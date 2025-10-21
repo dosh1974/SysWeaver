@@ -20,9 +20,9 @@
 
 # OVERVIEW
 
-A framework for building services in .NET on Linux and Windows.
-Focus is on building robust primitives for large systems.
-Functionality is centered around a web server and an easy way to add API's.
+A framework for building services in .NET on Linux and Windows.  
+Focus is on building robust primitives for large systems.  
+Functionality is centered around a web server and an easy way to add API's.  
 
 
-Functionality of a specific service is configured in a single json file that declares what micro-services to use and their parameters.
+Functionality of a specific service is configured in a single json file that declares what micro-services to use and their parameters.  
