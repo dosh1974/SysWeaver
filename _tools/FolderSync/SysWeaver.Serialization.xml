@@ -1,0 +1,140 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Serialization</name>
+    </assembly>
+    <members>
+        <member name="P:SysWeaver.Serialization.ISerializerInfo.Name">
+            <summary>
+            The name of the compression implementation
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.ISerializerInfo.Extension">
+            <summary>
+            The serialized formats file extension
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.ISerializerInfo.Mime">
+            <summary>
+            The mime code for the data created by this serializer
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.ISerializerInfo.MimeHeader">
+            <summary>
+            The Content-Type http header value to use (including char set)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.ISerializerInfo.Encoding">
+            <summary>
+            If the serializer is text-based, this is the econding to use
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.ISerializerInfo.Prio">
+            <summary>
+            The priority (quality) of the compressor, if multiple compressors are available the one with the highest priority is returned by the compression manager
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetJsonSerializer.Register">
+            <summary>
+            Call once to register this serializer type to the serializer manager
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.NetXmlSerializer.Register">
+            <summary>
+            Call once to register this serializer type to the serializer manager
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerManager.All">
+            <summary>
+            Get all added serializers in the order that they we're added
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerManager.Extensions">
+            <summary>
+            Get all supported "file extensions"
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerManager.TextExtensions">
+            <summary>
+            Get all supported "file extensions" that serialize to text
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerManager.ExtensionHandlers">
+            <summary>
+            Get a dictionary with all handlers for all suported "file extensions"
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Serialization.SerManager.TextExtensionHandlers">
+            <summary>
+            Get a dictionary with all handlers for all suported "file extensions" that serialize to text
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerManager.Get(System.String)">
+            <summary>
+            Get the implementation for a given "file extension" (uses the ones with highest prio if multiple serializers are available)
+            </summary>
+            <param name="ext">The file extension, all lowercase (can include a . prefix, like ".json")</param>
+            <returns>A serializer for the given file extension or null if non exist</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerManager.GetText(System.String)">
+            <summary>
+            Get the implementation for a given "file extension" (uses the ones with highest prio if multiple serializers are available).
+            Only serializers that is text based is supported.
+            </summary>
+            <param name="ext">The file extension, all lowercase (can include a . prefix, like ".json")</param>
+            <returns>A text based serializer for the given file extension or null if non exist</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerTools.MakeHeader(System.String,System.Text.Encoding)">
+            <summary>
+            Add char-set to a mime if it exist
+            </summary>
+            <param name="mime"></param>
+            <param name="enc"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.SerTools.SerializeWithoutType(SysWeaver.Serialization.ISerializer,System.Object,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serialize an object as if if was of it's own type, thus without type information (uses GetType() to determine the type and then serialize as that.
+            Example:
+                SomeType data = new SomeType();
+                Object obj = data;
+                var a = serializer.Serialize(data);
+                var b = serializer.Serialize(obj);
+                var c = serializer.SerializeWithoutType(obj);
+            For the above, a and c will be equal, b will contain type information.
+            </summary>
+            <param name="serializer">The serializer</param>
+            <param name="obj">The object to serialize</param>
+            <param name="options">The object to serialize</param>
+            <returns>The serialized data</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.TextSerTools.ToStringWithoutType(SysWeaver.Serialization.ITextSerializer,System.Object,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serialize an object as if if was of it's own type, thus without type information (uses GetType() to determine the type and then serialize as that.
+            Example:
+                SomeType data = new SomeType();
+                Object obj = data;
+                var a = serializer.Serialize(data);
+                var b = serializer.Serialize(obj);
+                var c = serializer.SerializeWithoutType(obj);
+            For the above, a and c will be equal, b will contain type information.
+            </summary>
+            <param name="serializer">The serializer</param>
+            <param name="obj">The object to serialize</param>
+            <param name="options">The object to serialize</param>
+            <returns>The serialized data</returns>
+        </member>
+        <member name="T:SysWeaver.Serialization.TypeNameResolver">
+            <summary>
+            Try (real hard) to find a type for the given type name
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Serialization.TypeNameResolver.Get(System.String)">
+            <summary>
+            Get the type for a given type name or null if it can't be found
+            </summary>
+            <param name="typeName">The name of the type to find</param>
+            <returns>The type or null if it can't be found</returns>
+        </member>
+    </members>
+</doc>

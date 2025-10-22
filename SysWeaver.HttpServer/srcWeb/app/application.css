@@ -1,0 +1,972 @@
+﻿
+body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/****** APP ******/
+
+app-header {
+    --h: calc(var(--ThemeIconSize) * 48px);
+    --m56: calc(var(--ThemeIconSize) * 56px);
+    --mh: calc(var(--ThemeIconSize) * 64px);
+    /*background-color: var(--ThemeAcc1);*/
+    background-image: linear-gradient(to bottom, color-mix(in srgb, var(--ThemeBackground) 25%, var(--ThemeAcc1) 75%), var(--ThemeAcc1));
+    color: var(--ThemeBackground);
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    height: var(--mh);
+    max-height: var(--mh);
+    box-sizing: border-box;
+    box-shadow: 0px 8px 8px rgba(0, 0, 0, 0.4);
+    z-index: 2;
+}
+
+    app-header app-MenuButton {
+        position: absolute;
+        width: var(--h);
+        height: var(--h);
+        left: 8px;
+        top: 8px;
+    }
+
+    app-header app-BackButton {
+        position: absolute;
+        width: var(--h);
+        height: var(--h);
+        left: var(--m56);
+        top: 8px;
+    }
+
+
+    app-header app-ContentTitle {
+        position: absolute;
+        top: 8px;
+        height: var(--h);
+        left: calc(var(--m56) * 2 - 8px);
+        right: var(--m56);
+        line-height: calc(var(--ThemeIconSize) * 48px);
+        text-align: center;
+        vertical-align: middle;
+        overflow: hidden;
+        white-space: nowrap;
+        text-transform: uppercase;
+        font-weight: bold;
+        font-size: 125%;
+        transition: opacity linear 0.05s;
+    }
+
+        app-header app-ContentTitle.Hidden {
+            opacity: 0;
+        }
+
+    app-header app-SettingsButton {
+        position: absolute;
+        width: var(--h);
+        height: var(--h);
+        right: 8px;
+        top: 8px;
+    }
+
+        app-header app-SettingsButton icon-48x48 {
+            left: 0;
+            top: 0;
+            position: absolute;
+        }
+
+app-menu {
+    background-image: linear-gradient(to right, color-mix(in srgb, var(--ThemeBackground) 15%, var(--ThemeAcc1) 85%), var(--ThemeAcc1));
+    color: var(--ThemeBackground);
+    position: absolute;
+    z-index: 1;
+    left: 0;
+    top: calc(var(--ThemeIconSize) * 64px);
+    width: 400px;
+    bottom: 0;
+    transition: transform 0.1s;
+    box-shadow: 8px 0px 8px rgba(0, 0, 0, 0.4);
+    user-select: none;
+    padding: 16px 4px 4px 4px;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    overflow-y: auto;
+    direction: rtl;
+    font-family: var(--ThemeFont);
+    font-style: normal;
+    font-size: 100%;
+    text-align: left;
+}
+
+    app-menu:before {
+        content: '';
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 2;
+        background-image: url('../logo.svg');
+        background-size: 320px 240px;
+        background-position: 40px bottom;
+        background-repeat: no-repeat;
+        pointer-events: none;
+        opacity: 0.1;
+    }
+
+
+
+
+    app-menu > * {
+        direction: ltr;
+    }
+
+    app-menu.Collapsed {
+        transform: translateX(-360px);
+    }
+
+
+app-capture {
+    /*background-color: transparent;*/
+    background-color: rgba(0,0,0,0.05);
+    position: absolute;
+    z-index: -2;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+}
+
+
+
+app-content {
+    position: absolute;
+    z-index: 0;
+    left: 0;
+    top: calc(var(--ThemeIconSize) * 64px);
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    padding-top: 8px;
+    padding-left: 48px;
+    color: var(--ThemeMain);
+}
+
+
+    app-content iframe {
+        overflow: auto;
+        width: 100%;
+        height: 100%;
+        transition: opacity linear 0.1s, transform linear 0.1s;
+    }
+
+    app-content iframe.Hidden {
+        opacity: 0;
+        transform: translateY(0.5em);
+    }
+
+
+@media screen and (max-width: 600px) {
+
+    app-menu {
+        width: 100%;
+        box-shadow: 0px 8px 8px rgba(0, 0, 0, 0.4);
+    }
+
+        app-menu.Collapsed {
+            transform: translate(0, -110%);
+        }
+
+    app-content {
+        padding-left: 0px;
+    }
+}
+
+/****** Default menu ******/
+
+.DefaultMenu {
+    --MenuSubBack: var(--ThemeMain);
+}
+
+.DefaultMenu table {
+    border: none;
+    border-collapse: collapse;
+    border-spacing: 0;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    max-width: 100%;
+    /*table-layout: fixed;*/
+}
+
+SysWeaver-PopupMenu.DefaultMenu table table {
+    width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
+}
+
+
+
+.DefaultMenu tr {
+    transition: opacity linear 0.15s, background-color linear 0.15s, color linear 0.15s;
+}
+
+.DefaultMenu td {
+    padding: 1px 0;
+}
+
+.DefaultMenu td:first-child {
+    border-radius: var(--ThemeRadInp);
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.DefaultMenu td:last-child {
+    border-radius: var(--ThemeRadInp);
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    overflow: visible;
+    min-height: calc(var(--ThemeIconSize) * 32px + 2px);
+}
+
+
+.DefaultMenu td:last-child > * {
+    position: relative;
+    left: -3px;
+    top: 3px;
+}
+
+.DefaultMenu td.MenuNested:last-child > * {
+    position: relative;
+    left: 0;
+    top: 0;
+}
+
+    .DefaultMenu tr.MenuHide {
+        display: none;
+    }
+
+.DefaultMenu tr.MenuData.SubMenu {
+    background-image: linear-gradient(to bottom right, color-mix(in srgb, var(--MenuSubBack) 15%, transparent 85%), color-mix(in srgb, var(--MenuSubBack) 60%, transparent 40%));
+    transition: opacity linear 0.1s;
+}
+
+.DefaultMenu tr.MenuData.SubMenuHide > td:last-child{
+    opacity: 0.4;
+}
+
+/*.DefaultMenu tr.MenuData.SubMenu:hover {
+    background-color: color-mix(in srgb, var(--MenuSubBack) 85%, var(--ThemeBackground) 15%);
+}*/
+
+
+
+.DefaultMenu tr.MenuData:hover 
+{
+    background-color: rgba(var(--ThemeBackgroundRGB), 0.15);
+}
+
+    .DefaultMenu tr.MenuSel {
+        background-color: var(--ThemeBackground);
+        color: var(--ThemeAcc1);
+    }
+
+        .DefaultMenu tr.MenuSel.MenuClick {
+            opacity: 1;
+            cursor: default;
+        }
+
+        .DefaultMenu tr.MenuSel.MenuData:hover {
+            background-color: var(--ThemeBackground);
+            color: var(--ThemeAcc1);
+        }
+
+        .DefaultMenu tr.MenuSel.MenuData.MenuDisabled:hover {
+            background: none;
+            color: var(--ThemeAcc1);
+        }
+
+.DefaultMenu tr.MenuData.MenuDisabled:hover {
+    background: none;
+}
+
+.DefaultMenu tr.MenuDisabled {
+    background: none;
+    opacity: 0.4;
+}
+
+
+.DefaultMenu tr.MenuChecked td:nth-child(2)::after {
+    content: '✓';
+}
+
+
+
+.DefaultMenu tr.MenuClick {
+    cursor: pointer;
+    opacity: 0.8;
+}
+
+    .DefaultMenu tr.MenuClick:hover {
+        opacity: 1;
+    }
+
+    
+ .DefaultMenu td {
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+    .DefaultMenu td:first-child {
+        width: 0px;
+        min-width: 6px;
+    }
+
+    .DefaultMenu td:nth-child(2)
+    {
+        padding: 2px 12px 2px 4px;
+    }
+
+    .DefaultMenu td.MenuNested:nth-child(2) {
+        padding: 0;
+    }
+
+
+SysWeaver-PopupMenu {
+    position: fixed;
+    display: block;
+    overflow: visible;
+}
+
+    SysWeaver-PopupMenu tr.MenuData td:nth-child(4) {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    SysWeaver-PopupMenu.Bottom SysWeaver-PopupMenuBack {
+        bottom: 0;
+    }
+
+SysWeaver-PopupMenuBack {
+    position: fixed;
+    display: block;
+    background-color: var(--ThemeAcc2);
+    color: var(--ThemeBackground);
+    border-radius: var(--ThemeRad);
+    margin: 1px 8px 8px 0;
+    max-width: 75vw;
+    max-height: 85vh;
+    padding: 5px;
+    cursor: default !important;
+    font-family: var(--ThemeFont);
+    font-style: normal;
+    font-size: 100%;
+    text-align: left;
+    overflow-y: auto;
+}
+
+    SysWeaver-PopupMenuBack.DefaultMenu {
+        --MenuSubBack: var(--ThemeMain);
+    }
+
+    SysWeaver-Blocker {
+        position: fixed;
+        display: block;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: var(--ThemeBackground75);
+        cursor: default !important;
+        backdrop-filter: blur(4px);
+        outline: none;
+        z-index: 100;
+    }
+
+        SysWeaver-Blocker:focus {
+            outline: none;
+        }
+
+        SysWeaver-Blocker SysWeaver-BlockerClose {
+            z-index: 100000;
+            position: fixed;
+            display: block;
+            max-width: 40em;
+            position: absolute;
+            left: 50%;
+            top: 2px;
+            transform: translate(-50%, 0);
+            box-sizing: border-box;
+            margin: 1em auto 1em auto;
+            width: 100%;
+            pointer-events: none;
+        }
+
+        SysWeaver-Blocker SysWeaver-BlockerCloseButton {
+            display: block;
+            position: absolute;
+            right: 4px;
+            top: 4px;
+            background-color: var(--ThemeBackground);
+            border-radius: var(--ThemeRad);
+            pointer-events: initial;
+        }
+
+            SysWeaver-Blocker SysWeaver-BlockerCloseButton > * {
+                margin-left: 6px;
+            }
+
+    SysWeaver-Blocker .FullWidth SysWeaver-PopupBackground {
+        max-width: calc(100% - 2em);
+        width: calc(100% - 2em);
+    }
+
+    SysWeaver-Blocker.MaxHeight SysWeaver-PopupBackground {
+        height: calc(100vh - 2em);
+    }
+
+
+
+
+SysWeaver-Blocker.FullWidth SysWeaver-BlockerClose {
+    max-width: calc(100% - 2em);
+}
+
+    SysWeaver-Blocker.Scroll SysWeaver-PopupBackground {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+
+    SysWeaver-Blocker.Scroll SysWeaver-BlockerCloseButton {
+        left: calc(100% - 34px - 20px);
+    }
+
+SysWeaver-PopUpBackground {
+    --maxWidth: calc(100vw - 16px);
+    display: block;
+    max-width: calc(min(40em, var(--maxWidth)));
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, 0);
+    box-sizing: border-box;
+    margin: 1em auto 1em auto;
+    width: 40em;
+    padding: calc(max(1em, 32px)) 1em 1em 1em;
+    box-shadow: 4px 8px 16px rgba(0, 0, 0, 0.5);
+    background-color: var(--ThemeBackground);
+    border: 1px solid var(--ThemeAcc150);
+    border-radius: var(--ThemeRad);
+    max-height: calc(100vh - 2em);
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+    SysWeaver-PopUpBackground.Wide {
+        max-width: calc(min(75em, var(--maxWidth)));
+        width: 75em;
+    }
+
+    SysWeaver-PopUpBackground.Resize {
+        min-width: 64px;
+        min-height: 32px;
+        max-width: calc(min(80em, var(--maxWidth)));
+        resize: both;
+    }
+
+    SysWeaver-PopUpBackground SysWeaver-PopUpText {
+        display: block;
+        text-transform: uppercase;
+        color: var(--ThemeAcc2);
+        margin-bottom: 1em;
+        font-size: 80%;
+        font-weight: bold;
+    }
+
+    SysWeaver-PopUpBackground SysWeaver-PopUpFilter 
+    {
+        box-sizing: border-box;
+        width: 100%;
+        display: flex;
+        align-items: center;
+    }
+
+    SysWeaver-PopUpBackground input {
+        box-sizing: border-box;
+        font-size: 125%;
+        background-color: rgba(var(--ThemeMainRGB), 0.1);
+        color: var(--ThemeMain);
+        border-radius: var(--ThemeRadInp);
+        padding: 1px 12px 1px 12px;
+        border: 2px solid var(--ThemeBackground);
+        outline: none !important;
+        transition: color linear var(--ThemeFadeDuration);
+        margin-right: 0.5em;
+        width: calc(100% - 50px);
+    }
+
+        SysWeaver-PopUpBackground input::placeholder {
+            opacity: 0.5;
+            font-size: 80%;
+            font-style: italic;
+        }
+
+    SysWeaver-PopUpBackground textarea {
+        box-sizing: border-box;
+        font-size: 125%;
+        background-color: rgba(var(--ThemeMainRGB), 0.1);
+        color: var(--ThemeMain);
+        border-radius: var(--ThemeRadInp);
+        padding: 1px 12px 1px 12px;
+        border: 2px solid var(--ThemeBackground);
+        outline: none !important;
+        transition: color linear var(--ThemeFadeDuration);
+        margin-right: 0.5em;
+        width: calc(100% - 50px);
+        resize: vertical;
+        height: 6.25em;
+        min-height: 2.5em;
+        max-height: 60vh;
+    }
+
+        SysWeaver-PopUpBackground textarea::placeholder {
+            opacity: 0.5;
+            font-size: 80%;
+            font-style: italic;
+        }
+
+
+    SysWeaver-PopUpBackground SysWeaver-SelectList {
+        display: block;
+        overflow-y: auto;
+        margin-top: 1em;
+        margin-bottom: 0.5em;
+        max-height: calc(80vh - 10em);
+    }
+
+
+    SysWeaver-PopUpBackground SysWeaver-PopSelData {
+        display: block;
+        margin-top: 1em;
+        max-height: calc(80vh - 10em);
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    SysWeaver-PopUpBackground SysWeaver-PopSelEnd {
+        display: block;
+        width: 100%;
+        margin: 1em 0 50vh 0;
+        font-size: 80%;
+        font-style: italic;
+        color: rgba(var(--ThemeMainRGB), 0.5);
+    }
+
+
+
+SysWeaver-PopupMenu.DefaultMenu table {
+    table-layout: initial;
+    width: auto;
+    height: auto;
+}
+
+SysWeaver-PopupMenuBack.Right {
+    right: 0;
+}
+
+
+
+SysWeaver-ConfTitle
+{
+    display: block;
+    font-size: 125%;
+    font-weight: bold;
+    color: var(--ThemeAcc1);
+}
+
+    SysWeaver-ConfTitle.MouseClick{
+        cursor: pointer;
+    }
+
+SysWeaver-ConfText {
+    display: block;
+    font-size: 100%;
+    color: var(--ThemeMain);
+    margin-top: 2em;
+}
+
+    SysWeaver-ConfText.MouseClick {
+        cursor: pointer;
+    }
+
+SysWeaver-ConfButtons {
+    margin-top: 2em;
+    display: flex;
+    width: 100%;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    overflow: hidden;
+}
+
+
+SysWeaver-CenterBlockSpace {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    margin: 1em 0 0.25em 0;
+    padding: 0;
+    justify-content: space-around;
+}
+
+
+SysWeaver-CenterBlock {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    margin: 1em 0 0.25em 0;
+    padding: 0;
+    justify-content: space-between;
+}
+
+    SysWeaver-CenterBlock > *:first-child:last-child {
+        margin: 0 auto;
+    }
+
+
+SysWeaver-PopUpWorkingTitle {
+    margin-top: 1em;
+    margin-bottom: 1em;
+    display: block;
+    font-size: 150%;
+    text-align: center;
+    color: var(--ThemeAcc1);
+}
+
+SysWeaver-PopUpWorkingIcon {
+    display: block;
+    text-align: center;
+}
+
+
+SysWeaver-PopUpWorkingText {
+    margin-top: 1em;
+    margin-bottom: 1em;
+    display: block;
+    text-align: center;
+}
+
+/****** ICONS ******/
+.IconMenu {
+    mask-image: url("../icons/more.svg");
+}
+
+.IconExpand {
+    mask-image: url("../icons/plus.svg");
+}
+
+.IconCollapse {
+    mask-image: url("../icons/minus.svg");
+}
+
+.IconClearInput {
+    mask-image: url("../icons/clear_input.svg");
+}
+
+
+.IconHome {
+    mask-image: url("../icons/home.svg");
+}
+
+.IconSignUp {
+    mask-image: url("../icons/user_add.svg");
+}
+
+.IconLogin {
+    mask-image: url("../icons/user.svg");
+}
+
+.IconUser {
+    mask-image: url("../icons/user.svg");
+}
+
+.IconUsers {
+    mask-image: url("../icons/users.svg");
+}
+
+.IconInvite {
+    mask-image: url("../icons/user_add.svg");
+}
+
+
+.IconLogout {
+    mask-image: url("../icons/user_logout.svg");
+}
+
+.IconPassword {
+    mask-image: url("../icons/user_password.svg");
+}
+
+.IconChangePassword {
+    mask-image: url("../icons/user_password.svg");
+}
+
+.IconDeletePassword {
+    mask-image: url("../icons/user_password_delete.svg");
+}
+
+.IconAddPassword {
+    mask-image: url("../icons/user_password_add.svg");
+}
+
+.IconAddEmail {
+    mask-image: url("../icons/user_email_add.svg");
+}
+
+.IconDeleteEmail {
+    mask-image: url("../icons/user_email_delete.svg");
+}
+
+.IconChangeEmail {
+    mask-image: url("../icons/user_email_change.svg");
+}
+
+.IconAddPhone {
+    mask-image: url("../icons/user_phone_add.svg");
+}
+
+.IconDeletePhone {
+    mask-image: url("../icons/user_phone_delete.svg");
+}
+
+.IconChangePhone {
+    mask-image: url("../icons/user_phone_change.svg");
+}
+
+
+
+.IconDelete {
+    mask-image: url("../icons/user_delete.svg");
+}
+
+
+.IconRecover {
+    mask-image: url("../icons/user_check.svg");
+}
+
+.IconSettings {
+    mask-image: url("../icons/settings.svg");
+}
+
+.IconNavBack {
+    mask-image: url("../icons/left.svg");
+}
+
+
+.IconTheme {
+    mask-image: url("../icons/theme.svg");
+}
+
+.IconThemeAuto {
+    mask-image: url("../icons/theme_auto.svg");
+}
+
+.IconThemeLight{
+    mask-image: url("../icons/theme_light.svg");
+}
+
+.IconThemeDark {
+    mask-image: url("../icons/theme_dark.svg");
+}
+
+.IconThemeHacker {
+    mask-image: url("../icons/theme_hacker.svg");
+}
+
+.IconExplore {
+    mask-image: url("../icons/explore.svg");
+}
+
+.IconTable {
+    mask-image: url("../icons/table.svg");
+}
+
+.IconChart {
+    mask-image: url("../icons/chart.svg");
+}
+
+.IconFullScreenEnter {
+    mask-image: url("../icons/fullscreen_enter.svg");
+}
+
+.IconFullScreenExit {
+    mask-image: url("../icons/fullscreen_exit.svg");
+}
+
+.IconNewTab {
+    mask-image: url("../icons/newtab.svg");
+}
+
+.IconTableSerializer {
+    mask-image: url("../icons/table_serializer.svg");
+}
+
+.IconTableLanguage {
+    mask-image: url("../icons/table_language.svg");
+}
+
+.IconTableCurrency {
+    mask-image: url("../icons/table_currency.svg");
+}
+
+.IconTableCountry{
+    mask-image: url("../icons/table_country.svg");
+}
+
+.IconTablePhone {
+    mask-image: url("../icons/phone.svg");
+}
+
+.IconTableCompression {
+    mask-image: url("../icons/table_compression.svg");
+}
+
+.IconTableStats {
+    mask-image: url("../icons/table_stats.svg");
+}
+
+.IconTableServices {
+    mask-image: url("../icons/table_services.svg");
+}
+
+.IconTablePerfSystem {
+    mask-image: url("../icons/table_perf_system.svg");
+}
+
+.IconTablePerformance {
+    mask-image: url("../icons/table_performance.svg");
+}
+
+.IconTableLog {
+    mask-image: url("../icons/table_log.svg");
+}
+
+.IconTableTables {
+    mask-image: url("../icons/table_tables.svg");
+}
+
+.IconTableApi {
+    mask-image: url("../icons/table_api.svg");
+}
+
+.IconTableTranslateTo {
+    mask-image: url("../icons/table_translate_to.svg");
+}
+
+.IconTableTranslateFrom {
+    mask-image: url("../icons/table_translate_from.svg");
+}
+
+.IconTableCache {
+    mask-image: url("../icons/table_cache.svg");
+}
+
+.IconTableTemplates {
+    mask-image: url("../icons/table_template.svg");
+}
+
+.IconTableSession {
+    mask-image: url("../icons/table_session.svg");
+}
+
+.IconTableUsers {
+    mask-image: url("../icons/user.svg");
+}
+
+.IconTableMemory {
+    mask-image: url("../icons/memory.svg"); 
+}
+
+.IconLock {
+    mask-image: url("../icons/lock.svg");
+}
+
+.IconKey {
+    mask-image: url("../icons/key.svg");
+}
+
+
+.IconOk {
+    mask-image: url("../icons/fav_on.svg");
+}
+
+.IconCancel {
+    mask-image: url("../icons/close.svg");
+}
+
+.IconClosePopUp {
+    mask-image: url("../icons/close.svg");
+}
+.IconDb {
+    mask-image: url("../icons/db.svg");
+}
+
+.IconDbRemove {
+    mask-image: url("../icons/db_remove.svg");
+}
+
+.IconDbAdd{
+    mask-image: url("../icons/db_add.svg");
+}
+
+.IconDbMinus {
+    mask-image: url("../icons/db_minus.svg");
+}
+
+.IconAddPasskey {
+    mask-image: url("../icons/passkey_add.svg");
+}
+
+.IconUsePasskey {
+    mask-image: url("../icons/passkey_use.svg");
+}
+
+.IconAddPasskeyOther {
+    mask-image: url("../icons/qr_code.svg");
+}
+
+.IconCashBill {
+    mask-image: url("../icons/cash_bill.svg");
+}
+
+.IconCashBills {
+    mask-image: url("../icons/cash_bills.svg");
+}
+
+.IconCoin {
+    mask-image: url("../icons/cash_bills.svg");
+}
+
+.IconRefund {
+    mask-image: url("../icons/refund.svg");
+}
+
+.IconImage {
+    mask-image: url("../icons/image.svg");
+}
+
+.IconChat {
+    mask-image: url("../icons/chat.svg");
+}
+
+.IconNotes {
+    mask-image: url("../icons/notes.svg");
+}
+
+.IconDisc {
+    mask-image: url("../icons/disc.svg");
+}
+
+.IconSync {
+    mask-image: url("../icons/sync.svg");
+}

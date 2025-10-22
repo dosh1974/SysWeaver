@@ -1,0 +1,8 @@
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+	<style>.spinner_jCIR{animation:spinner_B8Vq 1.9s linear infinite;animation-delay:-1.9s}.spinner_upm8{animation-delay:-1.8s}.spinner_2eL5{animation-delay:-1.7s}.spinner_Rp9l{animation-delay:-1.6s}.spinner_dy3W{animation-delay:-1.5s}@keyframes spinner_B8Vq{0%,66.66%{animation-timing-function:cubic-bezier(0.36,.61,.3,.98);y:10px;height:6px}33.33%{animation-timing-function:cubic-bezier(0.36,.61,.3,.98);y:6px;height:12px}}</style>
+	<rect class="spinner_jCIR" x="1" y="10" width="2.8" height="6"/>
+	<rect class="spinner_jCIR spinner_upm8" x="5.8" y="10" width="2.8" height="6"/>
+	<rect class="spinner_jCIR spinner_2eL5" x="10.6" y="10" width="2.8" height="6"/>
+	<rect class="spinner_jCIR spinner_Rp9l" x="15.4" y="10" width="2.8" height="6"/>
+	<rect class="spinner_jCIR spinner_dy3W" x="20.2" y="10" width="2.8" height="6"/>
+</svg>

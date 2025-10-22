@@ -1,0 +1,65 @@
+﻿
+.IconAuthSignUp {
+    mask-image: url("../icons/user_add.svg");
+}
+
+.IconChoosePassword {
+    mask-image: url("../icons/user_add.svg");
+}
+
+.IconAuthSetPassword {
+    mask-image: url("../icons/user_password.svg");
+}
+
+.IconAuthForgotPassword {
+    mask-image: url("../icons/user_check.svg");
+}
+
+.IconAuthResetPassword {
+    mask-image: url("../icons/user_check.svg");
+}
+
+
+.IconAuthDeleteAccount {
+    mask-image: url("../icons/user_delete.svg");
+}
+
+.IconAuthDeleteMail {
+    mask-image: url("../icons/user_delete.svg");
+}
+
+.IconAuthInviteUser {
+    mask-image: url("../icons/user_add.svg");
+}
+
+.IconAuthAddPassword {
+    mask-image: url("../icons/user_password_add.svg");
+}
+
+.IconAuthDeletePassword {
+    mask-image: url("../icons/user_password_delete.svg");
+}
+
+.IconAuthChangeEmail {
+    mask-image: url("../icons/user_email_change.svg");
+}
+
+.IconAuthDeleteEmail {
+    mask-image: url("../icons/user_email_delete.svg");
+}
+
+.IconAuthAddEmail {
+    mask-image: url("../icons/user_email_add.svg");
+}
+
+.IconAuthChangePhone {
+    mask-image: url("../icons/user_phone_change.svg");
+}
+
+.IconAuthDeletePhone {
+    mask-image: url("../icons/user_phone_delete.svg");
+}
+
+.IconAuthAddPhone {
+    mask-image: url("../icons/user_phone_add.svg");
+}

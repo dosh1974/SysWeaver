@@ -1,0 +1,36 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>Chat-Test</title>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi, viewport-fit=cover" />
+    <link rel="manifest" href="../app/manifest.json">
+</head>
+<body style="width:100vw;height:100vh;padding:0;margin:0;">
+    <script>
+        function Clear() {
+            document.body.getElementsByTagName("iframe")[0].contentWindow.postMessage({ Type: "chat.clear" });
+        }
+        function ScrollTop() {
+            document.body.getElementsByTagName("iframe")[0].contentWindow.postMessage({ Type: "chat.scrolltop" });
+        }
+        function ScrollBottom() {
+            document.body.getElementsByTagName("iframe")[0].contentWindow.postMessage({ Type: "chat.scrollbottom" });
+        }
+        function ShowAll() {
+            document.body.getElementsByTagName("iframe")[0].contentWindow.postMessage({ Type: "chat.showall" });
+        }
+        function HideAll() {
+            document.body.getElementsByTagName("iframe")[0].contentWindow.postMessage({ Type: "chat.hideall" });
+        }
+    </script>
+    <button onclick="Clear()">Clear</button>
+    <button onclick="ScrollTop()">Scroll to top</button>
+    <button onclick="ScrollBottom()">Scroll to bottom</button>
+    <button onclick="ShowAll()">Show all</button>
+    <button onclick="HideAll()">Hide all</button>
+    <iframe style="position:absolute;top:2em;left:0;width:100vw;height:calc(100vh - 2em);border:none;" src="Chat.html?id=Test&options={%22UserColor%22:false}"></iframe>
+</body>
+</html>

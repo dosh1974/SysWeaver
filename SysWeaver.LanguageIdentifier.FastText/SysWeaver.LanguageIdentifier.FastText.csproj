@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFramework>net8.0</TargetFramework>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <RootNamespace>SysWeaver.LanguageIdentifier</RootNamespace>
+	  <NoWarn>1701;1702;1591</NoWarn>
+	  <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+	<PackageReference Include="AutoMapper" Version="10.1.1" />
+	<PackageReference Include="FastText.Native.Linux" Version="1.0.115" />
+	<PackageReference Include="FastText.Native.Windows" Version="1.0.115" />
+	<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.0" />
+
+
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+    <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
+    <ProjectReference Include="..\SysWeaver.IsoData\SysWeaver.IsoData.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="srcData\" />
+  </ItemGroup>
+
+
+	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcData\* .\data" />
+		<ItemGroup>
+			<EmbeddedResource Include="data\**\*.br" Visible="false" />
+		</ItemGroup>
+	</Target>
+
+</Project>

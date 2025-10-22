@@ -1,0 +1,253 @@
+﻿
+SysWeaver-TypeSection {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 1.5em;
+    border: 1px solid rgba(var(--ThemeMainRGB), 0.1);
+    border-radius: 10px;
+    vertical-align: middle;
+    color: var(--ThemeAcc1);
+    overflow-x: auto;
+}
+
+SysWeaver-TypeTitle {
+    display: block;
+    margin-bottom: 4px;
+    opacity: 0.5;
+    text-transform: uppercase;
+    color: var(--ThemeMain);
+    font-size: 80%;
+    font-weight: bold;
+    font-style: normal;
+    font-family: var(--ThemeFont);
+    user-select: none;
+}
+
+
+SysWeaver-TypeSection.TypeCol {
+    font-family: var(--ThemeFontMono);
+    color: rgba(var(--ThemeAcc1RGB), 0.7);
+}
+
+SysWeaver-TypeSection.TypeItalic {
+    font-style: italic;
+}
+
+SysWeaver-TypeSection.TypeCode {
+    font-family: var(--ThemeFontMono);
+}
+
+    SysWeaver-TypeSection.TypeCode SysWeaver-Text {
+        opacity: 0.8;
+    }
+
+SysWeaver-TypeSection a {
+    font-weight: normal;
+    display: inline-block;
+    line-height: 20px;
+    height: 20px;
+    vertical-align: top;
+    margin-bottom: 6px;
+}
+
+
+SysWeaver-TypeSection > SysWeaver-Link{
+    display: inline-block;
+    line-height: 24px;
+    height: 24px;
+}
+
+SysWeaver-TypeSection > SysWeaver-Text {
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+SysWeaver-TypeSection > Icon-24x24 {
+    margin-top: 2px;
+}
+
+SysWeaver-TypeSection SysWeaver-Text {
+    display: inline-block;
+    line-height: 24px;
+    height: 24px;
+    vertical-align: top;
+    margin-bottom: 6px;
+}
+
+SysWeaver-TypeSection icon-24x24 {
+    margin-left: 16px;
+    vertical-align: top;
+}
+
+
+SysWeaver-TypeSection table.TypeMembers {
+    border: none;
+    border-collapse: collapse;
+    border-spacing: 0;
+    font-size: 100%;
+    width: 100%;
+    position: relative;
+    user-select: none;
+}
+
+    SysWeaver-TypeSection table.TypeMembers tr {
+        transition: background-color 0.2s;
+        min-height: 28px;
+    }
+
+        SysWeaver-TypeSection table.TypeMembers tr:hover {
+            background-color: rgba(var(--ThemeAcc2RGB), 0.1);
+        }
+
+        SysWeaver-TypeSection table.TypeMembers tr:nth-child(2n) {
+            transition: background-color 0.2s;
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+            SysWeaver-TypeSection table.TypeMembers tr:nth-child(2n):hover {
+                background-color: rgba(var(--ThemeAcc2RGB), 0.1);
+            }
+
+
+    SysWeaver-TypeSection table.TypeMembers th {
+        text-transform: uppercase;
+        color: var(--ThemeMain);
+        font-size: 80%;
+        font-weight: bold;
+        font-style: normal;
+        font-family: var(--ThemeFont);
+    }
+
+        SysWeaver-TypeSection table.TypeMembers th:nth-child(1) {
+            padding-left: 4px;
+        }
+
+
+    SysWeaver-TypeSection table.TypeMembers td {
+        overflow: hidden;
+        white-space: nowrap;
+        vertical-align: top;
+    }
+
+        SysWeaver-TypeSection table.TypeMembers td:nth-child(1) {
+            font-size: 90%;
+            font-family: var(--ThemeFontMono);
+            padding: 7px 8px 1px 0;
+        }
+
+            SysWeaver-TypeSection table.TypeMembers td > * {
+                display: inline-block;
+                line-height: 24px;
+                height: 24px;
+                vertical-align: top;
+                margin-bottom: 6px;
+                padding-top: 2px;
+                padding-bottom: 2px;
+            }
+
+        SysWeaver-TypeSection table.TypeMembers td:nth-child(2) {
+            padding: 4px 0 4px 0;
+            color: var(--ThemeAcc2);
+            user-select: text;
+        }
+
+        SysWeaver-TypeSection table.TypeMembers td:nth-child(3) {
+            font-style: italic;
+            padding: 4px 2px 4px 8px;
+            color: var(--ThemeMain);
+            user-select: text;
+        }
+
+        SysWeaver-TypeSection table.TypeMembers td:nth-child(1) SysWeaver-Text {
+            margin-left: 4px;
+            opacity: 0.8;
+        }
+
+        SysWeaver-TypeSection table.TypeMembers td:nth-child(2) SysWeaver-Text {
+            padding-top: 2px;
+            line-height: 24px;
+            height: 24px;
+        }
+
+        SysWeaver-TypeSection table.TypeMembers td:nth-child(3) SysWeaver-Text {
+            height: auto;
+        }
+
+
+SysWeaver-TypeSection table.TypeEnumValues {
+    border: none;
+    border-collapse: collapse;
+    border-spacing: 0;
+    font-size: 100%;
+    width: 100%;
+    position: relative;
+    user-select: none;
+}
+
+    SysWeaver-TypeSection table.TypeEnumValues tr {
+        transition: background-color 0.2s;
+        min-height: 28px;
+    }
+
+        SysWeaver-TypeSection table.TypeEnumValues tr:hover {
+            background-color: rgba(var(--ThemeAcc2RGB), 0.1);
+        }
+
+        SysWeaver-TypeSection table.TypeEnumValues tr:nth-child(2n) {
+            transition: background-color 0.2s;
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+            SysWeaver-TypeSection table.TypeEnumValues tr:nth-child(2n):hover {
+                background-color: rgba(var(--ThemeAcc2RGB), 0.1);
+            }
+
+
+    SysWeaver-TypeSection table.TypeEnumValues th {
+        text-transform: uppercase;
+        color: var(--ThemeMain);
+        font-size: 80%;
+        font-weight: bold;
+        font-style: normal;
+        font-family: var(--ThemeFont);
+    }
+
+        SysWeaver-TypeSection table.TypeEnumValues th:nth-child(1) {
+            text-align: right;
+            padding-right: 16px;
+        }
+
+    SysWeaver-TypeSection table.TypeEnumValues td {
+        overflow: hidden;
+        white-space: nowrap;
+        vertical-align: top;
+    }
+
+        SysWeaver-TypeSection table.TypeEnumValues td:nth-child(1) {
+            font-size: 90%;
+            font-family: var(--ThemeFontMono);
+            padding: 7px 16px 1px 0;
+            text-align: right;
+            user-select: text;
+        }
+
+        SysWeaver-TypeSection table.TypeEnumValues td:nth-child(2) {
+            padding: 4px 0 4px 0;
+            color: var(--ThemeAcc2);
+            user-select: text;
+        }
+
+        SysWeaver-TypeSection table.TypeEnumValues td:nth-child(3) {
+            font-style: italic;
+            padding: 4px 0 4px 8px;
+            color: var(--ThemeMain);
+            user-select: text;
+        }
+
+
+
+.SysWeaverTypeIconExternal {
+    mask-image: url("../icons/newtab.svg");
+}

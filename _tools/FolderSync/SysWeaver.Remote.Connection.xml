@@ -1,0 +1,520 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Remote.Connection</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.Remote.Connection.InterfaceTypeCache`1">
+            <summary>
+            Provides functionality for creating a remote connection instance of a specific type, this uses il emit to build a new type.
+            </summary>
+            <typeparam name="T"></typeparam>
+        </member>
+        <member name="F:SysWeaver.Remote.Connection.InterfaceTypeCache`1.Create">
+            <summary>
+            Creates a remote connection instance for a specific remote interface
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Remote.EndPointException">
+            <summary>
+            Exception thrown when the response status of a remote call isn't 200.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.EndPointException.StatusCode">
+            <summary>
+            The response code that genereated this exception
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.EndPointOptions.#ctor(System.String,System.String,System.Int32)">
+            <summary>
+            Changes to this must be reflected in the 
+            </summary>
+            <param name="ser"></param>
+            <param name="postSer"></param>
+            <param name="timeOutInMilliSeconds"></param>
+        </member>
+        <member name="M:SysWeaver.Remote.FormUrlSerializer.Register">
+            <summary>
+            Call once to register this serializer type to the serializer manager
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.IgnoreDefaultsFormUrlSerializer.Register">
+            <summary>
+            Call once to register this serializer type to the serializer manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteAuthMethod.HttpAuth">
+            <summary>
+            Use the Authorization http header for auth.
+            Can use Bearer or Basic 
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteAuthMethod.SysWeaverLogin">
+            <summary>
+            Use the SysWeaver login protocol (no plain text, no replay attacks)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Remote.RemoteConnection">
+            <summary>
+            Parameters for a specific instance of a remote connection
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.BaseUrl">
+            <summary>
+            The base url, all endpoints defined in an API is prefixed with this value, ex: "http://locahost:1234/api/"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.BearerToken">
+            <summary>
+            If this is non-empty, the bearer token is sent in the Authorization header (typically this is the API key).
+            The bearer token can be read from a credentials file where the user name part is bearer, ex:
+            "CredFile": "Test.txt" and "Test.txt" content is "bearer:the token".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.TimeoutInMilliSeconds">
+            <summary>
+            The timeout to use for a request, less or equal to zero to uses the timeout attribute on the interface type or if not present 60 000 ms is used.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.AcceptedCompressionMethods">
+            <summary>
+            Alllow the server to respond with compressed data using these formats
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.Compression">
+            <summary>
+            The compression method to use when sending content, the server MUST support the compression method.
+            null = Uncomporessed.
+            br = Brotli
+            deflate = Deflate.
+            gzip = GZip
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.CompLevel">
+            <summary>
+            The compression level to use when sending content
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.Serializer">
+            <summary>
+            The serializer to use for encoding (POST/PUT) and for decoding responses, encoding can be different if PostSerializer is used, if null or empty the serializer attribute of the interface is used (or else json)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.PostSerializer">
+            <summary>
+            The serializer to use for encoding (POST/PUT), by default the Serializer is used
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.MaxConcurrency">
+            <summary>
+            Maximum number of concurrent API calls on this connection
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.CleanUrl">
+            <summary>
+            If true, url's in exceptions is stripped to not disclose sensitive information
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.CacheDuration">
+            <summary>
+            Number of seconds to cache remote calls on this connection, typically it's better to specify this per API end point, use 0 to disable caching.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.MaxCachedItems">
+            <summary>
+            Maximum number of cached calls per api on this connection, typically it's better to specify this per API end point, use 0 to disable caching.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.Proxy">
+            <summary>
+            An optional proxy to use.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.UseTor">
+            <summary>
+            If true and no Proxy is specified, route all API calls through the TOR network.
+            The SysWeaver.Tor assembly must be available.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.IgnoreCertErrors">
+            <summary>
+            If true, any bad server certificates are accepted.. NOT RECOMMENDED!
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.CertValidator">
+            <summary>
+            An optional cert validator, return true to accept the request
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.AllowAutoRedirect">
+            <summary>
+            If true, redirected requests are followed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.UserAgent">
+            <summary>
+            Optional user agent string to use.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.AuthMethod">
+            <summary>
+            The auth method to use
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnection.SysWeaverBaseSuffix">
+            <summary>
+            The suffix to add to the BaseUrl to get to the service root url (if required)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnection.Create``1">
+            <summary>
+            Create an instance of a remote connection with the specified parameters (any parameters changes after creation will not affect the created connection)
+            </summary>
+            <typeparam name="T">The interface to create an instance of, must inherit IDisposable (and/or optionally IRemoteApi), use RemoteXXXX attributes on interface methods to control the actions</typeparam>
+            <returns>An instance of T</returns>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnection.Create(System.Type)">
+            <summary>
+            Create an instance of a remote connection with the specified parameters (any parameters changes after creation will not affect the created connection)
+            </summary>
+            <param name="t">The type of the interface to create an instance of, must inherit IDisposable (and/or optionally IRemoteApi), use RemoteXXXX attributes on interface methods to control the actions</param>
+            <returns>An instance of the type, must cast to use</returns>
+        </member>
+        <member name="T:SysWeaver.Remote.RemoteConnectionBase">
+            <summary>
+            Base class for remote connection implmentations
+            </summary>
+        </member>
+        <member name="E:SysWeaver.Remote.RemoteConnectionBase.OnCallBegin">
+            <summary>
+            Invoked before any request (after request payload serilization)
+            </summary>
+        </member>
+        <member name="E:SysWeaver.Remote.RemoteConnectionBase.OnCallEnd">
+            <summary>
+            Invoked after any request (before response payload deserilization)
+            Will always get called if OnRequestBegin is called
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.Cancel">
+            <summary>
+            Cancels all pending request on the remote connection 
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnectionBase.UrlBase">
+            <summary>
+            The base url, all endpoints defined in an API is prefixed with this value, ex: "http://locahost:1234/api/"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnectionBase.Ser">
+            <summary>
+            The serializer to use for for decoding responses
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnectionBase.PostSer">
+            <summary>
+            The serializer to use for encoding (POST/PUT)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnectionBase.Client">
+            <summary>
+            The internal HttpClient that is used
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnectionBase.ClientHandler">
+            <summary>
+            The internal HttpClientHandler that is used
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnectionBase.TimeoutInMilliSeconds">
+            <summary>
+            The timeout to use for a request, less or equal to zero to uses the timeout attribute on the interface type or if not present 60 000 ms is used.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnectionBase.CleanUrl">
+            <summary>
+            If true, url's in exceptions is stripped to not disclose sensitive information
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnectionBase.UsingTor">
+            <summary>
+            If true, the traffic is routed through the Tor network.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnectionBase.Compression">
+            <summary>
+            The compression type to use when sending content, the server MUST support the compression method.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteConnectionBase.CompLevel">
+            <summary>
+            The compression level
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Remote.RemoteConnectionBase.PerfMon">
+            <summary>
+            The performance monitor instance
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteConnectionBase.GetStats">
+            <summary>
+            Return some stats
+            </summary>
+            <returns>The stats</returns>
+        </member>
+        <member name="M:SysWeaver.RemoteConnectionExt.SysWeaverLogin(SysWeaver.Remote.IRemoteApi,System.String,System.String,System.String)">
+            <summary>
+            Login to a SysWeaver service
+            </summary>
+            <param name="connection">A connection to a SysWeaver service</param>
+            <param name="username">Username</param>
+            <param name="password">Password (never sent in plaintext, nor sent using the same hash twice)</param>
+            <param name="urlFix">An optional url part added to the remote connections base url (to get to the server root url)</param>
+            <returns>User information if successful else null</returns>
+        </member>
+        <member name="M:SysWeaver.RemoteConnectionExt.SysWeaverLogOut(SysWeaver.Remote.IRemoteApi,System.String)">
+            <summary>
+            Log out the currentgly logged in user
+            </summary>
+            <param name="connection">A connection to a SysWeaver service</param>
+            <param name="urlFix">An optional url part added to the remote connections base url (to get to the server root url)</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.RemoteConnectionExt.SysWeaverFileUploadPrepare(SysWeaver.Remote.IRemoteApi,System.String,System.String,System.String[])">
+            <summary>
+            Prepare file(s) for upload to a SysWeaver service (get information from the server about the files)
+            </summary>
+            <param name="connection">The remote connection</param>
+            <param name="repo">The repository</param>
+            <param name="urlFix">An optional url part added to the remote connections base url (to get to the server root url)</param>
+            <param name="filenames">File(s) to prepare for upload</param>
+            <returns>Information about the files</returns>
+        </member>
+        <member name="M:SysWeaver.RemoteConnectionExt.SysWeaverFileUploadPrepared(SysWeaver.Remote.IRemoteApi,System.String,System.String,SysWeaver.SysWeaverHttpClientExt.FileInfo[])">
+            <summary>
+            Upload the files previously prepared
+            </summary>
+            <param name="connection">The remote connection</param>
+            <param name="repo">The repository</param>
+            <param name="urlFix">An optional url part added to the remote connections base url (to get to the server root url)</param>
+            <param name="info">The files as returned byFileUploadPrepare</param>
+            <returns>True if the upload request(s) was performed and status was updated in the file info(s). True does NOT mean that the file(s) was uploaded succesfully, need to check status</returns>
+        </member>
+        <member name="M:SysWeaver.RemoteConnectionExt.SysWeaverFileUpload(SysWeaver.Remote.IRemoteApi,System.String,System.String,System.String[])">
+            <summary>
+            Upload one or more files to a SysWeaver service
+            </summary>
+            <param name="connection">The remote connection</param>
+            <param name="repo">The repository</param>
+            <param name="urlFix">An optional url part added to the remote connections base url (to get to the server root url)</param>
+            <param name="filenames">File(s) to upload</param>
+            <returns>An array of information about the files (and their status), or null if some fatal error happened</returns>
+        </member>
+        <member name="T:SysWeaver.SysWeaverHttpClientExt">
+            <summary>
+            Extensions to HttpClient to perform some action against SysWeaver services
+            </summary>
+        </member>
+        <member name="T:SysWeaver.SysWeaverHttpClientExt.AuthInfo">
+            <summary>
+            SysWeaver auth information
+            </summary>
+        </member>
+        <member name="P:SysWeaver.SysWeaverHttpClientExt.AuthInfo.Succeeded">
+            <summary>
+            True if a user is logged in to the session
+            </summary>
+        </member>
+        <member name="P:SysWeaver.SysWeaverHttpClientExt.AuthInfo.Language">
+            <summary>
+            The language code of the user / session
+            </summary>
+        </member>
+        <member name="P:SysWeaver.SysWeaverHttpClientExt.AuthInfo.Guid">
+            <summary>
+            Guid (can be used for user image etc)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.SysWeaverHttpClientExt.AuthInfo.Username">
+            <summary>
+            The unique account name of the user
+            </summary>
+        </member>
+        <member name="P:SysWeaver.SysWeaverHttpClientExt.AuthInfo.NickName">
+            <summary>
+            The non-unique customizable nick name of the user (defaults to username)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.SysWeaverHttpClientExt.AuthInfo.Domain">
+            <summary>
+            The domain of the user (the domain meaning is application specific)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.SysWeaverHttpClientExt.AuthInfo.Tokens">
+            <summary>
+            The security tokens that this user have
+            </summary>
+        </member>
+        <member name="P:SysWeaver.SysWeaverHttpClientExt.LoginReq.Hash">
+            <summary>
+            Process: 
+                temp = Convert.ToBase64(SHA256.HashData(Encoding.UTF8.GetBytes(String.Join('|', password, userSalt))))
+                Hash = Convert.ToBase64(SHA256.HashData(Encoding.UTF8.GetBytes(String.Join('|', temp, OneTimePad))))
+            </summary>
+        </member>
+        <member name="P:SysWeaver.SysWeaverHttpClientExt.LoginReq.OneTimePad">
+            <summary>
+            The one time pad used (from GetUserSalt)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SysWeaverHttpClientExt.SysWeaverLogin(System.Net.Http.HttpClient,System.String,System.String,System.String)">
+            <summary>
+            Login to a SysWeaver service
+            </summary>
+            <param name="client">The http client to login</param>
+            <param name="server">The base address to a SysWeaver service</param>
+            <param name="username">Username</param>
+            <param name="password">Password (never sent in plaintext, nor sent using the same hash twice) or password hash</param>
+            <returns>User information if successful else null</returns>
+        </member>
+        <member name="M:SysWeaver.SysWeaverHttpClientExt.SysWeaverLogout(System.Net.Http.HttpClient,System.String)">
+            <summary>
+            Log out the currentgly logged in user
+            </summary>
+            <param name="client">The http client to login</param>
+            <param name="server">The base address to a SysWeaver service</param>
+            <returns></returns>
+        </member>
+        <member name="T:SysWeaver.SysWeaverHttpClientExt.FileInfo">
+            <summary>
+            Information about a file 
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileInfo.Name">
+            <summary>
+            Name of the file (only filename and extension, no path)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileInfo.Length">
+            <summary>
+            Length in bytes of the file data
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileInfo.Hash">
+            <summary>
+            The MD5 checksum of the file content, encoded using hex values, "abcd...", where a = is the high nibble of the first byte, b is the low nibble of the first byte and so on...
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileInfo.LastModified">
+            <summary>
+            Numer of milliseconds since the Unix epoch
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SysWeaverHttpClientExt.FileInfo.SetLastModified(System.DateTime)">
+            <summary>
+            Set the LastModified field from a an UTC DateTime time.
+            </summary>
+            <param name="utcLastModified">The last modified time in UTC</param>
+        </member>
+        <member name="T:SysWeaver.SysWeaverHttpClientExt.FileStatus">
+            <summary>
+            The status for a file that is about to be uploaded to a server
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.DiscQuotaExceeded">
+            <summary>
+            Can't upload this file since the disc quota will be exceeded
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.NotAuthorized">
+            <summary>
+            Not autharized to upload this file
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.InvalidParams">
+            <summary>
+            Some paramaters are wrong
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.RefuseExtension">
+            <summary>
+            The file extension is not accepeted
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.RefuseSize">
+            <summary>
+            The file is refused due to it's size (typically too big)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.Refuse">
+            <summary>
+            File is refused for some other reason
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.UploadFailed">
+            <summary>
+            The upload failed (might retry)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.None">
+            <summary>
+            No status found
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.AlreadyUploaded">
+            <summary>
+            The file already exist and the checksum etc matches so no need to upload again
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileStatus.Upload">
+            <summary>
+            The file is ok to be uploaded
+            </summary>
+        </member>
+        <member name="T:SysWeaver.SysWeaverHttpClientExt.FileUploadRequest">
+            <summary>
+            Check upload status for one or more files
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileUploadRequest.Repo">
+            <summary>
+            The name of the repository to upload to
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SysWeaverHttpClientExt.FileUploadRequest.Files">
+            <summary>
+            File information
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SysWeaverHttpClientExt.SysWeaverFileUploadPrepare(System.Net.Http.HttpClient,System.String,System.String,System.String[])">
+            <summary>
+            Prepare file(s) for upload to a SysWeaver service (get information from the server about the files)
+            </summary>
+            <param name="client">The http client to login</param>
+            <param name="server">The base address to a SysWeaver service</param>
+            <param name="repo">The repository</param>
+            <param name="filenames">File(s) to prepare for upload</param>
+            <returns>Information about the files</returns>
+        </member>
+        <member name="M:SysWeaver.SysWeaverHttpClientExt.SysWeaverFileUploadPrepared(System.Net.Http.HttpClient,System.String,System.String,SysWeaver.SysWeaverHttpClientExt.FileInfo[])">
+            <summary>
+            Upload the files previously prepared
+            </summary>
+            <param name="client">The http client to login</param>
+            <param name="server">The base address to a SysWeaver service</param>
+            <param name="repo">The repository</param>
+            <param name="info">The files as returned byFileUploadPrepare</param>
+            <returns>True if the upload request(s) was performed and status was updated in the file info(s). True does NOT mean that the file(s) was uploaded succesfully, need to check status</returns>
+        </member>
+        <member name="M:SysWeaver.SysWeaverHttpClientExt.SysWeaverFileUpload(System.Net.Http.HttpClient,System.String,System.String,System.String[])">
+            <summary>
+            Upload one or more files to a SysWeaver service
+            </summary>
+            <param name="client">The http client to login</param>
+            <param name="server">The base address to a SysWeaver service</param>
+            <param name="repo">The repository</param>
+            <param name="filenames">File(s) to upload</param>
+            <returns>An array of information about the files (and their status), or null if some fatal error happened</returns>
+        </member>
+    </members>
+</doc>

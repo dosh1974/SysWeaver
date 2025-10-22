@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFramework>net8.0</TargetFramework>
+	  <RootNamespace>SysWeaver.FolderSync</RootNamespace>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+    <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
+    <ProjectReference Include="..\SysWeaver.Remote.Connection\SysWeaver.Remote.Connection.csproj" />
+    <ProjectReference Include="..\SysWeaver.Storage\SysWeaver.Storage.csproj" />
+  </ItemGroup>
+
+</Project>

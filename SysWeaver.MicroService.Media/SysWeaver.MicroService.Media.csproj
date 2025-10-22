@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFramework>net8.0</TargetFramework>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <RootNamespace>SysWeaver.MicroService</RootNamespace>
+	  <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+
+	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\*+ .\web" />
+		<ItemGroup>
+			<EmbeddedResource Include="web\**\*.br" Visible="false" />
+		</ItemGroup>
+	</Target>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+	</ItemGroup>
+</Project>

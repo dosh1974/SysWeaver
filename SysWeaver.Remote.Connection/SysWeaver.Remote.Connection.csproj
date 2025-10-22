@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<RootNamespace>SysWeaver.Remote</RootNamespace>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<NoWarn>1701;1702;1591</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="BitFaster.Caching" Version="2.5.4" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+	  <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
+	  <ProjectReference Include="..\SysWeaver.Remote\SysWeaver.Remote.csproj" />
+	  <ProjectReference Include="..\SysWeaver.Serialization\SysWeaver.Serialization.csproj" />
+	</ItemGroup>
+
+</Project>

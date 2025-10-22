@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <RootNamespace>SysWeaver.MicroService</RootNamespace>
+	  <NoWarn>1701;1702;1591</NoWarn>
+	  <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+	  <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+  </PropertyGroup>
+
+	
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.AspHttpServer\SysWeaver.AspHttpServer.csproj" />
+    <ProjectReference Include="..\SysWeaver.Auth.Core\SysWeaver.Auth.Core.csproj" />
+    <ProjectReference Include="..\SysWeaver.HttpServer\SysWeaver.HttpServer.csproj" />
+    <ProjectReference Include="..\SysWeaver.MicroService.HttpServer\SysWeaver.MicroService.HttpServer.csproj" />
+    <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,691 @@
+﻿
+
+a {
+    text-decoration: none;
+    color: inherit;
+    padding: 0;
+    margin: 0;
+}
+
+    a:visited {
+        color: inherit;
+    }
+
+body {
+    margin: 0;
+    overflow-x: scroll;
+}
+
+
+.DataTable {
+    border: 1px solid rgba(0,0,0,0.3);
+    border-collapse: collapse;
+    border-spacing: 0;
+    font-size: 100%;
+    margin: 4px 4px 32px 4px;
+}
+
+    .DataTable tr {
+        transition: background-color 0.2s;
+        min-height: 28px;
+    }
+
+        .DataTable tr:hover {
+            background-color: rgba(var(--ThemeAcc2RGB), 0.1);
+        }
+
+        .DataTable tr:nth-child(2n) {
+            transition: background-color 0.2s;
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+            .DataTable tr:nth-child(2n):hover {
+                background-color: rgba(var(--ThemeAcc2RGB), 0.1);
+            }
+
+
+    .DataTable tr:nth-child(1) {
+        background-color: var(--ThemeAcc1);
+    }
+
+        .DataTable tr:nth-child(1) th:nth-child(2) {
+            border-radius: var(--ThemeRad);
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+
+        .DataTable tr:nth-child(1) th:last-child {
+            border-radius: var(--ThemeRad);
+            border-top-left-radius: 0;
+            border-bottom-right-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+
+            .DataTable tr:nth-child(1) th:last-child:nth-child(2) {
+                border-radius: var(--ThemeRad);
+                border-bottom-right-radius: 0;
+                border-bottom-left-radius: 0;
+            }
+
+
+
+    .DataTable th {
+        text-align: left;
+        overflow: hidden;
+        white-space: nowrap;
+        padding: 4px 6px 4px 6px;
+        vertical-align: top;
+        user-select: none;
+        border: none;
+    }
+
+        .DataTable th:nth-child(1) {
+            background-color: var(--ThemeBackground);
+            cursor: pointer;
+            padding: 0 8px 0 0;
+            margin: 0;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .DataTable th div {
+            display: inline-flex;
+            align-items: center;
+        }
+
+
+    .DataTable tr.HideRow {
+        display: none;
+    }
+    
+    .DataTable tr.FilterRow {
+        background-color: var(--ThemeAcc1);
+    }
+
+
+        .DataTable tr.FilterRow:hover {
+            background-color: var(--ThemeAcc1);
+        }
+
+        .DataTable tr.FilterRow:nth-child(2n):hover {
+            background-color: var(--ThemeAcc1);
+        }
+
+
+    .DataTable tr.FilterRow td:nth-child(1) {
+        color: var(--ThemeMain);
+        background-color: var(--ThemeBackground);
+        opacity: 1;
+        cursor: pointer;
+        padding: 0 8px 0 0;
+        margin: 0;
+        text-align: center;
+        vertical-align: middle;
+    }
+
+
+        .DataTable tr.FilterRow td {
+            vertical-align: middle;
+            border: none;
+            padding: 2px 3px 2px 3px;
+            white-space: nowrap;
+        }
+
+            .DataTable tr.FilterRow td select {
+                font-family: var(--ThemeFont);
+                box-sizing: border-box;
+                border: none;
+                outline: none;
+                background-color: var(--ThemeBackground);
+                color: var(--ThemeMain);
+                cursor: pointer;
+                border-radius: 6px;
+                padding: 1px 0 1px 0;
+                width: 100%;
+                height: 100%;
+                font-size: 100%;
+            }
+
+                .DataTable tr.FilterRow td select:focus {
+                    outline: 2px solid var(--ThemeAcc2);
+                }
+
+        .DataTable tr.FilterRow td option {
+            cursor: pointer;
+        }
+
+        .DataTable tr.FilterRow td option:hover {
+            background-color: var(--ThemeAcc1);
+            color: var(--ThemeBackground);
+        }
+
+
+
+            .DataTable tr.FilterRow td input {
+                font-family: var(--ThemeFont);
+                box-sizing: border-box;
+                border: none;
+                outline: none;
+                background-color: var(--ThemeBackground);
+                color: var(--ThemeMain);
+                border-radius: var(--ThemeRadInp);
+                padding: 2px 3.5px 2px 3.5px;
+                width: 100%;
+                height: 100%;
+                font-size: 100%;
+            }
+
+                .DataTable tr.FilterRow td input::placeholder {
+                    font-size: 90%;
+                    font-style: italic;
+                    opacity: 0.6;
+                }
+
+                .DataTable tr.FilterRow td input:focus {
+                    outline: 2px solid var(--ThemeAcc2);
+                }
+
+                .DataTable tr.FilterRow td input:read-only{
+                    opacity: 0.7;
+                }
+
+
+            .DataTable tr.FilterRow td table-check {
+                border-radius: 6px;
+                padding: 0px 5px 0px 5px;
+                background-color: var(--ThemeBackground);
+                color: var(--ThemeAcc2);
+                user-select: none;
+                cursor: pointer;
+                border: 1px solid var(--ThemeBackground);
+                line-height: 21.5px;
+                display: inline-block;
+                opacity: 0.8;
+                transition: opacity 0.1s transform 0.1s outline 0.1s;
+            }
+
+                .DataTable tr.FilterRow td table-check.Disabled {
+                    cursor: default;
+                    color: var(--ThemeMain);
+                    opacity: 0.7;
+                }
+
+
+    .DataTable tr.FilterRow td table-check:hover {
+        opacity: 1;
+        transform: translateY(-0.5px);
+    }
+                .DataTable tr.FilterRow td table-check.Disabled:hover {
+                    opacity: 0.7;
+                    transform: none;
+                }
+
+
+    .DataTable tr.FilterRow td table-check:active {
+        transform: translateY(1px);
+    }
+
+                .DataTable tr.FilterRow td table-check.Disabled:active {
+                    transform: none;
+                }
+
+
+                .DataTable tr.FilterRow td table-check:focus {
+                    opacity: 1;
+                    transform: translateY(-0.5px);
+                    outline: 2px solid var(--ThemeMain);
+                }
+
+                .DataTable tr.FilterRow td table-check.Disabled:focus {
+                    opacity: 0.7;
+                    transform: none;
+                    outline: none;
+                }
+
+            .DataTable tr.FilterRow td table-check.Checked {
+                color: var(--ThemeBackground);
+                background-color: var(--ThemeAcc2);
+                border: 1px solid var(--ThemeBackground);
+            }
+
+            .DataTable tr.FilterRow td table-check:nth-child(2) {
+                margin-left: 4px;
+            }
+
+    .DataTable th.Sort {
+        cursor: pointer;
+        opacity: 0.5;
+        transition: opacity 0.1s;
+    }
+
+        .DataTable th.Sort:hover {
+            opacity: 0.9;
+        }
+
+        .DataTable th.Sort icon-main {
+            margin-right: 4px;
+        }
+
+    .DataTable th.NoSort icon-16x16 {
+        width: 0px;
+    }
+
+    .DataTable th.CurrentSort {
+        cursor: pointer;
+    }
+
+        .DataTable th.CurrentSort icon-main {
+            margin-right: 4px;
+        }
+
+    .DataTable th span {
+        color: var(--ThemeBackground);
+        font-weight: bold;
+        font-size: 75%;
+        text-transform: uppercase;
+        text-overflow: ellipsis;
+    }
+
+    .DataTable td {
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+        border: 1px solid rgba(0,0,0,0.4);
+        padding: 4px 6px 4px 6px;
+        vertical-align: top;
+        color: var(--ThemeAcc1);
+    }
+
+        .DataTable td span {
+            margin: 0px 4px 0px 4px;
+            background-color: var(--ThemeAcc1);
+            color: var(--ThemeBackground);
+            border-radius: var(--ThemeRadInp);
+            padding: 2px 4px 2px 4px;
+            font-weight: bold;
+            }
+
+        .DataTable td a {
+            color: var(--ThemeAcc2);
+            padding: 2px 4px 2px 4px;
+            transition: color 0.2s, background-color 0.2s;
+            border-radius: 6px;
+        }
+
+            .DataTable td a:hover {
+                color: var(--ThemeBackground);
+                background-color: var(--ThemeAcc2);
+            }
+
+        .DataTable td:nth-child(1) {
+            color: rgba(var(--ThemeAcc2RGB), 0.6);
+            font-size: 75%;
+            padding-top: 8px;
+        }
+
+        .DataTable td.Right {
+            text-align: right;
+        }
+
+        .DataTable td.Monospaced {
+            font-family: var(--ThemeFontMono);
+            padding-top: 7px;
+        }
+
+        .DataTable td.Flash{
+            animation-name: DataTableFlash;
+            animation-duration: 1s;
+        }
+
+        .DataTable td.False {
+            color: var(--ThemeAcc2);
+        }
+
+        .DataTable td.Null {
+            opacity: 0.5;
+        }
+
+        .DataTable td.Text {
+            user-select: text;
+            color: var(--ThemeMain);
+        }
+
+        .DataTable td.Toggle
+        {
+            padding: 0;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .DataTable td.ValueFormatImg {
+            padding-top: 0;
+            padding-bottom: 0;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .DataTable td.ValueFormatImg.Left {
+            text-align: left;
+        }
+
+        .DataTable td.ValueFormatImg.Right {
+            text-align: right;
+        }
+
+            .DataTable td.ValueFormatImg img.ImgLink {
+                cursor: pointer;
+            }
+
+
+        .DataTable td.ValueFormatDefault.MouseClick {
+            cursor: pointer;
+            transition: color linear 0.1s;
+        }
+
+        .DataTable td.ValueFormatDefault.MouseClick:hover {
+            color: var(--ThemeAcc1);
+        }
+
+        .DataTable td.ValueFormatJson {
+            user-select: text;
+            padding-top: 0;
+            padding-bottom: 0;
+            vertical-align: middle;
+            cursor: pointer;
+            color: var(--ThemeMain);
+            transition: color linear 0.1s;
+        }
+
+            .DataTable td.ValueFormatJson:hover {
+                color: var(--ThemeAcc1);
+            }
+
+            .DataTable td.ValueFormatJson.Capped:after{
+                content: ' ...';
+                color: var(--ThemeAcc2);
+            }
+
+        .DataTable td.ValueFormatText {
+            user-select: text;
+            padding-top: 0;
+            padding-bottom: 0;
+            vertical-align: middle;
+            cursor: pointer;
+            color: var(--ThemeMain);
+            transition: color linear 0.1s;
+        }
+
+            .DataTable td.ValueFormatText:hover {
+                color: var(--ThemeAcc1);
+            }
+
+            .DataTable td.ValueFormatText.Capped:after {
+                content: ' ...';
+                color: var(--ThemeAcc2);
+            }
+
+
+        .DataTable td.ValueFormatMD {
+            user-select: text;
+            padding-top: 0;
+            padding-bottom: 0;
+            vertical-align: middle;
+            cursor: pointer;
+            color: var(--ThemeMain);
+            transition: color linear 0.1s;
+        }
+
+            .DataTable td.ValueFormatMD:hover {
+                color: var(--ThemeAcc1);
+            }
+
+            .DataTable td.ValueFormatMD.Capped:after {
+                content: ' ...';
+                color: var(--ThemeAcc2);
+            }
+
+SysWeaver-toggle {
+    user-select: none;
+    display: inline-block;
+    background-color: var(--ThemeAcc2);
+    padding: 0 6px 0 6px;
+    color: var(--ThemeBackground);
+    border-radius: 6px;
+    cursor: pointer;
+    vertical-align: middle;
+    opacity: 0.5;
+    transition: opacity 0.1s transform 0.1s outline 0.1s;
+    margin: 1px 4px 1px 4px;
+}
+
+    SysWeaver-toggle:focus {
+        opacity: 1;
+        transform: translateY(-0.5px);
+        outline: 2px solid var(--ThemeAcc1);
+    }
+
+    SysWeaver-toggle:hover {
+        opacity: 1;
+        transform: translateY(-0.5px);
+    }
+
+    SysWeaver-toggle:active {
+        transform: translateY(1px);
+    }
+
+        SysWeaver-toggle.Null {
+            opacity: 0.2;
+            cursor: default;
+        }
+
+
+SysWeaver-action {
+    user-select: none;
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: left;
+    background-color: var(--ThemeAcc2);
+    padding: 0px 6px 0px 3px;
+    color: var(--ThemeBackground);
+    border-radius: 6px;
+    cursor: pointer;
+    vertical-align: middle;
+    opacity: 0.8;
+    transition: opacity 0.1s transform 0.1s outline 0.1s;
+    margin: 1px 4px 1px 4px;
+    height: 22px;
+}
+
+    SysWeaver-action img {
+        max-width: 22px;
+        max-height: 22px;
+    }
+
+    SysWeaver-action:focus {
+        opacity: 1;
+        transform: translateY(-0.5px);
+        outline: 2px solid var(--ThemeAcc1);
+    }
+
+    SysWeaver-action:hover {
+        opacity: 1;
+        transform: translateY(-0.5px);
+    }
+    
+    SysWeaver-action:active {
+        transform: translateY(1px);
+    }
+
+SysWeaver-action.Null {
+    opacity: 0.2;
+    cursor: default;
+}
+
+    SysWeaver-action.Disabled {
+        opacity: 0.2;
+        cursor: default;
+    }
+
+    SysWeaver-action > * {
+        display: inline-block;
+    }
+
+SysWeaver-actionText {
+    margin-left: 6px;
+}
+
+
+
+
+@keyframes DataTableFlash {
+    from {
+        background-color: var(--ThemeAcc225);
+    }
+
+    to {
+        background-color: transparent;
+    }
+}
+
+
+SysWeaver-PopupMenu.Table SysWeaver-PopupMenuBack {
+    bottom: 0;
+}
+
+
+
+/* Icon images */
+
+
+.IconAscending {
+    mask-image: url("../icons/m_sort_asc.svg");
+}
+
+.IconDescending {
+    mask-image: url("../icons/m_sort_desc.svg");
+}
+
+.IconPlus {
+    mask-image: url("../icons/plus.svg");
+}
+
+.IconMinus {
+    mask-image: url("../icons/minus.svg");
+}
+
+.IconClose {
+    mask-image: url("../icons/close.svg");
+}
+
+.IconMore {
+    mask-image: url("../icons/more.svg");
+}
+
+.IconExpand {
+    mask-image: url("../icons/expand.svg");
+}
+
+.IconClear {
+    mask-image: url("../icons/clear.svg");
+}
+
+.IconClearSort {
+    mask-image: url("../icons/m_menu.svg");
+}
+
+.IconCollapse {
+    mask-image: url("../icons/collapse.svg");
+}
+
+.IconReset {
+    mask-image: url("../icons/reset.svg");
+}
+
+.IconPrev{
+    mask-image: url("../icons/prev.svg");
+}
+
+.IconNext {
+    mask-image: url("../icons/next.svg");
+}
+
+.IconHome {
+    mask-image: url("../icons/home.svg");
+}
+
+.IconClose {
+    mask-image: url("../icons/close.svg");
+}
+
+.IconReload {
+    mask-image: url("../icons/reload.svg");
+}
+
+.IconExport {
+    mask-image: url("../icons/newtab.svg");
+}
+
+.IconFileCsv {
+    background-color: transparent !important;
+    background-image: url("../icons/ext/csv.svg");
+}
+
+.IconFileJson {
+    background-color: transparent !important;
+    background-image: url("../icons/ext/json.svg");
+}
+
+.IconFileXlsx {
+    background-color: transparent !important;
+    background-image: url("../icons/ext/xlsx.svg");
+}
+
+.IconFilePdf {
+    background-color: transparent !important;
+    background-image: url("../icons/ext/pdf.svg");
+}
+
+.IconCopy {
+    mask-image: url("../icons/copy.svg");
+}
+
+.IconShareLink0 {
+    mask-image: url("../icons/disc.svg");
+}
+
+.IconShareLink1 {
+    mask-image: url("../icons/user_check.svg");
+}
+
+.IconShareLink2 {
+    mask-image: url("../icons/share.svg");
+}
+
+
+datatable-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 32px;
+    background-color: var(--ThemeAcc1);
+    vertical-align: middle;
+    padding: 1px 0 4px 8px;
+    box-sizing: border-box;
+    border-radius: var(--ThemeRad);
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+datatable-footer icon-26x26{
+    margin-right: 8px;
+    cursor: pointer;
+}
+
+    datatable-footer *.Disabled {
+        cursor: default;
+        opacity: 0.5;
+    }

@@ -1,0 +1,95 @@
+﻿SysWeaver-TagsGallery {
+    box-sizing: border-box;
+    padding: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    border: 1px solid var(--ThemeMain50);
+    border-radius: var(--SysWeaverEditDesktopRad);
+    background-color: var(--ThemeBackground);
+    margin: 4px;
+    margin-bottom: 32px;
+    overflow: hidden;
+}
+
+SysWeaver-TagsGallery.Embedded {
+    padding: 0;
+    border: none;
+    background-color: initial;
+    margin: 0;
+}
+
+
+    SysWeaver-TagsGallery.Keep {
+        min-height: 66px;
+    }
+
+        SysWeaver-TagsGallery.Keep SysWeaver-TagEdit {
+            background-color: #4c4;
+        }
+
+    SysWeaver-TagsGallery.Ignore {
+        min-height: 66px;
+    }
+
+        SysWeaver-TagsGallery.Ignore SysWeaver-TagEdit {
+            background-color: #48c;
+        }
+
+
+SysWeaver-TagEdit {
+    background-color: var(--ThemeAcc1);
+    color: var(--ThemeBackground);
+    border-radius: 15px;
+    margin: 8px;
+    padding: 8px 16px 8px 16px;
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 24px;
+    outline: none;
+    transition: outline linear 0.1s;
+}
+
+    SysWeaver-TagEdit:focus {
+        outline: 3px solid var(--ThemeAcc2);
+    }
+
+    SysWeaver-TagEdit SysWeaver-TagText {
+        float: left;
+        display: inline-block;
+        font-weight: bold;
+    }
+
+    SysWeaver-TagEdit icon-24x24 {
+        float: right;
+        vertical-align: middle;
+        display: inline-block;
+        margin-left: 8px;
+    }
+
+
+
+
+SysWeaver-TagsGallery SysWeaver-Button {
+    vertical-align: middle;
+}
+
+SysWeaver-PopUpBackground SysWeaver-TagEdit {
+    opacity: 0.8;
+    cursor: pointer;
+    transition: opacity linear 0.1s;
+}
+
+    SysWeaver-PopUpBackground SysWeaver-TagEdit:hover {
+        opacity: 1;
+    }
+
+
+
+.IconTagRemove {
+    mask-image: url("../icons/minus.svg");
+}
+
+.IconTagAdd {
+    mask-image: url("../icons/plus.svg");
+}
+

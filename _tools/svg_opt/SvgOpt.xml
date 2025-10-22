@@ -1,0 +1,153 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SvgOpt</name>
+    </assembly>
+    <members>
+        <member name="M:SysWeaver.ImageCompareGallery.Create(System.String,System.Collections.Generic.IEnumerable{System.Tuple{System.String,System.String}})">
+            <summary>
+            Creates an html files that can be used to compare images
+            </summary>
+            <param name="dest">Name of the output html file</param>
+            <param name="imagePairs">Each pair contains an original and modified filename</param>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveFill">
+            <summary>
+            Remove all fill attributes.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveSize">
+            <summary>
+            Remove size attribute.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveComments">
+            <summary>
+            Remove comments.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveWhiteSpaces">
+            <summary>
+            Remove white spaces
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveBackground">
+            <summary>
+            Remove background rectangle
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveClipRule">
+            <summary>
+            Remove clip-rules on paths (if they don't affect output)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveFillRule">
+            <summary>
+            Remove fill-rules on paths (if they don't affect output)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.TryRemoveAttributes">
+            <summary>
+            Try remove any attributes (on render items)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveAttributeSpaces">
+            <summary>
+            Remove atribute spaces
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveTitle">
+            <summary>
+            Remove title elements
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveMetadata">
+            <summary>
+            Remove metadata elements
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveDocType">
+            <summary>
+            Remove the doc type
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.ShortenColors">
+            <summary>
+            Select the shortest color representation
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.ShortenPath">
+            <summary>
+            Remove spaces from a path
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveVersion">
+            <summary>
+            Remove version
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.TrimTagClose">
+            <summary>
+            Remove spaces before an /&gt;
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.TrimTransform">
+            <summary>
+            Remove transform
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.TrimLeadingZeros">
+            <summary>
+            Remove the leading zeros, i.e "0.5" => ".5" and "-0.3" to "-.3"
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.TrimTrailingZeros">
+            Remove trailing zeros, i.e "10.500" => "10.5", "13.0" => "13", "0.0" => "0", ".10" => ".1", ".0" => "0", "-0.0" => "0", "-.000" => "0"
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveGraphs">
+            <summary>
+            Remove empty and / or unnecessary graphs
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveTextNodes">
+            <summary>
+            Remove empty text nodes
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveHidden">
+            <summary>
+            Remove hidden nodes (display = "none")
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveIds">
+            <summary>
+            Remove unused id's
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RemoveUseSize">
+            <summary>
+            Remove use width or height of 100% 
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.RenameIds">
+            <summary>
+            Rename id's to shorten them
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.MaxDecimalRes">
+            <summary>
+            Automatically select number of decimals so that at least this many coordinates are alllowed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.MaxDecimals">
+            <summary>
+            The maximum number of decimals to keep, less than zero to disable
+            </summary>
+        </member>
+        <member name="F:SysWeaver.SvgOptParams.Compare">
+            <summary>
+            Supply a filename to create a .html file that can be used to compare the original and the modified files
+            </summary>
+        </member>
+    </members>
+</doc>

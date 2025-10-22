@@ -1,0 +1,136 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <style type="text/css">
+
+
+        iframe {
+            height: 100%;
+            left: 0;
+            position: absolute;
+            top: 0;
+            width: 100%;
+        }
+
+        Settings-Menu {
+            background-color: rgba(var(--ThemeBackgroundRGB), 0.7);
+            box-sizing: border-box;
+            padding-top: 4px;
+            padding-left: 4px;
+            border-radius: 4px;
+            width: 40px;
+            height: 40px;
+            position: absolute;
+            top: 0.25em;
+            right: 0.25em;
+            display: block;
+            transition: opacity linear var(--ThemeFadeDuration);
+            opacity: 0.3;
+        }
+
+        Settings-Menu:hover {
+            opacity: 1;
+        }
+
+            Settings-Menu:focus {
+                opacity: 1;
+            }
+
+            
+    </style>
+    <link rel="stylesheet" href="${BaseUrl}common/theme.css">
+    <link rel="stylesheet" href="${BaseUrl}app/application.css">
+    <script src="${BaseUrl}common/common.js"></script>
+    <script src="${BaseUrl}app/application.js"></script>
+    <script type="text/javascript">
+        window.onload = async () => {
+            const f = document.body.getElementsByTagName("iframe")[0];
+
+            const settingMenus = "Theme";
+            const themeItems = WebMenu.From(await sendRequest("${BaseUrl}Api/application/GetMenu", settingMenus)).Items;
+            const til = themeItems.length;
+
+            const expandEmbeddedIcon = new ColorIcon("IconSettings", "IconColorThemeMain", 32, 32, "Click to show settings", ev => {
+                if (badClick(ev))
+                    return;
+
+                PopUpMenu(expandEmbeddedIcon.Element, close => {
+
+                    const menu = new WebMenu();
+                    menu.Name = "AppSettings";
+                    if (FullScreen.IsFull()) {
+                        menu.Items.push(WebMenuItem.From({
+                            Name: "Exit full screen",
+                            Flags: 0,
+                            IconClass: "IconFullScreenExit",
+                            Title: "Exit full screen mode",
+                            Data: async () => {
+
+                                await FullScreen.Exit();
+                                close();
+                            },
+                        }));
+                    } else {
+                        menu.Items.push(WebMenuItem.From({
+                            Name: "Enter full screen",
+                            Flags: 0,
+                            IconClass: "IconFullScreenEnter",
+                            Title: "Enter full screen mode",
+                            Data: async () => {
+
+                                await FullScreen.Enter();
+                                close();
+                            },
+                        }));
+                    }
+
+                    for (let i = 0; i < til; ++i)
+                        menu.Items.push(themeItems[i]);
+
+/*                    menu.Items.push(WebMenuItem.From({
+                        Name: "Open in new tab",
+                        Flags: 0,
+                        IconClass: "IconNewTab",
+                        Title: "Open the content iframe in a new tab",
+                        Data: async () => {
+                            const contentUrl = f.src;
+                            if (contentUrl)
+                                Open(contentUrl);
+                            close();
+                        },
+                    }));
+*/
+                    return menu;
+                }, true);
+            });
+            const sm = document.createElement("Settings-Menu");
+            sm.appendChild(expandEmbeddedIcon.Element);
+            document.body.appendChild(sm);
+
+            let delay = 100;
+            let i = 0;
+            const fn = () => {
+                try {
+                    const t = f.contentDocument.title;
+                    if (t !== document.title)
+                        document.title = t;
+                    delay = 5000;
+                }
+                catch
+                {
+                    ++i;
+                    if (i > 50)
+                        delay = 5000;
+                }
+                setTimeout(fn, delay);
+            };
+            fn();
+        };
+    </script>
+</head>
+<body>
+    <iframe src="${Url Name}" frameborder="0"></iframe>
+</body>
+</html>

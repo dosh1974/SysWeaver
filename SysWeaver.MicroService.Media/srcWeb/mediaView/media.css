@@ -1,0 +1,458 @@
+﻿
+body {
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    text-align: center;
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+
+SysWeaver-Page.Media {
+    position: fixed;
+    top: 0;
+}
+
+Media-Full {
+    position: relative;
+    z-index: 1;
+}
+
+
+Media-Full.Hide Media-Preview
+{
+    display: none;
+}
+
+    Media-Full.Hide Media-Stats{
+        display: none;
+    }
+
+    Media-Full.Hide Media-Controls {
+        display: none;
+    }
+
+
+    Media-Full > * {
+        max-width: 52em;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    Media-Full > Media-Preview {
+        max-width: initial;
+    }
+
+
+Media-NoAudio {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1000;
+    background-color: var(--ThemeBackground75);
+    backdrop-filter: blur(4px);
+    font-size: 125%;
+    color: var(--ThemeMain);
+    cursor: pointer;
+    line-height: 100vh;
+    vertical-align: middle;
+    text-align: center;
+}
+
+
+/* Preview */
+Media-Preview {
+    --maxWidth: calc(min(100vw - 5em, ((80vh - 72px - 5em) * 16 / 9)));
+    display: block;
+    width: var(--maxWidth);
+    height: calc(var(--maxWidth) * 9 / 16);
+    margin: 1em auto;
+}
+
+    Media-Preview.Replacing {
+        position: fixed;
+        top: -10000px;
+    }
+
+    Media-Preview.NoVisual {
+        width: 0;
+        height: 0;
+        margin: 0;
+    }
+
+Media-AspectContainer.MediaPreviewFit > * {
+    background-color: var(--ThemeBackground);
+}
+
+
+Media-AspectContainer.MediaPreviewFit > *{
+    /*filter: drop-shadow(0 0 16px rgba(var(--ThemeAcc1RGB), 0.5));*/
+}
+
+Media-AspectContainer.MediaPreviewFill {
+    overflow: hidden;
+}
+
+
+/* Aspect ratio control */
+
+Media-AspectContainer {
+    position: relative;
+    display: block;
+}
+
+    Media-AspectContainer > * {
+        position: relative;
+        display: block;
+        border: none;
+        pointer-events: none;
+        left: 0;
+        top: 0;
+        transform-origin: top left;
+    }
+
+        Media-AspectContainer > *.MediaHidden {
+            opacity: 0;
+            position: fixed;
+        }
+
+    Media-AspectContainer.MediaPreviewFit > Media-Overlay {
+        filter: none;
+        background-color: transparent;
+    }
+
+    Media-AspectContainer > Media-Overlay {
+        background-color: transparent;
+        box-sizing: border-box;
+        position: absolute;
+        opacity: 0;
+        outline: 2px solid transparent;
+    }
+
+        Media-AspectContainer > Media-Overlay.Show {
+            background-color: transparent;
+            opacity: 1;
+            outline: 2px solid red;
+        }
+
+/* Stats */
+
+Media-Stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    align-content: flex-start;
+    justify-content: space-between;
+    overflow: visible;
+    margin: 0 auto;
+    margin-bottom: 1em;
+}
+
+    Media-Stats > *:first-child:last-child {
+        margin: 0 auto;
+    }
+
+Media-Stat {
+    margin: 0.5em;
+    display: inline-block;
+    padding: 4px 8px;
+    border: 2px solid var(--ThemeMain50);
+    border-radius: var(--ThemeRad);
+    font-size: 70%;
+    background-color: var(--ThemeBackground);
+    outline: 2px solid transparent;
+    cursor: pointer;
+    transition: border linear 0.1s, outline linear 0.1s;
+    font-family: var(--ThemeFontMono);
+}
+
+    Media-Stat.Adjust {
+        color: rgb(20, 192, 20);
+        border: 2px solid rgba(20, 192, 20, 0.5);
+    }
+
+        Media-Stat.Adjust:hover {
+            border: 2px solid rgb(20, 192, 20);
+        }
+
+
+    Media-Stat.Clip {
+        color: rgb(20, 96, 192);
+        border: 2px solid rgba(20, 96, 192, 0.5);
+    }
+
+        Media-Stat.Clip:hover {
+            border: 2px solid rgb(20, 96, 192);
+        }
+
+
+    Media-Stat.Actual {
+        color: rgb(192, 20, 192);
+        border: 2px solid rgba(192, 20, 192, 0.5);
+    }
+
+        Media-Stat.Actual:hover {
+            border: 2px solid rgb(192, 20, 192);
+        }
+
+    Media-Stat:hover {
+        border: 2px solid var(--ThemeMain);
+    }
+
+    Media-Stat:focus {
+        outline: 2px solid var(--ThemeAcc1);
+    }
+
+
+Media-Stat.Hide
+{
+    display: none;
+}
+
+Media-StatName {
+    display: inline-block;
+    margin-right: 0.75em;
+}
+
+Media-StatValue {
+    display: inline-block;
+    text-align: right;
+    min-width: 5em;
+}
+
+
+
+/* Controls */
+Media-Controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    align-content: flex-start;
+    justify-content: space-between;
+    overflow: visible;
+    margin: 0 auto;
+}
+
+    Media-Controls > *:first-child:last-child
+    {
+        margin: 0 auto;
+    }
+
+Media-Button {
+    font-size: 80%;
+    font-weight: bold;
+    min-width: 128px;
+    transition: opacity linear 0.1s, transform linear 0.03s, box-shadow linear 0.03s;
+    opacity: 0.8;
+    margin: 8px;
+    display: inline-block;
+    line-height: 24px;
+    padding: 8px 16px 8px 16px;
+    background-color: var(--ThemeAcc1);
+    color: var(--ThemeBackground);
+    border-radius: 15px;
+    cursor: pointer;
+    box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+    Media-Button:hover {
+        transform: translate(-0.5px, -1px);
+        opacity: 1;
+    }
+
+
+    Media-Button.Pressed {
+        transform: translate(1px, 2px);
+        box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
+        opacity: 1;
+        cursor: pointer;
+    }
+
+    Media-Button.Disabled {
+        transform: translate(1px, 2px);
+        box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
+        opacity: 0.4;
+        cursor: default;
+    }
+
+    Media-Button.Disabled:hover {
+        opacity: 0.4;
+    }
+
+
+    Media-Button Sysweaver-ButtonText {
+        vertical-align: middle;
+        display: inline-block;
+        float: left;
+    }
+
+    Media-Button Icon-24x24 {
+        vertical-align: middle;
+        display: inline-block;
+        float: right;
+        margin-left: 8px;
+    }
+
+
+Media-Edit {
+    position: relative;
+    box-sizing: border-box;
+    margin: 0 auto 0 auto;
+    padding: 0 0.25em 1em 0.25em;
+    width: 100%;
+    display: block;
+    text-align: left;
+}
+
+
+Media-View {
+    position: absolute;
+    left: 1em;
+    top: 1em;
+    right: 1em;
+    bottom: 1em;
+    display: grid;
+    grid-gap: 0;
+    grid-template-rows: minmax(25%, auto) max-content max-content;
+    grid-template-columns: 100%;
+}
+
+
+    Media-View Media-PreView {
+        grid-row: 1;
+        grid-column: 1;
+        width: 100%;
+        height: auto;
+        margin: 0;
+        overflow: hidden;
+    }
+
+    Media-View Media-Stats {
+        padding-top: 1em;
+        grid-row: 2;
+        grid-column: 1;
+        max-width: initial;
+    }
+
+    Media-View Media-Controls {
+        grid-row: 3;
+        grid-column: 1;
+        max-width: initial;
+    }
+
+
+
+
+body.MediaPreview
+{
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #000;
+}
+
+    body.MediaPreview > * {
+        position: relative;
+        display: block;
+        transform-box: border-box;
+        left: 0;
+        top: 0;
+        transition: opacity linear 0.1s;
+        border: none;
+        outline: none;
+        pointer-events: none;
+    }
+
+
+
+    body.MediaPreview.NoFade {
+        --c0: #bbb;
+        --c1: #eee;
+        --hs: calc(round(up, min(100vw, 100vh) / 32, 1px));
+        --s: calc(var(--hs) * 2);
+        background: initial;
+        background-size: var(--s) var(--s);
+        background-image: linear-gradient(45deg, var(--c0) 25%, transparent 25%, transparent 75%, var(--c0) 75%, var(--c0)), linear-gradient(45deg, var(--c0) 25%, transparent 25%, transparent 75%, var(--c0) 75%, var(--c0)), linear-gradient(45deg, var(--c1) 25%, transparent 25%, transparent 75%, var(--c1) 75%, var(--c1)), linear-gradient(45deg, var(--c1) 25%, transparent 25%, transparent 75%, var(--c1) 75%, var(--c1));
+        background-position: 0 0, var(--hs) var(--hs), var(--hs) 0, 0 var(--hs);
+    }
+
+    body.MediaPreview.NoFade > * {
+        transition: none;
+    }
+
+    body.MediaPreview > *.MediaHidden {
+        opacity: 0;
+    }
+
+
+    /* Control icons */
+    .MediaIconPlay {
+        mask-image: url("../icons/preview_play.svg");
+    }
+
+
+
+
+.MediaIconPause {
+    mask-image: url("../icons/preview_pause.svg");
+}
+
+.MediaIconStop {
+    mask-image: url("../icons/preview_stop.svg");
+}
+
+
+.MediaIconMute {
+    mask-image: url("../icons/preview_mute.svg");
+}
+
+.MediaIconUnMute {
+    mask-image: url("../icons/preview_unmute.svg");
+}
+
+.MediaIconVolLoud {
+    mask-image: url("../icons/preview_vol_loud.svg");
+}
+
+.MediaIconVolLow {
+    mask-image: url("../icons/preview_vol_low.svg");
+}
+
+.MediaIconExpand {
+    mask-image: url("../icons/preview_expand.svg");
+}
+
+.MediaIconLoop {
+    mask-image: url("../icons/preview_loop.svg");
+}
+
+.MediaIconOnce {
+    mask-image: url("../icons/preview_once.svg");
+}
+
+.IconSave {
+    mask-image: url("../icons/disc.svg");
+}
+
+.IconApply {
+    mask-image: url("../icons/reload.svg");
+}
+
+.IconMediaNewWindow {
+    mask-image: url("../icons/newtab.svg");
+}
+
+.IconMediaCollapse {
+    mask-image: url("../icons/expand.svg");
+}
+
+.IconMediaExpand{
+    mask-image: url("../icons/collapse.svg");
+}

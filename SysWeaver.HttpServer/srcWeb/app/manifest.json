@@ -1,0 +1,29 @@
+﻿{
+  "start_url": "${Request.Prefix}",
+  "short_name": "${EnvInfo.AppName}",
+  "name": "${EnvInfo.AppDisplayName}",
+  "icons": [
+    {
+      "src": "../icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "../icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ],
+  "display": "fullscreen",
+  "orientation": "any",
+  "description": "${EnvInfo.AppDescription}",
+  "theme_color": "${Color.Color}",
+  "background_color": "${Color.Background}",
+  "screenshots": [
+    {
+      "src": "../logo.svg",
+      "sizes": "1024x768",
+      "type": "image/svg+xml"
+    }
+  ]
+}

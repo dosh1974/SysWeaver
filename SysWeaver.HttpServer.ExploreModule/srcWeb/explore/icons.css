@@ -1,0 +1,59 @@
+﻿body {
+    user-select: none;
+}
+
+SysWeaver-CenterBlock {
+    padding-bottom: 1em;
+}
+
+SysWeaver-IconList {
+    text-align: center;
+    display: inline-block;
+    font-weight: bold;
+    font-size: 125%;
+}
+
+SysWeaver-IconItem {
+    --s: calc(min(100vw, 100vh - 64px - 1em) / 2 - 3em);
+    --h: calc(var(--s) + 1.5em);
+    display: inline-block;
+    position: relative;
+    width: var(--s);
+    height: var(--h);
+    border: 1px solid var(--ThemeMain50);
+    margin: 0.5em;
+    border-radius: var(--ThemeRad);
+    cursor: pointer;
+    transition: box-shadow linear 0.1s;
+}
+
+
+    SysWeaver-IconItem:hover {
+        box-shadow: var(--ThemeAcc1) 0 0 10px;
+    }
+
+    SysWeaver-IconItem img {
+        position: relative;
+        display: block;
+        width: var(--s);
+        height: var(--s);
+        border-radius: var(--ThemeRad);
+        --D: #666;
+        --B: #aaa;
+        --C: 10px;
+        --R: 20px;
+        background-position: 0px 0px, var(--C) var(--C);
+        background-size: var(--R) var(--R);
+        background-image: linear-gradient(45deg, var(--D) 25%, transparent 25%, transparent 75%, var(--D) 75%, var(--D) 100%),linear-gradient(45deg, var(--D) 25%, var(--B) 25%, var(--B) 75%, var(--D) 75%, var(--D) 100%);
+    }
+
+    SysWeaver-IconItem SysWeaver-IconName {
+        position: relative;
+        display: block;
+        width: var(--s);
+        height: 1.25em;
+        text-align: center;
+    }
+
+
+

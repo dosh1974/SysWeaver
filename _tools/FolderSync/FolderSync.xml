@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>FolderSync</name>
+    </assembly>
+    <members>
+        <member name="P:FolderSync.Params.CredFile">
+            <summary>
+            Filename, if specified the user and password is read from the file (should be single line of text in the user:key format)
+            </summary>
+        </member>
+        <member name="P:FolderSync.Params.User">
+            <summary>
+            Username or key
+            </summary>
+        </member>
+        <member name="P:FolderSync.Params.Password">
+            <summary>
+            Password
+            </summary>
+        </member>
+        <member name="P:FolderSync.Params.IgnoreCertErrors">
+            <summary>
+            If true, any bad server certificates are accepted.. NOT RECOMMENDED!
+            </summary>
+        </member>
+        <member name="P:FolderSync.Params.NoSwitch">
+            <summary>
+            If true, the files will be synched to a folder that is not used immediately, must switch folders manually on the server.
+            </summary>
+        </member>
+        <member name="P:FolderSync.Params.Comment">
+            <summary>
+            An optional comment
+            </summary>
+        </member>
+    </members>
+</doc>

@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<RootNamespace>SysWeaver.MicroService</RootNamespace>
+		<NoWarn>1701;1702;1591</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\Serialization\SysWeaver.Serialization.NewtonsoftJson\SysWeaver.Serialization.NewtonsoftJson.csproj" />
+	  <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="srcWeb\chart\external\" />
+	</ItemGroup>
+
+	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+		<Exec Command="rmdir /S /Q .\srcWeb\chart\icons\.opt" />
+		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare -RemoveFill -RemoveSize .\srcWeb\chart\icons\*.svg .\srcWeb\chart\icons\.opt\" />
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\chart\icons\.opt\*.svg+ .\web\chart\icons" />
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\chart\* .\web\chart" />
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\chart\external\*+ .\web\chart\external" />
+		<ItemGroup>
+			<EmbeddedResource Include="web\**\*.br" Visible="false" />
+		</ItemGroup>
+	</Target>
+
+</Project>

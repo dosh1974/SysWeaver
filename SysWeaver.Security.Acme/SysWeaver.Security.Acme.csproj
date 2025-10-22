@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<RootNamespace>SysWeaver.Security</RootNamespace>
+		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<NoWarn>1701;1702;1591</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <None Remove="Certs\https___acme-staging-v02.api.letsencrypt.org_directory.pem" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <EmbeddedResource Include="Certs\https___acme-staging-v02.api.letsencrypt.org_directory.pem" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="Certes" Version="3.0.4" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\SysWeaver.NetHttpServer\SysWeaver.NetHttpServer.csproj" />
+	  <ProjectReference Include="..\SysWeaver.Security\SysWeaver.Security.csproj" />
+	</ItemGroup>
+
+</Project>

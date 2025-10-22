@@ -1,0 +1,81 @@
+﻿
+
+SysWeaver-TabBar {
+    display: block;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+
+SysWeaver-Tab:first-child {
+    margin-left: 16px;
+}
+
+SysWeaver-Tab:last-child {
+    margin-right: 16px;
+}
+
+
+SysWeaver-Tab {
+    box-sizing: border-box;
+    display: inline-block;
+    cursor: pointer;
+    padding: 8px;
+    margin-right: 4px;
+    background-color: var(--ThemeBackground);
+    color: var(--ThemeMain);
+    border-radius: var(--ThemeRad);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-left: 1px solid var(--ThemeAcc1);
+    border-top: 1px solid var(--ThemeAcc1);
+    border-right: 1px solid var(--ThemeAcc1);
+    transition: background-color linear 0.1s, color linear 0.1s;
+    font-size: 80%;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+    SysWeaver-Tab:hover {
+        background-color: rgba(var(--ThemeAcc1RGB), 0.1);
+    }
+
+    SysWeaver-Tab.tabactive {
+        cursor: default;
+        background-color: var(--ThemeAcc1);
+        color: var(--ThemeBackground);
+    }
+
+        SysWeaver-Tab.tabactive:hover {
+            background-color: var(--ThemeAcc1);
+        }
+
+
+SysWeaver-TabContent {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 4px;
+    display: none;
+    border: 1px solid var(--ThemeAcc1);
+    border-radius: var(--ThemeRad);
+}
+
+    SysWeaver-TabContent.CODE {
+        font-family: var(--ThemeFontMono);
+        padding: 16px;
+        word-wrap: break-word;
+        font-size: 80%;
+        user-select: text;
+        white-space: pre;
+    }
+
+    SysWeaver-TabContent.tabactive {
+        display: block;
+    }
+
+
+
+

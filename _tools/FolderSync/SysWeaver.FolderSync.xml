@@ -1,0 +1,154 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.FolderSync</name>
+    </assembly>
+    <members>
+        <member name="M:SysWeaver.FolderSync.FolderSyncer.SyncFolder(System.String,System.String,System.Boolean,System.Action{SysWeaver.FolderSync.FolderSyncEvents,System.String})">
+            <summary>
+            Synchronize a local folder with a remote folder.
+            </summary>
+            <param name="sourceFolders">The local source folder. Multiple folders can be specified separated by a ';'</param>
+            <param name="destName">The name of the remote folder</param>
+            <param name="switchTo">If true, the newly synched folder will be used when updated</param>
+            <param name="onEvent">An optional callback used to display what's going on</param>
+            <returns>Sync results</returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncerParams.Server">
+            <summary>
+            Server address
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncerParams.IgnoreCertErrors">
+            <summary>
+            If true, any bad server certificates are accepted.. NOT RECOMMENDED!
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncerParams.MaxConcurrency">
+            <summary>
+            The maximum concurrency to use, zero or negative is based on the number of hardware threads
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncerParams.Comment">
+            <summary>
+            An optional comment
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncEvents.Hashed">
+            <summary>
+            Called when a hash of a local file have been computed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncEvents.Scanned">
+            <summary>
+            Files on the source disc have been scanned
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncEvents.Checked">
+            <summary>
+            Files have been checked against remote server
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncEvents.Uploaded">
+            <summary>
+            Called when a file have been uploaded
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncFile.Name">
+            <summary>
+            Name of the file (locally within the source folder)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncFile.Hash">
+            <summary>
+            The MD5 checksum of the file content, encoded using hex values, "abcd...", where a = is the high nibble of the first byte, b is the low nibble of the first byte and so on...
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncFile.LastModified">
+            <summary>
+            Numer of milliseconds since the Unix epoch
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncRequest.Folder">
+            <summary>
+            The folder
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncRequest.Files">
+            <summary>
+            The files
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncRequest.UseFolder">
+            <summary>
+            If true, the newly synched folder will be activated directly
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncRequest.Machine">
+            <summary>
+            The source machine name
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncRequest.Comment">
+            <summary>
+            An optional comment
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncOperation.Folder">
+            <summary>
+            The folder
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncOperation.DiscFolder">
+            <summary>
+            The name of the folder on disc
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncRequestAudit.Folder">
+            <summary>
+            The folder
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncRequestAudit.FileCount">
+            <summary>
+            The number of source files
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncRequestAudit.UseFolder">
+            <summary>
+            If true, the newly synched folder will be activated directly
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncRequestAudit.Machine">
+            <summary>
+            The source machine name
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncRequestAudit.Comment">
+            <summary>
+            An optional comment
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncResponse.FolderCode">
+            <summary>
+            The code to use when uploading files
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncResponse.Files">
+            <summary>
+            The files to upload
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncResponseAudit.FolderCode">
+            <summary>
+            The code to use when uploading files
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.FolderSyncResponseAudit.FileCount">
+            <summary>
+            The number of files to upload
+            </summary>
+        </member>
+    </members>
+</doc>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<RootNamespace>SysWeaver.Serialization</RootNamespace>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<NoWarn>1701;1702;1591</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+	  <ProjectReference Include="..\SysWeaver.Docs\SysWeaver.Docs.csproj" />
+	  <ProjectReference Include="..\SysWeaver.ExpressionEvaluator\SysWeaver.ExpressionEvaluator.csproj" />
+	</ItemGroup>
+
+</Project>

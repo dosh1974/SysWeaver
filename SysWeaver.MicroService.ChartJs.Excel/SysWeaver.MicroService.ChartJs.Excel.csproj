@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFramework>net8.0</TargetFramework>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <RootNamespace>SysWeaver.MicroService</RootNamespace>
+	  <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.Excel\SysWeaver.Excel.csproj" />
+    <ProjectReference Include="..\SysWeaver.MicroService.ChartJs\SysWeaver.MicroService.ChartJs.csproj" />
+    <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
+  </ItemGroup>
+
+</Project>

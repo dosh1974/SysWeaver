@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+	  <RootNamespace>SysWeaver.Db</RootNamespace>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+    <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
+    <ProjectReference Include="..\SysWeaver.Serialization\SysWeaver.Serialization.csproj" />
+    <ProjectReference Include="..\SysWeaver.TableData\SysWeaver.TableData.csproj" />
+    <ProjectReference Include="D:\SysWeaver\_external\simplestack.orm\src\SimpleStack.Orm\SimpleStack.Orm.csproj" />
+  </ItemGroup>
+
+</Project>

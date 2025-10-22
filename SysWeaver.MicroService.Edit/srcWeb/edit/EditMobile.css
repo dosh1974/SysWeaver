@@ -1,0 +1,435 @@
+﻿:root {
+    --SysWeaverEditMobileRad: var(--ThemeRad);
+    --SysWeaverEditMobileRadInp: var(--ThemeRadInp);
+    --SysWeaverEditMobileRadInp2: var(--ThemeRadInp2);
+}
+
+SysWeaver-TabContent > SysWeaver-EditMobile {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    background: none;
+}
+
+SysWeaver-EditEntryValue > SysWeaver-EditMobile {
+    border: none;
+}
+
+SysWeaver-EditMobile {
+    box-sizing: border-box;
+    padding: 8px;
+    display: block;
+    border: 1px solid var(--ThemeMain50);
+    border-radius: var(--SysWeaverEditMobileRad);
+    background-color: var(--ThemeBackground);
+    margin: 4px;
+}
+
+    SysWeaver-EditMobile SysWeaver-TypeTitle {
+        color: var(--ThemeAcc1);
+        font-weight: bold;
+    }
+
+    SysWeaver-EditMobile tr.SeparatorRow > td {
+        padding: 2px;
+    }
+
+
+    SysWeaver-EditMobile SysWeaver-MemberTitle {
+        box-sizing: border-box;
+        display: inline-block;
+        padding: 0;
+    }
+
+    SysWeaver-EditMobile > table {
+        box-sizing: border-box;
+        width: 100%;
+        /*table-layout: fixed;*/
+        border-collapse: collapse;
+        border-spacing: 0;
+    }
+
+        SysWeaver-EditMobile > table td {
+            padding: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+    SysWeaver-EditMobile tr.TitleRow > td {
+        padding: 0 4px 0 4px;
+        white-space: nowrap;
+        overflow: visible;
+        vertical-align: middle;
+   }
+
+        SysWeaver-EditMobile tr.TitleRow > td > .IconButton {
+            float: left;
+            margin-right: 4px;
+            width: 24px;
+            height: 24px;
+        }
+
+    SysWeaver-EditMobile tr.HeaderRow > td {
+        color: var(--ThemeMain);
+        font-weight: bold;
+        font-size: 80%;
+        padding-left: 12px;
+        padding-bottom: 0;
+        background-color: var(--ThemeMain25);
+    }
+
+        SysWeaver-EditMobile tr.HeaderRow > td:first-child {
+            width: 99%;
+            border-radius: var(--SysWeaverEditMobileRad);
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+
+
+        SysWeaver-EditMobile tr.HeaderRow > td.EditButton {
+            padding: 5px 5px 0 0;
+            vertical-align: middle;
+            line-height: 0.5em;
+            width: 32px;
+            overflow: visible;
+        }
+
+
+        SysWeaver-EditMobile tr.HeaderRow > td:last-child {
+            border-radius: var(--SysWeaverEditMobileRad);
+            border-top-left-radius: 0;
+            border-bottom-right-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+
+
+    SysWeaver-EditMobile tr.ValueRow > td {
+        background-color: var(--ThemeMain25);
+        color: var(--ThemeMain);
+        border-radius: var(--SysWeaverEditMobileRad);
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+    }
+
+    SysWeaver-EditMobile tr.ValueRow.EditorExpanded > td {
+        border-radius: 0;
+    }
+
+    SysWeaver-EditMobile tr.DataRow {
+        display: none;
+    }
+
+        SysWeaver-EditMobile tr.DataRow.EditorExpanded {
+            display: table-row;
+        }
+
+
+            SysWeaver-EditMobile tr.DataRow.EditorExpanded.Hide {
+                display: none;
+            }
+
+
+            SysWeaver-EditMobile tr.DataRow.EditorExpanded > td {
+                background-color: var(--ThemeMain25);
+                border-radius: var(--SysWeaverEditMobileRad);
+                border-top-left-radius: 0;
+                border-top-right-radius: 0;
+                overflow: visible;
+            }
+
+
+    SysWeaver-EditMobile tr.ValueRow > td input {
+        box-sizing: border-box;
+        font-size: 125%;
+        width: 100%;
+        border: none;
+        background-color: var(--ThemeBackground);
+        color: var(--ThemeMain);
+        border-radius: var(--SysWeaverEditMobileRadInp);
+        padding: 1px 12px 1px 12px;
+        border: 2px solid var(--ThemeBackground);
+        outline: none !important;
+        transition: color linear var(--SysWeaverEditFadeDuration), border linear var(--SysWeaverEditFadeDuration);
+    }
+
+            SysWeaver-EditMobile tr.ValueRow > td input:focus {
+                border: 2px solid var(--ThemeAcc2);
+                color: var(--ThemeAcc1);
+            }
+
+            SysWeaver-EditMobile tr.ValueRow > td input:hover {
+                border: 2px solid rgba(var(--ThemeAcc2RGB), 0.5);
+            }
+
+                SysWeaver-EditMobile tr.ValueRow > td input:hover:focus {
+                    border: 2px solid var(--ThemeAcc2);
+                }
+
+            SysWeaver-EditMobile tr.ValueRow > td input::placeholder {
+                color: var(--ThemeMain25);
+                font-style: italic;
+                font-size: 80%;
+            }
+
+
+        SysWeaver-EditMobile tr.ValueRow > td input.HalfWidth {
+            width: 100%;
+            display: block;
+        }
+
+            SysWeaver-EditMobile tr.ValueRow > td input.HalfWidth:first-child {
+                margin-bottom: 0.25em;
+            }
+
+
+    SysWeaver-EditMobile tr.ValueRow > td textarea {
+        resize: vertical;
+        font: var(--ThemeFont);
+        box-sizing: border-box;
+        font-size: 125%;
+        width: 100%;
+        min-height: 5.125em;
+        max-height: 24em;
+        border: none;
+        background-color: var(--ThemeBackground);
+        color: var(--ThemeMain);
+        border-radius: var(--SysWeaverEditMobileRadInp);
+        padding: 1px 12px 1px 12px;
+        border: 2px solid var(--ThemeBackground);
+        outline: none !important;
+        transition: color linear var(--SysWeaverEditFadeDuration), border linear var(--SysWeaverEditFadeDuration);
+        margin-bottom: -4px;
+    }
+
+        SysWeaver-EditMobile tr.ValueRow > td textarea.EditReadOnly {
+            font-style: italic;
+        }
+
+
+        SysWeaver-EditMobile tr.ValueRow > td textarea:focus {
+            border: 2px solid var(--ThemeAcc2);
+            color: var(--ThemeAcc1);
+        }
+
+        SysWeaver-EditMobile tr.ValueRow > td textarea:hover {
+            border: 2px solid rgba(var(--ThemeAcc2RGB), 0.5);
+        }
+
+            SysWeaver-EditMobile tr.ValueRow > td textarea:hover:focus {
+                border: 2px solid var(--ThemeAcc2);
+            }
+
+        SysWeaver-EditMobile tr.ValueRow > td textarea::placeholder {
+            color: var(--ThemeMain25);
+            font-style: italic;
+            font-size: 80%;
+        }
+
+
+        SysWeaver-EditMobile tr.ValueRow > td.EditSlider input:first-child {
+            width: 28%;
+        }
+
+        SysWeaver-EditMobile tr.ValueRow > td.EditSlider input:last-child {
+            -webkit-appearance: none;
+            appearance: none;
+            margin: 0px;
+            height: 1.4em;
+            padding: 1px;
+            float: right;
+            width: 70%;
+            cursor: pointer;
+        }
+
+            SysWeaver-EditMobile tr.ValueRow > td.EditSlider input:last-child:disabled {
+                cursor: default;
+            }
+
+            SysWeaver-EditMobile tr.ValueRow > td.EditSlider input:last-child::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                appearance: none;
+                width: 1em;
+                height: 1.15em;
+                background-color: var(--ThemeMain);
+                border-radius: var(--SysWeaverEditMobileRadInp2);
+                transition: background-color linear var(--SysWeaverEditFadeDuration);
+                border: none;
+                outline: none;
+            }
+
+            SysWeaver-EditMobile tr.ValueRow > td.EditSlider input:last-child:focus::-webkit-slider-thumb {
+                background-color: var(--ThemeAcc1);
+            }
+
+
+            SysWeaver-EditMobile tr.ValueRow > td.EditSlider input:last-child::-moz-range-thumb {
+                appearance: none;
+                width: 1em;
+                height: 1.15em;
+                background-color: var(--ThemeMain);
+                border-radius: var(--SysWeaverEditMobileRadInp2);
+                transition: background-color linear var(--SysWeaverEditFadeDuration);
+                border: none;
+                outline: none;
+            }
+
+            SysWeaver-EditMobile tr.ValueRow > td.EditSlider input:last-child:focus::-moz-range-thumb {
+                background-color: var(--ThemeAcc1);
+            }
+
+
+
+        SysWeaver-EditMobile tr.ValueRow > td.EditBoolean input {
+            -webkit-appearance: none;
+            appearance: none;
+            margin: 0px;
+            height: 1.4em;
+            padding: 1px;
+            max-width: 3.5em;
+            cursor: pointer;
+        }
+
+            SysWeaver-EditMobile tr.ValueRow > td.EditBoolean input:disabled {
+                cursor: default;
+            }
+
+
+    SysWeaver-EditMobile td.EditBoolean input::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 2em;
+        height: 1.15em;
+        background-color: var(--ThemeMain);
+        border-radius: var(--SysWeaverEditMobileRadInp2);
+        transition: background-color linear var(--SysWeaverEditFadeDuration);
+        border: none;
+        outline: none;
+    }
+
+    SysWeaver-EditMobile td.EditBoolean.EditTrue input::-webkit-slider-thumb {
+        background-color: var(--ThemeAcc1);
+    }
+
+    SysWeaver-EditMobile td.EditBoolean input::-moz-range-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 2em;
+        height: 1.15em;
+        background-color: var(--ThemeMain);
+        border-radius: var(--SysWeaverEditMobileRadInp2);
+        transition: background-color linear var(--SysWeaverEditFadeDuration);
+        border: none;
+        outline: none;
+    }
+
+
+
+    SysWeaver-EditMobile td.EditBoolean.EditTrue input::-moz-range-thumb {
+        background-color: var(--ThemeAcc1);
+    }
+
+    SysWeaver-EditMobile tr.ValueRow > td select {
+        box-sizing: border-box;
+        font-size: 125%;
+        width: 100%;
+        border: none;
+        background-color: var(--ThemeBackground);
+        color: var(--ThemeMain);
+        border-radius: var(--SysWeaverEditMobileRadInp);
+        padding: 0px 8px 1px 8px;
+        border: 2px solid var(--ThemeBackground);
+        outline: none !important;
+        transition: color linear var(--SysWeaverEditFadeDuration);
+        cursor: pointer;
+    }
+
+        SysWeaver-EditMobile tr.ValueRow > td select[multiple] {
+            overflow-y: auto;
+            min-height: 4em;
+            max-height: 75vh;
+            resize: vertical;
+        }
+
+        SysWeaver-EditMobile tr.ValueRow > td select:disabled {
+            opacity: 1;
+            cursor: default;
+            color: var(--ThemeMain);
+            background-color: var(--ThemeBackground);
+            font-style: italic;
+        }
+
+
+        SysWeaver-EditMobile tr.ValueRow > td select:focus {
+            border: 2px solid var(--ThemeAcc2);
+            color: var(--ThemeAcc1);
+        }
+
+
+        SysWeaver-EditMobile tr.ValueRow > td select option {
+            border-radius: var(--SysWeaverEditMobileRadInp);
+            padding: 0px 8px 0px 8px;
+            cursor: pointer;
+            background-color: var(--ThemeBackground);
+            color: var(--ThemeMain);
+        }
+
+            SysWeaver-EditMobile tr.ValueRow > td select option:checked {
+                background-color: var(--ThemeMain);
+                color: var(--ThemeBackground);
+            }
+
+            SysWeaver-EditMobile tr.ValueRow > td select option:disabled {
+                background-color: var(--ThemeBackground);
+                color: rgba(--ThemeMainRGB, 0.1);
+                font-style: italic;
+            }
+
+        SysWeaver-EditMobile tr.ValueRow > td select:focus option {
+            color: var(--ThemeAcc1);
+        }
+
+            SysWeaver-EditMobile tr.ValueRow > td select:focus option:checked {
+                color: var(--ThemeBackground);
+                background-color: var(--ThemeAcc2);
+            }
+
+
+
+        SysWeaver-EditMobile tr.ValueRow > td select:disabled option {
+            cursor: default;
+            font-style: italic;
+            color: var(--ThemeMain);
+        }
+
+            SysWeaver-EditMobile tr.ValueRow > td select:disabled option:checked {
+                background-color: var(--ThemeMain);
+                color: var(--ThemeBackground);
+            }
+
+    SysWeaver-EditMobile SysWeaver-PopupMenuBack {
+        right: -30px;
+    }
+
+
+    SysWeaver-EditMobile SysWeaver-PopupMenuIcon 
+    {
+        display: inline-block;
+        float: right;
+    }
+
+    SysWeaver-EditMobile > table.EditorCollapsed tr.HeaderRow {
+        display: none;
+    }
+
+    SysWeaver-EditMobile > table.EditorCollapsed tr.SeparatorRow {
+        display: none;
+    }
+
+    SysWeaver-EditMobile > table.EditorCollapsed tr.ValueRow {
+        display: none;
+    }
+
+    SysWeaver-EditMobile > table.EditorCollapsed tr.DataRow {
+        display: none;
+    }

@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Compress</name>
+    </assembly>
+    <members>
+        <member name="F:SysWeaver.CompressParams.OnlyBest">
+            <summary>
+            If true, only the best compression method is saved
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressParams.OnlyBetter">
+            <summary>
+            Skip a file if the compressed size is greater or equal to the original
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressParams.RecompressImages">
+            <summary>
+            If true, image files such as png and jpeg may be re-compressed, trying to make smaller
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressParams.CopyOriginal">
+            <summary>
+            If true, the original file is copied to the destination
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressParams.Methods">
+            <summary>
+            The compression methods to use (br, zgip, zstd, deflate), or use "org" to copy the original (or the type compressed version)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressParams.OptimizeWebFiles">
+            <summary>
+            If true, .js files will be minimized
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressParams.OptimizeShaders">
+            <summary>
+            If true, .glsl files will be optimized
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressParams.RemoveShaderVars">
+            <summary>
+            If true, shader variables will be removed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CompressProgram.ToolMinify">
+            <summary>
+            https://github.com/tdewolff/minify/
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressProgram.OnAllGlobalConsts(System.String[],System.Func{System.String,System.String,System.String,System.String,System.String,System.String})">
+            <summary>
+            
+            </summary>
+            <param name="lines"></param>
+            <param name="onVar">Line content, type, name, value, comment</param>
+        </member>
+    </members>
+</doc>

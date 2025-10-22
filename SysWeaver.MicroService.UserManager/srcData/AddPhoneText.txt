@@ -1,0 +1,5 @@
+﻿[Header]
+Enter code [ShortCode].
+Alternatively click to associate this number to your account: 
+[Link]
+[Footer]

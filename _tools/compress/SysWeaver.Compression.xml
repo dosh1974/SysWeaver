@@ -1,0 +1,370 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Compression</name>
+    </assembly>
+    <members>
+        <member name="M:SysWeaver.Compression.AsmResExt.FindResource(System.Reflection.Assembly,System.String@)">
+            <summary>
+            Given an uncompressed resource name, find the compressed version (if any) and modify to the true resource name
+            </summary>
+            <param name="asm">The assembly that contain the resource</param>
+            <param name="uncompressedName">The name of the resource, if a compressed version is found it's modified to that resource</param>
+            <returns>The compression type or null</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.AsmResExt.GetResourceCompression(System.Reflection.Assembly,System.String@)">
+            <summary>
+            Determine the compression method used in a resource based on it's extension
+            </summary>
+            <param name="asm">The assembly that contain the resource</param>
+            <param name="compressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+            <returns>The compression type or null</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.AsmResExt.GetUncompressedResourceData(System.Reflection.Assembly,System.String@)">
+            <summary>
+            Get the data of an embedded resource, if it's compressed it will be decompressed
+            </summary>
+            <param name="asm">The assembly that contain the resource</param>
+            <param name="compressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+            <returns>The uncompressed data of the resource</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.AsmResExt.GetUncompressedResourceData(System.Reflection.Assembly,System.String)">
+            <summary>
+            Get the data of an embedded resource, if it's compressed it will be decompressed
+            </summary>
+            <param name="asm">The assembly that contain the resource</param>
+            <param name="uncompressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+            <returns>The uncompressed data of the resource</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.AsmResExt.GetResourceData(System.Reflection.Assembly,System.String)">
+            <summary>
+            Get the data of an embedded resource
+            </summary>
+            <param name="asm">The assembly that contain the resource</param>
+            <param name="name">The name of the resource</param>
+            <returns>The data of the resource</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.AsmResExt.GetUncompressedResourceData(System.Type,System.String)">
+            <summary>
+            Get the data of an embedded resource, if it's compressed it will be decompressed
+            </summary>
+            <param name="asmType">A type in the assembly that contain the resource</param>
+            <param name="uncompressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+            <returns>The uncompressed data of the resource</returns>
+        </member>
+        <member name="T:SysWeaver.Compression.CompBrotliNET">
+            <summary>
+            A compression type that uses brotli for compression
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNET.Register">
+            <summary>
+            Call once to register this compression type to the compression manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompBrotliNET.Instance">
+            <summary>
+            The instance of the compressor
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Compression.CompDeflateNET">
+            <summary>
+            A compression type that uses deflate for compression
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompDeflateNET.Register">
+            <summary>
+            Call once to register this compression type to the compression manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompDeflateNET.Instance">
+            <summary>
+            The instance of the compressor
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompEncoderLevels.Fast">
+            <summary>
+            Use for real-time compression of API's etc
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompEncoderLevels.Balanced">
+            <summary>
+            Use for offline preview or for longer caching etc
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompEncoderLevels.Best">
+            <summary>
+            Use for offline builds etc
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GetCompressed(SysWeaver.Compression.ICompEncoder,System.ReadOnlySpan{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Get compressed data
+            </summary>
+            <param name="c">The compression encoder</param>
+            <param name="from">The memory to read uncompressed data from</param>
+            <param name="level">The compression level to use</param>
+            <returns>The compressed data</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GetCompressed(SysWeaver.Compression.ICompEncoder,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Get compressed data
+            </summary>
+            <param name="c">The compression encoder</param>
+            <param name="from">The stream to read the uncompressed data from</param>
+            <param name="level">The compression level to use</param>
+            <returns>The compressed data</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GetCompressedAsync(SysWeaver.Compression.ICompEncoder,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Get compressed data
+            </summary>
+            <param name="c">The compression encoder</param>
+            <param name="from">The stream to read the uncompressed data from</param>
+            <param name="level">The compression level to use</param>
+            <returns>The compressed data</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GetDecompressed(SysWeaver.Compression.ICompDecoder,System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Get compressed data
+            </summary>
+            <param name="c">The compression decoder</param>
+            <param name="from">The memory to read compressed data from</param>
+            <returns>The decompressed data</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GetDecompressed(SysWeaver.Compression.ICompDecoder,System.IO.Stream)">
+            <summary>
+            Get compressed data
+            </summary>
+            <param name="c">The compression decoder</param>
+            <param name="from">The stream to read the compressed data from</param>
+            <returns>The decompressed data</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GetDecompressedAsync(SysWeaver.Compression.ICompDecoder,System.IO.Stream)">
+            <summary>
+            Get compressed data
+            </summary>
+            <param name="c">The compression decoder</param>
+            <param name="from">The stream to read the compressed data from</param>
+            <returns>The decompressed data</returns>
+        </member>
+        <member name="T:SysWeaver.Compression.CompGZipNET">
+            <summary>
+            A compression type that uses gzip for compression
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompGZipNET.Register">
+            <summary>
+            Call once to register this compression type to the compression manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompGZipNET.Instance">
+            <summary>
+            The instance of the compressor
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Compression.CompManager">
+            <summary>
+            Manages compression implementations
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompManager.AddType(SysWeaver.Compression.ICompType)">
+            <summary>
+            Add a compression type to the compression manager
+            </summary>
+            <param name="type">The type to add</param>
+            <exception cref="T:System.ArgumentException"></exception>
+        </member>
+        <member name="P:SysWeaver.Compression.CompManager.All">
+            <summary>
+            Get all added compression types in the order that they we're added
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompManager.HttpCodes">
+            <summary>
+            Get all supported http codes
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompManager.Extensions">
+            <summary>
+            Get all supported file extensions
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompManager.HttpCodeHandlers">
+            <summary>
+            Get a dictionary with all handlers for all suported http codes
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.CompManager.ExtensionHandlers">
+            <summary>
+            Get a dictionary with all handlers for all suported file extensions
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompManager.GetFromHttp(System.String)">
+            <summary>
+            Get the implementation for a given http code (uses the ones with highest prio if multiple compressors are available)
+            </summary>
+            <param name="httpCode">The http code, all lowercase</param>
+            <returns>A compressor for the given http code or null if non exist</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompManager.GetFromExt(System.String)">
+            <summary>
+            Get the implementation for a given file extension (uses the ones with highest prio if multiple compressors are available)
+            </summary>
+            <param name="ext">The file extension, all lowercase (can include a . prefix, like ".gzip")</param>
+            <returns>A compressor for the given file extension or null if non exist</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompDecoder.Decompress(System.IO.Stream,System.IO.Stream)">
+            <summary>
+            Decompress data
+            </summary>
+            <param name="from">The stream to read the compressed data from</param>
+            <param name="to">The stream to write the uncompressed data to</param>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompDecoder.Decompress(System.IO.Stream,System.Span{System.Byte})">
+            <summary>
+            Decompress data
+            </summary>
+            <param name="from">The stream to read the compressed data from</param>
+            <param name="to">The memory to write the uncompressed data to</param>
+            <returns>The number of uncompressed bytes written</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompDecoder.Decompress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte})">
+            <summary>
+            Decompress data
+            </summary>
+            <param name="from">The memory to read compressed data from</param>
+            <param name="to">The memory to write the uncompressed data to</param>
+            <returns>The number of uncompressed bytes written</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompDecoder.Decompress(System.ReadOnlySpan{System.Byte},System.IO.Stream)">
+            <summary>
+            Decompress data
+            </summary>
+            <param name="from">The memory to read compressed data from</param>
+            <param name="to">The stream to write the uncompressed data to</param>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompDecoder.DecompressAsync(System.IO.Stream,System.IO.Stream)">
+            <summary>
+            Decompress data
+            </summary>
+            <param name="from">The stream to read the compressed data from</param>
+            <param name="to">The stream to write the uncompressed data to</param>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompDecoder.DecompressAsync(System.IO.Stream,System.Memory{System.Byte})">
+            <summary>
+            Decompress data
+            </summary>
+            <param name="from">The stream to read the compressed data from</param>
+            <param name="to">The memory to write the uncompressed data to</param>
+            <returns>The number of uncompressed bytes written</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompDecoder.DecompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream)">
+            <summary>
+            Decompress data
+            </summary>
+            <param name="from">The memory to read ompressed data from</param>
+            <param name="to">The stream to write the uncompressed data to</param>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompEncoder.Compress(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress data
+            </summary>
+            <param name="from">The stream to read the uncompressed data from</param>
+            <param name="to">The stream to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompEncoder.Compress(System.IO.Stream,System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress data
+            </summary>
+            <param name="from">The stream to read the uncompressed data from</param>
+            <param name="to">The memory to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+            <returns>The number of compressed bytes written</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompEncoder.Compress(System.ReadOnlySpan{System.Byte},System.Span{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress data
+            </summary>
+            <param name="from">The memory to read uncompressed data from</param>
+            <param name="to">The memory to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+            <returns>The number of compressed bytes written</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompEncoder.Compress(System.ReadOnlySpan{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress data
+            </summary>
+            <param name="from">The memory to read uncompressed data from</param>
+            <param name="to">The stream to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompEncoder.CompressAsync(System.IO.Stream,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress data
+            </summary>
+            <param name="from">The stream to read the uncompressed data from</param>
+            <param name="to">The stream to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompEncoder.CompressAsync(System.IO.Stream,System.Memory{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress data
+            </summary>
+            <param name="from">The stream to read the uncompressed data from</param>
+            <param name="to">The memory to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+            <returns>The number of compressed bytes written</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.ICompEncoder.CompressAsync(System.ReadOnlyMemory{System.Byte},System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Compress data
+            </summary>
+            <param name="from">The memory to read uncompressed data from</param>
+            <param name="to">The stream to write the compressed data to</param>
+            <param name="level">The compression level to use</param>
+        </member>
+        <member name="P:SysWeaver.Compression.ICompInfo.Name">
+            <summary>
+            The name of the compression implementation
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.ICompInfo.HttpCode">
+            <summary>
+            The http code as specified for the Accept-Encoding header (or custom), ex: "deflate", "gzip" or "br", "compress", must be all lowercase
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.ICompInfo.Prio">
+            <summary>
+            The priority (quality) of the compressor, if multiple compressors are available the one with the highest priority is returned by the compression manager
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Compression.ICompInfo.FileExtensions">
+            <summary>
+            File extensions that is associated with the compressor, must be all lowercase
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Compression.TransformGZipToDeflateStream">
+            <summary>
+            A stream that takes a seekable input stream containing GZip compressed data, and presents it as a deflate compressed data stream
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.TransformGZipToDeflateStream.GetDeflateData(System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            Get deflate memory from gzip memory
+            </summary>
+            <param name="gzipData">Memory containing GZip data</param>
+            <returns>Memory with the deflate portion of the memory data</returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="M:SysWeaver.Compression.TransformGZipToDeflateStream.#ctor(System.IO.Stream,System.Boolean)">
+            <summary>
+            Create a defalte data stream from a gzip data stream
+            </summary>
+            <param name="gzipData">Stream containing GZIp data (must be a complete file and nothing after that)</param>
+            <param name="leaveOpen">If true, the underlaying stream isn't disposed when this stream is disposed</param>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+    </members>
+</doc>

@@ -1,0 +1,43 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<RootNamespace>SysWeaver.Knowledge</RootNamespace>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<NoWarn>1701;1702;1591</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <None Remove="data\Artists.db" />
+	  <None Remove="data\Arts.db" />
+	  <None Remove="data\Cars.db" />
+	  <None Remove="data\Events.db" />
+	  <None Remove="data\LangAlts.db" />
+	  <None Remove="data\Movies.db" />
+	  <None Remove="data\Persons.db" />
+	  <None Remove="data\Places.db" />
+	  <None Remove="data\Series.db" />
+	  <None Remove="data\Sports.db" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <EmbeddedResource Include="data\Artists.db" />
+	  <EmbeddedResource Include="data\Arts.db" />
+	  <EmbeddedResource Include="data\Cars.db" />
+	  <EmbeddedResource Include="data\Events.db" />
+	  <EmbeddedResource Include="data\LangAlts.db" />
+	  <EmbeddedResource Include="data\Movies.db" />
+	  <EmbeddedResource Include="data\Persons.db" />
+	  <EmbeddedResource Include="data\Places.db" />
+	  <EmbeddedResource Include="data\Series.db" />
+	  <EmbeddedResource Include="data\Sports.db" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+	  <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
+	  <ProjectReference Include="..\SysWeaver.IsoData\SysWeaver.IsoData.csproj" />
+	  <ProjectReference Include="..\SysWeaver.Serialization\SysWeaver.Serialization.csproj" />
+	</ItemGroup>
+
+</Project>

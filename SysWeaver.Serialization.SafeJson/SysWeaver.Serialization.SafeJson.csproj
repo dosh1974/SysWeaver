@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<RootNamespace>SysWeaver.Serialization</RootNamespace>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<NoWarn>1701;1702;1591</NoWarn>
+		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>	  <TargetFramework>net8.0</TargetFramework>
+	  <RootNamespace>SysWeaver.Serialization</RootNamespace>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <NoWarn>1701;1702;1591</NoWarn>
+	  
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Serialization\SysWeaver.Serialization.NewtonsoftJson\SysWeaver.Serialization.NewtonsoftJson.csproj" />
+    <ProjectReference Include="..\Serialization\SysWeaver.Serialization.SwJson\SysWeaver.Serialization.SwJson.csproj" />
+    <ProjectReference Include="..\SysWeaver.Serialization\SysWeaver.Serialization.csproj" />
+  </ItemGroup>
+
+</Project>

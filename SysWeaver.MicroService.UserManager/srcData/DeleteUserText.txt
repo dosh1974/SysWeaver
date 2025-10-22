@@ -1,0 +1,5 @@
+﻿[Header]
+Enter code [ShortCode].
+Alternatively click to delete your account: 
+[Link]
+[Footer]

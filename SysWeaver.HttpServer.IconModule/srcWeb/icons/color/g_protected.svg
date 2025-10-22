@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.1" viewBox="0 0 768 1024" xmlns="http://www.w3.org/2000/svg">
+	<filter id="s">
+		<feDropShadow dx="3" dy="3" stdDeviation="5" flood-opacity="0.3"/>	
+	</filter>
+	<g filter="url(#s)">
+		<path d="M384 96 c0 32 -352 72 -352 64 c-40 0 32 768 352 768" fill="#ddd" />
+		<path d="M384 96 c0 32 352 72 352 64 c40 0 -32 768 -352 768" fill="#bbb" />
+		<path d="M384 128 c0 32 -320 72 -320 64 c-40 0 64 704 320 704" fill="#4d4" />
+		<path d="M384 128 c0 32 320 72 320 64 c40 0 -64 704 -320 704" fill="#383" />
+	</g>
+
+	
+</svg>

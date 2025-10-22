@@ -1,0 +1,6 @@
+﻿	<g opacity="0.8" stroke="#fff" stroke-width="32" stroke-linejoin="round" stroke-linecap="round" fill="none">
+		<path d="M 192 336 l64 0 l96 -96 l0 288 l-96 -96 l-64 0 l0 -96 z" />
+		<path d="M 416 336 c16 16 16 80 0 96" />
+		<path d="M 480 304 c32 32 32 128 0 160" />
+		<path d="M 544 272 c48 48 48 186 0 224" />
+	</g>

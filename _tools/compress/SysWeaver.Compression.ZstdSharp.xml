@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Compression.ZstdSharp</name>
+    </assembly>
+    <members>
+        <member name="M:SysWeaver.Compression.CompZstdSharp.Register">
+            <summary>
+            Call once to register this compression type to the compression manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompZstdSharp.Instance">
+            <summary>
+            The instance of the compressor
+            </summary>
+        </member>
+    </members>
+</doc>

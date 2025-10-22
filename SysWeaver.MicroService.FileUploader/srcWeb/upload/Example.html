@@ -1,0 +1,270 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi, viewport-fit=cover" />
+    <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../icon.svg">
+    <link rel="apple-touch-icon" type="image/png" href="../apple-touch-icon.png">
+    <link rel="manifest" href="../app/manifest.json">
+    <title>Upload example</title>
+    <link rel="stylesheet" href="../common/theme.css">
+    <script src="../common/common.js"></script>
+    <script src="../common/md5.js"></script>
+    <script src="../common/UZIP.js"></script>
+    <script src="../common/fileUploader.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100%;
+            max-width: 90ch;
+            margin: auto;
+            font-family: var(--ThemeFont);
+            font-size: var(--ThemeFontSize);
+        }
+
+        span {
+            margin-left: 1.5em;
+            margin-top: 1em;
+            display: block;
+            width: calc(100% - 2.5em);
+            overflow: hidden;
+        }
+
+        input {
+            display: block;
+            margin: 0.5em 1em 2em 1em;
+            width: calc(100% - 2em);
+            font: var(--ThemeFont);
+            background-color: var(--ThemeMain25);
+            color: var(--ThemeAcc1);
+            outline: 1px solid transparent;
+            border-radius: var(--ThemeRadInp);
+            border: none;
+            padding: 0.125em 0.5em;
+            transition: outline linear var(--ThemeFadeDuration), color linear var(--ThemeFadeDuration);
+            font-size: 125%;
+        }
+
+            input:hover {
+                outline: 1px solid var(--ThemeAcc225);
+            }
+
+            input:focus {
+                outline: 1px solid var(--ThemeAcc250);
+            }
+
+                input:focus:hover {
+                    outline: 1px solid var(--ThemeAcc250);
+                }
+        img {
+            display: block;
+            margin: 2em auto;
+            max-width: calc(100% - 2em);
+            height: auto;
+            border-radius: var(--ThemeRad);
+            outline: 1px solid var(--ThemeMain25);
+        }
+
+        a {
+            display: block;
+            text-align: center;
+            white-space: wrap;
+            overflow: hidden;
+            margin: 2em auto;
+            visibility: hidden;
+        }
+
+            a.Show {
+                visibility: visible;
+            }
+
+        /* --- The div is the element that is used for selecting or dropping files. Have to use the pseudo element after for the image since the mask will affect the element border otherwise --- */
+
+        div {
+            display: block;
+            margin: 0.5em 1em;
+            width: calc(100% - 2em);
+            min-height: calc(max(4em, 25vh));
+            border: 4px dashed var(--ThemeAcc275);
+            position: relative;
+            transition: border linear var(--ThemeFadeDuration), opacity linear var(--ThemeFadeDuration);
+            cursor: pointer;
+            border-radius: var(--ThemeRad);
+        }
+
+            div:after {
+                content: '';
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                right: 0;
+                transition: background-color linear var(--ThemeFadeDuration);
+                background-color: var(--ThemeAcc275);
+                mask-image: url('../icons/send.svg');
+                mask-size: 50% 50%;
+                mask-repeat: no-repeat;
+                mask-position: center center;
+            }
+
+        /* --- Highlight on hover --- */
+            div:hover {
+                border: 4px dashed var(--ThemeAcc2);
+            }
+
+                div:hover:after {
+                    background-color: var(--ThemeAcc2);
+                }
+
+        /* --- Dim and change icon when selecting a local file --- */
+
+            div.Selecting {
+                opacity: 0.25;
+            }
+
+                div.Selecting:after {
+                    mask-image: url('../icons/disc.svg');
+                }
+
+        /* --- Change color and icon when dragging over --- */
+
+            div.Dragging {
+                cursor: grabbing;
+                border: 4px dashed var(--ThemeAcc1);
+            }
+
+                div.Dragging:after {
+                    background-color: var(--ThemeAcc1);
+                    mask-image: url('../icons/plus.svg');
+                }
+
+        /* --- "Disable" when uploading --- */
+
+
+            div.Uploading {
+                cursor: default;
+                opacity: 0.25;
+            }
+
+                div.Uploading:hover {
+                    border: 4px dashed var(--ThemeAcc275);
+                }
+
+                div.Uploading:after {
+                    mask-image: url('../icons/loading.svg');
+                }
+
+                div.Uploading:after:hover {
+                    background-color: var(--ThemeAcc275);
+                }
+
+                div.Uploading.Dragging {
+                    border: 4px dashed var(--ThemeAcc275);
+                }
+
+
+
+    </style>
+</head>
+<body>
+    <span data-translation_context="This is the label for an input field that let the user enter the name of a file repository to use when uploading files">
+        Repository
+    </span>
+    <input data-translation_context="This is the placeholder text for an input field that let the user enter the name of a file repository to use when uploading files"
+           id="repo"
+           type="text"
+           placeholder="Enter a server repository name" />
+    <div data-translation_context="This is the tool tip text for an area that let the user upload file(s) to a server repository"
+         title="Click to select file(s) to upload, or drop file(s) here to upload them"
+         id="drop">
+    </div>
+    <a  target="_blank"
+        id="link"
+        title="Click to view/download the uploaded file"
+       >
+    </a>
+    <img 
+         src="../auth/UserImages/Current/large" 
+         id="userimage"
+         />
+
+    <script type="text/javascript">
+        //  Get parameters
+        const closeLoader = AddLoading(document.body);
+        try {
+
+            const ps = getUrlParams();
+            let repo = ps.get('repo');
+            if (!repo)
+                repo = "UserImage";
+
+            //  Get the upload element to use and set up the initial parameters
+            const c = document.getElementById("drop");
+
+            c.setAttribute("data-repo", repo);
+            if (ps.get('multiple'))
+                c.setAttribute("data-multiple", "true");
+
+            // Get the repo input element and set it up (changing repo on change etc)
+            const e = document.getElementById("repo");
+            e.value = repo;
+            e.onchange = () => c.setAttribute("data-repo", e.value);
+
+            const img = document.getElementById("userimage");
+
+            const a = document.getElementById("link");
+
+            // Final setup of the uploader element
+            fileUploaderSetup(c, null,
+                (el, files, rr) => {
+                    //  Called when file(s) are selected for uploading
+                    Info(_T("Uploading \"{0}\"", files[0].name, "Text displayed when a file is about to be uploaded to a server.{0} is replaced with the name of the file"));
+                },
+                (el, res, files, rr) => {
+                    const err = res.Error;
+                    if (err) {
+                        a.classList.remove("Show");
+                        Fail(err);
+                        return;
+                    }
+                    //  Only showing status of first file, todo: when multiple is allowed show all?
+                    const res0 = res.Status[0];
+                    const url = res.Urls[0];
+                    if (url) {
+                        a.innerText = url;
+                        a.href = "../" + url;
+                        a.classList.add("Show");
+                    } else {
+                        a.classList.remove("Show");
+                    }
+
+                    switch (res0) {
+                        case UploadStatus.AlreadyUploaded:
+                            Info(_T("File \"{0}\" was already uploaded", files[0].name, "Text displayed when a file have already been uploaded to a server.{0} is replaced with the name of the file"));
+                            break;
+                        case UploadStatus.None:
+                            Info(_T("Uploaded \"{0}\"", files[0].name, "Text displayed when a file was succesfully uploaded to a server.{0} is replaced with the name of the file"));
+                            SetImageSource(img, img.src, null, true);
+                            break;
+                        default:
+                            Fail(_T("{0}, when uploading \"{1}\"", fileUploaderStatusText(res0), files[0].name, "Text displayed when uploading of a file to a server failed.{0} is replaced with a message as to why the file failed.{1} is replaced with the name of the file"));
+                            break;
+                    }
+                }
+            );
+
+        }
+        catch (e) {
+            Fail(e);
+        }
+        closeLoader();
+
+    </script>
+</body>
+</html>

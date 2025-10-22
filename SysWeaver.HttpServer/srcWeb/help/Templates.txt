@@ -1,0 +1,41 @@
+﻿Files can be served as templates.
+Files are assumed to be UTF-8 text.
+
+What files are considered templates can be specified by the per disc folder using the Templates array (array of string templates).
+Patterns can use wildcards '*' (matches one or more) or '?' (matches one).
+If the pattern starts with '$' the rest of the pattern is a regular expression.
+If the pattern starts with '#' the match should be case insensitive.
+If the pattern starts with '$#' the rest of the pattern is a regular expression matched case insensitive.
+
+Variables are of the format ${VarName}.
+Variable names are case sensitive.
+Templates can be deemed as dynamic or static depending on what variables they use.
+Dynamic templates is not cached (client or server side) while static will be cached according to the folders cache policies.
+Other things like runtime compression / auth will be handled like any file.
+
+
+Variable values can be transformed by prepending the variable name with one of the following.
+Examples for a variable value of "Hello world! & have FUN!".
+_ = Make lower case, ex: ${_VarName} will result in "hello world! & have fun!".
+^ = Make upper case, ex: ${^VarName} will result in "HELLO WORLD! & HAVE FUN!".
+@ = Make html attribute safe (HttpUtility.HtmlAttributeEncode), ex: ${@VarName} will result in "Hello world! \&amp; have FUN!".
+# = Make html value safe (HttpUtility.HtmlEncode), ex: ${#VarName} will result in "Hello world! \&amp; have FUN!".
+% = Make URL safe (HttpUtility.UrlEncode), ex: ${%VarName} will result in "Hello+world!+%26+have+FUN!".
+$ = Make javascript string safe (HttpUtility.JavaScriptStringEncode), ex: ${$VarName} will result in "Hello world! \\u0026 have FUN!".
+Only one of _ and ^ may be used.
+Only one of @, #, % and $ may be used.
+_ or ^ can be combined with one of @, #, % and $, ex: _#, ^$
+
+You set variables by using the query paramaters, ex: "xyz/Welcome.html?Name=John Doe&Mail=John.Doe@gmail.com":
+${Name} in Welcome.html will now be replaced with "John Doe".
+${Mail} in Welcome.html will now be replaced with "John.Doe@gmail.com".
+
+There are some built in variables:
+Env.* will expose all system environment variables.
+EnvInfo.* exposes some misc system/app values.
+Session.* exposes some session variables.
+Server.* exposes some server variables.
+
+The current value of the built in variables can be found in the TemplateVariables table.
+
+

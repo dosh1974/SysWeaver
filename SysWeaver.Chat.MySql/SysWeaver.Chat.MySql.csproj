@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFramework>net8.0</TargetFramework>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <NoWarn>1701;1702;1591</NoWarn>
+	  <RootNamespace>SysWeaver.Chat.MySql</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.Chat\SysWeaver.Chat.csproj" />
+    <ProjectReference Include="..\SysWeaver.DbSimpleStack.MySql\SysWeaver.DbSimpleStack.MySql.csproj" />
+  </ItemGroup>
+
+</Project>

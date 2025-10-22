@@ -1,0 +1,484 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.CommandLine</name>
+    </assembly>
+    <members>
+        <member name="F:SysWeaver.CommandLine.Executable">
+            <summary>
+            Name of the executable filename
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLine.ExecutableFolder">
+            <summary>
+            Directory name where the executable exists
+            </summary>
+        </member>
+        <member name="T:SysWeaver.CommandLineArgument">
+            <summary>
+            Represents a valid command argument
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CommandLineArgument.Make(System.String,System.Type,System.Boolean,System.String,System.String)">
+            <summary>
+            Make an argument
+            </summary>
+            <param name="name">Name of the option</param>
+            <param name="optional">Set to true if the argument is optional, false to require it</param>
+            <param name="type">Type of the option</param>
+            <param name="defaultValue">The default value of the option or null if it's a required option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <returns>An argument</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineArgument.Make``1(System.String,System.Boolean,System.String,System.String)">
+            <summary>
+            Make an argument
+            </summary>
+            <typeparam name="T">Type of the option</typeparam>
+            <param name="name">Name of the option</param>
+            <param name="optional">Set to true if the argument is optional, false to require it</param>
+            <param name="defaultValue">The default value of the option or null if it's a required option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <returns>An argument</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineArgument.Make``1(System.String,``0,``0,System.Boolean,System.String,System.String)">
+            <summary>
+            Make an argument
+            </summary>
+            <typeparam name="T">Type of the option</typeparam>
+            <param name="name">Name of the option</param>
+            <param name="minValue">The minimum allowed value of the option</param>
+            <param name="maxValue">The maximum allowed value of the option</param>
+            <param name="optional">Set to true if the argument is optional, false to require it</param>
+            <param name="defaultValue">The default value of the option or null if it's a required option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <returns>An argument</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineArgument.Make(System.String,System.Type,System.Func{System.String,System.Object},System.Boolean,System.String,System.String)">
+            <summary>
+            Make an argument
+            </summary>
+            <param name="name">Name of the option</param>
+            <param name="type">Type of the option</param>
+            <param name="parser">The parser to use (string to object)</param>
+            <param name="optional">Set to true if the argument is optional, false to require it</param>
+            <param name="defaultValue">The default value of the option or null if it's a required option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <returns>An argument</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineArgument.Make``1(System.String,System.Func{System.String,``0},System.Boolean,System.String,System.String)">
+            <summary>
+            Make an argument
+            </summary>
+            <typeparam name="T">Type of the option</typeparam>
+            <param name="name">Name of the option</param>
+            <param name="parser">The parser to use (string to object)</param>
+            <param name="optional">Set to true if the argument is optional, false to require it</param>
+            <param name="defaultValue">The default value of the option or null if it's a required option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <returns>An argument</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineArgument.Make``1(System.String,System.Func{System.String,``0},``0,``0,System.Boolean,System.String,System.String)">
+            <summary>
+            Make an argument
+            </summary>
+            <typeparam name="T">Type of the option</typeparam>
+            <param name="name">Name of the option</param>
+            <param name="parser">The parser to use (string to object)</param>
+            <param name="minValue">The minimum allowed value of the option</param>
+            <param name="maxValue">The maximum allowed value of the option</param>
+            <param name="optional">Set to true if the argument is optional, false to require it</param>
+            <param name="defaultValue">The default value of the option or null if it's a required option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <returns>An argument</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineArgument.ValueText(System.Object,System.String)">
+            <summary>
+            Get a string that represents the value of this argument, name=val
+            </summary>
+            <param name="value">The value to use</param>
+            <param name="prefix">An optional prefix to add to the string</param>
+            <returns>A string that represents the value of this argument, name=val</returns>
+        </member>
+        <member name="F:SysWeaver.CommandLineArgument.Optional">
+            <summary>
+            True if this is an optional argument (option), else false
+            </summary>
+        </member>
+        <member name="P:SysWeaver.CommandLineArgument.Tags">
+            <summary>
+            List of tags
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CommandLineOption.Make(System.String,System.String,SysWeaver.CommandLineOptionArgument[])">
+            <summary>
+            Make an option
+            </summary>
+            <param name="name">Name of the option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <param name="args">optional paramters for this option</param>
+            <returns>An option</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineOption.Make(System.String,SysWeaver.CommandLineOptionArgument[])">
+            <summary>
+            Make an option
+            </summary>
+            <param name="name">Name of the option</param>
+            <param name="args">optional paramters for this option</param>
+            <returns>An option</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineOption.Make(System.String,System.String,System.Type)">
+            <summary>
+            Make an option
+            </summary>
+            <param name="name">Name of the option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <param name="valueType">The type of the option</param>
+            <returns>An option</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineOption.Make(System.String,System.Type)">
+            <summary>
+            Make an option
+            </summary>
+            <param name="name">Name of the option</param>
+            <param name="valueType">The type of the option</param>
+            <returns>An option</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineOption.Make(System.String,System.String,System.Object)">
+            <summary>
+            Make an option
+            </summary>
+            <param name="name">Name of the option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <param name="value">Default value</param>
+            <returns>An option</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineOption.Make(System.String,System.Object)">
+            <summary>
+            Make an option
+            </summary>
+            <param name="name">Name of the option</param>
+            <param name="value">Default value</param>
+            <returns>An option</returns>
+        </member>
+        <member name="P:SysWeaver.CommandLineOption.Syntax">
+            <summary>
+            Get the syntax for this option
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CommandLineOption.Desc(System.String,System.String)">
+            <summary>
+            Get a descirption for this option
+            </summary>
+            <param name="newLinePrefix"></param>
+            <param name="argPrefix"></param>
+            <returns></returns>
+        </member>
+        <member name="T:SysWeaver.CommandLineOptionArgument">
+            <summary>
+            Represents a valid command line option
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CommandLineOptionArgument.Make(System.String,System.Type,System.String,System.String)">
+            <summary>
+            Make an option
+            </summary>
+            <param name="name">Name of the option</param>
+            <param name="type">Type of the option</param>
+            <param name="defaultValue">The default value of the option or null if it's a required option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <returns>An option</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineOptionArgument.Make``1(System.String,System.String,System.String)">
+            <summary>
+            Make an option
+            </summary>
+            <typeparam name="T">Type of the option</typeparam>
+            <param name="name">Name of the option</param>
+            <param name="defaultValue">The default value of the option or null if it's a required option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <returns>An option</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineOptionArgument.Make``1(System.String,``0,``0,System.String,System.String)">
+            <summary>
+            Make an option
+            </summary>
+            <typeparam name="T">Type of the option</typeparam>
+            <param name="name">Name of the option</param>
+            <param name="minValue">The minimum allowed value of the option</param>
+            <param name="maxValue">The maximum allowed value of the option</param>
+            <param name="defaultValue">The default value of the option or null if it's a required option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <returns>An option</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineOptionArgument.Make(System.String,System.Type,System.Func{System.String,System.Object},System.String,System.String)">
+            <summary>
+            Make an option
+            </summary>
+            <param name="name">Name of the option</param>
+            <param name="type">Type of the option</param>
+            <param name="parser">The parser to use (string to object)</param>
+            <param name="defaultValue">The default value of the option or null if it's a required option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <returns>An option</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineOptionArgument.Make``1(System.String,System.Func{System.String,``0},System.String,System.String)">
+            <summary>
+            Make an option
+            </summary>
+            <typeparam name="T">Type of the option</typeparam>
+            <param name="name">Name of the option</param>
+            <param name="parser">The parser to use (string to object)</param>
+            <param name="defaultValue">The default value of the option or null if it's a required option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <returns>An option</returns>
+        </member>
+        <member name="M:SysWeaver.CommandLineOptionArgument.Make``1(System.String,System.Func{System.String,``0},``0,``0,System.String,System.String)">
+            <summary>
+            Make an option
+            </summary>
+            <typeparam name="T">Type of the option</typeparam>
+            <param name="name">Name of the option</param>
+            <param name="parser">The parser to use (string to object)</param>
+            <param name="minValue">The minimum allowed value of the option</param>
+            <param name="maxValue">The maximum allowed value of the option</param>
+            <param name="defaultValue">The default value of the option or null if it's a required option</param>
+            <param name="helpText">Optional help text for this option</param>
+            <returns>An option</returns>
+        </member>
+        <member name="P:SysWeaver.CommandLineOptionArgument.Tags">
+            <summary>
+            List of tags
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLineOptionArgument.Name">
+            <summary>
+            Name
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLineOptionArgument.Type">
+            <summary>
+            Type 
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLineOptionArgument.TypeTag">
+            <summary>
+            Type tag
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLineOptionArgument.HelpText">
+            <summary>
+            Help text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLineOptionArgument.Limit">
+            <summary>
+            True if the valus has numerical limits
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLineOptionArgument.DefaultTag">
+            <summary>
+            The tag to display if the value have a default
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLineOptionArgument.ValidTag">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLineOptionArgument.LimitTag">
+            <summary>
+            The tag to indicate the numerical limits
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLineOptionArgument.MinValue">
+            <summary>
+            The min allowed value if it has numerical limits
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CommandLineOptionArgument.MaxValue">
+            <summary>
+            The max allowed value if it has numerical limits
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CommandLineOptionArgument.ParseValue(System.String)">
+            <summary>
+            Parse a value from a string
+            </summary>
+            <param name="value">The string that represents this value</param>
+            <returns>The object that was represented in the string</returns>
+            <exception cref="T:System.ArgumentOutOfRangeException"></exception>
+        </member>
+        <member name="T:SysWeaver.ConsoleMessageHandler">
+            <summary>
+            Message handler that output's messages to the console
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ConsoleMessageHandler.GetAsync(SysWeaver.ConsoleMessageHandler.Styles,System.Boolean)">
+            <summary>
+            Get a console log handler that isn't blocking the calling thread while outputting (this improved performance but "debugging" using logging is harder)
+            </summary>
+            <param name="style">The display style to use</param>
+            <param name="monoChrome">True for monochrome output</param>
+            <returns>A message handler</returns>
+        </member>
+        <member name="M:SysWeaver.ConsoleMessageHandler.GetSync(SysWeaver.ConsoleMessageHandler.Styles,System.Boolean)">
+            <summary>
+            Get a console log handler that is blocking the calling thread while outputting (this makes it better for "debugging" but may slow down)
+            </summary>
+            <param name="style">The display style to use</param>
+            <param name="monoChrome">True for monochrome output</param>
+            <returns>A message handler</returns>
+        </member>
+        <member name="F:SysWeaver.ConsoleMessageHandler.Styles.Normal">
+            <summary>
+            Minimal details
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ConsoleMessageHandler.Styles.Verbose">
+            <summary>
+            Plenty of details
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ConsoleMessageHandler.Styles.Debug">
+            <summary>
+            Even more details
+            </summary>
+        </member>
+        <member name="T:SysWeaver.FilesToFolderTool`1">
+            <summary>
+            Quick and easy shell for creating tools that requires a input file and some optional destination folder
+            </summary>
+            <typeparam name="T">A type with optional options</typeparam>
+        </member>
+        <member name="F:SysWeaver.FilesToFolderTool`1.SourceFilesName">
+            <summary>
+            Name of source files
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FilesToFolderTool`1.SourceFilesHelp">
+            <summary>
+            Optional help text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FilesToFolderTool`1.AllowSourceSequence">
+            <summary>
+            If true, input files will be treated as the first in a sequence, i.e "Frame_0.png" will result in "Frame_0.png", "Frame_1.png" etc will be processed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FilesToFolderTool`1.DestFolderName">
+            <summary>
+            Name of the destination folder argument
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FilesToFolderTool`1.DestFolderHelp">
+            <summary>
+            Help for the destination folder argument
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FilesToFolderTool`1.OnFiles(System.String[],System.Func{SysWeaver.IMessageHost,`0,System.String,System.String,System.String,System.Int32},System.Func{`0,System.Int32})">
+            <summary>
+            Process the files specified on the command line with the specified options and destination folder
+            </summary>
+            <param name="commandLineArgs">The command line args (as passed to main)</param>
+            <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+            <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
+            <returns>0 if sucessfull or the error code</returns>
+        </member>
+        <member name="M:SysWeaver.FilesToFolderTool`1.OnFiles(System.String[],System.Func{SysWeaver.IMessageHost,`0,System.String,System.String,System.String,System.Threading.Tasks.Task{System.Int32}},System.Func{`0,System.Int32})">
+            <summary>
+            Process the files specified on the command line with the specified options and destination folder, files are processed async
+            </summary>
+            <param name="commandLineArgs">The command line args (as passed to main)</param>
+            <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+            <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
+            <returns>0 if sucessfull or the error code</returns>
+        </member>
+        <member name="M:SysWeaver.FilesToFolderTool`1.OnFilesParallel(System.String[],System.Func{SysWeaver.IMessageHost,`0,System.String,System.String,System.String,System.Threading.Tasks.Task{System.Int32}},System.Func{`0,System.Int32},System.Int32)">
+            <summary>
+            Process the files specified on the command line with the specified options and destination folder, files are processed async and in parallel
+            </summary>
+            <param name="commandLineArgs">The command line args (as passed to main)</param>
+            <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+            <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
+            <param name="threadCount">Maximum number of threads to execute, if 0 or less it's the number of CPU threads + the thread count</param>
+            <returns>0 if sucessfull or the error code</returns>
+        </member>
+        <member name="M:SysWeaver.FilesToFolderTool`1.OnFilesAsync(System.String[],System.Func{SysWeaver.IMessageHost,`0,System.String,System.String,System.String,System.Threading.Tasks.Task{System.Int32}},System.Func{`0,System.Int32})">
+            <summary>
+            Process the files specified on the command line with the specified options and destination folder, files are processed async
+            </summary>
+            <param name="commandLineArgs">The command line args (as passed to main)</param>
+            <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+            <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
+            <returns>0 if sucessfull or the error code</returns>
+        </member>
+        <member name="M:SysWeaver.FilesToFolderTool`1.OnFilesParallelAsync(System.String[],System.Func{SysWeaver.IMessageHost,`0,System.String,System.String,System.String,System.Threading.Tasks.Task{System.Int32}},System.Func{`0,System.Int32},System.Int32)">
+            <summary>
+            Process the files specified on the command line with the specified options and destination folder, files are processed async and in parallel
+            </summary>
+            <param name="commandLineArgs">The command line args (as passed to main)</param>
+            <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+            <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
+            <param name="threadCount">Maximum number of threads to execute, if 0 or less it's the number of CPU threads + the thread count</param>
+            <returns>0 if sucessfull or the error code</returns>
+        </member>
+        <member name="T:SysWeaver.FilesToFolderTool">
+            <summary>
+            Process files, with options
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FilesToFolderTool.OnFiles``1(System.String[],System.Func{SysWeaver.IMessageHost,``0,System.String,System.String,System.String,System.Int32},System.Func{``0,System.Int32})">
+            <summary>
+            Process some input file(s), with an optional separate output folder
+            </summary>
+            <typeparam name="T">The type containing optional options</typeparam>
+            <param name="commandLineArgs">The command line args (as passed to main)</param>
+            <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+            <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
+            <returns>0 if successful, positive for wrong args and negative for errors</returns>
+        </member>
+        <member name="M:SysWeaver.FilesToFolderTool.OnFiles``1(System.String[],System.Func{SysWeaver.IMessageHost,``0,System.String,System.String,System.String,System.Threading.Tasks.Task{System.Int32}},System.Func{``0,System.Int32})">
+            <summary>
+            Process some input file(s), with an optional separate output folder, files are processed async
+            </summary>
+            <typeparam name="T">The type containing optional options</typeparam>
+            <param name="commandLineArgs">The command line args (as passed to main)</param>
+            <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+            <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
+            <returns>0 if successful, positive for wrong args and negative for errors</returns>
+        </member>
+        <member name="M:SysWeaver.FilesToFolderTool.OnFilesParallel``1(System.String[],System.Func{SysWeaver.IMessageHost,``0,System.String,System.String,System.String,System.Threading.Tasks.Task{System.Int32}},System.Func{``0,System.Int32},System.Int32)">
+            <summary>
+            Process some input file(s), with an optional separate output folder, files are processed async and in parallel
+            </summary>
+            <typeparam name="T">The type containing optional options</typeparam>
+            <param name="commandLineArgs">The command line args (as passed to main)</param>
+            <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+            <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
+            <param name="threadCount">Maximum number of threads to execute, if 0 or less it's the number of CPU threads + the thread count</param>
+            <returns>0 if successful, positive for wrong args and negative for errors</returns>
+        </member>
+        <member name="M:SysWeaver.FilesToFolderTool.OnFilesAsync``1(System.String[],System.Func{SysWeaver.IMessageHost,``0,System.String,System.String,System.String,System.Threading.Tasks.Task{System.Int32}},System.Func{``0,System.Int32})">
+            <summary>
+            Process some input file(s), with an optional separate output folder, files are processed async
+            </summary>
+            <typeparam name="T">The type containing optional options</typeparam>
+            <param name="commandLineArgs">The command line args (as passed to main)</param>
+            <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+            <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
+            <returns>0 if successful, positive for wrong args and negative for errors</returns>
+        </member>
+        <member name="M:SysWeaver.FilesToFolderTool.OnFilesParallelAsync``1(System.String[],System.Func{SysWeaver.IMessageHost,``0,System.String,System.String,System.String,System.Threading.Tasks.Task{System.Int32}},System.Func{``0,System.Int32},System.Int32)">
+            <summary>
+            Process some input file(s), with an optional separate output folder, files are processed async and in parallel
+            </summary>
+            <typeparam name="T">The type containing optional options</typeparam>
+            <param name="commandLineArgs">The command line args (as passed to main)</param>
+            <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+            <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
+            <param name="threadCount">Maximum number of threads to execute, if 0 or less it's the number of CPU threads + the thread count</param>
+            <returns>0 if successful, positive for wrong args and negative for errors</returns>
+        </member>
+    </members>
+</doc>

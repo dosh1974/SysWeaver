@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFramework>net8.0</TargetFramework>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <NoWarn>1701;1702;1591</NoWarn>
+	  <RootNamespace>SysWeaver.IpLocation.Caches</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.DbSimpleStack.MySql\SysWeaver.DbSimpleStack.MySql.csproj" />
+    <ProjectReference Include="..\SysWeaver.IpLocation\SysWeaver.IpLocation.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,246 @@
+﻿
+.Dimmed{
+    opacity: 0.4;
+}
+
+a {
+    color: inherit;
+}
+
+    a:visited {
+        color: inherit;
+    }
+
+body {
+    margin: 0;
+}
+
+
+
+.ExploreNavigator {
+    margin: 2px 4px 2px 5px;
+    font-size: 125%;
+    font-weight: bold;
+}
+
+SysWeaver-Link.Path {
+    color: var(--ThemeBackground);
+    background-color: var(--ThemeAcc2);
+    margin: 2px 1px 0 0px;
+    padding: 2px 10px 2px 10px;
+    border-radius: var(--ThemeRad);
+}
+
+SysWeaver-Link.Path::after {
+    padding-left: 0.15em;
+    content: "/";
+    opacity: 0.25;
+}
+
+
+
+.Explore {
+    border: 1px solid rgba(0,0,0,0.3);
+    border-collapse: collapse;
+    border-spacing: 0;
+    margin: 4px;
+}
+
+    .Explore img {
+        --s: calc(var(--ThemeIconSize) * 32px);
+        display: inline-block;
+        width: var(--s);
+        height: var(--s);
+    }
+
+    .Explore td {
+        text-overflow: ellipsis;
+        /*overflow: hidden;*/
+        white-space: nowrap;
+        padding: 0;
+        border-left: 1px solid rgba(0,0,0,0.4);
+    }
+
+        .Explore td:first-child {
+            border-left: none;
+        }
+
+
+        .Explore th {
+            text-overflow: ellipsis;
+            /*overflow: hidden;*/
+            white-space: nowrap;
+            padding: 4px 0;
+            color: var(--ThemeBackground);
+            font-weight: normal;
+            text-transform: uppercase;
+            text-align: left;
+        }
+
+            .Explore th:first-child {
+                border-radius: var(--ThemeRad);
+                border-top-right-radius: 0;
+                border-bottom-right-radius: 0;
+                border-bottom-left-radius: 0;
+            }
+
+            .Explore th:last-child {
+                border-radius: var(--ThemeRad);
+                border-top-left-radius: 0;
+                border-bottom-right-radius: 0;
+                border-bottom-left-radius: 0;
+            }
+
+
+        .Explore th div {
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .Explore th img {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .Explore th span {
+            cursor: pointer;
+            margin-left: 4px;
+        }
+
+    .Explore tr:nth-child(2n) {
+        background-color: rgba(0, 0, 0, 0.1);
+    }
+
+th.ExploreSizeH {
+    padding: 0px 4px 0px 4px;
+    text-align: right;
+}
+
+th.ExploreNameH {
+    padding: 0px 4px 0px 4px;
+}
+
+th.ExploreIconH {
+    padding: 0px 4px 0px 4px;
+    text-align: center;
+}
+
+
+th.ExploreExtH {
+    padding: 0px 4px 0px 4px;
+}
+
+th.ExploreAuthH {
+    padding: 0px 4px 0px 4px;
+}
+
+th.ExploreTimeH {
+    padding: 0px 4px 0px 4px;
+}
+
+th.ExploreClientCacheH {
+    padding: 0px 4px 0px 4px;
+}
+
+th.ExploreRequestCacheH {
+    padding: 0px 4px 0px 4px;
+}
+
+th.ExploreCompPreferenceH {
+    padding: 0px 4px 0px 4px;
+}
+
+th.ExplorePreCompressedH {
+    padding: 0px 4px 0px 4px;
+}
+
+
+td.ExploreSize {
+    padding: 0px 4px 0px 4px;
+    text-align: right;
+}
+
+
+td.ExploreName {
+    padding: 0px 4px 0px 4px;
+    max-width: 512px;
+}
+
+/*
+td.ExploreIcon SysWeaver-Link {
+    box-sizing: border-box;
+    display: inline-block;
+    padding: 0px;
+    transition: border-color linear 0.1s;
+    border: 1px solid transparent;
+}
+
+    td.ExploreIcon SysWeaver-Link:hover {
+        background-color: inherit;
+        border-color: var(--ThemeAcc1);
+    }
+*/
+
+td.ExploreExt {
+    padding: 0px 4px 0px 4px;
+    max-width: 64px;
+}
+
+td.ExploreAuth {
+}
+
+    td.ExploreAuth div {
+        display: flex;
+        align-items: center;
+    }
+
+    td.ExploreAuth img {
+        display: inline-block;
+    }
+
+    td.ExploreAuth span {
+        display: inline-block;
+        text-transform: uppercase;
+        font-weight: bold;
+        padding: 2px 4px 2px 4px;
+        border-radius: 4px;
+        margin-right: 4px;
+        font-size: 60%;
+    }
+
+td.ExploreTime {
+    padding: 0px 4px 0px 4px;
+}
+
+td.ExploreClientCache {
+    padding: 0px 4px 0px 4px;
+    text-align: right;
+}
+
+td.ExploreRequestCache {
+    padding: 0px 4px 0px 4px;
+    text-align: right;
+}
+
+
+td.ExploreCompPreference {
+}
+
+    td.ExploreCompPreference div {
+        display: flex;
+        align-items: center;
+        padding-left: 4px;
+    }
+
+
+    td.ExploreCompPreference span {
+        display: inline-block;
+        text-transform: uppercase;
+        font-weight: bold;
+        padding: 2px 4px 2px 4px;
+        border-radius: var(--ThemeRadInp2);
+        margin-right: 4px;
+        font-size: 60%;
+    }
+

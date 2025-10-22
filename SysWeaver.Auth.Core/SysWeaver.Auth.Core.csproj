@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<NoWarn>1701;1702;1591</NoWarn>
+		<RootNamespace>SysWeaver.Auth</RootNamespace>
+	</PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+    <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
+    <ProjectReference Include="..\SysWeaver.MicroServices\SysWeaver.MicroServices.csproj" />
+    <ProjectReference Include="..\SysWeaver.Storage\SysWeaver.Storage.csproj" />
+    <ProjectReference Include="..\SysWeaver.TableData\SysWeaver.TableData.csproj" />
+  </ItemGroup>
+
+	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\*+ .\web" />
+		<ItemGroup>
+			<EmbeddedResource Include="web\**\*.br" Visible="false" />
+		</ItemGroup>
+	</Target>
+
+
+</Project>

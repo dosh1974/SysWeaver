@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<RootNamespace>SysWeaver.WebBrowser</RootNamespace>
+		<NoWarn>1701;1702;1591</NoWarn>
+		<CefSharpBuildAction>Content</CefSharpBuildAction>
+		<CefSharpAnyCpuSupport>true</CefSharpAnyCpuSupport>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="CefSharp.OffScreen.NETCore" Version="139.0.280" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+		<ProjectReference Include="..\SysWeaver.WebBrowser\SysWeaver.WebBrowser.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Update="chromiumembeddedframework.runtime.win-arm64" Version="139.0.28" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Update="chromiumembeddedframework.runtime.win-x64" Version="139.0.28" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Update="chromiumembeddedframework.runtime.win-x86" Version="139.0.28" />
+	</ItemGroup>
+
+</Project>

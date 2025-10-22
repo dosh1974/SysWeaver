@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<RootNamespace>SysWeaver.MicroService</RootNamespace>
+		<NoWarn>1701;1702;1591</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\SysWeaver.HttpServer\SysWeaver.HttpServer.csproj" />
+		<ProjectReference Include="..\SysWeaver.Media\SysWeaver.Media.csproj" />
+		<ProjectReference Include="..\SysWeaver.MicroService.FileUploader\SysWeaver.MicroService.FileUploader.csproj" />
+		<ProjectReference Include="..\SysWeaver.MicroService.Media\SysWeaver.MicroService.Media.csproj" />
+		<ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
+		<ProjectReference Include="..\SysWeaver.WebBrowser\SysWeaver.WebBrowser.csproj" />
+	</ItemGroup>
+
+</Project>

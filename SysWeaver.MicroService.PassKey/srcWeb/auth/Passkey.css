@@ -1,0 +1,10 @@
+﻿
+
+.IconAddPasskey {
+    mask-image: url("../icons/passkey_add.svg");
+}
+
+.IconUsePasskey {
+    mask-image: url("../icons/passkey_use.svg");
+}
+

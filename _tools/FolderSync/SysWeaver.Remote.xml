@@ -1,0 +1,234 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Remote</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.Remote.HttpEndPointTypes">
+            <summary>
+            Corresponds to the html request verb to use
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.HttpEndPointTypes.Get">
+            <summary>
+            Perform a GET request, no payload body
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.HttpEndPointTypes.Post">
+            <summary>
+            Perform a POST request, all data will go into the body
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.HttpEndPointTypes.Put">
+            <summary>
+            Perform a PUT request, all data will go into the body
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.HttpEndPointTypes.Delete">
+            <summary>
+            Perform a DELETE request, no payload body
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Remote.RemoteApiCallBegin">
+            <summary>
+            Callback function for monitoring remote api calls, called when a remote api call begin
+            </summary>
+            <param name="id">A unique id for the request (incremental counter), this is matched in the request end callbacks</param>
+            <param name="url">The url of the request</param>
+            <param name="type">The type of request</param>
+            <param name="timeout">The timeout for this request in milli seconds</param>
+            <param name="requestPayloadSerializer">The serializer used to create the payload (only for POST and PUT request)</param>
+            <param name="requestPayload">The request payload (only for POST and PUT)</param>
+            <param name="requestPayloadSize">The size of the request payload, do not use requestPayload.Length (only for POST and PUT)</param>
+        </member>
+        <member name="T:SysWeaver.Remote.RemoteApiCallEnd">
+            <summary>
+            Callback function for monitoring remote api calls, called when a remote api call end
+            </summary>
+            <param name="id">A unique id for the request (incremental counter), this is matched in the request end callbacks</param>
+            <param name="ex">The exception if an error occured, else null</param>
+            <param name="statusCode">The HTTP response code or 0 when an exception happened</param>
+            <param name="responsePayloadSerizlier">The serializer used to deserialize the response payload</param>
+            <param name="responsePayload">The response payload</param>
+        </member>
+        <member name="T:SysWeaver.Remote.IRemoteApi">
+            <summary>
+            The generated instance of any remote api interface implements this interface.
+            This functionality adds some debug/monitoring functionality, interfaces can inherit from this or instances can be casted to this.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.IRemoteApi.Cancel">
+            <summary>
+            Cancels all pending remote api calls on the remote connection.
+            </summary>
+        </member>
+        <member name="E:SysWeaver.Remote.IRemoteApi.OnCallBegin">
+            <summary>
+            Invoked before any remote api call (after any payload serilization).
+            </summary>
+        </member>
+        <member name="E:SysWeaver.Remote.IRemoteApi.OnCallEnd">
+            <summary>
+            Invoked after any remote api call (before any response payload deserilization).
+            Will always get called if OnCallBegin is called, that way calls in progress can be tracked and so on.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Remote.RemoteEndPointAttribute">
+            <summary>
+            Defines the end point formatting for an api call and/or the http end point type (verb)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteEndPointAttribute.Path">
+            <summary>
+            The path formatting to use
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteEndPointAttribute.Type">
+            <summary>
+            The verb to use
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteEndPointAttribute.#ctor(System.String,SysWeaver.Remote.HttpEndPointTypes)">
+            <summary>
+            Defines the end point formatting for an api call and optionally the rest type (verb)
+            </summary>
+            <param name="path">The path formatting to use, for GET and PUT calls - method arguments can be inserted using the {arg} syntax, if there is a single argument and that argument is an object, the syntax is {field} or {property}</param>
+            <param name="type">The type of verb to use</param>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteEndPointAttribute.#ctor(SysWeaver.Remote.HttpEndPointTypes,System.String)">
+            <summary>
+            Defines the rest type (verb) of an api and optionally the end point formatting 
+            </summary>
+            <param name="type">The type of verb to use</param>
+            <param name="path">The path formatting to use, for GET and PUT calls - method arguments can be inserted using the {arg} syntax, if there is a single argument and that argument is an object, the syntax is {field} or {property}</param>
+        </member>
+        <member name="T:SysWeaver.Remote.RemotePathPrefixAttribute">
+            <summary>
+            Defines a path prefix to use for all methods in this interface
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemotePathPrefixAttribute.PathPrefix">
+            <summary>
+            The path prefix to use on all methods in this interface
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemotePathPrefixAttribute.#ctor(System.String)">
+            <summary>
+            Defines a path prefix to use for all methods in this interface
+            </summary>
+            <param name="pathPrefix">The path prefix to use on all methods in this interface</param>
+        </member>
+        <member name="T:SysWeaver.Remote.RemoteParam">
+            <summary>
+            Some constants to make API definition easier
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteParam.JsonSerializer">
+            <summary>
+            Json serializer constant
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteParam.FormUrlSerializer">
+            <summary>
+            Serializer used for POST and PUT that encodes using the x-www-form-urlencoded format, this can only be used for POST serialization
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteParam.FormUrlIgnoreDefaultsSerializer">
+            <summary>
+            Serializer used for POST and PUT that encodes using the x-www-form-urlencoded format, all members that has the default value (of their type) is excluded, this can only be used for POST serialization
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Remote.RemoteSerializerAttribute">
+            <summary>
+            Override the serializer to use for a specific API call (or calls if placed on an interface)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteSerializerAttribute.Ser">
+            <summary>
+            The serializer to use for encoding and decoding, encoding can be different by using the postSerizlier
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteSerializerAttribute.PostSer">
+            <summary>
+            The serializer to use for encoding, if null the same serializer as for decoding will be used
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteSerializerAttribute.#ctor(System.String,System.String)">
+            <summary>
+            Override the serializer to use for a specific API call (or calls if placed on an interface), default is to use the serializer specified in the RemoteConnection
+            </summary>
+            <param name="serializer">The name of the serializer to use for this API call (or calls if placed on an interface)</param>
+            <param name="postSerializer">The name of the serializer to use for encoding data, if null the same serializer will be used for encoding and decoding</param>
+        </member>
+        <member name="T:SysWeaver.Remote.RemoteTimeoutAttribute">
+            <summary>
+            Override the time-out for a specific API call (or calls if placed on an interface)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteTimeoutAttribute.TimeOutInMilliSeconds">
+            <summary>
+            The time-out to use in millie seconds, if less or equal than zero, the time-out in the RemoteConnection settings is used
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteTimeoutAttribute.#ctor(System.Int32)">
+            <summary>
+            Override the time-out for this API call (or calls if placed on an interface)
+            </summary>
+            <param name="timeOutInMilliSeconds">The time-out to use in millie seconds, if less or equal than zero, the time-out in the RemoteConnection is used</param>
+        </member>
+        <member name="T:SysWeaver.Remote.RemoteCacheAttribute">
+            <summary>
+            Override the cache behaviour for a specific API call (or calls if placed on an interface)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteCacheAttribute.Disabled">
+            <summary>
+            Value to use to disable cache behaviour
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteCacheAttribute.UseConnection">
+            <summary>
+            Value to use to if the values passed in the remote connection should be used
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteCacheAttribute.Duration">
+            <summary>
+            Number of seconds that the response can be resued, if 0 or less no time based caching is performed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Remote.RemoteCacheAttribute.MaxItems">
+            <summary>
+            Maximum number of cached responses, if 0 or less there is no maximum
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.RemoteCacheAttribute.#ctor(System.Int32,System.Int32)">
+            <summary>
+            Override the cache behaviour for this specific API call (or calls if placed on an interface)
+            </summary>
+            <param name="duration">Number of seconds that the response can be resued, if 0 or less no time based caching is performed</param>
+            <param name="maxItems">Maximum number of cached responses, if 0 or less there is no maximum</param>
+        </member>
+        <member name="T:SysWeaver.Remote.NoRemoteCacheAttribute">
+            <summary>
+            Disables any caching for a specific API call (or calls if placed on an interface)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.NoRemoteCacheAttribute.#ctor">
+            <summary>
+            Disables any caching for this specific API call (or calls if placed on an interface)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Remote.ParamAsObjectAttribute">
+            <summary>
+            Use an object instead of an array for methods with more than one parameter.
+            Params names are mapped to object fields.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Remote.ParamAsObjectAttribute.#ctor">
+            <summary>
+            Use an object instead of an array for methods with more than one parameter.
+            Params names are mapped to object fields.
+            </summary>
+        </member>
+    </members>
+</doc>

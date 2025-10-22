@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.1" viewBox="0 0 768 1024" xmlns="http://www.w3.org/2000/svg">
+	<filter id="s">
+		<feDropShadow dx="3" dy="3" stdDeviation="5" flood-opacity="0.3"/>	
+	</filter>
+	<g filter="url(#s)">
+		<path d="M384 256 l256 512 l-512 0" fill="#dd2" />
+		<g fill="none" stroke="#442" stroke-width="32" stroke-linecap="round">
+			<path d="M384 256 l256 512"/>
+			<path d="M640 768 l-512 0"/>
+			<path d="M128 768 l256 -512"/>
+		</g>
+	</g>
+	<text fill="#442" font-family="Verdana" font-size="320px" font-weight="bold" dominant-baseline="central" text-anchor="middle" x="384" y="564">!</text>
+</svg>

@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Serialization.NewtonsoftJson</name>
+    </assembly>
+    <members>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.Register">
+            <summary>
+            Call once to register this serializer type to the serializer manager
+            </summary>
+        </member>
+    </members>
+</doc>

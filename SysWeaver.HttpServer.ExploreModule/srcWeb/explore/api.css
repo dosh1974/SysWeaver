@@ -1,0 +1,111 @@
+﻿
+
+SysWeaver-ApiSection {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    padding: 4px;
+    margin-bottom: 1.5em;
+    border: 1px solid rgba(var(--ThemeMainRGB), 0.1);
+    border-radius: var(--ThemeRad);
+    vertical-align: middle;
+    overflow-x: auto;
+}
+
+    SysWeaver-ApiSection:first-child
+    {
+        display: flex;
+        align-items: center;
+    }
+
+    SysWeaver-ApiSection:first-child icon-24x24{
+        margin-left: 1em;
+    }
+
+    SysWeaver-ApiSection SysWeaver-Text {
+        display: inline-block;
+    }
+
+    SysWeaver-ApiSection a {
+        display: inline-block;
+    }
+
+
+    SysWeaver-ApiSection.ApiSignature {
+        font-family: var(--ThemeFontMono);
+        font-size: 80%;
+        padding: 12px 4px 12px 4px;
+    }
+
+    SysWeaver-ApiSection.ApiSignature a {
+        font-weight: normal;
+    }
+
+        SysWeaver-ApiSection.ApiSignature SysWeaver-Text {
+            color: rgba(var(--ThemeAcc1RGB), 0.8);
+        }
+
+
+            SysWeaver-ApiSection.ApiSignature SysWeaver-Text.Signature {
+                color: var(--ThemeAcc2);
+                margin: 0 0 0 4px;
+            }
+
+            SysWeaver-ApiSection.ApiSignature SysWeaver-Text.Control {
+                color: var(--ThemeMain);
+            }
+
+SysWeaver-ApiDesc {
+    color: var(--ThemeAcc2);
+    display: inline-block;
+    user-select: text;
+}
+
+SysWeaver-ApiSection icon-24x24 {
+}
+
+SysWeaver-ApiUrl {
+    display: inline-block;
+    color: var(--ThemeAcc1);
+    user-select: text;
+}
+
+SysWeaver-ApiTag {
+    display: inline-block;
+    background-color: var(--ThemeMain);
+    color: var(--ThemeBackground);
+    padding: 2px 6px 2px 6px;
+    border-radius: var(--ThemeRadInp);
+    margin: 3px 10px 3px 10px;
+    font-size: 80%;
+    font-weight: bold;
+}
+
+
+SysWeaver-ApiSendButton {
+    margin: 1em auto 1em auto;
+    display: block;
+    text-align: center;
+}
+
+SysWeaver-TabContent.CODE
+{
+    overflow-x: auto;
+}
+
+
+SysWeaver-TabContent.CODE > iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    min-height: 10vh;
+    resize: vertical;
+}
+
+.IconSecured {
+    mask-image: url("../icons/lock.svg");
+}
+
+.IconSendIt {
+    mask-image: url("../icons/table_api.svg");
+}

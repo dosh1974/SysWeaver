@@ -1,0 +1,11 @@
+﻿	<g opacity="0.8" fill="#fff">
+		<path d="M384 160 l-32 0 l0 32 l32 0"/>
+		<path d="M384 192 l32 0 l0 32 l-32 0"/>
+		<path d="M384 224 l-32 0 l0 32 l32 0"/>
+		<path d="M384 256 l32 0 l0 32 l-32 0"/>
+		<path d="M384 288 l-32 0 l0 32 l32 0"/>
+		<path d="M384 320 l32 0 l0 32 l-32 0"/>
+		<path d="M384 352 l-32 0 l0 32 l32 0"/>
+		<path d="M384 384 l32 0 l0 32 l-32 0"/>
+	</g>
+	<circle cx="384" cy="496" r="64" opacity="0.8" stroke="#fff" stroke-width="32" fill="none"/>

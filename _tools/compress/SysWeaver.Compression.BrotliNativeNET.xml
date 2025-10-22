@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Compression.BrotliNativeNET</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.Compression.CompBrotliNativeNET">
+            <summary>
+            A compression type that uses brotli for compression
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNativeNET.Register">
+            <summary>
+            Call once to register this compression type to the compression manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompBrotliNativeNET.Instance">
+            <summary>
+            The instance of the compressor
+            </summary>
+        </member>
+    </members>
+</doc>

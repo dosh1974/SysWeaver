@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.ExpressionEvaluator</name>
+    </assembly>
+    <members>
+        <member name="M:SysWeaver.MicroService.CalcService.Calc(System.String)">
+            <summary>
+            Evaluate the value of an expression using Double precision arithmetics
+            </summary>
+            <param name="expression">The expression to evaluate, ex: "5 * 12"</param>
+            <returns>The value of the expression</returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.CalcService.CalcDecimal(System.String)">
+            <summary>
+            Evaluate the value of an expression using Decimal arithmetics
+            </summary>
+            <param name="expression">The expression to evaluate, ex: "5 * 12"</param>
+            <returns>The value of the expression</returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.CalcService.CalcInteger(System.String)">
+            <summary>
+            Evaluate the value of an expression using Int64 arithmetics
+            </summary>
+            <param name="expression">The expression to evaluate, ex: "5 * 12"</param>
+            <returns>The value of the expression</returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.CalcService.CalcUnsigned(System.String)">
+            <summary>
+            Evaluate the value of an expression using UInt64 arithmetics
+            </summary>
+            <param name="expression">The expression to evaluate, ex: "5 * 12"</param>
+            <returns>The value of the expression</returns>
+        </member>
+        <member name="T:SysWeaver.ExpressionOptimizer">
+            <summary>
+            A class that optimizes linq expressions
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExpressionOptimizer.RemovedNodes">
+            <summary>
+            The number of nodes removed by the optimizer
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExpressionOptimizer.MergedStaticNodes">
+            <summary>
+            The number of nodes that was merged
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ExpressionOptimizer.Optimize(System.Linq.Expressions.Expression)">
+            <summary>
+            Optimizes a linq expression
+            </summary>
+            <param name="e">The linq expression to optimize</param>
+            <returns>An optimized version of the expression</returns>
+        </member>
+        <member name="M:SysWeaver.ExpressionOptimizer.NodeCount(System.Linq.Expressions.Expression)">
+            <summary>
+            Counts the number of nodes in the expression
+            </summary>
+            <param name="e">The linq expression to count nodes in</param>
+            <returns>The number of nodes found in the supplied linq expression</returns>
+        </member>
+    </members>
+</doc>

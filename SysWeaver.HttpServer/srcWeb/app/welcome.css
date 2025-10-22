@@ -1,0 +1,64 @@
+﻿
+body {
+    margin: 0;
+    font-family: var(--ThemeFont);
+    background-color: var(--ThemeBackground);
+    color: var(--ThemeMain);
+    width: 100%;
+    min-height: 100vh;
+    text-align: center;
+    user-select: none;
+}
+
+div
+{
+    display: block;
+    left: 50%;
+    top: 40%;
+    position: absolute;
+    transform: translateX(-50%) translateY(-40%);
+}
+
+
+img {
+    --size: calc(min(70vw, 70vh));
+    display: block;
+    margin: auto;
+    width: var(--size);
+    max-width: var(--size);
+    max-height: var(--size);
+    margin-top: 1em;
+    margin-bottom: 1em;
+}
+
+p {
+    display: inline-block;
+    padding: 0.25em 1em;
+    border-radius: var(--ThemeRadInp);
+    outline: 2px solid transparent;
+}
+
+img.Click
+{
+    cursor: pointer;
+    transition: filter 0.15s linear;
+}
+
+
+    img.Click:hover {
+        filter: drop-shadow(0 0 1em var(--ThemeAcc150));
+    }
+
+p.KeyClick {
+    cursor: pointer;
+    transition: background-color 0.1s linear, color 0.1s linear, outline 0.1s linear;
+}
+
+    p.KeyClick:focus {
+        outline: 2px solid var(--ThemeAcc250);
+    }
+
+    p.KeyClick:hover {
+        background-color: var(--ThemeAcc1);
+        color: var(--ThemeBackground);
+    }

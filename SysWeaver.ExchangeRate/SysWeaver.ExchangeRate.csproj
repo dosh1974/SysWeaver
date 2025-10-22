@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFramework>net8.0</TargetFramework>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <NoWarn>1701;1702;1591</NoWarn>
+	  <RootNamespace>SysWeaver.ExchangeRate</RootNamespace>
+
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.IsoData\SysWeaver.IsoData.csproj" />
+    <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
+    <ProjectReference Include="..\SysWeaver.Remote.Connection\SysWeaver.Remote.Connection.csproj" />
+    <ProjectReference Include="..\SysWeaver.Serialization\SysWeaver.Serialization.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,47 @@
+﻿
+body {
+    margin: 0;
+    font-family: var(--ThemeFont);
+    background-color: var(--ThemeBackground);
+    color: var(--ThemeMain);
+    width: 100%;
+    height: 100%;
+    text-align: center;
+}
+
+img {
+    display: block;
+    margin: auto;
+    --size: calc(min(60vw, 60vh));
+    max-width: var(--size);
+    max-height: var(--size);
+}
+
+    img.UserImage {
+        position: relative;
+        display: block;
+        margin: auto;
+        --size: calc(min(10vw, 10vh));
+        max-width: var(--size);
+        max-height: var(--size);
+        border-radius: calc(var(--size) * 0.1);
+    }
+
+
+    img.CanUpload {
+        cursor: pointer;
+        transition: outline linear var(--ThemeFadeDuration), opacity linear var(--ThemeFadeDuration);
+    }
+
+    img.CanUpload.Dragging {
+       outline: 4px dashed var(--ThemeAcc1); 
+    }
+
+
+        img.CanUpload.Selecting {
+            opacity: 0.5;
+        }
+
+        img.CanUpload.Uploading {
+            opacity: 0.5;
+        }

@@ -1,0 +1,453 @@
+﻿
+:root {
+    --ThemeBackground: #242226;
+    --ThemeMain: #aaaaaa;
+    --ThemeAcc1: #D0BF2F;
+    --ThemeAcc2: #5ecad6;
+    --ThemeFont: Verdana, Geneva, Tahoma, sans-serif;
+    --ThemeFontMono: 'Roboto Mono', 'Lucida Console', monospace;
+    --ThemeRad: 12px;
+    --ThemeRadInp: 8px;
+    --ThemeRadInp2: 5px;
+    --ThemeFadeDuration: 0.1s;
+    --ThemeOk: #0b0;
+    --ThemeError: #c00;
+    --ThemeWarning: #ba0;
+    /* Individual R,G,B compnents, computed by js when switching */
+    --ThemeBackgroundR: 0;
+    --ThemeBackgroundG: 0;
+    --ThemeBackgroundB: 0;
+    --ThemeMainR: 0;
+    --ThemeMainG: 0;
+    --ThemeMainB: 0;
+    --ThemeAcc1R: 0;
+    --ThemeAcc1G: 0;
+    --ThemeAcc1B: 0;
+    --ThemeAcc2R: 0;
+    --ThemeAcc2G: 0;
+    --ThemeAcc2B: 0;
+    /* R,G,B compnents, computed by js when switching */
+    --ThemeBackgroundRGB: 0;
+    --ThemeMainRGB: 0;
+    --ThemeAcc1RGB: 0;
+    --ThemeAcc2RGB: 0;
+    /* At opacity, computed by js when switching */
+    --ThemeBackground25: 0;
+    --ThemeBackground50: 0;
+    --ThemeBackground75: 0;
+    --ThemeMain25: 0;
+    --ThemeMain50: 0;
+    --ThemeMain75: 0;
+    --ThemeAcc125: 0;
+    --ThemeAcc150: 0;
+    --ThemeAcc175: 0;
+    --ThemeAcc225: 0;
+    --ThemeAcc250: 0;
+    --ThemeAcc275: 0;
+}
+
+
+SysWeaver-Link {
+    font-weight: bold;
+    color: var(--ThemeAcc1);
+    text-decoration: none;
+    padding: 2px 5px 2px 5px;
+    border-radius: 6px;
+    transition: background-color linear 0.1s, color linear 0.1s, outline linear 0.1s;
+    outline: 2px solid transparent;
+    cursor: pointer;
+}
+
+    SysWeaver-Link:focus {
+        outline: 2px solid var(--ThemeAcc2);
+    }
+
+    SysWeaver-Link:hover {
+        color: var(--ThemeBackground);
+        background-color: var(--ThemeAcc1);
+    }
+
+    SysWeaver-Link:visited {
+        color: var(--ThemeAcc1);
+    }
+
+        SysWeaver-Link:visited:hover {
+            color: var(--ThemeBackground);
+        }
+
+    SysWeaver-Link.ThemeMain {
+        color: var(--ThemeMain);
+    }
+
+        SysWeaver-Link.ThemeMain:hover {
+            color: var(--ThemeBackground);
+            background-color: var(--ThemeMain);
+        }
+
+        SysWeaver-Link.ThemeMain:visited {
+            color: var(--ThemeMain);
+        }
+
+    SysWeaver-Link.Image {
+        box-sizing: border-box;
+        display: inline-block;
+        padding: 0px;
+        transition: border-color linear 0.1s;
+        border: 1px solid transparent;
+    }
+
+        SysWeaver-Link.Image:hover {
+            background-color: inherit;
+            border-color: var(--ThemeAcc1);
+        }
+
+        SysWeaver-Link.Image.ThemeMain:hover {
+            background-color: inherit;
+            border-color: var(--ThemeMain);
+        }
+
+SysWeaver-Page {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, 0);
+    box-sizing: border-box;
+    margin: 0 auto 0 auto;
+    padding: 1em 0.25em 1em 0.25em;
+    width: 100%;
+    max-width: 52em;
+    min-height: 100%;
+    background-color: transparent;
+    box-shadow: 0 0 64px rgba(var(--ThemeAcc1RGB), 0.15);
+    display: block;
+    text-align: left;
+}
+
+    SysWeaver-Page.Wide {
+        max-width: 78em;
+    }
+
+
+SysWeaver-Fail {
+    z-index: 10000;
+    display: block;
+    border-radius: 12px;
+    padding: 8px;
+    font-size: 125%;
+    position: fixed;
+    margin-top: 100%;
+    left: 1em;
+    right: 1em;
+    bottom: 1em;
+    text-align: center;
+    cursor: pointer;
+}
+
+    SysWeaver-Fail.MsgError {
+        border: 4px solid #f00;
+        background-color: #800;
+        color: #eee;
+    }
+
+    SysWeaver-Fail.MsgInfo {
+        border: 4px solid #4b4;
+        background-color: #383;
+        color: #eee;
+    }
+
+SysWeaver-CenterBlock {
+    display: flex;
+    max-width: 100%;
+    width: 100%;
+    padding: 0;
+    justify-content: space-around;
+    flex-wrap: wrap
+}
+
+    SysWeaver-CenterBlock > *:first-child:last-child {
+        margin: 0 auto
+    }
+
+
+
+SysWeaver-Button {
+    font-size: 80%;
+    font-weight: bold;
+    min-width: 128px;
+    transition: opacity linear 0.1s, transform linear 0.03s, box-shadow linear 0.03s, outline linear 0.1s;
+    opacity: 0.8;
+    margin: 8px;
+    display: inline-flex;
+    line-height: 24px;
+    padding: 8px 16px 8px 16px;
+    background-color: var(--ThemeAcc2);
+    color: var(--ThemeBackground);
+    border-radius: 15px;
+    cursor: pointer;
+    box-shadow: 2px 4px 8px rgba(0, 0, 0, 0.5);
+    outline: none;
+    flex-shrink: 0;
+    justify-content: space-between;
+}
+
+    SysWeaver-Button.SysWeaverButtonCenter {
+        margin-left: auto;
+        margin-right: auto;
+        vertical-align: middle;
+        display: inline-block;
+    }
+
+    SysWeaver-Button:focus {
+        outline: 3px solid var(--ThemeAcc1);
+    }
+
+    SysWeaver-Button:hover {
+        opacity: 1;
+    }
+
+
+    SysWeaver-Button.Pressed {
+        transform: translate(1px, 2px);
+        box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
+        opacity: 1;
+        cursor: pointer;
+    }
+
+    SysWeaver-Button.Disabled {
+        transform: translate(1px, 2px);
+        box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.3);
+        opacity: 0.4;
+        cursor: default;
+    }
+
+        SysWeaver-Button.Disabled:hover {
+            opacity: 0.4;
+        }
+
+
+    SysWeaver-Button Sysweaver-ButtonText {
+        vertical-align: middle;
+        display: inline-block;
+        float: left;
+    }
+
+    SysWeaver-Button Icon-24x24 {
+        vertical-align: middle;
+        display: inline-block;
+        float: right;
+        margin-left: 8px;
+    }
+
+
+    SysWeaver-Button.ThemeMain {
+        background-color: var(--ThemeMain);
+    }
+
+    SysWeaver-Button.ThemeAcc1 {
+        background-color: var(--ThemeAcc1);
+    }
+
+
+SysWeaver-Loading {
+    position: sticky;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    background-color: rgba(var(--ThemeBackgroundRGB), 0.5);
+    pointer-events: none;
+    cursor: default !important;
+    backdrop-filter: blur(4px);
+}
+
+SysWeaver-LoadingText {
+    font-size: 200%;
+    color: var(--ThemeAcc1);
+    position: fixed;
+    display: block;
+    max-width: 90vw;
+    left: 50vw;
+    bottom: 3em;
+    font-weight: bold;
+    transform: translateX(-50%);
+    margin-right: -100vmax;
+}
+
+SysWeaver-Loading > Icon-64x64 {
+    display: block;
+    position: fixed;
+    left: calc(50% - 32px);
+    top: calc(30vh - 32px);
+}
+
+
+SysWeaver-ProgressBar {
+    display: block;
+    width: 100%;
+    height: 2em;
+    background-color: rgba(var(--ThemeMainRGB), 0.1);
+    border-radius: 1em;
+    overflow: hidden;
+}
+
+SysWeaver-ProgressBarFill {
+    position: relative;
+    display: block;
+    height: 2em;
+    border-radius: 1em;
+    background-color: var(--ThemeAcc1);
+}
+
+SysWeaver-ProgressBarTextInside {
+    z-index: 1;
+    font-size: 50%;
+    font-weight: bold;
+    font-family: var(--ThemeMono);
+    display: inline-block;
+    position: absolute;
+    height: 4em;
+    text-align: right;
+    padding-right: 1em;
+    line-height: 4em;
+    vertical-align: middle;
+    overflow: hidden;
+    white-space: nowrap;
+    color: transparent;
+    transition: color linear 0.1s;
+}
+
+    SysWeaver-ProgressBarTextInside.Active {
+        color: var(--ThemeBackground);
+    }
+
+SysWeaver-ProgressBarTextOutside {
+    z-index: 1;
+    font-size: 50%;
+    font-weight: bold;
+    font-family: var(--ThemeMono);
+    display: inline-block;
+    position: absolute;
+    height: 4em;
+    text-align: left;
+    padding-left: 1em;
+    line-height: 4em;
+    vertical-align: middle;
+    overflow: hidden;
+    white-space: nowrap;
+    color: transparent;
+    transition: color linear 0.1s;
+}
+
+    SysWeaver-ProgressBarTextOutside.Active {
+        color: var(--ThemeMain);
+    }
+
+SysWeaver-Text {
+    display: block;
+    border-radius: 0.5em;
+    padding: 0.25em;
+}
+
+    SysWeaver-Text.KeyClick {
+        cursor: pointer;
+        outline: 1px solid transparent;
+        transition: outline linear 0.15s;
+    }
+
+        SysWeaver-Text.KeyClick:focus {
+            outline: 1px solid var(--ThemeAcc2);
+        }
+
+
+SysWeaver-ServerBlock {
+    z-index: 1111111;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: block;
+    background-color: rgba(var(--ThemeBackgroundRGB), 0.95);
+    padding-top: 1em;
+    padding-left: calc(max(0px, (100% - max(50%, 500px)) / 2));
+    padding-right: calc(max(0px, (100% - max(50%, 500px)) / 2));
+    text-align: center;
+    backdrop-filter: blur(4px);
+    cursor: not-allowed;
+}
+
+SysWeaver-ServerImage {
+    display: block;
+}
+
+SysWeaver-ServerTitle {
+    margin-top: 2em;
+    display: block;
+    font-size: 200%;
+    font-weight: bold;
+    color: var(--ThemeAcc1);
+}
+
+SysWeaver-ServerText {
+    margin-top: 1em;
+    display: block;
+    font-size: 150%;
+}
+
+SysWeaver-ServerWaiting {
+    margin-top: 5em;
+    display: block;
+}
+
+SysWeaver-ServerTime {
+    margin-top: 1em;
+    display: block;
+    font-weight: bold;
+    color: var(--ThemeAcc2);
+}
+
+
+SysWeaver-Loading {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    background-color: rgba(var(--ThemeBackgroundRGB), 0.5);
+}
+
+
+    SysWeaver-Loading > Icon-64x64.LoadingIcon {
+        display: inline-block;
+        position: absolute;
+        left: calc(50% - 32px);
+        top: calc(50% - 32px);
+    }
+
+
+.IconWorking {
+    mask-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiB4bWw6c3BhY2U9InByZXNlcnZlIj48cGF0aCBkPSJNMzEuNiAzLjVDNS45IDEzLjYtNi42IDQyLjcgMy41IDY4LjRjMTAuMSAyNS43IDM5LjIgMzguMyA2NC45IDI4LjFsLTMuMS03LjljLTIxLjMgOC 40LTQ1LjQtMi01My44LTIzLjNjLTguNC0yMS4zIDItNDUuNCAyMy4zLTUzLjhMMzEuNiAzLjV6Ij48YW5pbWF0ZVRyYW5zZm9ybSBhdHRyaWJ1dGVOYW1lPSJ0cmFuc2Zvcm0iIGF0dHJpYnV0ZVR5cGU9IlhNTCIgdHlwZT0icm90YXRlIiBkdXI9IjJzIiBmcm9tPSIwIDUwIDUwIiB0bz0iMzYwIDUwIDUwIiByZXBlYXRDb3VudD0iaW5kZWZ pbml0ZSI+PC9hbmltYXRlVHJhbnNmb3JtPjwvcGF0aD48cGF0aCBkPSJNNDIuMyAzOS42YzUuNy00LjMgMTMuOS0zLjEgMTguMSAyLjdjNC4zIDUuNyAzLjEgMTMuOS0yLjcgMTguMWw0LjEgNS41YzguOC02LjUgMTAuNi0xOSA0LjEtMjcuN2MtNi41LTguOC0xOS0xMC42LTI3LjctNC4xTDQyLjMgMzkuNnoiPjxhbmltYXRlVHJhbnNmb3Jt IGF0dHJpYnV0ZU5hbWU9InRyYW5zZm9ybSIgYXR0cmlidXRlVHlwZT0iWE1MIiB0eXBlPSJyb3RhdGUiIGR1cj0iMXMiIGZyb209IjAgNTAgNTAiIHRvPSItMzYwIDUwIDUwIiByZXBlYXRDb3VudD0iaW5kZWZpbml0ZSI+PC9hbmltYXRlVHJhbnNmb3JtPjwvcGF0aD48cGF0aCBkPSJNODIgMzUuN0M3NC4xIDE4IDUzLjQgMTAuMSAzNS43I DE4UzEwLjEgNDYuNiAxOCA2NC4zbDcuNi0zLjRjLTYtMTMuNSAwLTI5LjMgMTMuNS0zNS4zczI5LjMgMCAzNS4zIDEzLjVMODIgMzUuN3oiPjxhbmltYXRlVHJhbnNmb3JtIGF0dHJpYnV0ZU5hbWU9InRyYW5zZm9ybSIgYXR0cmlidXRlVHlwZT0iWE1MIiB0eXBlPSJyb3RhdGUiIGR1cj0iMnMiIGZyb209IjAgNTAgNTAiIHRvPSIzNjAgNT AgNTAiIHJlcGVhdENvdW50PSJpbmRlZmluaXRlIj48L2FuaW1hdGVUcmFuc2Zvcm0+PC9wYXRoPjwvc3ZnPg==");
+}
+
+.IconPaused {
+    mask-image: url("data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTYgM0M0LjkgMyA0IDMuOSA0IDVWMTlDNCAyMC4xIDQuOSAyMSA2IDIxSDlDMTAuMSAyMSAxMSAyMC4xIDExIDE5VjVDMTEgMy45IDEwLjEgMyA5IDNINloiLz48cGF0aCBkPSJNMTUgM0 MxMy45IDMgMTMgMy45IDEzIDVWMTlDMTMgMjAuMSAxMy45IDIxIDE1IDIxSDE4QzE5LjEgMjEgMjAgMjAuMSAyMCAxOVY1QzIwIDMuOSAxOS4xIDMgMTggM0gxNVoiLz48L3N2Zz4=");
+}
+
+.IconPower {
+    mask-image: url("data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgNTEyIDUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNDAwIDU0LjFjNjMgNDUgMTA0IDExOC42IDEwNCAyMDEuOSAwIDEzNi44LTExMC44IDI0Ny43LTI0Ny41IDI0OEMxMjAgNTA0LjMgOC4yIDM5MyA4IDI1Ni40IDcuOSAxNzMuMSA0OC 45IDk5LjMgMTExLjggNTQuMmMxMS43LTguMyAyOC00LjggMzUgNy43TDE2Mi42IDkwYzUuOSAxMC41IDMuMSAyMy44LTYuNiAzMS00MS41IDMwLjgtNjggNzkuNi02OCAxMzQuOS0uMSA5Mi4zIDc0LjUgMTY4LjEgMTY4IDE2OC4xIDkxLjYgMCAxNjguNi03NC4yIDE2OC0xNjkuMS0uMy01MS44LTI0LjctMTAxLjgtNjguMS0xMzQtOS43LTc uMi0xMi40LTIwLjUtNi41LTMwLjlsMTUuOC0yOC4xYzctMTIuNCAyMy4yLTE2LjEgMzQuOC03Ljh6TTI5NiAyNjRWMjRjMC0xMy4zLTEwLjctMjQtMjQtMjRoLTMyYy0xMy4zIDAtMjQgMTAuNy0yNCAyNHYyNDBjMCAxMy4zIDEwLjcgMjQgMjQgMjRoMzJjMTMuMyAwIDI0LTEwLjcgMjQtMjR6Ii8+PC9zdmc+");
+}
+
+.IconWarning {
+    mask-image: url("data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTExIDEzQzExIDEzLjYgMTEuNCAxNCAxMiAxNEMxMi42IDE0IDEzIDEzLjYgMTMgMTNWMTBDMTMgOS40IDEyLjYgOSAxMiA5QzExLjQgOSAxMSA5LjQgMTEgMTBWMTNaTTEzIDE2QzEzID E1LjQgMTIuNiAxNSAxMiAxNUMxMS40IDE1IDExIDE1LjQgMTEgMTZWMTZDMTEgMTYuNiAxMS40IDE3IDEyIDE3QzEyLjYgMTcgMTMgMTYuNiAxMyAxNlYxNlpNOS40IDQuN0MxMC41IDIuNiAxMy41IDIuNiAxNC42IDQuN0wyMS4yIDE2LjVDMjIuMyAxOC41IDIwLjkgMjEgMTguNiAyMUg1LjRDMy4xIDIxIDEuNyAxOC41IDIuOCAxNi41TDk uNCA0LjdaIi8+PC9zdmc+");
+}
+
+.IconReload {
+    mask-image: url("data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSItMzIgLTMyIDE5ODQgMTk4NCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNOTYwIDB2MjEzLjNjNDExLjYgMCA3NDYuNyAzMzQuOSA3NDYuNyA3NDYuN1MxMzcxLjYgMTcwNi43IDk2MCAxNzA2LjcgMjEzLjMgMTM3MS43IDIxMy4zIDk2MGMwLTE5NyA3OC40LTM4Mi41IDIxMy4zLTUyMC43djI1NC4xSDY0MFYxMDYuN0g1My4zVjMyMGgxOTFDODguNiA0OTQuMSAwIDcyMSAwIDk2MGMwIDUyOS4zIDQzMC42IDk2MCA5NjAgOTYwczk2MC00MzAuNyA5NjAtOTYwUzE0ODkuNCAwIDk2MCAwIi8+PC9zdmc+");
+}
+
+
+.IconLogo {
+    background-color: transparent !important;
+    background-image: url("../icon.svg");
+}

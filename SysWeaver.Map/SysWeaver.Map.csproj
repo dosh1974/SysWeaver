@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFramework>net8.0</TargetFramework>
+	  <RootNamespace>SysWeaver.Map</RootNamespace>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="srcData\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+    <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
+    <ProjectReference Include="..\SysWeaver.IsoData\SysWeaver.IsoData.csproj" />
+    <ProjectReference Include="..\SysWeaver.Media.Svg\SysWeaver.Media.Svg.csproj" />
+    <ProjectReference Include="..\SysWeaver.Serialization\SysWeaver.Serialization.csproj" />
+  </ItemGroup>
+
+	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcData\*+ .\data" />
+		<ItemGroup>
+			<EmbeddedResource Include="data\**\*.br" Visible="false" />
+		</ItemGroup>
+	</Target>
+	
+</Project>

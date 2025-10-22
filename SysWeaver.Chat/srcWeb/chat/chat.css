@@ -1,0 +1,913 @@
+﻿
+body.ChatMain{
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    padding: 0;
+    margin: 0;
+    user-select: none;
+}
+
+
+    body.ChatMain SysWeaver-Chat {
+        max-width: calc(min(125vh, 100vw));
+        min-width: 320px;
+        box-shadow: 0 0 64px rgba(var(--ThemeAcc1RGB), 0.15);
+    }
+
+SysWeaver-Chat {
+    --ics: 48px;
+    font-size: 125%;
+    position: relative;
+    background-color: rgba(var(--ThemeBackgroundRGB), 0.5);
+    color: var(--ThemeMain);
+    width: 100%;
+    height: 100%;
+    margin: 0 auto 0 auto;
+    display: flex;
+    flex-flow: column;
+    overflow: hidden;
+}
+
+SysWeaver-ChatMain {
+    font-size: 125%;
+    display: block;
+    width: 100%;
+    overflow-y: auto;
+    flex: 0 1 auto;
+    box-sizing: border-box;
+    padding-bottom: 0.5em;
+    resize: vertical;
+    height: calc(100% - max(4.5em, var(--ics)));
+    min-height: 10%;
+    max-height: calc(100% - max(max(104px, 2.5em), var(--ics)));
+}
+
+    SysWeaver-ChatMain icon-64x64 {
+        opacity: 0.5;
+        margin: auto;
+        display: block;
+        animation: var(--ThemeFadeDuration) linear LoadingFade;
+    }
+
+
+    SysWeaver-ChatMain.Stick {
+        animation: 0.5s linear SysWeaver_ChatStick;
+    }
+
+SysWeaver-ChatInput {
+    box-sizing: border-box;
+    display: block;
+    flex: 1 1 auto;
+    width: 100%;
+    padding: 0.25em;
+    box-shadow: 0 -0.5em 1.5em rgba(0, 0, 0, 0.5);
+    position: relative;
+
+    background-repeat: no-repeat;
+    background-position: right 72px bottom 16px;
+    background-size: auto 32px;
+}
+
+
+
+
+
+    SysWeaver-ChatInput > *.IconButton {
+        position: absolute;
+        top: 0.25em;
+        right: 0.25em;
+    }
+
+        SysWeaver-ChatInput > *.IconButton:nth-child(3) {
+            top: auto;
+            bottom: 0.25em;
+            transition: background-color linear 0.15s;
+            background-color: var(--ThemeAcc2) !important;
+        }
+
+            SysWeaver-ChatInput > *.IconButton:nth-child(3).IconDisabled {
+                mask-image: url(icons/ChatInput.svg);
+                opacity: 0.6;
+            }
+
+
+
+            SysWeaver-ChatInput > *.IconButton:nth-child(3).IconWorking {
+                mask-image: url(icons/ChatRecording.svg);
+                opacity: 1.0;
+            }
+
+
+    SysWeaver-ChatInput textarea {
+        box-sizing: border-box;
+        width: calc(100% - var(--ics) - 0.25em);
+        height: 100%;
+        resize: none;
+        background-color: rgba(var(--ThemeBackgroundRGB), 0.85);
+        color: var(--ThemeMain);
+        border-radius: var(--ThemeRad);
+        padding: 0.5em 0.75em;
+        border: 2px solid rgba(var(--ThemeAcc1RGB), 0.05);
+        outline: none !important;
+        transition: color linear var(--ThemeFadeDuration), border linear var(--ThemeFadeDuration);
+        font: var(--ThemeFont);
+        position: relative;
+    }
+
+        SysWeaver-ChatInput textarea::placeholder {
+            color: var(--ThemeMain);
+            opacity: 0.25;
+            font-size: 80%;
+            font-style: italic;
+        }
+
+        SysWeaver-ChatInput textarea.Listening {
+            border: 2px solid var(--ThemeAcc2);
+        }
+
+        SysWeaver-ChatInput textarea.Dragging {
+            border: 2px dashed var(--ThemeAcc1);
+        }
+
+
+
+
+
+SysWeaver-ChatRow {
+    --si: calc(var(--ThemeIconSize) * 40px);
+    --fi: calc(var(--ThemeIconSize) * 32px);
+    font-size: 80%;
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    padding: 1em 0.5em;
+    text-align: left;
+    border-bottom: 1px dashed rgba(var(--ThemeMainRGB), 0.1);
+}
+
+SysWeaver-ChatRow:first-child {
+    margin-top: 48px;
+}
+
+    SysWeaver-ChatRow:last-child {
+        margin-bottom: 0;
+        border-bottom: none;
+    }
+
+
+    SysWeaver-ChatRow.Hide {
+        display: none;
+    }
+
+    SysWeaver-ChatRow.Preview {
+        border-top: 2px dashed var(--ThemeAcc1);
+        padding-top: 0;
+        padding-bottom: 0.25em;
+    }
+
+
+        SysWeaver-ChatRow.Preview:before {
+            padding-top: 0.25em;
+            content: "Preview";
+            display: block;
+            text-align: center;
+            font-size: 80%;
+            margin-bottom: 0.5em;
+        }
+
+    SysWeaver-ChatRow.Preview SysWeaver-ChatHeader {
+        cursor: default;
+    }
+
+    SysWeaver-ChatMsg {
+        background-color: var(--ThemeBackground);
+        display: inline-block;
+        border: 2px solid rgba(var(--ThemeMainRGB), 0.1);
+        border-radius: var(--ThemeRad);
+        border-top-left-radius: 2px;
+        box-sizing: border-box;
+        max-width: 95%;
+    }
+
+SysWeaver-ChatRow.Mine {
+    text-align: right;
+}
+
+    SysWeaver-ChatRow.Mine SysWeaver-ChatMsg {
+        border-radius: var(--ThemeRad);
+        border-top-right-radius: 2px;
+    }
+
+
+    SysWeaver-ChatRow.Mine SysWeaver-ChatLanguage {
+        grid-column: 1 / 1;
+    }
+
+    SysWeaver-ChatRow.Mine SysWeaver-ChatName {
+    }
+
+    SysWeaver-ChatRow.Mine SysWeaver-ChatTime {
+    }
+
+    SysWeaver-ChatRow.Mine SysWeaver-ChatIcon {
+        grid-column: 3 / 3;
+    }
+
+    SysWeaver-ChatRow.Mine SysWeaver-ChatHeader {
+        grid-template-columns: var(--fi) auto var(--si);
+        padding: 2px 2px 2px 0.5em;
+    }
+
+SysWeaver-ChatHeader {
+    display: block;
+    background-color: rgba(var(--ThemeAcc2RGB), 0.1);
+    padding: 2px 0.5em 2px 2px;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: var(--si) auto var(--fi);
+    grid-template-rows: auto auto;
+}
+
+SysWeaver-ChatLanguage {
+    grid-column: 3 / 3;
+    grid-row: 1 / span 2;
+    background-color: transparent;
+    transition: background-color linear var(--ThemeFadeDuration);
+    mask-position: center center;
+    mask-repeat: no-repeat;
+    mask-size: contain;
+}
+
+
+    SysWeaver-ChatLanguage img {
+        width: var(--fi);
+        height: var(--si);
+        object-fit: contain;
+        border: none;
+        cursor: pointer;
+        border-radius: calc(var(--fi) * 0.1);
+        transition: opacity linear var(--ThemeFadeDuration), filter linear var(--ThemeFadeDuration);
+    }
+
+    SysWeaver-ChatLanguage.Translating {
+        background-color: var(--ThemeMain);
+        mask-image: url("../icons/Loading.svg");
+    }
+
+    SysWeaver-ChatLanguage.Translating img {
+        opacity: 0;
+    }
+
+    SysWeaver-ChatLanguage.Translated img {
+        filter: drop-shadow(0 0 5px var(--ThemeAcc1));
+    }
+
+SysWeaver-ChatName {
+    font-size: calc(max(12px, 75%));
+    font-weight: bold;
+    grid-column: 2 / 2;
+    grid-row: 1 / 1;
+    padding: 0 0.75em 0 0.75em;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+SysWeaver-ChatTime {
+    font-size: calc(max(11px, 60%));
+    opacity: 0.75;
+    grid-column: 2 / 2;
+    grid-row: 2 / 2;
+    padding: 0 0.75em 0 0.75em;
+    white-space: nowrap;
+}
+
+SysWeaver-ChatIcon {
+    grid-column: 1 / 1;
+    grid-row: 1 / span 2;
+}
+
+    SysWeaver-ChatIcon img {
+        width: var(--si);
+        height: var(--si);
+        object-fit: contain;
+        border: none;
+        cursor: pointer;
+        border-radius: calc(var(--si) * 0.1);
+    }
+
+
+SysWeaver-ChatContent {
+    display: block;
+    padding: 0.5em;
+    text-align: left;
+    user-select: text;
+    overflow: hidden;
+    cursor: text;
+    max-height: 60vh;
+    /*white-space: pre-wrap;*/
+}
+
+    SysWeaver-ChatContent:focus
+    {
+        overflow: auto;
+    }
+
+
+    SysWeaver-ChatContent.Hidden {
+        display: none;
+    }
+
+
+    SysWeaver-ChatContent h1 {
+        margin-top: 0.25em;
+        margin-bottom: 0.5em;
+        color: var(--ThemeAcc1);
+    }
+
+    SysWeaver-ChatContent h2 {
+        margin-top: 0.25em;
+        margin-bottom: 0.5em;
+        color: var(--ThemeAcc1);
+    }
+
+    SysWeaver-ChatContent h3 {
+        margin-top: 0.25em;
+        margin-bottom: 0.5em;
+        color: var(--ThemeAcc1);
+    }
+
+    SysWeaver-ChatContent h4 {
+        margin-top: 0.25em;
+        margin-bottom: 0.5em;
+        color: var(--ThemeAcc1);
+    }
+
+    SysWeaver-ChatContent h5 {
+        margin-top: 0.25em;
+        margin-bottom: 0.5em;
+        color: var(--ThemeAcc1);
+    }
+
+    SysWeaver-ChatContent h6 {
+        margin-top: 0.25em;
+        margin-bottom: 0.5em;
+        color: var(--ThemeAcc1);
+    }
+
+
+    SysWeaver-ChatContent strong {
+        color: var(--ThemeAcc1);
+    }
+
+
+    SysWeaver-ChatContent p {
+        margin-top: 0.25em;
+        margin-bottom: 0.75em;
+    }
+
+    SysWeaver-ChatContent a {
+        display: inline-block;
+    }
+
+
+    SysWeaver-ChatContent em
+    {
+        color: var(--ThemeAcc2);
+    }
+
+
+    SysWeaver-ChatContent mark {
+        padding: 0 0.3em;
+        border-radius: var(--ThemeRadInp);
+        background-color: rgba(var(--ThemeAcc1RGB), 0.5);
+        color: rgba(var(--ThemeBackgroundRGB), 0.95);
+    }
+
+    SysWeaver-ChatContent hr {
+        border: none;
+        border-top: 1px dashed rgba(var(--ThemeMainRGB), 0.4);
+        border-bottom: 1px dashed rgba(var(--ThemeMainRGB), 0.6);
+    }
+
+
+    SysWeaver-ChatContent ol,ul {
+        margin: 0.5em 0 0 0;
+        color: var(--ThemeMain);
+    }
+
+    SysWeaver-ChatContent li {
+        margin: 0.25em 0 0 0;
+        border-radius: var(--ThemeRadInp);
+        transition: background-color linear var(--ThemeFadeDuration);
+    }
+
+        SysWeaver-ChatContent li:hover {
+            background-color: rgba(var(--ThemeMainRGB), 0.05);
+        }
+
+        SysWeaver-ChatContent li::marker {
+            color: var(--ThemeAcc1);
+            font-size: 75%;
+        }
+
+    SysWeaver-ChatContent img {
+        max-height: 35vw;
+        background-color: rgba(var(--ThemeMainRGB), 0.05);
+        border-radius: 3px;
+        padding: 2px;
+    }
+
+    SysWeaver-ChatContent blockquote {
+        margin-inline-start: 0.25em;
+        margin-inline-end: 0;
+        padding-top: 0.25em;
+        background-color: rgba(var(--ThemeMainRGB), 0.05);
+        padding-bottom: 0.25em;
+        padding-left: 0.5em;
+        border-left: 0.5em solid rgba(var(--ThemeMainRGB), 0.25);
+    }
+
+    SysWeaver-ChatContent a img {
+        padding: 5px;
+    }
+
+    SysWeaver-ChatContent pre {
+        margin: 0;
+        background-color: rgba(var(--ThemeMainRGB), 0.05);
+        padding: 0.5em 0.25em 0.5em 0.25em;
+        border-radius: var(--ThemeRadInp2);
+        white-space: pre-wrap;
+    }
+
+    SysWeaver-ChatContent code {
+        font: var(--ThemeFontMono);
+        color: var(--ThemeAcc2);
+        white-space: pre-wrap;
+    }
+
+    SysWeaver-ChatContent table {
+        border-collapse: collapse;
+        border-color: rgba(var(--ThemeMainRGB), 0.15);
+        border: 1px solid rgba(0, 0, 0, 0.3);
+    }
+
+    SysWeaver-ChatContent p img {
+        display: inline;
+        max-height: 35vw;
+    }
+
+
+    SysWeaver-ChatContent th {
+        color: var(--ThemeAcc1);
+        font-weight: bold;
+        white-space: nowrap;
+        font-size: 75%;
+        padding: 0.125em 0.25em 0.125em 0.25em;
+    }
+
+    SysWeaver-ChatContent tr {
+        transition: background-color linear 0.2s;
+    }
+
+        SysWeaver-ChatContent tr:hover {
+            background-color: rgba(var(--ThemeAcc2RGB), 0.1);
+        }
+
+        SysWeaver-ChatContent tr:nth-child(2n) {
+            background-color: rgba(0,0,0, 0.1);
+        }
+
+            SysWeaver-ChatContent tr:nth-child(2n):hover {
+                background-color: rgba(var(--ThemeAcc2RGB), 0.1);
+            }
+
+
+    SysWeaver-ChatContent td:nth-child(2n) {
+        color: var(--ThemeAcc2);
+    }
+
+    SysWeaver-ChatContent td {
+        padding: 0.125em 0.25em 0.125em 0.25em;
+        border-right: 1px solid rgba(0, 0, 0, 0.3);
+    }
+
+    SysWeaver-ChatContent td:last-child {
+        border: none;
+    }
+
+
+SysWeaver-ChatRow.Working SysWeaver-ChatData > * {
+    max-height: 32px;
+    background: none;
+}
+
+SysWeaver-ChatRow.Working SysWeaver-ChatData img {
+    max-height: 64px;
+    background: none;
+}
+
+
+SysWeaver-ChatRow.Working SysWeaver-ChatExpand
+{
+    display: none;
+}
+
+
+
+SysWeaver-ChatData
+{
+    display: block;
+    width: 100%;
+    text-align: center;
+}
+
+
+    SysWeaver-ChatData.Hidden {
+        display: none;
+    }
+
+
+    SysWeaver-ChatData > * {
+        resize: both;
+        min-width: 100%;
+        min-height: calc(var(--ThemeIconSize) * 32px + 12px);
+        max-width: 100%;
+        max-height: 100vh;
+    }
+
+
+
+
+    SysWeaver-ChatData SysWeaver-ChatHolder {
+        --size: 80vh;
+        border: 2px solid rgba(var(--ThemeMainRGB), 0.05);
+        border-radius: 4px;
+        margin: 0 2px 2px 2px;
+        box-sizing: border-box;
+        display: inline-block;
+        width: 100%;
+        height: calc(0.5 * var(--size));
+        max-width: calc(100% - 4px);
+        max-height: var(--size);
+        position: relative;
+        padding: 2px;
+        overflow: hidden;
+    }
+
+
+        SysWeaver-ChatData SysWeaver-ChatHolder.Clickable > *:first-child{
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: border linear var(--ThemeFadeDuration);
+            box-sizing: border-box;
+            outline: none;
+        }
+
+            SysWeaver-ChatData SysWeaver-ChatHolder.Clickable > *:first-child:hover {
+                border: 1px solid var(--ThemeAcc1);
+            }
+
+            SysWeaver-ChatData SysWeaver-ChatHolder.Clickable > *:first-child:focus {
+                border: 1px solid var(--ThemeAcc1);
+            }
+
+
+        SysWeaver-ChatData SysWeaver-ChatHolder iframe {
+            outline: none;
+            border: none;
+            margin: 0;
+            box-sizing: border-box;
+            width: 100%;
+            height: 100%;
+        }
+
+        SysWeaver-ChatData SysWeaver-ChatHolder SysWeaver-ChatExpand 
+        {
+            position: absolute;
+            top: 4px;
+            right: 5px;
+            width: 32px;
+            height: 32px;
+            background-color: rgba(var(--ThemeBackgroundRGB), 0.6);
+            border-radius: 4px;
+            transition: opacity linear 0.1s;
+            opacity: 0.25;
+        }
+
+            SysWeaver-ChatData SysWeaver-ChatHolder SysWeaver-ChatExpand:hover {
+                opacity: 1.0;
+            }
+
+        SysWeaver-ChatData SysWeaver-ChatHolder.Extension {
+            --size: 6em;
+            height: 6em;
+        }
+
+            SysWeaver-ChatData SysWeaver-ChatHolder.Extension img {
+                --size: 4em;
+                display: inline-block;
+                width: auto;
+            }
+
+        SysWeaver-ChatData SysWeaver-ChatHolder SysWeaver-ChatLabel {
+            display: block;
+            font-size: 70%;
+            user-select: text;
+        }
+
+
+    SysWeaver-ChatData img {
+        background-color: rgba(var(--ThemeMainRGB), 0.05);
+        border-radius: 3px;
+        padding: 2px;
+        display: inline-block;
+        margin: 0;
+        box-sizing: border-box;
+        max-width: 100%;
+        max-height: calc(var(--size) - 4px);
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        
+        display: inline-block;
+        width: auto;
+    }
+
+
+
+
+SysWeaver-Chat > *.IconButton {
+    display: block;
+    position: absolute;
+    top: 0.5em;
+    right: 1em;
+    opacity: 0.25 !important;
+}
+
+    SysWeaver-Chat > *.IconButton:focus {
+        opacity: 0.6 !important;
+    }
+
+        SysWeaver-Chat > *.IconButton:hover {
+            opacity: 1 !important;
+        }
+
+        SysWeaver-Chat > *.IconButton:focus:hover {
+            opacity: 1 !important;
+        }
+
+SysWeaver-PopupMenu.Chat SysWeaver-PopupMenuBack{
+    position: absolute;
+    font-size: 100%;
+}
+
+SysWeaver-PopupMenu.ChatData SysWeaver-PopupMenuBack {
+    position: absolute;
+    right: -32px;
+    font-size: 100%;
+}
+
+SysWeaver-ChatLangItem {
+    background-repeat: no-repeat;
+    background-position: 0.75em center;
+    background-size: auto 70%;
+    display: block;
+    margin: 0.5em 4px;
+    padding: 0.5em 0.5em 0.5em 4em;
+    border-radius: var(--ThemeRadInp);
+    border: 1px solid var(--ThemeMain25);
+    transition: border linear var(--ThemeFadeDuration), background-color linear var(--ThemeFadeDuration), color linear var(--ThemeFadeDuration);
+    cursor: pointer;
+}
+
+    SysWeaver-ChatLangItem:hover {
+        color: var(--ThemeAcc2);
+        background-color: rgba(var(--ThemeMainRGB), 0.075);
+        border: 1px solid var(--ThemeAcc1);
+    }
+
+
+.IconSend {
+    mask-image: url('../icons/send.svg');
+}
+
+.IconMenu {
+    mask-image: url('../icons/menu.svg');
+}
+
+
+.IconChatSave {
+    mask-image: url('../icons/disc.svg');
+}
+
+
+.IconChatStore {
+    mask-image: url('../icons/db_add.svg');
+}
+
+.IconChatLink {
+    mask-image: url("../icons/share.svg");
+}
+
+
+.IconChatLink0 {
+    mask-image: url("../icons/keep.svg");
+}
+
+.IconChatLink1 {
+    mask-image: url("../icons/user_check.svg");
+}
+
+.IconChatLink2 {
+    mask-image: url("../icons/table_country.svg");
+}
+
+
+.IconChatClear {
+    mask-image: url('../icons/trash.svg');
+}
+
+.IconChatRemove {
+    mask-image: url('../icons/trash.svg');
+}
+
+.IconChatKeep {
+    mask-image: url('../icons/fav_on.svg');
+}
+
+.IconChatTop {
+    mask-image: url('../icons/MoveTop.svg');
+}
+
+.IconChatBottom {
+    mask-image: url('../icons/MoveBottom.svg');
+}
+
+.IconChatAge {
+    mask-image: url('../icons/hour_glass.svg');
+}
+
+.IconChatTime {
+    mask-image: url('../icons/clock.svg');
+}
+
+.IconDebug {
+    mask-image: url('../icons/table_api.svg');
+}
+
+.IconDebug {
+    mask-image: url('../icons/table_api.svg');
+}
+
+.IconDebugNone {
+    mask-image: url('../icons/minus.svg');
+}
+
+.IconDebugOverview {
+    mask-image: url('../icons/rating_off.svg');
+}
+
+.IconDebugParameters {
+    mask-image: url('../icons/rating_half.svg');
+}
+
+.IconDebugDetails {
+    mask-image: url('../icons/rating_on.svg');
+}
+
+.IconChatMicOn {
+    mask-image: url('../icons/mic_on.svg');
+}
+
+.IconChatMicOff {
+    mask-image: url('../icons/mic_off.svg');
+}
+
+.IconCopy {
+    mask-image: url('../icons/copy.svg');
+}
+
+.IconChatShow {
+    mask-image: url('../icons/eye.svg');
+}
+
+.IconChatHide {
+    mask-image: url('../icons/eye_off.svg');
+}
+
+.IconChatExpand {
+    mask-image: url('../icons/newtab.svg');
+}
+
+.IconChatSpeechGenEnable {
+    mask-image: url('../icons/preview_vol_loud.svg');
+}
+
+.IconChatSpeechGenDisable {
+    mask-image: url('../icons/preview_mute.svg');
+}
+
+.IconChatSpeechVolume {
+    mask-image: url('../icons/preview_unmute.svg');
+}
+
+.IconChatSpeechVolume25 {
+    mask-image: url('../icons/preview_vol_low.svg');
+}
+
+.IconChatSpeechVolume50 {
+    mask-image: url('../icons/preview_vol_low.svg');
+}
+
+.IconChatSpeechVolume75 {
+    mask-image: url('../icons/preview_vol_loud.svg');
+}
+
+.IconChatSpeechVolume100 {
+    mask-image: url('../icons/preview_vol_loud.svg');
+}
+
+.IconChatHelp {
+    mask-image: url('../icons/help.svg');
+}
+
+.IconProfile {
+    mask-image: url('../icons/user.svg');
+}
+
+.IconChatText {
+    mask-image: url('icons/ChatFormatText.svg');
+}
+
+.IconChatMD {
+    mask-image: url('icons/ChatFormatMD.svg');
+}
+
+.IconChatHidePreview {
+    mask-image: url('icons/ChatHidePreview.svg');
+}
+
+.IconChatShowPreview {
+    mask-image: url('icons/ChatShowPreview.svg');
+}
+
+
+.IconChatCopyImage {
+    mask-image: url('../icons/image.svg');
+}
+
+.IconChatCopy {
+    mask-image: url('../icons/copy.svg');
+}
+
+.IconChatDeleteFile {
+    mask-image: url('../icons/db_remove.svg');
+}
+
+.IconChatHideFile {
+    mask-image: url('../icons/eye_off.svg');
+}
+
+.IconChatAttachFile {
+    mask-image: url('../icons/db_add.svg');
+}
+
+.IconChatLanguage {
+    mask-image: url('../icons/table_language.svg');
+}
+
+.IconChatClearCurrent {
+    mask-image: url('../icons/clear.svg');
+}
+
+.IconChatAutoSendOn {
+    mask-image: url('../icons/send.svg');
+}
+
+.IconChatAutoSendOff {
+    mask-image: url('../icons/edit.svg');
+}
+
+
+
+@keyframes SysWeaver_ChatStick {
+    from {
+        box-shadow: inset 0 -32px 20px -20px rgba(var(--ThemeAcc1RGB), 0.5);
+    }
+
+    to {
+        box-shadow: inset 0 -32px 20px -20px transparent;
+    }
+}
+
+@keyframes LoadingFade {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 0.5;
+    }
+}
+

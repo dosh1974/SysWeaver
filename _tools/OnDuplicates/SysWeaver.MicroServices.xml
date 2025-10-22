@@ -1,0 +1,592 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.MicroServices</name>
+    </assembly>
+    <members>
+        <member name="T:SysWeaver.MicroService.IsMicroServiceAttribute">
+            <summary>
+            Indicated that a type can be used as a micro service
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.OptionalDepAttribute">
+            <summary>
+            Add to a micro service class to show an optional dependency
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.OptionalDepAttribute`1">
+            <summary>
+            Add to a micro service class to show an optional dependency
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.OptionalDepAttribute`2">
+            <summary>
+            Add to a micro service class to show an optional dependency
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.RequiredDepAttribute">
+            <summary>
+            Add to a micro service class to show a required dependency
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.RequiredDepAttribute`1">
+            <summary>
+            Add to a micro service class to show a required dependency
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.RequiredDepAttribute`2">
+            <summary>
+            Add to a micro service class to show a required dependency
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.IEmailService.Send(System.String,System.String,System.String,System.Boolean)">
+            <summary>
+            Send a message
+            </summary>
+            <param name="to"></param>
+            <param name="subject"></param>
+            <param name="message"></param>
+            <param name="isHtml"></param>
+            <returns></returns>
+        </member>
+        <member name="P:SysWeaver.MicroService.IEmailService.From">
+            <summary>
+            The from address when sending emails using this instance
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.IQrCodeService">
+            <summary>
+            Service for generating QR code svgs
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.IQrCodeService.CreateQrCode(System.String)">
+            <summary>
+            Generate a QR code for the given data string
+            </summary>
+            <param name="data">The data string to encode in the QR code</param>
+            <returns>The svg image containing the data</returns>
+        </member>
+        <member name="M:SysWeaver.MicroService.IQrCodeService.CreateQrCode(System.String,System.String,System.String,System.Boolean)">
+            <summary>
+            Generate a QR code for the given data string, with optional parameters
+            </summary>
+            <param name="data">The data string to encode in the QR code</param>
+            <param name="bright">The bright (background) css color</param>
+            <param name="dark">The dark (dots) css color</param>
+            <param name="safeArea">True to render a safe are (background) around the actual code</param>
+            <returns>The svg image containing the data</returns>
+        </member>
+        <member name="T:SysWeaver.MicroService.IServiceMessageListener">
+            <summary>
+            Any instance registered to the service manager, will get message if this interface is implemented
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.IHaveTemplateVariables">
+            <summary>
+            Any instance registered to the service manager, that implements this interface will have the template variables registered
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiAttribute">
+            <summary>
+            Put this attribute on a method to make it available online
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiAttribute.#ctor(System.String)">
+            <summary>
+            Put this attribute on a method to make it available online, optionally specify a name
+            </summary>
+            <param name="url">An optional url (name) for the method, by default the method name is used. {0} is replaced with the method name.</param>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiAttribute.Url">
+            <summary>
+            Optional name instead of the default (method name)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiRawAttribute">
+            <summary>
+            The method must returns some readonly memory, and in that case the function should be treated as raw data (i.e no serialization will happen).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiRawAttribute.Mime">
+            <summary>
+            The mimetype of the raw output data
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiRawAttribute.DisableCompression">
+            <summary>
+            True to compress the output, null = use mime default
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiRawAttribute.IsTranslated">
+            <summary>
+            Set to true if the response data is localized (different pending on the specified language)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiRawAttribute.#ctor(System.String,System.Boolean,System.Boolean)">
+            <summary>
+            The method must returns some readonly memory, and in that case the function should be treated as raw data (i.e no serialization will happen).
+            </summary>
+            <param name="mime">The mimetype of the raw output data</param>
+            <param name="disableCompression">True to automatically detect if compression should happen, else the default behaviour is used</param>
+            <param name="isTranslated">Set to true if the response data is localized (different pending on the specified language)</param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiRawTextAttribute">
+            <summary>
+            The method must returns some readonly memory containg UTF8 encoded text, and in that case the function should be treated as raw data (i.e no serialization will happen).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiRawTextAttribute.#ctor(System.Boolean)">
+            <summary>
+            The method must returns some readonly memory containg UTF8 encoded text, and in that case the function should be treated as raw data (i.e no serialization will happen).
+            </summary>
+            <param name="disableCompression">True to automatically detect if compression should happen, else the default behaviour is used</param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiAuditAttribute">
+            <summary>
+            Put this attribute on web api's to report them to any audit loggers
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiAuditAttribute.#ctor(System.String)">
+            <summary>
+            Put this attribute on web api's to report them to any audit loggers
+            </summary>
+            <param name="group">An optional group for the method.</param>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiAuditAttribute.Group">
+            <summary>
+            Optional group
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiAuditFilterParamsAttribute">
+            <summary>
+            Use this to modify the audit parameters value.
+            The function must NEVER modify the actual value (rather return a new modified value of the same or any other type).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiAuditFilterParamsAttribute.#ctor(System.String)">
+            <summary>
+            Use this to modify the audit parameters value.
+            The function must NEVER modify the actual value (rather return a new modified value of the same or any other type).
+            </summary>
+            <param name="methodName">
+            Name of a method in the type where the method is defined with the following signature: 
+            Object Function(long callId, HttpServerRequest request, Object paramsValue); 
+            or
+            Object Function(long callId, Object paramsValue); 
+            </param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiAuditFilterReturnAttribute">
+            <summary>
+            Use this to modify the audit return value.
+            The function must NEVER modify the actual value (rather return a new modified value of the same or any other type).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiAuditFilterReturnAttribute.#ctor(System.String)">
+            <summary>
+            Use this to modify the audit return value.
+            The function must NEVER modify the actual value (rather return a new modified value of the same or any other type).
+            </summary>
+            <param name="methodName">
+            Name of a method in the type where the method is defined with the following signature: 
+            Object Function(long callId, HttpServerRequest request, Object returnValue);
+            or
+            Object Function(long callId, Object returnValue); 
+            </param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiAuthAttribute">
+            <summary>
+            Put this attribute on a type or method to specify the auth required
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiAuthAttribute.#ctor(System.String)">
+            <summary>
+            Put this attribute on a type or method to specify the auth required
+            </summary>
+            <param name="auth">The auth required for API's on this type or for this mehtod.\nnull = No auth required.\n"" = Auth required, but no specific access token is required\nComma separated list of required access tokens (one is needed).</param>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiAuthAttribute.Auth">
+            <summary>
+            Auth
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.IRunTimeWebApiAuth">
+            <summary>
+            Services with API's can implement this API to provide runtime configurable auths
+            </summary>
+        </member>
+        <member name="P:SysWeaver.MicroService.IRunTimeWebApiAuth.MethodAuths">
+            <summary>
+            Runtime auto overrides, key = method name, value = auth for that method
+            Key "*" means all all methods (that are not otherwise specified)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiClientCacheAttribute">
+            <summary>
+            Put this attribute on a type or method to specify the client cache duration.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiClientCacheAttribute.#ctor(System.Int32)">
+            <summary>
+            Put this attribute on a type or method to specify the client cache duration.
+            </summary>
+            <param name="duration">The duration in seconds that the client should keep the response cached (basically setting up the Cache header in the response).</param>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiClientCacheAttribute.Duration">
+            <summary>
+            The duration in seconds that the client should keep the response cached (basically setting up the Cache header in the response)
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiCompressionAttribute">
+            <summary>
+            Put this attribute on a type or method to specify the request response compression
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiCompressionAttribute.#ctor(System.String)">
+            <summary>
+            Put this attribute on a type or method to specify the request response compression methods and priority
+            </summary>
+            <param name="compression">Compresson method and level in the desired priority, ex: "br:Fast, deflate:Balanced".
+            Supported compressors:
+                br = Best overall.
+                deflate = Wide support.
+                gzip = Wider suppor, same as deflate but extra headers and performance overhead.
+            Compression levels:
+                Fast = Best performance (typically use for small data).
+                Balanced = Better compression (typically use for larger data).
+                Best = Best compression, often to slow for on the fly.
+            </param>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiCompressionAttribute.Compression">
+            <summary>
+            Compresson method and level in the desired priority, ex: "br:Fast, deflate:Balanced".
+            Supported compressors:
+                br = Best overall.
+                deflate = Wide support.
+                gzip = Wider suppor, same as deflate but extra headers and performance overhead.
+            Compression levels:
+                Fast = Best performance (typically use for small data).
+                Balanced = Better compression (typically use for larger data).
+                Best = Best compression, often to slow for on the fly.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiOptionalAttribute">
+            <summary>
+            Put this attribute on a method to invoke a member to check if the api is available or not
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiOptionalAttribute.#ctor(System.String)">
+            <summary>
+            Put this attribute on a method to invoke a member to check if the api is available or not
+            </summary>
+            <param name="memberName">An instance field, property or method with a boolean, if returning true, the API is exposed, else it's hidden</param>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiCaches.AutoDetect">
+            <summary>
+            Caching is per session if the method takes a HttpServerRequest parameter.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiCaches.Globally">
+            <summary>
+            Caching is independent of sessions (same cache for all sessions).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiCaches.PerSession">
+            <summary>
+            Caching is for a session, so request meta data such as user, ip, user agent etc can be used.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiTools.CacheClientStatic">
+            <summary>
+            Client side cache duration for static results.
+            30 seconds should be ok, is a service restart (update) takes more than this there's no room for error.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiTools.CacheServerStatic">
+            <summary>
+            Server side cache duration for static results.
+            50 years should do it.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiRequestCacheAttribute">
+            <summary>
+            Put this attribute on a type or method to specify the request cache duration.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiRequestCacheAttribute.#ctor(System.Int32,SysWeaver.MicroService.WebApiCaches)">
+            <summary>
+            Put this attribute on a type or method to specify the request cache duration.
+            </summary>
+            <param name="duration">The duration in seconds that the same request should be cached on the server, i.e the WriteStream / GetData for the same request from multiple clients within this period will only result in a single call to these methods (reduces server load).</param>
+            <param name="cache">Specifies cache behaviour</param>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiRequestCacheAttribute.Duration">
+            <summary>
+            The duration in seconds that the same request should be cached on the server, i.e the WriteStream / GetData for the same request from multiple clients within this period will only result in a single call to these methods (reduces server load).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiRequestCacheAttribute.AutoDetectPerSession">
+            <summary>
+            If true, the per session functionality should be auto-detected.
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiClientCacheStaticAttribute">
+            <summary>
+            Put this attribute on a type or method to specify that the request should be cached as a static resource (not changing during the service lifetime)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiClientCacheStaticAttribute.#ctor">
+            <summary>
+            Put this attribute on a type or method to specify that the request should be cached forever
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiRequestCacheStaticAttribute">
+            <summary>
+            Put this attribute on a type or method to specify that the request should be cached as a static resource (not changing during the service lifetime)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiRequestCacheStaticAttribute.#ctor(SysWeaver.MicroService.WebApiCaches)">
+            <summary>
+            Put this attribute on a type or method to specify that the request should be cached forever
+            </summary>
+            <param name="cache">Specifies cache behaviour</param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiUrlAttribute">
+            <summary>
+            Put this attribute on a type to specify it's base url, this is the prefix to the method name
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiUrlAttribute.#ctor(System.String)">
+            <summary>
+            Put this attribute on a type to specify it's base url, this is the prefix to the method name
+            </summary>
+            <param name="url">Base url for this type, {0} is replaced with the type name</param>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebApiUrlAttribute.Url">
+            <summary>
+            Base url for this type
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebDashItem">
+            <summary>
+            Represents an user defined item
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebDashItem.Type">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebDashTypes.Frame">
+            <summary>
+            An embedded iframe
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebDashTypes.Http">
+            <summary>
+            Inline http code
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebMenu">
+            <summary>
+            Represents a web menu
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebMenu.Items">
+            <summary>
+            Root items
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebMenuAttribute">
+            <summary>
+            Put this attribute on a method to add to a menu
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebMenuAttribute.#ctor(System.String,System.String,SysWeaver.MicroService.WebMenuItemTypes,System.String,System.String,System.String,System.Single,System.String,System.Boolean,System.String,System.String)">
+            <summary>
+            Put this attribute on a method to add to a menu
+            </summary>
+            <param name="menu">Menu name to add it to (null for default)</param>
+            <param name="id">Id of this item, this can be path separated by /, ex: "Debug/Data/CompressionTable"</param>
+            <param name="type">The type of this item (action to perform)</param>
+            <param name="name">The display name of the item</param>
+            <param name="title">The title (tool tip) to display</param>
+            <param name="iconClass">A class name (maybe url supported later)</param>
+            <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
+            <param name="auth">The auth required for this item to be available in thew menu</param>
+            <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
+            <param name="data">Menu data</param>
+            <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebMenuChartAttribute">
+            <summary>
+            Put this attribute on a chart API to add it to a menu
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebMenuChartAttribute.#ctor(System.String,System.String,System.String,System.String,System.String,System.Single,System.String,System.Boolean,System.String)">
+            <summary>
+            Put this attribute on a table data API to add it to a menu
+            </summary>
+            <param name="menu">Menu name to add it to (null for default)</param>
+            <param name="id">Id of this item, this can be path separated by /, ex: "Debug/Data/CompressionTable"</param>
+            <param name="name">The display name of the item</param>
+            <param name="title">The title (tool tip) to display</param>
+            <param name="iconClass">A class name (maybe url supported later)</param>
+            <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
+            <param name="auth">The auth required for this item to be available in thew menu</param>
+            <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
+            <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebMenuEmbeddedAttribute">
+            <summary>
+            Put this attribute on any type that is registered in the service manager to add it to a menu
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebMenuEmbeddedAttribute.#ctor(System.String,System.String,System.String,System.String,System.String,System.String,System.Single,System.String,System.Boolean,System.String)">
+            <summary>
+            Put this attribute on any type that is registered in the service manager to add it to a menu
+            </summary>
+            <param name="menu">Menu name to add it to (null for default)</param>
+            <param name="id">Id of this item, this can be path separated by /, ex: "Debug/Data/CompressionTable"</param>
+            <param name="name">The display name of the item</param>
+            <param name="url"></param>
+            <param name="title">The title (tool tip) to display</param>
+            <param name="iconClass">A class name (maybe url supported later)</param>
+            <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
+            <param name="auth">The auth required for this item to be available in thew menu</param>
+            <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
+            <param name="dynamic">
+            Dynamically modify item, this is a type name followed by a . and then the method name to invoke or just the method name (of the existing type), ex:
+            SomeOtherClass.Func or Func (in the type that the attribute is put on).
+            The method signature is:
+            Task&lt;bool&gt; Func(HttpServerRequest context, WebMenuItem item)
+            or
+            Task&lt;bool&gt; Func(Authorization auth, WebMenuItem item)
+            </param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebMenuItem">
+            <summary>
+            Represents a single menu item
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebMenuItem.Id">
+            <summary>
+            Id of the item
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebMenuItem.Name">
+            <summary>
+            Name of the item
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebMenuItem.Type">
+            <summary>
+            The type of the item
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebMenuItem.Title">
+            <summary>
+            Title (tool tip)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebMenuItem.IconClass">
+            <summary>
+            Class name for an icon
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebMenuItem.Data">
+            <summary>
+            Data (type dependent, typically an url).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MicroService.WebMenuItem.Children">
+            <summary>
+            Optional child items
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebMenuJsAttribute">
+            <summary>
+            Put this attribute on any type that is registered in the service manager to add it to a menu
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebMenuJsAttribute.#ctor(System.String,System.String,System.String,System.String,System.String,System.String,System.Single,System.String,System.Boolean,System.String)">
+            <summary>
+            Put this attribute on any type that is registered in the service manager to add it to a menu
+            </summary>
+            <param name="menu">Menu name to add it to (null for default)</param>
+            <param name="id">Id of this item, this can be path separated by /, ex: "Debug/Data/CompressionTable"</param>
+            <param name="name">The display name of the item</param>
+            <param name="jscode">The js code to execute, return true to close the menu on invocation</param>
+            <param name="title">The title (tool tip) to display</param>
+            <param name="iconClass">A class name (maybe url supported later)</param>
+            <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
+            <param name="auth">The auth required for this item to be available in thew menu</param>
+            <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
+            <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebMenuLinkAttribute">
+            <summary>
+            Put this attribute on any type that is registered in the service manager to add it to a menu
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebMenuLinkAttribute.#ctor(System.String,System.String,System.String,System.String,System.String,System.String,System.Single,System.String,System.Boolean,System.String)">
+            <summary>
+            Put this attribute on any type that is registered in the service manager to add it to a menu
+            </summary>
+            <param name="menu">Menu name to add it to (null for default)</param>
+            <param name="id">Id of this item, this can be path separated by /, ex: "Debug/Data/CompressionTable"</param>
+            <param name="name">The display name of the item</param>
+            <param name="url"></param>
+            <param name="title">The title (tool tip) to display</param>
+            <param name="iconClass">A class name (maybe url supported later)</param>
+            <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
+            <param name="auth">The auth required for this item to be available in thew menu</param>
+            <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
+            <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebMenuLinkExternalAttribute">
+            <summary>
+            Put this attribute on any type that is registered in the service manager to add it to a menu
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebMenuLinkExternalAttribute.#ctor(System.String,System.String,System.String,System.String,System.String,System.String,System.Single,System.String,System.Boolean,System.String)">
+            <summary>
+            Put this attribute on any type that is registered in the service manager to add it to a menu
+            </summary>
+            <param name="menu">Menu name to add it to (null for default)</param>
+            <param name="id">Id of this item, this can be path separated by /, ex: "Debug/Data/CompressionTable"</param>
+            <param name="name">The display name of the item</param>
+            <param name="url"></param>
+            <param name="title">The title (tool tip) to display</param>
+            <param name="iconClass">A class name (maybe url supported later)</param>
+            <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
+            <param name="auth">The auth required for this item to be available in thew menu</param>
+            <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
+            <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebMenuPathAttribute">
+            <summary>
+            Put this attribute on a method to make it available online
+            </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebMenuTableAttribute">
+            <summary>
+            Put this attribute on a table data API to add it to a menu
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebMenuTableAttribute.#ctor(System.String,System.String,System.String,System.String,System.String,System.Single,System.String,System.Boolean,System.String,System.String)">
+            <summary>
+            Put this attribute on a table data API to add it to a menu
+            </summary>
+            <param name="menu">Menu name to add it to (null for default)</param>
+            <param name="id">Id of this item, this can be path separated by /, ex: "Debug/Data/CompressionTable"</param>
+            <param name="name">The display name of the item</param>
+            <param name="title">The title (tool tip) to display</param>
+            <param name="iconClass">A class name (maybe url supported later)</param>
+            <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
+            <param name="auth">The auth required for this item to be available in the menu</param>
+            <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
+            <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
+            <param name="data">The table API is required if the attribute is on a type, else it's optional where {0} is replaced with the API name.</param>
+        </member>
+    </members>
+</doc>

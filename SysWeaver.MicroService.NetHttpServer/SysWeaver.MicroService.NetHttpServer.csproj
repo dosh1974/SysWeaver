@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<RootNamespace>SysWeaver.MicroService</RootNamespace>
+		<NoWarn>1701;1702;1591</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\SysWeaver.Auth.Core\SysWeaver.Auth.Core.csproj" />
+	  <ProjectReference Include="..\SysWeaver.HttpServer\SysWeaver.HttpServer.csproj" />
+	  <ProjectReference Include="..\SysWeaver.MicroService.HttpServer\SysWeaver.MicroService.HttpServer.csproj" />
+	  <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
+	  <ProjectReference Include="..\SysWeaver.NetHttpServer\SysWeaver.NetHttpServer.csproj" />
+	</ItemGroup>
+
+</Project>

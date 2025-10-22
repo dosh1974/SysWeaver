@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+	<defs>
+		<pattern id="x" patternUnits="userSpaceOnUse" width="48" height="48">
+			<g stroke-width="1" stroke="#000">
+				<path d="M0 0 h3z M0 0 v3z M48 0 h-3z M48 0 v3z M48 48 h-3z M48 48 v-3z M0 48 h3z M0 48 v-3z" />
+			</g>
+			<g fill="#fff" fill-opacity="75%">
+				<rect x="15.5" y="-0.5" width="1" height="1"></rect>
+				<rect x="31.5" y="-0.5" width="1" height="1"></rect>
+				<rect x="15.5" y="47.5" width="1" height="1"></rect>
+				<rect x="31.5" y="47.5" width="1" height="1"></rect>
+				<rect y="15.5" x="-0.5" width="1" height="1"></rect>
+				<rect y="31.5" x="-0.5" width="1" height="1"></rect>
+				<rect y="15.5" x="47.5" width="1" height="1"></rect>
+				<rect y="31.5" x="47.5" width="1" height="1"></rect>
+			</g>
+		</pattern>
+	</defs>
+  <rect width="1024" height="1024" fill="url(#x)" fill-opacity="30%"/>
+</svg>

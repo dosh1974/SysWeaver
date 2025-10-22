@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<RootNamespace>SysWeaver.MicroService</RootNamespace>
+		<NoWarn>1701;1702;1591</NoWarn>	  <TargetFramework>net8.0</TargetFramework>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <RootNamespace>SysWeaver.MicroService</RootNamespace>
+	  
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.HttpServer\SysWeaver.HttpServer.csproj" />
+    <ProjectReference Include="..\SysWeaver.Media.Svg\SysWeaver.Media.Svg.csproj" />
+  </ItemGroup>
+
+
+	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+		<Exec Command="rmdir /S /Q .\srcData\.opt" />
+		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare -RemoveSize .\srcData\*.svg .\srcData\.opt\" />
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcData\.opt\* .\data" />
+		<ItemGroup>
+			<EmbeddedResource Include="data\**\*.br" Visible="false" />
+		</ItemGroup>
+	</Target>
+
+</Project>

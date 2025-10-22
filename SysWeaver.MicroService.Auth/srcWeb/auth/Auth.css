@@ -1,0 +1,327 @@
+﻿html {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: block;
+}
+
+body {
+    user-select: none;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: block;
+    box-sizing: border-box;
+    vertical-align: middle;
+}
+
+form.SysWeaver-AuthBox {
+    --TM: calc(2em);
+    --boxWidth: calc(min(100vw - 2em, 600px));
+    box-sizing: border-box;
+    background: rgba(var(--ThemeBackgroundRGB), 0.6);
+    width: var(--boxWidth);
+    margin: 0;
+    padding: 1em;
+    border: 1px solid rgba(var(--ThemeMainRGB), 0.5);
+    display: block;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translateX(-50%) translateY(-50%);
+    text-align: left;
+    border-radius: var(--ThemeRad);
+    box-shadow: rgba(0,0,0,0.5) 0 0 2em;
+}
+
+    form.SysWeaver-AuthBox > Icon-300x300 {
+        --size: calc(min(40vh, min(40vw, var(--boxWidth) * 0.7)));
+        box-sizing: border-box;
+        width: var(--size);
+        height: var(--size);
+        mask-size: var(--size) var(--size);
+        margin: auto;
+        display: block;
+    }
+
+SysWeaver-AuthText {
+    margin-top: var(--TM);
+    display: block;
+    width: 100%;
+    text-align: center;
+    overflow: hidden;
+}
+
+
+SysWeaver-AuthError {
+    margin-top: var(--TM);
+    font-style: italic;
+    display: block;
+    width: 100%;
+    text-align: center;
+    overflow: hidden;
+    min-height: 2.5em;
+    overflow-y: auto;
+}
+
+    SysWeaver-AuthError.Error {
+
+        color: var(--ThemeError);
+    }
+
+    SysWeaver-AuthError.Warning {
+        color: var(--ThemeWarning);
+    }
+
+    SysWeaver-AuthError.Good {
+        color: var(--ThemeOk);
+    }
+
+
+SysWeaver-AuthLabel {
+    margin-top: var(--TM);
+    color: var(--ThemeAcc2);
+    font-weight: bold;
+    display: block;
+    width: 100%;
+    overflow: hidden;
+}
+
+
+form.SysWeaver-AuthBox *.Fail {
+    color: var(--ThemeAcc1);
+}
+
+form.SysWeaver-AuthBox *.Info {
+    color: var(--ThemeAcc2);
+}
+
+form.SysWeaver-AuthBox *.Hide {
+    display: none;
+}
+
+form.SysWeaver-AuthBox SysWeaver-CenterBlock {
+    padding-top: var(--TM);
+}
+
+form.SysWeaver-AuthBox input {
+    margin-top: calc(var(--TM) * 0.25);
+    width: 100%;
+    padding: 0.75em;
+    display: block;
+    color: var(--ThemeMain);
+    background-color: var(--ThemeBackground);
+    border: none;
+    box-sizing: border-box;
+    font-size: 125%;
+    font-weight: bold;
+    border-radius: var(--ThemeRad);
+    outline: 2px solid rgba(var(--ThemeMainRGB), 0.25) !important;
+    transition: outline linear 0.1s, box-shadow linear 0.1s;
+}
+
+    form.SysWeaver-AuthBox input:hover {
+        outline: 2px solid rgba(var(--ThemeMainRGB), 0.75) !important;
+    }
+
+    form.SysWeaver-AuthBox input:focus {
+        outline: 2px solid var(--ThemeAcc1) !important;
+    }
+
+    form.SysWeaver-AuthBox input.Error {
+        box-shadow: var(--ThemeError) 0 0 0.75em;
+    }
+
+form.SysWeaver-AuthBox *.Error input {
+    box-shadow: var(--ThemeError) 0 0 0.75em;
+}
+
+
+    form.SysWeaver-AuthBox input::placeholder {
+        color: var(--ThemeMain);
+        opacity: 0.3;
+        font-weight: normal;
+        font-style: italic;
+        font-size: 80%;
+    }
+
+
+SysWeaver-AuthTab {
+    margin-top: var(--TM);
+    font-weight: bold;
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    transition: opacity linear var(--ThemeFadeDuration);
+}
+
+    SysWeaver-AuthTab.Disabled
+    {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+
+SysWeaver-AuthTabHeader {
+    display: inline-flex;
+    align-items: center;
+    margin: 2px;
+    padding: 0.125em 0.5em 0.125em 0.5em;
+    border-radius: var(--ThemeRadInp);
+    border: 1px solid var(--ThemeAcc250);
+    cursor: pointer;
+    color: var(--ThemeAcc2);
+    outline: 2px solid transparent;
+    transition: color linear var(--ThemeFadeDuration), background-color linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
+}
+
+
+
+    SysWeaver-AuthTabHeader > icon-24x24
+    {
+        margin-left: 0.5em;
+    }
+
+
+    SysWeaver-AuthTabHeader:hover {
+        background-color: var(--ThemeAcc225);
+    }
+
+    SysWeaver-AuthTabHeader:focus {
+        outline: 2px solid var(--ThemeAcc1);
+    }
+
+    SysWeaver-AuthTabHeader.Selected:focus {
+        outline: 2px solid transparent;
+    }
+
+
+    SysWeaver-AuthTabHeader.Selected {
+        cursor: default;
+        pointer-events: none;
+        background-color: var(--ThemeAcc2);
+        color: var(--ThemeBackground);
+    }
+
+SysWeaver-AuthTabContent {
+    display: block;
+    width: 100%;
+    position: relative;
+    padding: 0;
+    height: 64px;
+    transition: opacity linear var(--ThemeFadeDuration);
+}
+    SysWeaver-AuthTabContent.Disabled {
+        pointer-events: none;
+        opacity: 0.5;
+    }
+
+
+SysWeaver-AuthTabContent Icon-32x32
+{
+    position: absolute !important;
+    top: 10px;
+}
+
+form.SysWeaver-AuthBox input.Phone {
+    padding-left: 64px;
+}
+
+SysWeaver-AuthPhone {
+    display: block;
+    position: relative;
+}
+
+SysWeaver-AuthPhoneCc {
+    position: absolute !important;
+    left: 6px;
+    top: 6px;
+    width: 48px;
+    height: 40px;
+    box-sizing: border-box;
+    background-color: transparent;
+    display: block;
+    border-radius: 8px;
+    vertical-align: middle;
+    background-repeat: no-repeat;
+    background-size: 40px 32px;
+    background-position: center center;
+    cursor: pointer;
+    transition: background-color linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
+    outline: 2px solid transparent;
+}
+
+    SysWeaver-AuthPhoneCc:hover {
+        background-color: var(--ThemeAcc1);
+        
+    }
+
+    SysWeaver-AuthPhoneCc:focus {
+        outline: 2px solid var(--ThemeAcc2);
+    }
+
+
+
+
+.InsideInput {
+    position: relative;
+}
+
+    .InsideInput.IconDisabled {
+        opacity: 0.1;
+    }
+
+        .InsideInput.IconDisabled:hover {
+            opacity: 0.1;
+        }
+
+hr {
+    margin-top: var(--TM);
+}
+
+.IconRetry {
+    mask-image: url("../icons/reload.svg");
+}
+
+.IconWarning {
+    mask-image: url("../icons/warning.svg");
+}
+
+.IconAuthPassword {
+    mask-image: url("../icons/lock.svg");
+}
+
+.IconAuthPost {
+    mask-image: url("../icons/send.svg");
+}
+
+.IconAuthLogin {
+    mask-image: url("../icons/user.svg");
+}
+
+.IconAuthLogout {
+    mask-image: url("../icons/user_logout.svg");
+}
+
+.IconAuthCopy {
+    mask-image: url("../icons/copy.svg");
+}
+
+.IconAuthRandom {
+    mask-image: url("../icons/dice.svg");
+}
+
+.IconAuthView {
+    mask-image: url("../icons/eye.svg");
+}
+
+.IconAuthViewOff {
+    mask-image: url("../icons/eye_off.svg");
+}
+
+.IconAuthEmail {
+    mask-image: url("../icons/email.svg");
+}
+
+.IconAuthPhone {
+    mask-image: url("../icons/phone.svg");
+}

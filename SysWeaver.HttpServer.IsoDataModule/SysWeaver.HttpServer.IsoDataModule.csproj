@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<RootNamespace>SysWeaver.Net.IsoDataModule</RootNamespace>
+		<GenerateDocumentationFile>True</GenerateDocumentationFile>
+		<NoWarn>1701;1702;1591</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <Compile Remove="srcWeb\iso-data\**" />
+	  <EmbeddedResource Remove="srcWeb\iso-data\**" />
+	  <None Remove="srcWeb\iso-data\**" />
+	</ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.HttpServer\SysWeaver.HttpServer.csproj" />
+    <ProjectReference Include="..\SysWeaver.IsoData\SysWeaver.IsoData.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="srcWeb\" />
+  </ItemGroup>
+
+	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+		<Exec Command="rmdir /S /Q .\srcWeb\icons\.opt" />
+		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare -RemoveSize -MaxDecimals 2 .\srcWeb\iso_data\icons\*.svg .\srcWeb\iso_data\icons\.opt\" />
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\iso_data\icons\.opt\* .\web\iso_data\icons" />
+		<ItemGroup>
+			<EmbeddedResource Include="web\**\*.br" Visible="false" />
+		</ItemGroup>
+	</Target>
+
+
+</Project>

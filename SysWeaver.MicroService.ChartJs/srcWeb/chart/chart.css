@@ -1,0 +1,340 @@
+﻿
+body {
+    padding: 0;
+    margin: 0;
+    width: 100vw;
+    height: 100vh;
+
+}
+
+SysWeaver-Chart {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+}
+
+
+    SysWeaver-Chart canvas {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    SysWeaver-Chart icon-32x32.IconButton {
+        position: absolute;
+        right: 0.5em;
+        bottom: 0.5em;
+        opacity: 0.1;
+    }
+
+
+SysWeaver-PopupMenu.Chart SysWeaver-PopupMenuBack {
+    bottom: 0;
+}
+
+
+.IconChartMenu {
+    mask-image: url("../icons/menu.svg");
+}
+
+.IconChartExport {
+    mask-image: url("../icons/newtab.svg");
+}
+
+
+.IconChartType {
+    mask-image: url("icons/chart_mixed.svg");
+}
+
+.IconChartTypeBar {
+    mask-image: url("icons/chart_bar.svg");
+}
+
+.IconChartTypeBarHorizontal {
+    mask-image: url("icons/chart_bar_horizontal.svg");
+}
+
+.IconChartTypeLine {
+    mask-image: url("icons/chart_line.svg");
+}
+
+.IconChartTypeLineHorizontal {
+    mask-image: url("icons/chart_line_horizontal.svg");
+}
+
+.IconChartTypePie {
+    mask-image: url("icons/chart_pie.svg");
+}
+
+.IconChartTypeDoughnut {
+    mask-image: url("icons/chart_doughnut.svg");
+}
+
+.IconChartTypePolarArea {
+    mask-image: url("icons/chart_polar.svg");
+}
+
+.IconChartSize {
+    mask-image: url("../icons/fullscreen_exit.svg");
+}
+
+.IconChartSize50 {
+    mask-image: url("icons/chart_pie.svg");
+    mask-size: 12px 12px;
+}
+
+.IconChartSize75 {
+    mask-image: url("icons/chart_pie.svg");
+    mask-size: 14px 14px;
+}
+
+
+.IconChartSize100 {
+    mask-image: url("icons/chart_pie.svg");
+    mask-size: 16px 16px;
+}
+
+.IconChartSize125 {
+    mask-image: url("icons/chart_pie.svg");
+    mask-size: 20px 20px;
+}
+
+.IconChartSize150 {
+    mask-image: url("icons/chart_pie.svg");
+    mask-size: 24px 24px;
+}
+
+.IconChartSize200 {
+    mask-image: url("icons/chart_pie.svg");
+    mask-size: 28px 38px;
+}
+
+.IconChartSize250 {
+    mask-image: url("icons/chart_pie.svg");
+}
+
+.IconFilePng {
+    background-color: transparent !important;
+    background-image: url("../icons/ext/png.svg");
+}
+
+.IconFileSvg {
+    background-color: transparent !important;
+    background-image: url("../icons/ext/svg.svg");
+}
+
+.IconFilePdf {
+    background-color: transparent !important;
+    background-image: url("../icons/ext/pdf.svg");
+}
+
+.IconFileXlsx {
+    background-color: transparent !important;
+    background-image: url("../icons/ext/xlsx.svg");
+}
+
+
+.IconColors {
+    mask-image: url("../icons/color_palette.svg");
+}
+
+.IconColoredLabels {
+    mask-image: url("../icons/text.svg");
+}
+
+
+.IconColoredValues {
+    mask-image: url("../icons/number.svg");
+}
+
+
+.IconColorOriginal {
+    mask-image: url("../icons/home.svg");
+}
+
+
+.IconColorRandomValueGradient {
+    mask-image: url("../icons/gradient.svg");
+}
+
+.IconColorRandomSeriesGradient {
+    mask-image: url("../icons/gradient.svg");
+}
+
+.IconColorRandomMagnitudeGradient {
+    mask-image: url("../icons/gradient.svg");
+}
+
+.IconColorLabelText {
+    mask-image: url("../icons/text.svg");
+}
+
+
+.IconColorGradient0 {
+    border-radius: 8px;
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+    outline: 1px solid black;
+    background-color: transparent !important;
+    background-image: linear-gradient(in hsl, hsl(0, 80%, 70%), hsl(60, 80%, 70%) );
+}
+
+.IconColorGradient1 {
+    border-radius: 8px;
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+    outline: 1px solid black;
+    background-color: transparent !important;
+    background-image: linear-gradient(in hsl, hsl(30, 80%, 70%), hsl(90, 80%, 70%) );
+}
+
+.IconColorGradient2 {
+    border-radius: 8px;
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+    outline: 1px solid black;
+    background-color: transparent !important;
+    background-image: linear-gradient(in hsl, hsl(60, 80%, 70%), hsl(120, 80%, 70%) );
+}
+
+.IconColorGradient3 {
+    border-radius: 8px;
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+    outline: 1px solid black;
+    background-color: transparent !important;
+    background-image: linear-gradient(in hsl, hsl(90, 80%, 70%), hsl(150, 80%, 70%) );
+}
+
+.IconColorGradient4 {
+    border-radius: 8px;
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+    outline: 1px solid black;
+    background-color: transparent !important;
+    background-image: linear-gradient(in hsl, hsl(120, 80%, 70%), hsl(180, 80%, 70%) );
+}
+
+.IconColorGradient5 {
+    border-radius: 8px;
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+    outline: 1px solid black;
+    background-color: transparent !important;
+    background-image: linear-gradient(in hsl, hsl(150, 80%, 70%), hsl(210, 80%, 70%) );
+}
+.IconColorGradient6 {
+    border-radius: 8px;
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+    outline: 1px solid black;
+    background-color: transparent !important;
+    background-image: linear-gradient(in hsl, hsl(180, 80%, 70%), hsl(240, 80%, 70%) );
+}
+.IconColorGradient7 {
+    border-radius: 8px;
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+    outline: 1px solid black;
+    background-color: transparent !important;
+    background-image: linear-gradient(in hsl, hsl(210, 80%, 70%), hsl(270, 80%, 70%) );
+}
+
+.IconColorGradient8 {
+    border-radius: 8px;
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+    outline: 1px solid black;
+    background-color: transparent !important;
+    background-image: linear-gradient(in hsl, hsl(240, 80%, 70%), hsl(300, 80%, 70%) );
+}
+
+.IconColorGradient9 {
+    border-radius: 8px;
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+    outline: 1px solid black;
+    background-color: transparent !important;
+    background-image: linear-gradient(in hsl, hsl(270, 80%, 70%), hsl(330, 80%, 70%) );
+}
+
+.IconColorGradient10 {
+    border-radius: 8px;
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+    outline: 1px solid black;
+    background-color: transparent !important;
+    background-image: linear-gradient(in hsl, hsl(300, 80%, 70%), hsl(360, 80%, 70%) );
+}
+
+.IconColorGradient11 {
+    border-radius: 8px;
+    margin: 2px;
+    width: 28px;
+    height: 28px;
+    outline: 1px solid black;
+    background-color: transparent !important;
+    background-image: linear-gradient(in hsl, hsl(330, 80%, 70%), hsl(390, 80%, 70%) );
+}
+
+.IconShareLink0 {
+    mask-image: url("../icons/disc.svg");
+}
+
+.IconShareLink1 {
+    mask-image: url("../icons/user_check.svg");
+}
+
+.IconShareLink2 {
+    mask-image: url("../icons/share.svg");
+}
+
+.IconOrder {
+    mask-image: url("../icons/table_log.svg");
+}
+
+
+.IconOrderOriginalSel {
+    mask-image: url("../icons/home.svg");
+}
+
+.IconOrderAscendingSel {
+    mask-image: url("../icons/m_sort_asc.svg");
+}
+
+.IconOrderDescendingSel {
+    mask-image: url("../icons/m_sort_desc.svg");
+}
+
+.IconOrderOriginal {
+    opacity: 0.1 !important;
+    mask-image: url("../icons/home.svg");
+}
+
+
+.IconOrderAscending {
+    opacity: 0.1 !important;
+    mask-image: url("../icons/m_sort_asc.svg");
+}
+
+.IconOrderDescending {
+    opacity: 0.1 !important;
+    mask-image: url("../icons/m_sort_desc.svg");
+}

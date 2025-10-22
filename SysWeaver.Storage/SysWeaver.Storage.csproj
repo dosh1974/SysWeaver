@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+	  <RootNamespace>SysWeaver.Serialization</RootNamespace>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <NoWarn>1701;1702;1591</NoWarn>
+	  <AllowUnsafeBlocks>True</AllowUnsafeBlocks>	  
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.Common.Linux\SysWeaver.Common.Linux.csproj" />
+    <ProjectReference Include="..\SysWeaver.Common.Windows\SysWeaver.Common.Windows.csproj" />
+    <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+    <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
+    <ProjectReference Include="..\SysWeaver.Serialization\SysWeaver.Serialization.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,108 @@
+﻿
+SysWeaver-EditLanguage {
+    display: block;
+    width: auto;
+    height: 29px;
+    line-height: 29px;
+    vertical-align: middle;
+    outline: none !important;
+    background-color: var(--ThemeBackground);
+    border-radius: var(--SysWeaverEditDesktopRadInp);
+    padding: 0 0.5em 0 0.5em;
+    overflow: hidden;
+    border: 2px solid var(--ThemeBackground);
+    transition: color linear var(--SysWeaverEditFadeDuration), border linear var(--SysWeaverEditFadeDuration);
+    white-space: nowrap;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+}
+
+    SysWeaver-EditLanguage.Enabled {
+        font-style: normal;
+        cursor: pointer;
+    }
+
+    SysWeaver-EditLanguage:focus {
+        border: 2px solid var(--ThemeAcc2);
+        color: var(--ThemeAcc1);
+    }
+
+    SysWeaver-EditLanguage:hover {
+        border: 2px solid rgba(var(--ThemeAcc2RGB), 0.5);
+    }
+
+    SysWeaver-EditLanguage:focus:hover {
+        border: 2px solid var(--ThemeAcc2);
+    }
+
+
+
+    SysWeaver-EditLanguage img {
+        display: inline;
+        max-height: 23px;
+        max-width: 48px;
+    }
+
+    SysWeaver-EditLanguage SysWeaver-EditLangText {
+        user-select: text;
+        margin-left: 0.5em;
+        display: inline;
+        white-space: nowrap;
+    }
+
+
+
+SysWeaver-EditLangSel {
+    display: block;
+    display: block;
+    width: auto;
+    height: 35px;
+    line-height: 35px;
+    vertical-align: middle;
+    outline: none !important;
+    background-color: rgba(var(--ThemeMainRGB), 0.1);
+    border-radius: var(--SysWeaverEditDesktopRadInp);
+    padding: 0 0.5em 0 0.5em;
+    overflow: hidden;
+    border: 2px solid var(--ThemeBackground);
+    transition: color linear var(--SysWeaverEditFadeDuration), border linear var(--SysWeaverEditFadeDuration);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    margin-top: 0.25em;
+    margin-right: 0.5em;
+}
+    SysWeaver-EditLangSel.Recent {
+        border: 2px solid rgba(var(--ThemeAcc1RGB), 0.5);
+    }
+
+    SysWeaver-EditLangSel:focus {
+        border: 2px solid var(--ThemeAcc2);
+        color: var(--ThemeAcc1);
+    }
+
+    SysWeaver-EditLangSel:hover {
+        border: 2px solid var(--ThemeAcc2);
+        color: var(--ThemeAcc1);
+    }
+
+
+    SysWeaver-EditLangSel img {
+        display: inline;
+        max-height: 23px;
+        max-width: 48px;
+        min-width: 48px;
+        width: 48px;
+    }
+
+    SysWeaver-EditLangSel SysWeaver-EditLangText {
+        user-select: text;
+        margin-left: 0.5em;
+        display: inline;
+        white-space: nowrap;
+        font-size: 125%;
+        color: var(--ThemeMain);
+    }
+

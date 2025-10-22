@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFramework>net8.0</TargetFramework>
+	  <RootNamespace>SysWeaver.MicroService</RootNamespace>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.CommandLine\SysWeaver.CommandLine.csproj" />
+    <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+    <ProjectReference Include="..\SysWeaver.HttpServer\SysWeaver.HttpServer.csproj" />
+    <ProjectReference Include="..\SysWeaver.MicroServices\SysWeaver.MicroServices.csproj" />
+    <ProjectReference Include="..\SysWeaver.Remote.Connection\SysWeaver.Remote.Connection.csproj" />
+    <ProjectReference Include="..\SysWeaver.TableData\SysWeaver.TableData.csproj" />
+  </ItemGroup>
+
+</Project>

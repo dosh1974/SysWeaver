@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFramework>net8.0</TargetFramework>
+	  <RootNamespace>SysWeaver.Net</RootNamespace>
+	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	  <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.Auth.Core\SysWeaver.Auth.Core.csproj" />
+    <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+    <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
+    <ProjectReference Include="..\SysWeaver.IsoData\SysWeaver.IsoData.csproj" />
+    <ProjectReference Include="..\SysWeaver.Media.Svg\SysWeaver.Media.Svg.csproj" />
+    <ProjectReference Include="..\SysWeaver.MicroServices\SysWeaver.MicroServices.csproj" />
+    <ProjectReference Include="..\SysWeaver.Serialization\SysWeaver.Serialization.csproj" />
+    <ProjectReference Include="..\SysWeaver.TableData\SysWeaver.TableData.csproj" />
+  </ItemGroup>
+
+	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+    <Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\*+ .\web" />
+    <Exec Command="copy /Y .\web\index.html.br .\web\debug.html.br" />
+    <ItemGroup>
+			<EmbeddedResource Include="web\**\*.br" Visible="false" />
+			<EmbeddedResource Include="web\**\*.png" Visible="false" />
+		</ItemGroup>
+	</Target>
+</Project>

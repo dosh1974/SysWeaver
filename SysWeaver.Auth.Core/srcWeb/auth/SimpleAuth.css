@@ -1,0 +1,112 @@
+﻿
+
+SysWeaver-AuthText {
+    font-family: var(--ThemeFontMono);
+    font-weight: bold;
+    background-color: var(--ThemeBackground);
+    border-radius: var(--ThemeRadInp);
+    color: var(--ThemeAcc1);
+    height: 32px;
+    padding: 8px;
+    box-sizing: border-box;
+    white-space: nowrap;
+    border-right: 40px solid transparent;
+}
+
+
+form.SysWeaver-AuthBox.SysWeaver-SimpleAuth {
+    background: initial;
+    width: initial;
+    height: initial;
+    display: initial;
+    position: initial;
+    left: initial;
+    top: initial;
+    transform: initial;
+    border-radius: initial;
+    box-shadow: initial;
+    border: initial;
+    padding: initial;
+    margin: initial;
+    box-sizing: initial;
+}
+
+
+.IconLock {
+    mask-image: url("../icons/lock.svg");
+}
+
+.IconCopy {
+    mask-image: url("../icons/copy.svg");
+}
+
+.IconRemove {
+    mask-image: url("../icons/close.svg");
+}
+
+.IconAdd {
+    mask-image: url("../icons/plus.svg");
+}
+
+.IconDownload {
+    mask-image: url("../icons/disc.svg");
+}
+
+table {
+    margin: 1em auto 1em auto;
+    border-collapse: collapse;
+    background-color: rgba(var(--ThemeMainRGB), 0.1);
+    border: 1px solid rgba(var(--ThemeBackgroundRGB), 0.9);
+    border-radius: var(--ThemeRad);
+    font-size: 125%;
+    min-width: 16em;
+}
+
+td {
+    border: 1px solid rgba(var(--ThemeBackgroundRGB), 0.9);
+    padding: 0.25em 1em;
+    text-align: center;
+}
+
+tr:first-child th {
+    border-radius: var(--ThemeRad);
+    border-bottom-right-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+tr:nth-child(3) td {
+    padding-top: 1em;
+}
+
+tr:nth-last-child(2) td {
+    padding-bottom: 1em;
+}
+
+
+tr:last-child SysWeaver-CenterBlock {
+    margin: 0.5em 0;
+}
+
+
+    td:first-child {
+        text-align: left;
+    }
+
+    th {
+        border: 1px solid rgba(var(--ThemeBackgroundRGB), 0.2);
+        padding: 0.1em 0.5em;
+        background-color: var(--ThemeAcc2);
+    }
+
+    th.title {
+        color: rgba(var(--ThemeBackgroundRGB), 0.5);
+        font-weight: bold;
+        font-size: 75%;
+        text-transform: uppercase;
+        text-align: left;
+    }
+
+    th.header {
+        color: rgba(var(--ThemeBackgroundRGB), 0.9);
+        font-size: 125%;
+    }
