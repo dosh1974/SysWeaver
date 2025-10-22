@@ -167,11 +167,14 @@ namespace SysWeaver.MicroService
             if (ss == FileMod)
             {
                 FileMod = null;
-                foreach (var x in Repos.Values)
+                if (ss != null)
                 {
-                    var repo = x.Item1;
-                    foreach (var folder in repo.ExposeFolders.Nullable())
-                        ss.RemoveFolder(folder);
+                    foreach (var x in Repos.Values)
+                    {
+                        var repo = x.Item1;
+                        foreach (var folder in repo.ExposeFolders.Nullable())
+                            ss.RemoveFolder(folder);
+                    }
                 }
             }
             RemoveRepos(service as IFileRepoContainer);
