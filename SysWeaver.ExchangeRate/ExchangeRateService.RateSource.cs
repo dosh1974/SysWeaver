@@ -27,7 +27,7 @@ namespace SysWeaver.ExchangeRate
 
             public readonly IRateSource S;
 
-            public readonly TimeSpan FailTime;
+            //public readonly TimeSpan FailTime;
 
             long NextUpdate;
 

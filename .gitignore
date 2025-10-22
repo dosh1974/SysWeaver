@@ -425,6 +425,8 @@ FodyWeavers.xsd
 *.msm
 *.msp
 
+!SysWeaver.MicroServices.Log
+
 
 /SysWeaver.AI.OpenAI/web
 /SysWeaver.Auth.Core/web
@@ -449,6 +451,4 @@ FodyWeavers.xsd
 /SysWeaver.MicroService.UserManager/data
 /SysWeaver.MicroService.UserManager/web
 /SysWeaver.MicroService.UserStorage/data
-!SysWeaver.MicroServices.Log
-
 /SysWeaver.MicroServices.Log/web
