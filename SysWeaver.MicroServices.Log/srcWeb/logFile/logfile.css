@@ -1,0 +1,39 @@
+﻿
+body {
+    margin: 0;
+    background-color: var(--ThemeBackground);
+    user-select: none;
+    font-family: var(--ThemeFont);
+    text-align: center;
+}
+
+
+SysWeaver-CenterBlock
+{
+    margin-top: 0;
+    width: calc(100% - 2em);
+    padding: 0.25em 1em;
+    top: 0;
+    left: 0;
+    position: fixed;
+    box-shadow: rgba(0,0,0,0.4) 0 4px 4px;
+    background-color: var(--ThemeBackground);
+}
+
+pre {
+    color: var(--ThemeMain);
+    font-size: 100%;
+    font-family: var(--ThemeFontMono);
+    text-align: left;
+    user-select: text;
+    padding-top: 128px;
+    padding-bottom: 128px;
+}
+
+.IconDownload {
+    mask-image: url("../icons/disc.svg");
+}
+
+.IconDelete {
+    mask-image: url("../icons/trash.svg");
+}
