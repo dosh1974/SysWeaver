@@ -12,7 +12,7 @@
     <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
     <ProjectReference Include="..\SysWeaver.Serialization\SysWeaver.Serialization.csproj" />
     <ProjectReference Include="..\SysWeaver.TableData\SysWeaver.TableData.csproj" />
-    <ProjectReference Include="D:\SysWeaver\_external\simplestack.orm\src\SimpleStack.Orm\SimpleStack.Orm.csproj" />
+    <ProjectReference Include="..\_external\simplestack.orm\src\SimpleStack.Orm\SimpleStack.Orm.csproj" />
   </ItemGroup>
 
 </Project>

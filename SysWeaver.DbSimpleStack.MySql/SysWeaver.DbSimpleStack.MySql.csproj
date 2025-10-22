@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SysWeaver.DbSimpleStack\SysWeaver.DbSimpleStack.csproj" />
-    <ProjectReference Include="D:\SysWeaver\_external\simplestack.orm\src\SimpleStack.Orm.MySQLConnector\SimpleStack.Orm.MySQLConnector.csproj" />
+    <ProjectReference Include="..\_external\simplestack.orm\src\SimpleStack.Orm.MySQLConnector\SimpleStack.Orm.MySQLConnector.csproj" />
   </ItemGroup>
 
 </Project>
