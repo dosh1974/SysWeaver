@@ -7,8 +7,6 @@
 launchSettings.json
 
 # SysWeaver ignores
-web/
-data/
 WebCompar*.html
 DataCompar*.html
 .opt/
@@ -426,3 +424,26 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+/SysWeaver.AI.OpenAI/web
+/SysWeaver.Auth.Core/web
+/SysWeaver.Chat/web
+/SysWeaver.HttpServer.ExploreModule/data
+/SysWeaver.HttpServer.ExploreModule/web
+/SysWeaver.HttpServer.IconModule/data
+/SysWeaver.HttpServer.IconModule/web
+/SysWeaver.HttpServer.IsoDataModule/web
+/SysWeaver.HttpServer/web
+/SysWeaver.LanguageIdentifier.FastText/data
+/SysWeaver.Map/data
+/SysWeaver.Media.Svg/data
+/SysWeaver.MicroService.Auth/web
+/SysWeaver.MicroService.Avatar/data
+/SysWeaver.MicroService.ChartJs/web
+/SysWeaver.MicroService.Edit/web
+/SysWeaver.MicroService.FileUploader/web
+/SysWeaver.MicroService.Media/web
+/SysWeaver.MicroService.PassKey/web
+/SysWeaver.MicroService.TranslationDbCache/web
+/SysWeaver.MicroService.UserManager/data
+/SysWeaver.MicroService.UserManager/web
+/SysWeaver.MicroService.UserStorage/data
