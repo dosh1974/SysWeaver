@@ -38,7 +38,7 @@ public class TestResult
 
     /// <summary>
     /// Gets an array <see cref="Metrics.ScoreVsTrue"/> for specified label, sorted by score.
-    /// If <see cref="label"/> is null, this method returns aggregated and sorted array through
+    /// If <see pref="label"/> is null, this method returns aggregated and sorted array through
     /// all the labels.
     /// </summary>
     /// <param name="label">Valid label or <code>null</code>.</param>
@@ -62,7 +62,7 @@ public class TestResult
 
     /// <summary>
     /// Gets accumulated true and false positive counts for a specified label (based on <see cref="Metrics.ScoreVsTrue"/>).
-    /// If <see cref="label"/> is null, this method returns aggregated and sorted array through
+    /// If <see pref="label"/> is null, this method returns aggregated and sorted array through
     /// all the labels.
     /// </summary>
     /// <param name="label">Valid label or <code>null</code>.</param>
@@ -101,7 +101,7 @@ public class TestResult
 
     /// <summary>
     /// Gets a precision-recall curve for a specified label.
-    /// If <see cref="label"/> is null, this method returns aggregated result through
+    /// If <see pref="label"/> is null, this method returns aggregated result through
     /// all the labels.
     /// </summary>
     /// <param name="label">Valid label or <code>null</code>.</param>
@@ -138,7 +138,7 @@ public class TestResult
 
     /// <summary>
     /// Gets precision at specified recall value for a specified label.
-    /// If <see cref="label"/> is null, this method returns aggregated result through
+    /// If <see pref="label"/> is null, this method returns aggregated result through
     /// all the labels.
     /// </summary>
     /// <param name="recall">Recall to get precision at.</param>
@@ -160,7 +160,7 @@ public class TestResult
 
     /// <summary>
     /// Gets precision at specified recall value for a specified label.
-    /// If <see cref="label"/> is null, this method returns aggregated result through
+    /// If <see pref="label"/> is null, this method returns aggregated result through
     /// all the labels.
     /// </summary>
     /// <param name="precision">Recall to get precision at.</param>

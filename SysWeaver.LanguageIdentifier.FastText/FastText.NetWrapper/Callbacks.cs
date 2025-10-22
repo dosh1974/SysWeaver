@@ -8,6 +8,7 @@ namespace FastText.NetWrapper;
 /// <param name="progress">Progress percentage in range [0..1].</param>
 /// <param name="loss">Current average loss.</param>
 /// <param name="wst">Words per thread per second.</param>
+/// <param name="lr">Learning rate?</param>
 /// <param name="eta">Estimated time in seconds.</param>
 [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 public delegate void TrainProgressCallback(float progress, float loss, double wst, double lr, long eta);
