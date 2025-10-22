@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>MySQL Provider for SimpleStack.Orm</Description>
+    <VersionPrefix>1.0.2</VersionPrefix>
+    <Authors>SimpleStack Team;NServiceKit;ServiceStack</Authors>
+    <TargetFrameworks>netstandard2.0</TargetFrameworks>
+    <AssemblyName>SimpleStack.Orm.MySQL</AssemblyName>
+    <PackageId>SimpleStack.Orm.MySQL</PackageId>
+    <PackageTags>MySQL;SimpleStack;Orm</PackageTags>
+    <PackageLicenseUrl>http://www.gnu.org/licenses/old-licenses/gpl-2.0-standalone.html</PackageLicenseUrl>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <Version>1.2.0-beta95</Version>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
+    <PackageVersion>1.2.5</PackageVersion>
+    <PackageProjectUrl>https://simplestack.org/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/SimpleStack/simplestack.orm</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleStack.Orm\SimpleStack.Orm.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MySql.Data" Version="8.0.30" />
+  </ItemGroup>
+
+</Project>

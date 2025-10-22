@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <Description>SQLite Provider for SimpleStack.Orm based on System.Data.Sqlite</Description>
+        <VersionPrefix>1.0.2</VersionPrefix>
+        <Authors>SimpleStack Team;NServiceKit;ServiceStack</Authors>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <AssemblyName>SimpleStack.Orm.SDSQLite</AssemblyName>
+        <PackageId>SimpleStack.Orm.SDSQLite</PackageId>
+        <PackageTags>System.Data.Sqlite;SimpleStack;Sqlite</PackageTags>
+        <PackageLicenseUrl>http://www.opensource.org/licenses/MIT</PackageLicenseUrl>
+        <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+        <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+        <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+        <Version>1.2.0-beta95</Version>
+        <AssemblyVersion>1.2.0.0</AssemblyVersion>
+        <FileVersion>1.2.0.0</FileVersion>
+        <PackageVersion>1.2.5</PackageVersion>
+        <RootNamespace>SimpleStack.Orm.SDSQlite</RootNamespace>
+        <PackageProjectUrl>https://simplestack.org/</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/SimpleStack/simplestack.orm</RepositoryUrl>
+    </PropertyGroup>
+    
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SimpleStack.Orm\SimpleStack.Orm.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+      <PackageReference Include="System.Data.SQLite" Version="1.0.117" />
+      <PackageReference Include="System.Data.SQLite.Core" Version="1.0.117" />
+    </ItemGroup>
+
+</Project>
