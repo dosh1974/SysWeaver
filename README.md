@@ -18,6 +18,12 @@
               \_\_/     \_\_/ \_\_\_\_\_\_/ \_\_/   \_\_/         \_\_\_\_\_\_/ \_\_/   \_\_/
 ```
 
+> ⚠️ **DISCLAIMER**  
+>         SysWeaver is used in my personal and proffesional work.  
+>         It's **not** intended for wide public consumption.  
+>         I break things.  
+>         Use at your own risk!  
+
 # OVERVIEW
 
 A framework for building services in .NET on Linux and Windows.  
