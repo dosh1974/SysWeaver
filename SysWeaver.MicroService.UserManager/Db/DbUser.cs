@@ -6,7 +6,7 @@ using SysWeaver.Data;
 namespace SysWeaver.MicroService.Db
 {
     [Alias("Users")]
-    [PartitionByKey(nameof(Id))]
+    //[PartitionByKey(nameof(Id))]
     public sealed class DbUser
     {
         /// <summary>

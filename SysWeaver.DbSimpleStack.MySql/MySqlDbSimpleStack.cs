@@ -576,12 +576,6 @@ namespace SysWeaver.Db
                             }
                         }
                         */
-            var partitions = Partitions;
-            if (partitions != null)
-            {
-                if (partitions.Length > 0)
-                    await Partition<T>(con, partitions).ConfigureAwait(false);
-            }
             await ValidateTable<T>(con).ConfigureAwait(false);
         }
 
@@ -591,7 +585,7 @@ namespace SysWeaver.Db
             if (!P.ReadOnly)
             {
                 using var c = await GetAsync().ConfigureAwait(false);
-                Partitions = await MySqlDbSimpleStack.CanPartition(c).ConfigureAwait(false) ? P.Partitions : null;
+                Partitions = await CanPartition(c).ConfigureAwait(false) ? P.Partitions : null;
             }
         }
 
@@ -1097,7 +1091,7 @@ namespace SysWeaver.Db
                 var y = x;
             }
             
-            return await Partition(con, t, P.Partitions, tableName).ConfigureAwait(false);
+            return await Partition(con, t, Partitions, tableName).ConfigureAwait(false);
         }
 
         sealed class ExistingIndex
