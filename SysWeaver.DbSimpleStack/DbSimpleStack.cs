@@ -84,6 +84,9 @@ namespace SysWeaver.Db
                 p = Activator.CreateInstance(paramType) as DbParams;
             if (p == null)
                 throw new Exception("No paramaters!");
+            if (p.Server.FastEquals("127.0.0.1") || String.IsNullOrEmpty(p.Server))
+                p.Server = "localhost";
+
             Config.ApplyConfig(paramType, p, 
                 Path.Combine("DbConfigs", String.Concat(paramType.Name, '_', PathExt.SafeFilename(p.Server), '_', p.Port, ".json")), 
                 String.Concat("These settings are forced for all SysWeaver application in this system.\nFor all db connections to ", p.Server, ':', p.Port)

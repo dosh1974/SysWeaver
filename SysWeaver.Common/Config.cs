@@ -88,7 +88,7 @@ namespace SysWeaver
                     var d = ct.GetProperty(x.Key, BindingFlags.Public | BindingFlags.Instance);
                     if (d != null)
                     {
-                        if (d.CanWrite)
+                        if (!d.CanWrite)
                             continue;
                         if (d.GetCustomAttribute<ConfigIgnoreAttribute>()?.Ignore ?? false)
                             continue;
@@ -111,7 +111,7 @@ namespace SysWeaver
                     var d = ct.GetField(x.Key, BindingFlags.Public | BindingFlags.Instance);
                     if (d != null)
                     {
-                        if (!d.IsInitOnly)
+                        if (d.IsInitOnly)
                             continue;
                         if (d.GetCustomAttribute<ConfigIgnoreAttribute>()?.Ignore ?? false)
                             continue;

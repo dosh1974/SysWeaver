@@ -9,7 +9,7 @@ namespace SysWeaver.Db
         {
             ConnectionString = connectionString;
             ConnectionStringNoSchema = connectionStringNoScehma;
-            Server = "127.0.0.1";
+            Server = "localhost";
             User = "root"; 
         }
 

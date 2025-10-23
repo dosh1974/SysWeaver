@@ -7,7 +7,7 @@ namespace SysWeaver.MicroService.Db
 {
 
     [TableDataPrimaryKey(nameof(Ip), nameof(DeviceId))] // Additional primary key (only used in Charts)
-
+    [PartitionByKey(nameof(Id))]
     [Alias("AuditApiClients")]
     sealed class DbAuditApiClient
     {

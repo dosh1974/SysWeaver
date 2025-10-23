@@ -1096,9 +1096,8 @@ namespace SysWeaver.Db
                     continue;
                 var y = x;
             }
-
-
-            return true; 
+            
+            return await Partition(con, t, P.Partitions, tableName).ConfigureAwait(false);
         }
 
         sealed class ExistingIndex
