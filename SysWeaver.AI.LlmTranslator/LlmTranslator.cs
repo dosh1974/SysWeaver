@@ -21,6 +21,7 @@ namespace SysWeaver.AI
         public LlmTranslator(ServiceManager manager, LlmTranslatorParams p = null)
         {
             p = p ?? new LlmTranslatorParams();
+            RetryCount = Math.Max(0, p.RetryCount);
             Llm = manager.Get<OpenAiService>(p.AiInstance);
             CountTokensTasks[0] = CountTokens0;
             CountTokensTasks[1] = CountTokens1;
@@ -28,6 +29,23 @@ namespace SysWeaver.AI
             Models[0] = p.LowModel;
             Models[1] = p.MediumModel;
             Models[2] = p.HighModel;
+            if (p.ForceLanguagesOnLoad)
+            {
+                manager.AddMessage("Fetching supported languages");
+                TryGetLanguagesNow(true).RunAsync();
+                manager.AddMessage("Fetched supported languages");
+
+            }
+            else
+            {
+                if (p.GetLanguagesOnLoad)
+                {
+                    manager.AddMessage("Loading/Fetching supported languages");
+                    TryGetLanguagesNow().RunAsync();
+                    manager.AddMessage("Loaded/Fetched supported languages");
+
+                }
+            }
         }
 
         readonly OpenAiService Llm;
@@ -136,6 +154,9 @@ namespace SysWeaver.AI
 
         static List<String> Decode(String response)
         {
+            response = response.Trim();
+            if (!response.FastStartsWith("=="))
+                return null;
             List<String> res = new List<string>();
             var len = response.Length;
             int start = 0;
@@ -253,34 +274,65 @@ namespace SysWeaver.AI
 
         static readonly Char[] SplitOn = "\n\r ".ToCharArray();
         
-        async Task TryGetLanguagesNow()
+        async Task TryGetLanguagesNow(bool forceRenew = false)
         {
+            const int modelIndex = 2; // Low, Med, High
             try
             {
-                var model = Models[2];
+                var model = Models[modelIndex];
                 string storeKey = "LLmTranslator.Lang." + model;
                 var current = await KeyValueStore.AllShared.TryGetAsync<SupLangSave>(storeKey).ConfigureAwait(false);
-                if ((current == null) || ((DateTime.UtcNow - current.Updated) > TimeSpan.FromDays(30)))
+                if ((current == null) || forceRenew || ((DateTime.UtcNow - current.Updated) > TimeSpan.FromDays(30)))
                 {
-                    var q = Llm.CreateQuerySession(model);
-                    var res = await q.Query(GetLanguagesPrompt, null, CountTokensTasks[2]).ConfigureAwait(false);
-                    var tt = res.Split(SplitOn, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                    var l = tt.Length;
-                    var s = new HashSet<String>(l, StringComparer.Ordinal);
-                    for (int i = 0; i < l; ++i)
+                    String[] tt = null;
+                    DateTime updated = DateTime.UtcNow;
+                    try
                     {
-                        var lang = tt[i];
-                        var lc = IsoLanguage.TryGetName(lang);
-                        if (lc != null)
-                            s.Add(lang);
-                        else
-                            s.Add(lang);
+                        var q = Llm.CreateQuerySession(model);
+                        var res = await q.Query(GetLanguagesPrompt, null, CountTokensTasks[modelIndex]).ConfigureAwait(false);
+                        if (!res.FastStartsWith("Error:"))
+                        {
+                            tt = res.Split(SplitOn, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                            var l = tt.Length;
+                            var s = new HashSet<String>(l, StringComparer.Ordinal);
+                            for (int i = 0; i < l; ++i)
+                            {
+                                var lang = tt[i];
+                                var lc = IsoLanguage.TryGet(out var c, lang);
+                                if (lc != null)
+                                {
+                                    if (c == null)
+                                        s.Add(lc.Iso639_1);
+                                    else
+                                        s.Add(String.Concat(lc.Iso639_1, '-', c.Iso3166a2));
+                                }
+                                else
+                                {
+                                    lc = IsoLanguage.TryGetName(lang);
+                                    if (lc != null)
+                                        s.Add(lc.Iso639_1);
+                                    else
+                                    {
+                                        s.Add(lang);
+                                    }
+                                }
 
+                            }
+                            tt = s.OrderBy(x => x).ToArray();
+                            updated = DateTime.UtcNow;
+                        }
                     }
-                    tt = s.OrderBy(x => x).ToArray();
+                    catch
+                    {
+                    }
+                    if (tt == null)
+                    {
+                        tt = IsoLanguage.Common;
+                        updated = DateTime.UtcNow.AddDays(-100);
+                    }
                     current = new SupLangSave
                     {
-                        Updated = DateTime.UtcNow,
+                        Updated = updated,
                         ValidList = tt,
                     };
                     await KeyValueStore.AllShared.SetAsync(storeKey, current).ConfigureAwait(false);
@@ -366,17 +418,28 @@ namespace SysWeaver.AI
                 return Array.Empty<String>();
             var ret = new String[count];
             var countTask = CountTokensTasks[(int)effort];
+            var retryCount = RetryCount;
             for (int i = 0; i < count; ++i)
             {
                 SetTarget(q, dest[i]);
-                String res;
-                using (var x = PerfMon.Track("Query." + effort))
-                    res = await client.Query(String.Join('\n', q), null, countTask).ConfigureAwait(false);
-                var texts = Decode(res);
-                ret[i] = texts.Count > 0 ? texts[0] : null;
+                List<String> texts;
+                for (int retry = 0; ; ++retry)
+                {
+                    String res;
+                    using (var x = PerfMon.Track("Query." + effort))
+                        res = await client.Query(String.Join('\n', q), null, countTask).ConfigureAwait(false);
+                    texts = Decode(res);
+                    if (texts != null)
+                        break;
+                    if (retry >= retryCount)
+                        break;
+                }
+                ret[i] = (texts?.Count ?? 0) > 0 ? texts[0] : null;
             }
             return ret;
         }
+
+        readonly int RetryCount;
 
         public async Task<string[]> TranslateMultiple(string[] texts, string to, string from, string context, TranslationEffort effort, TranslationCacheRetention retention)
         {
@@ -400,14 +463,25 @@ namespace SysWeaver.AI
 
             String[] ret = new string[count * textCount];
             var countTask = CountTokensTasks[(int)effort];
+            var retryCount = RetryCount;
             for (int i = 0, o = 0; i < count; ++i)
             {
                 SetTarget(q, dest[i]);
-                String res;
-                using (var x = PerfMon.Track("Query." + effort))
-                    res = await client.Query(String.Join('\n', q), null, countTask).ConfigureAwait(false);
-                var otexts = Decode(res);
-                var tl = otexts.Count;
+                List<String> otexts;
+                for (int retry = 0; ; ++retry)
+                {
+                    String res;
+                    using (var x = PerfMon.Track("Query." + effort))
+                        res = await client.Query(String.Join('\n', q), null, countTask).ConfigureAwait(false);
+                    otexts = Decode(res);
+                    if (otexts != null)
+                        break;
+                    if (retry >= retryCount)
+                        break;
+                }
+
+
+                var tl = otexts?.Count ?? 0;
                 for (int j = 0; j < textCount; ++j, ++o)
                 {
                     var text = texts[j];
@@ -429,11 +503,20 @@ namespace SysWeaver.AI
             AddHeader(q, from, to, context);
             if (!AddBlock(q, text))
                 return null;
-            String res;
-            using (var x = PerfMon.Track("Query." + effort))
-                res = await client.Query(String.Join('\n', q), null, CountTokensTasks[(int)effort]).ConfigureAwait(false);
-            var texts = Decode(res);
-            return texts.Count > 0 ? texts[0] : null;
+            var retryCount = RetryCount;
+            List<String> texts;
+            for (int retry = 0; ; ++retry)
+            {
+                String res;
+                using (var x = PerfMon.Track("Query." + effort))
+                    res = await client.Query(String.Join('\n', q), null, CountTokensTasks[(int)effort]).ConfigureAwait(false);
+                texts = Decode(res);
+                if (texts != null)
+                    break;
+                if (retry >= retryCount)
+                    break;
+            }
+            return (texts?.Count ?? 0) > 0 ? texts[0] : null;
         }
 
         public Task<string> RequestOne(string from, string to, string text, string context, TranslationEffort effort, TranslationCacheRetention retention)
@@ -488,7 +571,7 @@ Context: <context>
 <md text>
 ------------------------------------
 
-<lang> is the source language (ISO code or plain text).
+<lang> is the source language (LCID, ISO code or plain text).
 <context> is some per translation context, that can give hints to what context the text is used, entities in the source text that shouldn't be translated etc.
 <plain text> is some plain text that should be translated.
 <md text> is some mark down text that should be translated.
@@ -502,7 +585,7 @@ The output format should separate each translated block using ""== TEXT =="" or 
         const String GetLanguagesPrompt = @"
 List all languages that you understand.
 Respond using plain text with one language per row.
-Output the language code, not the name.
+Output the language LCID (locale code), not the name.
 Some examples: ""en"", ""en-US"", ""en-GB"", ""es"", ""es-MX"", ""es-ES"", ""sv"", ""sv-FI"", ""pt"" and ""pt-BR"".
 Make sure to only output each language once.
 Output only this list, no explanation or anything else.

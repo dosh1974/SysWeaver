@@ -9,7 +9,6 @@ namespace SysWeaver.Db
         {
             ConnectionString = connectionString;
             ConnectionStringNoSchema = connectionStringNoScehma;
-            Server = "localhost";
             User = "root"; 
         }
 
@@ -97,7 +96,8 @@ namespace SysWeaver.Db
         public override string ToString()
         {
             var args = new Dictionary<String, String>(StringComparer.OrdinalIgnoreCase);
-            args[nameof(Server)] = Server;
+            var s = Server;
+            args[nameof(Server)] = String.IsNullOrEmpty(s) ? "localhost" : s;
             args[nameof(Port)] = Port.ToString();
             args[nameof(Schema)] = Schema;
             args[nameof(User)] = "???";
