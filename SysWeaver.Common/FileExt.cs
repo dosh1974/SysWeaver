@@ -44,7 +44,7 @@ namespace SysWeaver
         /// <param name="filename">The file to write to (overwites existing)</param>
         /// <param name="memory">The memory to save</param>
         /// <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
-        public static async Task WriteMemoryAsync(String filename, ReadOnlyMemory<Byte> memory, bool ensureWriteTo = false)
+        public static async ValueTask WriteMemoryAsync(String filename, ReadOnlyMemory<Byte> memory, bool ensureWriteTo = false)
         {
             using var s = new FileStream(filename, FileMode.Create, FileAccess.Write);
             var m = Mem.ToMemory(memory.Span);
@@ -66,7 +66,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="memory">The memory to save</param>
         /// <param name="filename">The file to write to (overwites existing)</param>
-        public static Task WriteToFileAsync(this ReadOnlyMemory<Byte> memory, String filename)
+        public static ValueTask WriteToFileAsync(this ReadOnlyMemory<Byte> memory, String filename)
             => WriteMemoryAsync(filename, memory);
 
 
