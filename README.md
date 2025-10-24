@@ -32,3 +32,5 @@ Functionality is centered around a web server and an easy way to add API's.
 
 
 Functionality of a specific service is configured in a single json file that declares what micro-services to use and their parameters.  
+
+
