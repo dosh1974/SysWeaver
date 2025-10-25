@@ -1056,8 +1056,9 @@ class Table {
             rowsPerPage = 25;
         //  Get request params, define save function
         const key = "SysWeaver.Table." + await hashString(url);
+        const useTitleAsName = !tableName;
 
-        if (!tableName) {
+        if (useTitleAsName) {
             const tt = url.split('/');
             tableName = tt[tt.length - 1];
         }
@@ -1408,6 +1409,12 @@ class Table {
                         requestParams.Row = 0;
                         save();
                         data = await sendRequest(url, requestParams, didChange);
+                    }
+                    if (useTitleAsName) {
+                        if (data.Title) {
+                            tableName = data.Title;
+                            tableInfo.Name = tableName;
+                        }
                     }
                 }
                 latestData = data;

@@ -562,7 +562,18 @@ namespace SysWeaver.Chat
             var us = UserStore;
             if (us == null)
                 return null;
-            var l = context.MakeRequestAbsolute(Uri.UnescapeDataString(request.Url)).Substring(context.Prefix.Length);
+            var prefix = context.Prefix;
+            var rurl = Uri.UnescapeDataString(request.Url);
+            var i = prefix.IndexOf(':', prefix.IndexOf(':') + 1);
+            if (i >= 0)
+            {
+                if (rurl[i] != ':')
+                {
+                    var e = prefix.IndexOf('/', i);
+                    prefix = prefix.Substring(0, i) + prefix.Substring(e);
+                }
+            }
+            var l = context.MakeRequestAbsolute(rurl).Substring(prefix.Length);
             foreach (var x in LinkHandlers)
             {
                 var r = await x.Key.HandleLink(us, l, request.Scope, context).ConfigureAwait(false);

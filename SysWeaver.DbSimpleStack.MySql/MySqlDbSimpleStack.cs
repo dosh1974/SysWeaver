@@ -610,7 +610,7 @@ namespace SysWeaver.Db
         /// </summary>
         /// <param name="con"></param>
         /// <returns></returns>
-        static async Task<bool> CanPartition(OrmConnection con)
+        public static async Task<bool> CanPartition(OrmConnection con)
         {
             String version = "0.0.0.0";
             using (var r = await con.ReaderCommandAsync("SELECT VERSION()").ConfigureAwait(false))

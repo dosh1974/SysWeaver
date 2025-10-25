@@ -135,7 +135,14 @@ namespace SysWeaver.MicroService
         {
             if (!TableExporters.TryGetValue(export.ExportAs, out var exporter))
                 throw new Exception(export.ExportAs.ToQuoted() + " is not a reqistered data table exporter!");
-            return exporter.Export(export.Data, request, export.Options);
+            var opt = export.Options;
+            if (opt != null)
+            {
+                var fn = opt.Filename;
+                if (fn != null)
+                    opt.Filename = PathExt.SafeFilename(fn);
+            }
+            return exporter.Export(export.Data, request, opt);
         }
 
         /// <summary>
