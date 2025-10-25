@@ -2412,7 +2412,7 @@ class Chat {
 
         // Mark down and preview
 
-        let useMarkDown = !!localStorage.getItem(useMarkDownKey);
+        let useMarkDown = localStorage.getItem(useMarkDownKey) === "true";
         useMarkDown &= data.AllowMarkDown;
 
         let showPreview = localStorage.getItem(previewKey); // null means auto (on for md and off for text)
@@ -2475,7 +2475,7 @@ class Chat {
         async function markDownChanged() {
             const pm = previewElement.Msg;
             pm.Format = useMarkDown ? 1 : 0;
-            write.placeholder = useMarkDown ? placeholderText : placeholderMD;
+            write.placeholder = useMarkDown ? placeholderMD : placeholderText;
             await previewElement.UpdateBody(pm.Text, pm.Format, false);
             previewChanged();
         }
