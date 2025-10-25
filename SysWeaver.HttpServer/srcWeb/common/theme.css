@@ -48,6 +48,11 @@
     --ThemeAcc275: 0;
 }
 
+
+
+
+/* Dark */
+
 [data-theme="dark"] {
     --ThemeBackground: #242226;
     --ThemeMain: #aaaaaa;
@@ -56,14 +61,21 @@
 }
 
 
-[data-theme="application"] {
-    --ThemeBackground: ${Color.Background};
-    --ThemeMain: ${Color.Color};
-    --ThemeAcc1: ${Color.Acc1};
-    --ThemeAcc2: ${Color.Acc2};
+:root[data-theme="dark"] {
+    color-scheme: dark;
+}
+
+html[data-theme="dark"] textarea {
+    color-scheme: dark;
+}
+
+html[data-theme="dark"] body {
+    background-image: url('racing-stripes.svg'), radial-gradient(circle farthest-side at 50% 100% in srgb, rgba(var(--ThemeAcc1RGB), 0.1), transparent);
+    background-size: auto, cover;
 }
 
 
+/* Hacker */
 
 [data-theme="hacker"] {
     --ThemeBackground: #041004;
@@ -77,14 +89,6 @@
     --ThemeRadInp2: 1px;
 }
 
-:root[data-theme="dark"] {
-    color-scheme: dark;
-}
-
-html[data-theme="dark"] textarea {
-    color-scheme: dark;
-}
-
 
 :root[data-theme="hacker"] {
     color-scheme: dark;
@@ -94,6 +98,32 @@ html[data-theme="hacker"] textarea {
     color-scheme: dark;
 }
 
+
+html[data-theme="hacker"] body::before {
+    pointer-events: none;
+    content: "";
+    position: fixed;
+    display: block;
+    left: 0vw;
+    top: 0vh;
+    width: 100vw;
+    height: 200vh;
+    background-size: 64px 64px;
+    background-image: url('Hacker.png');
+    background-position: 0px var(--ThemePos);
+    z-index: 10000000;
+}
+
+/* Application */
+
+[data-theme="application"] {
+    --ThemeBackground: ${Color.Background};
+    --ThemeMain: ${Color.Color};
+    --ThemeAcc1: ${Color.Acc1};
+    --ThemeAcc2: ${Color.Acc2};
+}
+
+
 :root[data-theme="application"] {
     color-scheme: dark;
 }
@@ -102,8 +132,16 @@ html[data-theme="application"] textarea {
     color-scheme: dark;
 }
 
+html[data-theme="application"] body {
+    background-color: var(--ThemeBackground);
+    background-image: url('moroccan.svg'), radial-gradient(circle closest-corner at 50% 100% in srgb, rgba(var(--ThemeMainRGB), 0.2), transparent), radial-gradient(circle closest-corner at 0% 30% in srgb, rgba(var(--ThemeAcc2RGB), 0.1), transparent), radial-gradient(circle closest-corner at 100% 30% in srgb, rgba(var(--ThemeAcc1RGB), 0.1), transparent);
+    background-attachment: fixed, fixed, fixed, fixed;
+    background-position: left top, left top, left top, left top;
+    background-size: auto, cover, cover, cover;
+    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+}
 
-
+/* Pro */
 
 [data-theme="pro"] {
     --ThemeBackground: #171c2e;
@@ -119,8 +157,8 @@ html[data-theme="application"] textarea {
 }
 
 html[data-theme="pro"] body {
-    background-image: radial-gradient(circle farthest-side at 50% 100% in srgb, rgba(var(--ThemeAcc1RGB), 0.05), transparent);
-    background-size: cover;
+    background-image: url('glamorous.svg'), radial-gradient(circle farthest-side at 50% 100% in srgb, rgba(var(--ThemeAcc1RGB), 0.10), transparent);
+    background-size: auto, cover;
     font-optical-sizing: auto;
 }
 
@@ -149,20 +187,6 @@ html [data-theme] body {
     }
 
 
-html[data-theme="hacker"] body::before {
-    pointer-events: none;
-    content: "";
-    position: fixed;
-    display: block;
-    left: 0vw;
-    top: 0vh;
-    width: 100vw;
-    height: 200vh;
-    background-size: 64px 64px;
-    background-image: url('Hacker.png');
-    background-position: 0px var(--ThemePos);
-    z-index: 10000000;
-}
 
 
 input[type=password]::-ms-reveal,
@@ -209,11 +233,11 @@ input[type=password]::-ms-clear {
 
 body {
     background-color: var(--ThemeBackground);
-    background-image: url('Pattern.svg'), radial-gradient(circle closest-corner at 50% 100% in srgb, rgba(var(--ThemeMainRGB), 0.2), transparent), radial-gradient(circle closest-corner at 0% 30% in srgb, rgba(var(--ThemeAcc2RGB), 0.1), transparent), radial-gradient(circle closest-corner at 100% 30% in srgb, rgba(var(--ThemeAcc1RGB), 0.1), transparent);
-    background-attachment: fixed, fixed, fixed, fixed;
-    background-position: left top, left top, left top, left top;
-    background-size: 1024px 1024px, cover, cover, cover;
-    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+    background-image: url('graph-paper.svg');
+    background-attachment: fixed;
+    background-position: left top;
+    background-size: auto;
+    background-repeat: repeat;
     color: var(--ThemeMain);
     font-family: var(--ThemeFont);
     font-size: var(--ThemeFontSize);

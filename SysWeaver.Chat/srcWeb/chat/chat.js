@@ -1388,8 +1388,7 @@ class Chat {
             const msgIcon = document.createElement("SysWeaver-ChatIcon");
             const msgBody = document.createElement("SysWeaver-ChatContent");
             const msgData = document.createElement("SysWeaver-ChatData");
-
-            //msgBody.tabIndex = "0";
+            msgBody.tabIndex = "0";
 
             let isH = isPreview ? false : isHidden(m.From);
             msgHeader.IsHidden = isH;
