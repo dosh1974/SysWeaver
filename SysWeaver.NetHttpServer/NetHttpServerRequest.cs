@@ -2,6 +2,8 @@
 using System.Net;
 using System.IO;
 using System.Threading.Tasks;
+using System.Threading;
+using System.Diagnostics;
 
 namespace SysWeaver.Net
 {
@@ -33,7 +35,23 @@ namespace SysWeaver.Net
 
         public override String GetResMime() => Res.ContentType;
 
-        public override void SetResMime(String mime) => Res.ContentType = mime;
+
+        int C;
+        StackTrace Ctr;
+
+        public override void SetResMime(String mime)
+        {
+            switch (Interlocked.Increment(ref C))
+            {
+                case 1:
+                    Ctr = new StackTrace();
+                    break;
+                default:
+                    var x = new StackTrace();
+                    break;
+            }
+            Res.ContentType = mime;
+        }
 
         public override String ProtocolVersion => Req.ProtocolVersion.ToString();
 
@@ -92,7 +110,8 @@ namespace SysWeaver.Net
             return r.OutputStream.WriteAsync(data);
         }
 
-        public override void SetResHeader(String header, String value) => Res.Headers[header] = value;
+        public override void SetResHeader(String header, String value)
+            => Res.Headers[header] = value;
 
         bool InternalIsDead;
 

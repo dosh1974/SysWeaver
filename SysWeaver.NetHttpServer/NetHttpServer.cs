@@ -389,18 +389,23 @@ namespace SysWeaver.Net
                 String url = "";
                 try
                 {
+                    var req = c.Request;
                     if (IsPaused)
                     {
                         res.StatusCode = 503;
-                        await WriteResponseString(res, "The service is temporarily paused").ConfigureAwait(false);
+                        var lang = await GetAcceptLanguage(req.Headers["accept-language"]).ConfigureAwait(false);
+                        var text = await Translator.TranslateSafe("The service is temporarily paused", lang).ConfigureAwait(false);
+                        await WriteResponseString(res, text).ConfigureAwait(false);
                         return;
                     }
-                    var uri = c.Request.Url ?? DummyUri;
+                    var uri = req.Url ?? DummyUri;
                     var host = GetHost(out var prefix, out url, uri);
                     if (prefix == null)
                     {
                         res.StatusCode = 404;
-                        await WriteResponseString(res, "It's a 404!").ConfigureAwait(false);
+                        var lang = await GetAcceptLanguage(req.Headers["accept-language"]).ConfigureAwait(false);
+                        var text = await Get404Text(lang).ConfigureAwait(false);
+                        await WriteResponseString(res, text).ConfigureAwait(false);
                         return;
                     }
                     using var data = new NetHttpServerRequest(c, url, prefix, this, uri, host);

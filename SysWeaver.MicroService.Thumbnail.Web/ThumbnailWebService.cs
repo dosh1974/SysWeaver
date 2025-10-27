@@ -489,8 +489,6 @@ namespace SysWeaver.MicroService
                     Control = true,
                     Width = 320,
                     Height = 180,
-                    //Url = "https://www.quizzweaver.com/quizz/MediaPreview.html?type=3&link=https://www.quizzweaver.com/icons/flags/" + flag + ".svg",
-                    Url = "https://www.quizzweaver.com/quizz/MediaPreview.html?type=9&link=https://www.quizzweaver.com/Media/Stock/StockMedia/Effects/" + flag + ".glsl",
                 };
                 res = await GetPng(p).ConfigureAwait(false);
                 await File.WriteAllBytesAsync(Path.Combine(f, String.Join(i.ToString().PadLeft(4, '0'), nameof(StressTestSerial), ".png")), res.Png).ConfigureAwait(false);
@@ -522,8 +520,6 @@ namespace SysWeaver.MicroService
                     Control = true,
                     Width = 320,
                     Height = 180,
-                    //Url = "https://www.quizzweaver.com/quizz/MediaPreview.html?type=3&link=https://www.quizzweaver.com/icons/flags/" + flag + ".svg",
-                    Url = "https://www.quizzweaver.com/quizz/MediaPreview.html?type=9&link=https://www.quizzweaver.com/Media/Stock/StockMedia/Effects/" + flag + ".glsl",
                 };
                 var ii = i + 1;
                 async Task DoOne()

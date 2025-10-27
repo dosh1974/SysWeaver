@@ -500,60 +500,31 @@ namespace SysWeaver.Net
         /// <param name="data">Should be the data that was the argument to the Handler method.</param>
         /// <param name="newUrl">The new url to read data from, only the local part is changed</param>
         /// <returns>A handler if the newUrl can be handled by the server</returns>
-        public async Task<IHttpRequestHandler> InternalRedirect(IHttpServerModule caller, HttpServerRequest data, String newUrl)
+        public async ValueTask<IHttpRequestHandler> InternalRedirect(IHttpServerModule caller, HttpServerRequest data, String newUrl)
         {
 #if DEBUG
             if (caller == null)
                 throw new ArgumentNullException(nameof(caller));
 #endif//DEBUG
             var n = ReplaceUrl(data, newUrl);
+            using var _ = n as IDisposable;
             try
             {
                 var res = await GetHandler(n, caller).ConfigureAwait(false);
                 if (res != null)
                 {
-                    res.Redirected = n;
+                    //res.Redirected = n;
                     return res;
                 }
             }
             catch
             {
             }
-            (n as IDisposable)?.Dispose();
+            //(n as IDisposable)?.Dispose();
             return null;
         }
 
 
-        /// <summary>
-        /// This method may only be called inside the Handler method in the IHttpServerModule interface implementations.
-        /// Internally redirect a request (the client will see the original url, it's just the response data that will be read from somewhere else).
-        /// </summary>
-        /// <param name="caller">Should be the this object</param>
-        /// <param name="data">Should be the data that was the argument to the Handler method.</param>
-        /// <param name="newUrl">The new url to read data from, only the local part is changed</param>
-        /// <returns>A handler if the newUrl can be handled by the server</returns>
-        public async ValueTask<IHttpRequestHandler> InternalRedirectValue(IHttpServerModule caller, HttpServerRequest data, String newUrl)
-        {
-#if DEBUG
-            if (caller == null)
-                throw new ArgumentNullException(nameof(caller));
-#endif//DEBUG
-            var n = ReplaceUrl(data, newUrl);
-            try
-            {
-                var res = await GetHandler(n, caller).ConfigureAwait(false);
-                if (res != null)
-                {
-                    res.Redirected = n;
-                    return res;
-                }
-            }
-            catch
-            {
-            }
-            (n as IDisposable)?.Dispose();
-            return null;
-        }
 
         /// <summary>
         /// Read (and optional decompress) the data from a request handler
@@ -835,11 +806,17 @@ namespace SysWeaver.Net
         readonly IReadOnlyDictionary<String, Func<HttpServerRequest, HttpSession, ValueTask<IHttpRequestHandler>>> OptionalEndPoints;
 
 
+        protected async ValueTask<String> Get404Text(String language)
+        {
+            return "404: " + await Translator.TranslateSafe("Not Found - The server cannot find the requested resource.", language, "en", "This is the message to display when trying to access a non-existing end point in a web server").ConfigureAwait(false);
+
+        }
+
         async ValueTask Set404(HttpServerRequest data)
         {
             data.SetResStatusCode(404);
             if (!data.IsHead)
-                data.SetResText("404: " + await Translator.TranslateSafe("Not Found - The server cannot find the requested resource.", data.Language, "en", "This is the message to display when trying to access a non-existing end point in a web server").ConfigureAwait(false));
+                data.SetResText(await Get404Text(data.Language).ConfigureAwait(false));
         }
 
         async ValueTask Set429(HttpServerRequest data)
@@ -1002,6 +979,9 @@ namespace SysWeaver.Net
             }
             if (t == HttpServerTools.AlreadyHandled)
                 return;
+            var newData = t.Redirected;
+            data = newData ?? data;
+            //  Rate limiting
             rateLimiter = t.ServiceRateLimiter;
             if ((rateLimiter != null) && (await rateLimiter.IsOverTheLimit().ConfigureAwait(false)))
             {
@@ -1019,8 +999,6 @@ namespace SysWeaver.Net
 #endif//DEBUG
 
 
-            var newData = t.Redirected;
-            data = newData ?? data;
             using var _ = newData as IDisposable;
             if (isHead && AllowAuthorizationAuth)
                 data.SetResHeader("Access-Control-Allow-Headers", "Authorization");
@@ -1848,6 +1826,9 @@ namespace SysWeaver.Net
             return "en";
         }
 
+        protected ValueTask<String> GetAcceptLanguage(String acceptLanguageValue)
+            => AcceptLangCache.GetOrUpdateValueAsync(String.IsNullOrEmpty(acceptLanguageValue) ? "en" : acceptLanguageValue, GetAcceptLang);
+
         async ValueTask<HttpSession> GetSession(HttpServerRequest req)
         {
             using (PerfMon.Track(nameof(GetSession)))
@@ -1900,8 +1881,7 @@ namespace SysWeaver.Net
                     session = new HttpSession(rateLimiterParams, sessionToken, now, maxLife, extLife, ua, ip, prot, deviceId);
                 } while (!sessions.TryAdd(sessionToken, session));
                 session.LanguageTimeStamp = DateTime.UtcNow;
-                var lang = req.GetReqHeader("accept-language");
-                session.Language = await AcceptLangCache.GetOrUpdateValueAsync(String.IsNullOrEmpty(lang) ? "en" : lang, GetAcceptLang).ConfigureAwait(false);
+                session.Language = await GetAcceptLanguage(req.GetReqHeader("accept-language")).ConfigureAwait(false);
                 session.OnAuthLogout += RunOnLogout;
                 var exp = new DateTime(now + maxLife, DateTimeKind.Utc);
                 req.UpdateCookie(sn, sessionToken, exp, cookieOpt);
@@ -2163,6 +2143,7 @@ namespace SysWeaver.Net
                 return null;
             }
         }
+
 
         ValueTask Compress(ICompEncoder encoder, CompEncoderLevels level, Input i, Stream output)
         {
