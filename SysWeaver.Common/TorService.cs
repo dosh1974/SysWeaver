@@ -16,10 +16,10 @@ namespace SysWeaver
         static TorService()
         {
             var torType = TypeFinder.Get("SysWeaver.Tor.TorHttpClient, SysWeaver.Tor");
-            CreateTorClient = () => null;
+            CreateTorClient = (x) => null;
             if (torType != null)
             {
-                CreateTorClient = Expression.Lambda<Func<HttpClient>>(Expression.Call(torType.GetMethod("Create", BindingFlags.Static | BindingFlags.Public))).Compile();
+                CreateTorClient = Expression.Lambda<Func<bool, HttpClient>>(Expression.Call(torType.GetMethod("Create", BindingFlags.Static | BindingFlags.Public))).Compile();
                 Proxy = (WebProxy)torType.GetField("Proxy", BindingFlags.Static | BindingFlags.Public).GetValue(null);
                 IsAvailable = true;
             }
@@ -33,7 +33,7 @@ namespace SysWeaver
         /// <summary>
         /// Create a tor client (will return null if Tor tools isn't available)
         /// </summary>
-        public static Func<HttpClient> CreateTorClient;
+        public static Func<bool, HttpClient> CreateTorClient;
 
         /// <summary>
         /// The proxy to use to route through tor

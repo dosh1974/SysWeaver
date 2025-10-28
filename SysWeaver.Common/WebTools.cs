@@ -20,15 +20,26 @@ namespace SysWeaver
         public static readonly ProductInfoHeaderValue UserAgent = ProductInfoHeaderValue.Parse("Anonymous");
 
 
+        static readonly HttpClientHandler DefHandlerAutoDecomp = new HttpClientHandler
+        {
+            AutomaticDecompression = DecompressionMethods.All
+
+        };
+
+        static readonly HttpClientHandler NoCertDefHandlerAutoDecomp = new HttpClientHandler
+        {
+            AutomaticDecompression = DecompressionMethods.All,
+            ServerCertificateCustomValidationCallback = (requestMessage, certificate, chain, sslErrors) => true
+        };
+
+
         static readonly HttpClientHandler DefHandler = new HttpClientHandler
         {
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli
 
         };
 
         static readonly HttpClientHandler NoCertDefHandler = new HttpClientHandler
         {
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
             ServerCertificateCustomValidationCallback = (requestMessage, certificate, chain, sslErrors) => true
         };
 
@@ -37,24 +48,31 @@ namespace SysWeaver
         /// </summary>
         /// <param name="useTor">If true, the client will proxy through the tor network (must be available)</param>
         /// <param name="ignoreCertErrors">If true, the client will ignore any certificate errors (all certificates is ok - very dangerous)</param>
+        /// <param name="autoDecompress">If true, the client will automatically decompress any compressed response data</param>
         /// <returns></returns>
-        public static HttpClient CreateHttpClient(bool useTor = false, bool ignoreCertErrors = false)
+        public static HttpClient CreateHttpClient(bool useTor = false, bool ignoreCertErrors = false, bool autoDecompress = true)
         {
             HttpClient client;
             if (useTor)
             {
                 if (!TorService.IsAvailable)
                     throw new Exception("SysWeaver.Tor is not found! Can't use Tor!");
-                client = TorService.CreateTorClient();
-            }else
+                client = TorService.CreateTorClient(autoDecompress);
+            } else
             {
-                client = new HttpClient(ignoreCertErrors ? NoCertDefHandler : DefHandler);
+                client = new HttpClient(
+                    autoDecompress
+                    ?
+                        (ignoreCertErrors ? NoCertDefHandlerAutoDecomp : DefHandlerAutoDecomp)
+                    :
+                        (ignoreCertErrors ? NoCertDefHandler : DefHandler)
+                    );
             }
             client.DefaultRequestHeaders.UserAgent.Add(UserAgent);
             return client;
         }
 
-        static readonly ConcurrentDictionary<String, HttpClient> HttpClientCache = new (StringComparer.Ordinal);
+        static readonly ConcurrentDictionary<String, HttpClient> HttpClientCache = new(StringComparer.Ordinal);
 
         /// <summary>
         /// Get a shared http client with a specific timeout.
@@ -86,11 +104,37 @@ namespace SysWeaver
         /// <summary>
         /// A shared http client that you can use.
         /// Do NOT dispose!
-        /// Do NOT modify  the state of the client!
+        /// Do NOT modify the state of the client!
         /// </summary>
-        public static HttpClient HttpClient => InternalHttpClient.Value;
+        public static HttpClient HttpClient => InternalHttpClients[1].Value;
 
-        static readonly Lazy<HttpClient> InternalHttpClient = new Lazy<HttpClient>(() => CreateHttpClient());
+        /// <summary>
+        /// Get shared http client that you can use.
+        /// Do NOT dispose!
+        /// Do NOT modify the state of the client!
+        /// </summary>
+        public static HttpClient GetSharedHttpClient(bool useTor = false, bool ignoreCertErrors = false, bool autoDecompress = true)
+            => InternalHttpClients[
+                (autoDecompress ? 1 : 0) |
+                (ignoreCertErrors ? 2 : 0) |
+                (useTor ? 4 : 0)
+                ].Value;
+
+        static readonly Lazy<HttpClient>[] InternalHttpClients =
+        [
+            new Lazy<HttpClient>(() => CreateHttpClient(false, false, false)),
+            new Lazy<HttpClient>(() => CreateHttpClient(false, false, true)),
+            new Lazy<HttpClient>(() => CreateHttpClient(false, true, false)),
+            new Lazy<HttpClient>(() => CreateHttpClient(false, true, true)),
+            new Lazy<HttpClient>(() => CreateHttpClient(true, false, false)),
+            new Lazy<HttpClient>(() => CreateHttpClient(true, false, true)),
+            new Lazy<HttpClient>(() => CreateHttpClient(true, true, false)),
+            new Lazy<HttpClient>(() => CreateHttpClient(true, true, true)),
+        ];
+
+
+
+        
 
 
 

@@ -49,13 +49,13 @@ namespace SysWeaver.Tor
 
         public static readonly WebProxy Proxy = new WebProxy(new Uri("socks5://localhost:" + Settings.TorSettings.SocksPort));
 
-        public static HttpClient Create()
+        public static HttpClient Create(bool autoDecompress = true)
         {
             Init();
             var handler = new HttpClientHandler
             {
                 Proxy = Proxy,
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli
+                AutomaticDecompression = autoDecompress ? (DecompressionMethods.All) : 0
             };
             return new TorHttpClient(handler);
         }

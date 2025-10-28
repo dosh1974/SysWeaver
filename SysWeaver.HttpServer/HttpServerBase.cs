@@ -1881,7 +1881,7 @@ namespace SysWeaver.Net
                     session = new HttpSession(rateLimiterParams, sessionToken, now, maxLife, extLife, ua, ip, prot, deviceId);
                 } while (!sessions.TryAdd(sessionToken, session));
                 session.LanguageTimeStamp = DateTime.UtcNow;
-                session.Language = await GetAcceptLanguage(req.GetReqHeader("accept-language")).ConfigureAwait(false);
+                session.Language = await GetAcceptLanguage(req.GetReqHeader("Accept-Language")).ConfigureAwait(false);
                 session.OnAuthLogout += RunOnLogout;
                 var exp = new DateTime(now + maxLife, DateTimeKind.Utc);
                 req.UpdateCookie(sn, sessionToken, exp, cookieOpt);

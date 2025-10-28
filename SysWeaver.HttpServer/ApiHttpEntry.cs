@@ -712,38 +712,38 @@ namespace SysWeaver.Net
 
         public HttpServerEndpointTypes Type => HttpServerEndpointTypes.Api;
 
-        public Object Instance { get; private set; }
+        public Object Instance { get; init; }
 
-        public int ClientCacheDuration { get; private set; }
+        public int ClientCacheDuration { get; init; }
 
-        public int RequestCacheDuration { get; private set; }
+        public int RequestCacheDuration { get; init; }
 
         public bool UseStream => false;
 
-        public HttpCompressionPriority Compression { get; private set; }
+        public HttpCompressionPriority Compression { get; init; }
 
         public ICompDecoder Decoder => null;
 
-        public IReadOnlyList<string> Auth { get; private set; }
+        public IReadOnlyList<string> Auth { get; init; }
 
 
         public MethodInfo MethodInfo => Mi;
 
-        public string Uri { get; private set; }
+        public string Uri { get; init; }
 
-        public string Method { get; private set; }
+        public string Method { get; init; }
 
         public string CompPreference => Compression?.ToString();
 
         public string PreCompressed => null;
 
-        public string Location { get; private set; }
+        public string Location { get; init; }
 
         public long? Size => -1;
 
         public DateTime LastModified => HttpServerTools.StartedTime;
 
-        public string Mime { get; private set; }
+        public string Mime { get; init; }
 
         public async ValueTask<String> GetCacheKey(HttpServerRequest request)
         {

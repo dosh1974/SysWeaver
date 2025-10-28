@@ -38,6 +38,13 @@ namespace SysWeaver.Net
         /// If true, any bad server certificates are accepted.. NOT RECOMMENDED!
         /// </summary>
         public bool IgnoreCertErrors;
+
+        /// <summary>
+        /// Auth required to access the proxied urls
+        /// </summary>
+        public String Auth;
+
+
     }
 
 }

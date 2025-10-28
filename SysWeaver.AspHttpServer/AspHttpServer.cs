@@ -525,7 +525,7 @@ namespace SysWeaver.Net
                     if (IsPaused)
                     {
                         res.StatusCode = 503;
-                        var lang = await GetAcceptLanguage(req.Headers["accept-language"]).ConfigureAwait(false);
+                        var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
                         var text = await Translator.TranslateSafe("The service is temporarily paused", lang).ConfigureAwait(false);
                         await WriteResponseString(res, text).ConfigureAwait(false);
                         return;
@@ -535,7 +535,7 @@ namespace SysWeaver.Net
                     if (prefix == null)
                     {
                         res.StatusCode = 404;
-                        var lang = await GetAcceptLanguage(req.Headers["accept-language"]).ConfigureAwait(false);
+                        var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
                         var text = await Get404Text(lang).ConfigureAwait(false);
                         await WriteResponseString(res, text).ConfigureAwait(false);
                         return;
