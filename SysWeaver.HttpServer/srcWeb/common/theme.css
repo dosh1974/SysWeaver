@@ -13,6 +13,7 @@
     --ThemeRadInp: 8px;
     --ThemeRadInp2: 5px;
     --ThemeFadeDuration: 0.1s;
+    --ThemeOk: #0b0;
     --ThemeError: #c00;
     --ThemeWarning: #ba0;
     /* Individual R,G,B components, computed by js when switching */
@@ -550,33 +551,40 @@ SysWeaver-Button {
 
 
 SysWeaver-Loading {
-    position: sticky;
+    position: fixed;
     left: 0;
     top: 0;
-    right: 0;
-    bottom: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
     z-index: 1000;
-    background-color: rgba(var(--ThemeBackgroundRGB), 0.5);
-    pointer-events: none;
+    background-color: var(--ThemeBackground75);
     cursor: default !important;
     backdrop-filter: blur(4px);
 }
+
     SysWeaver-Loading.Opaque {
         background-color: var(--ThemeBackground);
         backdrop-filter: none;
     }
 
-    SysWeaver-LoadingText {
-        font-size: 200%;
-        color: var(--ThemeAcc1);
-        position: fixed;
-        display: block;
-        max-width: 90vw;
-        left: 50vw;
-        bottom: 3em;
-        font-weight: bold;
-        transform: translateX(-50%);
-        margin-right: -100vmax;
+SysWeaver-LoadingText {
+    font-size: 200%;
+    color: var(--ThemeAcc1);
+    position: fixed;
+    display: block;
+    max-width: 90vw;
+    left: 50vw;
+    bottom: 3em;
+    font-weight: bold;
+    transform: translateX(-50%);
+    margin-right: -100vmax;
+}
+
+    SysWeaver-LoadingText.Center {
+        bottom: initial;
+        top: 50vh;
+        transform: translate(-50% -50%);
     }
 
 SysWeaver-Loading > Icon-64x64 {

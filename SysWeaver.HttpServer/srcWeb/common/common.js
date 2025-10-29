@@ -5189,13 +5189,106 @@ function PageLoaded() {
 }
 
 /**
+ * Prevents tabbing outside of this element (useful for pop-ups), should call UnblockTab when element is deleted
+ * @param {HTMLElement} element The element to keep focused
+ */
+function BlockTab(element) {
+    let tabBlockers = window.TabBlockers;
+    if (typeof tabBlockers === "undefined") {
+        tabBlockers = [];
+        window.TabBlockers = tabBlockers;
+        console.log("Creating tab block hook");
+        let prevFocus = null;
+        const tabBlockFn = ev => {
+
+            const l = tabBlockers.length;
+            if (l <= 0)
+                return;
+            const block = tabBlockers[l - 1][0];
+            if (!IsAttached(block)) {
+                console.warn("Element " + block + " is blocking tabs, but isn't attached, unblocking tabs!");
+                UnblockTab(block);
+                return;
+            }
+            let e = ev.target;
+            if (e === block) {
+                console.log("Preventing shift-tab");
+                if (prevFocus)
+                    prevFocus.focus();
+                return;
+            }
+            if (e.tagName === "SYSWEAVER-TABBLOCK") {
+                console.log("Preventing tab (block)");
+                if (prevFocus)
+                    prevFocus.focus();
+                return;
+            }
+            while (e) {
+                if (e === block) {
+                    prevFocus = ev.target;
+                    return;
+                }
+                e = e.parentElement;
+            }
+            console.log("Preventing tab");
+            if (prevFocus)
+                prevFocus.focus();
+            else
+                block.focus();
+        }
+        document.body.addEventListener("focus", tabBlockFn, true);
+        window.TabBlockFn = tabBlockFn;
+    }
+    console.log("Adding tab block");
+    tabBlockers.push([element, document.activeElement]);
+}
+
+/**
+ * Re-enable tabbing outside of the element
+ * @param {HTMLElement} element The element to keep focused
+ */
+function UnblockTab(element) {
+    console.log("Removing tab block");
+    const tabBlockers = window.TabBlockers;
+    if (typeof tabBlockers === "undefined")
+        return;
+    const l = tabBlockers.length;
+    let i = l;
+    while (i > 0) {
+        --i;
+        const tb = tabBlockers[i];
+        if (tb[0] === element) {
+            tabBlockers.splice(i, 1);
+            if (l === 1) {
+                console.log("Deleting tab block hook");
+                document.body.removeEventListener("focus", window.TabBlockFn, true);
+                delete window.TabBlockFn;
+                delete window.TabBlockers;
+            }
+            if ((i + 1) === l) {
+                const cFocus = tb[1];
+                if (cFocus) {
+                    if (IsAttached(cFocus)) {
+                        console.log("Restoring foucus");
+                        cFocus.focus();
+                    }
+                }
+            }
+            return;
+        }
+    }
+}
+
+
+/**
  * Add a loading overlay
  * @param {HTMLElement} page The element to add the loading page to, use null or undefined to use the default (document.body).
  * @param {string} text An optional text to display while loading.
  * @param {boolean} opaque If true, make the loader background opaque
+ * @param {boolean} useIcon Override an icon class with this, use "" to disable any icon
  * @returns {function(boolean):void} A function that when executed removes the loading overlay, if the argument is true, no events ('LoaderRemoved
  */
-function AddLoading(page, text, opaque) {
+function AddLoading(page, text, opaque, useIcon) {
 
     if (!page)
         page = document.body;
@@ -5205,25 +5298,42 @@ function AddLoading(page, text, opaque) {
         behavior: "instant"
     };
     let le = document.createElement("SysWeaver-Loading");
-    if (opaque)
-        le.classList.add("Opaque");
-    if (text) {
-        const te = document.createElement("SysWeaver-LoadingText");
-        te.innerText = text;
-        le.appendChild(te);
-    }
-    const loading = new ColorIcon("IconWorking", "IconColorThemeMain", 64, 64);
-    le.appendChild(loading.Element);
-    le.onclick = ev => {
+
+    le.onmousedown = ev => {
         ev.preventDefault();
         ev.stopPropagation();
     };
-    page.appendChild(le);
-//    const op = page.style.pointerEvents;
-    //    page.style.pointerEvents = "none";
 
+    le.onmouseup = ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+    };
+
+    le.onkeydown = ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+    };
+    BlockTab(le);
+    if (opaque)
+        le.classList.add("Opaque");
+    let te = null;
+    if (text) {
+        te = document.createElement("SysWeaver-LoadingText");
+        te.innerText = text;
+        le.appendChild(te);
+    }
+    if (useIcon !== "") {
+        const icon = useIcon ?? "IconWorking";
+        const loading = new ColorIcon(icon, "IconColorThemeMain", 64, 64);
+        le.appendChild(loading.Element);
+    } else {
+        if (te)
+            te.classList.add("Center");
+    }
+    page.appendChild(le);
     return noEvents => {
         if (le) {
+            UnblockTab(le);
             le.remove();
             if (!noEvents) {
                 PostTop("LoaderRemoved", null, "*");

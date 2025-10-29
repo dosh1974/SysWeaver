@@ -372,6 +372,8 @@ namespace SysWeaver.OsServices
         {
             AppDomain.CurrentDomain.UnhandledException -= ReplaceFaultyManifestAndRestart;
             var current = man.ManifestFileName;
+            if (current == null)
+                return;
             var baseName = Path.Combine(Path.GetDirectoryName(current), Path.GetFileNameWithoutExtension(current));
             var lastGood = baseName + ".LastGood" + Path.GetExtension(current);
             if (FileHash.FilesAreEqual(current, lastGood))

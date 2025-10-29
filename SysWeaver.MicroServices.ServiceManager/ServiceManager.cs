@@ -86,7 +86,6 @@ namespace SysWeaver.MicroService
                 Register(mh);
             }
             AppDomain.CurrentDomain.UnhandledException += UnhandledException;
-            PruneTask = new PeriodicTask(Prune, 2000);
             runBeforeRegister?.Invoke(this);
             if (registerFromManifestFile)
             {
@@ -97,6 +96,7 @@ namespace SysWeaver.MicroService
                     RegisterManifestFile(fn);
                 }
             }
+            PruneTask = new PeriodicTask(Prune, 2000);
         }
 
         public ConfigEntry[] ReadManifest(String file = null)
