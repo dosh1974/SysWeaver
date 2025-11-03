@@ -39,14 +39,86 @@ namespace SysWeaver
 
         readonly ConcurrentDictionary<TKey, ConCount> Counts;
 
+        /// <summary>
+        /// Increment the value at key
+        /// </summary>
+        /// <param name="key"></param>
+        /// <returns>The incremented value</returns>
         public long IncValue(TKey key) =>
             Interlocked.Increment(ref Get(key).Value);
 
+        /// <summary>
+        /// Decrement the value at key
+        /// </summary>
+        /// <param name="key"></param>
+        /// <returns>The decremented value</returns>
         public long DecValue(TKey key) =>
             Interlocked.Decrement(ref Get(key).Value);
 
+        /// <summary>
+        /// Add the value at key
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="value">The value to add</param>
+        /// <returns>The value after addition</returns>
         public long AddValue(TKey key, long value) =>
             Interlocked.Add(ref Get(key).Value, value);
+
+        /// <summary>
+        /// And a value to the value at the key
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="value">The value to and</param>
+        /// <returns>The value after and</returns>
+        public long AndValue(TKey key, long value) =>
+            Interlocked.And(ref Get(key).Value, value);
+
+        /// <summary>
+        /// Or a value to the value at the key
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="value">The value to or</param>
+        /// <returns>The value after or</returns>
+        public long OrValue(TKey key, long value) =>
+            Interlocked.Or(ref Get(key).Value, value);
+
+        /// <summary>
+        /// Exchange a value if the current value matches a comparand.
+        /// newValue = currentValue == comparand ? value : curretValue
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="value">The value to replace with</param>
+        /// <param name="comparand">The value to compare with</param>
+        /// <returns>The orignal value</returns>
+        public long CompareExchangeValue(TKey key, long value, long comparand) =>
+            Interlocked.CompareExchange(ref Get(key).Value, value, comparand);
+
+        /// <summary>
+        /// Replace the value at the key
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="value">The value to replace to</param>
+        /// <returns>The orignal value</returns>
+        public long ExchangeValue(TKey key, long value) =>
+            Interlocked.Exchange(ref Get(key).Value, value);
+
+        /// <summary>
+        /// Takes the maximum value of the current and supplied value
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="value">The value to max with</param>
+        /// <returns>The value after max</returns>        
+        public long MaxValue(TKey key, long value) =>
+            InterlockedEx.Max(ref Get(key).Value, value);
+
+        /// <summary>
+        /// Takes the minimum value of the current and supplied value
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="value">The value to min with</param>
+        /// <returns>The value after min</returns>        
+        public long MinValue(TKey key, long value) =>
+            InterlockedEx.Min(ref Get(key).Value, value);
 
         /// <summary>
         /// Returns the current count of an item, 0 if not found
@@ -71,6 +143,11 @@ namespace SysWeaver
             return true;
         }
 
+        public void Add(TKey key, long value)
+        {
+            if (!Counts.TryAdd(key, new ConCount { Value = value }))
+                throw new ArgumentException("The key already exists in the collection");
+        }
 
         #region ICollection
 
