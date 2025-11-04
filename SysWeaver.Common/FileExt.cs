@@ -69,7 +69,13 @@ namespace SysWeaver
         public static ValueTask WriteToFileAsync(this ReadOnlyMemory<Byte> memory, String filename)
             => WriteMemoryAsync(filename, memory);
 
-
+        /// <summary>
+        /// Save all memory to disc
+        /// </summary>
+        /// <param name="memory">The memory to save</param>
+        /// <param name="filename">The file to write to (overwites existing)</param>
+        public static ValueTask WriteToFileAsync(this Memory<Byte> memory, String filename)
+            => WriteMemoryAsync(filename, memory);
 
         /// <summary>
         /// Save all span to disc

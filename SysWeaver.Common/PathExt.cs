@@ -12,6 +12,25 @@ namespace SysWeaver
     {
 
         /// <summary>
+        /// Remove the extension from a path.
+        /// Example: "C:\Windows\Temp\Data.dll" to "C:\Windows\Temp\Data"
+        /// Example: "C:\Windows\Temp\NoExt" to "C:\Windows\Temp\NoExt"
+        /// </summary>
+        /// <param name="path">A path with an extension.
+        /// Example: "C:\Windows\Temp\Data.dll" to "C:\Windows\Temp\Data"
+        /// Example: "C:\Windows\Temp\NoExt" to "C:\Windows\Temp\NoExt"
+        /// </param>
+        /// <returns>The path without an extension or the original path if non exist.
+        /// Example: "C:\Windows\Temp\Data.dll" to "C:\Windows\Temp\Data"
+        /// Example: "C:\Windows\Temp\NoExt" to "C:\Windows\Temp\NoExt"
+        /// </returns>
+        public static String StripExtension(String path)
+        {
+            var e = path.LastIndexOf('.');
+            return e < 0 ? path : path.Substring(0, e);
+        }
+
+        /// <summary>
         /// Make a path relative to the executables path if it's not already rooted
         /// </summary>
         /// <param name="path">A relative or rooted path</param>
