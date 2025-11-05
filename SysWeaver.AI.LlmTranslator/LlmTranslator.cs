@@ -156,7 +156,7 @@ namespace SysWeaver.AI
         {
             response = response.Trim();
             if (!response.FastStartsWith("=="))
-                return null;
+                return [response];
             List<String> res = new List<string>();
             var len = response.Length;
             int start = 0;
@@ -578,7 +578,8 @@ Context: <context>
 There can be any number or combination of ""== TEXT =="" and ""== MD =="" blocks.
 
 The response should only contain the translations, no explanations etc.
-The output format should separate each translated block using ""== TEXT =="" or ""== MD =="", similar to the input.
+It is extremely important that the output format should separate each translated block using ""== TEXT =="" or ""== MD =="" on a line, similar to the input.
+You MUST respect this and use exactly 2 equal signs, a space, then TEXT or MD, a space, 2 equal signs and finally a new line.
 ";
 
 

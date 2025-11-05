@@ -11,6 +11,36 @@ using System.Runtime.Intrinsics.X86;
 namespace SysWeaver
 {
 
+
+    public static class BigRatExt
+    {
+        /// <summary>
+        /// Randomly pass a test based on the probability (this value)
+        /// </summary>
+        /// <param name="probability">A probability [0, 1]</param>
+        /// <param name="rng">The rng to use</param>
+        /// <param name="usedProb">The actual probability used (may be a truncated value that differes from the desired probability)</param>
+        /// <returns>True if the test passed</returns>
+        public static bool PassProbability64(this BigRat probability, SecureRng rng, out BigRat usedProb)
+        {
+            var x = probability.Normalize();
+            var var = (BigRat)(Int64.MaxValue >> 1);
+            var num = x.Numerator();
+            var denom = x.Denominator();
+            while (denom >= var)
+            {
+                denom /= 2;
+                num /= 2;
+            }
+            var inum = (UInt64)num;
+            var idenom = (UInt64)denom;
+            var val = rng.GetUInt64Max(idenom);
+            usedProb = new BigRat((long)inum, idenom);
+            return val < inum;
+        }
+
+    }
+
     /// <summary>
     /// The "new" version from:
     /// https://github.com/c-ohle/RationalNumerics?tab=readme-ov-file

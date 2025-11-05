@@ -2088,7 +2088,7 @@ async function getDevicePosition(lowPrecision, timeout, maximumAge) {
  * @param {number} timeout An optional time out in milliseconds (if the event haven't triggered before the timeout the function will return null).
  * @returns {Event} The event that was triggered or null if it timed out.
  */
-async function waitEvent(element, eventName, fn, timeout) {
+function waitEvent(element, eventName, fn, timeout) {
     return new Promise(resolve => {
         let timeoutT = null;
         const end = ev => {
@@ -2117,7 +2117,7 @@ async function waitEvent(element, eventName, fn, timeout) {
  * @param {number} timeout An optional time out in milliseconds (if the event haven't triggered before the timeout the function will return null).
  * @returns {Event} The event that was triggered first (one of the two) or null if it timed out.
 */
-async function waitEvent2(element, eventName1, eventName2, fn, timeout) {
+function waitEvent2(element, eventName1, eventName2, fn, timeout) {
     return new Promise(resolve => {
         let timeoutT = null;
         const end = ev => {
@@ -2150,7 +2150,7 @@ async function waitFor(fn) {
     });
 }
 
-async function setMediaSrcAndWait(mediaElement, url, onResult) {
+function setMediaSrcAndWait(mediaElement, url, onResult) {
     const eo = "canplaythrough";
     const ee = "error";
     return new Promise(resolve => {
@@ -2201,13 +2201,13 @@ class AbortHandler {
 }
 
 // Delay some time
-async function delay(msToWait)
+function delay(msToWait)
 {
     return new Promise(resolve => setTimeout(resolve, msToWait));
 }
 
 // Delay some time, with custom abort
-async function delayWithAbort(msToWait, abortHandler)
+function delayWithAbort(msToWait, abortHandler)
 {
     return new Promise(resolve =>
     {

@@ -172,7 +172,7 @@ namespace SysWeaver.Net
                 {
                     typeUrl = a.Url;
                     if (typeUrl != null)
-                        typeUrl = typeUrl.Replace("{0}", t.Name);
+                        typeUrl = typeUrl.TrimEnd('/').Replace("{0}", t.Name);
                 }
             }
             var mn = method.Name;

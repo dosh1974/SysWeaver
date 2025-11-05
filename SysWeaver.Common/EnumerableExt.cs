@@ -157,7 +157,34 @@ namespace SysWeaver
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         }
 
+        /// <summary>
+        /// Process all elements in a list.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list">The list to process</param>
+        /// <param name="action">The action to perform on each element</param>
+        public static void Process<T>(this IReadOnlyList<T> list, Action<T> action)
+        {
+            if (list == null)
+                return;
+            var l = list.Count;
+            for (int i = 0; i < l; i++)
+                action(list[i]);
+        }
 
+        /// <summary>
+        /// Process all elements in an enumerable.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="enumerable">The enumerable to process</param>
+        /// <param name="action">The action to perform on each element</param>
+        public static void Process<T>(this IEnumerable<T> enumerable, Action<T> action)
+        {
+            if (enumerable == null)
+                return;
+            foreach (var i in enumerable)
+                action(i);
+        }
 
         /// <summary>
         /// Process all elements in a list.
@@ -181,7 +208,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Process all elements in a list.
+        /// Process all elements in an enumerable.
         /// Elements are processed in paralell (async).
         /// </summary>
         /// <typeparam name="T"></typeparam>
@@ -213,7 +240,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Process all elements in a list.
+        /// Process all elements in an enumerable.
         /// Elements are processed in paralell (async).
         /// </summary>
         /// <typeparam name="T"></typeparam>
@@ -249,7 +276,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Process all elements in a list.
+        /// Process all elements in an enumerable.
         /// Elements are processed in paralell (async).
         /// </summary>
         /// <typeparam name="T"></typeparam>
@@ -281,7 +308,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Process all elements in a list.
+        /// Process all elements in an enumerable.
         /// Elements are processed in paralell (async).
         /// </summary>
         /// <typeparam name="T"></typeparam>
