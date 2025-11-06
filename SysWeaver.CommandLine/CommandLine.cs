@@ -246,8 +246,16 @@ namespace SysWeaver
                     sopt.Add(x.Name, x);
             }
             List<Tuple<CommandLineOption, Object[]>> usedOptions = new List<Tuple<CommandLineOption, object[]>>(l);
-            var validArgs = arguments.ToList();
+            var validArgs = arguments?.ToList() ?? [];
             var maxArgCount = validArgs.Count;
+            bool anyNumberOfArgs = arguments == null || ((maxArgCount > 0) && (validArgs[maxArgCount - 1] == null));
+            if (anyNumberOfArgs)
+            {
+                --maxArgCount;
+                if (maxArgCount > 0)
+                    validArgs.RemoveAt(maxArgCount);
+                maxArgCount = int.MaxValue;
+            }
             var minArgCount = validArgs.Count(x => !x.Optional);
             int i = 0;
             while (i < l)
@@ -295,19 +303,26 @@ namespace SysWeaver
             int lastRequired = validArgs.LastIndexOf(x => !x.Optional) + 1;
             int skip = Math.Max(0, lastRequired - argCount);
             int so = 0;
+            var maxDef = validArgs.Count;
             var aa = new Tuple<CommandLineArgument, Object>[argCount];
             for (int s = 0; s < argCount; ++s)
             {
-                var arg = validArgs[so];
-                while ((skip > 0) && arg.Optional)
+                if (so < maxDef)
                 {
-                    ++so;
-                    arg = validArgs[so];
+                    var arg = validArgs[so];
+                    while ((skip > 0) && arg.Optional)
+                    {
+                        ++so;
+                        arg = validArgs[so];
+                        --skip;
+                    }
                     --skip;
+                    ++so;
+                    aa[s] = new Tuple<CommandLineArgument, object>(arg, arg.ParseValue(outArgs[s]));
+                }else
+                {
+                    aa[s] = new Tuple<CommandLineArgument, object>(CommandLineArgument.Make<String>("Arg" + s), outArgs[s]);
                 }
-                --skip;
-                ++so;
-                aa[s] = new Tuple<CommandLineArgument, object>(arg, arg.ParseValue(outArgs[s]));
             }
             return new CommandLine(aa, usedOptions.ToArray());
         }
@@ -450,18 +465,54 @@ namespace SysWeaver
 
         public static String JoinNonEmpty(String separator, params String[] values) => String.Join(separator, values.Where(x => !String.IsNullOrEmpty(x)));
 
+        static String FormatHelp(String help, int pad)
+        {
+            if (help == null)
+                return "";
+            var ps = new String(' ', pad);
+            var lines = help.Split('\n', StringSplitOptions.TrimEntries);
+            var c = lines.Length;
+            if (c < 2)
+                return help;
+            for (int i = 1; i < c; ++ i)
+            {
+                var t = lines[i];
+                lines[i] = String.IsNullOrEmpty(t) ? "" : (ps + t);
+            }
+            return String.Join(Environment.NewLine, lines);
+        }
+
         public static IEnumerable<String> SyntaxOptions(IEnumerable<CommandLineArgument> arguments, IEnumerable<CommandLineOption> options, String commandPrefix = null, String linePrefix = "", String levelInset = "  ")
         {
             commandPrefix = commandPrefix ?? String.Concat("Use: ", Path.GetFileNameWithoutExtension(Executable), ' ');
             levelInset = levelInset ?? "";
             linePrefix = linePrefix ?? "";
-            yield return String.Concat(linePrefix, commandPrefix, OptionalArgumentStart, "Options", OptionalArgumentEnd, ' ', String.Join(' ', arguments.Select(x => String.Concat(x.Optional ? OptionalArgumentStart : RequiredArgumentStart, x.Name, x.Optional ? OptionalArgumentEnd : RequiredArgumentEnd))));
+            var baseLen = levelInset.Length + linePrefix.Length;
+            yield return String.Concat(linePrefix, commandPrefix, OptionalArgumentStart, "Options", OptionalArgumentEnd, ' ', String.Join(' ', arguments.Select(x => x == null ? String.Concat(OptionalArgumentStart + "..." + OptionalArgumentEnd) : String.Concat(x.Optional ? OptionalArgumentStart : RequiredArgumentStart, x.Name, x.Optional ? OptionalArgumentEnd : RequiredArgumentEnd))));
             yield return String.Concat(linePrefix, "Arguments:");
-            var pad = arguments.Select(x => x.Name.Length).Max() + 1;
-            foreach (var x in arguments)
-                yield return String.Concat(linePrefix, levelInset, x.Name.PadRight(pad), String.Join(' ', x.Tags.Select(z => MakeTag(z))), ' ', x.HelpText ?? "");
+            var validArgs = arguments?.ToList() ?? [];
+            var maxArgCount = validArgs.Count;
+            bool anyNumberOfArgs = arguments == null || ((maxArgCount > 0) && (validArgs[maxArgCount - 1] == null));
+            int pad;
+            if (arguments == null)
+            {
+                pad = 4;
+                yield return String.Concat(linePrefix, levelInset, "...".PadRight(pad), "Optional arguments");
+            }
+            else
+            {
+                pad = validArgs.Select(x => x == null ? 3 : x.Name.Length).Max() + 1;
+                foreach (var x in validArgs)
+                    yield return x == null ?
+                        String.Concat(linePrefix, levelInset, "...".PadRight(pad), "Optional arguments")
+                        :
+                        String.Concat(linePrefix, levelInset, x.Name.PadRight(pad), String.Join(' ', x.Tags.Select(z => MakeTag(z))), ' ', FormatHelp(x.HelpText, baseLen + pad))
+                        ;
+            }
             yield return String.Concat(linePrefix, "Options ", MakeTag(OptionalTag), ':');
             pad = options.Select(x => x.Syntax.Length).Max() + 1;
+            ++baseLen;
+            var baseLen2 = levelInset.Length + baseLen;
             foreach (var x in options)
             {
                 var args = x.Args;
@@ -470,15 +521,15 @@ namespace SysWeaver
                 if ((argLen == 1) && (String.IsNullOrEmpty(x.HelpText) || String.IsNullOrEmpty(args[0].HelpText)))
                 {
                     var y = args[0];
-                    yield return String.Concat(linePrefix, levelInset, DefaultOptionsPrefix, x.Syntax.PadRight(pad), String.Join(' ', y.Tags.Select(z => MakeTag(z))), ' ', y.HelpText ?? x.HelpText ?? "");
+                    yield return String.Concat(linePrefix, levelInset, DefaultOptionsPrefix, x.Syntax.PadRight(pad), String.Join(' ', y.Tags.Select(z => MakeTag(z))), ' ', FormatHelp(y.HelpText ?? x.HelpText, baseLen + pad));
                 }
                 else {
-                    yield return String.Concat(linePrefix, levelInset, DefaultOptionsPrefix, x.Syntax.PadRight(pad), x.HelpText ?? "");
+                    yield return String.Concat(linePrefix, levelInset, DefaultOptionsPrefix, x.Syntax.PadRight(pad), FormatHelp(x.HelpText, baseLen + pad));
                     if (argLen > 0)
                     {
                         var pad2 = args.Select(y => y.Name.Length).Max() + 1;
                         foreach (var y in args)
-                            yield return String.Concat(linePrefix, levelInset, levelInset, y.Name.PadRight(pad2), String.Join(' ', y.Tags.Select(z => MakeTag(z))), ' ', y.HelpText ?? "");
+                            yield return String.Concat(linePrefix, levelInset, levelInset, y.Name.PadRight(pad2), String.Join(' ', y.Tags.Select(z => MakeTag(z))), ' ', FormatHelp(y.HelpText, baseLen2 + pad2));
                     }
                 }
             }

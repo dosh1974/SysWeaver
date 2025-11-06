@@ -26,8 +26,6 @@ namespace SysWeaver.MicroService
     public class FolderSyncService : IHttpServerModule, IHttpRequestHandler, IDisposable
     {
 
-
-
         #region IHttpRequestHandler
 
         public HttpServerRequest Redirected { get; set; }
@@ -88,7 +86,6 @@ namespace SysWeaver.MicroService
 
         #endregion//IHttpRequestHandler
 
-
         #region IHttpServerModule
 
         public String[] OnlyForPrefixes { get; init; } = ["FolderSync/"];
@@ -105,7 +102,7 @@ namespace SysWeaver.MicroService
             "explore",
             "Folders",
             nameof(SyncFolder),
-            nameof(SynchedFoldersTable), 
+            nameof(SynchedFoldersTable),
             nameof(Activate),
             nameof(Remove),
             nameof(GetSynchedFolderManifest),
@@ -114,33 +111,48 @@ namespace SysWeaver.MicroService
 
         #endregion//IHttpServerModule
 
-        readonly FileHttpServerModule FileMod;
-
         public FolderSyncService(ServiceManager manager, FolderSyncParams p)
         {
-            Dictionary<String, Folder> folders = new (StringComparer.Ordinal);
-            var fm = manager.TryGet<FileHttpServerModule>();
-            fm = manager.TryGet<FileHttpServerModule>();
+            Manager = manager;
+            FileMod = manager.TryGet<FileHttpServerModule>();
             foreach (var x in p.Folders)
-            {
-                var path = Path.GetFullPath(x.DiscFolder);
-                var name = x.Name;
-                PathExt.EnsureFolderExist(path);
-                path = new DirectoryInfo(path).FullName;
-                if (String.IsNullOrEmpty(name))
-                    name = Path.GetFileName(path);
-                var auth = x.Auth ?? Roles.Debug;
-                var folder = new Folder(name, path, auth, TimeSpan.FromDays(Math.Max(0, x.RemoveBackupsDays)));
-                folders.Add(name.FastToLower(), folder);
-                if (fm != null)
-                    fm.AddFolder(folder.ModFolder);
-            }
-            Folders = folders.Freeze();
+                AddFolder(x);
+            
             TempRemove = TimeSpan.Zero;
             Prune().RunAsync();
             TempRemove = TimeSpan.FromHours(12);
             PruneTask = new PeriodicTask(Prune, 5 * 60 * 1000, true, true, true);
         }
+
+
+
+
+        public void AddFolder(FolderSyncFolder x)
+        {
+            var folders = Folders;
+            var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
+            var name = x.Name;
+            PathExt.EnsureFolderExist(path);
+            path = new DirectoryInfo(path).FullName;
+            if (String.IsNullOrEmpty(name))
+                name = Path.GetFileName(path);
+            var auth = x.Auth ?? Roles.Debug;
+            var folder = new Folder(
+                name,
+                path,
+                auth,
+                TimeSpan.FromDays(Math.Max(0, x.RemoveBackupsDays)),
+                x.OnActivate,
+                x.OnDeactivate
+                );
+            folders.TryAdd(name.FastToLower(), folder);
+            var fm = FileMod;
+            if (fm != null)
+                fm.AddFolder(folder.ModFolder);
+        }
+
+        readonly FileHttpServerModule FileMod;
+        readonly ServiceManager Manager;
 
         PeriodicTask PruneTask;
 
@@ -219,16 +231,41 @@ namespace SysWeaver.MicroService
 
         sealed class Folder
         {
+            /// <summary>
+            /// Optional commands to execute before deactivating (before old folder is renamed to back-up name)
+            /// </summary>
+            public readonly String[] OnDeactivate;
+
+            /// <summary>
+            /// Optional commands to execute to activate (after the folder have been replaced with old content)
+            /// </summary>
+            public readonly String[] OnActivate;
+
             public readonly String LockName;
             public readonly String Name;
             public readonly String DestPath;
             public readonly IReadOnlyList<String> Auth;
             public TimeSpan RemoveAfter;
             public readonly FileHttpServerModuleFolder ModFolder;
-            public Folder(string name, string path, string auth, TimeSpan removeAfter)
+
+            static String[] ParseCommands(String s, IReadOnlyDictionary<String, String> extra)
+            {
+                if (String.IsNullOrEmpty(s))
+                    return null;
+                var r = s.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                var l = r.Length;
+                if (l <= 0)
+                    return null;
+                for (int i = 0; i < l; ++i)
+                    r[i] = PathTemplate.Resolve(r[i], extra);
+                return r;
+            }
+
+            public Folder(string name, string path, string auth, TimeSpan removeAfter, String onActivate, String onDeactivate)
             {
                 Name = name;
-                DestPath = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                var tp = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                DestPath = tp + Path.DirectorySeparatorChar;
                 Auth = Authorization.GetRequiredTokens(auth);
                 RemoveAfter = removeAfter;
                 LockName = "FolderSync_" + Encoding.UTF8.GetBytes(name.FastToLower()).ToHex();
@@ -239,8 +276,15 @@ namespace SysWeaver.MicroService
                     ClientCacheDuration = 5,
                     RequestCacheDuration = 4,
                     WebFolder = "FolderSync/Folders/" + name,
-                    DiscFolder = DestPath,
+                    DiscFolder = tp,
                 };
+                var x = new Dictionary<String, String>(StringComparer.Ordinal);
+                x.Add("name", name);
+                x.Add("target", tp);
+                x.Add("targetname", Path.GetFileName(tp));
+                x.Add("targetdir", Path.GetDirectoryName(tp));
+                OnActivate = ParseCommands(onActivate, x);
+                OnDeactivate = ParseCommands(onDeactivate, x);
             }
         }
 
@@ -323,7 +367,7 @@ namespace SysWeaver.MicroService
         }
 
 
-        readonly IReadOnlyDictionary<String, Folder> Folders;
+        readonly ConcurrentDictionary<String, Folder> Folders = new ConcurrentDictionary<String, Folder>(StringComparer.Ordinal);
 
 
 
@@ -339,11 +383,40 @@ namespace SysWeaver.MicroService
             var dir = String.Concat(d.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), '_', d.LastWriteTimeUtc.ToString(TimeFmt));
             return dir;
         }
-        async ValueTask<Exception> InternalActivate(String target, String from, HttpServerRequest context)
+
+        async ValueTask RunCommands(Folder folder, String[] commands)
         {
+            var m = Manager;
+            foreach (var cmd in commands)
+            {
+                m.AddMessage("Running command: \"" + cmd + "\":");
+                using var _ = m.Tab();
+                try
+                {
+                    var exe = SystemHelper.GetCommandAndArgs(out var args, cmd);
+                    await ExternalProcess.RunAsync(exe, args, (text, err) =>
+                    {
+                        m.AddMessage(text, err ? MessageLevels.Warning : MessageLevels.Info);
+                    }).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    m.AddMessage("Failed to run!", ex, MessageLevels.Warning);
+                }
+            }
+        }
+
+        async ValueTask<Exception> InternalActivate(Folder folder, String target, String from, HttpServerRequest context)
+        {
+            var cmd = folder.OnDeactivate;
+            if (cmd != null)
+                await RunCommands(folder, cmd).ConfigureAwait(false);
             var ex = await PathExt.TryFolderSwapAsync(target, GetBakName(target), from).ConfigureAwait(false);
             if (ex == null)
                 new DirectoryInfo(target).LastAccessTimeUtc = DateTime.UtcNow;
+            cmd = folder.OnActivate;
+            if (cmd != null)
+                await RunCommands(folder, cmd).ConfigureAwait(false);
             context.Server.InvalidateCache();
             return ex;
         }
@@ -441,7 +514,7 @@ namespace SysWeaver.MicroService
                     await WriteManifest(sync.R, dest, sync.CopyCount, sync.CopySize, sync.UploadCount, sync.UploadSize, sync.NetworkSize, sync.User, sync.Start).ConfigureAwait(false);
                     if (sync.UseFolder)
                     {
-                        var exx = await InternalActivate(target.DestPath, dest, context).ConfigureAwait(false);
+                        var exx = await InternalActivate(target, target.DestPath, dest, context).ConfigureAwait(false);
                         if (exx != null)
                             return false;
                     }
@@ -511,7 +584,7 @@ namespace SysWeaver.MicroService
                 throw new Exception("Can't activate an active folder!");
             if (discFolder.FastStartsWith(temp))
                 throw new Exception("Can't activate a temporary folder!");
-            var ex = await InternalActivate(path, di.FullName, context).ConfigureAwait(false);
+            var ex = await InternalActivate(folder, path, di.FullName, context).ConfigureAwait(false);
             if (ex != null)
                 throw ex;
             return true;
@@ -695,7 +768,7 @@ namespace SysWeaver.MicroService
                     await WriteManifest(r, newFolderName, copy.Count, copySize, 0, 0, 0, context.Session.Auth?.Username, start).ConfigureAwait(false);
                     if (r.UseFolder)
                     {
-                        var exx = await InternalActivate(dest, newFolderName, context).ConfigureAwait(false);
+                        var exx = await InternalActivate(folder, dest, newFolderName, context).ConfigureAwait(false);
                         if (exx != null)
                             throw exx;
                     }

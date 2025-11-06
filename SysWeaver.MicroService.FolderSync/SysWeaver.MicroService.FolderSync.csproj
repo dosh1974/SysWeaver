@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SysWeaver.FolderSync\SysWeaver.FolderSync.csproj" />
     <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
+    <ProjectReference Include="..\SysWeaver.Storage.Cdc\SysWeaver.Storage.Cdc.csproj" />
   </ItemGroup>
 
 </Project>
