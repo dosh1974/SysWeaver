@@ -113,9 +113,10 @@ namespace SysWeaver.MicroService
 
         public FolderSyncService(ServiceManager manager, FolderSyncParams p)
         {
+            p = p ?? new();
             Manager = manager;
             FileMod = manager.TryGet<FileHttpServerModule>();
-            foreach (var x in p.Folders)
+            foreach (var x in p.Folders.Nullable())
                 AddFolder(x);
             
             TempRemove = TimeSpan.Zero;
@@ -142,8 +143,7 @@ namespace SysWeaver.MicroService
                 path,
                 auth,
                 TimeSpan.FromDays(Math.Max(0, x.RemoveBackupsDays)),
-                x.OnActivate,
-                x.OnDeactivate
+                x
                 );
             folders.TryAdd(name.FastToLower(), folder);
             var fm = FileMod;
@@ -241,6 +241,9 @@ namespace SysWeaver.MicroService
             /// </summary>
             public readonly String[] OnActivate;
 
+            public Func<String, String, ValueTask<Exception>> OnActivateAsync;
+            public Func<String, String, ValueTask<Exception>> OnDeactivateAsync;
+
             public readonly String LockName;
             public readonly String Name;
             public readonly String DestPath;
@@ -261,7 +264,7 @@ namespace SysWeaver.MicroService
                 return r;
             }
 
-            public Folder(string name, string path, string auth, TimeSpan removeAfter, String onActivate, String onDeactivate)
+            public Folder(string name, string path, string auth, TimeSpan removeAfter, FolderSyncFolder fs)
             {
                 Name = name;
                 var tp = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -283,8 +286,10 @@ namespace SysWeaver.MicroService
                 x.Add("target", tp);
                 x.Add("targetname", Path.GetFileName(tp));
                 x.Add("targetdir", Path.GetDirectoryName(tp));
-                OnActivate = ParseCommands(onActivate, x);
-                OnDeactivate = ParseCommands(onDeactivate, x);
+                OnActivate = ParseCommands(fs.OnActivate, x);
+                OnDeactivate = ParseCommands(fs.OnDeactivate, x);
+                OnActivateAsync = fs.OnActivateAsync;
+                OnDeactivateAsync = fs.OnDeactivateAsync;
             }
         }
 
@@ -411,12 +416,40 @@ namespace SysWeaver.MicroService
             var cmd = folder.OnDeactivate;
             if (cmd != null)
                 await RunCommands(folder, cmd).ConfigureAwait(false);
+            var a = folder.OnDeactivateAsync;
+            if (a != null)
+            {
+                try
+                {
+                    var ex3 = await a(folder.Name, folder.DestPath).ConfigureAwait(false);
+                    if (ex3 != null)
+                        return ex3;
+                }
+                catch (Exception ex2)
+                {
+                    return ex2;
+                }
+            }
             var ex = await PathExt.TryFolderSwapAsync(target, GetBakName(target), from).ConfigureAwait(false);
             if (ex == null)
                 new DirectoryInfo(target).LastAccessTimeUtc = DateTime.UtcNow;
             cmd = folder.OnActivate;
             if (cmd != null)
                 await RunCommands(folder, cmd).ConfigureAwait(false);
+            a = folder.OnActivateAsync;
+            if (a != null)
+            {
+                try
+                {
+                    var ex3 = await a(folder.Name, folder.DestPath).ConfigureAwait(false);
+                    if (ex3 != null)
+                        return ex3;
+                }
+                catch (Exception ex2)
+                {
+                    return ex2;
+                }
+            }
             context.Server.InvalidateCache();
             return ex;
         }

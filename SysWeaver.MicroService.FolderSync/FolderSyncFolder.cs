@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 
 namespace SysWeaver.MicroService
 {
@@ -34,5 +35,8 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String OnActivate;
 
+
+        public Func<String, String, ValueTask<Exception>> OnActivateAsync;
+        public Func<String, String, ValueTask<Exception>> OnDeactivateAsync;
     }
 }
