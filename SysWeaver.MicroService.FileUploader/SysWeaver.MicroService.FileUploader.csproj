@@ -12,6 +12,7 @@
     <ProjectReference Include="..\SysWeaver.HttpServer\SysWeaver.HttpServer.csproj" />
     <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
     <ProjectReference Include="..\SysWeaver.MicroServices\SysWeaver.MicroServices.csproj" />
+    <ProjectReference Include="..\SysWeaver.Storage.Cdc\SysWeaver.Storage.Cdc.csproj" />
   </ItemGroup>
 
   <ItemGroup>

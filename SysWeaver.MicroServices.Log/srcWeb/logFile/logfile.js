@@ -14,7 +14,7 @@ async function logFileMain() {
         }
         await updateText();
         const user = await getRequest("../Api/auth/GetUser");
-        const haveAdmin = user && user.Succeeded && user.Tokens && (user.Tokens.indexOf("admin") >= 0);
+        const haveAdmin = user && user.Succeeded && user.Tokens && ((user.Tokens.indexOf("admin") >= 0) || (user.Tokens.indexOf("debug") >= 0));
         const br = Button.CreateRow();
         target.appendChild(br);
         const d = new Button("", "Download", "Click to download the file", "IconDownload", true, async () => {

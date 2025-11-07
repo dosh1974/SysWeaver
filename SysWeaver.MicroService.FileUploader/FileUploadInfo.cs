@@ -31,6 +31,16 @@ namespace SysWeaver.MicroService
         public double LastModified;
 
         /// <summary>
+        /// Optionally send the hashes for Cdc chunks of the file
+        /// </summary>
+        public Byte[] Chunks;
+
+        /// <summary>
+        /// Used internally
+        /// </summary>
+        public String ChunkCacheKey => String.Join('|', Hash, Name);
+
+        /// <summary>
         /// Get the file extension (including the leading '.') or String.Empty if there is none
         /// </summary>
         /// <returns></returns>
@@ -51,6 +61,8 @@ namespace SysWeaver.MicroService
         {
             LastModified = new DateTimeOffset(utcLastModified).ToUnixTimeMilliseconds();
         }
+
+
 
     }
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CommunityToolkit.HighPerformance;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -39,7 +40,7 @@ namespace SysWeaver
             }
         }
 
-        static bool TryReadVar(Stream s, out ulong res)
+        public static bool TryReadVar(Stream s, out ulong res)
         {
             res = 0;
             int shift = 0;
@@ -544,6 +545,29 @@ namespace SysWeaver
 
 
         /// <summary>
+        /// Get the filename where a the compressed data of a chunk is stored
+        /// </summary>
+        /// <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
+        /// <param name="props">The props used</param>
+        /// <returns>A filename or null if the chunk isn't stored</returns>
+        public static String TryGetChunkFile(String hashStr, CdcProps props = null)
+        {
+            props = props ?? CdcProps.Default;
+            var fileName = GetFilename(hashStr, props);
+            var fi = new FileInfo(fileName);
+            return (fi.Exists && (fi.Length > 0)) ? fi.FullName : null;
+        }
+
+        /// <summary>
+        /// Get the filename where a the compressed data of a chunk is stored
+        /// </summary>
+        /// <param name="hash">The hash of the chunk as binary data</param>
+        /// <param name="props">The props used</param>
+        /// <returns>A filename or null if the chunk isn't stored</returns>
+        public static String TryGetChunkFile(ReadOnlySpan<Byte> hash, CdcProps props = null)
+            => TryGetChunkFile(hash.ToHexString(), props);
+
+        /// <summary>
         /// Open a stream to the compressed chunk data
         /// </summary>
         /// <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
@@ -731,7 +755,7 @@ namespace SysWeaver
         /// <param name="data">The data</param>
         /// <param name="props">The props used</param>
         /// <returns>True if the chunk already exist in the storage or if it was saved successfully, false for any failure</returns>
-        public static async ValueTask<bool> TrySaveCompressedChunk(String hashStr, ReadOnlyMemory<Byte> data, CdcProps props = null)
+        public static async ValueTask<bool> TrySaveDataAsChunk(String hashStr, ReadOnlyMemory<Byte> data, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             var fileName = GetFilename(hashStr, props);
@@ -771,6 +795,52 @@ namespace SysWeaver
         }
 
 
+
+        /// <summary>
+        /// Save a chunk to disc
+        /// </summary>
+        /// <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
+        /// <param name="data">The already compressed chunk data</param>
+        /// <param name="props">The props used</param>
+        /// <returns>True if the chunk already exist in the storage or if it was saved successfully, false for any failure</returns>
+        static async ValueTask<bool> TrySaveChunk(String hashStr, ReadOnlyMemory<Byte> data, CdcProps props = null)
+        {
+            props = props ?? CdcProps.Default;
+            var fileName = GetFilename(hashStr, props);
+            var fi = new FileInfo(fileName);
+            if (fi.Exists && (fi.Length > 0))
+            {
+                fi.LastAccessTimeUtc = DateTime.UtcNow;
+                return true;
+            }
+            using var s = await SystemLock.GetAsync("ContentChunks" + hashStr).ConfigureAwait(false);
+            fi = new FileInfo(fileName);
+            if (fi.Exists && (fi.Length > 0))
+            {
+                fi.LastAccessTimeUtc = DateTime.UtcNow;
+                return true;
+            }
+            var ex = await PathExt.EnsureCanWriteFileAsync(fileName).ConfigureAwait(false);
+            if (ex != null)
+                throw ex;
+            var tempName = fileName + ".temp" + DateTime.UtcNow.Ticks;
+            try
+            {
+                await data.WriteToFileAsync(tempName).ConfigureAwait(false);
+                File.Move(tempName, fileName, true);
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                await PathExt.TryDeleteFileAsync(tempName).ConfigureAwait(false);
+            }
+            return true;
+        }
+
+
         /// <summary>
         /// Save some data as a compressed chunk
         /// </summary>
@@ -778,8 +848,8 @@ namespace SysWeaver
         /// <param name="data">The data</param>
         /// <param name="props">The props used</param>
         /// <returns>True if the chunk already exist in the storage or if it was saved successfully, false for any failure</returns>
-        public static ValueTask<bool> TrySaveCompressedChunk(ReadOnlySpan<Byte> hash, ReadOnlyMemory<Byte> data, CdcProps props = null)
-            => TrySaveCompressedChunk(hash.ToHexString(), data, props);
+        public static ValueTask<bool> TrySaveChunk(ReadOnlySpan<Byte> hash, ReadOnlyMemory<Byte> data, CdcProps props = null)
+            => TrySaveDataAsChunk(hash.ToHexString(), data, props);
 
         /// <summary>
         /// Compute the hash for a chunk of memory and save it to storage if it doesn't exist
@@ -794,7 +864,7 @@ namespace SysWeaver
             props = props ?? CdcProps.Default;
             if (!props.Hash(data.Span, hash.Span, out var _hs))
                 throw new Exception("Failed to hash!");
-            if (!await TrySaveCompressedChunk(hash.Span, data, props).ConfigureAwait(false))
+            if (!await TrySaveChunk(hash.Span, data, props).ConfigureAwait(false))
                 throw new Exception("Failed to save chunk data!");
         }
 
@@ -897,6 +967,87 @@ namespace SysWeaver
             using var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
             await Cut(s, false, props);
         }
+
+        /// <summary>
+        /// Write a list chunks to a chunk list stream 
+        /// </summary>
+        /// <param name="destStream">The destination stream</param>
+        /// <param name="chunks">Array of chunk hashes</param>
+        /// <param name="props">The properties, if null the default properties will be used (recommended)</param>
+        /// <returns>True if all the chunks was found and written to the stream, else false</returns>
+        public static async ValueTask<bool> TryWriteChunkList(Stream destStream, ReadOnlyMemory<byte> chunks, CdcProps props = null)
+        {
+            props = props ?? CdcProps.Default;
+            var hashSize = props.HashSize;
+            var l = chunks.Length;
+            for (int i = 0; i < l; i += hashSize)
+            {
+                var hashMem = chunks.Slice(i, hashSize);
+                using var s = TryOpenCompressedChunk(hashMem.Span, props);
+                if (s == null)
+                    return false;
+                var len = s.Length;
+                WriteVar(destStream, (ulong)len);
+                await destStream.WriteAsync(hashMem).ConfigureAwait(false);
+                await s.CopyToAsync(destStream).ConfigureAwait(false);
+            }
+            return true;
+        }
+
+
+        /// <summary>
+        /// Open a series of chunks as a single stream
+        /// </summary>
+        /// <param name="chunks">The chunks</param>
+        /// <param name="props">The properties, if null the default properties will be used (recommended)</param>
+        /// <returns>A stream with the chunk content (decompressed)</returns>
+        /// <exception cref="Exception"></exception>
+        public static Stream OpenChunkStream(ReadOnlyMemory<byte> chunks, CdcProps props = null)
+        {
+            props = props ?? CdcProps.Default;
+            var hashSize = props.HashSize;
+            var l = chunks.Length;
+            String[] c = new String[l];
+            for (int i = 0; i < l; i += hashSize)
+            {
+                var fn = TryGetChunkFile(chunks.Slice(i, hashSize).Span, props);
+                if (fn == null)
+                    throw new Exception("Chunk " + chunks.Slice(i, hashSize).ToHex() + " is missing!");
+                c[i] = fn;
+            }
+            return new CompressedChunkedStream(x =>
+            {
+                if (x > l)
+                    return null;
+                return new FileStream(c[x], FileMode.Open, FileAccess.Read, FileShare.Read);
+            }, props.Comp);
+        }
+
+        /// <summary>
+        /// Try to add a list of chunks to the storage
+        /// </summary>
+        /// <param name="sourceStream"></param>
+        /// <param name="props">The properties, if null the default properties will be used (recommended)</param>
+        /// <returns>True if the chunks was added, elase false</returns>
+        public static async ValueTask<bool> AddChunkList(Stream sourceStream, CdcProps props = null)
+        {
+            props = props ?? CdcProps.Default;
+            var hashSize = props.HashSize;
+            var hash = new Byte[hashSize];
+            while (ContentDependentChunking.TryReadVar(sourceStream, out var dataSize))
+            {
+                if (await sourceStream.ReadAsync(hash).ConfigureAwait(false) != hashSize)
+                    return false;
+                var data = new Byte[dataSize];
+                if (await sourceStream.ReadAsync(data).ConfigureAwait(false) != (long)dataSize)
+                    return false;
+                if (!await TrySaveChunk(hash.ToHex(), data, props).ConfigureAwait(false))
+                    return false;
+            }
+            return true;
+        }
+
+
 
 
         static int CenterSize(int average, int minimum, int sourceSize)
@@ -1011,4 +1162,8 @@ namespace SysWeaver
 
 
     }
+
+
+
+
 }

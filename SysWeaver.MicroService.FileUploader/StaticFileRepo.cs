@@ -471,9 +471,34 @@ namespace SysWeaver.MicroService
                     }
                 }
                 s[i] = FileRepoTools.Upload;
+                var chunks = f.Chunks;
+                if (chunks != null)
+                {
+                    //  Check what chunks exist
+                    var props = CdcProps.Default;
+                    var hashSize = props.HashSize;
+                    var len = chunks.Length;
+                    var missing = new Byte[len];
+                    int wo = 0;
+                    for (int co = 0; co < len; co += hashSize)
+                    {
+                        if (ContentDependentChunking.ValidateChunk(chunks.AsSpan(co, hashSize), props))
+                            continue;
+                        Array.Copy(chunks, co, missing, wo, hashSize);
+                        wo += hashSize;
+                    }
+                    Array.Resize(ref missing, wo);
+                    s[i] = new FileUploadResult(FileUploadStatus.Upload)
+                    {
+                        Chunks = missing
+                    };
+                    ChunkCache.GetOrUpdate(f.ChunkCacheKey, _ => missing);
+                }
             }
             return s;
         }
+
+        readonly FastMemCache<String, Byte[]> ChunkCache = new FastMemCache<string, byte[]>(TimeSpan.FromMinutes(30), StringComparer.Ordinal);
 
         public async ValueTask<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
         {
@@ -491,16 +516,27 @@ namespace SysWeaver.MicroService
             if (!SystemLock.TryGet("SysWeaver.MediaUpload." + fileName.ToLower(), out var ldisp))
                 return FileRepoTools.OperationInProgress;
             using var __y = ldisp;
-            if (decoder != null)
+            if (ChunkCache.TryGet(file.ChunkCacheKey, out var chunks))
             {
-                if (SavePreCompressed)
+                if (!await ContentDependentChunking.AddChunkList(s).ConfigureAwait(false))
+                    return new FileUploadResult(FileUploadStatus.InvalidFile);
+                await s.DisposeAsync().ConfigureAwait(false);
+                s = ContentDependentChunking.OpenChunkStream(chunks);
+            }
+            else
+            {
+                if (decoder != null)
                 {
-                    fileName = String.Join('.', fileName, decoder.FileExtensions.First());
-                }else
-                {
-                    var raw = await decoder.GetDecompressedAsync(s).ConfigureAwait(false);
-                    await s.DisposeAsync().ConfigureAwait(false);
-                    s = raw.AsStream();
+                    if (SavePreCompressed)
+                    {
+                        fileName = String.Join('.', fileName, decoder.FileExtensions.First());
+                    }
+                    else
+                    {
+                        var raw = await decoder.GetDecompressedAsync(s).ConfigureAwait(false);
+                        await s.DisposeAsync().ConfigureAwait(false);
+                        s = raw.AsStream();
+                    }
                 }
             }
             var prev = new FileInfo(fileName);

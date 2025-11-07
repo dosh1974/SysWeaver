@@ -13,6 +13,11 @@ namespace SysWeaver.FolderSync
         /// The files to upload
         /// </summary>
         public String[] Files;
+
+        /// <summary>
+        /// If non-null and the CdcProps.Default.Key matches this string, prefer to use Cdc for upload
+        /// </summary>
+        public String Cdc;
     }
 
     public sealed class FolderSyncResponseAudit
@@ -26,6 +31,12 @@ namespace SysWeaver.FolderSync
         /// The number of files to upload
         /// </summary>
         public long FileCount;
+
+        /// <summary>
+        /// If non-null and the CdcProps.Default.Key matches this string, prefer to use Cdc for upload
+        /// </summary>
+        public String Cdc;
+
     }
 
 }

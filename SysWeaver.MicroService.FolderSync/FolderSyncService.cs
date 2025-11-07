@@ -128,7 +128,7 @@ namespace SysWeaver.MicroService
 
 
 
-        public void AddFolder(FolderSyncFolder x)
+        public String AddFolder(FolderSyncFolder x)
         {
             var folders = Folders;
             var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
@@ -149,6 +149,7 @@ namespace SysWeaver.MicroService
             var fm = FileMod;
             if (fm != null)
                 fm.AddFolder(folder.ModFolder);
+            return path;
         }
 
         readonly FileHttpServerModule FileMod;
@@ -231,6 +232,8 @@ namespace SysWeaver.MicroService
 
         sealed class Folder
         {
+
+
             /// <summary>
             /// Optional commands to execute before deactivating (before old folder is renamed to back-up name)
             /// </summary>
@@ -241,8 +244,14 @@ namespace SysWeaver.MicroService
             /// </summary>
             public readonly String[] OnActivate;
 
-            public Func<String, String, ValueTask<Exception>> OnActivateAsync;
-            public Func<String, String, ValueTask<Exception>> OnDeactivateAsync;
+            /// <summary>
+            /// Optional commands to execute when a new folder is uploaded
+            /// </summary>
+            public readonly String[] OnNewFolder;
+
+            public FolderSyncFolder.ActivationHandler OnActivateAsync;
+            public FolderSyncFolder.ActivationHandler OnDeactivateAsync;
+            public FolderSyncFolder.ActivationHandler OnNewFolderAsync;
 
             public readonly String LockName;
             public readonly String Name;
@@ -250,6 +259,12 @@ namespace SysWeaver.MicroService
             public readonly IReadOnlyList<String> Auth;
             public TimeSpan RemoveAfter;
             public readonly FileHttpServerModuleFolder ModFolder;
+
+            /// <summary>
+            /// If true, folder versions are compressed.
+            /// Activating (swapping) is slower but disc usage is reduced a lot (especially for many versions).
+            /// </summary>
+            public readonly bool Compress;
 
             static String[] ParseCommands(String s, IReadOnlyDictionary<String, String> extra)
             {
@@ -288,8 +303,12 @@ namespace SysWeaver.MicroService
                 x.Add("targetdir", Path.GetDirectoryName(tp));
                 OnActivate = ParseCommands(fs.OnActivate, x);
                 OnDeactivate = ParseCommands(fs.OnDeactivate, x);
+                OnNewFolder = fs.OnNewFolder?.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
                 OnActivateAsync = fs.OnActivateAsync;
                 OnDeactivateAsync = fs.OnDeactivateAsync;
+                OnNewFolderAsync = fs.OnNewFolderAsync;
+                Compress = fs.Compress;
             }
         }
 
@@ -389,39 +408,45 @@ namespace SysWeaver.MicroService
             return dir;
         }
 
-        async ValueTask RunCommands(Folder folder, String[] commands)
+        const String LogPrefix = "[FolderSync] ";
+
+        async ValueTask<int> RunCommand(String cmd)
         {
             var m = Manager;
-            foreach (var cmd in commands)
+            m.AddMessage(String.Concat(LogPrefix, "Running command: \"", cmd, "\":"));
+            using var _ = m.Tab();
+            try
             {
-                m.AddMessage("Running command: \"" + cmd + "\":");
-                using var _ = m.Tab();
-                try
+                var exe = SystemHelper.GetCommandAndArgs(out var args, cmd);
+                return await ExternalProcess.RunAsync(exe, args, (text, err) =>
                 {
-                    var exe = SystemHelper.GetCommandAndArgs(out var args, cmd);
-                    await ExternalProcess.RunAsync(exe, args, (text, err) =>
-                    {
-                        m.AddMessage(text, err ? MessageLevels.Warning : MessageLevels.Info);
-                    }).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    m.AddMessage("Failed to run!", ex, MessageLevels.Warning);
-                }
+                    m.AddMessage(LogPrefix + text, err ? MessageLevels.Warning : MessageLevels.Info);
+                }).ConfigureAwait(false);
             }
+            catch (Exception ex)
+            {
+                m.AddMessage(LogPrefix + "Failed to run!", ex, MessageLevels.Warning);
+            }
+            return -42;
+        }
+
+        async ValueTask RunCommands(String[] commands)
+        {
+            foreach (var cmd in commands)
+                await RunCommand(cmd).ConfigureAwait(false);
         }
 
         async ValueTask<Exception> InternalActivate(Folder folder, String target, String from, HttpServerRequest context)
         {
             var cmd = folder.OnDeactivate;
             if (cmd != null)
-                await RunCommands(folder, cmd).ConfigureAwait(false);
+                await RunCommands(cmd).ConfigureAwait(false);
             var a = folder.OnDeactivateAsync;
             if (a != null)
             {
                 try
                 {
-                    var ex3 = await a(folder.Name, folder.DestPath).ConfigureAwait(false);
+                    var ex3 = await a(folder.Name, folder.DestPath, RunCommand).ConfigureAwait(false);
                     if (ex3 != null)
                         return ex3;
                 }
@@ -435,13 +460,13 @@ namespace SysWeaver.MicroService
                 new DirectoryInfo(target).LastAccessTimeUtc = DateTime.UtcNow;
             cmd = folder.OnActivate;
             if (cmd != null)
-                await RunCommands(folder, cmd).ConfigureAwait(false);
+                await RunCommands(cmd).ConfigureAwait(false);
             a = folder.OnActivateAsync;
             if (a != null)
             {
                 try
                 {
-                    var ex3 = await a(folder.Name, folder.DestPath).ConfigureAwait(false);
+                    var ex3 = await a(folder.Name, folder.DestPath, RunCommand).ConfigureAwait(false);
                     if (ex3 != null)
                         return ex3;
                 }
@@ -478,8 +503,11 @@ namespace SysWeaver.MicroService
             {
                 FileCount = i.Files?.Length ?? 0,
                 FolderCode = i.FolderCode,
+                Cdc = i.Cdc,
             };
         }
+
+        readonly ExceptionTracker Exs = new ExceptionTracker();
 
         /// <summary>
         /// Upload a file
@@ -544,23 +572,43 @@ namespace SysWeaver.MicroService
                 dest = sync.DestPath;
                 try
                 {
-                    await WriteManifest(sync.R, dest, sync.CopyCount, sync.CopySize, sync.UploadCount, sync.UploadSize, sync.NetworkSize, sync.User, sync.Start).ConfigureAwait(false);
+                    await WriteManifest(target, sync.R, dest, sync.CopyCount, sync.CopySize, sync.UploadCount, sync.UploadSize, sync.NetworkSize, sync.User, sync.Start).ConfigureAwait(false);
                     if (sync.UseFolder)
                     {
                         var exx = await InternalActivate(target, target.DestPath, dest, context).ConfigureAwait(false);
-                        if (exx != null)
+                        if (exx == null)
+                        {
+                            Manager.AddMessage(String.Concat(LogPrefix, "Activated folder \"", target.Name, "\""));
+                        } else
+                        {
+                            Exs.OnException(exx);
+                            Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, activating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                             return false;
+                        }
                     }
                     else
                     {
                         var exx = await PathExt.TryMoveFolderAsync(dest, String.Concat(dest.TrimEnd(Path.DirectorySeparatorChar), "_", jobId)).ConfigureAwait(false);
                         if (exx == null)
+                        {
                             new DirectoryInfo(dest).LastAccessTimeUtc = DateTime.UtcNow;
-                        context.Server.InvalidateCache();
-                        if (exx != null)
+                            context.Server.InvalidateCache();
+                            Manager.AddMessage(String.Concat(LogPrefix, "Synced folder \"", target.Name, "\""));
+                        }
+                        else
+                        {
+                            Exs.OnException(exx);
+                            Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, creating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                             return false;
+                        }
                     }
                     return true;
+                }
+                catch (Exception exx)
+                {
+                    Exs.OnException(exx);
+                    Manager.AddMessage(String.Concat(LogPrefix, "Sync failed for folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                    throw;
                 }
                 finally
                 {
@@ -568,10 +616,12 @@ namespace SysWeaver.MicroService
                     sync.D.Dispose();
                 }
             }
-            catch
+            catch (Exception exx)
             {
                 await PathExt.TryDeleteFileAsync(dest).ConfigureAwait(false);
                 Interlocked.Exchange(ref file.InProgress, 0);
+                Exs.OnException(exx);
+                Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, fo folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                 throw;
             }
             finally
@@ -619,7 +669,12 @@ namespace SysWeaver.MicroService
                 throw new Exception("Can't activate a temporary folder!");
             var ex = await InternalActivate(folder, path, di.FullName, context).ConfigureAwait(false);
             if (ex != null)
+            {
+                Exs.OnException(ex);
+                Manager.AddMessage(String.Concat(LogPrefix, "Failed to activate folder \"", folder.Name, "\""), ex, MessageLevels.Warning);
                 throw ex;
+            }
+            Manager.AddMessage(String.Concat(LogPrefix, "Activated folder \"", folder.Name, "\""));
             return true;
         }
 
@@ -675,7 +730,7 @@ namespace SysWeaver.MicroService
         static String V(long value) => value.ToString("### ### ### ### ### ### ### ##0").TrimStart();
 
 
-        Task WriteManifest(FolderSyncRequest r, String folder, long copyCount, long copySize, long uploadCount, long uploadSize, long networkSize, String user, DateTime start)
+        async ValueTask WriteManifest(Folder ff, FolderSyncRequest r, String folder, long copyCount, long copySize, long uploadCount, long uploadSize, long networkSize, String user, DateTime start)
         {
             var end = DateTime.UtcNow;
             var duration = end - start;
@@ -698,7 +753,33 @@ namespace SysWeaver.MicroService
             var c = r.Comment;
             if (!String.IsNullOrEmpty(c))
                 b.AppendLine("Comment :").AppendLine(c);
-            return File.WriteAllTextAsync(Path.Combine(folder, ManifestName), b.ToString());
+            await File.WriteAllTextAsync(Path.Combine(folder, ManifestName), b.ToString()).ConfigureAwait(false);
+
+            var cmd = ff.OnNewFolder;
+            if (cmd != null)
+            {
+                var x = new Dictionary<String, String>(StringComparer.Ordinal);
+                x.Add("name", ff.Name);
+                x.Add("target", folder);
+                x.Add("targetname", Path.GetFileName(folder));
+                x.Add("targetdir", Path.GetDirectoryName(folder));
+                var rcmd = cmd.Convert(c => PathTemplate.Resolve(c, x));
+                await RunCommands(rcmd).ConfigureAwait(false);
+            }
+            var a = ff.OnNewFolderAsync;
+            if (a != null)
+            {
+                try
+                {
+                    var ex3 = await a(ff.Name, folder, RunCommand).ConfigureAwait(false);
+                    if (ex3 != null)
+                        Exs.OnException(ex3);
+                }
+                catch (Exception ex2)
+                {
+                    Exs.OnException(ex2);
+                }
+            }
         }
 
 
@@ -718,16 +799,16 @@ namespace SysWeaver.MicroService
         {
             DateTime start = DateTime.UtcNow;
             var folderName = r.Folder.FastToLower();
-            if (!Folders.TryGetValue(folderName, out var folder))
+            if (!Folders.TryGetValue(folderName, out var target))
                 throw new Exception("Unknown folder id");
-            if (!context.Session.IsValid(folder.Auth))
+            if (!context.Session.IsValid(target.Auth))
                 throw new Exception("Not authorized!");
-            if (!SystemLock.TryGet(folder.LockName, out var lck))
+            if (!SystemLock.TryGet(target.LockName, out var lck))
                 throw new Exception("A folder sync is already in progress!");
             String newFolderName = null;
             try
             { 
-                var dest = folder.DestPath;
+                var dest = target.DestPath;
                 ConcurrentDictionary<String, FileSync> upload = new (StringComparer.Ordinal);
                 ConcurrentDictionary<String, int> copy = new (StringComparer.Ordinal);
                 ConcurrentDictionary<String, int> all = new(StringComparer.Ordinal);
@@ -798,31 +879,46 @@ namespace SysWeaver.MicroService
                 }
                 if (upload.Count <= 0)
                 {
-                    await WriteManifest(r, newFolderName, copy.Count, copySize, 0, 0, 0, context.Session.Auth?.Username, start).ConfigureAwait(false);
+                    await WriteManifest(target, r, newFolderName, copy.Count, copySize, 0, 0, 0, context.Session.Auth?.Username, start).ConfigureAwait(false);
                     if (r.UseFolder)
                     {
-                        var exx = await InternalActivate(folder, dest, newFolderName, context).ConfigureAwait(false);
-                        if (exx != null)
+                        var exx = await InternalActivate(target, dest, newFolderName, context).ConfigureAwait(false);
+                        if (exx == null)
+                        {
+                            Manager.AddMessage(String.Concat(LogPrefix, "Activated folder \"", target.Name, "\""));
+                        }
+                        else
+                        {
+                            Exs.OnException(exx);
+                            Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, activating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                             throw exx;
+                        }
                     }
                     else
                     {
                         var exx = await PathExt.TryMoveFolderAsync(newFolderName, String.Concat(dest.TrimEnd(Path.DirectorySeparatorChar), "_", jobId)).ConfigureAwait(false);
                         if (exx == null)
+                        { 
                             new DirectoryInfo(newFolderName).LastAccessTimeUtc = DateTime.UtcNow;
-                        context.Server.InvalidateCache();
-                        if (exx != null)
+                            context.Server.InvalidateCache();
+                            Manager.AddMessage(String.Concat(LogPrefix, "Synced folder \"", target.Name, "\""));
+                        }
+                        else
+                        {
+                            Exs.OnException(exx);
+                            Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, creating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                             throw exx;
+                        }
                     }
                     return new FolderSyncResponse();
                 }
-                SyncJobs.TryAdd(jobId, new Sync(r, upload.Values, newFolderName, folder, r.UseFolder, lck, copy.Count, copySize, context.Session.Auth?.Username, start));
+                SyncJobs.TryAdd(jobId, new Sync(r, upload.Values, newFolderName, target, r.UseFolder, lck, copy.Count, copySize, context.Session.Auth?.Username, start));
                 lck = null;
                 return new FolderSyncResponse
                 {
                     FolderCode = jobId,
                     Files = upload.Values.Select(x => x.Name).ToArray(),
-                   
+                    Cdc = target.Compress ? CdcProps.Default.Key : null,
                 };
             }
             catch

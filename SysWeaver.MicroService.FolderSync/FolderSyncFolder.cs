@@ -3,6 +3,10 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.MicroService
 {
+
+
+
+
     public sealed class FolderSyncFolder
     {
         /// <summary>
@@ -35,8 +39,21 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String OnActivate;
 
+        /// <summary>
+        /// Optional commands to execute when a new folder is uploaded
+        /// </summary>
+        public String OnNewFolder;
 
-        public Func<String, String, ValueTask<Exception>> OnActivateAsync;
-        public Func<String, String, ValueTask<Exception>> OnDeactivateAsync;
+        /// <summary>
+        /// If true, folder versions are compressed.
+        /// Activating (swapping) is slower but disc usage is reduced a lot (especially for many versions).
+        /// </summary>
+        public bool Compress;
+
+        public delegate ValueTask<Exception> ActivationHandler(String name, String folderDiscPath, Func<String, ValueTask<int>> commandRunner);
+
+        public ActivationHandler OnActivateAsync;
+        public ActivationHandler OnDeactivateAsync;
+        public ActivationHandler OnNewFolderAsync;
     }
 }

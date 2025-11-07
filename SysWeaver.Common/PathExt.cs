@@ -374,6 +374,52 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Try to copy a file.
+        /// If it fails, retry at least N times.
+        /// </summary>
+        /// <param name="source">The file to copy</param>
+        /// <param name="dest">The file to overwrite or create</param>
+        /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
+        /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+        /// <returns>Null if the file was copied successfully, else the exception</returns>
+        public static Exception TryCopyFile(String source, String dest, int retryCount = 10, int delayInMs = 100)
+        {
+            try
+            {
+                Retry.Op(() => File.Copy(source, dest, true), retryCount, delayInMs);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return ex;
+            }
+        }
+
+        /// <summary>
+        /// Try to copy a file.
+        /// If it fails, retry at least N times.
+        /// </summary>
+        /// <param name="source">The file to copy</param>
+        /// <param name="dest">The file to overwrite or create</param>
+        /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
+        /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+        /// <returns>Null if the file was copied successfully, else the exception</returns>
+        public static async Task<Exception> TryCopyFileAsync(String source, String dest, int retryCount = 10, int delayInMs = 100)
+        {
+            try
+            {
+                await Retry.OpAsync(() => File.Copy(source, dest, true), retryCount, delayInMs).ConfigureAwait(false);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return ex;
+            }
+        }
+
+
+
 
         /// <summary>
         /// Delete a directory if it exists.

@@ -14,6 +14,12 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String Url;
 
+        /// <summary>
+        /// If chunks was provided, this is a list of missing chunks
+        /// </summary>
+        public Byte[] Chunks;
+
+
         public FileUploadResult()
         {
         }
