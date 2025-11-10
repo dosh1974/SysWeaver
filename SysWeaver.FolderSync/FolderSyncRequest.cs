@@ -20,6 +20,11 @@ namespace SysWeaver.FolderSync
         public bool UseFolder;
 
         /// <summary>
+        /// Populate with CdcProps.Default.Key if Cdc is requested
+        /// </summary>
+        public String Cdc;
+
+        /// <summary>
         /// The source machine name
         /// </summary>
         public String Machine;

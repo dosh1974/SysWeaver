@@ -995,6 +995,28 @@ namespace SysWeaver
         }
 
 
+        public static async ValueTask<bool> TryWriteChunkList(Stream destStream, IEnumerable<ReadOnlyMemory<byte>> chunkEnum, CdcProps props = null)
+        {
+            props = props ?? CdcProps.Default;
+            var hashSize = props.HashSize;
+            foreach (var chunks in chunkEnum)
+            {
+                var l = chunks.Length;
+                for (int i = 0; i < l; i += hashSize)
+                {
+                    var hashMem = chunks.Slice(i, hashSize);
+                    using var s = TryOpenCompressedChunk(hashMem.Span, props);
+                    if (s == null)
+                        return false;
+                    var len = s.Length;
+                    WriteVar(destStream, (ulong)len);
+                    await destStream.WriteAsync(hashMem).ConfigureAwait(false);
+                    await s.CopyToAsync(destStream).ConfigureAwait(false);
+                }
+            }
+            return true;
+        }
+
         /// <summary>
         /// Open a series of chunks as a single stream
         /// </summary>

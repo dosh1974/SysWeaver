@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -19,14 +20,17 @@ namespace SysWeaver.FolderSync
     {
         public FolderSyncer(FolderSyncerParams p)
         {
-            var server = p.Server.TrimEnd('/') + "/FolderSync/";
-
+            var serverBase = p.Server.TrimEnd('/');
             var maxThreads = p.MaxConcurrency;
             if (maxThreads <= 0)
                 maxThreads = Math.Max(1, Environment.ProcessorCount + maxThreads);
             Comment = p.Comment;
             MaxThreads = maxThreads;
-            Server = server;
+
+            var server = serverBase + "/FolderSync/";
+            UploadBase = server;
+            UploadCdcBase = serverBase + "/FolderSyncCdc/";
+            UploadChunkBase = serverBase + "/FolderSyncCdcChunks/";
             var rrc = new RemoteConnection
             {
                 User = p.User,
@@ -45,7 +49,9 @@ namespace SysWeaver.FolderSync
 
         readonly String Comment;
         readonly int MaxThreads;
-        readonly String Server;
+        readonly String UploadBase;
+        readonly String UploadCdcBase;
+        readonly String UploadChunkBase;
         readonly IFolderSyncApi Api;
 
         static readonly ICompType Comp = CompManager.GetFromHttp("br");
@@ -101,11 +107,16 @@ namespace SysWeaver.FolderSync
         /// <param name="sourceFolders">The local source folder. Multiple folders can be specified separated by a ';'</param>
         /// <param name="destName">The name of the remote folder</param>
         /// <param name="switchTo">If true, the newly synched folder will be used when updated</param>
+        /// <param name="useCdc">If true, try to use Content Dependent Chunking</param>
+        /// <param name="ignore">An optional callback used to ignore some files</param>
         /// <param name="onEvent">An optional callback used to display what's going on</param>
         /// <returns>Sync results</returns>
         /// <exception cref="Exception"></exception>
-        public async ValueTask<FolderSyncResult> SyncFolder(String sourceFolders, String destName, bool switchTo, Action<FolderSyncEvents, String> onEvent = null )
+        public async ValueTask<FolderSyncResult> SyncFolder(String sourceFolders, String destName, bool switchTo = false, bool useCdc = true, Func<String, bool> ignore = null, Action<FolderSyncEvents, String> onEvent = null)
         {
+            //var props = useCdc ? new CdcProps(folders: [@"D:\Temp\CdcSyncTest"]) : null;
+            var props = useCdc ? CdcProps.Default : null;
+            //var throttler = new AsyncLock(1);
             var throttler = new AsyncLock(MaxThreads);
             Dictionary<String, Tuple<String, FolderSyncFile>> files = new (StringComparer.Ordinal);
             long sourceBytes = 0;
@@ -118,6 +129,24 @@ namespace SysWeaver.FolderSync
                 var sourceFolder = di.FullName;
                 var sfl = sourceFolder.Length + 1;
                 var srcFiles = Directory.GetFiles(sourceFolder, "*", SearchOption.AllDirectories);
+                var l = srcFiles.Length;
+                if (ignore != null)
+                {
+                    int o = 0;
+                    for (int i = 0; i < l; i++)
+                    {
+                        var n = srcFiles[i];
+                        if (ignore(n))
+                            continue;
+                        srcFiles[o] = n;
+                        ++o;
+                    }
+                    if (o != l)
+                    {
+                        l = o;
+                        Array.Resize(ref srcFiles, l);
+                    }
+                }
                 sourceFileCount += srcFiles.Length;
                 foreach (var f in await srcFiles.ConvertAsyncValue(async x =>
                 {
@@ -142,6 +171,7 @@ namespace SysWeaver.FolderSync
                 Folder = destName,
                 Files = files.Values.OrderBy(x => x.Item2.Name).Select(x => x.Item2).ToArray(),
                 UseFolder = switchTo,
+                Cdc = useCdc ? props.Key : null,
                 Comment = Comment,
                 Machine = Environment.MachineName,
             }).ConfigureAwait(false);
@@ -154,64 +184,192 @@ namespace SysWeaver.FolderSync
                     Errors = [new Exception("Folder sync request failed")]
                 };
             //  Already synced
-            if (res.Files == null)
+            var uploadFiles = res.Files;
+            if (uploadFiles == null)
                 return new FolderSyncResult
                 {
                     SourceFiles = sourceFileCount,
                     SourceBytes = sourceBytes,
                 };
             onEvent?.Invoke(FolderSyncEvents.Checked, sourceFolders);
-            var destPrefix = String.Concat(Server, res.FolderCode, '/');
             var client = (Api as RemoteConnectionBase).Client;
             long fileCount = 0;
             long fileSize = 0;
             long payloadSize = 0;
-            var uncompressible = Uncompressible;
-            var exceptions = await res.Files.ConvertAsyncValue(async x =>
+            useCdc = res.Cdc.FastEquals(props.Key);
+            if (useCdc)
             {
-                //  Upload each file in paralell
-                try
+                long chunkCount = 0;
+                long newChunkCount = 0;
+                long newChunkSize = 0;
+                var destPrefix = String.Concat(UploadCdcBase, res.FolderCode, '/');
+                //  Send chunk information and gather unknown chunks
+                var xfileCount = uploadFiles.Length;
+                ConcurrentDictionary<ReadOnlyMemory<Byte>, int> uniqueChunks = new(ReadOnlyMemoryComparer.GetEqualityComparer<Byte>());
+                var hashSize = props.HashSize;
+                var exceptions = await uploadFiles.ConvertAsyncValue(async x =>
                 {
-                    using var _ = await throttler.Lock().ConfigureAwait(false);
-                    var srcFile = files[x.FastToLower()].Item1;
-                    var destFile = destPrefix + x.Replace('\\', '/');
-                    var fi = new FileInfo(srcFile);
-                    bool compress = !uncompressible.Contains(new FileInfo(srcFile).Extension.FastToLower());
-                    using var s = compress ? (await CompressedFile.OpenAsync(srcFile, Comp, CompEncoderLevels.Best).ConfigureAwait(false)) : new FileStream(srcFile, FileMode.Open, FileAccess.Read, FileShare.Read);
-                    using var content = new StreamContent(s);
-                    if (compress)
-                        content.Headers.ContentEncoding.Add(Comp.HttpCode);
-                    var res = await client.PostAsync(destFile, content).ConfigureAwait(false);
-                    var data = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    var ct = res.Content.Headers.ContentType.MediaType;
+                    try
+                    {
+
+                        using var _ = await throttler.Lock().ConfigureAwait(false);
+                        var srcFile = files[x.FastToLower()].Item1;
+                        var fi = new FileInfo(srcFile);
+                        var destFile = destPrefix + x.Replace('\\', '/');
+                        Byte[] chunks;
+                        using (var fs = fi.OpenRead())
+                            chunks = await ContentDependentChunking.Cut(fs, false, props).ConfigureAwait(false);
+                        using var content = new ByteArrayContent(chunks);
+                        var res = await client.PostAsync(destFile, content).ConfigureAwait(false);
+                        var data = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                        var ct = res.Content.Headers.ContentType.MediaType;
+                        if (ct.FastStartsWith(MimeTypeMap.Data))
+                        {
+                            var chunkMem = chunks.AsMemory();
+                            var l = data.Length;
+                            for (int i = 0; i < l; ++ i)
+                            {
+                                int mask = data[i];
+                                int bc = i << 3;
+                                for (int j = 0; mask != 0; ++ j, mask = mask >> 1)
+                                {
+                                    if ((mask & 1) == 0)
+                                        continue;
+                                    int chunk = bc + j;
+                                    uniqueChunks.TryAdd(chunkMem.Slice(chunk * hashSize, hashSize), 0);
+                                }
+                            }
+                            Interlocked.Increment(ref fileCount);
+                            Interlocked.Add(ref fileSize, fi.Length);
+                            Interlocked.Add(ref payloadSize, chunks.Length);
+                            Interlocked.Add(ref chunkCount, chunks.Length / hashSize);
+                            onEvent?.Invoke(FolderSyncEvents.Uploaded, x);
+                            return null;
+                        }
+                        return new Exception(Encoding.UTF8.GetString(data));
+                    }
+                    catch (Exception ex)
+                    {
+                        return ex;
+                    }
+                }).ConfigureAwait(false);
+                var t = exceptions.Where(x => x != null).ToArray();
+                if (t.Length > 0)
+                    return new FolderSyncResult
+                    {
+                        SourceFiles = sourceFileCount,
+                        SourceBytes = sourceBytes,
+                        Errors = t
+                    };
+                //  Send missing chunks
+                var ucc = uniqueChunks.Count;
+                if (ucc > 0)
+                {
+                    Interlocked.Add(ref newChunkCount, ucc);
+                    ReadOnlyMemory<Byte> mem;
+                    using (var ms = new MemoryStream(ucc * CdcProps.Default.AverageSize + 4096))
+                    {
+                        if (!await ContentDependentChunking.TryWriteChunkList(ms, uniqueChunks.Keys, props).ConfigureAwait(false))
+                            throw new Exception("Failed to write chunks!");
+                        mem = ms.GetBuffer().AsMemory().Slice(0, (int)ms.Position);
+                    }
+                    var destFile = String.Concat(UploadChunkBase, res.FolderCode, "/Data");
+                    String data;
+                    String ct;
+                    using (var content = new ReadOnlyMemoryContent(mem))
+                    {
+                        var res2 = await client.PostAsync(destFile, content).ConfigureAwait(false);
+                        data = await res2.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        ct = res2.Content.Headers.ContentType.MediaType;
+                    }
                     if (ct.FastStartsWith("application/json"))
                     {
+                        Interlocked.Add(ref newChunkSize, mem.Length);
                         if (!data.FastEquals("true"))
-                            return new Exception("Failed to upload \"" + x + "\"");
-                        Interlocked.Increment(ref fileCount);
-                        Interlocked.Add(ref fileSize, fi.Length);
-                        Interlocked.Add(ref payloadSize, s.Position);
-                        onEvent?.Invoke(FolderSyncEvents.Uploaded, x);
+                            return new FolderSyncResult
+                            {
+                                SourceFiles = sourceFileCount,
+                                SourceBytes = sourceBytes,
+                                Errors = [new Exception("Failed to upload missing chunks!")],
+                            };
+                        Interlocked.Add(ref payloadSize, mem.Length);
                     }
                     else
                     {
-                        return new Exception(data);
+                        return new FolderSyncResult
+                        {
+                            SourceFiles = sourceFileCount,
+                            SourceBytes = sourceBytes,
+                            Errors = [new Exception(data)],
+                        };
                     }
                 }
-                catch (Exception ex)
-                {
-                    return ex;
-                }
-                return null;
-            }).ConfigureAwait(false);
-            var t = exceptions.Where(x => x != null).ToArray();
-            if (t.Length > 0)
                 return new FolderSyncResult
                 {
                     SourceFiles = sourceFileCount,
                     SourceBytes = sourceBytes,
-                    Errors = t
+                    Uploaded = fileCount,
+                    UploadedSourceBytes = fileSize,
+                    UploadedNetworkBytes = payloadSize,
+                    ChunkCount = chunkCount,
+                    NewChunkCount = newChunkCount,
+                    NewChunkSize = newChunkSize,
                 };
+
+            }
+            else
+            {
+                var destPrefix = String.Concat(UploadBase, res.FolderCode, '/');
+                var uncompressible = Uncompressible;
+                var exceptions = await uploadFiles.ConvertAsyncValue(async x =>
+                {
+                    //  Upload each file in paralell
+                    try
+                    {
+                        using var _ = await throttler.Lock().ConfigureAwait(false);
+                        var srcFile = files[x.FastToLower()].Item1;
+                        var destFile = destPrefix + x.Replace('\\', '/');
+
+
+
+                        var fi = new FileInfo(srcFile);
+                        bool compress = !uncompressible.Contains(new FileInfo(srcFile).Extension.FastToLower());
+                        using var s = compress ? (await CompressedFile.OpenAsync(srcFile, Comp, CompEncoderLevels.Best).ConfigureAwait(false)) : new FileStream(srcFile, FileMode.Open, FileAccess.Read, FileShare.Read);
+                        using var content = new StreamContent(s);
+                        if (compress)
+                            content.Headers.ContentEncoding.Add(Comp.HttpCode);
+                        var res = await client.PostAsync(destFile, content).ConfigureAwait(false);
+                        var data = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        var ct = res.Content.Headers.ContentType.MediaType;
+                        if (ct.FastStartsWith("application/json"))
+                        {
+                            if (!data.FastEquals("true"))
+                                return new Exception("Failed to upload \"" + x + "\"");
+                            Interlocked.Increment(ref fileCount);
+                            Interlocked.Add(ref fileSize, fi.Length);
+                            Interlocked.Add(ref payloadSize, s.Position);
+                            onEvent?.Invoke(FolderSyncEvents.Uploaded, x);
+                        }
+                        else
+                        {
+                            return new Exception(data);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        return ex;
+                    }
+                    return null;
+                }).ConfigureAwait(false);
+                var t = exceptions.Where(x => x != null).ToArray();
+                if (t.Length > 0)
+                    return new FolderSyncResult
+                    {
+                        SourceFiles = sourceFileCount,
+                        SourceBytes = sourceBytes,
+                        Errors = t
+                    };
+            }
             return new FolderSyncResult
             {
                 SourceFiles = sourceFileCount,

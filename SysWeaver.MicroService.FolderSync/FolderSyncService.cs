@@ -74,11 +74,29 @@ namespace SysWeaver.MicroService
             var x = context.LocalUrl.Split('/');
             var len = x.Length;
             if (len < 3)
+            {
+                context.SetResMime(MimeTypeMap.Json);
                 return FalseValue;
+            }
             var jobId = x[1];
             var filename = String.Join('/', x, 2, len - 2);
-            var res = await UploadFile(jobId, filename, context).ConfigureAwait(false);
-            return res ? TrueValue : FalseValue;
+            var u = x[0];
+            if (u.FastEquals("FolderSync"))
+            {
+                var res = await UploadFile(jobId, filename, context).ConfigureAwait(false);
+                context.SetResMime(MimeTypeMap.Json);
+                return res ? TrueValue : FalseValue;
+            }
+            if (u.FastEquals("FolderSyncCdc"))
+            {
+                context.SetResMime(MimeTypeMap.Data);
+                return await UploadCdcFile(jobId, filename, context).ConfigureAwait(false);
+            }
+
+            var res2 = await UploadCdcChunks(jobId, context).ConfigureAwait(false);
+            context.SetResMime(MimeTypeMap.Json);
+            return res2 ? TrueValue : FalseValue;
+
         }
 
         static readonly ReadOnlyMemory<byte> TrueValue = Encoding.UTF8.GetBytes("true");
@@ -88,7 +106,12 @@ namespace SysWeaver.MicroService
 
         #region IHttpServerModule
 
-        public String[] OnlyForPrefixes { get; init; } = ["FolderSync/"];
+        public String[] OnlyForPrefixes { get; init; } = 
+        [
+            "FolderSync/",
+            "FolderSyncCdc/",
+            "FolderSyncCdcChunks/",
+        ];
 
 
         public IHttpRequestHandler Handler(HttpServerRequest context)
@@ -134,6 +157,7 @@ namespace SysWeaver.MicroService
             var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
             var name = x.Name;
             PathExt.EnsureFolderExist(path);
+            PathExt.AllowAllAccess(path);
             path = new DirectoryInfo(path).FullName;
             if (String.IsNullOrEmpty(name))
                 name = Path.GetFileName(path);
@@ -327,6 +351,9 @@ namespace SysWeaver.MicroService
                 Name = name;
                 LastModified = lastModified;
             }
+
+            public ReadOnlyMemory<Byte> CdcChunks;
+
         }
 
 
@@ -371,6 +398,20 @@ namespace SysWeaver.MicroService
             public long UploadSize;
             public long NetworkSize;
 
+            /// <summary>
+            /// Number of file chunks sent (all chunks in all missing files)
+            /// </summary>
+            public long ChunkCount = 0;
+            /// <summary>
+            /// Number of new chunks that was sent (all missing chunks in all missing files)
+            /// </summary>
+            public long NewChunkCount = 0;
+            /// <summary>
+            /// Total number of compressed bytes that was sent (all missing chunk data in all missing files)
+            /// </summary>
+            public long NewChunkSize = 0;
+
+
             public Sync(FolderSyncRequest r, IEnumerable<FileSync> files, string destPath, Folder target, bool activate, IDisposable d, long copyCount, long copySize, String user, DateTime start)
             {
                 R = r;
@@ -395,7 +436,7 @@ namespace SysWeaver.MicroService
 
 
 
-        readonly ConcurrentDictionary<String, Sync> SyncJobs = new ConcurrentDictionary<string, Sync>();
+        readonly ConcurrentDictionary<String, Sync> SyncJobs = new ConcurrentDictionary<string, Sync>(StringComparer.Ordinal);
 
 
 
@@ -519,16 +560,9 @@ namespace SysWeaver.MicroService
         /// <exception cref="Exception"></exception>
         async Task<bool> UploadFile(String jobId, String filename, HttpServerRequest context)
         {
-            ICompType cmp = null;
-            var compression = context.GetReqHeader("Content-Encoding");
-            if (!String.IsNullOrEmpty(compression))
-            {
-                cmp = CompManager.GetFromHttp(compression);
-                if (cmp == null)
-                    throw new Exception("Unsupported compression method");
-            }
             if (!SyncJobs.TryGetValue(jobId, out Sync sync))
                 throw new Exception("Invalid sync job!");
+            sync.Touch();
             var target = sync.Target;
             if (!context.Session.IsValid(target.Auth))
                 throw new Exception("Not authorized!");
@@ -537,7 +571,15 @@ namespace SysWeaver.MicroService
                 throw new Exception("Invalid filename!");
             if (Interlocked.CompareExchange(ref file.InProgress, 1, 0) != 0)
                 throw new Exception("File is already being uploaded!");
-            sync.Touch();
+
+            ICompType cmp = null;
+            var compression = context.GetReqHeader("Content-Encoding");
+            if (!String.IsNullOrEmpty(compression))
+            {
+                cmp = CompManager.GetFromHttp(compression);
+                if (cmp == null)
+                    throw new Exception("Unsupported compression method");
+            }
             var data = context.InputStream;
             var dest = Path.Combine(sync.DestPath, file.Name);
             Interlocked.Increment(ref sync.FileInProgess);
@@ -569,52 +611,7 @@ namespace SysWeaver.MicroService
                     return true;
                 if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) != 0)
                     return true;
-                dest = sync.DestPath;
-                try
-                {
-                    await WriteManifest(target, sync.R, dest, sync.CopyCount, sync.CopySize, sync.UploadCount, sync.UploadSize, sync.NetworkSize, sync.User, sync.Start).ConfigureAwait(false);
-                    if (sync.UseFolder)
-                    {
-                        var exx = await InternalActivate(target, target.DestPath, dest, context).ConfigureAwait(false);
-                        if (exx == null)
-                        {
-                            Manager.AddMessage(String.Concat(LogPrefix, "Activated folder \"", target.Name, "\""));
-                        } else
-                        {
-                            Exs.OnException(exx);
-                            Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, activating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
-                            return false;
-                        }
-                    }
-                    else
-                    {
-                        var exx = await PathExt.TryMoveFolderAsync(dest, String.Concat(dest.TrimEnd(Path.DirectorySeparatorChar), "_", jobId)).ConfigureAwait(false);
-                        if (exx == null)
-                        {
-                            new DirectoryInfo(dest).LastAccessTimeUtc = DateTime.UtcNow;
-                            context.Server.InvalidateCache();
-                            Manager.AddMessage(String.Concat(LogPrefix, "Synced folder \"", target.Name, "\""));
-                        }
-                        else
-                        {
-                            Exs.OnException(exx);
-                            Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, creating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-                catch (Exception exx)
-                {
-                    Exs.OnException(exx);
-                    Manager.AddMessage(String.Concat(LogPrefix, "Sync failed for folder \"", target.Name, "\""), exx, MessageLevels.Warning);
-                    throw;
-                }
-                finally
-                {
-                    SyncJobs.TryRemove(jobId, out var _);
-                    sync.D.Dispose();
-                }
+                return await Finalize(jobId, sync, context).ConfigureAwait(false);
             }
             catch (Exception exx)
             {
@@ -630,6 +627,230 @@ namespace SysWeaver.MicroService
             }
         }
 
+        /// <summary>
+        /// Upload a file using Cdc chunks
+        /// </summary>
+        /// <param name="jobId"></param>
+        /// <param name="filename"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        async Task<ReadOnlyMemory<Byte>> UploadCdcFile(String jobId, String filename, HttpServerRequest context)
+        {
+            if (!SyncJobs.TryGetValue(jobId, out Sync sync))
+                throw new Exception("Invalid sync job!");
+            sync.Touch();
+            var target = sync.Target;
+            if (!context.Session.IsValid(target.Auth))
+                throw new Exception("Not authorized!");
+            var fileKey = filename.FastToLower();
+            if (!sync.Files.TryGetValue(fileKey, out var file))
+                throw new Exception("Invalid filename!");
+            if (Interlocked.CompareExchange(ref file.InProgress, 1, 0) != 0)
+                throw new Exception("File is already being uploaded!");
+            var dest = Path.Combine(sync.DestPath, file.Name);
+            Interlocked.Increment(ref sync.FileInProgess);
+            try
+            {
+                var hashData = await context.InputStream.ReadAllMemoryAsync().ConfigureAwait(false);
+                var hashDataLen = hashData.Length;
+                var hashSize = CdcProps.Default.HashSize;
+                var hashCount = hashDataLen / hashSize;
+                var missingMap = new Byte[(hashCount + 7) >> 3];
+                bool anyMissing = false;
+                int chunkIndex = 0;
+                for (int i = 0; i < hashDataLen; i += hashSize, ++chunkIndex)
+                {
+                    if (!ContentDependentChunking.ValidateChunk(hashData.Slice(i, hashSize).Span))
+                    {
+                        missingMap[chunkIndex >> 3] |= (Byte)(1 << (chunkIndex & 7));
+                        anyMissing = true;
+                        Interlocked.Increment(ref sync.NewChunkCount);
+                    }
+                }
+                Interlocked.Add(ref sync.ChunkCount, hashCount);
+                if (anyMissing)
+                {
+                    file.CdcChunks = hashData;
+                    return missingMap;
+                }
+                var ex = await PathExt.EnsureCanWriteFileAsync(dest).ConfigureAwait(false);
+                if (ex != null)
+                    throw ex;
+                using (var destStream = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    for (int i = 0; i < hashDataLen; i += hashSize)
+                    {
+                        if (!await ContentDependentChunking.TryDecompressChunk(destStream, hashData.Slice(i, hashSize).Span).ConfigureAwait(false))
+                            throw new Exception("Failed to decompress chunk!");
+                    }
+                    Interlocked.Add(ref sync.UploadSize, destStream.Position);
+                }
+                Interlocked.Add(ref sync.NetworkSize, context.ReqContentLength);
+                Interlocked.Increment(ref sync.UploadCount);
+                sync.Touch();
+                new FileInfo(dest).LastWriteTimeUtc = file.LastModified;
+                sync.Files.TryRemove(fileKey, out var __);
+                if (sync.Files.Count > 0)
+                    return ReadOnlyMemory<Byte>.Empty;
+                if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) != 0)
+                    return ReadOnlyMemory<Byte>.Empty;
+                await Finalize(jobId, sync, context).ConfigureAwait(false);
+                return ReadOnlyMemory<Byte>.Empty;
+            }
+            catch (Exception exx)
+            {
+                await PathExt.TryDeleteFileAsync(dest).ConfigureAwait(false);
+                Interlocked.Exchange(ref file.InProgress, 0);
+                Exs.OnException(exx);
+                Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, fo folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                throw;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref sync.FileInProgess);
+            }
+
+
+        }
+
+
+        /// <summary>
+        /// Upload the Cdc chunks required to create all files
+        /// </summary>
+        /// <param name="jobId"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        async Task<bool> UploadCdcChunks(String jobId, HttpServerRequest context)
+        {
+            if (!SyncJobs.TryGetValue(jobId, out Sync sync))
+                throw new Exception("Invalid sync job!");
+            sync.Touch();
+            var target = sync.Target;
+            if (!context.Session.IsValid(target.Auth))
+                throw new Exception("Not authorized!");
+            Interlocked.Increment(ref sync.FileInProgess);
+            try
+            {
+                await ContentDependentChunking.AddChunkList(context.InputStream).ConfigureAwait(false);
+                var rl = context.ReqContentLength;
+                Interlocked.Add(ref sync.NetworkSize, rl);
+                Interlocked.Add(ref sync.NewChunkSize, rl);
+                var hashSize = CdcProps.Default.HashSize;
+                var exceptions = await sync.Files.ToList().ConvertAsyncValue(async fileX =>
+                {
+                    var fileKey = fileX.Key;
+                    var file = fileX.Value;
+                    var hashData = file.CdcChunks;
+                    if (hashData.IsEmpty)
+                        return null;
+                    var dest = Path.Combine(sync.DestPath, file.Name);
+                    try
+                    {
+                        var ex = await PathExt.EnsureCanWriteFileAsync(dest).ConfigureAwait(false);
+                        if (ex != null)
+                            throw ex;
+                        var hashDataLen = hashData.Length;
+                        using (var destStream = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            for (int i = 0; i < hashDataLen; i += hashSize)
+                            {
+                                if (!await ContentDependentChunking.TryDecompressChunk(destStream, hashData.Slice(i, hashSize).Span).ConfigureAwait(false))
+                                    return new Exception("Failed to decompress chunk!");
+                            }
+                            Interlocked.Add(ref sync.UploadSize, destStream.Position);
+                        }
+                        new FileInfo(dest).LastWriteTimeUtc = file.LastModified;
+                    }
+                    catch (Exception exx)
+                    {
+                        await PathExt.TryDeleteFileAsync(dest).ConfigureAwait(false);
+                        Interlocked.Exchange(ref file.InProgress, 0);
+                        Exs.OnException(exx);
+                        Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, Cdc to folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                        return exx;
+                    }
+                    Interlocked.Increment(ref sync.UploadCount);
+                    sync.Files.TryRemove(fileKey, out var __);
+                    return null;
+                }).ConfigureAwait(false);
+                sync.Touch();
+                foreach (var e in exceptions)
+                    if (e != null)
+                        throw e;
+                if (sync.Files.Count > 0)
+                    return true;
+                if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) != 0)
+                    return true;
+                await Finalize(jobId, sync, context).ConfigureAwait(false);
+                return true;
+            }
+            catch (Exception exx)
+            {
+                Exs.OnException(exx);
+                Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, to folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                throw;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref sync.FileInProgess);
+            }
+        }
+
+
+        async ValueTask<bool> Finalize(String jobId, Sync sync, HttpServerRequest context)
+        {
+            var dest = sync.DestPath;
+            var target = sync.Target;
+            try
+            {
+                await WriteManifest(target, sync.R, dest, sync.CopyCount, sync.CopySize, sync.UploadCount, sync.UploadSize, sync.NetworkSize, sync.User, sync.Start).ConfigureAwait(false);
+                if (sync.UseFolder)
+                {
+                    var exx = await InternalActivate(target, target.DestPath, dest, context).ConfigureAwait(false);
+                    if (exx == null)
+                    {
+                        Manager.AddMessage(String.Concat(LogPrefix, "Activated folder \"", target.Name, "\""));
+                    }
+                    else
+                    {
+                        Exs.OnException(exx);
+                        Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, activating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                        return false;
+                    }
+                }
+                else
+                {
+                    var exx = await PathExt.TryMoveFolderAsync(dest, String.Concat(dest.TrimEnd(Path.DirectorySeparatorChar), "_", jobId)).ConfigureAwait(false);
+                    if (exx == null)
+                    {
+                        new DirectoryInfo(dest).LastAccessTimeUtc = DateTime.UtcNow;
+                        context.Server.InvalidateCache();
+                        Manager.AddMessage(String.Concat(LogPrefix, "Synced folder \"", target.Name, "\""));
+                    }
+                    else
+                    {
+                        Exs.OnException(exx);
+                        Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, creating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                        return false;
+                    }
+                }
+                return true;
+            }
+            catch (Exception exx)
+            {
+                Exs.OnException(exx);
+                Manager.AddMessage(String.Concat(LogPrefix, "Sync failed for folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                throw;
+            }
+            finally
+            {
+                SyncJobs.TryRemove(jobId, out var _);
+                sync.D.Dispose();
+            }
+
+        }
 
         /// <summary>
         /// Activate a folder
@@ -853,6 +1074,7 @@ namespace SysWeaver.MicroService
                     jobId = now.ToString(TimeFmt);
                     newFolderName = String.Concat(dest.TrimEnd(Path.DirectorySeparatorChar), "_Temp", jobId);
                     if (!Directory.Exists(newFolderName))
+                    {
                         if (!SyncJobs.ContainsKey(jobId))
                         {
                             var ex = await PathExt.EnsureFolderExistAsync(newFolderName).ConfigureAwait(false);
@@ -861,6 +1083,8 @@ namespace SysWeaver.MicroService
                             if (ret > 10)
                                 throw ex;
                         }
+                        PathExt.AllowAllAccess(newFolderName);
+                    }
                     await Task.Delay(1).ConfigureAwait(false);
                 }
                 var f = new DirectoryInfo(newFolderName);
@@ -872,6 +1096,7 @@ namespace SysWeaver.MicroService
                     {
                         var destFile = Path.Combine(newFolderName, name);
                         PathExt.EnsureFolderExist(Path.GetDirectoryName(destFile));
+                        PathExt.AllowAllAccess(newFolderName);
                         var sourceFile = Path.Combine(dest, name);
                         File.Copy(sourceFile, destFile);
                         copySize += new FileInfo(sourceFile).Length;

@@ -22,6 +22,11 @@ namespace SysWeaver.MicroService
                 s.AddFolder(f);
 
             var destFolders = PathTemplate.Resolve(String.IsNullOrEmpty(p.ServiceFolder) ? @"$(CommonApplicationData)\SysWeaver\ManagedServices" : p.ServiceFolder).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (var f in destFolders)
+            {
+                PathExt.EnsureFolderExist(f);
+                PathExt.AllowAllAccess(f);
+            }
             var ss = Services;
             foreach (var f in p.Services.Nullable())
             {
@@ -32,7 +37,11 @@ namespace SysWeaver.MicroService
                 {
                     df = Path.GetFullPath(Folders.SelectFolder(destFolders, f.Name));
                     df = Path.Combine(df, f.Name, "bin");
-                }else
+                    PathExt.EnsureFolderExist(df);
+                    PathExt.AllowAllAccess(df);
+                    PathExt.AllowAllAccess(Path.Combine(df, f.Name));
+                }
+                else
                 {
                     df = PathTemplate.Resolve(df);
                 }

@@ -11,6 +11,7 @@
     <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
     <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
     <ProjectReference Include="..\SysWeaver.Remote.Connection\SysWeaver.Remote.Connection.csproj" />
+    <ProjectReference Include="..\SysWeaver.Storage.Cdc\SysWeaver.Storage.Cdc.csproj" />
     <ProjectReference Include="..\SysWeaver.Storage\SysWeaver.Storage.csproj" />
   </ItemGroup>
 

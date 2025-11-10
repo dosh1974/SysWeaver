@@ -1,5 +1,9 @@
 using System;
 using System.Buffers;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 
 namespace SysWeaver
 {
@@ -39,6 +43,102 @@ namespace SysWeaver
 
         internal static readonly SpanAction<Char, ReadOnlyMemory<Byte>> WriteHexAction = WriteHex;
 
+
+    }
+
+    public static class ReadOnlyMemoryComparer
+    {
+
+        sealed class Cmp<T> : IComparer<ReadOnlyMemory<T>>, IEqualityComparer<ReadOnlyMemory<T>>
+        {
+            public static readonly Cmp<T> Instance = new Cmp<T>();
+
+            public unsafe int Compare(ReadOnlyMemory<T> x, ReadOnlyMemory<T> y)
+            {
+                var l = x.Length;
+                var c = l - y.Length;
+                if (c != 0)
+                    return c;
+                using var px = x.Pin();
+                using var py = y.Pin();
+                var dx = (Byte*)px.Pointer;
+                var dy = (Byte*)py.Pointer;
+                l *= Marshal.SizeOf<T>();
+                for (int i = 0; i < l; ++ i)
+                {
+                    c = dx[i] - dy[i];
+                    if (c != 0)
+                        return c;
+                }
+                return 0;
+            }
+
+            public bool Equals(ReadOnlyMemory<T> x, ReadOnlyMemory<T> y)
+                => x.Span.SequenceEqual(y.Span);
+
+            public unsafe int GetHashCode([DisallowNull] ReadOnlyMemory<T> obj)
+            {
+                using var pm = obj.Pin();
+                var s = (Byte*)pm.Pointer;
+                var t = new ReadOnlySpan<Byte>(s, obj.Length * Marshal.SizeOf<T>());
+                return GxHash.Hash32(t, 12);
+            }
+
+        }
+
+
+
+        public static IComparer<ReadOnlyMemory<T>> GetComparer<T>() => Cmp<T>.Instance;
+        
+        public static IEqualityComparer<ReadOnlyMemory<T>> GetEqualityComparer<T>() => Cmp<T>.Instance;
+
+    }
+
+    public static class MemoryComparer
+    {
+
+        sealed class Cmp<T> : IComparer<Memory<T>>, IEqualityComparer<Memory<T>>
+        {
+            public static readonly Cmp<T> Instance = new Cmp<T>();
+
+            public unsafe int Compare(Memory<T> x, Memory<T> y)
+            {
+                var l = x.Length;
+                var c = l - y.Length;
+                if (c != 0)
+                    return c;
+                using var px = x.Pin();
+                using var py = y.Pin();
+                var dx = (Byte*)px.Pointer;
+                var dy = (Byte*)py.Pointer;
+                l *= Marshal.SizeOf<T>();
+                for (int i = 0; i < l; ++i)
+                {
+                    c = dx[i] - dy[i];
+                    if (c != 0)
+                        return c;
+                }
+                return 0;
+            }
+
+            public bool Equals(Memory<T> x, Memory<T> y)
+                => x.Span.SequenceEqual(y.Span);
+
+            public unsafe int GetHashCode([DisallowNull] Memory<T> obj)
+            {
+                using var pm = obj.Pin();
+                var s = (Byte*)pm.Pointer;
+                var t = new Span<Byte>(s, obj.Length * Marshal.SizeOf<T>());
+                return GxHash.Hash32(t, 12);
+            }
+
+        }
+
+
+
+        public static IComparer<Memory<T>> GetComparer<T>() => Cmp<T>.Instance;
+
+        public static IEqualityComparer<Memory<T>> GetEqualityComparer<T>() => Cmp<T>.Instance;
 
     }
 

@@ -39,6 +39,10 @@ namespace SysWeaver
         /// </summary>
         public const String Svg = "image/svg+xml" + Utf8Suffix;
 
+        /// <summary>
+        /// Raw data
+        /// </summary>
+        public const String Data = "application/octet-stream";
 
         /// <summary>
         /// UTF8 encoded Form Url Encoded
