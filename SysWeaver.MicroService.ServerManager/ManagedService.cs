@@ -21,8 +21,9 @@ namespace SysWeaver.MicroService
 
         /// <summary>
         /// The auth required to sync this folder
+        /// null is equal to Roles.Debug
         /// </summary>
-        public String SyncAuth = Roles.Debug;
+        public String SyncAuth;
 
 
 

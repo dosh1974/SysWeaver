@@ -20,6 +20,11 @@ namespace SysWeaver.MicroService
         public int RemoveServiceBackupsDays = 365;
 
         /// <summary>
+        /// Default auth for folders and services
+        /// </summary>
+        public String SyncAuth = Roles.Admin;
+
+        /// <summary>
         /// SysWeaver services that should be managed
         /// </summary>
         public ManagedService[] Services;

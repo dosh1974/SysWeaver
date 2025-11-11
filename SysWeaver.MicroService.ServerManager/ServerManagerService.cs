@@ -19,7 +19,10 @@ namespace SysWeaver.MicroService
             Manager = manager;
             Syncer = s;
             foreach (var f in p.Folders.Nullable())
+            {
+                f.Auth = f.Auth ?? p.SyncAuth;
                 s.AddFolder(f);
+            }
 
             var destFolders = PathTemplate.Resolve(String.IsNullOrEmpty(p.ServiceFolder) ? @"$(CommonApplicationData)\SysWeaver\ManagedServices" : p.ServiceFolder).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             foreach (var f in destFolders)
@@ -50,7 +53,7 @@ namespace SysWeaver.MicroService
                     Name = f.Name,
                     DiscFolder = df,
                     Compress = p.CompressServices,
-                    Auth = f.SyncAuth,
+                    Auth = f.SyncAuth ?? p.SyncAuth,
                     RemoveBackupsDays = p.RemoveServiceBackupsDays,
                     OnNewFolderAsync = OnNewFolder,
                     OnActivateAsync = OnServiceActivate,

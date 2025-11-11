@@ -20,9 +20,10 @@ namespace SysWeaver.MicroService
         public String DiscFolder;
 
         /// <summary>
-        /// The auth required to sync this folder
+        /// The auth required to sync this folder.
+        /// null is equal to Roles.Debug
         /// </summary>
-        public String Auth = Roles.Debug;
+        public String Auth;
 
         /// <summary>
         /// The number of days to keep backup's

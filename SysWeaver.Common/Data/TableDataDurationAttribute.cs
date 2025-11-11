@@ -107,8 +107,9 @@ namespace SysWeaver.Data
         /// {0} = Value.
         /// {1} = Capped value.
         /// </param>
-        public TableDataTextAttribute(int maxLength = 30, String titleFormat = "{0}", String copyOnClick = "{0}")
-            : base(TableDataFormats.Text, maxLength > 0 ? maxLength : 30, titleFormat ?? "{0}", copyOnClick)
+        /// <param name="monoSpaced">If true, display using a fixed width font</param>
+        public TableDataTextAttribute(int maxLength = 30, String titleFormat = "{0}", String copyOnClick = "{0}", bool monoSpaced = false)
+            : base(TableDataFormats.Text, maxLength > 0 ? maxLength : 30, titleFormat ?? "{0}", copyOnClick, monoSpaced)
         {
         }
     }

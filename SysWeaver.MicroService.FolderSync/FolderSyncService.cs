@@ -7,7 +7,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using SysWeaver.Auth;
 using SysWeaver.Compression;
 using SysWeaver.Data;
 using SysWeaver.FolderSync;
@@ -23,7 +22,7 @@ namespace SysWeaver.MicroService
     /// </summary>
     [WebApiUrl("../FolderSync")]
     [IsMicroService]
-    public class FolderSyncService : IHttpServerModule, IHttpRequestHandler, IDisposable
+    public partial class FolderSyncService : IHttpServerModule, IHttpRequestHandler, IDisposable
     {
 
         #region IHttpRequestHandler
@@ -240,8 +239,62 @@ namespace SysWeaver.MicroService
                 }
                 await Task.Delay(100).ConfigureAwait(false);
             }
+        //  Perform and schedule compression
+            var scheduled = Scheduled;
+            while (scheduled.TryDequeue(out var f))
+            {
+                if (!SystemLock.TryGet("ActLock" + f, out var lck))
+                    break;
+                using var _ = lck;
+                await TryCompressFolderLog(f).ConfigureAwait(false);
+            }
+            foreach (var f in GetFolderData())
+            {
+                if (f.IsActive)
+                    continue;
+                if (f.Comp)
+                    continue;
+                if (f.Folder.Compress)
+                    scheduled.Enqueue(f.FullPath);
+            }
             return true;
         }
+
+        async ValueTask<Exception> TryCompressFolderLog(String folder)
+        {
+            var m = Manager;
+            m.AddMessage(String.Concat(LogPrefix, "Compressing: \"", folder, "\""));
+            using var _ = m.Tab();
+            var ex = await TryCompressFolder(folder).ConfigureAwait(false);
+            if (ex == null)
+                m.AddMessage(String.Concat(LogPrefix, "Compression done!"));
+            else
+                m.AddMessage(String.Concat(LogPrefix, "Compression of: \"", folder, "\" failed!"), ex, MessageLevels.Warning);
+            return ex;
+        }
+
+        async ValueTask<Exception> TryCompressFolder(String folder)
+        { 
+            try
+            {
+                if (!Directory.Exists(folder))
+                    return null;
+                var comp = folder + ContentDependentChunking.DotFileExt;
+                if (File.Exists(comp))
+                    return null;
+                await ContentDependentChunking.Compact(folder).ConfigureAwait(false);
+                var noDel = Path.Combine(folder, "_FolderSync.txt");
+                return await PathExt.TryCleanDirectoryAsync(folder, (fn, isFolder) => !fn.FastEquals(isFolder ? folder : noDel)).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                return ex;
+            }
+        }
+
+        readonly ConcurrentDictionary<String, int> IsCompressing = new ConcurrentDictionary<string, int>();
+        readonly ConcurrentQueue<String> Scheduled = new ConcurrentQueue<string>();
+
 
         public void Dispose()
         {
@@ -251,183 +304,6 @@ namespace SysWeaver.MicroService
             {
                 foreach (var x in Folders.Values)
                     fm.RemoveFolder(x.ModFolder);
-            }
-        }
-
-        sealed class Folder
-        {
-
-
-            /// <summary>
-            /// Optional commands to execute before deactivating (before old folder is renamed to back-up name)
-            /// </summary>
-            public readonly String[] OnDeactivate;
-
-            /// <summary>
-            /// Optional commands to execute to activate (after the folder have been replaced with old content)
-            /// </summary>
-            public readonly String[] OnActivate;
-
-            /// <summary>
-            /// Optional commands to execute when a new folder is uploaded
-            /// </summary>
-            public readonly String[] OnNewFolder;
-
-            public FolderSyncFolder.ActivationHandler OnActivateAsync;
-            public FolderSyncFolder.ActivationHandler OnDeactivateAsync;
-            public FolderSyncFolder.ActivationHandler OnNewFolderAsync;
-
-            public readonly String LockName;
-            public readonly String Name;
-            public readonly String DestPath;
-            public readonly IReadOnlyList<String> Auth;
-            public TimeSpan RemoveAfter;
-            public readonly FileHttpServerModuleFolder ModFolder;
-
-            /// <summary>
-            /// If true, folder versions are compressed.
-            /// Activating (swapping) is slower but disc usage is reduced a lot (especially for many versions).
-            /// </summary>
-            public readonly bool Compress;
-
-            static String[] ParseCommands(String s, IReadOnlyDictionary<String, String> extra)
-            {
-                if (String.IsNullOrEmpty(s))
-                    return null;
-                var r = s.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                var l = r.Length;
-                if (l <= 0)
-                    return null;
-                for (int i = 0; i < l; ++i)
-                    r[i] = PathTemplate.Resolve(r[i], extra);
-                return r;
-            }
-
-            public Folder(string name, string path, string auth, TimeSpan removeAfter, FolderSyncFolder fs)
-            {
-                Name = name;
-                var tp = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                DestPath = tp + Path.DirectorySeparatorChar;
-                Auth = Authorization.GetRequiredTokens(auth);
-                RemoveAfter = removeAfter;
-                LockName = "FolderSync_" + Encoding.UTF8.GetBytes(name.FastToLower()).ToHex();
-                ModFolder = new FileHttpServerModuleFolder
-                {
-                    AssumePreCompressed = true,
-                    Auth = Roles.AdminOps,
-                    ClientCacheDuration = 5,
-                    RequestCacheDuration = 4,
-                    WebFolder = "FolderSync/Folders/" + name,
-                    DiscFolder = tp,
-                };
-                var x = new Dictionary<String, String>(StringComparer.Ordinal);
-                x.Add("name", name);
-                x.Add("target", tp);
-                x.Add("targetname", Path.GetFileName(tp));
-                x.Add("targetdir", Path.GetDirectoryName(tp));
-                OnActivate = ParseCommands(fs.OnActivate, x);
-                OnDeactivate = ParseCommands(fs.OnDeactivate, x);
-                OnNewFolder = fs.OnNewFolder?.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-
-                OnActivateAsync = fs.OnActivateAsync;
-                OnDeactivateAsync = fs.OnDeactivateAsync;
-                OnNewFolderAsync = fs.OnNewFolderAsync;
-                Compress = fs.Compress;
-            }
-        }
-
-        sealed class FileSync
-        {
-            public override string ToString() => Name;
-
-            public readonly String Name;
-
-            public readonly DateTime LastModified;
-
-            public int InProgress;
-
-            public FileSync(string name, DateTime lastModified)
-            {
-                Name = name;
-                LastModified = lastModified;
-            }
-
-            public ReadOnlyMemory<Byte> CdcChunks;
-
-        }
-
-
-        sealed class Sync
-        {
-            public readonly ConcurrentDictionary<String, FileSync> Files = new ConcurrentDictionary<string, FileSync>();
-            public readonly Folder Target;
-            public readonly String DestPath;
-            public readonly bool UseFolder;
-            public readonly IDisposable D;
-
-            public long FileInProgess;
-
-
-
-            public void Touch()
-            {
-                Interlocked.Exchange(ref LastUsed, DateTime.UtcNow.Ticks);
-            }
-
-            static readonly long ExpirationTime = TimeSpan.FromMinutes(5).Ticks;
-
-            public bool IsOld
-            {
-                get
-                {
-                    return (DateTime.UtcNow.Ticks - Interlocked.Read(ref LastUsed)) > ExpirationTime;
-                }
-            }
-
-            long LastUsed;
-
-            public int DoExit;
-
-            public readonly long CopyCount;
-            public readonly long CopySize;
-            public readonly String User;
-            public readonly DateTime Start;
-            public readonly FolderSyncRequest R;
-
-            public long UploadCount;
-            public long UploadSize;
-            public long NetworkSize;
-
-            /// <summary>
-            /// Number of file chunks sent (all chunks in all missing files)
-            /// </summary>
-            public long ChunkCount = 0;
-            /// <summary>
-            /// Number of new chunks that was sent (all missing chunks in all missing files)
-            /// </summary>
-            public long NewChunkCount = 0;
-            /// <summary>
-            /// Total number of compressed bytes that was sent (all missing chunk data in all missing files)
-            /// </summary>
-            public long NewChunkSize = 0;
-
-
-            public Sync(FolderSyncRequest r, IEnumerable<FileSync> files, string destPath, Folder target, bool activate, IDisposable d, long copyCount, long copySize, String user, DateTime start)
-            {
-                R = r;
-                var fs = Files;
-                foreach (var f in files)
-                    fs.TryAdd(f.Name.FastToLower().Replace('\\', '/'), f);
-                Target = target;
-                DestPath = destPath;
-                UseFolder = activate;
-                D = d;
-                CopyCount = copyCount;
-                CopySize = copySize;
-                User = user;
-                Start = start;
-                LastUsed = DateTime.UtcNow.Ticks;
-
             }
         }
 
@@ -479,6 +355,9 @@ namespace SysWeaver.MicroService
 
         async ValueTask<Exception> InternalActivate(Folder folder, String target, String from, HttpServerRequest context)
         {
+            if (!SystemLock.TryGet("ActLock" + from, out var lck))
+                return new Exception("Folder \"" + from + "\" is in use, try later!");
+            using var _ = lck;
             if (folder.Compress)
             {
             //  De-compress stored
@@ -543,19 +422,9 @@ namespace SysWeaver.MicroService
             if (folder.Compress)
             {
                 //  Compress stored
-                Manager.AddMessage(LogPrefix + "Compacting \"" + bakName + "\"");
-                try
-                {
-                    await ContentDependentChunking.Compact(bakName).ConfigureAwait(false);
-                    var noDel = Path.Combine(bakName, "_FolderSync.txt");
-                    var ex2 = await PathExt.TryCleanDirectoryAsync(bakName, (fn, isFolder) => !fn.FastEquals(isFolder ? bakName : noDel)).ConfigureAwait(false);
-                    if (ex2 != null)
-                        return ex2;
-                }
-                catch (Exception ex3)
-                {
-                    return ex3;
-                }
+                var ex2 = await TryCompressFolderLog(bakName).ConfigureAwait(false);
+                if (ex2 != null)
+                    return ex2;
             }
 
             return ex;
@@ -863,10 +732,11 @@ namespace SysWeaver.MicroService
                 }
                 else
                 {
-                    var exx = await PathExt.TryMoveFolderAsync(dest, String.Concat(dest.TrimEnd(Path.DirectorySeparatorChar), "_", jobId)).ConfigureAwait(false);
+                    var bakFolder = String.Concat(dest.TrimEnd(Path.DirectorySeparatorChar), "_", jobId);
+                    var exx = await PathExt.TryMoveFolderAsync(dest, bakFolder).ConfigureAwait(false);
                     if (exx == null)
                     {
-                        new DirectoryInfo(dest).LastAccessTimeUtc = DateTime.UtcNow;
+                        new DirectoryInfo(bakFolder).LastAccessTimeUtc = DateTime.UtcNow;
                         context.Server.InvalidateCache();
                         Manager.AddMessage(String.Concat(LogPrefix, "Synced folder \"", target.Name, "\""));
                     }
@@ -990,7 +860,31 @@ namespace SysWeaver.MicroService
         const String ManifestName = "_FolderSync.txt";
 
         static String V(long value) => value.ToString("### ### ### ### ### ### ### ##0").TrimStart();
-
+        
+        void BuildManifest(Folder ff, String manifestName)
+        {
+            var start = DateTime.UtcNow;
+            long totCount = 0;
+            long totBytes = 0;
+            String folder = Path.GetDirectoryName(manifestName);
+            var di = new DirectoryInfo(folder);
+            foreach (var f in di.GetFiles("*", SearchOption.AllDirectories))
+            {
+                ++totCount;
+                totBytes += f.Length;
+            }
+            var end = DateTime.UtcNow;
+            var duration = end - start;
+            StringBuilder b = new StringBuilder();
+            int tab = 16;
+            b.Append("Start :".PadRight(tab)).AppendLine(start.ToString("O"));
+            b.Append("End :".PadRight(tab)).AppendLine(end.ToString("O"));
+            b.Append("Duration :".PadRight(tab)).AppendLine(duration.ToString());
+            b.Append("Files :".PadRight(tab)).AppendLine(V(totCount));
+            b.Append("Size :".PadRight(tab)).Append(V(totBytes)).AppendLine(" bytes");
+            b.AppendLine("Comment :").AppendLine("Re-constructed from exsiting or manually copied data");
+            File.WriteAllText(manifestName, b.ToString());
+        }
 
         async ValueTask WriteManifest(Folder ff, FolderSyncRequest r, String folder, long copyCount, long copySize, long uploadCount, long uploadSize, long networkSize, String user, DateTime start)
         {
@@ -1065,9 +959,9 @@ namespace SysWeaver.MicroService
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(target.Auth))
                 throw new Exception("Not authorized!");
+            String newFolderName = null;
             if (!SystemLock.TryGet(target.LockName, out var lck))
                 throw new Exception("A folder sync is already in progress!");
-            String newFolderName = null;
             try
             { 
                 var dest = target.DestPath;
@@ -1201,30 +1095,9 @@ namespace SysWeaver.MicroService
 
 
 
-
-
-
-        /// <summary>
-        /// All synched folders as a table
-        /// </summary>
-        /// <param name="r"></param>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        [WebApi]
-        [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, "Debug/SynchedFolders", "Synched folders", "Details about folders that can be synched remotely", "IconSync", -6)]
-        [WebApiClientCache(4)]
-        [WebApiRequestCache(3)]
-        public TableData SynchedFoldersTable(TableDataRequest r, HttpServerRequest context)
+        IEnumerable<Data> GetFolderData()
         {
-            if (r == null)
-                r = new TableDataRequest();
-            if ((r.Order == null) || (r.Order.Length <= 0))
-                r.Order = [
-                    nameof(Data.Name),
-                    "-" + nameof(Data.Uploaded),
-                    ];
-            return TableDataTools.Get(r, 5000, Folders.Values.SelectMany(folder =>
+            return Folders.Values.SelectMany(folder =>
             {
                 var uploadName = folder.Name;
                 var path = folder.DestPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -1253,6 +1126,7 @@ namespace SysWeaver.MicroService
                         });
                         actions = Uri.EscapeDataString(actions);
                     }
+                    var a = folder.Auth;
                     var data = new Data
                     {
                         Name = uploadName,
@@ -1262,10 +1136,27 @@ namespace SysWeaver.MicroService
                         LastUsed = lastTime,
                         Actions = actions,
                         FullPath = di.FullName,
+                        Comp = File.Exists(di.FullName + ContentDependentChunking.DotFileExt),
+                        Auth = a == null ? null : String.Join(',', a),
+                        Folder = folder,
                     };
                     try
                     {
                         var mn = Path.Combine(di.FullName, ManifestName);
+                        if (!File.Exists(mn))
+                        {
+                            try
+                            {
+                                BuildManifest(folder, mn);
+                                if (folder.Compress)
+                                {
+
+                                }
+                            }
+                            catch
+                            {
+                            }
+                        }
                         if (File.Exists(mn))
                         {
                             var t = File.ReadAllLines(mn);
@@ -1293,7 +1184,31 @@ namespace SysWeaver.MicroService
                     }
                     return data;
                 });
-            }));
+            });
+        }
+
+
+        /// <summary>
+        /// All synched folders as a table
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebMenuTable(null, "Debug/SynchedFolders", "Synched folders", "Details about folders that can be synched remotely", "IconSync", -6)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        public TableData SynchedFoldersTable(TableDataRequest r, HttpServerRequest context)
+        {
+            if (r == null)
+                r = new TableDataRequest();
+            if ((r.Order == null) || (r.Order.Length <= 0))
+                r.Order = [
+                    nameof(Data.Name),
+                    "-" + nameof(Data.Uploaded),
+                    ];
+            return TableDataTools.Get(r, 5000, GetFolderData());
         }
 
 
@@ -1336,92 +1251,6 @@ namespace SysWeaver.MicroService
         }.Freeze();
 
         static readonly ITextSerializer JsonSer = SerManager.GetText("json");
-
-        sealed class Data
-        {
- 
-
-            /// <summary>
-            /// True if active
-            /// </summary>
-            public bool IsActive;
-
-            /// <summary>
-            /// Folder name on disc
-            /// </summary>
-            [TableDataUrl("{0}", "../FolderSync/GetSynchedFolderManifest?\"{1}/{0}\"", "Click to show the manifest file.")]
-            public String DiscFolder;
-
-            /// <summary>
-            /// Name of the repo, use this when synchronizing a local folder.
-            /// </summary>
-            [TableDataUrl("{0}", "*../FolderSync/Folders/{0}/explore", "Click to explore \"{3}\".")]
-            public String Name;
-
-
-            /// <summary>
-            /// Number of files in the folder
-            /// </summary>
-            public long Count;
-
-            /// <summary>
-            /// The number of bytes (sum of all file sizes)
-            /// </summary>
-            [TableDataByteSize]
-            public long Size;
-
-            /// <summary>
-            /// Folder creation time
-            /// </summary>
-            [TableDataSortDesc]
-            public DateTime Uploaded;
-
-            /// <summary>
-            /// The service user that uploaded this
-            /// </summary>
-            public String User;
-
-            /// <summary>
-            /// The name of the source machine (this can be anything)
-            /// </summary>
-            public String Machine;
-
-            /// <summary>
-            /// Optional comment supplied when uploading this folder
-            /// </summary>
-            [TableDataText]
-            public String Comment;
-
-            /// <summary>
-            /// Actions that can be performed
-            /// </summary>
-            [TableDataActions(
-                "Activate", 
-                "Click to activate this folder (rename to base name)",
-                "../FolderSync/" + nameof(Activate) + "?{0}",
-                "IconOk",
-
-                "Remove",
-                "Click to remove this folder",
-                "../FolderSync/" + nameof(Remove) + "?{0}",
-                "IconCancel"
-                )]
-            public String Actions;
-
-            /// <summary>
-            /// When folder was last used (as active)
-            /// </summary>
-            [TableDataSortDesc]
-            public DateTime LastUsed;
-
-            /// <summary>
-            /// Full path
-            /// </summary>
-            [TableDataText]
-            public String FullPath;
-
-
-        }
 
 
     }

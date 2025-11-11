@@ -75,19 +75,18 @@ namespace SysWeaver
         /// <summary>
         /// Message text
         /// </summary>
-        [TableDataText(100)]
+        [TableDataText(100, "{0}", "{0}", true)]
         public readonly String Text;
        
         /// <summary>
         /// The thread that created the message
         /// </summary>
         public readonly int ThreadId;
+        
         /// <summary>
         /// Exception (or null)
         /// </summary>
         public readonly Exception Exception;
-
-
 
         static readonly Char[] Pattern = ". ".ToCharArray();
         const int PatternMask = 1;

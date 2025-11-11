@@ -2056,7 +2056,7 @@ async function getDevicePosition(lowPrecision, timeout, maximumAge) {
                     resolve();
                 },
                 e => {
-                    err = new Error(val.message);
+                    err = new Error(e.message);
                     resolve();
                 },
                 {
@@ -4200,7 +4200,9 @@ class ValueFormat {
 
     static updateLongText(el, value, formats, nextValue, flash, type, onRefresh) {
 
-        ValueFormat.updateFormat(el, "LongText");
+        const isMonoSpace = !!formats[4];
+        if (ValueFormat.updateFormat(el, "LongText"))
+            el.classList.add("Monospaced");
         if (!value) {
             if (el.innerText !== "") {
                 el.title = "";
@@ -4239,8 +4241,11 @@ class ValueFormat {
             if (badClick(ev))
                 return;
             await PopUp((el, closeFn, buttons) => {
+
                 const e = document.createElement("SysWeaver-LongText");
                 el.classList.add("Resize");
+                if (isMonoSpace)
+                    e.classList.add("Mono");
                 el.appendChild(e);
                 e.innerText = value;
                 if (buttons && copy)

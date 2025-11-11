@@ -453,7 +453,7 @@ SysWeaver-PopUpBackground {
     box-sizing: border-box;
     margin: 1em auto 1em auto;
     width: 40em;
-    padding: calc(max(1em, 32px)) 1em 1em 1em;
+    padding: calc(var(--ThemeIconSize) * 32px + 8px) 1em 1em 1em;
     box-shadow: 4px 8px 16px rgba(0, 0, 0, 0.5);
     background-color: var(--ThemeBackground);
     border: 1px solid var(--ThemeAcc150);
