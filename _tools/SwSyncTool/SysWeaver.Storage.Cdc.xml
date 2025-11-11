@@ -1,0 +1,382 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SysWeaver.Storage.Cdc</name>
+    </assembly>
+    <members>
+        <member name="F:SysWeaver.CdcChunkStats.FileCount">
+            <summary>
+            Number of files
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcChunkStats.ChunkCount">
+            <summary>
+            Total number of chunks
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcChunkStats.UniqueChunks">
+            <summary>
+            Total number of unique chunks
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcChunkStats.TotalMissing">
+            <summary>
+            Total number of missing chunks
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcChunkStats.MissingChunks">
+            <summary>
+            All missing chunks
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcChunkStats.BrokenFiles">
+            <summary>
+            All broken files
+            </summary>
+        </member>
+        <member name="T:SysWeaver.CdcProps.Hasher">
+            <summary>
+            Signature of a function that is used for computing the hash of a chunk
+            </summary>
+            <param name="source">The data to compute the hash for</param>
+            <param name="hash">The resulting hash</param>
+            <param name="bytesWritten">Number of bytes written (must be consistent)</param>
+            <returns>True if successful</returns>
+        </member>
+        <member name="M:SysWeaver.CdcProps.#ctor(System.Int32,System.Int32,System.Int32,SysWeaver.CdcProps.Hasher,System.String,System.String,System.Collections.Generic.IReadOnlyList{System.String})">
+            <summary>
+            Init some new properties, properties must be the same everywhere for things to work properly.
+            Supply null to function or use (CdcProps.Default).
+            Only create a new property set for testing.
+            </summary>
+            <param name="averageSize">The target chunk size, must be a power of 2</param>
+            <param name="minSize">Computed from averageSize, but can be overriden</param>
+            <param name="maxSize">Computed from averageSize, but can be overriden</param>
+            <param name="hash">The hash function to use</param>
+            <param name="hashName">Name of this hash function, musn't be the same as any other used hash function, defaults to SHA256</param>
+            <param name="compression">The compression method to use for chunk storage (and transmission etc)</param>
+            <param name="folders">Optionally store chunk data in these folders (advanced)</param>
+            <exception cref="T:System.ArgumentException"></exception>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="F:SysWeaver.CdcProps.Comp">
+            <summary>
+            The compression used for chunks
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcProps.Hash">
+            <summary>
+            The function used to compute a hash
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcProps.HashName">
+            <summary>
+            Name of this hash function, musn't be the same as any other used hash function
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcProps.HashSize">
+            <summary>
+            The number of bytes for a hash
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcProps.MinSize">
+            <summary>
+            The minimum size of a chunk (before compression)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcProps.MaxSize">
+            <summary>
+            The maximum size of a chunk (before compression)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcProps.AverageSize">
+            <summary>
+            The target size of chunk (before compression)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcProps.Key">
+            <summary>
+            The "Key" for these properties, used for folder names etc
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcProps.Mask1">
+            <summary>
+            A computed mask, used internally
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcProps.Mask2">
+            <summary>
+            A computed mask, used internally
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcProps.ChunkFolders">
+            <summary>
+            Chunk data is stored in these folders, somewhat evenly distributed
+            </summary>
+        </member>
+        <member name="F:SysWeaver.CdcProps.Default">
+            <summary>
+            The default properties (used when null is supplied)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.CompactFile(System.String,System.String,SysWeaver.CdcProps)">
+            <summary>
+            Compact a file by storing the chunk lists
+            </summary>
+            <param name="fileName">Name of the file to compact</param>
+            <param name="destName">Optional destination filename, default is to name it the same as the file with an added .swcompact extension</param>
+            <param name="props">The props used</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.CompactFolder(System.String,System.String,SysWeaver.CdcProps)">
+            <summary>
+            Compact a folder into a single file by storing the chunk lists
+            </summary>
+            <param name="folderName">Name of the folder to compact</param>
+            <param name="destName">Optional destination filename, default is to name it the same as the folder with an added .swcompact extension</param>
+            <param name="props">The props used</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.Compact(System.String,System.String,SysWeaver.CdcProps)">
+            <summary>
+            Compact a file or folder into a single file by storing the chunk lists
+            </summary>
+            <param name="path">Path to the file system object (file or folder)</param>
+            <param name="destName">Optional destination filename, default is to name it the same as the file or folder with an added .swcompact extension</param>
+            <param name="props">The props used</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.Expand(System.String,System.String,SysWeaver.CdcProps)">
+            <summary>
+            Expand a .swcompact file into a file or folder 
+            </summary>
+            <param name="fileName">The .swcompact filename</param>
+            <param name="destName">Optional destination name (folder or file), default is the same as fileName excluding the .swcompact extension</param>
+            <param name="props">The props used</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.Verify(System.String,SysWeaver.CdcProps)">
+            <summary>
+            Find missing chunks in a .swcompact file 
+            </summary>
+            <param name="fileName">The .swcompact filename</param>
+            <param name="props">The props used</param>
+            <returns>Stats</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.Recover(System.String,System.String,SysWeaver.CdcProps)">
+            <summary>
+            Expand a .swcompact file into a file or folder, replace missing chunks with "MISSING CHUNK".
+            </summary>
+            <param name="fileName">The .swcompact filename</param>
+            <param name="destName">Optional destination name (folder or file), default is the same as fileName excluding the .swcompact extension</param>
+            <param name="props">The props used</param>
+            <returns>Stats</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.TryGetChunkFile(System.String,SysWeaver.CdcProps)">
+            <summary>
+            Get the filename where a the compressed data of a chunk is stored
+            </summary>
+            <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
+            <param name="props">The props used</param>
+            <returns>A filename or null if the chunk isn't stored</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.TryGetChunkFile(System.ReadOnlySpan{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Get the filename where a the compressed data of a chunk is stored
+            </summary>
+            <param name="hash">The hash of the chunk as binary data</param>
+            <param name="props">The props used</param>
+            <returns>A filename or null if the chunk isn't stored</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.TryOpenCompressedChunk(System.String,SysWeaver.CdcProps)">
+            <summary>
+            Open a stream to the compressed chunk data
+            </summary>
+            <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
+            <param name="props">The props used</param>
+            <returns>A stream to the data or null if the chunk isn't stored</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.TryOpenCompressedChunk(System.ReadOnlySpan{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Open a stream to the compressed chunk data
+            </summary>
+            <param name="hash">The hash of the chunk as binary data</param>
+            <param name="props">The props used</param>
+            <returns>A stream to the data or null if the chunk isn't stored</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.ValidateChunk(System.String,SysWeaver.CdcProps)">
+            <summary>
+            Validate that a chunk exist
+            </summary>
+            <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
+            <param name="props">The props used</param>
+            <returns>True if the chunk exist</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.ValidateChunk(System.ReadOnlySpan{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Validate that a chunk exist
+            </summary>
+            <param name="hash">The hash of the chunk as binary data</param>
+            <param name="props">The props used</param>
+            <returns>True if the chunk exist</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.TryCopyCompressedChunk(System.IO.Stream,System.String,SysWeaver.CdcProps)">
+            <summary>
+            Try to copy a compressed chunk to a stream
+            </summary>
+            <param name="dest">The destination stream</param>
+            <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
+            <param name="props">The props used</param>
+            <returns>True if the chunk was copied, false if the chunk didn't exist in the storage</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.TryCopyCompressedChunk(System.IO.Stream,System.ReadOnlySpan{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Try to copy a compressed chunk to a stream
+            </summary>
+            <param name="dest">The destination stream</param>
+            <param name="hash">The hash of the chunk as binary data</param>
+            <param name="props">The props used</param>
+            <returns>True if the chunk was copied, false if the chunk didn't exist in the storage</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.TryDecompressChunk(System.IO.Stream,System.String,SysWeaver.CdcProps)">
+            <summary>
+            Try to copy the decompressed data of a chunk to a stream
+            </summary>
+            <param name="dest">The destination stream</param>
+            <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
+            <param name="props">The props used</param>
+            <returns>True if the chunk was copied, false if the chunk didn't exist in the storage</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.TryDecompressChunk(System.IO.Stream,System.ReadOnlySpan{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Try to copy the decompressed data of a chunk to a stream
+            </summary>
+            <param name="dest">The destination stream</param>
+            <param name="hash">The hash of the chunk as binary data</param>
+            <param name="props">The props used</param>
+            <returns>True if the chunk was copied, false if the chunk didn't exist in the storage</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.GetFolderStats(System.Boolean,SysWeaver.CdcProps)">
+            <summary>
+            Get stats about the chunked data storage folders
+            </summary>
+            <param name="getUncompressedStats">If true, all chunks are decompressed to get their raw size, this is slow</param>
+            <param name="props">The props used</param>
+            <returns>Array of folder statistics</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.GetFilename(System.String,SysWeaver.CdcProps)">
+            <summary>
+            Get the storage filename for a given hash
+            </summary>
+            <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
+            <param name="props">The props used</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.TrySaveDataAsChunk(System.String,System.ReadOnlyMemory{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Save some data as a compressed chunk
+            </summary>
+            <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
+            <param name="data">The data</param>
+            <param name="props">The props used</param>
+            <returns>True if the chunk already exist in the storage or if it was saved successfully, false for any failure</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.TrySaveChunk(System.String,System.ReadOnlyMemory{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Save a chunk to disc
+            </summary>
+            <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
+            <param name="data">The already compressed chunk data</param>
+            <param name="props">The props used</param>
+            <returns>True if the chunk already exist in the storage or if it was saved successfully, false for any failure</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.TrySaveChunk(System.ReadOnlySpan{System.Byte},System.ReadOnlyMemory{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Save some data as a compressed chunk
+            </summary>
+            <param name="hash">The hash of the chunk as binary data</param>
+            <param name="data">The data</param>
+            <param name="props">The props used</param>
+            <returns>True if the chunk already exist in the storage or if it was saved successfully, false for any failure</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.CreateChunk(System.Memory{System.Byte},System.ReadOnlyMemory{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Compute the hash for a chunk of memory and save it to storage if it doesn't exist
+            </summary>
+            <param name="hash">Destination for the hash</param>
+            <param name="data">The data</param>
+            <param name="props">The props used</param>
+            <returns></returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.HashChunk(System.Memory{System.Byte},System.ReadOnlyMemory{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Compute the hash for a chunk of memory 
+            </summary>
+            <param name="hash">Destination for the hash</param>
+            <param name="data">The data</param>
+            <param name="props">The props used</param>
+            <returns></returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.Cut(System.IO.Stream,System.Boolean,SysWeaver.CdcProps)">
+            <summary>
+            Cut a stream into chunks, return the chunk hashes as binary data
+            </summary>
+            <param name="s">The stream (will not be closed)</param>
+            <param name="preview">If true, no chunk data is created</param>
+            <param name="props">The properties, if null the default properties will be used (recommended)</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.Add(System.String,SysWeaver.CdcProps)">
+            <summary>
+            Add a file to the chunk store
+            </summary>
+            <param name="filename">The file</param>
+            <param name="props">The properties, if null the default properties will be used (recommended)</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.TryWriteChunkList(System.IO.Stream,System.ReadOnlyMemory{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Write a list chunks to a chunk list stream 
+            </summary>
+            <param name="destStream">The destination stream</param>
+            <param name="chunks">Array of chunk hashes</param>
+            <param name="props">The properties, if null the default properties will be used (recommended)</param>
+            <returns>True if all the chunks was found and written to the stream, else false</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.OpenChunkStream(System.ReadOnlyMemory{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Open a series of chunks as a single stream
+            </summary>
+            <param name="chunks">The chunks</param>
+            <param name="props">The properties, if null the default properties will be used (recommended)</param>
+            <returns>A stream with the chunk content (decompressed)</returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.AddChunkList(System.IO.Stream,SysWeaver.CdcProps)">
+            <summary>
+            Try to add a list of chunks to the storage
+            </summary>
+            <param name="sourceStream"></param>
+            <param name="props">The properties, if null the default properties will be used (recommended)</param>
+            <returns>True if the chunks was added, elase false</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.GetCutSize(System.Span{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Determine the chunk cut position for some memory
+            </summary>
+            <param name="source">The data source</param>
+            <param name="props">The props used (may not be null)</param>
+            <returns>The number of bytes from sourceOffset to use as a chunk</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.MoveToFront(System.Byte[],System.Int32,System.Int32)">
+            <summary>
+            Move some remaining memory to the front of a buffer
+            </summary>
+            <param name="d">The buffer</param>
+            <param name="offset">The start offset to move memory from</param>
+            <param name="size">The number of bytes to move</param>
+        </member>
+    </members>
+</doc>

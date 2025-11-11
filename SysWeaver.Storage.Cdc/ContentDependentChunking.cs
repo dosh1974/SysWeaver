@@ -775,7 +775,7 @@ namespace SysWeaver
             var ex = await PathExt.EnsureCanWriteFileAsync(fileName).ConfigureAwait(false);
             if (ex != null)
                 throw ex;
-            var comp = props.Comp.GetCompressed(data.Span, CompEncoderLevels.Best);
+            var comp = props.Comp.GetCompressed(data.Span, CompEncoderLevels.Balanced);
             var tempName = fileName + ".temp" + DateTime.UtcNow.Ticks;
             try
             {

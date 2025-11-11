@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SwSyncTool</name>
+    </assembly>
+    <members>
+        <member name="F:SwSyncTool.SwSyncToolProgram.Params.Comment">
+            <summary>
+            [Sync]
+            Optional comment to use when synching to a remote repository.
+            </summary>
+        </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.Params.Ignore">
+            <summary>
+            [Sync]
+            One or more (separated by a ;) wild card patterns of files to ignore ("*.pdb" for instance).
+            </summary>
+        </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.Params.IgnoreCertErrors">
+            <summary>
+            [Sync]
+            If true, and server cert errors are ignored. NOT reccomended!
+            </summary>
+        </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.Params.MaxConcurrency">
+            <summary>
+            [Sync]
+            The maximum concurrency to use, zero or negative is based on the number of hardware threads.
+            </summary>
+        </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.Params.NoActivate">
+            <summary>
+            [Sync]
+            If true, the synched folder won't be activated.
+            </summary>
+        </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.Params.NoCdc">
+            <summary>
+            [Sync]
+            If true, Content Dependency Chunking optimizations won't be used.
+            </summary>
+        </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.Params.OutputDir">
+            <summary>
+            [Compact, Expand and Recover] 
+            Optional output directory.
+            </summary>
+        </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.Params.Folders">
+            <summary>
+            (Advanced) One or more folders (separated by a semi colon ';'), that will be used for chunk storage.
+            </summary>
+        </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.Params.ChunkSize">
+            <summary>
+            (Advanced) Optionally specify a chunk size, must be a power of two.
+            </summary>
+        </member>
+    </members>
+</doc>

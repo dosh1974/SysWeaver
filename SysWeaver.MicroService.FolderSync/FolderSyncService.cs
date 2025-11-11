@@ -479,6 +479,27 @@ namespace SysWeaver.MicroService
 
         async ValueTask<Exception> InternalActivate(Folder folder, String target, String from, HttpServerRequest context)
         {
+            if (folder.Compress)
+            {
+            //  De-compress stored
+                var compact = from + ContentDependentChunking.DotFileExt;
+                if (File.Exists(compact))
+                {
+                    Manager.AddMessage(LogPrefix + "Expanding \"" + compact + "\"");
+                    try
+                    {
+                        await ContentDependentChunking.Expand(compact).ConfigureAwait(false);
+                        var ex2 = await PathExt.TryDeleteFileAsync(compact).ConfigureAwait(false);
+                        if (ex2 != null)
+                            return ex2;
+                    }
+                    catch (Exception ex3)
+                    {
+                        return ex3;
+                    }
+                }
+            }
+            var destFolder = folder.DestPath;
             var cmd = folder.OnDeactivate;
             if (cmd != null)
                 await RunCommands(cmd).ConfigureAwait(false);
@@ -487,7 +508,7 @@ namespace SysWeaver.MicroService
             {
                 try
                 {
-                    var ex3 = await a(folder.Name, folder.DestPath, RunCommand).ConfigureAwait(false);
+                    var ex3 = await a(folder.Name, destFolder, RunCommand).ConfigureAwait(false);
                     if (ex3 != null)
                         return ex3;
                 }
@@ -496,7 +517,8 @@ namespace SysWeaver.MicroService
                     return ex2;
                 }
             }
-            var ex = await PathExt.TryFolderSwapAsync(target, GetBakName(target), from).ConfigureAwait(false);
+            var bakName = GetBakName(target);
+            var ex = await PathExt.TryFolderSwapAsync(target, bakName, from).ConfigureAwait(false);
             if (ex == null)
                 new DirectoryInfo(target).LastAccessTimeUtc = DateTime.UtcNow;
             cmd = folder.OnActivate;
@@ -507,7 +529,7 @@ namespace SysWeaver.MicroService
             {
                 try
                 {
-                    var ex3 = await a(folder.Name, folder.DestPath, RunCommand).ConfigureAwait(false);
+                    var ex3 = await a(folder.Name, destFolder, RunCommand).ConfigureAwait(false);
                     if (ex3 != null)
                         return ex3;
                 }
@@ -517,6 +539,25 @@ namespace SysWeaver.MicroService
                 }
             }
             context.Server.InvalidateCache();
+
+            if (folder.Compress)
+            {
+                //  Compress stored
+                Manager.AddMessage(LogPrefix + "Compacting \"" + bakName + "\"");
+                try
+                {
+                    await ContentDependentChunking.Compact(bakName).ConfigureAwait(false);
+                    var noDel = Path.Combine(bakName, "_FolderSync.txt");
+                    var ex2 = await PathExt.TryCleanDirectoryAsync(bakName, (fn, isFolder) => !fn.FastEquals(isFolder ? bakName : noDel)).ConfigureAwait(false);
+                    if (ex2 != null)
+                        return ex2;
+                }
+                catch (Exception ex3)
+                {
+                    return ex3;
+                }
+            }
+
             return ex;
         }
 
