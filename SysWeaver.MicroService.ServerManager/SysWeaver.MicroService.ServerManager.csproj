@@ -8,8 +8,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.MicroService.ChartJs\SysWeaver.MicroService.ChartJs.csproj" />
     <ProjectReference Include="..\SysWeaver.MicroService.FolderSync\SysWeaver.MicroService.FolderSync.csproj" />
     <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
+    <ProjectReference Include="..\SysWeaver.OsServices\SysWeaver.OsServices.csproj" />
   </ItemGroup>
+
+	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\ServerManager\* .\web\ServerManager" />
+		<ItemGroup>
+			<EmbeddedResource Include="web\**\*.br" Visible="false" />
+		</ItemGroup>
+	</Target>
 
 </Project>

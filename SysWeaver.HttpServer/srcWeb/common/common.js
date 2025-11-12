@@ -1,4 +1,5 @@
 ﻿
+
 /**
  * Function called by the hacker theme (never call manually)
  * @param {number} time The current animation time for the theme
@@ -4200,9 +4201,10 @@ class ValueFormat {
 
     static updateLongText(el, value, formats, nextValue, flash, type, onRefresh) {
 
-        const isMonoSpace = !!formats[4];
+        const isMonoSpace = formats[4] === "True";
         if (ValueFormat.updateFormat(el, "LongText"))
-            el.classList.add("Monospaced");
+            if (isMonoSpace)
+                el.classList.add("Monospaced");
         if (!value) {
             if (el.innerText !== "") {
                 el.title = "";

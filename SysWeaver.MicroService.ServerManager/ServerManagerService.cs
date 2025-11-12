@@ -1,17 +1,25 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using SysWeaver.Data;
+using SysWeaver.Net;
+using SysWeaver.OsServices;
 
 namespace SysWeaver.MicroService
 {
 
 
+
     [RequiredDep<FolderSyncService>()]
-    public sealed class ServerManagerService
+    [WebApiUrl("../ServerManager")]
+    public sealed partial class ServerManagerService : IDisposable
     {
+
         public ServerManagerService(ServiceManager manager, ServerManagerParams p)
         {
             p = p ?? new ServerManagerParams();
@@ -33,8 +41,6 @@ namespace SysWeaver.MicroService
             var ss = Services;
             foreach (var f in p.Services.Nullable())
             {
-                if (!ss.TryAdd(f.Name.FastToLower(), f))
-                    throw new Exception("Must have a unique name!");
                 var df = f.DiscFolder;
                 if (String.IsNullOrEmpty(df))
                 {
@@ -59,11 +65,21 @@ namespace SysWeaver.MicroService
                     OnActivateAsync = OnServiceActivate,
                     OnDeactivateAsync = OnServiceDeactivate,
                 };
+                if (!ss.TryAdd(f.Name.FastToLower(), new SmServiceInfo(f, v, p)))
+                    throw new Exception("Must have a unique name!");
                 s.AddFolder(v);
             }
+            UpdateTask = new PeriodicTask(UpdateMetrics, 5000);
         }
 
-        readonly ConcurrentDictionary<String, ManagedService> Services = new ConcurrentDictionary<string, ManagedService>(StringComparer.Ordinal);
+        public void Dispose()
+        {
+            Interlocked.Exchange(ref UpdateTask, null)?.Dispose();
+        }
+
+        PeriodicTask UpdateTask;
+
+        readonly ConcurrentDictionary<String, SmServiceInfo> Services = new ConcurrentDictionary<string, SmServiceInfo>(StringComparer.Ordinal);
         readonly ServiceManager Manager;
 
         static String FindServiceExe(String path)
@@ -124,8 +140,9 @@ namespace SysWeaver.MicroService
 
         async ValueTask<Exception> OnNewFolder(String name, String path, Func<String, ValueTask<int>> commandRunner)
         {
-            if (!Services.TryGetValue(name.FastToLower(), out var ss))
+            if (!Services.TryGetValue(name.FastToLower(), out var si))
                 return null;
+            var ss = si.Service;
             if (!ss.MasterConfig)
                 return null;
             var exe = FindServiceExe(path);
@@ -162,12 +179,80 @@ namespace SysWeaver.MicroService
             return ex;
         }
 
+        readonly ExceptionTracker StatusEx = new ExceptionTracker();
+
+        async ValueTask<ServiceStatus> CheckStatus(String exe)
+        {
+            ServiceStatus status = ServiceStatus.Unknown;
+            try
+            {
+                await ExternalProcess.RunAsync(exe, "status", (text, err) =>
+                {
+                    foreach (var lx in text.Split('\n'))
+                    {
+                        try
+                        {
+                            var l = lx.Trim();
+                            if (!l.FastStartsWith("Checking status:"))
+                                continue;
+                            var s = l.LastIndexOf(' ') + 1;
+                            var e = l.LastIndexOf(']');
+                            var num = l.Substring(s, e - s);
+                            status = (ServiceStatus)int.Parse(num);
+                        }
+                        catch (Exception ex)
+                        {
+                            StatusEx.OnException(ex);
+                        }
+                    }
+                }).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                StatusEx.OnException(ex);
+            }
+            return status;
+
+
+        }
+
+        async ValueTask<int> RunCommand(String cmd, bool silent = false)
+        {
+            if (silent)
+            {
+                try
+                {
+                    var exe = SystemHelper.GetCommandAndArgs(out var args, cmd);
+                    return await ExternalProcess.RunAsync(exe, args).ConfigureAwait(false);
+                }
+                catch
+                {
+                }
+                return -42;
+            }
+            var m = Manager;
+            using var _ = m.Tab();
+            try
+            {
+                var exe = SystemHelper.GetCommandAndArgs(out var args, cmd);
+                return await ExternalProcess.RunAsync(exe, args, (text, err) =>
+                {
+                    m.AddMessage(LogPrefix + text, err ? MessageLevels.Warning : MessageLevels.Info);
+                }).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                m.AddMessage(LogPrefix + "Failed to run!", ex, MessageLevels.Warning);
+            }
+            return -42;
+        }
+
         async ValueTask<Exception> OnServiceActivate(String name, String path, Func<String, ValueTask<int>> commandRunner)
         {
             var exe = FindServiceExe(path);
             if (exe == null)
                 return null;
-            var res = await commandRunner(exe + " start").ConfigureAwait(false);
+            var res = await RunCommand(exe + " start").ConfigureAwait(false);
             if (res < 0)
                 return new Exception("Failed to start service \"" + name + "\", error: " + res);
             return null;
@@ -179,13 +264,313 @@ namespace SysWeaver.MicroService
             var exe = FindServiceExe(path);
             if (exe == null)
                 return null;
-            var res = await commandRunner(exe + " uninstall").ConfigureAwait(false);
+            var res = await RunCommand(exe + " uninstall").ConfigureAwait(false);
             if (res < 0)
                 return new Exception("Failed to uninstall service \"" + name + "\", error: " + res);
             return null;
         }
 
         readonly FolderSyncService Syncer;
+
+        readonly int MaxUpdateConcurrency = Math.Max(2, (Environment.ProcessorCount + 1) >> 1);
+
+        async ValueTask<bool> UpdateMetrics()
+        {
+            Dictionary<String, Process> procExes = new Dictionary<string, Process>(StringComparer.Ordinal);
+
+
+
+
+            foreach (var p in Process.GetProcesses())
+            {
+                try
+                {
+                    var mod = p.MainModule.FileName;
+                    procExes[mod] = p;
+                }
+                catch
+                {
+                }
+            }
+            var s = Services.Values.ToList();
+            var l = new AsyncLock(MaxUpdateConcurrency);
+            var maxAge = DateTime.UtcNow - TimeSpan.FromHours(24);
+            await s.ProcessAsyncValue(async i =>
+            {
+                using var _ = await l.Lock().ConfigureAwait(false);
+                var m = new SmServiceMetrics();
+                var exe = FindServiceExe(i.Syncher.DiscFolder);
+                if (exe != null)
+                {
+                    if (procExes.TryGetValue(exe.RemoveQuotes(), out var p))
+                    {
+                        try
+                        {
+                            m.ProcessHandle = (long)p.Handle;
+                            m.MemUsage = (long)p.WorkingSet64;
+                            var l = i.LastCpu;
+                            var now = Stopwatch.GetTimestamp();
+                            var time = p.TotalProcessorTime;
+                            m.TotalProcessorTime = time;
+                            if (l != 0)
+                            {
+                                var du = (Decimal)(time - i.LastTotCpu).TotalSeconds;
+                                var dt = (Decimal)(now - l) / (Decimal)Stopwatch.Frequency;
+                                if (dt > 0)
+                                    m.CpuUsage = Math.Max(0, Math.Min(100, (double)((du * 100) / (dt * Environment.ProcessorCount))));
+                            }
+                            i.LastCpu = now;
+                            i.LastTotCpu = time;
+                        }
+                        catch
+                        {
+                        }
+                    }
+                    m.Status = await CheckStatus(exe).ConfigureAwait(false);
+                }
+                else
+                {
+                    m.Status = ServiceStatus.NotInstalled;
+                }
+                Interlocked.Exchange(ref i.Metrics, m);
+                var h = i.History;
+                h.Enqueue(m);
+                while (h.TryPeek(out var o))
+                {
+                    if (o.Time >= maxAge)
+                        break;
+                    if (!h.TryDequeue(out o))
+                        break;
+                }
+            }).ConfigureAwait(false);
+            return true;
+        }
+
+
+        SmServiceInfo Validate(String serviceName, HttpServerRequest context)
+        {
+            serviceName = serviceName.FastToLower();
+            if (!Services.TryGetValue(serviceName, out var info))
+                throw new Exception("Unknown service!");
+            if (!context.Session.IsValid(info.Auth))
+                throw new Exception("Not authorized!");
+            return info;
+        }
+
+
+        [WebApi]
+        [WebApiAuth]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetMem(String serviceName, HttpServerRequest context)
+        {
+            var info = Validate(serviceName, context);
+            var min = DateTime.UtcNow - TimeSpan.FromMinutes(5);
+            List<String> labels = new List<string>();
+            List<double> values = new List<double>();
+            double minVal = double.MaxValue;
+            double maxVal = double.MinValue;
+            foreach (var x in info.History)
+            {
+                var t = x.Time;
+                if (t < min)
+                    continue;
+                var val = (Double)x.MemUsage / (1024.0 * 1024.0);
+                labels.Add(t.ToString("HH:mm:ss"));
+                values.Add(val);
+                if (val < minVal)
+                    minVal = val;
+                if (val > maxVal)
+                    maxVal = val;
+
+            }
+            const double hueMin = 120;
+            const double hueMax = 0;
+            const double dHue = hueMax - hueMin;
+            var dval = maxVal - minVal;
+            String[] colors;
+            if (dval <= 0)
+                colors = values.Convert(x => "#0f0");
+            else
+            {
+                var sval = dHue / dval;
+                colors = values.Convert(v =>
+                {
+                    var rgb = ColorTools.HsvToRgb((v - minVal) * sval + hueMin, 0.7, 0.9);
+                    return HtmlColors.MakeHtmlColor(rgb);
+                });
+            }
+
+            return ChartJsService.ChartSerialize(new ChartJsConfig
+            {
+                RefreshRate = 5000,
+                Title = serviceName + " memory usage last hour",
+                type = "bar",
+                Precision = 1,
+                ValidTypes = ["bar"],
+                ValueSuffix = " MB",
+                data = new ChartJsData
+                {
+                    labels = labels.ToArray(),
+                    datasets = [
+                        new ChartJsDataSet
+                        {
+                            label = "Memory usage",
+                            categoryPercentage = 0.99,
+                            barPercentage = 1,
+                            data = values.ToArray(),
+                            backgroundColor = colors,
+                        }
+                    ]
+                },
+                options = new ChartJsOptions
+                {
+                    barPercentage = 1,
+                    plugins = new ChartJsPlugins
+                    {
+                        datalabels = new ChartJsDataLabels
+                        {
+                            display = false,
+                        }
+                    }
+                }
+
+            });
+        }
+
+
+        [WebApi]
+        [WebApiAuth]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetCpu(String serviceName, HttpServerRequest context)
+        {
+            var info = Validate(serviceName, context);
+            var min = DateTime.UtcNow - TimeSpan.FromMinutes(5);
+            List<String> labels = new List<string>();
+            List<double> values = new List<double>();
+            foreach (var x in info.History)
+            {
+                var t = x.Time;
+                if (t < min)
+                    continue;
+                var val = x.CpuUsage;
+                labels.Add(t.ToString("HH:mm:ss"));
+                values.Add(val);
+            }
+            const double hueMin = 120;
+            const double hueMax = 0;
+            const double dHue = hueMax - hueMin;
+            var sval = dHue / 100;
+            var colors = values.Convert(v =>
+            {
+                var rgb = ColorTools.HsvToRgb(v * sval + hueMin, 0.7, 0.9);
+                return HtmlColors.MakeHtmlColor(rgb);
+            });
+
+            return ChartJsService.ChartSerialize(new ChartJsConfig
+            {
+                RefreshRate = 5000,
+                Title = serviceName + " Cpu usage last hour",
+                type = "bar",
+                Precision = 1,
+                ValidTypes = ["bar"],
+                ValueSuffix = "%",
+                data = new ChartJsData
+                {
+                    labels = labels.ToArray(),
+                    datasets = [
+                        new ChartJsDataSet
+                        {
+                            label = "Cpu usage",
+                            categoryPercentage = 0.99,
+                            barPercentage = 1,
+                            data = values.ToArray(),
+                            backgroundColor = colors,
+                            borderRadius = new ChartJsCorner
+                            {
+                                bottomLeft = 0,
+                                bottomRight = 0,
+                                topLeft = 0,
+                                topRight = 0,
+                            }
+                        }
+                    ],
+                    
+                },
+                options = new ChartJsOptions
+                {
+                    barPercentage = 1,
+                    scales = new ChartJsScalesOptions
+                    {
+                        y = new ChartJsScaleOptions
+                        {
+                            min = 0,
+                            max = 100,
+                        }
+                    },
+                    plugins = new ChartJsPlugins
+                    {
+                        datalabels = new ChartJsDataLabels
+                        {
+                            display = false,
+                        },
+                    }
+                }
+
+            });
+        }
+
+
+        [WebApi]
+        [WebApiAuth]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        public SmServiceDetail GetDetail(String serviceName, HttpServerRequest context)
+        {
+            var info = Validate(serviceName, context);
+            var data = Syncer.GetFolderData(serviceName).ToList();
+            return new SmServiceDetail(info, data);
+        }
+
+
+        [WebApi]
+        [WebApiAuth]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        public SmServiceBrief[] GetServices(HttpServerRequest context)
+        {
+            var session = context.Session;
+            var ss = Services;
+            var l = Services.Count;
+            List<SmServiceInfo> s = new List<SmServiceInfo>(l); 
+            foreach (var x in ss)
+            {
+                var i = x.Value;
+                if (!session.IsValid(i.Auth))
+                    continue;
+                s.Add(i);
+            }
+            return s.Convert(info => new SmServiceBrief(info, Syncer.GetFolderData(info.Syncher.Name).ToList()));
+        }
+
+
+        /// <summary>
+        /// All synched folders as a table
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebMenuTable(null, "Services", "Services", "Services", null, -7)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        public TableData ServicesTable(TableDataRequest r, HttpServerRequest context)
+            => TableDataTools.Get(r, 5000, GetServices(context));
+        
 
     }
 }

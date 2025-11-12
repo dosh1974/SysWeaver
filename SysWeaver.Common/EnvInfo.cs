@@ -256,9 +256,10 @@ namespace SysWeaver
         ///             "AppAssemblyName" = Application assembly name (typically the exe name), "ExchangeRateService".
         ///             "AppGuid" = A unique guid for this appllication, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
         ///             "UserName" = The environment user name, ex: "John Doe".
-        ///             "Is64BitProcess" = "True" if the process is running as a 64-bit process, else "False"
-        ///             "OSVersion" = The version of the OS
+        ///             "Is64BitProcess" = "True" if the process is running as a 64-bit process, else "False".
+        ///             "OSVersion" = The version of the OS.
         ///             "Platform" = The platform, ex "WinNT", "Unix".
+        ///             "MachineName" = The computer name.
         /// </summary>
         public static IReadOnlyDictionary<String, String> TextVars
         {
@@ -279,6 +280,8 @@ namespace SysWeaver
                     { nameof(Environment.Is64BitProcess), Environment.Is64BitProcess.ToString() },
                     { nameof(Environment.OSVersion), Environment.OSVersion.ToString() },
                     { nameof(Environment.OSVersion.Platform), Environment.OSVersion.Platform.ToString() },
+                    { nameof(Environment.MachineName), Environment.MachineName },
+
                 }.Freeze();
                 InternalTextVars = v;
                 return v;
@@ -297,9 +300,10 @@ namespace SysWeaver
         ///             "appassemblyname" = Application assembly name (typically the exe name), "ExchangeRateService".
         ///             "appguid" = A unique guid for this appllication, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
         ///             "username" = The environment user name, ex: "John Doe".
-        ///             "is64bitprocess" = "True" if the process is running as a 64-bit process, else "False"
-        ///             "osversion" = The version of the OS
+        ///             "is64bitprocess" = "True" if the process is running as a 64-bit process, else "False".
+        ///             "osversion" = The version of the OS.
         ///             "platform" = The platform, ex "WinNT", "Unix".
+        ///             "machinename" = The computer name.
         /// </summary>
         public static IReadOnlyDictionary<String, String> TextVarsCaseInsensitive
         {
@@ -320,6 +324,7 @@ namespace SysWeaver
                     { nameof(Environment.Is64BitProcess).FastToLower(), Environment.Is64BitProcess.ToString() },
                     { nameof(Environment.OSVersion).FastToLower(), Environment.OSVersion.ToString() },
                     { nameof(Environment.OSVersion.Platform).FastToLower(), Environment.OSVersion.Platform.ToString() },
+                    { nameof(Environment.MachineName).FastToLower(), Environment.MachineName },
                 }.Freeze();
                 InternalTextVarsCaseInsensitive = v;
                 return v;
@@ -341,6 +346,7 @@ namespace SysWeaver
         ///             $(Is64BitProcess) = "True" if the process is running as a 64-bit process, else "False".
         ///             $(OSVersion) = The version of the OS.
         ///             $(Platform) = The platform, ex "WinNT", "Unix".
+        ///             $(MachineName) = The computer name.
         /// </summary>
         /// <param name="template">The template, variables start with "$(" and ends with ")".
         ///             $(AppName) = Application name.
@@ -353,6 +359,7 @@ namespace SysWeaver
         ///             $(Is64BitProcess) = "True" if the process is running as a 64-bit process, else "False".
         ///             $(OSVersion) = The version of the OS.
         ///             $(Platform) = The platform, ex "WinNT", "Unix".
+        ///             $(MachineName) = The computer name.
         /// </param>
         /// <param name="caseInSensitive">If true the variable names is case in-sensitive</param>
         /// <param name="extra">Optional extra variables</param>
@@ -426,6 +433,7 @@ namespace SysWeaver
             new Stats(StatsSystem , nameof(Environment.Is64BitProcess), Environment.Is64BitProcess, "True if the process runs as a 64-bit process"),
             new Stats(StatsSystem , nameof(Environment.OSVersion), Environment.OSVersion.ToString(), "The operation system"),
             new Stats(StatsSystem , nameof(Environment.OSVersion.Platform), Environment.OSVersion.Platform.ToString(), "The OS platform"),
+            new Stats(StatsSystem , nameof(Environment.MachineName), Environment.MachineName, "The computer name"),
             new Stats(StatsSystem , nameof(ProcessorArchitecture), ProcessorArchitecture, "The CPU in the machine"),
             new Stats(StatsSystem , nameof(OsPlatform), OsPlatform, "The general OS type"),
         ];
@@ -525,10 +533,10 @@ namespace SysWeaver
                 m?.AddMessage("No app info parameters supplied!", MessageLevels.Warning);
                 return;
             }
-            var name = p.AppName;
-            var dispName = p.AppDisplayName;
-            var desc = p.AppDescription;
-            var lang = p.AppLanguage;
+            var name = PathTemplate.Resolve(p.AppName);
+            var dispName = PathTemplate.Resolve(p.AppDisplayName);
+            var desc = PathTemplate.Resolve(p.AppDescription);
+            var lang = PathTemplate.Resolve(p.AppLanguage);
             if (name != null)
             {
                 if (name != EnvInfo.AppName)

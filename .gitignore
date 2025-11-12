@@ -452,3 +452,4 @@ FodyWeavers.xsd
 /SysWeaver.MicroService.UserManager/web
 /SysWeaver.MicroService.UserStorage/data
 /SysWeaver.MicroServices.Log/web
+web

@@ -11,7 +11,7 @@ namespace SysWeaver.MicroService
 
     public partial class FolderSyncService
     {
-        sealed class Folder
+        internal sealed class Folder
         {
 
 

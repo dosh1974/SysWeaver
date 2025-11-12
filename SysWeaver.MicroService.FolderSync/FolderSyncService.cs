@@ -708,7 +708,6 @@ namespace SysWeaver.MicroService
             }
         }
 
-
         async ValueTask<bool> Finalize(String jobId, Sync sync, HttpServerRequest context)
         {
             var dest = sync.DestPath;
@@ -809,10 +808,6 @@ namespace SysWeaver.MicroService
             Manager.AddMessage(String.Concat(LogPrefix, "Activated folder \"", folder.Name, "\""));
             return true;
         }
-
-
-
-
 
         /// <summary>
         /// Remove a folder
@@ -1094,98 +1089,103 @@ namespace SysWeaver.MicroService
         }
 
 
-
-        IEnumerable<Data> GetFolderData()
+        IEnumerable<Data> GetFolderData(Folder folder)
         {
-            return Folders.Values.SelectMany(folder =>
+            var uploadName = folder.Name;
+            var path = folder.DestPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var name = Path.GetFileName(path);
+            var parent = Path.GetDirectoryName(path);
+            var temp = Path.Combine(parent, name + "_Temp");
+            var mp = ManifestParsers;
+            return Directory.GetDirectories(parent, name + "*", SearchOption.TopDirectoryOnly)
+            .Where(x => !x.FastStartsWith(temp))
+            .Select(dir =>
             {
-                var uploadName = folder.Name;
-                var path = folder.DestPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                var name = Path.GetFileName(path);
-                var parent = Path.GetDirectoryName(path);
-                var temp = Path.Combine(parent, name + "_Temp");
-                var mp = ManifestParsers;
-                return Directory.GetDirectories(parent, name + "*", SearchOption.TopDirectoryOnly)
-                .Where(x => !x.FastStartsWith(temp))
-                .Select(dir =>
+                var fn = Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                var di = new DirectoryInfo(dir);
+                var lastTime = di.LastWriteTimeUtc;
+                var acc = di.LastAccessTimeUtc;
+                if (acc > lastTime)
+                    lastTime = acc;
+                String actions = null;
+                var isActive = name.FastEquals(fn);
+                if (!isActive)
                 {
-                    var fn = Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                    var di = new DirectoryInfo(dir);
-                    var lastTime = di.LastWriteTimeUtc;
-                    var acc = di.LastAccessTimeUtc;
-                    if (acc > lastTime)
-                        lastTime = acc;
-                    String actions = null;
-                    var isActive = name.FastEquals(fn);
-                    if (!isActive)
+                    actions = JsonSer.ToString(new FolderSyncOperation
                     {
-                        actions = JsonSer.ToString(new FolderSyncOperation
-                        {
-                            Folder = uploadName,
-                            DiscFolder = fn,
-                        });
-                        actions = Uri.EscapeDataString(actions);
-                    }
-                    var a = folder.Auth;
-                    var data = new Data
-                    {
-                        Name = uploadName,
+                        Folder = uploadName,
                         DiscFolder = fn,
-                        IsActive = isActive,
-                        Uploaded = di.CreationTimeUtc,
-                        LastUsed = lastTime,
-                        Actions = actions,
-                        FullPath = di.FullName,
-                        Comp = File.Exists(di.FullName + ContentDependentChunking.DotFileExt),
-                        Auth = a == null ? null : String.Join(',', a),
-                        Folder = folder,
-                    };
-                    try
+                    });
+                    actions = Uri.EscapeDataString(actions);
+                }
+                var a = folder.Auth;
+                var data = new Data
+                {
+                    Name = uploadName,
+                    DiscFolder = fn,
+                    IsActive = isActive,
+                    Uploaded = di.CreationTimeUtc,
+                    LastUsed = lastTime,
+                    Actions = actions,
+                    FullPath = di.FullName,
+                    Comp = File.Exists(di.FullName + ContentDependentChunking.DotFileExt),
+                    Auth = a == null ? null : String.Join(',', a),
+                    Folder = folder,
+                };
+                try
+                {
+                    var mn = Path.Combine(di.FullName, ManifestName);
+                    if (!File.Exists(mn))
                     {
-                        var mn = Path.Combine(di.FullName, ManifestName);
-                        if (!File.Exists(mn))
+                        try
                         {
-                            try
+                            BuildManifest(folder, mn);
+                            if (folder.Compress)
                             {
-                                BuildManifest(folder, mn);
-                                if (folder.Compress)
-                                {
 
-                                }
-                            }
-                            catch
-                            {
                             }
                         }
-                        if (File.Exists(mn))
+                        catch
                         {
-                            var t = File.ReadAllLines(mn);
-                            int lineIndex = 0;
-                            foreach (var x in t)
-                            {
-                                var line = x.Trim();
-                                var key = line.SplitFirst(':', out var value).TrimEnd().FastToLower();
-                                if (mp.TryGetValue(key, out var fnx))
-                                {
-                                    try
-                                    {
-                                        fnx(data, value.TrimStart(), t, lineIndex);
-                                    }
-                                    catch
-                                    {
-                                    }
-                                }
-                                ++lineIndex;
-                            }
                         }
                     }
-                    catch
+                    if (File.Exists(mn))
                     {
+                        var t = File.ReadAllLines(mn);
+                        int lineIndex = 0;
+                        foreach (var x in t)
+                        {
+                            var line = x.Trim();
+                            var key = line.SplitFirst(':', out var value).TrimEnd().FastToLower();
+                            if (mp.TryGetValue(key, out var fnx))
+                            {
+                                try
+                                {
+                                    fnx(data, value.TrimStart(), t, lineIndex);
+                                }
+                                catch
+                                {
+                                }
+                            }
+                            ++lineIndex;
+                        }
                     }
-                    return data;
-                });
+                }
+                catch
+                {
+                }
+                return data;
             });
+
         }
+
+        static readonly IEnumerable<Data> Empty = Array.Empty<Data>();
+
+        public IEnumerable<Data> GetFolderData(String syncName)
+            => Folders.TryGetValue(syncName.FastToLower(), out var f) ? GetFolderData(f) : Empty;
+
+        public IEnumerable<Data> GetFolderData()
+            => Folders.Values.SelectMany(GetFolderData);
 
 
         /// <summary>

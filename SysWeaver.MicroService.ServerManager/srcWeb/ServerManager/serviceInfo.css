@@ -1,0 +1,68 @@
+﻿
+*
+{
+    box-sizing: border-box;
+}
+
+body {
+    padding: 0;
+    margin: 0;
+    width: 100svw;
+}
+
+
+si-name
+{
+    width: 100svw;
+    text-align: center;
+    padding: 0.5em 0.25em;
+    display: block;
+    font-size: 125%;
+}
+
+si-state {
+    padding: 0.5em 0.25em;
+}
+
+si-servicebuttons {
+    padding: 0.5em 0.25em;
+    display: block;
+}
+
+si-graphs {
+    display: block;
+    width: 100svw;
+    padding: 0.5em 0.25em;
+}
+
+si-graph
+{
+    width: calc(50svw - 1.5em);
+    height: 30svh;
+    padding: 0.5em;
+    margin: 0.5em;
+    display: inline-block;
+    background: rgba(0,0,0,0.25);
+    border-radius: var(--ThemeRad);
+    cursor: pointer;
+}
+
+si-text
+{
+    display: block;
+    height: 24px;
+    text-align: center;
+}
+
+
+si-graph iframe {
+    display: block;
+    border: none;
+    width: 100%;
+    height: calc(100% - 24px);
+    pointer-events: none;
+}
+
+si-debugbuttons {
+    display: block;
+}

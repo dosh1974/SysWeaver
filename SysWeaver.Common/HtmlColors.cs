@@ -193,6 +193,40 @@ namespace SysWeaver
 
 
         /// <summary>
+        /// Make the shortest html color string for the given red, green, blue and alpha components.
+        /// </summary>
+        /// <param name="rgb">0xrrggbb</param>
+        /// <param name="a">[0, 1] Alpha component</param>
+        /// <returns>A html color string</returns>
+        public static String MakeHtmlColor(uint rgb, double a = 1)
+        {
+            if (a <= 0)
+                return "transparent";
+            var r = (rgb >> 16) & 0xff;
+            var g = (rgb >> 8) & 0xff;
+            var b = rgb & 0xff;
+            if (a >= 1) 
+            {
+                r = r < 0 ? 0 : (r > 255 ? 255 : r);
+                g = g < 0 ? 0 : (g > 255 ? 255 : g);
+                b = b < 0 ? 0 : (b > 255 ? 255 : b);
+                var key = (r << 16) | (g << 8) | b;
+                HexToName.TryGetValue((uint)key, out var name);
+                var h = Hex;
+                var ru = r >> 4;
+                var gu = g >> 4;
+                var bu = b >> 4;
+                var rl = r & 0xf;
+                var gl = g & 0xf;
+                var bl = b & 0xf;
+                if ((rl == ru) && (gl == gu) && (bl == bu))
+                    return SelShortest(name, String.Concat('#', h[ru], h[gu], h[bu]));
+                return SelShortest(name, String.Concat('#', h[ru], h[rl], h[gu], h[gl], h[bu], h[bl]));
+            }
+            return String.Concat("rgba(", r, ',', g, ',', b, ',', a.ToString(CultureInfo.InvariantCulture), ')');
+        }
+
+        /// <summary>
         /// Make the given color transparent
         /// </summary>
         /// <param name="htmlColor">A html color, can be a name [Red], a hex value [#f00] or [#ff0000], rgb [rgb(255,0,0)] or rgba [rgba(255,0,0,1.0)]</param>

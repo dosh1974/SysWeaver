@@ -1597,6 +1597,10 @@ class CanvasChart {
                     let fn = chartOptions.OnServerData;
                     if (fn != null)
                         await fn(data);
+                    if (!data.options)
+                        data.options = {};
+                    if (!data.options.plugins)
+                        data.options.plugins = {};
                     orgDataStr = JSON.stringify(data);
                     ApplyChanges(data);
                     fn = chartOptions.OnFixedData;
@@ -1933,6 +1937,9 @@ async function chartMain() {
                 setValue(config, "options.scales.*y.ticks.font.weight", val);
                 setValue(config, "options.scales.*r.ticks.font.weight", val);
             }
+            val = ps.get("aspect");
+            if (val != null)
+                setValue(config, "options.maintainAspectRatio", val === "true");
         };
         o.OnDefaults = def =>
         {
@@ -1995,8 +2002,6 @@ async function chartMain() {
             val = ps.get("line-height");
             if (val != null)
                 def.font.lineHeight = parseFloat(val);
-
-
 
         };
 

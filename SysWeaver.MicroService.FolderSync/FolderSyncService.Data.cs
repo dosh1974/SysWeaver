@@ -7,7 +7,7 @@ namespace SysWeaver.MicroService
 
     public partial class FolderSyncService
     {
-        sealed class Data
+        public sealed class Data
         {
  
 
@@ -92,7 +92,7 @@ namespace SysWeaver.MicroService
             /// <summary>
             /// Full path
             /// </summary>
-            [TableDataText]
+            [TableDataText(30, "{0}", "{0}", true)]
             public String FullPath;
 
             /// <summary>
