@@ -281,7 +281,7 @@ namespace SysWeaver
                     { nameof(Environment.OSVersion), Environment.OSVersion.ToString() },
                     { nameof(Environment.OSVersion.Platform), Environment.OSVersion.Platform.ToString() },
                     { nameof(Environment.MachineName), Environment.MachineName },
-
+                    { (nameof(Environment.MachineName) + "Cased"), Environment.MachineName.FastToLower().MakeFirstUppercase() },
                 }.Freeze();
                 InternalTextVars = v;
                 return v;
@@ -325,6 +325,7 @@ namespace SysWeaver
                     { nameof(Environment.OSVersion).FastToLower(), Environment.OSVersion.ToString() },
                     { nameof(Environment.OSVersion.Platform).FastToLower(), Environment.OSVersion.Platform.ToString() },
                     { nameof(Environment.MachineName).FastToLower(), Environment.MachineName },
+                    { (nameof(Environment.MachineName) + "Cased").FastToLower(), Environment.MachineName.FastToLower().MakeFirstUppercase() },
                 }.Freeze();
                 InternalTextVarsCaseInsensitive = v;
                 return v;

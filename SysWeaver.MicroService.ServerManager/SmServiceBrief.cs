@@ -12,7 +12,7 @@ namespace SysWeaver.MicroService
         /// Name of the repo, use this when synchronizing a local folder.
         /// </summary>
         //[TableDataUrl("{0}", "*../FolderSync/Folders/{0}/explore", "Click to explore \"{3}\".")]
-        [TableDataUrl("{0}", "*../ServerManager/ServiceInfo.html?p=\"{0}\"", "Click to view service details \"{3}\".")]
+        [TableDataUrl("{0}", "*../ServerManager/serviceInfo.html?p={0}", "Click to view service details \"{3}\".")]
         public String Name;
 
         /// <summary>

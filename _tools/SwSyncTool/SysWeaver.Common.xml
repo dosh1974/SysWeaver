@@ -1708,7 +1708,7 @@
             Will show the full version of the text on click.
             </summary>
         </member>
-        <member name="M:SysWeaver.Data.TableDataTextAttribute.#ctor(System.Int32,System.String,System.String)">
+        <member name="M:SysWeaver.Data.TableDataTextAttribute.#ctor(System.Int32,System.String,System.String,System.Boolean)">
             <summary>
             Format some long multiline text.
             Will show a capped version of the text.
@@ -1723,6 +1723,7 @@
             {0} = Value.
             {1} = Capped value.
             </param>
+            <param name="monoSpaced">If true, display using a fixed width font</param>
         </member>
         <member name="T:SysWeaver.Data.TableDataMdAttribute">
             <summary>
@@ -3103,9 +3104,10 @@
                         "AppAssemblyName" = Application assembly name (typically the exe name), "ExchangeRateService".
                         "AppGuid" = A unique guid for this appllication, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
                         "UserName" = The environment user name, ex: "John Doe".
-                        "Is64BitProcess" = "True" if the process is running as a 64-bit process, else "False"
-                        "OSVersion" = The version of the OS
+                        "Is64BitProcess" = "True" if the process is running as a 64-bit process, else "False".
+                        "OSVersion" = The version of the OS.
                         "Platform" = The platform, ex "WinNT", "Unix".
+                        "MachineName" = The computer name.
             </summary>
         </member>
         <member name="P:SysWeaver.EnvInfo.TextVarsCaseInsensitive">
@@ -3118,9 +3120,10 @@
                         "appassemblyname" = Application assembly name (typically the exe name), "ExchangeRateService".
                         "appguid" = A unique guid for this appllication, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
                         "username" = The environment user name, ex: "John Doe".
-                        "is64bitprocess" = "True" if the process is running as a 64-bit process, else "False"
-                        "osversion" = The version of the OS
+                        "is64bitprocess" = "True" if the process is running as a 64-bit process, else "False".
+                        "osversion" = The version of the OS.
                         "platform" = The platform, ex "WinNT", "Unix".
+                        "machinename" = The computer name.
             </summary>
         </member>
         <member name="M:SysWeaver.EnvInfo.ResolveText(System.String,System.Boolean,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})">
@@ -3136,6 +3139,7 @@
                         $(Is64BitProcess) = "True" if the process is running as a 64-bit process, else "False".
                         $(OSVersion) = The version of the OS.
                         $(Platform) = The platform, ex "WinNT", "Unix".
+                        $(MachineName) = The computer name.
             </summary>
             <param name="template">The template, variables start with "$(" and ends with ")".
                         $(AppName) = Application name.
@@ -3148,6 +3152,7 @@
                         $(Is64BitProcess) = "True" if the process is running as a 64-bit process, else "False".
                         $(OSVersion) = The version of the OS.
                         $(Platform) = The platform, ex "WinNT", "Unix".
+                        $(MachineName) = The computer name.
             </param>
             <param name="caseInSensitive">If true the variable names is case in-sensitive</param>
             <param name="extra">Optional extra variables</param>
@@ -3782,6 +3787,14 @@
             <param name="r">[0, 255] Red component</param>
             <param name="g">[0, 255] Green component</param>
             <param name="b">[0, 255] Blue component</param>
+            <param name="a">[0, 1] Alpha component</param>
+            <returns>A html color string</returns>
+        </member>
+        <member name="M:SysWeaver.HtmlColors.MakeHtmlColor(System.UInt32,System.Double)">
+            <summary>
+            Make the shortest html color string for the given red, green, blue and alpha components.
+            </summary>
+            <param name="rgb">0xrrggbb</param>
             <param name="a">[0, 1] Alpha component</param>
             <returns>A html color string</returns>
         </member>
