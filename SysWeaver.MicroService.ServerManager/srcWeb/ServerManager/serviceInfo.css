@@ -17,17 +17,44 @@ si-name
     text-align: center;
     padding: 0.5em 0.25em;
     display: block;
+    font-weight: bold;
     font-size: 125%;
+    margin-bottom: 0.5em;
+}
+
+si-stats {
+    margin: 0.5em 1em;
+    display: flex;
+    flex-wrap: wrap;
 }
 
 si-state {
-    padding: 0.5em 0.25em;
+    display: inline-flex;
+    font-weight: bold;
+    margin: 8px 8px 8px 0;
+    padding: 0.5em 1em;
+    background-color: var(--ThemeMain);
+    color: var(--ThemeBackground);
+    border-radius: var(--ThemeRad);
 }
 
+
+    si-state.Hide {
+        display: none;
+    }
+
+
 si-servicebuttons {
-    padding: 0.5em 0.25em;
-    display: block;
+    margin: 0.5em 1em;
+    display: flex;
+    flex-wrap: wrap;
 }
+
+
+    si-servicebuttons sysweaver-button{
+        margin: 8px 8px 8px 0;
+
+    }
 
 si-graphs {
     display: block;
@@ -64,5 +91,40 @@ si-graph iframe {
 }
 
 si-debugbuttons {
-    display: block;
+    margin: 0.5em 1em;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+
+.si-icon-restart {
+    mask-image: url("../icons/reload.svg");
+}
+
+.si-icon-pause {
+    mask-image: url("../icons/preview_pause.svg");
+}
+
+.si-icon-resume {
+    mask-image: url("../icons/preview_play.svg");
+}
+
+.si-icon-stop {
+    mask-image: url("../icons/preview_stop.svg");
+}
+
+.si-icon-start {
+    mask-image: url("../icons/preview_play.svg");
+}
+
+.si-icon-disable {
+    mask-image: url("../icons/close.svg");
+}
+
+.si-icon-explore {
+    mask-image: url("../icons/explore.svg");
+}
+
+.si-icon-log {
+    mask-image: url("../icons/notes.svg");
 }

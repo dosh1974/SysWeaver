@@ -2815,6 +2815,7 @@ class Button {
             e.classList.add(style.ButtonStyle);
         const t = this;
         t.Element = e;
+        e.Button = t;
         t.Title = title;
         t.UserClick = onclick;
         const th = this;

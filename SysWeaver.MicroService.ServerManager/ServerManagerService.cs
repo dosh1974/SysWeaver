@@ -88,7 +88,7 @@ namespace SysWeaver.MicroService
             {
                 var fn = Path.GetFileName(x).FastToLower();
                 if (!fn.FastEquals("createdump.exe"))
-                    return x.ToQuoted();
+                    return x;
             }
             return null;
         }
@@ -252,7 +252,7 @@ namespace SysWeaver.MicroService
             var exe = FindServiceExe(path);
             if (exe == null)
                 return null;
-            var res = await RunCommand(exe + " start").ConfigureAwait(false);
+            var res = await RunCommand(exe.ToQuoted() + " start").ConfigureAwait(false);
             if (res < 0)
                 return new Exception("Failed to start service \"" + name + "\", error: " + res);
             return null;
@@ -264,7 +264,7 @@ namespace SysWeaver.MicroService
             var exe = FindServiceExe(path);
             if (exe == null)
                 return null;
-            var res = await RunCommand(exe + " uninstall").ConfigureAwait(false);
+            var res = await RunCommand(exe.ToQuoted() + " uninstall").ConfigureAwait(false);
             if (res < 0)
                 return new Exception("Failed to uninstall service \"" + name + "\", error: " + res);
             return null;
@@ -277,10 +277,6 @@ namespace SysWeaver.MicroService
         async ValueTask<bool> UpdateMetrics()
         {
             Dictionary<String, Process> procExes = new Dictionary<string, Process>(StringComparer.Ordinal);
-
-
-
-
             foreach (var p in Process.GetProcesses())
             {
                 try
@@ -302,7 +298,7 @@ namespace SysWeaver.MicroService
                 var exe = FindServiceExe(i.Syncher.DiscFolder);
                 if (exe != null)
                 {
-                    if (procExes.TryGetValue(exe.RemoveQuotes(), out var p))
+                    if (procExes.TryGetValue(exe, out var p))
                     {
                         try
                         {
@@ -508,7 +504,7 @@ namespace SysWeaver.MicroService
                         y = new ChartJsScaleOptions
                         {
                             min = 0,
-                            max = 100,
+                            //max = 100,
                         }
                     },
                     plugins = new ChartJsPlugins
@@ -524,15 +520,43 @@ namespace SysWeaver.MicroService
         }
 
 
+        static SmFileInfo GetFileInfo(String fullname)
+        {
+            var fi = new FileInfo(fullname);
+            if (!fi.Exists)
+                return null;
+            return new SmFileInfo
+            {
+                Name = fi.Name,
+                LastModified = fi.LastWriteTimeUtc,
+                Size = fi.Length,
+            };
+        }
+
         [WebApi]
         [WebApiAuth]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public SmServiceDetail GetDetail(String serviceName, HttpServerRequest context)
+            => InternalGetDetail(Validate(serviceName, context));
+
+        SmServiceDetail InternalGetDetail(SmServiceInfo info)
         {
-            var info = Validate(serviceName, context);
-            var data = Syncer.GetFolderData(serviceName).ToList();
-            return new SmServiceDetail(info, data);
+            var data = Syncer.GetFolderData(info.Service.Name).ToList();
+            var discFolder = info.Syncher.DiscFolder;
+            var exeName = FindServiceExe(discFolder);
+            SmFileInfo logFile = null;
+            SmFileInfo[] configs = null;
+            if (exeName != null)
+            {
+                exeName = Path.GetFileName(exeName);
+                var baseName = Path.GetFileNameWithoutExtension(exeName);
+                configs = GetConfigs(discFolder, baseName).OrderBy(x => x).Select(x => GetFileInfo(Path.Combine(discFolder, x))).ToArray();
+                logFile = GetFileInfo(Path.Combine(discFolder, baseName + ".log"));
+            }
+            var masterFolder = Path.GetDirectoryName(discFolder);
+            SmFileInfo[] masterConfigs = GetConfigs(masterFolder, "*").OrderBy(x => x).Select(x => GetFileInfo(Path.Combine(masterFolder, x))).ToArray();
+            return new SmServiceDetail(info, data, exeName, logFile, configs, masterConfigs);
         }
 
 
@@ -556,6 +580,60 @@ namespace SysWeaver.MicroService
             return s.Convert(info => new SmServiceBrief(info, Syncer.GetFolderData(info.Syncher.Name).ToList()));
         }
 
+
+
+        async Task<SmServiceDetail> DoVerb(String serviceName, String verb, HttpServerRequest context)
+        {
+            var info = Validate(serviceName, context);
+            var exe = FindServiceExe(info.Syncher.DiscFolder);
+            if (exe == null)
+                return null;
+            var res = await RunCommand(exe.ToQuoted() + " " + verb).ConfigureAwait(false);
+            if (res < 0)
+                throw new Exception("Failed to start service \"" + serviceName + "\", error: " + res);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            info.Metrics.Status = await CheckStatus(exe).ConfigureAwait(false);
+            return InternalGetDetail(info);
+        }
+
+        const string AuditGroup = "ServerManager";
+
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public Task<SmServiceDetail> Restart(String serviceName, HttpServerRequest context)
+            => DoVerb(serviceName, "restart", context);
+
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public Task<SmServiceDetail> Pause(String serviceName, HttpServerRequest context)
+            => DoVerb(serviceName, "pause", context);
+
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public Task<SmServiceDetail> Continue(String serviceName, HttpServerRequest context)
+            => DoVerb(serviceName, "continue", context);
+
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public Task<SmServiceDetail> Stop(String serviceName, HttpServerRequest context)
+            => DoVerb(serviceName, "stop", context);
+
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public Task<SmServiceDetail> Start(String serviceName, HttpServerRequest context)
+            => DoVerb(serviceName, "start", context);
+
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public Task<SmServiceDetail> Uninstall(String serviceName, HttpServerRequest context)
+            => DoVerb(serviceName, "uninstall", context);
 
         /// <summary>
         /// All synched folders as a table
