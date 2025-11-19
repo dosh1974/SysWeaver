@@ -1,4 +1,8 @@
 ﻿
+:root {
+    --MaxW: 100ch;
+}
+
 *
 {
     box-sizing: border-box;
@@ -7,25 +11,54 @@
 body {
     padding: 0;
     margin: 0;
-    width: 100svw;
+    width: 100%;
 }
 
+body.ViewOnly{
+    pointer-events: none;
+}
+
+si-bg {
+    position: fixed;
+    display: block;
+    left: 50%;
+    top: 0;
+    width: calc(var(--MaxW) + 2em);
+    bottom: 0;
+    transform: translateX(-50%);
+    box-shadow: 0 0 32px var(--ThemeMain25);
+    z-index: -1;
+}
 
 si-name
 {
-    width: 100svw;
+    width: 100%;
     text-align: center;
     padding: 0.5em 0.25em;
-    display: block;
     font-weight: bold;
     font-size: 125%;
     margin-bottom: 0.5em;
+    background-color: var(--ThemeAcc2);
+    color: var(--ThemeBackground);
+    display: none;
+}
+
+body.TopWindow si-name {
+    display: block;
+}
+
+@media screen and (max-width: 600px) {
+    si-name {
+        border-radius: 0;
+    }
 }
 
 si-stats {
-    margin: 0.5em 1em;
+    max-width: var(--MaxW);
+    margin: 0.5em auto;
     display: flex;
     flex-wrap: wrap;
+    justify-content: space-evenly;
 }
 
 si-state {
@@ -39,15 +72,29 @@ si-state {
 }
 
 
+    si-state.Ok {
+        background-color: var(--ThemeOk);
+    }
+
+    si-state.Warning {
+        background-color: var(--ThemeWarning);
+    }
+
+    si-state.Error {
+        background-color: var(--ThemeError);
+    }
+
     si-state.Hide {
         display: none;
     }
 
 
 si-servicebuttons {
-    margin: 0.5em 1em;
+    max-width: var(--MaxW);
+    margin: 0.5em auto;
     display: flex;
     flex-wrap: wrap;
+    justify-content: space-evenly;
 }
 
 
@@ -58,21 +105,50 @@ si-servicebuttons {
 
 si-graphs {
     display: block;
-    width: 100svw;
+    width: 100%;
     padding: 0.5em 0.25em;
 }
 
-si-graph
-{
-    width: calc(50svw - 1.5em);
+@media screen and (max-width: 600px) {
+    si-graphs {
+        padding-left: 0;
+        padding-right: 0;
+    }
+}
+
+si-graph {
+    width: calc(50% - 1.5em);
     height: 30svh;
     padding: 0.5em;
     margin: 0.5em;
     display: inline-block;
-    background: rgba(0,0,0,0.25);
+    background-color: var(--ThemeBackground);
     border-radius: var(--ThemeRad);
     cursor: pointer;
+    border: 2px solid transparent;
+    outline: 3px solid transparent;
+    transition: outline linear var(--ThemeFadeDuration), border linear var(--ThemeFadeDuration);
 }
+
+    si-graph:focus {
+        outline: 3px solid var(--ThemeAcc1);
+    }
+
+si-graph:hover
+{
+    border: 2px solid var(--ThemeAcc250);
+}
+
+/* Portrait */
+@media (max-aspect-ratio: 2/3) {
+    si-graph {
+        width: calc(100%);
+        margin-left: 0;
+        margin-right: 0;
+        border-radius: 0;
+    }
+}
+
 
 si-text
 {
@@ -91,11 +167,93 @@ si-graph iframe {
 }
 
 si-debugbuttons {
-    margin: 0.5em 1em;
+    max-width: var(--MaxW);
+    margin: 0.5em auto;
     display: flex;
     flex-wrap: wrap;
+    justify-content: space-evenly;
 }
 
+
+si-configs {
+    display: grid;
+    grid-template-columns: 32px auto auto auto;
+    grid-gap: 0.25em 1em;
+    max-width: var(--MaxW);
+    margin: 1.5em auto 0.25em auto;
+    border: 1px solid var(--ThemeMain);
+    border-radius: var(--ThemeRad);
+    padding-bottom: 0.25em;
+    overflow: hidden;
+}
+
+@media screen and (max-width: 600px) {
+    si-configs {
+        margin-left: 0;
+        margin-right: 0;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+}
+
+
+
+si-file-header {
+    grid-column-start: 1;
+    grid-column-end: 5;
+    text-transform: uppercase;
+    background-color: var(--ThemeMain);
+    color: var(--ThemeBackground);
+    padding: 1px 1em;
+    font-weight: bold;
+}
+
+
+si-file-icon{
+    grid-column: 1;
+    width: 32px;
+    height: 24px;
+    background-repeat: no-repeat;
+    background-position: center center;
+}
+
+si-file-name {
+    grid-column: 2;
+    line-height: 24px;
+    border-radius: var(--ThemeRadInp);
+    padding: 0 0.25em;
+    cursor: pointer;
+    transition: background-color linear var(--ThemeFadeDuration), color linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
+    outline: 3px solid transparent;
+    color: var(--ThemeAcc2);
+}
+
+    si-file-name:focus {
+        outline: 3px solid var(--ThemeAcc1);
+    }
+
+    si-file-name:hover {
+        background-color: var(--ThemeMain);
+        color: var(--ThemeBackground);
+    }
+
+
+si-file-size {
+    grid-column: 3;
+    text-align: right;
+    font: var(--ThemeFontMono);
+    line-height: 24px;
+    color: var(--ThemeAcc1);
+}
+
+si-file-time {
+    grid-column: 4;
+    font: var(--ThemeFontMono);
+    line-height: 24px;
+    text-align: right;
+    padding-right: 1em;
+}
 
 .si-icon-restart {
     mask-image: url("../icons/reload.svg");

@@ -6008,6 +6008,7 @@ async function SysWeaverInit() {
     {
     }
     const isTop = (wtop === wself) || (!isSameDomain);
+    window.IsTop = isTop;
     const sin = "SysWeaver.ServerInstance";
     let serverInstance = sessionStorage.getItem(sin) ?? null;
     if (serverInstance === "")

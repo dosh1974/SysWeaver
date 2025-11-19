@@ -224,7 +224,7 @@ namespace SysWeaver.MicroService
             var saveExt = SaveExt;
             var hashFile = pathPrefix + ".txt";
             var ex = await PathExt.TryDeleteFileAsync(hashFile).ConfigureAwait(false);
-            var exs = await Sizes.ConvertAsync(size => PathExt.TryDeleteFileAsync(String.Concat(pathPrefix, '_', size, saveExt))).ConfigureAwait(false);
+            var exs = await Sizes.ConvertAsyncValue(size => PathExt.TryDeleteFileAsync(String.Concat(pathPrefix, '_', size, saveExt))).ConfigureAwait(false);
             AuthManager?.InvalidateUserImageCache(uid);
             r.Session.InvalidateCache();
             //r.Server.PushMessageUser(uid, HttpServerBase.MessageRefresh);

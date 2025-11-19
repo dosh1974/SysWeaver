@@ -11,10 +11,12 @@ async function logFileMain() {
         const url = ps.get("api");
         const target = document.body;
         const p = document.createElement("pre");
+        target.appendChild(p);
         async function updateText() {
             p.innerText = await getRequest(url ?? "../Api/logFile/LogFile.txt", false, false, null, async e => e.text());
+            window.scrollTo(0, target.scrollHeight);
         }
-        await updateText();
+        const textUpdate = updateText();
         const user = await getRequest("../Api/auth/GetUser");
         const haveAdmin = (!url) && user && user.Succeeded && user.Tokens && ((user.Tokens.indexOf("admin") >= 0) || (user.Tokens.indexOf("debug") >= 0));
         const br = Button.CreateRow();
@@ -55,10 +57,11 @@ async function logFileMain() {
             br.appendChild(del.Element);
 
         }
-        target.appendChild(p);
+        await textUpdate;
+        PageLoaded();
     }
     catch (e) {
+        PageLoaded();
         Fail(e);
     }
-    PageLoaded();
 }

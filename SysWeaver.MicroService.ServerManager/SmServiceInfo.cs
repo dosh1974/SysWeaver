@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using SysWeaver.Auth;
+using SysWeaver.Net;
 using SysWeaver.OsServices;
 
 namespace SysWeaver.MicroService
@@ -12,13 +13,14 @@ namespace SysWeaver.MicroService
         public readonly ManagedService Service;
         public readonly FolderSyncFolder Syncher;
         public readonly IReadOnlyList<string> Auth;
-
+        public readonly RequestOptions Options;
 
         public SmServiceInfo(ManagedService service, FolderSyncFolder syncher, ServerManagerParams p)
         {
             Service = service;
             Syncher = syncher;
             Auth = Authorization.GetRequiredTokens(service.SyncAuth ?? p.SyncAuth ?? Roles.Debug);
+            Options = new RequestOptions(5, 4, 32, "br:Balanced,deflate:Balanced,gzip:Balanced", String.Join(',', Auth));
         }
 
         public long LastCpu;

@@ -17,7 +17,7 @@ namespace SysWeaver.MicroService
 
     [RequiredDep<FolderSyncService>()]
     [WebApiUrl("../ServerManager")]
-    public sealed partial class ServerManagerService : IDisposable
+    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule
     {
 
         public ServerManagerService(ServiceManager manager, ServerManagerParams p)
@@ -76,6 +76,45 @@ namespace SysWeaver.MicroService
         {
             Interlocked.Exchange(ref UpdateTask, null)?.Dispose();
         }
+
+
+        #region IHttpServerModule
+
+        public String[] OnlyForPrefixes { get; } = ["ServerManager/Data/"];
+
+        public IHttpRequestHandler Handler(HttpServerRequest context)
+        {
+            var lurl = context.LocalUrl.Split('/');
+            if (lurl.Length != 4)
+                return null;
+            var serviceName = lurl[2];
+            SmServiceInfo info;
+            try
+            {
+                info = Validate(serviceName, context);
+            }
+            catch
+            {
+                return null;
+            }
+            var folder = info.Syncher.DiscFolder;
+            folder = Path.GetDirectoryName(folder);
+            var file = new FileInfo(Path.Combine(folder, lurl[3]));
+            if (!file.Exists)
+                return null;
+            var ext = file.Extension.FastToLower();
+            if (!OkExtensions.Contains(ext))
+                return null;
+            var mime = MimeTypeMap.GetMimeType(ext);
+            return new FileHttpRequestHandler(mime, file, info.Options, true);
+        }
+
+        static readonly IReadOnlySet<String> OkExtensions = new HashSet<string>(StringComparer.Ordinal)
+        {
+            ".json", ".config",
+        }.Freeze();
+
+        #endregion//IHttpServerModule
 
         PeriodicTask UpdateTask;
 
@@ -302,7 +341,7 @@ namespace SysWeaver.MicroService
                     {
                         try
                         {
-                            m.ProcessHandle = (long)p.Handle;
+                            m.ProcessHandle = (long)p.Id;
                             m.MemUsage = (long)p.WorkingSet64;
                             var l = i.LastCpu;
                             var now = Stopwatch.GetTimestamp();

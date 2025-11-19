@@ -1048,7 +1048,7 @@ namespace SysWeaver
                 return unchecked((int)h);
             }
         }
-        public override bool Equals(object? value)
+        public override bool Equals(object value)
         {
             return value is BigRat a ? Equals(a) : false;
         }
@@ -1067,14 +1067,14 @@ namespace SysWeaver
             var v = stackalloc uint[4]; copy(v, value);
             fixed (uint* u = this.p) return cmp(u, v);
         }
-        public int CompareTo(object? value)
+        public int CompareTo(object value)
         {
             if (value == null) return 1;
             if (value is BigRat d) return CompareTo(d);
             throw new ArgumentException(nameof(value));
         }
 
-        public bool TryFormat(Span<char> s, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = null)
+        public bool TryFormat(Span<char> s, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider provider = null)
         {
             var a = this; char f = 'Q', g = f; int d = 32; var info = NumberFormatInfo.GetInstance(provider);
             if (format.Length != 0)
@@ -1128,7 +1128,7 @@ namespace SysWeaver
             charsWritten = n; return true; err:
             new Span<char>(&t, 2).TryCopyTo(s); charsWritten = 0; return false;
         }
-        public string ToString(string? format, IFormatProvider? provider)
+        public string ToString(string format, IFormatProvider provider)
         {
             if (format != default && format.Length == 0) provider = NumberFormatInfo.InvariantInfo; // "" : dbg
             Span<char> s = stackalloc char[1024];
@@ -1143,11 +1143,11 @@ namespace SysWeaver
             }
             finally { free(pa); }
         }
-        public string ToString(string? format)
+        public string ToString(string format)
         {
             return ToString(format, default(IFormatProvider));
         }
-        public string ToString(IFormatProvider? provider)
+        public string ToString(IFormatProvider provider)
         {
             return ToString(default(string), provider);
         }
@@ -1156,7 +1156,7 @@ namespace SysWeaver
             return ToString(default(string), default(IFormatProvider));
         }
 
-        public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider? provider, out BigRat result)
+        public static bool TryParse(ReadOnlySpan<char> s, NumberStyles style, IFormatProvider provider, out BigRat result)
         {
             if ((style & NumberStyles.AllowHexSpecifier) != 0) goto err;
             if ((style & NumberStyles.AllowLeadingWhite) != 0) s = s.TrimStart(" \u0009\u000A\u000B\u000C\u000D");
@@ -1179,7 +1179,7 @@ namespace SysWeaver
             if (d != 0) a /= d; if (p != 0) a *= p;
             result = a; return true; err: result = default; return false;
         }
-        public static bool TryParse([NotNullWhen(true)] string? s, out BigRat result)
+        public static bool TryParse([NotNullWhen(true)] string s, out BigRat result)
         {
             return TryParse(s.AsSpan(), NumberStyles.Float, null, out result);
         }
@@ -1187,20 +1187,20 @@ namespace SysWeaver
         {
             return TryParse(s, NumberStyles.Float, null, out result);
         }
-        public static bool TryParse([NotNullWhen(true)] string? s, NumberStyles style, IFormatProvider? provider, out BigRat result)
+        public static bool TryParse([NotNullWhen(true)] string s, NumberStyles style, IFormatProvider provider, out BigRat result)
         {
             return TryParse(s.AsSpan(), style, provider, out result);
         }
-        public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out BigRat result)
+        public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider provider, out BigRat result)
         {
             return TryParse(s, NumberStyles.Float, provider, out result);
         }
-        public static bool TryParse([NotNullWhen(true)] string? s, IFormatProvider? provider, out BigRat result)
+        public static bool TryParse([NotNullWhen(true)] string s, IFormatProvider provider, out BigRat result)
         {
             return TryParse(s.AsSpan(), NumberStyles.Float, provider, out result);
         }
 
-        public static BigRat Parse(ReadOnlySpan<char> s, NumberStyles style = NumberStyles.Float | NumberStyles.AllowThousands, IFormatProvider? provider = null)
+        public static BigRat Parse(ReadOnlySpan<char> s, NumberStyles style = NumberStyles.Float | NumberStyles.AllowThousands, IFormatProvider provider = null)
         {
             if (s == null) throw new ArgumentNullException(nameof(s));
             if ((style & NumberStyles.AllowHexSpecifier) != 0) throw new ArgumentException(nameof(style));
@@ -1214,15 +1214,15 @@ namespace SysWeaver
         {
             return Parse(s.AsSpan(), style, null);
         }
-        public static BigRat Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        public static BigRat Parse(ReadOnlySpan<char> s, IFormatProvider provider)
         {
             return Parse(s, NumberStyles.Float, provider);
         }
-        public static BigRat Parse(string s, NumberStyles style, IFormatProvider? provider)
+        public static BigRat Parse(string s, NumberStyles style, IFormatProvider provider)
         {
             return Parse(s.AsSpan(), style, provider);
         }
-        public static BigRat Parse(string s, IFormatProvider? provider)
+        public static BigRat Parse(string s, IFormatProvider provider)
         {
             return Parse(s.AsSpan(), NumberStyles.Float, provider);
         }
@@ -1256,9 +1256,9 @@ namespace SysWeaver
             }
         }
 
-        readonly uint[]? p;
+        readonly uint[] p;
 
-        BigRat(uint[]? p)
+        BigRat(uint[] p)
         {
             this.p = p;
         }
