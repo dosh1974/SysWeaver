@@ -105,7 +105,7 @@ async function versionInfoMain() {
         AddString("Machine", data.Machine);
         AddString("Comment", data.Comment);
         AddTime("Last used", data.LastUsed, "The time when this version was used last.");
-        AddYesNo("Compressed", data.Compressed);
+        AddYesNo("Compressed", data.Comp);
         AddCount("Files", data.Count);
         AddByteSize("Size", data.Size);
         AddString("Path", data.FullPath);
