@@ -33,9 +33,9 @@ namespace SysWeaver.MicroService
         public double CpuUsage;
 
         /// <summary>
-        /// Number of versions that this server have
+        /// Number of versions that this service have
         /// </summary>
-        public int Versions;
+        public int VersionCount;
 
         /// <summary>
         /// The time when the current version was uploaded
@@ -79,7 +79,7 @@ namespace SysWeaver.MicroService
             var s = info.Service;
             var f = info.Syncher;
             Name = s.Name;
-            Versions = data.Count;
+            VersionCount = data.Count;
             var x = data.FirstOrDefault(x => x.IsActive);
             Folder = Path.GetDirectoryName(f.DiscFolder);
             Uploaded = x?.Uploaded ?? DateTime.MinValue;

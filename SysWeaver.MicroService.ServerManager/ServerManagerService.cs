@@ -806,7 +806,7 @@ namespace SysWeaver.MicroService
                 throw new Exception("Version not found!");
 
 
-            return new SmVersionDetail(version);
+            return new SmVersionDetail(info, version);
         }
 
 

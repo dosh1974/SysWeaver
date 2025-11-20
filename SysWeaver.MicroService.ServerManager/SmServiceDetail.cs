@@ -4,95 +4,41 @@ using System.Collections.Generic;
 namespace SysWeaver.MicroService
 {
 
-
-    public sealed class SmFileInfo
-    {
-        public String Name;
-        public long Size;
-        public DateTime LastModified;
-    }
-
-
-    public class SmVersionBrief : IComparable<SmVersionBrief>
-    {
-        public SmVersionBrief()
-        {
-        }
-
-        internal SmVersionBrief(FolderSyncService.Data s)
-        {
-            Name = s.DiscFolder;
-            IsActive = s.IsActive;
-            Uploaded = s.Uploaded;
-            User = s.User;
-            Machine = s.Machine;
-            Comment = s.Comment;
-            LastUsed = s.LastUsed;
-        }
-
-        public String Name;
-
-        /// <summary>
-        /// True if active
-        /// </summary>
-        public bool IsActive;
-
-        /// <summary>
-        /// Folder creation time
-        /// </summary>
-        public DateTime Uploaded;
-
-        /// <summary>
-        /// The service user that uploaded this
-        /// </summary>
-        public String User;
-
-        /// <summary>
-        /// The name of the source machine (this can be anything)
-        /// </summary>
-        public String Machine;
-
-        /// <summary>
-        /// Optional comment supplied when uploading this folder
-        /// </summary>
-        public String Comment;
-
-        /// <summary>
-        /// When folder was last used (as active)
-        /// </summary>
-        public DateTime LastUsed;
-
-        public int CompareTo(SmVersionBrief other)
-        {
-            var i = other.Uploaded.CompareTo(Uploaded);
-            if (i != 0)
-                return i;
-            return other.LastUsed.CompareTo(LastUsed);
-        }
-    }
-
-
-    public class SmVersionDetail : SmVersionBrief
-    {
-        public SmVersionDetail() : base()
-        {
-        }
-
-        internal SmVersionDetail(FolderSyncService.Data s) : base(s)
-        {
-        }
-
-    }
-
     public sealed class SmServiceDetail : SmServiceBrief
     {
-
+        /// <summary>
+        /// The process id 
+        /// </summary>
         public long ProcId;
+        
+        /// <summary>
+        /// The total CPU time spent bny the service since it started
+        /// </summary>
         public TimeSpan TotalProcessorTime;
+
+        /// <summary>
+        /// Name of the executable
+        /// </summary>
         public String ExeName;
+
+        /// <summary>
+        /// Information about the log (if log is at default location)
+        /// </summary>
         public SmFileInfo Log;
+
+        /// <summary>
+        /// Configuration files that are active
+        /// </summary>
         public SmFileInfo[] Configs;
+
+        /// <summary>
+        /// Master configuration files
+        /// </summary>
         public SmFileInfo[] MasterConfigs;
+
+        /// <summary>
+        /// Information about available versions
+        /// </summary>
         public SmVersionBrief[] Versions;
 
         public SmServiceDetail()

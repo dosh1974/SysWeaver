@@ -49,4 +49,33 @@ body.TopWindow si-name {
     }
 }
 
+si-values {
+    display: grid;
+    grid-template-columns: auto 100%;
+    grid-gap: 0.25em 1em;
+    max-width: var(--MaxW);
+    margin: 1.5em auto 0.25em auto;
+    padding-bottom: 0.25em;
+    overflow: hidden;
+}
 
+@media screen and (max-width: 600px) {
+    si-values {
+        margin-left: 0;
+        margin-right: 0;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+}
+
+si-value-name {
+    grid-column: 1;
+    color: var(--ThemeMain);
+}
+
+
+si-value-value {
+    grid-column: 2;
+    color: var(--ThemeAcc1);
+}
