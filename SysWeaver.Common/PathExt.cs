@@ -799,8 +799,31 @@ namespace SysWeaver
                 return false;
             }
         }
-    
-    
+
+
+
+        /// <summary>
+        /// Gety the directory name and file mask from a path (typically containing wild cards).
+        /// Example: "D:\Temp\*.png" => "D:\Temp" and fileMask = "*.png".
+        /// Handles cases like having no directory (uses Environment.CurrentDirectory), ex: "*.png", "..\*.txt", ".\*.exe", "Sub\*.jpg" and so on.
+        /// </summary>
+        /// <param name="pathWithMask">Path (directory and file mask), ex: "D:\Temp\*.png"</param>
+        /// <param name="fileMask">Will be filled in with the file mask</param>
+        /// <returns>Will return the rooted directory part of the path</returns>
+        public static String GetDirectoryAndMask(String pathWithMask, out String fileMask)
+        {
+            var x = pathWithMask.LastIndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, Path.VolumeSeparatorChar]) + 1;
+            var dir = pathWithMask.Substring(0, x);
+            if (!Path.IsPathRooted(dir))
+            {
+                var e = Environment.CurrentDirectory;
+                dir = dir.Length == 0 ? e : Path.Combine(e, dir);
+            }
+            dir = new DirectoryInfo(dir).FullName;
+            fileMask = pathWithMask.Substring(x);
+            return dir;
+        }
+
     }
 
     public sealed class DirectoryNotEmptyException : Exception

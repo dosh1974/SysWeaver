@@ -341,8 +341,9 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fileName">The .swcompact filename</param>
         /// <param name="props">The props used</param>
+        /// <param name="touch">If true, mark exsiting chunks as used</param>
         /// <returns>Stats</returns>
-        public static async ValueTask<CdcChunkStats> Verify(String fileName, CdcProps props = null)
+        public static async ValueTask<CdcChunkStats> Verify(String fileName, CdcProps props = null, bool touch = false)
         {
             props = props ?? CdcProps.Default;
             var destName = PathExt.StripExtension(fileName);
@@ -371,7 +372,7 @@ namespace SysWeaver
                     var str = chunks.Span.Slice(i, hashSize).ToHexString();
                     ++chunkCount;
                     localUnique.Add(str);
-                    if (!ValidateChunk(str, props))
+                    if (!ValidateChunk(str, props, touch))
                     {
                         ++missingCount;
                         missingChunks.Add(str);
@@ -597,13 +598,28 @@ namespace SysWeaver
         /// </summary>
         /// <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
         /// <param name="props">The props used</param>
+        /// <param name="touch">If true, mark exsiting chunk as used</param>
         /// <returns>True if the chunk exist</returns>
-        public static bool ValidateChunk(String hashStr, CdcProps props = null)
+        public static bool ValidateChunk(String hashStr, CdcProps props = null, bool touch = false)
         {
             props = props ?? CdcProps.Default;
             var fileName = GetFilename(hashStr, props);
             var fi = new FileInfo(fileName);
-            return fi.Exists && (fi.Length > 0);
+            if (!fi.Exists)
+                return false;
+            if (fi.Length <= 0)
+                return false;
+            if (touch)
+            {
+                try
+                {
+                    fi.LastAccessTimeUtc = DateTime.UtcNow;
+                }
+                catch
+                {
+                }
+            }
+            return true;
         }
 
         /// <summary>
@@ -611,9 +627,10 @@ namespace SysWeaver
         /// </summary>
         /// <param name="hash">The hash of the chunk as binary data</param>
         /// <param name="props">The props used</param>
+        /// <param name="touch">If true, mark exsiting chunk as used</param>
         /// <returns>True if the chunk exist</returns>
-        public static bool ValidateChunk(ReadOnlySpan<Byte> hash, CdcProps props = null)
-            => ValidateChunk(hash.ToHexString(), props);
+        public static bool ValidateChunk(ReadOnlySpan<Byte> hash, CdcProps props = null, bool touch = false)
+            => ValidateChunk(hash.ToHexString(), props, touch);
 
 
 
@@ -682,16 +699,21 @@ namespace SysWeaver
             => new AsyncLock(Math.Max(1, Environment.ProcessorCount - 1));
 
 
-        static async ValueTask<CdcFolderStats> InternalFolderStats(String folder, AsyncLock l, bool getUncompressedStats, CdcProps props)
+        static async ValueTask<CdcFolderStats> InternalFolderStats(String folder, AsyncLock l, bool getUncompressedStats, CdcProps props, DateTime oldIfUnusedSince)
         {
             var comp = props.Comp;
             var fileExt = ".bin." + props.CompFileExt;
             long count = 0;
             long compSize = 0;
             long discSize = 0;
+
             long unCompSize = 0;
             long otherSize = 0;
             long otherCount = 0;
+
+            long oldCount = 0;
+            long oldDiscSize = 0;
+
             String[] files;
             using (var _ = await l.Lock().ConfigureAwait(false))
                 files = Directory.GetFiles(folder);
@@ -700,7 +722,13 @@ namespace SysWeaver
                 using var _ = await l.Lock().ConfigureAwait(false);
                 var fi = new FileInfo(file);
                 var size = fi.Length;
-                Interlocked.Add(ref discSize, (size + ClusterRound) & ClusterMask);
+                var estSize = (size + ClusterRound) & ClusterMask;
+                Interlocked.Add(ref discSize, estSize);
+                if (fi.LastAccessTimeUtc < oldIfUnusedSince)
+                {
+                    Interlocked.Increment(ref oldCount);
+                    Interlocked.Add(ref oldDiscSize, estSize);
+                }
                 if (file.FastEndsWith(fileExt))
                 {
                     Interlocked.Increment(ref count);
@@ -708,7 +736,8 @@ namespace SysWeaver
                     if (getUncompressedStats)
                     {
                         var data = await File.ReadAllBytesAsync(file).ConfigureAwait(false);
-                        Interlocked.Add(ref unCompSize, comp.GetDecompressed(data).Length);
+                        long uncompSize = comp.GetDecompressed(data).Length;
+                        Interlocked.Add(ref unCompSize, uncompSize);
                     }
                 }
                 else
@@ -717,21 +746,77 @@ namespace SysWeaver
                     Interlocked.Add(ref otherSize, size);
                 }
             }).ConfigureAwait(false);
-            return new CdcFolderStats(folder, discSize, count, compSize, unCompSize, otherCount, otherSize);
+            return new CdcFolderStats(folder, discSize, count, compSize, unCompSize, otherCount, otherSize, oldIfUnusedSince, oldDiscSize, oldCount);
         }
+
+
+        static async ValueTask<CdcPruneStats> InternalPrune(String folder, AsyncLock l, CdcProps props, DateTime oldIfUnusedSince)
+        {
+            long count = 0;
+            long discSize = 0;
+
+            long oldErrors = 0;
+            long oldCount = 0;
+            long oldDiscSize = 0;
+
+            String err = null;
+
+            String[] files;
+            using (var _ = await l.Lock().ConfigureAwait(false))
+                files = Directory.GetFiles(folder);
+            await files.ProcessAsyncValue(async file =>
+            {
+                using var _ = await l.Lock().ConfigureAwait(false);
+                var fi = new FileInfo(file);
+                var size = fi.Length;
+                var estSize = (size + ClusterRound) & ClusterMask;
+                Interlocked.Increment(ref count);
+                Interlocked.Add(ref discSize, estSize);
+                if (fi.LastAccessTimeUtc >= oldIfUnusedSince)
+                    return;
+                var ex = await PathExt.TryDeleteFileAsync(fi.FullName).ConfigureAwait(false);
+                if (ex != null)
+                {
+                    Interlocked.Increment(ref oldErrors);
+                    Interlocked.CompareExchange(ref err, ex.Message, null);
+                    return;
+                }
+                Interlocked.Increment(ref oldCount);
+                Interlocked.Add(ref oldDiscSize, estSize);
+            }).ConfigureAwait(false);
+            return new CdcPruneStats(folder, oldIfUnusedSince, discSize, count, oldDiscSize, oldCount, oldErrors, err);
+        }
+
 
         /// <summary>
         /// Get stats about the chunked data storage folders
         /// </summary>
         /// <param name="getUncompressedStats">If true, all chunks are decompressed to get their raw size, this is slow</param>
+        /// <param name="oldIfUnusedSince">If a chunk haven't been used since this UTC time, it's considered old</param>
         /// <param name="props">The props used</param>
         /// <returns>Array of folder statistics</returns>
-        public static ValueTask<CdcFolderStats[]> GetFolderStats(bool getUncompressedStats = false, CdcProps props = null)
+        public static ValueTask<CdcFolderStats[]> GetFolderStats(bool getUncompressedStats = false, DateTime? oldIfUnusedSince = null, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             var folders = props.ChunkFolders;
             var l = CreateLock();
-            return folders.ConvertAsyncValue(folder => InternalFolderStats(folder, l, getUncompressedStats, props));
+            var o = oldIfUnusedSince == null ? DateTime.UtcNow.AddDays(-400).ToStartOfDay(12) : (oldIfUnusedSince ?? DateTime.UtcNow).ToStartOfMinute();
+            return folders.ConvertAsyncValue(folder => InternalFolderStats(folder, l, getUncompressedStats, props, o));
+        }
+
+        /// <summary>
+        /// Prune (delete) old chunks. WARNING! Chunks will be permanently removed!
+        /// </summary>
+        /// <param name="props">The props used</param>
+        /// <param name="oldIfUnusedSince">If a chunk haven't been used since this UTC time, it's considered old and will be REMOVED permanently!</param>
+        /// <returns>Array of folder statistics</returns>
+        public static ValueTask<CdcPruneStats[]> Prune(DateTime? oldIfUnusedSince = null, CdcProps props = null)
+        {
+            props = props ?? CdcProps.Default;
+            var folders = props.ChunkFolders;
+            var l = CreateLock();
+            var o = oldIfUnusedSince == null ? DateTime.UtcNow.AddDays(-400).ToStartOfDay(12) : (oldIfUnusedSince ?? DateTime.UtcNow).ToStartOfMinute();
+            return folders.ConvertAsyncValue(folder => InternalPrune(folder, l, props, o));
         }
 
         /// <summary>

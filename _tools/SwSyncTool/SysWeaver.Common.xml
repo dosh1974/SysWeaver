@@ -2514,6 +2514,61 @@
             <param name="zeroAsThis">If exactly zerom return this value</param>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.DateTimeExt.ToStartOfYear(System.DateTime,System.Int32,System.Double)">
+            <summary>
+            Given a time stamp, get the start of the year that includes the time stamp
+            Example: 2024-03-15 11:05:33 => 2024-01-01 00:00:00.
+            </summary>
+            <param name="value">The time stamp</param>
+            <param name="extraMonths">Number of months to add to the start of the year</param>
+            <param name="extraDays">Number of days to add to the start of the month</param>
+            <returns>A new time stamp</returns>
+        </member>
+        <member name="M:SysWeaver.DateTimeExt.ToStartOfMonth(System.DateTime,System.Double)">
+            <summary>
+            Given a time stamp, get the start of the month that includes the time stamp
+            Example: 2024-03-15 11:05:33 => 2024-03-01 00:00:00.
+            </summary>
+            <param name="value">The time stamp</param>
+            <param name="extraDays">Number of days to add to the start of the month</param>
+            <returns>A new time stamp</returns>
+        </member>
+        <member name="M:SysWeaver.DateTimeExt.ToStartOfDay(System.DateTime,System.Double)">
+            <summary>
+            Given a time stamp, get the start of the day that includes the time stamp.
+            Example: 2024-03-15 11:05:33 => 2024-03-15 00:00:00.
+            </summary>
+            <param name="value">The time stamp</param>
+            <param name="extraHours">Number of hours to add to the start of the day</param>
+            <returns>A new time stamp</returns>
+        </member>
+        <member name="M:SysWeaver.DateTimeExt.ToStartOfHour(System.DateTime,System.Double)">
+            <summary>
+            Given a time stamp, get the start of the hour that includes the time stamp.
+            Example: 2024-03-15 11:05:33 => 2024-03-15 11:00:00.
+            </summary>
+            <param name="value">The time stamp</param>
+            <param name="extraMinutes">Number of minutes to add to the start of the hour</param>
+            <returns>A new time stamp</returns>
+        </member>
+        <member name="M:SysWeaver.DateTimeExt.ToStartOfMinute(System.DateTime,System.Double)">
+            <summary>
+            Given a time stamp, get the start of the minute that includes the time stamp.
+            Example: 2024-03-15 11:05:33 => 2024-03-15 11:05:00.
+            </summary>
+            <param name="value">The time stamp</param>
+            <param name="extraSeconds">Number of seconds to add to the start of the minute</param>
+            <returns>A new time stamp</returns>
+        </member>
+        <member name="M:SysWeaver.DateTimeExt.ToStartOSecond(System.DateTime,System.Double)">
+            <summary>
+            Given a time stamp, get the start of the seconds that includes the time stamp.
+            Example: 2024-03-15 11:05:33,123 => 2024-03-15 11:05:33,000.
+            </summary>
+            <param name="value">The time stamp</param>
+            <param name="extraMs">Number of millie seconds to add to the start of the second</param>
+            <returns>A new time stamp</returns>
+        </member>
         <member name="T:SysWeaver.DebugMessageHandler">
             <summary>
             Message handler that output's messages to the console
@@ -5212,6 +5267,16 @@
             </summary>
             <param name="folder"></param>
             <returns></returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.GetDirectoryAndMask(System.String,System.String@)">
+            <summary>
+            Gety the directory name and file mask from a path (typically containing wild cards).
+            Example: "D:\Temp\*.png" => "D:\Temp" and fileMask = "*.png".
+            Handles cases like having no directory (uses Environment.CurrentDirectory), ex: "*.png", "..\*.txt", ".\*.exe", "Sub\*.jpg" and so on.
+            </summary>
+            <param name="pathWithMask">Path (directory and file mask), ex: "D:\Temp\*.png"</param>
+            <param name="fileMask">Will be filled in with the file mask</param>
+            <returns>Will return the rooted directory part of the path</returns>
         </member>
         <member name="T:SysWeaver.PathTemplate">
             <summary>

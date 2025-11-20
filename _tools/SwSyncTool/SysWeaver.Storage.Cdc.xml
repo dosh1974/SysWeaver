@@ -155,12 +155,13 @@
             <param name="props">The props used</param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.ContentDependentChunking.Verify(System.String,SysWeaver.CdcProps)">
+        <member name="M:SysWeaver.ContentDependentChunking.Verify(System.String,SysWeaver.CdcProps,System.Boolean)">
             <summary>
             Find missing chunks in a .swcompact file 
             </summary>
             <param name="fileName">The .swcompact filename</param>
             <param name="props">The props used</param>
+            <param name="touch">If true, mark exsiting chunks as used</param>
             <returns>Stats</returns>
         </member>
         <member name="M:SysWeaver.ContentDependentChunking.Recover(System.String,System.String,SysWeaver.CdcProps)">
@@ -204,20 +205,22 @@
             <param name="props">The props used</param>
             <returns>A stream to the data or null if the chunk isn't stored</returns>
         </member>
-        <member name="M:SysWeaver.ContentDependentChunking.ValidateChunk(System.String,SysWeaver.CdcProps)">
+        <member name="M:SysWeaver.ContentDependentChunking.ValidateChunk(System.String,SysWeaver.CdcProps,System.Boolean)">
             <summary>
             Validate that a chunk exist
             </summary>
             <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
             <param name="props">The props used</param>
+            <param name="touch">If true, mark exsiting chunk as used</param>
             <returns>True if the chunk exist</returns>
         </member>
-        <member name="M:SysWeaver.ContentDependentChunking.ValidateChunk(System.ReadOnlySpan{System.Byte},SysWeaver.CdcProps)">
+        <member name="M:SysWeaver.ContentDependentChunking.ValidateChunk(System.ReadOnlySpan{System.Byte},SysWeaver.CdcProps,System.Boolean)">
             <summary>
             Validate that a chunk exist
             </summary>
             <param name="hash">The hash of the chunk as binary data</param>
             <param name="props">The props used</param>
+            <param name="touch">If true, mark exsiting chunk as used</param>
             <returns>True if the chunk exist</returns>
         </member>
         <member name="M:SysWeaver.ContentDependentChunking.TryCopyCompressedChunk(System.IO.Stream,System.String,SysWeaver.CdcProps)">
@@ -256,12 +259,21 @@
             <param name="props">The props used</param>
             <returns>True if the chunk was copied, false if the chunk didn't exist in the storage</returns>
         </member>
-        <member name="M:SysWeaver.ContentDependentChunking.GetFolderStats(System.Boolean,SysWeaver.CdcProps)">
+        <member name="M:SysWeaver.ContentDependentChunking.GetFolderStats(System.Boolean,System.Nullable{System.DateTime},SysWeaver.CdcProps)">
             <summary>
             Get stats about the chunked data storage folders
             </summary>
             <param name="getUncompressedStats">If true, all chunks are decompressed to get their raw size, this is slow</param>
+            <param name="oldIfUnusedSince">If a chunk haven't been used since this UTC time, it's considered old</param>
             <param name="props">The props used</param>
+            <returns>Array of folder statistics</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.Prune(System.Nullable{System.DateTime},SysWeaver.CdcProps)">
+            <summary>
+            Prune (delete) old chunks. WARNING! Chunks will be permanently removed!
+            </summary>
+            <param name="props">The props used</param>
+            <param name="oldIfUnusedSince">If a chunk haven't been used since this UTC time, it's considered old and will be REMOVED permanently!</param>
             <returns>Array of folder statistics</returns>
         </member>
         <member name="M:SysWeaver.ContentDependentChunking.GetFilename(System.String,SysWeaver.CdcProps)">

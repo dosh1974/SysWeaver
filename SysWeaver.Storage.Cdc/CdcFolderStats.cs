@@ -15,9 +15,18 @@ namespace SysWeaver
         public readonly long OtherCount;
         public readonly long OtherSize;
 
+        public readonly DateTime Old;
+        public readonly long OldCount;
+        public readonly long OldSize;
+
+
         public override string ToString() => String.Concat(Folder, " [", DiscSize, ']');
 
-        public CdcFolderStats(string folder, long discSize, long chunkCount, long chunkSize, long chunkUncompressedSize, long otherCount, long otherSize)
+        public CdcFolderStats(string folder, 
+            long discSize, long chunkCount, long chunkSize, 
+            long chunkUncompressedSize, long otherCount, long otherSize,
+            DateTime old, long oldDiscSize, long oldFileCount
+            )
         {
             Folder = folder;
             DiscSize = discSize;
@@ -26,6 +35,9 @@ namespace SysWeaver
             ChunkUncompressedSize = chunkUncompressedSize;
             OtherCount = otherCount;
             OtherSize = otherSize;
+            Old = old;
+            OldSize = oldDiscSize;
+            OldCount = oldFileCount;
         }
 
 
@@ -37,9 +49,14 @@ namespace SysWeaver
                 ChunkSize + other.ChunkSize,
                 ChunkUncompressedSize + other.ChunkUncompressedSize,
                 OtherCount + other.OtherCount,
-                OtherSize + other.OtherSize
+                OtherSize + other.OtherSize,
+                Old == other.Old ? Old : DateTime.MinValue,
+                OldSize + other.OldSize,
+                OldCount + other.OldCount
             );
 
 
     }
+
+
 }

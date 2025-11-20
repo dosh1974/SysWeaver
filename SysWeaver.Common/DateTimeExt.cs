@@ -158,6 +158,100 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Given a time stamp, get the start of the year that includes the time stamp
+        /// Example: 2024-03-15 11:05:33 => 2024-01-01 00:00:00.
+        /// </summary>
+        /// <param name="value">The time stamp</param>
+        /// <param name="extraMonths">Number of months to add to the start of the year</param>
+        /// <param name="extraDays">Number of days to add to the start of the month</param>
+        /// <returns>A new time stamp</returns>
+        public static DateTime ToStartOfYear(this DateTime value, int extraMonths = 0, double extraDays = 0)
+        {
+            var n = new DateTime(value.Year, 1, 1, 0, 0, 0, value.Kind);
+            if (extraMonths != 0)
+                n = n.AddMonths(extraMonths);
+            if (extraDays != 0)
+                n = n.AddDays(extraDays);
+            return n;
+        }
+
+        /// <summary>
+        /// Given a time stamp, get the start of the month that includes the time stamp
+        /// Example: 2024-03-15 11:05:33 => 2024-03-01 00:00:00.
+        /// </summary>
+        /// <param name="value">The time stamp</param>
+        /// <param name="extraDays">Number of days to add to the start of the month</param>
+        /// <returns>A new time stamp</returns>
+        public static DateTime ToStartOfMonth(this DateTime value, double extraDays = 0)
+        {
+            var n = new DateTime(value.Year, value.Month, 1, 0, 0, 0, value.Kind);
+            if (extraDays != 0)
+                n = n.AddDays(extraDays);
+            return n;
+        }
+
+        /// <summary>
+        /// Given a time stamp, get the start of the day that includes the time stamp.
+        /// Example: 2024-03-15 11:05:33 => 2024-03-15 00:00:00.
+        /// </summary>
+        /// <param name="value">The time stamp</param>
+        /// <param name="extraHours">Number of hours to add to the start of the day</param>
+        /// <returns>A new time stamp</returns>
+        public static DateTime ToStartOfDay(this DateTime value, double extraHours = 0)
+        {
+            var n = new DateTime(value.Year, value.Month, value.Day, 0, 0, 0, value.Kind);
+            if (extraHours != 0)
+                n = n.AddHours(extraHours);
+            return n;
+        }
+
+        /// <summary>
+        /// Given a time stamp, get the start of the hour that includes the time stamp.
+        /// Example: 2024-03-15 11:05:33 => 2024-03-15 11:00:00.
+        /// </summary>
+        /// <param name="value">The time stamp</param>
+        /// <param name="extraMinutes">Number of minutes to add to the start of the hour</param>
+        /// <returns>A new time stamp</returns>
+        public static DateTime ToStartOfHour(this DateTime value, double extraMinutes = 0)
+        {
+            var n = new DateTime(value.Year, value.Month, value.Day, value.Hour, 0, 0, value.Kind);
+            if (extraMinutes != 0)
+                n = n.AddMinutes(extraMinutes);
+            return n;
+        }
+
+
+        /// <summary>
+        /// Given a time stamp, get the start of the minute that includes the time stamp.
+        /// Example: 2024-03-15 11:05:33 => 2024-03-15 11:05:00.
+        /// </summary>
+        /// <param name="value">The time stamp</param>
+        /// <param name="extraSeconds">Number of seconds to add to the start of the minute</param>
+        /// <returns>A new time stamp</returns>
+        public static DateTime ToStartOfMinute(this DateTime value, double extraSeconds = 0)
+        {
+            var n = new DateTime(value.Year, value.Month, value.Day, value.Hour, value.Minute, 0, value.Kind);
+            if (extraSeconds != 0)
+                n = n.AddSeconds(extraSeconds);
+            return n;
+        }
+
+        /// <summary>
+        /// Given a time stamp, get the start of the seconds that includes the time stamp.
+        /// Example: 2024-03-15 11:05:33,123 => 2024-03-15 11:05:33,000.
+        /// </summary>
+        /// <param name="value">The time stamp</param>
+        /// <param name="extraMs">Number of millie seconds to add to the start of the second</param>
+        /// <returns>A new time stamp</returns>
+        public static DateTime ToStartOSecond(this DateTime value, double extraMs = 0)
+        {
+            var n = new DateTime(value.Year, value.Month, value.Day, value.Hour, value.Minute, value.Second, value.Kind);
+            if (extraMs != 0)
+                n = n.AddMilliseconds(extraMs);
+            return n;
+        }
+
     }
 
 }
