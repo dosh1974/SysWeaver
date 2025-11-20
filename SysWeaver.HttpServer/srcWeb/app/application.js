@@ -819,6 +819,7 @@ async function PopUp(build, blockUntilClosed, dontAllowClose, onClose, haveClose
     page.MakeFullWidth = () => block.classList.add("FullWidth");
     page.MakeMaxHeight = () => block.classList.add("MaxHeight");
     block.appendChild(page);
+    page.tabIndex = "0";
     /*
     if (haveCloseButton) {
         const blockClose = document.createElement("SysWeaver-BlockerClose");
@@ -841,7 +842,7 @@ async function PopUp(build, blockUntilClosed, dontAllowClose, onClose, haveClose
     const cb = haveCloseButton ? document.createElement("SysWeaver-BlockerCloseButton") : null;
     await build(page, Close, cb);
 
-    page.appendChild(CreateTabBlock());
+    //page.appendChild(CreateTabBlock());
 
     if (haveCloseButton) {
         page.appendChild(cb);
@@ -851,7 +852,7 @@ async function PopUp(build, blockUntilClosed, dontAllowClose, onClose, haveClose
         cb.appendChild(closeButton.Element);
     }
 
-
+    page.focus();
 
     if (blockUntilClosed) {
         await waitFor(async endUsing => {

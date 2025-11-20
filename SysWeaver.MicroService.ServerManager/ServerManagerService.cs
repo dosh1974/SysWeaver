@@ -14,7 +14,6 @@ namespace SysWeaver.MicroService
 {
 
 
-
     [RequiredDep<FolderSyncService>()]
     [WebApiUrl("../ServerManager")]
     public sealed partial class ServerManagerService : IDisposable, IHttpServerModule
@@ -23,6 +22,8 @@ namespace SysWeaver.MicroService
         public ServerManagerService(ServiceManager manager, ServerManagerParams p)
         {
             p = p ?? new ServerManagerParams();
+            var removeServiceBackupsDays = Math.Max(3, p.RemoveServiceBackupsDays);
+            RemoveServiceBackupsDays = removeServiceBackupsDays;
             var s = manager.Get<FolderSyncService>();
             Manager = manager;
             Syncer = s;
@@ -60,7 +61,7 @@ namespace SysWeaver.MicroService
                     DiscFolder = df,
                     Compress = p.CompressServices,
                     Auth = f.SyncAuth ?? p.SyncAuth,
-                    RemoveBackupsDays = p.RemoveServiceBackupsDays,
+                    RemoveBackupsDays = removeServiceBackupsDays,
                     OnNewFolderAsync = OnNewFolder,
                     OnActivateAsync = OnServiceActivate,
                     OnDeactivateAsync = OnServiceDeactivate,
@@ -76,6 +77,8 @@ namespace SysWeaver.MicroService
         {
             Interlocked.Exchange(ref UpdateTask, null)?.Dispose();
         }
+
+        readonly int RemoveServiceBackupsDays;
 
 
         #region IHttpServerModule
@@ -188,7 +191,7 @@ namespace SysWeaver.MicroService
             if (exe == null)
                 return null;
             var ename = Path.GetFileNameWithoutExtension(exe);
-            var parent  = Path.GetDirectoryName(path);
+            var parent = Path.GetDirectoryName(path);
             var existing = GetConfigs(parent, ename);
             var m = Manager;
             Exception ex = null;
@@ -202,7 +205,8 @@ namespace SysWeaver.MicroService
                 {
                     m.AddMessage(String.Concat(LogPrefix, "Replacing config \"", version, "\" with master config"));
                     ex = ex ?? await PathExt.TryCopyFileAsync(master, version).ConfigureAwait(false);
-                }else
+                }
+                else
                 {
                     m.AddMessage(String.Concat(LogPrefix, "Creating new master config from \"", version, '"'));
                     ex = ex ?? await PathExt.TryCopyFileAsync(version, master).ConfigureAwait(false);
@@ -533,7 +537,7 @@ namespace SysWeaver.MicroService
                             }
                         }
                     ],
-                    
+
                 },
                 options = new ChartJsOptions
                 {
@@ -608,7 +612,7 @@ namespace SysWeaver.MicroService
             var session = context.Session;
             var ss = Services;
             var l = Services.Count;
-            List<SmServiceInfo> s = new List<SmServiceInfo>(l); 
+            List<SmServiceInfo> s = new List<SmServiceInfo>(l);
             foreach (var x in ss)
             {
                 var i = x.Value;
@@ -682,12 +686,133 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth]
-        [WebMenuTable(null, "Services", "Services", "Services", null, -7)]
+        [WebMenuTable(null, "Services", "Services", "Services", "../icons/settings.svg", -7)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public TableData ServicesTable(TableDataRequest r, HttpServerRequest context)
             => TableDataTools.Get(r, 5000, GetServices(context));
-        
+
+
+        /// <summary>
+        /// Returns stats for folders
+        /// </summary>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiClientCache(15)]
+        [WebApiRequestCache(14)]
+        public async Task<SmChunkFolderStats[]> GetStorageStats()
+        {
+            var old = DateTime.UtcNow.AddDays(-(RemoveServiceBackupsDays + 30)).ToStartOfDay(12);
+            var stats = await ContentDependentChunking.GetFolderStats(false, old).ConfigureAwait(false);
+            var l = stats.Length;
+            if (l > 1)
+            {
+                CdcFolderStats sum = null;
+                for (int i = 1; i < l; ++i)
+                    sum = (sum ?? stats[0]).Merge(stats[i]);
+                var n = new CdcFolderStats[l + 1];
+                n[0] = sum;
+                for (int i = 0; i < l; ++i)
+                    n[i + 1] = stats[i];
+                stats = n;
+
+            }
+            return stats.Convert(x => new SmChunkFolderStats(x));
+        }
+
+        /// <summary>
+        /// Statistics about the chunked storage
+        /// </summary>
+        /// <param name="r"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.Debug)]
+        [WebMenuTable(null, "ChunkStorage", "Chunk storage", "Analysis of the chunk storage", "../icons/disc.svg", -6)]
+        [WebApiClientCache(14)]
+        [WebApiRequestCache(10)]
+        public async Task<TableData> StorageStatsTable(TableDataRequest r)
+            => TableDataTools.Get(r, 15000, await GetStorageStats().ConfigureAwait(false));
+
+
+        /// <summary>
+        /// Statistics about the managed folders
+        /// </summary>
+        /// <param name="r"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebMenuTable(null, "Folders", "All folders", "All the managed folders", "../icons/sync.svg", -5)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        public TableData FoldersTable(TableDataRequest r)
+            => Syncer.SynchedFoldersTable(r);
+
+
+        SmServiceInfo GetValidatedVersion(out FolderSyncService.Data d, String versionName, HttpServerRequest context)
+        {
+            var p = versionName.Split(',');
+            var serviceName = p[0];
+            var uploaded = DateTime.Parse(p[1]).ToUniversalTime();
+            var versionFolderName = p[2];
+            var info = Validate(serviceName, context);
+            var data = Syncer.GetFolderData(info.Service.Name).ToList();
+            d = null;
+            foreach (var x in data)
+            {
+                if (x.Uploaded != uploaded)
+                    continue;
+                if (d != null)
+                {
+                    if (!x.DiscFolder.FastEquals(versionFolderName))
+                        continue;
+                }
+                d = x;
+            }
+            if (d == null)
+            {
+                foreach (var x in data)
+                {
+                    var dt = (x.Uploaded - uploaded).TotalSeconds;
+                    if (dt < 0)
+                        dt = -dt;
+                    if (dt > 1)
+                        continue;
+                    if (d != null)
+                    {
+                        if (!x.DiscFolder.FastEquals(versionFolderName))
+                            continue;
+                    }
+                    d = x;
+                }
+            }
+            return info;
+        }
+
+        /// <summary>
+        /// Get version details
+        /// </summary>
+        /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        public SmVersionDetail GetVersion(String versionName, HttpServerRequest context)
+        {
+            var info = GetValidatedVersion(out var version, versionName, context);
+            if (version == null)
+                throw new Exception("Version not found!");
+
+
+            return new SmVersionDetail(version);
+        }
+
 
     }
+
+
+
+
 }

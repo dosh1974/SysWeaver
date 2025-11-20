@@ -295,7 +295,14 @@ body {
         padding: 4px 6px 4px 6px;
         vertical-align: top;
         color: var(--ThemeAcc1);
+        transition: box-shadow linear var(--ThemeFadeDuration);
     }
+
+        .DataTable td.KeyClick:focus {
+            box-shadow: inset 0 0 0.5em var(--ThemeAcc2);
+            outline: none;
+        }
+
 
         .DataTable td span {
             margin: 0px 4px 0px 4px;

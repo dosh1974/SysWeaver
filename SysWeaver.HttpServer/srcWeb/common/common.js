@@ -1790,6 +1790,13 @@ function keyboardClick(element) {
     return e;
 }
 
+function removeKeyboardClick(element) {
+    const e = element;
+    e.tabIndex = null;
+    e.classList.remove("KeyClick");
+    e.onkeyup = null;
+    return e;
+}
 
 function isPureClick(ev) {
     if (!ev)
@@ -3512,6 +3519,7 @@ class ValueFormat {
         cl.remove("Text");
         cl.remove("Toggle");
         el.onclick = null;
+        removeKeyboardClick(el);
         return true;
     }
 
@@ -3727,17 +3735,18 @@ class ValueFormat {
         const url = GetAbsolutePath(urlTarget[0]);
         const target = urlTarget[1];
         const title = ValueFormat.stringFormat(formats[3] ?? _TF('Click to open "{3}".', "Tool tip that indicates that an url can be viewed by clicking on an element"), value, nextValue, text, url);
-        if (url.length >= 0)
-        {
+        if (url.length >= 0) {
             const a = ValueFormat.LinkNode;
             ValueFormat.setOnClickAttr(a, url, target);
             //a.target = target;
             //a.href = url;
             a.textContent = text;
-            ValueFormat.updateHtml(el, a.outerHTML, title, flash);
+            if (ValueFormat.updateHtml(el, a.outerHTML, title, flash))
+                keyboardClick(el);
             return;
         }
-        ValueFormat.updateText(el, text, title, flash);
+        if (ValueFormat.updateText(el, text, title, flash))
+            removeKeyboardClick(el);
     }
 
     static updateImg(el, value, formats, nextValue, flash, type, onRefresh) {
@@ -3789,7 +3798,12 @@ class ValueFormat {
 
         if (align)
             el.classList.add(align);
-        ValueFormat.updateHtml(el, a.outerHTML, title, flash);
+        if (ValueFormat.updateHtml(el, a.outerHTML, title, flash)) {
+            if (url.lenght > 0)
+                keyboardClick(el);
+            else
+                removeKeyboardClick(el);
+        }
     }
 
 
@@ -4147,6 +4161,7 @@ class ValueFormat {
                 el.classList.remove("Capped");
                 el.innerText = "";
                 el.onclick = null;
+                removeKeyboardClick(el);
             }
             return;
         }
@@ -4170,32 +4185,32 @@ class ValueFormat {
         else
             el.classList.remove("Capped");
         let title = ValueFormat.stringFormat(formats[2] ?? "{0}", value, capText);
-        let copy = formats[3];
-        if (copy)
-            copy = ValueFormat.stringFormat(copy, value, capText);
-
-
-        el.onclick = async ev => {
-            if (ValueFormat.haveElementSelection(el))
-                return;
-            if (badClick(ev))
-                return;
-            await PopUp(async (el, closeFn, buttons) => {
-                const e = document.createElement("SysWeaver-MdText");
-                el.classList.add("Resize");
-                el.appendChild(e);
-                e.innerHTML = await ValueFormat.MarkDownToHTML(value);
-                if (buttons && copy)
-                    buttons.appendChild(new ColorIcon(
-                        "IconCopy", "IconColorThemeAcc1", 32, 32,
-                        _TF("Click to copy the original MD text to the clipboard", "This is a tool tip on an icon that will copy some text to the clipboard when clicked"),
-                        () => {
-                            if (ValueFormat.copyToClipboard(copy))
-                                Info(_TF("Copied text to the clipboard", "A pop-up message telling the user that some text was copied to the clipboard"));
-                        }).Element);
-            }, false, false, null, true);
-        };
-        ValueFormat.updateText(el, capText, title, flash);
+        if (ValueFormat.updateText(el, capText, title, flash)) {
+            let copy = formats[3];
+            if (copy)
+                copy = ValueFormat.stringFormat(copy, value, capText);
+            el.onclick = async ev => {
+                if (ValueFormat.haveElementSelection(el))
+                    return;
+                if (badClick(ev))
+                    return;
+                await PopUp(async (el, closeFn, buttons) => {
+                    const e = document.createElement("SysWeaver-MdText");
+                    el.classList.add("Resize");
+                    el.appendChild(e);
+                    e.innerHTML = await ValueFormat.MarkDownToHTML(value);
+                    if (buttons && copy)
+                        buttons.appendChild(new ColorIcon(
+                            "IconCopy", "IconColorThemeAcc1", 32, 32,
+                            _TF("Click to copy the original MD text to the clipboard", "This is a tool tip on an icon that will copy some text to the clipboard when clicked"),
+                            () => {
+                                if (ValueFormat.copyToClipboard(copy))
+                                    Info(_TF("Copied text to the clipboard", "A pop-up message telling the user that some text was copied to the clipboard"));
+                            }).Element);
+                }, false, false, null, true);
+            };
+            keyboardClick(el);
+        }
         return el;
     }
 
@@ -4212,6 +4227,7 @@ class ValueFormat {
                 el.classList.remove("Capped");
                 el.innerText = "";
                 el.onclick = null;
+                removeKeyboardClick(el);
             }
             return;
         }
@@ -4235,33 +4251,35 @@ class ValueFormat {
         else
             el.classList.remove("Capped");
         let title = ValueFormat.stringFormat(formats[2] ?? "{0}", value, capText);
-        let copy = formats[3];
-        if (copy)
-            copy = ValueFormat.stringFormat(copy, value, capText);
-        el.onclick = async ev => {
-            if (ValueFormat.haveElementSelection(el))
-                return;
-            if (badClick(ev))
-                return;
-            await PopUp((el, closeFn, buttons) => {
+        if (ValueFormat.updateText(el, capText, title, flash)) {
+            let copy = formats[3];
+            if (copy)
+                copy = ValueFormat.stringFormat(copy, value, capText);
+            el.onclick = async ev => {
+                if (ValueFormat.haveElementSelection(el))
+                    return;
+                if (badClick(ev))
+                    return;
+                await PopUp((el, closeFn, buttons) => {
 
-                const e = document.createElement("SysWeaver-LongText");
-                el.classList.add("Resize");
-                if (isMonoSpace)
-                    e.classList.add("Mono");
-                el.appendChild(e);
-                e.innerText = value;
-                if (buttons && copy)
-                    buttons.appendChild(new ColorIcon(
-                        "IconCopy", "IconColorThemeAcc1", 32, 32,
-                        _TF("Click to copy the full text to the clipboard", "This is a tool tip on an icon that will copy some text to the clipboard when clicked"),
-                        () => {
-                            if (ValueFormat.copyToClipboard(copy))
-                                Info(_TF("Copied text to the clipboard", "A pop-up message telling the user that some text was copied to the clipboard"));
-                        }).Element);
-            }, false, false, null, true);
-        };
-        ValueFormat.updateText(el, capText, title, flash);
+                    const e = document.createElement("SysWeaver-LongText");
+                    el.classList.add("Resize");
+                    if (isMonoSpace)
+                        e.classList.add("Mono");
+                    el.appendChild(e);
+                    e.innerText = value;
+                    if (buttons && copy)
+                        buttons.appendChild(new ColorIcon(
+                            "IconCopy", "IconColorThemeAcc1", 32, 32,
+                            _TF("Click to copy the full text to the clipboard", "This is a tool tip on an icon that will copy some text to the clipboard when clicked"),
+                            () => {
+                                if (ValueFormat.copyToClipboard(copy))
+                                    Info(_TF("Copied text to the clipboard", "A pop-up message telling the user that some text was copied to the clipboard"));
+                            }).Element);
+                }, false, false, null, true);
+            };
+            keyboardClick(el);
+        }
         return el;
     }
     

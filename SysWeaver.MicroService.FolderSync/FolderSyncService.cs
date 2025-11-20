@@ -230,6 +230,7 @@ namespace SysWeaver.MicroService
                         if (age > (isTemp ? tempRemove : exp))
                         {
                             await PathExt.TryDeleteDirectoryAsync(dir, false).ConfigureAwait(false);
+                            await PathExt.TryDeleteFileAsync(dir + ContentDependentChunking.DotFileExt).ConfigureAwait(false);
                             await Task.Delay(100).ConfigureAwait(false);
                         }
                     }
@@ -1192,14 +1193,13 @@ namespace SysWeaver.MicroService
         /// All synched folders as a table
         /// </summary>
         /// <param name="r"></param>
-        /// <param name="context"></param>
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebMenuTable(null, "Debug/SynchedFolders", "Synched folders", "Details about folders that can be synched remotely", "IconSync", -6)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
-        public TableData SynchedFoldersTable(TableDataRequest r, HttpServerRequest context)
+        public TableData SynchedFoldersTable(TableDataRequest r)
         {
             if (r == null)
                 r = new TableDataRequest();
@@ -1241,7 +1241,7 @@ namespace SysWeaver.MicroService
 
         static readonly IReadOnlyDictionary<String, Action<Data, String, String[], int>> ManifestParsers = new Dictionary<String, Action<Data, String, String[], int>>(StringComparer.Ordinal)
         {
-            { "end", (data, value, l, i) => data.Uploaded = DateTime.Parse(value) },
+            { "end", (data, value, l, i) => data.Uploaded = DateTime.Parse(value).ToUniversalTime() },
             { "files", (data, value, l, i) => data.Count = long.Parse(value.Replace(" ", "")) },
             { "size", (data, value, l, i) => data.Size = long.Parse(value.SplitFirst('b').Replace(" ", "")) },
             { "user", (data, value, l, i) => data.User = value },

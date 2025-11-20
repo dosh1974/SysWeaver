@@ -1,4 +1,32 @@
 ﻿
+function BeginElementChildUpdate(targetElement) {
+    const el = targetElement;
+    let ccl = el.children?.length ?? 0;
+    let cindex = 0;
+    function add(e) {
+        if (cindex >= ccl) {
+            ++cindex;
+            el.appendChild(e);
+            return;
+        }
+        const cc = el.children[cindex];
+        ++cindex;
+        if (cc.outerHTML === e.outerHTML)
+            return;
+        el.replaceChild(e, cc);
+    }
+    function complete() {
+        while (ccl > cindex) {
+            --ccl;
+            el.children[ccl].remove();
+        }
+    }
+    return {
+        Target: el,
+        Add: add,
+        Complete: complete,
+    };
+}
 
 
 async function serviceInfoMain() {
@@ -160,23 +188,14 @@ async function serviceInfoMain() {
 
 
 
+
     const configs = document.body.getElementsByTagName("si-configs")[0];
     const masterConfigs = document.body.getElementsByTagName("si-configs")[1];
+    const versions = document.body.getElementsByTagName("si-versions")[0];
+
     function updateFileList(el, files, headerText, headerTitle, folderSuffix) {
-        let ccl = el.children?.length ?? 0;
-        let cindex = 0;
-        function Mod(e) {
-            if (cindex >= ccl) {
-                ++cindex;
-                el.appendChild(e);
-                return;
-            }
-            const cc = el.children[cindex];
-            ++cindex;
-            if (cc.outerHTML === e.outerHTML)
-                return;
-            el.replaceChild(e, cc);
-        }
+
+        const updater = BeginElementChildUpdate(el)
         if (files) {
             const cl = files.length;
             if (cl > 0) {
@@ -186,7 +205,7 @@ async function serviceInfoMain() {
                 header.innerText = headerText;
                 if (headerTitle)
                     header.title = headerTitle;
-                Mod(header);
+                updater.Add(header);
                 for (let i = 0; i < cl; ++i) {
                     const f = files[i];
                     const fn = f.Name;
@@ -194,7 +213,7 @@ async function serviceInfoMain() {
                     const ext = fn.substring(fn.lastIndexOf('.') + 1);
 
                     icon.style.backgroundImage = "url('../icons/ext/" + ext + ".svg')";
-                    Mod(icon);
+                    updater.Add(icon);
                     const name = document.createElement("si-file-name");
                     name.innerText = fn;
                     name.onclick = ev => {
@@ -203,12 +222,12 @@ async function serviceInfoMain() {
                         Open("../logFile/logfile.html?api=" + folderSuffix + service + "/" + fn, "_self");
                     }; 
                     keyboardClick(name);
-                    Mod(name);
+                    updater.Add(name);
 
                     const size = document.createElement("si-file-size");
                     size.innerText = ValueFormat.formatByteSize(f.Size);
                     ValueFormat.copyOnClick(size, f.Size, false, true);
-                    Mod(size);
+                    updater.Add(size);
 
                     const time = document.createElement("si-file-time");
                     const dd = new Date(f.LastModified);
@@ -216,22 +235,21 @@ async function serviceInfoMain() {
                     time.title = "Last modified\n" + v[0];
                     ValueFormat.copyOnClick(time, f.LastModified, false, true);
                     time.innerText = v[1];
-                    Mod(time);
+                    updater.Add(time);
 
                 }
             }
         }
-        while (ccl > cindex) {
-            --ccl;
-            el.children[ccl].remove();
-        }
-
+        updater.Complete();
     }
 
 
 
     let data = null;
-    function update() {
+    function update(first) {
+
+        if (first)
+            PageLoaded();
         const status = data.Status;
         const state = states[0];
         state.innerText = status;
@@ -256,12 +274,76 @@ async function serviceInfoMain() {
         updateFileList(configs, data.Configs, "Active Config Files", "These are the files that are currently active");
         updateFileList(masterConfigs, data.MasterConfigs, "Master Config Files", "These are the master config files, that get copied when a new version is uploaded", "../ServerManager/Data/");
 
+        const updater = BeginElementChildUpdate(versions);
+        const vs = data.Versions;
+        if (vs) {
+            const vl = vs.length
+            if (vl > 0) {
+                let e = document.createElement("si-version-header");
+                e.innerText = "Versions";
+                e.title = "All available versions of this service";
+                updater.Add(e);
+                for (let i = 0; i < vl; ++i) {
+                    const v = vs[i];
+                //  Active
+                    e = document.createElement("si-version-active");
+                    if (v.IsActive)
+                        e.classList.add("Active");
+                    updater.Add(e);
+                //  Uploaded
+                    e = document.createElement("si-version-uploaded");
+                    let dv = ValueFormat.getTimeStampTitle(new Date(v.Uploaded));
+                    e.title = "Click to show details.\n\nUploaded:\n" + dv[0];
+                    e.innerText = dv[1];
+
+                    e.onclick = ev => {
+                        if (badClick(ev))
+                            return;
+                        Open("versionInfo.html?p=" + service + "," + v.Uploaded + "," + v.Name, "_self");
+                    };
+                    keyboardClick(e);
+                    updater.Add(e);
+                //  User
+                    e = document.createElement("si-version-user");
+                    e.title = "The name of the user that was logged on to the machine that this version was uploaded from at the upload start time";
+                    e.innerText = v.User;
+                    ValueFormat.copyOnClick(e, v.User, false, true);
+                    updater.Add(e);
+                //  Machine
+                    e = document.createElement("si-version-machine");
+                    e.title = "The name of the machine that this version was uploaded from";
+                    e.innerText = v.Machine;
+                    ValueFormat.copyOnClick(e, v.Machine, false, true);
+                    updater.Add(e);
+                //  Comment
+                    e = document.createElement("si-version-comment");
+                    e.title = "The comment supplied when uploading this version";
+                    e.innerText = v.Comment;
+                    ValueFormat.copyOnClick(e, v.Comment, false, true);
+                    updater.Add(e);
+                //  Last used
+                    e = document.createElement("si-version-last");
+                    dv = ValueFormat.getTimeStampTitle(new Date(v.LastUsed));
+                    e.title = "Last activated\n" + dv[0];
+                    ValueFormat.copyOnClick(e, v.LastUsed, false, true);
+                    e.innerText = dv[1];
+                    updater.Add(e);
+
+
+                }
+            }
+        }
+        updater.Complete();
+
+
+
         updateButtons(status);
     }
     for (; ;) {
         try {
+            const noOld = !data;
             data = await sendRequest("GetDetail", service);
-            update();
+            update(noOld && data);
         }
         catch (e)
         {

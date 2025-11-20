@@ -463,6 +463,12 @@ SysWeaver-PopUpBackground {
     overflow-y: auto;
 }
 
+    SysWeaver-PopUpBackground:focus
+    {
+        outline: none;
+    }
+
+
     SysWeaver-PopUpBackground.Wide {
         max-width: calc(min(75em, var(--maxWidth)));
         width: 75em;

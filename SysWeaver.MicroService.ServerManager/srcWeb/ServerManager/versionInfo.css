@@ -1,0 +1,52 @@
+﻿
+:root {
+    --MaxW: 100ch;
+}
+
+*
+{
+    box-sizing: border-box;
+}
+
+body {
+    padding: 0;
+    margin: 0;
+    width: 100%;
+}
+
+si-bg {
+    position: fixed;
+    display: block;
+    left: 50%;
+    top: 0;
+    width: calc(var(--MaxW) + 2em);
+    bottom: 0;
+    transform: translateX(-50%);
+    box-shadow: 0 0 32px var(--ThemeMain25);
+    z-index: -1;
+}
+
+si-name
+{
+    width: 100%;
+    text-align: center;
+    padding: 0.5em 0.25em;
+    font-weight: bold;
+    font-size: 125%;
+    margin-bottom: 0.5em;
+    background-color: var(--ThemeAcc2);
+    color: var(--ThemeBackground);
+    display: none;
+}
+
+body.TopWindow si-name {
+    display: block;
+}
+
+@media screen and (max-width: 600px) {
+    si-name {
+        border-radius: 0;
+    }
+}
+
+
