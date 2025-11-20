@@ -724,12 +724,13 @@ namespace SysWeaver
                 var size = fi.Length;
                 var estSize = (size + ClusterRound) & ClusterMask;
                 Interlocked.Add(ref discSize, estSize);
-                if (fi.LastAccessTimeUtc < oldIfUnusedSince)
+                bool isChunk = file.FastEndsWith(fileExt) && (size > 0);
+                if ((fi.LastAccessTimeUtc < oldIfUnusedSince) || (!isChunk))
                 {
                     Interlocked.Increment(ref oldCount);
                     Interlocked.Add(ref oldDiscSize, estSize);
                 }
-                if (file.FastEndsWith(fileExt))
+                if (isChunk)
                 {
                     Interlocked.Increment(ref count);
                     Interlocked.Add(ref compSize, size);
@@ -752,6 +753,8 @@ namespace SysWeaver
 
         static async ValueTask<CdcPruneStats> InternalPrune(String folder, AsyncLock l, CdcProps props, DateTime oldIfUnusedSince)
         {
+            var fileExt = ".bin." + props.CompFileExt;
+
             long count = 0;
             long discSize = 0;
 
@@ -772,7 +775,8 @@ namespace SysWeaver
                 var estSize = (size + ClusterRound) & ClusterMask;
                 Interlocked.Increment(ref count);
                 Interlocked.Add(ref discSize, estSize);
-                if (fi.LastAccessTimeUtc >= oldIfUnusedSince)
+                bool isChunk = file.FastEndsWith(fileExt) && (size > 0);
+                if (isChunk && (fi.LastAccessTimeUtc >= oldIfUnusedSince))
                     return;
                 var ex = await PathExt.TryDeleteFileAsync(fi.FullName).ConfigureAwait(false);
                 if (ex != null)
