@@ -29,6 +29,16 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String FullPath;
 
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public bool IsRunning;
+
+
+        public bool IsCompressedService;
+
+
         public SmVersionDetail()
         {
         }
@@ -40,6 +50,8 @@ namespace SysWeaver.MicroService
             Size = s.Size;
             Comp = s.Comp;
             FullPath = s.FullPath;
+            IsRunning = (info.Metrics?.ProcessHandle ?? 0) != 0;
+            IsCompressedService = info.Syncher.Compress;
         }
 
     }

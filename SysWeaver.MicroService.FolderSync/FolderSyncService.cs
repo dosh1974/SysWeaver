@@ -274,6 +274,21 @@ namespace SysWeaver.MicroService
             return ex;
         }
 
+        async ValueTask<ValueTuple<Exception, CdcChunkStats>> TryExpandFolderLog(String compact)
+        {
+            Manager.AddMessage(LogPrefix + "Expanding \"" + compact + "\"");
+            try
+            {
+                var stats = await ContentDependentChunking.Expand(compact).ConfigureAwait(false);
+                var ex = await PathExt.TryDeleteFileAsync(compact).ConfigureAwait(false);
+                return ValueTuple.Create(ex, stats);
+            }
+            catch (Exception ex3)
+            {
+                return ValueTuple.Create(ex3, (CdcChunkStats)null);
+            }
+        }
+
         async ValueTask<Exception> TryCompressFolder(String folder)
         { 
             try
@@ -354,6 +369,7 @@ namespace SysWeaver.MicroService
                 await RunCommand(cmd).ConfigureAwait(false);
         }
 
+
         async ValueTask<Exception> InternalActivate(Folder folder, String target, String from, HttpServerRequest context)
         {
             if (!SystemLock.TryGet("ActLock" + from, out var lck))
@@ -364,20 +380,7 @@ namespace SysWeaver.MicroService
             //  De-compress stored
                 var compact = from + ContentDependentChunking.DotFileExt;
                 if (File.Exists(compact))
-                {
-                    Manager.AddMessage(LogPrefix + "Expanding \"" + compact + "\"");
-                    try
-                    {
-                        await ContentDependentChunking.Expand(compact).ConfigureAwait(false);
-                        var ex2 = await PathExt.TryDeleteFileAsync(compact).ConfigureAwait(false);
-                        if (ex2 != null)
-                            return ex2;
-                    }
-                    catch (Exception ex3)
-                    {
-                        return ex3;
-                    }
-                }
+                    return (await TryExpandFolderLog(compact).ConfigureAwait(false)).Item1;
             }
             var destFolder = folder.DestPath;
             var cmd = folder.OnDeactivate;
@@ -592,7 +595,8 @@ namespace SysWeaver.MicroService
                 {
                     for (int i = 0; i < hashDataLen; i += hashSize)
                     {
-                        if (!await ContentDependentChunking.TryDecompressChunk(destStream, hashData.Slice(i, hashSize).Span).ConfigureAwait(false))
+                        var l = await ContentDependentChunking.TryDecompressChunk(destStream, hashData.Slice(i, hashSize).Span).ConfigureAwait(false);
+                        if (l <= 0)
                             throw new Exception("Failed to decompress chunk! " + hashData.Slice(i, hashSize).Span.ToHexString());
                     }
                     Interlocked.Add(ref sync.UploadSize, destStream.Position);
@@ -667,7 +671,8 @@ namespace SysWeaver.MicroService
                         {
                             for (int i = 0; i < hashDataLen; i += hashSize)
                             {
-                                if (!await ContentDependentChunking.TryDecompressChunk(destStream, hashData.Slice(i, hashSize).Span).ConfigureAwait(false))
+                                var l = await ContentDependentChunking.TryDecompressChunk(destStream, hashData.Slice(i, hashSize).Span).ConfigureAwait(false);
+                                if (l <= 0)
                                     throw new Exception("Failed to decompress chunk! " + hashData.Slice(i, hashSize).Span.ToHexString());
                             }
                             Interlocked.Add(ref sync.UploadSize, destStream.Position);
@@ -760,7 +765,144 @@ namespace SysWeaver.MicroService
                 SyncJobs.TryRemove(jobId, out var _);
                 sync.D.Dispose();
             }
+        }
 
+        /// <summary>
+        /// Touch a folder /setting last access time to now)
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="context"></param>
+        /// <returns>The chunk stats for a compressed file or null if no compressed file exist</returns>
+        /// <exception cref="Exception"></exception>
+        public async Task<CdcChunkStats> Touch(FolderSyncOperation r, HttpServerRequest context)
+        {
+            var discFolder = r.DiscFolder;
+            if (!PathExt.IsValidFilename(discFolder))
+                throw new Exception("Invalid disc folder!");
+            var folderName = r.Folder.FastToLower();
+            if (!Folders.TryGetValue(folderName, out var folder))
+                throw new Exception("Unknown folder id");
+            if (!context.Session.IsValid(folder.Auth))
+                throw new Exception("Not authorized!");
+            if (!SystemLock.TryGet(folder.LockName, out var lck))
+                throw new Exception("A folder sync is in progress!");
+            using var _x = lck;
+            var targetDir = folder.DestPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var parentDir = Path.GetDirectoryName(targetDir);
+            var fullName = Path.Combine(parentDir, discFolder);
+            if (!Directory.Exists(fullName))
+                throw new Exception("Folder does not exist! " + fullName.ToQuoted());
+            new DirectoryInfo(fullName).LastAccessTimeUtc = DateTime.UtcNow;
+            fullName += ContentDependentChunking.DotFileExt;
+            if (File.Exists(fullName))
+                return await ContentDependentChunking.Verify(fullName, null, true).ConfigureAwait(false);
+            return null;
+        }
+
+        /// <summary>
+        /// Verify the integrity of a compressed folder and return some stats
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="getExpandedSize">If true, decompress the chunks to get the expanded size.
+        /// WARNING! This is much slower!</param>
+        /// <param name="context"></param>
+        /// <returns>The chunk stats for a compressed file or null if no compressed file exist</returns>
+        /// <exception cref="Exception"></exception>
+        public async Task<CdcChunkStats> Verify(FolderSyncOperation r, bool getExpandedSize, HttpServerRequest context)
+        {
+            var discFolder = r.DiscFolder;
+            if (!PathExt.IsValidFilename(discFolder))
+                throw new Exception("Invalid disc folder!");
+            var folderName = r.Folder.FastToLower();
+            if (!Folders.TryGetValue(folderName, out var folder))
+                throw new Exception("Unknown folder id");
+            if (!context.Session.IsValid(folder.Auth))
+                throw new Exception("Not authorized!");
+            if (!folder.Compress)
+                throw new Exception("Folder doesn't support compression!");
+            if (!SystemLock.TryGet(folder.LockName, out var lck))
+                throw new Exception("A folder sync is in progress!");
+            using var _x = lck;
+            var targetDir = folder.DestPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var parentDir = Path.GetDirectoryName(targetDir);
+            var fullName = Path.Combine(parentDir, discFolder);
+            if (!Directory.Exists(fullName))
+                throw new Exception("Folder does not exist! " + fullName.ToQuoted());
+            fullName += ContentDependentChunking.DotFileExt;
+            if (File.Exists(fullName))
+                return await ContentDependentChunking.Verify(fullName, null, false, getExpandedSize).ConfigureAwait(false);
+            return null;
+        }
+
+        /// <summary>
+        /// Expand a folder
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="context"></param>
+        /// <returns>The chunk stats for a compressed file or null if no compressed file exist</returns>
+        public async Task<CdcChunkStats> Expand(FolderSyncOperation r, HttpServerRequest context)
+        {
+            var discFolder = r.DiscFolder;
+            if (!PathExt.IsValidFilename(discFolder))
+                throw new Exception("Invalid disc folder!");
+            var folderName = r.Folder.FastToLower();
+            if (!Folders.TryGetValue(folderName, out var folder))
+                throw new Exception("Unknown folder id");
+            if (!context.Session.IsValid(folder.Auth))
+                throw new Exception("Not authorized!");
+            if (!folder.Compress)
+                throw new Exception("Folder doesn't support compression!");
+            if (!SystemLock.TryGet(folder.LockName, out var lck))
+                throw new Exception("A folder sync is in progress!");
+            using var _x = lck;
+            var targetDir = folder.DestPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var parentDir = Path.GetDirectoryName(targetDir);
+            var fullName = Path.Combine(parentDir, discFolder);
+            if (!Directory.Exists(fullName))
+                throw new Exception("Folder does not exist! " + fullName.ToQuoted());
+            fullName += ContentDependentChunking.DotFileExt;
+            if (!File.Exists(fullName))
+                return null;
+            var stats = await TryExpandFolderLog(fullName).ConfigureAwait(false);
+            var ex = stats.Item1;
+            if (ex != null)
+                throw ex;
+            return stats.Item2;
+            
+        }
+
+        /// <summary>
+        /// Compress a folder
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="context"></param>
+        /// <returns>True if the folder was compressed or false if it was already compressed</returns>
+        public async Task<bool> Compress(FolderSyncOperation r, HttpServerRequest context)
+        {
+            var discFolder = r.DiscFolder;
+            if (!PathExt.IsValidFilename(discFolder))
+                throw new Exception("Invalid disc folder!");
+            var folderName = r.Folder.FastToLower();
+            if (!Folders.TryGetValue(folderName, out var folder))
+                throw new Exception("Unknown folder id");
+            if (!context.Session.IsValid(folder.Auth))
+                throw new Exception("Not authorized!");
+            if (!folder.Compress)
+                throw new Exception("Folder doesn't support compression!");
+            if (!SystemLock.TryGet(folder.LockName, out var lck))
+                throw new Exception("A folder sync is in progress!");
+            using var _x = lck;
+            var targetDir = folder.DestPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var parentDir = Path.GetDirectoryName(targetDir);
+            var fullName = Path.Combine(parentDir, discFolder);
+            if (!Directory.Exists(fullName))
+                throw new Exception("Folder does not exist! " + fullName.ToQuoted());
+            if (File.Exists(fullName + ContentDependentChunking.DotFileExt))
+                return false;
+            var ex = await TryCompressFolderLog(fullName).ConfigureAwait(false);
+            if (ex != null)
+                throw ex;
+            return true;
         }
 
         /// <summary>
@@ -933,7 +1075,6 @@ namespace SysWeaver.MicroService
                 }
             }
         }
-
 
         /// <summary>
         /// Begin sync of a folder

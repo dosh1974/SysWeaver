@@ -280,35 +280,59 @@ namespace SysWeaver
         /// <param name="destName">Optional destination name (folder or file), default is the same as fileName excluding the .swcompact extension</param>
         /// <param name="props">The props used</param>
         /// <returns></returns>
-        public static async ValueTask Expand(String fileName, String destName = null, CdcProps props = null)
+        public static async ValueTask<CdcChunkStats> Expand(String fileName, String destName = null, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             destName = destName ?? PathExt.StripExtension(fileName);
             int hashSize = props.HashSize;
-        //  Read header
-            using var s = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+            //  Read header
+            var fi = new FileInfo(fileName);
+            using var s = fi.OpenRead();
             var header = await ReadHeader(s).ConfigureAwait(false);
             var minTime = header.MinTime;
             var files = header.Files;
         //  Processing of a single file
+            long fileCount = 0;
+            long chunkCount = 0;
+            long chunkCompSize = 0;
+            long chunkSize = 0;
+            ConcurrentDictionary<String, int> localUnique = new(StringComparer.Ordinal);
+            ConcurrentDictionary<String, CdcChunkFileStats> fileData = new(StringComparer.Ordinal);
+
             var l = CreateLock();
             async ValueTask DoOne(String file, CdcFileData data)
             {
+                Interlocked.Increment(ref fileCount);
                 using var _ = await l.Lock().ConfigureAwait(false);
                 await PathExt.EnsureFolderExistAsync(Path.GetDirectoryName(file)).ConfigureAwait(false);
                 var chunks = data.Chunks;
                 try
                 {
+                    long fileChunkCount = 0;
+                    long fileCompSize = 0;
+                    long fileSize = 0;
                     using (var d = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.None))
                     {
                         var sl = chunks.Length;
                         for (int i = 0; i < sl; i += hashSize)
                         {
-                            if (!await TryDecompressChunk(d, chunks.Span.Slice(i, hashSize), props).ConfigureAwait(false))
+                            var str = chunks.Span.Slice(i, hashSize).ToHexString();
+                            ++chunkCount;
+                            ++fileChunkCount;
+                            localUnique.TryAdd(str, 0);
+                            var p = d.Position;
+                            var l = await TryDecompressChunk(d, str, props).ConfigureAwait(false);
+                            if (l <= 0)
                                 throw new Exception("Failed to write chunk to \"" + file + "\"");
+                            var dl = d.Position - p;
+                            fileSize += dl;
+                            fileCompSize += l;
+                            Interlocked.Add(ref chunkSize, dl);
+                            Interlocked.Add(ref chunkCompSize, l);
                         }
                     }
                     data.SetFileInfo(file, minTime);
+                    fileData.TryAdd(file, new CdcChunkFileStats(file, fileChunkCount, fileCompSize, 0, fileSize));
                 }
                 catch
                 {
@@ -334,66 +358,18 @@ namespace SysWeaver
                 else
                     await PathExt.EnsureFolderExistAsync(destName).ConfigureAwait(false);
             }
-        }
-
-        /// <summary>
-        /// Find missing chunks in a .swcompact file 
-        /// </summary>
-        /// <param name="fileName">The .swcompact filename</param>
-        /// <param name="props">The props used</param>
-        /// <param name="touch">If true, mark exsiting chunks as used</param>
-        /// <returns>Stats</returns>
-        public static async ValueTask<CdcChunkStats> Verify(String fileName, CdcProps props = null, bool touch = false)
-        {
-            props = props ?? CdcProps.Default;
-            var destName = PathExt.StripExtension(fileName);
-            int hashSize = props.HashSize;
-
-            //  Read header
-            using var s = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read);
-            var header = await ReadHeader(s).ConfigureAwait(false);
-            var minTime = header.MinTime;
-            var files = header.Files;
-
-            //  Processing of a single file
-            long fileCount = 0;
-            long missingCount = 0;
-            long chunkCount = 0;
-            HashSet<String> localUnique = new HashSet<string>(StringComparer.Ordinal);
-            HashSet<String> missingChunks = new HashSet<string>(StringComparer.Ordinal);
-            HashSet<String> missingFiles = new HashSet<string>(StringComparer.Ordinal);
-            void DoOne(String file, CdcFileData data)
-            {
-                ++fileCount;
-                var chunks = data.Chunks;
-                var sl = chunks.Length;
-                for (int i = 0; i < sl; i += hashSize)
-                {
-                    var str = chunks.Span.Slice(i, hashSize).ToHexString();
-                    ++chunkCount;
-                    localUnique.Add(str);
-                    if (!ValidateChunk(str, props, touch))
-                    {
-                        ++missingCount;
-                        missingChunks.Add(str);
-                        missingFiles.Add(file);
-                    }
-                }
-            }
-            if (files != null)
-            {
-                //  Folder
-                foreach (var f in files)
-                    DoOne(Path.Combine(destName, f), await ReadFile(s, hashSize).ConfigureAwait(false));
-            }
-            else
-            {
-                //  File or empty Folder
-                var d = await ReadFile(s, hashSize, true).ConfigureAwait(false);
-                if (d != null)
-                    DoOne(destName, d);
-            }
-            return new CdcChunkStats(fileCount, chunkCount, missingCount, missingChunks, missingFiles, localUnique);
+            return new CdcChunkStats(
+                fi.Length,
+                fileCount,
+                chunkCount,
+                0,
+                chunkCompSize,
+                chunkSize,
+                null,
+                null,
+                localUnique.Keys.ToList(),
+                fileData.Values.ToList()
+                );
         }
 
 
@@ -412,7 +388,8 @@ namespace SysWeaver
             int hashSize = props.HashSize;
 
             //  Read header
-            using var s = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var fi = new FileInfo(fileName);
+            using var s = fi.OpenRead();
             var header = await ReadHeader(s).ConfigureAwait(false);
             var minTime = header.MinTime;
             var files = header.Files;
@@ -422,30 +399,39 @@ namespace SysWeaver
             long fileCount = 0;
             long missingCount = 0;
             long chunkCount = 0;
-            ConcurrentDictionary<String, int> localUnique = new (StringComparer.Ordinal);
-            ConcurrentDictionary<String, int> missingChunks = new (StringComparer.Ordinal);
+            long chunkCompSize = 0;
+            long chunkSize = 0;
+            ConcurrentDictionary<String, int> localUnique = new(StringComparer.Ordinal);
+            ConcurrentDictionary<String, int> missingChunks = new(StringComparer.Ordinal);
             ConcurrentDictionary<String, int> missingFiles = new(StringComparer.Ordinal);
-
+            ConcurrentDictionary<String, CdcChunkFileStats> fileData = new(StringComparer.Ordinal);
             var l = CreateLock();
             var ms = MissingChunk;
 
             async ValueTask DoOne(String file, CdcFileData data)
             {
-                ++fileCount;
+                Interlocked.Increment(ref fileCount);
                 using var _ = await l.Lock().ConfigureAwait(false);
                 await PathExt.EnsureFolderExistAsync(Path.GetDirectoryName(file)).ConfigureAwait(false);
                 var chunks = data.Chunks;
                 var sl = chunks.Length;
                 try
                 {
+                    long fileChunkCount = 0;
+                    long fileMissingCount = 0;
+                    long fileCompSize = 0;
+                    long fileSize = 0;
                     using (var d = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.None))
                     {
                         for (int i = 0; i < sl; i += hashSize)
                         {
                             var str = chunks.Span.Slice(i, hashSize).ToHexString();
                             ++chunkCount;
+                            ++fileChunkCount;
                             localUnique.TryAdd(str, 0);
-                            if (!await TryDecompressChunk(d, str, props).ConfigureAwait(false))
+                            var p = d.Position;
+                            var l = await TryDecompressChunk(d, str, props).ConfigureAwait(false);
+                            if (l <= 0)
                             {
                                 Interlocked.Increment(ref missingCount);
                                 missingChunks.TryAdd(str, 0);
@@ -457,9 +443,18 @@ namespace SysWeaver
                                 await d.WriteAsync(ms).ConfigureAwait(false);
                                 d.WriteByte((Byte)'>');
                             }
+                            else
+                            {
+                                var dl = d.Position - p;
+                                fileSize += dl;
+                                fileCompSize += l;
+                                Interlocked.Add(ref chunkSize, dl);
+                                Interlocked.Add(ref chunkCompSize, l);
+                            }
                         }
                     }
                     data.SetFileInfo(file, minTime);
+                    fileData.TryAdd(file, new CdcChunkFileStats(file, fileChunkCount, fileCompSize, fileMissingCount, fileSize));
                 }
                 catch
                 {
@@ -486,7 +481,116 @@ namespace SysWeaver
                 else
                     await PathExt.EnsureFolderExistAsync(destName).ConfigureAwait(false);
             }
-            return new CdcChunkStats(fileCount, chunkCount, missingCount, missingChunks.Keys.ToList(), missingFiles.Keys.ToList(), localUnique.Keys.ToList());
+            return new CdcChunkStats(
+                fi.Length,
+                fileCount,
+                chunkCount,
+                missingCount,
+                chunkCompSize,
+                chunkSize,
+                missingChunks.Keys.ToList(),
+                missingFiles.Keys.ToList(),
+                localUnique.Keys.ToList(),
+                fileData.Values.ToList()
+                );
+        }
+
+
+
+        /// <summary>
+        /// Find missing chunks in a .swcompact file 
+        /// </summary>
+        /// <param name="fileName">The .swcompact filename</param>
+        /// <param name="props">The props used</param>
+        /// <param name="touch">If true, mark exsiting chunks as used</param>
+        /// <param name="getExpandedSize">If true, decompress the chunks to get the expanded size.
+        /// WARNING! This is much slower!</param>
+        /// <returns>Stats</returns>
+        public static async ValueTask<CdcChunkStats> Verify(String fileName, CdcProps props = null, bool touch = false, bool getExpandedSize = false)
+        {
+            props = props ?? CdcProps.Default;
+            var destName = PathExt.StripExtension(fileName);
+            int hashSize = props.HashSize;
+
+            //  Read header
+            var fi = new FileInfo(fileName);
+            using var s = fi.OpenRead();
+            var header = await ReadHeader(s).ConfigureAwait(false);
+            var minTime = header.MinTime;
+            var files = header.Files;
+
+            //  Processing of a single file
+            long fileCount = 0;
+            long missingCount = 0;
+            long chunkCount = 0;
+            long chunkCompSize = 0;
+            long chunkSize = 0;
+            HashSet<String> localUnique = new (StringComparer.Ordinal);
+            HashSet<String> missingChunks = new (StringComparer.Ordinal);
+            HashSet<String> missingFiles = new (StringComparer.Ordinal);
+            Dictionary<String, CdcChunkFileStats> fileData = new (StringComparer.Ordinal);
+
+
+            void DoOne(String file, CdcFileData data)
+            {
+                ++fileCount;
+                var chunks = data.Chunks;
+                var sl = chunks.Length;
+                long fileChunkCount = 0;
+                long fileMissingCount = 0;
+                long fileCompSize = 0;
+                long fileSize = 0;
+                for (int i = 0; i < sl; i += hashSize)
+                {
+                    var str = chunks.Span.Slice(i, hashSize).ToHexString();
+                    ++chunkCount;
+                    ++fileChunkCount;
+                    localUnique.Add(str);
+                    var l = GetChunkSize(out var dl, str, props, touch, getExpandedSize);
+                    if (l > 0)
+                    {
+                        fileSize += dl;
+                        fileCompSize += l;
+                        chunkSize += dl;
+                        chunkCompSize += l;
+                    }
+                    else
+                    {
+                        ++fileMissingCount;
+                        ++missingCount;
+                        missingChunks.Add(str);
+                        missingFiles.Add(file);
+                    }
+                }
+                fileData[file] = new CdcChunkFileStats(file, fileChunkCount, fileCompSize, fileMissingCount, fileSize);
+            }
+
+            
+
+            if (files != null)
+            {
+                //  Folder
+                foreach (var f in files)
+                    DoOne(Path.Combine(destName, f), await ReadFile(s, hashSize).ConfigureAwait(false));
+            }
+            else
+            {
+                //  File or empty Folder
+                var d = await ReadFile(s, hashSize, true).ConfigureAwait(false);
+                if (d != null)
+                    DoOne(destName, d);
+            }
+            return new CdcChunkStats(
+                fi.Length,
+                fileCount, 
+                chunkCount, 
+                missingCount, 
+                chunkCompSize, 
+                chunkSize,
+                missingChunks, 
+                missingFiles, 
+                localUnique, 
+                fileData.Values.ToList());
         }
 
 
@@ -623,6 +727,43 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// Get the compressed size of a chunk
+        /// </summary>
+        /// <param name="expandedSize">The decompressed size of the chunk if getDecompressedSize = true</param>
+        /// <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
+        /// <param name="props">The props used</param>
+        /// <param name="touch">If true, mark exsiting chunk as used</param>
+        /// <param name="getExpandedSize">If true, decompress the chunks to get the expanded size.
+        /// WARNING! This is much slower!</param>
+        /// <returns>0 if the chunk doesn't exist, else the compressed length</returns>
+        public static long GetChunkSize(out long expandedSize, String hashStr, CdcProps props = null, bool touch = false, bool getExpandedSize = false)
+        {
+            expandedSize = 0;
+            props = props ?? CdcProps.Default;
+            var fileName = GetFilename(hashStr, props);
+            var fi = new FileInfo(fileName);
+            if (!fi.Exists)
+                return 0;
+            var l = fi.Length;
+            if (l <= 0)
+                return 0;
+            if (touch)
+            {
+                try
+                {
+                    fi.LastAccessTimeUtc = DateTime.UtcNow;
+                }
+                catch
+                {
+                }
+            }
+            if (getExpandedSize)
+                expandedSize = props.Comp.GetDecompressed(File.ReadAllBytes(fi.FullName)).Length;
+            return l;
+        }
+
+
+        /// <summary>
         /// Validate that a chunk exist
         /// </summary>
         /// <param name="hash">The hash of the chunk as binary data</param>
@@ -667,16 +808,16 @@ namespace SysWeaver
         /// <param name="dest">The destination stream</param>
         /// <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
         /// <param name="props">The props used</param>
-        /// <returns>True if the chunk was copied, false if the chunk didn't exist in the storage</returns>
-        public static async ValueTask<bool> TryDecompressChunk(Stream dest, String hashStr, CdcProps props = null)
+        /// <returns>Zero if the chunk didn't exist in the storage, else the length of the compressed chunk</returns>
+        public static async ValueTask<long> TryDecompressChunk(Stream dest, String hashStr, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             using var s = TryOpenCompressedChunk(hashStr, props);
             if (s == null)
-                return false;
+                return 0;
             var mem = await props.Comp.GetDecompressedAsync(s).ConfigureAwait(false);
             await dest.WriteAsync(mem).ConfigureAwait(false);
-            return true;
+            return s.Position;
         }
 
         /// <summary>
@@ -685,8 +826,8 @@ namespace SysWeaver
         /// <param name="dest">The destination stream</param>
         /// <param name="hash">The hash of the chunk as binary data</param>
         /// <param name="props">The props used</param>
-        /// <returns>True if the chunk was copied, false if the chunk didn't exist in the storage</returns>
-        public static ValueTask<bool> TryDecompressChunk(Stream dest, ReadOnlySpan<Byte> hash, CdcProps props = null) =>
+        /// <returns>Zero if the chunk didn't exist in the storage, else the length of the compressed chunk</returns>
+        public static ValueTask<long> TryDecompressChunk(Stream dest, ReadOnlySpan<Byte> hash, CdcProps props = null) =>
             TryDecompressChunk(dest, hash.ToHexString(), props);
 
 

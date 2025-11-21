@@ -51,7 +51,7 @@ body.TopWindow si-name {
 
 si-values {
     display: grid;
-    grid-template-columns: auto 100%;
+    grid-template-columns: auto auto 100%;
     grid-gap: 0.25em 1em;
     max-width: var(--MaxW);
     margin: 1.5em auto 0.25em auto;
@@ -72,10 +72,26 @@ si-values {
 si-value-name {
     grid-column: 1;
     color: var(--ThemeMain);
+    white-space: nowrap;
 }
 
 
 si-value-value {
     grid-column: 2;
     color: var(--ThemeAcc1);
+    white-space: nowrap;
 }
+
+
+si-actions {
+    max-width: var(--MaxW);
+    margin: 0.5em auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+}
+
+
+    si-actions sysweaver-button {
+        margin: 8px 8px 8px 0;
+    }

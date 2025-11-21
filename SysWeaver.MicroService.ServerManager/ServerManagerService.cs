@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Data;
+using SysWeaver.FolderSync;
 using SysWeaver.Net;
 using SysWeaver.OsServices;
 
@@ -804,15 +805,143 @@ namespace SysWeaver.MicroService
             var info = GetValidatedVersion(out var version, versionName, context);
             if (version == null)
                 throw new Exception("Version not found!");
-
-
             return new SmVersionDetail(info, version);
         }
 
 
+        /// <summary>
+        /// Get version details
+        /// </summary>
+        /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<bool> VersionActivate(String versionName, HttpServerRequest context)
+        {
+            var info = GetValidatedVersion(out var version, versionName, context);
+            if (version == null)
+                throw new Exception("Version not found!");
+
+            if (!await Syncer.Activate(new FolderSyncOperation
+            {
+                Folder = info.Syncher.Name,
+                DiscFolder = version.DiscFolder,
+            }, context).ConfigureAwait(false))
+                throw new Exception("Failed to activate \"" + version.DiscFolder + "\"");
+            Syncer.GetFolderData(info.Syncher.Name);
+            var exe = FindServiceExe(info.Syncher.DiscFolder);
+            if (exe != null)
+                info.Metrics.Status = await CheckStatus(exe).ConfigureAwait(false);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            return true;
+        }
+
+        /// <summary>
+        /// Touch a version (set last access time to now)
+        /// </summary>
+        /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
+        /// <param name="context"></param>
+        /// <returns>Compressed file stats or null if not compressed</returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<SmCompFileStats> VersionTouch(String versionName, HttpServerRequest context)
+        {
+            var info = GetValidatedVersion(out var version, versionName, context);
+            if (version == null)
+                throw new Exception("Version not found!");
+            var ret = await Syncer.Touch(new FolderSyncOperation
+            {
+                Folder = info.Syncher.Name,
+                DiscFolder = version.DiscFolder,
+            }, context).ConfigureAwait(false);
+            Syncer.GetFolderData(info.Syncher.Name);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            return ret == null ? null : new SmCompFileStats(ret);
+        }
+
+        /// <summary>
+        /// Verify a compressed version (looking for missing chunks etc)
+        /// </summary>
+        /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
+        /// <param name="context"></param>
+        /// <returns>Compressed file stats or null if not compressed</returns>
+        [WebApi]
+        [WebApiAuth]
+        public async Task<SmCompFileStats> VersionVerify(String versionName, HttpServerRequest context)
+        {
+            var info = GetValidatedVersion(out var version, versionName, context);
+            if (version == null)
+                throw new Exception("Version not found!");
+            var ret = await Syncer.Verify(new FolderSyncOperation
+            {
+                Folder = info.Syncher.Name,
+                DiscFolder = version.DiscFolder,
+            }, true, context).ConfigureAwait(false);
+            Syncer.GetFolderData(info.Syncher.Name);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            return ret == null ? null : new SmCompFileStats(ret);
+        }
+
+        /// <summary>
+        /// Expand a compressed version to it's individual files
+        /// </summary>
+        /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
+        /// <param name="context"></param>
+        /// <returns>Compressed file stats or null if not compressed</returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<SmCompFileStats> VersionExpand(String versionName, HttpServerRequest context)
+        {
+            var info = GetValidatedVersion(out var version, versionName, context);
+            if (version == null)
+                throw new Exception("Version not found!");
+            var ret = await Syncer.Expand(new FolderSyncOperation
+            {
+                Folder = info.Syncher.Name,
+                DiscFolder = version.DiscFolder,
+            }, context).ConfigureAwait(false);
+            Syncer.GetFolderData(info.Syncher.Name);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            return ret == null ? null : new SmCompFileStats(ret);
+        }
+
+
+        /// <summary>
+        /// Expand a compressed version to it's individual files
+        /// </summary>
+        /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
+        /// <param name="context"></param>
+        /// <returns>Compressed file stats or null if not compressed</returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<bool> VersionCompress(String versionName, HttpServerRequest context)
+        {
+            var info = GetValidatedVersion(out var version, versionName, context);
+            if (version == null)
+                throw new Exception("Version not found!");
+            var ret = await Syncer.Compress(new FolderSyncOperation
+            {
+                Folder = info.Syncher.Name,
+                DiscFolder = version.DiscFolder,
+            }, context).ConfigureAwait(false);
+            Syncer.GetFolderData(info.Syncher.Name);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            return ret;
+        }
+
+
     }
-
-
 
 
 }
