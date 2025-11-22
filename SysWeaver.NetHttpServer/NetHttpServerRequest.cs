@@ -75,17 +75,6 @@ namespace SysWeaver.Net
             return s.Substring(i, end - i);
         }
 
-        public static String MakeCookie(String name, String value, long maxAge, String path)
-        {
-            return String.Concat(
-                name,
-                '=',
-                value,
-                ";Max-Age=",
-                maxAge,
-                ";Path=",
-                path);
-        }
 
         public override void UpdateCookie(String n, String value, DateTime exp, String path = "/;HttpOnly")
         {
@@ -94,9 +83,10 @@ namespace SysWeaver.Net
             if (exp > maxDate)
                 exp = maxDate;
             var maxAge = (long)(exp - now).TotalSeconds;
-            var str = maxAge <= 0 ? MakeCookie(n, "", 0, path) : MakeCookie(n, value, maxAge, path);
+            var str = maxAge <= 0 ? HttpServerTools.MakeCookie(n, "", 0, path) : HttpServerTools.MakeCookie(n, value, maxAge, path);
             Res.AppendHeader("Set-Cookie", str);
         }
+
         public override void SetResBody(ReadOnlySpan<Byte> data)
         {
             var r = Res;

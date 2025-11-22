@@ -566,8 +566,9 @@ namespace SysWeaver.Net
                 {
                     try
                     {
-                        res.Body.Close();
+                        res.Body.Dispose();
                         //res.Headers["Server"] = StringValues.Empty;
+                        c.Request.Body.Dispose();
                     }
                     catch (Exception ex)
                     {

@@ -17,13 +17,12 @@ namespace SysWeaver.Net
         public override string ToString() => String.Concat("Token: ", Token, ", expires: ", new DateTime(ExpirationTime, DateTimeKind.Utc), ", auth: ", Auth);
 #endif//DEBUG
 
-        public HttpSession(HttpRateLimiterParams rateLimiterParams, String token, long utcNowTicks, long expirationDurationTicks, long keepAliveDurationTicks, String userAgent, String address, String httpProtocol, String deviceId)
+        public HttpSession(HttpRateLimiterParams rateLimiterParams, String token, long utcNowTicks, long keepAliveDurationTicks, String userAgent, String address, String httpProtocol, String deviceId)
         {
             RateLimiter = rateLimiterParams == null ? null : new HttpRateLimiter(rateLimiterParams);
             DeviceId = deviceId;
             Start = utcNowTicks;
             Token = token;
-            ExpirationTick = utcNowTicks + expirationDurationTicks;
             InternalKeepAliveDurationTicks = keepAliveDurationTicks;
             Exp = utcNowTicks + keepAliveDurationTicks;
             UserAgent = userAgent;
@@ -151,11 +150,6 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Session expiration tick (can expire earlier unless it's kept alive)
-        /// </summary>
-        public readonly long ExpirationTick;
-
-        /// <summary>
         /// Number of ticks to keep the session alive on each touch
         /// </summary>
         public long KeepAliveDurationTicks
@@ -179,10 +173,12 @@ namespace SysWeaver.Net
             get
             {
                 var e = Interlocked.Read(ref Exp);
-                var r = ExpirationTick;
-                return e < r ? e : r;
+                if (Interlocked.Read(ref Count) > 3)
+                    return e;
+                return (e - KeepAliveDurationTicks) + (TimeSpan.TicksPerMinute >> 1);
             }
         }
+
         /// <summary>
         /// True if we should expire this session
         /// </summary>
@@ -232,7 +228,24 @@ namespace SysWeaver.Net
             Interlocked.Exchange(ref Exp, DateTime.UtcNow.Ticks + KeepAliveDurationTicks);
         }
 
-        internal readonly DataReferenceStorage DataRefs = new DataReferenceStorage(DataScopes.Session);
+
+        DataReferenceStorage LazyDataRefs;
+
+        internal DataReferenceStorage DataRefs
+        {
+            get
+            {
+                var l = LazyDataRefs;
+                if (l != null)
+                    return l;
+                l = new DataReferenceStorage(DataScopes.Session);
+                var t = Interlocked.CompareExchange(ref LazyDataRefs, l, null);
+                if (t == null)
+                    return l;
+                l.Dispose();
+                return t;
+            }
+        }
 
 
         #region Session data
@@ -277,10 +290,14 @@ namespace SysWeaver.Net
         /// <returns>True if the data exists, else false</returns>
         public bool TryGet<T>(String key, out T val)
         {
-            if (Values.TryGetValue(key, out var v))
+            var vals = LazyValues;
+            if (vals != null)
             {
-                val = (T)v;
-                return true;
+                if (vals.TryGetValue(key, out var v))
+                {
+                    val = (T)v;
+                    return true;
+                }
             }
             val = default;
             return false;
@@ -295,10 +312,14 @@ namespace SysWeaver.Net
         /// <returns>True if the data was removed, else false</returns>
         public bool TryRemove<T>(String key, out T val)
         {
-            if (Values.TryRemove(key, out var v))
+            var vals = LazyValues;
+            if (vals != null)
             {
-                val = (T)v;
-                return true;
+                if (vals.TryRemove(key, out var v))
+                {
+                    val = (T)v;
+                    return true;
+                }
             }
             val = default;
             return false;
@@ -310,7 +331,7 @@ namespace SysWeaver.Net
         /// <param name="key">The unique key for this data</param>
         /// <returns>True if the data was removed, else false</returns>
         public bool TryRemove(String key)
-            => Values.TryRemove(key, out var v);
+            => LazyValues?.TryRemove(key, out var v) ?? false;
 
         /// <summary>
         /// Set some session data (add or replace)
@@ -323,8 +344,19 @@ namespace SysWeaver.Net
             Values[key] = val;
         }
 
+        ConcurrentDictionary<String, Object> LazyValues;
 
-        readonly ConcurrentDictionary<String, Object> Values = new ConcurrentDictionary<string, object>(StringComparer.Ordinal);
+        ConcurrentDictionary<String, Object> Values
+        {
+            get
+            {
+                var l = LazyValues;
+                if (l != null)
+                    return l;
+                l = new(StringComparer.Ordinal);
+                return Interlocked.CompareExchange(ref LazyValues, l, null) ?? l;
+            }
+        }
 
         /// <summary>
         /// Returns a change counter for the cache.
@@ -340,7 +372,7 @@ namespace SysWeaver.Net
         /// </summary>
         public void InvalidateCache()
         {
-            Cache.Clear();
+            Cache?.Clear();
             Interlocked.Increment(ref InternalCacheTimeStamp);
         }
 
@@ -351,6 +383,8 @@ namespace SysWeaver.Net
         public void InvalidateCache(Func<String, bool> shouldInvalidate)
         {
             var c = Cache;
+            if (c == null)
+                return;
             List<String> l = [];
             foreach (var x in c)
             {
@@ -364,9 +398,9 @@ namespace SysWeaver.Net
 
         internal void DoNewLogin()
         {
-            Values.Clear();
+            LazyValues?.Clear();
             Interlocked.Increment(ref WaiterId);
-            MessagesAdded.Change();
+            LazyMessagesAdded?.Change();
         }
 
         /// <summary>
@@ -375,17 +409,35 @@ namespace SysWeaver.Net
         /// </summary>
         internal void OnRemove()
         {
-            Values.Clear();
-            Cache.Clear();
+            LazyValues?.Clear();
+            Cache?.Clear();
             Interlocked.Increment(ref WaiterId);
-            MessagesAdded.Change();
+            LazyMessagesAdded?.Change();
             SetAuth(null);
             //Messages.Clear();
         }
 
 
-        internal readonly ConcurrentDictionary<String, HttpCacheEntry> Cache = new(StringComparer.Ordinal);
+        /// <summary>
+        /// This can be null, if you wan't to store something use the SaveCache property instead
+        /// </summary>
+        internal ConcurrentDictionary<String, HttpCacheEntry> Cache;
 
+
+        /// <summary>
+        /// Return Cache or create a new Cache
+        /// </summary>
+        internal ConcurrentDictionary<String, HttpCacheEntry> SaveCache
+        {
+            get
+            {
+                var l = Cache;
+                if (l != null)
+                    return l;
+                l = new(StringComparer.Ordinal);
+                return Interlocked.CompareExchange(ref Cache, l, null) ?? l;
+            }
+        }
 
         sealed class Message
         {
@@ -409,9 +461,39 @@ namespace SysWeaver.Net
 
         const long QueueMessage = TimeSpan.TicksPerSecond * 15;
 
+        /// <summary>
+        /// Can be null
+        /// </summary>
+        ConcurrentQueue<Message> LazyMessages;
 
-        readonly ConcurrentQueue<Message> Messages = new ConcurrentQueue<Message>();
-        readonly BlockUntilChange MessagesAdded = new BlockUntilChange(false);
+        /// <summary>
+        /// Create a new message queue if it doesn't exist
+        /// </summary>
+        ConcurrentQueue<Message> Messages
+        {
+            get
+            {
+                var l = LazyMessages;
+                if (l != null)
+                    return l;
+                l = new();
+                return Interlocked.CompareExchange(ref LazyMessages, l, null) ?? l;
+            }
+        }
+
+        BlockUntilChange LazyMessagesAdded;
+
+        BlockUntilChange MessagesAdded
+        {
+            get
+            {
+                var l = LazyMessagesAdded;
+                if (l != null)
+                    return l;
+                l = new(false);
+                return Interlocked.CompareExchange(ref LazyMessagesAdded, l, null) ?? l;
+            }
+        }
 
 
         long MessageId = 1;
@@ -561,28 +643,31 @@ namespace SysWeaver.Net
                     Messages = HttpServerBase.MessageServerReconnects,
                 };
             }
-            var messages = Messages;
-            for (; ; )
+            var messages = LazyMessages;
+            if (messages != null)
             {
-                var v = GetValidMessage(ref cc, auth, returnOn, messages);
-                if (v != null) 
-                    return v;
-                var wait = (end - DateTime.UtcNow.Ticks) / TimeSpan.TicksPerMillisecond;
-                if (wait <= 0)
-                    break;
-                var prev = cid;
-                cid = await ma.WaitForChange(cid, (int)wait).ConfigureAwait(false);
-                if (prev == cid)
-                    break;
-                //  Wait a small amount since there are cases where more than one message is pushed (this will give us a chance of sending all at once)
-                await Task.Delay(1).ConfigureAwait(false);
-                //  If auth have changed
-                if (Auth?.Guid != auth)
-                    break;
-                //  If there is a newer shared request, abort this waiter
-                if (shared)
-                    if (waiterId != Interlocked.Read(ref WaiterId))
+                for (; ; )
+                {
+                    var v = GetValidMessage(ref cc, auth, returnOn, messages);
+                    if (v != null)
+                        return v;
+                    var wait = (end - DateTime.UtcNow.Ticks) / TimeSpan.TicksPerMillisecond;
+                    if (wait <= 0)
                         break;
+                    var prev = cid;
+                    cid = await ma.WaitForChange(cid, (int)wait).ConfigureAwait(false);
+                    if (prev == cid)
+                        break;
+                    //  Wait a small amount since there are cases where more than one message is pushed (this will give us a chance of sending all at once)
+                    await Task.Delay(1).ConfigureAwait(false);
+                    //  If auth have changed
+                    if (Auth?.Guid != auth)
+                        break;
+                    //  If there is a newer shared request, abort this waiter
+                    if (shared)
+                        if (waiterId != Interlocked.Read(ref WaiterId))
+                            break;
+                }
             }
             if (cc == req.Cc)
                 return null;
@@ -597,7 +682,7 @@ namespace SysWeaver.Net
         internal void InvokeOnClose()
         {
             OnClose?.Invoke(this);
-            DataRefs.Dispose();
+            Interlocked.Exchange(ref LazyDataRefs, null)?.Dispose();
         }
 
         /// <summary>

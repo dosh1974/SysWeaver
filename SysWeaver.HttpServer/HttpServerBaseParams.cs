@@ -5,7 +5,7 @@ namespace SysWeaver.Net
     public class HttpServerBaseParams
     {
 
-        public override string ToString() => String.Concat("Session keep alive for: ", SessionExtendLifetime, " minutes, session max lifetime: ", SessionMaxLifetime, " minutes");
+        public override string ToString() => String.Concat("Session keep alive for: ", SessionExtendLifetime, " minutes, session cookie lifetime: ", SessionCookieLifetime, " minutes");
 
         /// <summary>
         /// Enable performance monitoring
@@ -25,7 +25,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Maximum lifetime of the session in minutes
         /// </summary>
-        public int SessionMaxLifetime = 24 * 60;
+        public int SessionCookieLifetime = 365 * 24 * 60;
 
         /// <summary>
         /// Number of minutes to keep the session alive after some form of interaction

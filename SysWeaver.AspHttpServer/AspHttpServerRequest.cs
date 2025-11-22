@@ -88,7 +88,7 @@ namespace SysWeaver.Net
 
         public override void UpdateCookie(String n, String value, DateTime exp, String path = DefPath)
         {
-            var now = DateTime.UtcNow; 
+/*            var now = DateTime.UtcNow; 
             var maxDate = now.AddYears(1);
             if (exp > maxDate)
                 exp = maxDate;
@@ -105,12 +105,20 @@ namespace SysWeaver.Net
                     Expires = exp,
                 };
             Res.Cookies.Append(n, value, opt);
-            Cok[n] = Tuple.Create(value, opt);
+*/
+            var now = DateTime.UtcNow;
+            var maxDate = now.AddYears(1);
+            if (exp > maxDate)
+                exp = maxDate;
+            var maxAge = (long)(exp - now).TotalSeconds;
+            var str = maxAge <= 0 ? HttpServerTools.MakeCookie(n, "", 0, path) : HttpServerTools.MakeCookie(n, value, maxAge, path);
+            Res.Headers.Append("Set-Cookie", str);
+            Cok[n] = str;
         }
 
 
 
-        readonly Dictionary<String, Tuple<String, CookieOptions>> Cok = new Dictionary<string, Tuple<string, CookieOptions>>(StringComparer.Ordinal);
+        readonly Dictionary<String, String> Cok = new Dictionary<string, String>(StringComparer.Ordinal);
         readonly Dictionary<String, String> Head = new Dictionary<string, string>(StringComparer.Ordinal);
 
         public override void SetResBody(ReadOnlySpan<Byte> data)
@@ -165,12 +173,15 @@ namespace SysWeaver.Net
             var toh = to.Headers;
             foreach (var h in Head)
                 toh.Append(h.Key, h.Value);
-            var toc = to.Cookies;
+            foreach (var c in Cok)
+                toh.Append("Set-Cookie", c.Value);
+
+/*            var toc = to.Cookies;
             foreach (var c in Cok)
             {
                 var v = c.Value;
                 toc.Append(c.Key, v.Item1, v.Item2);
-            }
+            }*/
         }
 
 

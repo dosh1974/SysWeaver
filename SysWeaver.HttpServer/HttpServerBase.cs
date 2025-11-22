@@ -78,8 +78,13 @@ namespace SysWeaver.Net
             DeviceIdCookieName = s == null ? null : TextTemplate.SearchAndReplace(String.IsNullOrEmpty(s) ? "SysWeaver.DeviceId" : s, envVars);
             DeviceIdCookieNameEquals = DeviceIdCookieName + "=";
 
-            SessionMaxLifetime = TimeSpan.TicksPerMinute * Math.Max(1, p.SessionMaxLifetime);
-            SessionExtendLifetime = TimeSpan.TicksPerMinute * Math.Max(1, p.SessionExtendLifetime);
+
+            var mx = Math.Max(1, p.SessionExtendLifetime);
+            SessionExtendLifetime = TimeSpan.TicksPerMinute * mx;
+            SessionCookieLifetime = TimeSpan.TicksPerMinute * Math.Max(mx * 10 + 30, p.SessionCookieLifetime);
+
+
+
             AuthRedirect = p.AuthRedirect;
             AllowAuthorizationAuth = p.AllowAuthorizationAuth;
             LogoutRedirect = p.LogoutRedirect;
@@ -329,19 +334,6 @@ namespace SysWeaver.Net
         }
 
 
-        sealed class UserData
-        {
-
-            public readonly Authorization Auth;
-            public readonly ConcurrentDictionary<HttpSession, bool> Sessions = new ConcurrentDictionary<HttpSession, bool>();
-
-            public UserData(Authorization auth)
-            {
-                Auth = auth;
-            }
-        }
-
-
         /// <summary>
         /// Execute some function on all active sessions for a specific user
         /// </summary>
@@ -410,7 +402,7 @@ namespace SysWeaver.Net
                 PrunceCache(Cache);
             using (PerfMon.Track(nameof(Prune) + ".Sessions"))
             {
-                const int maxWork = 100;
+                const int maxWork = 100000;
                 var sessions = Sessions;
                 List<String> remove = new List<string>(maxWork);
                 var now = DateTime.UtcNow.Ticks;
@@ -423,7 +415,9 @@ namespace SysWeaver.Net
                             break;
                     }else
                     {
-                        PrunceCache(x.Value.Cache);
+                        var cache = x.Value.Cache;
+                        if (cache != null)
+                            PrunceCache(cache);
                     }
                 }
                 var rs = ExpiredSessions;
@@ -433,17 +427,23 @@ namespace SysWeaver.Net
                         continue;
                     if (data.CanExpire(now))
                     {
+                        Interlocked.Decrement(ref CurrentSessionCount);
                         RunOnSessionRemove(data);
-                        rs.Enqueue(data);
+                        if (data.RequestCount > 3)
+                        {
+                            rs.Enqueue(data);
+                            Interlocked.Increment(ref ExpiredCount);
+                        }
                         continue;
                     }
                     sessions.TryAdd(x, data);
                 }
-                now -= (TimeSpan.TicksPerMinute * 15);
+                now -= (TimeSpan.TicksPerMinute * 1);
                 while (rs.TryPeek(out var data))
                 {
                     if (!data.CanExpire(now))
                         break;
+                    Interlocked.Decrement(ref ExpiredCount);
                     rs.TryDequeue(out data);
                 }
             }
@@ -1083,13 +1083,14 @@ namespace SysWeaver.Net
                 }
                 //  Handle cached requests
                 String cacheKey = String.Empty;
-                var cache = ((rcd < 0) || isDynamicTemplate) ? session.Cache : Cache;
-                if (rcd < 0)
-                    rcd = -rcd;
+                ConcurrentDictionary<String, HttpCacheEntry> cache = null;
                 var now = DateTime.UtcNow;
                 var nowT = now.Ticks;
-                if (rcd > 0)
+                if (rcd != 0)
                 {
+                    cache = ((rcd < 0) || isDynamicTemplate) ? session.SaveCache : Cache;
+                    if (rcd < 0)
+                        rcd = -rcd;
                     var key = (await t.GetCacheKey(data).ConfigureAwait(false)) ?? url;
                     if (key.Length > 0)
                     {
@@ -1761,7 +1762,7 @@ namespace SysWeaver.Net
         readonly String DeviceIdCookieNameEquals;
 
 
-        readonly long SessionMaxLifetime;
+        readonly long SessionCookieLifetime;
         readonly long SessionExtendLifetime;
 
         static String GetSessionGuid()
@@ -1771,9 +1772,12 @@ namespace SysWeaver.Net
         }
 
 
+        long TotalSessionCount;
+        long CurrentSessionCount;
         readonly ConcurrentDictionary<String, HttpSession> Sessions = new ConcurrentDictionary<string, HttpSession>(StringComparer.Ordinal);
         //readonly SemiFrozenDictionary<String, HttpSession> Sessions = new SemiFrozenDictionary<string, HttpSession>(StringComparer.Ordinal);
 
+        long ExpiredCount;
         readonly ConcurrentQueue<HttpSession> ExpiredSessions = new ConcurrentQueue<HttpSession>();
 
         readonly String CookieOptions;
@@ -1844,19 +1848,10 @@ namespace SysWeaver.Net
                 {
                     if (sessions.TryGetValue(sessionToken, out session))
                     {
-                        if (now < session.ExpirationTick)
-                        {
-                            session.Touch(now, req);
-                            return session;
-                        }
-                        if (sessions.TryRemove(sessionToken, out session))
-                        {
-                            ExpiredSessions.Enqueue(session);
-                        }
+                        session.Touch(now, req);
+                        return session;
                     }
                 }
-
-
                 var dn = DeviceIdCookieName;
                 String deviceId = req.GetReqCookie(dn);
                 if (deviceId == null)
@@ -1869,7 +1864,6 @@ namespace SysWeaver.Net
 
                 var ua = req.GetReqHeader("User-Agent") ?? "";
                 var prot = req.ProtocolVersion;
-                var maxLife = SessionMaxLifetime;
                 var extLife = SessionExtendLifetime;
                 var ip = req.GetIpAddress();
                 var et = sessionToken;
@@ -1878,12 +1872,12 @@ namespace SysWeaver.Net
                 {
                     sessionToken = et ?? GetSessionGuid();
                     et = null;
-                    session = new HttpSession(rateLimiterParams, sessionToken, now, maxLife, extLife, ua, ip, prot, deviceId);
+                    session = new HttpSession(rateLimiterParams, sessionToken, now, extLife, ua, ip, prot, deviceId);
                 } while (!sessions.TryAdd(sessionToken, session));
                 session.LanguageTimeStamp = DateTime.UtcNow;
                 session.Language = await GetAcceptLanguage(req.GetReqHeader("Accept-Language")).ConfigureAwait(false);
                 session.OnAuthLogout += RunOnLogout;
-                var exp = new DateTime(now + maxLife, DateTimeKind.Utc);
+                var exp = new DateTime(now + SessionCookieLifetime, DateTimeKind.Utc);
                 req.UpdateCookie(sn, sessionToken, exp, cookieOpt);
                 try
                 {
@@ -1893,6 +1887,8 @@ namespace SysWeaver.Net
                 {
                     SessionStartErrors.OnException(ex);
                 }
+                Interlocked.Increment(ref CurrentSessionCount);
+                Interlocked.Increment(ref TotalSessionCount);
                 return session;
             }
         }
@@ -2043,6 +2039,9 @@ namespace SysWeaver.Net
             var ratio = (double)((Decimal)hit * 100M / (Decimal)(total <= 0 ? 1 : total));
             yield return new Stats(sys, "Cache.Ratio", ratio, "Cache hit ratio, how many time a cached resource was returned", TableDataNumberAttribute.Percentage);
             yield return new Stats(sys, "Cache.Request", total, "Total number of request that could have hit the cache");
+            yield return new Stats(sys, "Session.Current", Interlocked.Read(ref CurrentSessionCount), "Total number of active sessions");
+            yield return new Stats(sys, "Session.Total", Interlocked.Read(ref TotalSessionCount), "Total number of sessions created during the life time of the process");
+            yield return new Stats(sys, "Session.Expired", Interlocked.Read(ref ExpiredCount), "Number of expired sessions that are kept for 5 minutes extra for debug / tracking purposes");
         }
 
 
@@ -2057,51 +2056,6 @@ namespace SysWeaver.Net
         static readonly Byte[] Dummy = GC.AllocateUninitializedArray<Byte>(16384);
 
         #region Compression
-
-        sealed class Input : IDisposable
-        {
-            public Stream Stream;
-            public ReadOnlyMemory<Byte>? Data;
-            Stack<IDisposable> Disp;
-
-            public Input(Stream stream)
-            {
-                Stream = stream;
-            }
-
-            public Input(ReadOnlyMemory<byte> data)
-            {
-                Data = data;
-            }
-
-            public void Dispose()
-            {
-                var s = Stream;
-                if (s != null)
-                    s.Dispose();
-                var d = Disp;
-                if (d == null)
-                    return;
-                while (d.Count > 0)
-                    d.Pop().Dispose();
-            }
-
-            public void ChangeStream(Stream stream)
-            {
-                var old = Stream;
-                Stream = stream;
-                if (old == null)
-                    return;
-                var d = Disp;
-                if (d == null)
-                {
-                    d = new Stack<IDisposable>();
-                    Disp = d;
-                }
-                d.Push(old);
-            }
-
-        }
 
 
         static bool GZipToDeflate(Input i)
@@ -2562,236 +2516,6 @@ namespace SysWeaver.Net
         [WebApiAuth(Roles.Debug)]
         public void SendAllSessionsMessage(String message, HttpServerRequest request) => request.Server.PushMessageAllSessions(new PushMessage(message));
 
-        [TableDataPrimaryKey(nameof(Name))]
-
-        sealed class UserDebugData
-        {
-            public UserDebugData(UserData d, long nowTick)
-            {
-                var a = d.Auth;
-                Name = a.Username;
-                Email = a.Email;
-                NickName = a.NickName;
-                Gen = a.AutoNickName;
-                var t = a.Tokens;
-                Auth = (t == null) || (t.Count <= 0) ? null : String.Join(',', a.Tokens);
-                var sb = new StringBuilder();
-                int c = 0;
-                foreach (var sk in d.Sessions)
-                {
-                    var s = sk.Key;
-                    if (s.CanExpire(nowTick))
-                        continue;
-                    ++c;
-                    if (sb.Length > 0)
-                        sb.Append(',');
-                    sb.Append(s.Token);
-                    sb.Append(':');
-                    var dur = (nowTick - s.Start) / TimeSpan.TicksPerSecond;
-                    sb.Append("Duration: ").Append(dur).AppendLine(" seconds.");
-                    sb.Append("Address: ").Append(s.Address).AppendLine(".");
-                    sb.Append("User agent: ").Append(s.UserAgent?.Replace(',', '¤'));
-                }
-                SessionCount = c;
-                Sessions = sb.ToString();
-            }
-            /// <summary>
-            /// User name
-            /// </summary>
-            public String Name;
-            /// <summary>
-            /// User email
-            /// </summary>
-            [TableDataKey]
-            public String Email;
-            
-            /// <summary>
-            /// User selectable nick name, displayed on public pages etc
-            /// </summary>
-            public String NickName;
-
-            /// <summary>
-            /// True if the nick name is auto generated (not selected by the user)
-            /// </summary>
-            public bool Gen;
-
-            /// <summary>
-            /// Auth information, null = open, empty = auth required or comma separted tokens that are required
-            /// </summary>
-            [TableDataTags("{^0}", null, "{0}", true)]
-            public String Auth;
-
-            /// <summary>
-            /// Number active sessions that the user is logged in to.
-            /// </summary>
-            public int SessionCount;
-
-            /// <summary>
-            /// Information about each session that the user is logged in to.
-            /// </summary>
-            [TableDataTags("{1}", "{2}\n", "Token: {1}.\n{2}", true)]
-            public String Sessions;
-        }
-
-
-        [TableDataPrimaryKey(nameof(Token))]
-        sealed class SessionDebugData
-        {
-            public SessionDebugData(HttpSession s, DateTime utcNow)
-            {
-                var nowTick = utcNow.Ticks;
-                Token = s.Token;
-                var st = new DateTime(s.Start, DateTimeKind.Utc);
-                LastActivity = new DateTime(s.LastActivity, DateTimeKind.Utc);
-                var count = s.RequestInProgress;
-                if (count == 0)
-                    Last = utcNow - LastActivity;
-                Started = st;
-                Expiration = new DateTime(s.ExpirationTime, DateTimeKind.Utc);
-                Timeout = TimeSpan.FromTicks(s.KeepAliveDurationTicks);
-                Deadline = new DateTime(s.ExpirationTick, DateTimeKind.Utc);
-                Expired = s.CanExpire(nowTick);
-                Duration = utcNow - st;
-                var a = s.Auth;
-                if (a != null)
-                {
-                    User = a.Username;
-                    var t = a.Tokens;   
-                    if (t != null)
-                        Auth = String.Join(',', t);
-                    else
-                        Auth = "-";
-                }
-                Address = s.Address;
-                UserAgent = s.UserAgent;
-                Cache = s.Cache.Count;
-                Protocol = s.HttpProtocol;
-                Count = s.RequestCount;
-                Active = count;
-                DeviceId = s.DeviceId;
-                Flag = s.Language;
-                Language = s.Language;
-                ClientTimeZone = s.ClientTimeZone;
-                ClientLanguage = s.ClientLanguage;
-            }
-
-            /// <summary>
-            /// Session token (redacted)
-            /// </summary>
-            public readonly String Token;
-
-            /// <summary>
-            /// True if the session has expired
-            /// </summary>
-            public readonly bool Expired;
-
-            /// <summary>
-            /// How long the session has been active
-            /// </summary>
-            public readonly TimeSpan Duration;
-
-            /// <summary>
-            /// How long ago the last activity was made
-            /// </summary>
-            public readonly TimeSpan Last;
-
-            /// <summary>
-            /// The address of the connected client
-            /// </summary>
-            [TableDataIp]
-            public readonly String Address;
-
-            /// <summary>
-            /// User if logged in
-            /// </summary>
-            public readonly String User;
-
-            /// <summary>
-            /// Auth tokens
-            /// </summary>
-            [TableDataTags]
-            public readonly String Auth;
-
-            /// <summary>
-            /// Id of the device
-            /// </summary>
-            public readonly String DeviceId;
-
-            /// <summary>
-            /// Number of requests made in this session
-            /// </summary>
-            public readonly long Count;
-
-            /// <summary>
-            /// Number of active requests
-            /// </summary>
-            public readonly long Active;
-
-            /// <summary>
-            /// When the session started
-            /// </summary>
-            public readonly DateTime Started;
-
-            /// <summary>
-            /// The time when the last activity was made
-            /// </summary>
-            public readonly DateTime LastActivity;
-
-            /// <summary>
-            /// Session expiration, this is extended when session is in use
-            /// </summary>
-            public readonly DateTime Expiration;
-
-            /// <summary>
-            /// Session timeout (when a session haven't interacted for this long, it will die)
-            /// </summary>
-            public readonly TimeSpan Timeout;
-
-            /// <summary>
-            /// Session deadline, the session will be expired at this time
-            /// </summary>
-            public readonly DateTime Deadline;
-
-            /// <summary>
-            /// Number of cached entries
-            /// </summary>
-            public readonly long Cache;
-
-            /// <summary>
-            /// The http protocol used
-            /// </summary>
-            public readonly String Protocol;
-
-            /// <summary>
-            /// The flag of the language
-            /// </summary>
-            [TableDataIsoLanguageImage]
-            public readonly String Flag;
-
-            /// <summary>
-            /// The language to use
-            /// </summary>
-            public readonly String Language;
-
-            /// <summary>
-            /// The client language
-            /// </summary>
-            public readonly String ClientLanguage;
-
-            /// <summary>
-            /// The client time zone
-            /// </summary>
-            public readonly String ClientTimeZone;
-
-
-            /// <summary>
-            /// User agent
-            /// </summary>
-            [TableDataUserAgent]
-            public readonly String UserAgent;
-
-        }
-
         /// <summary>
         /// Get all active sessions
         /// </summary>
@@ -2842,81 +2566,6 @@ namespace SysWeaver.Net
 
         }
 
-        [TableDataPrimaryKey(nameof(LocalUrl))]
-        sealed class CacheData
-        {
-            public CacheData(KeyValuePair<String, HttpCacheEntry> cs, DateTime utcNow)
-            {
-                var s = cs.Value;
-                var r = s.Res;
-
-                var p = cs.Key.Split('\n');
-                var pl = p.Length;
-                if (pl >= 4)
-                {
-                    var l = p[3];
-                    Flag = l;
-                    Language = IsoLanguage.TryGetName(l)?.Name ?? l;
-                }
-                LocalUrl = s.LocalUrl;
-                LastUsed = new DateTime(Interlocked.Read(ref s.LastUsed), DateTimeKind.Utc);
-                Expires = new DateTime(s.Expires, DateTimeKind.Utc);
-                Size = s.Data.Length;
-                Accept = r.AcceptEncoding;
-                Encoding = r.GetResHeader("Content-Encoding");
-            }   
-
-            /// <summary>
-            /// The url of the cached asset
-            /// </summary>
-            [TableDataUrl("{0}", "../{2}")]
-            public readonly String LocalUrl;
-
-
-            /// <summary>
-            /// The flag of the language (auto translated to)
-            /// </summary>
-            [TableDataIsoLanguageImage]
-            public readonly String Flag;
-
-            /// <summary>
-            /// The language (auto translated to)
-            /// </summary>
-            public readonly String Language;
-
-            /// <summary>
-            /// Size of the cached asset
-            /// </summary>
-            [TableDataByteSize]
-            public readonly long Size;
-
-
-            /// <summary>
-            /// Encoding used
-            /// </summary>
-            public readonly String Encoding;
-
-            /// <summary>
-            /// The time when this expires
-            /// </summary>
-            public readonly DateTime Expires;
-
-
-
-            /// <summary>
-            /// The time when this was last accessed
-            /// </summary>
-            public readonly DateTime LastUsed;
-
-            /// <summary>
-            /// Accepted encoding
-            /// </summary>
-            public readonly String Accept;
-
-
-        }
-
-
         /// <summary>
         /// Get cache entries
         /// </summary>
@@ -2949,7 +2598,7 @@ namespace SysWeaver.Net
         public TableData SessionCacheEntries(TableDataRequest r, HttpServerRequest context)
         {
             var n = DateTime.UtcNow;
-            return TableDataTools.Get(r, 5000, context.Session.Cache.Select(x => new CacheData(x, n)));
+            return TableDataTools.Get(r, 5000, context.Session.Cache.Nullable().Select(x => new CacheData(x, n)));
         }
 
         #endregion //Debug

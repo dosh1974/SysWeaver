@@ -205,6 +205,17 @@ namespace SysWeaver.Net
             return d.Freeze();
         }
 
+        public static String MakeCookie(String name, String value, long maxAge, String path)
+        {
+            return String.Concat(
+                name,
+                '=',
+                value,
+                ";Max-Age=",
+                maxAge,
+                ";Path=",
+                path);
+        }
 
 
     }
