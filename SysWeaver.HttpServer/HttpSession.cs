@@ -643,7 +643,7 @@ namespace SysWeaver.Net
                     Messages = HttpServerBase.MessageServerReconnects,
                 };
             }
-            var messages = LazyMessages;
+            var messages = Messages;
             if (messages != null)
             {
                 for (; ; )

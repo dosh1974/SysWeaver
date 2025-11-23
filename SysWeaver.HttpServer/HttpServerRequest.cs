@@ -59,18 +59,38 @@ namespace SysWeaver.Net
         /// The server instance
         /// </summary>
         public readonly HttpServerBase Server;
+        
+        
         /// <summary>
         /// The If-None-Match header value
         /// </summary>
-        public readonly String IfNoneMatch;
+        public abstract String IfNoneMatch { get; }
+        
         /// <summary>
         /// The compression header
         /// </summary>
-        public readonly String AcceptEncoding;
+        public abstract String AcceptEncoding { get; }
+
+
         /// <summary>
         /// The accepted encoders
         /// </summary>
-        public readonly IReadOnlySet<String> AcceptedEncoders;
+        public IReadOnlySet<String> AcceptedEncoders
+        {
+            get
+            {
+                var l = LazyAcceptedEncoders;
+                if (l != null)
+                    return l;
+                l = HttpCompressionPriority.GetAcceptedEncoders(AcceptEncoding);
+                LazyAcceptedEncoders = l;
+                return l;
+            }
+        }
+
+        IReadOnlySet<String> LazyAcceptedEncoders;
+
+
 
         /// <summary>
         /// The index in to the url string where the first query value is located, or 0 if there are no query parameters
@@ -112,7 +132,7 @@ namespace SysWeaver.Net
             { "HEAD", HttpServerMethods.HEAD },
         }.Freeze();
 
-        protected HttpServerRequest(String httpMethod, String ifNoneMatch, String acceptEncoding, String url, String prefix, HttpServerBase server, Uri uri, HttpServerHostInfo host)
+        protected HttpServerRequest(String httpMethod, String url, String prefix, HttpServerBase server, Uri uri, HttpServerHostInfo host)
         {
             Method = httpMethod;
             var m = ((httpMethod != null) && IntMethods.TryGetValue(httpMethod, out var hm)) ? hm : HttpServerMethods.Other;
@@ -126,9 +146,6 @@ namespace SysWeaver.Net
             QueryStringStart = qs + 1;
             LocalUrl = qs < 0 ? url.Substring(pl) : url.Substring(pl, qs - pl);
             Server = server;
-            IfNoneMatch = ifNoneMatch;
-            AcceptEncoding = acceptEncoding;
-            AcceptedEncoders = HttpCompressionPriority.GetAcceptedEncoders(acceptEncoding);
             Host = host;
         }
        
@@ -254,18 +271,21 @@ namespace SysWeaver.Net
 
         public void SetResText(String text, String mime = "text/plain; charset=UTF-8")
         {
-            var t = Encoding.UTF8.GetBytes(text);
+            var tl = text.Length;
             SetResMime(mime);
+            if (tl < 1024)
+            {
+                var al = tl << 2;
+                Span<Byte> tt = new Byte[al];
+                if (Encoding.UTF8.TryGetBytes(text, tt, out var wl))
+                {
+                    SetResBody(tt.Slice(0, wl));
+                    return;
+                }
+            }
+            var t = Encoding.UTF8.GetBytes(text);
             SetResBody(t);
         }
-
-        public ValueTask SetResTextAsync(String text, String mime = "text/plain; charset=UTF-8")
-        {
-            var t = Encoding.UTF8.GetBytes(text);
-            SetResMime(mime);
-            return SetResBodyAsync(t);
-        }
-
 
         public abstract void CopyHeaders(HttpServerRequest to);
 

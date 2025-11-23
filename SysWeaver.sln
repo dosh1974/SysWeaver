@@ -1,6 +1,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.4.33110.190
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.11217.181 d18.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SysWeaver.Common", "SysWeaver.Common\SysWeaver.Common.csproj", "{AB212FC0-65FC-45B8-91E6-C3F4FDEE580C}"
 EndProject
@@ -201,6 +201,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SysWeaver.TextMessage.Fake", "SysWeaver.TextMessage.Fake\SysWeaver.TextMessage.Fake.csproj", "{76A48BFD-1CC0-9960-95E8-81A73FA76F86}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SysWeaver.MicroService.CustomUserImage", "SysWeaver.MicroService.CustomUserImage\SysWeaver.MicroService.CustomUserImage.csproj", "{5AF8D62B-69D3-A267-6880-B1E692CE3E5E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SysWeaver.Storage.Cdc", "SysWeaver.Storage.Cdc\SysWeaver.Storage.Cdc.csproj", "{B6264E61-BED6-24A7-B579-9367348C8D64}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -1388,6 +1390,18 @@ Global
 		{5AF8D62B-69D3-A267-6880-B1E692CE3E5E}.Release|x64.Build.0 = Release|Any CPU
 		{5AF8D62B-69D3-A267-6880-B1E692CE3E5E}.Release|x86.ActiveCfg = Release|Any CPU
 		{5AF8D62B-69D3-A267-6880-B1E692CE3E5E}.Release|x86.Build.0 = Release|Any CPU
+		{B6264E61-BED6-24A7-B579-9367348C8D64}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B6264E61-BED6-24A7-B579-9367348C8D64}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B6264E61-BED6-24A7-B579-9367348C8D64}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B6264E61-BED6-24A7-B579-9367348C8D64}.Debug|x64.Build.0 = Debug|Any CPU
+		{B6264E61-BED6-24A7-B579-9367348C8D64}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B6264E61-BED6-24A7-B579-9367348C8D64}.Debug|x86.Build.0 = Debug|Any CPU
+		{B6264E61-BED6-24A7-B579-9367348C8D64}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B6264E61-BED6-24A7-B579-9367348C8D64}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B6264E61-BED6-24A7-B579-9367348C8D64}.Release|x64.ActiveCfg = Release|Any CPU
+		{B6264E61-BED6-24A7-B579-9367348C8D64}.Release|x64.Build.0 = Release|Any CPU
+		{B6264E61-BED6-24A7-B579-9367348C8D64}.Release|x86.ActiveCfg = Release|Any CPU
+		{B6264E61-BED6-24A7-B579-9367348C8D64}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

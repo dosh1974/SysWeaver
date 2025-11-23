@@ -8,10 +8,14 @@ namespace SysWeaver.Net
     public sealed class CustomHttpServerRequest : HttpServerRequest
     {
 
-        public CustomHttpServerRequest(String httpMethod = null, String ifNoneMatch = null, String acceptEncoding = null, String url = "", String prefix = "", HttpServerBase server = null, Uri uri = null, HttpServerHostInfo host = null)
-            : base(httpMethod, ifNoneMatch, acceptEncoding, url, prefix, server, uri, host)
+        public CustomHttpServerRequest(String httpMethod = null, String url = "", String prefix = "", HttpServerBase server = null, Uri uri = null, HttpServerHostInfo host = null)
+            : base(httpMethod, url, prefix, server, uri, host)
         { 
         }
+
+        public override String IfNoneMatch => null;
+        public override string AcceptEncoding => null;
+
 
         public override Stream InputStream => throw new NotImplementedException();
 

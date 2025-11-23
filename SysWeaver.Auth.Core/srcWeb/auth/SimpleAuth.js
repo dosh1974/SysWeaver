@@ -392,5 +392,6 @@ async function keyManMain() {
 
     rebuild();
 
+    PageLoaded();
 
 }

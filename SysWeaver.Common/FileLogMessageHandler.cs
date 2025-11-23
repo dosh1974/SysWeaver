@@ -115,7 +115,7 @@ namespace SysWeaver
                                                     copy = bs;
                                                 copySize -= copy;
                                                 fs.Position = s;
-                                                fs.Read(buf, 0, (int)copy);
+                                                fs.ReadExactly(buf, 0, (int)copy);
                                                 fs.Position = dest;
                                                 fs.Write(buf, 0, (int)copy);
                                                 s += copy;

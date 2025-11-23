@@ -121,7 +121,7 @@ namespace SysWeaver.Net
                     clientCacheDuration,
                     HttpServerTools.MaxRequestCache,
                     compression,
-                    disableCompession,
+                    disableCompession || (!mime.Item2),
                     lastModified,
                     comp,
                     auth,

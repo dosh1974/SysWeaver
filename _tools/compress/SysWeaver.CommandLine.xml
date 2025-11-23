@@ -480,5 +480,14 @@
             <param name="threadCount">Maximum number of threads to execute, if 0 or less it's the number of CPU threads + the thread count</param>
             <returns>0 if successful, positive for wrong args and negative for errors</returns>
         </member>
+        <member name="M:SysWeaver.Wildcard.Match(System.String,System.String,System.Boolean)">
+            <summary>
+            <para>Tests if a file name matches the given wildcard pattern, uses the same rule as shell commands.</para>
+            </summary>
+            <param name="fileName">The file name to test, without folder.</param>
+            <param name="pattern">A wildcard pattern which can use char * to match any amount of characters; or char ? to match one character.</param>
+            <param name="unixStyle">If true, use the *nix style wildcard rules; otherwise use windows style rules.</param>
+            <returns>true if the file name matches the pattern, false otherwise.</returns>
+        </member>
     </members>
 </doc>

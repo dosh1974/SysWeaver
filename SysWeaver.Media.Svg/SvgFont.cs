@@ -14,9 +14,16 @@ namespace SysWeaver.Media
             var type = typeof(SvgFont);
             var asm = type.Assembly;
             var pre = type.Namespace + ".data.";
-            using var s = asm.GetManifestResourceStream(pre + name + ".ttf.br");
-            using var d = new BrotliStream(s, CompressionMode.Decompress);
-            return GetOrCreateCreateFromStream(d, name, true);
+            using var s = asm.GetManifestResourceStream(pre + name + ".ttf");
+            if (s != null)
+            {
+                return GetOrCreateCreateFromStream(s, name, true);
+            }else
+            {
+                using var ss = asm.GetManifestResourceStream(pre + name + ".ttf.br");
+                using var d = new BrotliStream(ss, CompressionMode.Decompress);
+                return GetOrCreateCreateFromStream(d, name, true);
+            }
         }
 
         static readonly object CreateLock = new object();

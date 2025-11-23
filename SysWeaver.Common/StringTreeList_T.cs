@@ -481,6 +481,10 @@ namespace SysWeaver
         List<T> Leaf;
         Dictionary<Char, StringTreeList<T>> Nodes;
 
+        internal List<T> GetLeaf() => Leaf;
+        internal Dictionary<Char, StringTreeList<T>> GetNodes() => Nodes;
+
+
 
         public static long AllocatedNodes => Interlocked.Read(ref CountAllocNodes);
 
@@ -534,7 +538,5 @@ namespace SysWeaver
 
 
     }
-
-
 
 }

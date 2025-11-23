@@ -52,8 +52,6 @@ namespace SysWeaver
         /// <returns></returns>
         public static String ToHexString(this ReadOnlySpan<Byte> data)
         {
-            if (data == null)
-                return null;
             var l = data.Length;
             if (l <= 0)
                 return String.Empty;

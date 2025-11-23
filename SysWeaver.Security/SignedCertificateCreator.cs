@@ -287,7 +287,8 @@ namespace SysWeaver.Security
                     using (var tc = temp.HasPrivateKey ? null : temp.CopyWithPrivateKey(rsa))
                     {
                         var pp = tc ?? temp;
-                        var wk = new X509Certificate2(pp.Export(X509ContentType.Pfx), (String)null, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                        var wk = X509CertificateLoader.LoadPkcs12(pp.Export(X509ContentType.Pfx), (String)null, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                        //var wk = new X509Certificate2(pp.Export(X509ContentType.Pfx), (String)null, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
                         return wk;
                     }
                 }
@@ -326,7 +327,8 @@ namespace SysWeaver.Security
                 using (var temp = req.Create(parentCert, from, to, [1, 2, 3, 4]))
                 using (var tc = temp.CopyWithPrivateKey(rsa))
                 {
-                    var wk = new X509Certificate2(tc.Export(X509ContentType.Pfx), (String)null, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                    var wk = X509CertificateLoader.LoadPkcs12(tc.Export(X509ContentType.Pfx), (String)null, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                    //var wk = new X509Certificate2(tc.Export(X509ContentType.Pfx), (String)null, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
                     return wk;
                 }
             }

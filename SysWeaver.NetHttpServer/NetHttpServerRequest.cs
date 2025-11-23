@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Diagnostics;
+using System.Collections.Specialized;
 
 namespace SysWeaver.Net
 {
@@ -12,26 +13,32 @@ namespace SysWeaver.Net
         public NetHttpServerRequest(HttpListenerContext context, String url, String prefix, HttpServerBase server, Uri uri, HttpServerHostInfo host, String newMethod = null) 
             : base(
                     newMethod ?? context.Request.HttpMethod,
-                    //context.Request.Headers["If-Modified-Since"]?.Trim(),
-                    context.Request.Headers["If-None-Match"]?.Trim(),
-                    context.Request.Headers["Accept-Encoding"],
                     url, prefix, server, uri, host)
         {
             Context = context;
-            Req = context.Request;
-            Res = context.Response;
+            var req = context.Request;
+            var res = context.Response;
+            Req = req;
+            Res = res;
+            ReqHeaders = req.Headers;
+            ResHeaders = res.Headers;
         }
 
         internal readonly HttpListenerContext Context;
         internal readonly HttpListenerRequest Req;
         internal readonly HttpListenerResponse Res;
+        readonly NameValueCollection ReqHeaders;
+        readonly NameValueCollection ResHeaders;
+
+        public override String IfNoneMatch => ReqHeaders["If-None-Match"]?.Trim();
+        public override string AcceptEncoding => ReqHeaders["Accept-Encoding"];
 
         public override Stream InputStream => Req.InputStream;
         public override Stream OutputStream => Res.OutputStream;
         
         public override long ReqContentLength => Req.ContentLength64;
-        public override String GetReqHeader(String name) => Req.Headers[name];
-        public override String GetResHeader(String name) => Res.Headers[name];
+        public override String GetReqHeader(String name) => ReqHeaders[name];
+        public override String GetResHeader(String name) => ResHeaders[name];
 
         public override String GetResMime() => Res.ContentType;
 
@@ -61,7 +68,7 @@ namespace SysWeaver.Net
 
         public override String GetReqCookie(String name)
         {
-            String s = Req.Headers["Cookie"];
+            String s = ReqHeaders["Cookie"];
             if (s == null)
                 return null;
             name += "=";

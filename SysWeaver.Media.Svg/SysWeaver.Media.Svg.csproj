@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-	  <TargetFramework>net8.0</TargetFramework>
+	  <TargetFramework>net10.0</TargetFramework>
 	  <RootNamespace>SysWeaver.Media</RootNamespace>
 	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
 	  <NoWarn>1701;1702;1591</NoWarn>
@@ -26,6 +26,7 @@
 		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcData\*+ .\data" />
 		<ItemGroup>
 			<EmbeddedResource Include="data\**\*.br" Visible="false" />
+			<EmbeddedResource Include="data\**\*.ttf" Visible="false" />
 		</ItemGroup>
 	</Target>
 

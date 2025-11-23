@@ -13,9 +13,6 @@ namespace SysWeaver.Net
         public AspHttpServerRequest(HttpContext context, String url, String prefix, AspHttpServer server, Uri uri, HttpServerHostInfo host, String newMethod = null)
             : base(
                     newMethod ?? context.Request.Method,
-                    //context.Request.Headers["If-Modified-Since"].FirstOrDefault()?.Trim(),
-                    context.Request.Headers["If-None-Match"].FirstOrDefault()?.Trim(),
-                    context.Request.Headers["Accept-Encoding"],
                     url, prefix, server, uri, host)
         {
             Context = context;
@@ -26,6 +23,9 @@ namespace SysWeaver.Net
         internal readonly HttpContext Context;
         internal readonly HttpRequest Req;
         internal readonly HttpResponse Res;
+
+        public override String IfNoneMatch => Req.Headers["If-None-Match"].FirstOrDefault()?.Trim();
+        public override string AcceptEncoding => Req.Headers["Accept-Encoding"];
 
         public override Stream InputStream => Req.Body;
         public override Stream OutputStream => Res.Body;

@@ -62,7 +62,7 @@ namespace SysWeaver.Net
             //var certs = new Dictionary<int, Tuple<ICertificateProvider, HttpServerPrefix>>();
             var certs = new List<Tuple<int, ICertificateProvider, HttpServerPrefix>>();
 
-            ServicePointManager.CheckCertificateRevocationList = true;
+            //ServicePointManager.CheckCertificateRevocationList = true;
             /*            ServicePointManager.UseNagleAlgorithm = true;
                         ServicePointManager.Expect100Continue = true;
                         ServicePointManager.DefaultConnectionLimit = 100000;
@@ -365,7 +365,7 @@ namespace SysWeaver.Net
 
 
 
-        async Task WriteResponseString(HttpListenerResponse res, String text, String mime = HttpServerTools.TextMime)
+        async ValueTask WriteResponseString(HttpListenerResponse res, String text, String mime = HttpServerTools.TextMime)
         {
             var e = Encoding.UTF8;
             var data = e.GetBytes(text);
@@ -375,13 +375,29 @@ namespace SysWeaver.Net
         }
 
 
+        async ValueTask HandlePaused(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            res.StatusCode = 503;
+            var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
+            var text = await Translator.TranslateSafe("The service is temporarily paused", lang).ConfigureAwait(false);
+            await WriteResponseString(res, text).ConfigureAwait(false);
+        }
+
+        async ValueTask Handle404(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            res.StatusCode = 404;
+            var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
+            var text = await Get404Text(lang).ConfigureAwait(false);
+            await WriteResponseString(res, text).ConfigureAwait(false);
+        }
+
 
         /// <summary>
         /// Handles a single incoming request
         /// </summary>
         /// <param name="c"></param>
         /// <returns></returns>
-        async Task HandleRequest(HttpListenerContext c)
+        async ValueTask HandleRequest(HttpListenerContext c)
         {
             using (PerfMon.Track(nameof(HandleRequest)))
             {
@@ -392,20 +408,14 @@ namespace SysWeaver.Net
                     var req = c.Request;
                     if (IsPaused)
                     {
-                        res.StatusCode = 503;
-                        var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
-                        var text = await Translator.TranslateSafe("The service is temporarily paused", lang).ConfigureAwait(false);
-                        await WriteResponseString(res, text).ConfigureAwait(false);
+                        await HandlePaused(req, res).ConfigureAwait(false);
                         return;
                     }
                     var uri = req.Url ?? DummyUri;
                     var host = GetHost(out var prefix, out url, uri);
                     if (prefix == null)
                     {
-                        res.StatusCode = 404;
-                        var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
-                        var text = await Get404Text(lang).ConfigureAwait(false);
-                        await WriteResponseString(res, text).ConfigureAwait(false);
+                        await Handle404(req, res).ConfigureAwait(false);
                         return;
                     }
                     using var data = new NetHttpServerRequest(c, url, prefix, this, uri, host);

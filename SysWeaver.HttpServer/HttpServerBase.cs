@@ -1715,7 +1715,7 @@ namespace SysWeaver.Net
                 }
                 OrderedMods = mods.ToArray();
                 AllMods = allMods;
-                PrefixMods = prefixes.Count > 0 ? StringTreeList.Build(prefixes) : null;
+                PrefixMods = prefixes.Count > 0 ? FrozenStringTreeList.Build(prefixes) : null;
             }
         }
 
@@ -1749,7 +1749,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// A tree with modules that respond to certain prefixes only
         /// </summary>
-        StringTreeList<IHttpServerModule> PrefixMods;
+        FrozenStringTreeList<IHttpServerModule> PrefixMods;
 
         #endregion //Modules
 
@@ -1990,24 +1990,35 @@ namespace SysWeaver.Net
 
 
 
-        readonly ConcurrentDictionary<String, HttpServerHostInfo> Hosts = new ConcurrentDictionary<string, HttpServerHostInfo>(StringComparer.Ordinal);
+        readonly SemiFrozenDictionary<String, HttpServerHostInfo> Hosts = new SemiFrozenDictionary<string, HttpServerHostInfo>(StringComparer.Ordinal);
+
+        HttpServerHostInfo CreateHost(String hostName)
+        {
+            var hosts = Hosts;
+            lock (hosts)
+            {
+                if (!hosts.TryGetValue(hostName, out var host))
+                {
+
+                    var caseInSensitive = !CaseSensitive;
+                    //host = new HttpServerHostInfo(hostName, StringTree.Build(Prefixes.Select(x => x.Prefix.Replace("*", hostName)), caseInSensitive));
+                    host = new HttpServerHostInfo(hostName, FrozenStringTree.Build(Prefixes.Select(x => x.Prefix.Replace("*", hostName)), caseInSensitive));
+                    hosts[hostName] = host;
+                }
+                return host;
+            }
+        }
 
         protected HttpServerHostInfo GetHost(out String prefix, out String url, Uri uri)
         {
             var hostName = uri.Host.FastToLower();
-            var rootUrl = String.Concat(uri.Scheme, "://", hostName, ':', uri.Port, uri.LocalPath);// uri.ToString();// OriginalString;// HttpUtility.UrlDecode(uri.AbsoluteUri);
+            var rootUrl = String.Concat(uri.Scheme, "://", hostName, ':', uri.Port, uri.LocalPath);
             url = rootUrl;
             var ul = url.Length;
             if ((ul <= 0) || (url[ul - 1] == '/'))
                 url += "index.html";
-
-            var hosts = Hosts;
-            if (!hosts.TryGetValue(hostName, out var host))
-            {
-                var caseInSensitive = !CaseSensitive;
-                host = new HttpServerHostInfo(hostName, StringTree.Build(Prefixes.Select(x => x.Prefix.Replace("*", hostName)), caseInSensitive));
-                hosts[hostName] = host;
-            }
+            if (!Hosts.TryGetValue(hostName, out var host))
+                host = CreateHost(hostName);
             prefix = host.Prefixes.StartsWithAny(url);
             url += uri.Query;
             return host;

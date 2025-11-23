@@ -4,6 +4,60 @@
         <name>SysWeaver.Storage</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.CompressedChunkedStream">
+            <summary>
+            Create an uncompressed stream as the contatenation of several compressed streams
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressedChunkedStream.#ctor(System.Func{System.Int32,System.IO.Stream},SysWeaver.Compression.ICompDecoder)">
+            <summary>
+            Create an uncompressed stream as the contatenation of several compressed streams
+            </summary>
+            <param name="streamOpener">A function that opens one stream chunk, the paramter start at 0 and is incremented every time a new chunk is required, return null to signal end of data</param>
+            <param name="comp">The compression type of the streams</param>
+        </member>
+        <member name="T:SysWeaver.CompressedFile">
+            <summary>
+            Utility class to open a compressed version of a file.
+            Files are cached so re-opening will be faster.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressedFile.Open(System.String,SysWeaver.Compression.ICompType,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Open a compressed version of a file, with caching etc.
+            </summary>
+            <param name="file">The name of the file to get the compressed data for</param>
+            <param name="compType">The compression type</param>
+            <param name="level">The desired compression level</param>
+            <returns>A compressed stream</returns>
+        </member>
+        <member name="M:SysWeaver.CompressedFile.OpenAsync(System.String,SysWeaver.Compression.ICompType,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Open a compressed version of a file, with caching etc.
+            </summary>
+            <param name="file">The name of the file to get the compressed data for</param>
+            <param name="compType">The compression type</param>
+            <param name="level">The desired compression level</param>
+            <returns>A compressed stream</returns>
+        </member>
+        <member name="M:SysWeaver.CompressedFile.ReadAllBytes(System.String,SysWeaver.Compression.ICompType,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Read all compressed bytes from a file (with caching etc)
+            </summary>
+            <param name="file"></param>
+            <param name="compType"></param>
+            <param name="level"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.CompressedFile.ReadAllBytesAsync(System.String,SysWeaver.Compression.ICompType,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Read all compressed bytes from a file (with caching etc)
+            </summary>
+            <param name="file"></param>
+            <param name="compType"></param>
+            <param name="level"></param>
+            <returns></returns>
+        </member>
         <member name="T:SysWeaver.DecompressedFileHash">
             <summary>
             Computes and caches file hashes of the decompressed content (automatic pruning).

@@ -136,7 +136,8 @@ namespace SysWeaver.Security
             }
             try
             {
-                return new X509Certificate2(filename, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                return X509CertificateLoader.LoadPkcs12FromFile(filename, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                //return new X509Certificate2(filename, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
             }
             catch (Exception ex)
             {
@@ -166,7 +167,8 @@ namespace SysWeaver.Security
             }
             try
             {
-                return new X509Certificate2(data, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                return X509CertificateLoader.LoadPkcs12(data, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                //return new X509Certificate2(data, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
             }
             catch (Exception ex)
             {
