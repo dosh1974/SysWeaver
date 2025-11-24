@@ -332,7 +332,7 @@ namespace SysWeaver.MicroService
 
 
 
-        const String TimeFmt = "yyyy-MM-dd_HH.mm.ss_ffff";
+        public const String TimeFmt = "yyyy-MM-dd_HH.mm.ss_ffff";
 
         String GetBakName(String folder)
         {
@@ -1020,7 +1020,7 @@ namespace SysWeaver.MicroService
             b.Append("Duration :".PadRight(tab)).AppendLine(duration.ToString());
             b.Append("Files :".PadRight(tab)).AppendLine(V(totCount));
             b.Append("Size :".PadRight(tab)).Append(V(totBytes)).AppendLine(" bytes");
-            b.AppendLine("Comment :").AppendLine("Re-constructed from exsiting or manually copied data");
+            b.AppendLine("Comment :").AppendLine(totCount <= 0 ? "Initial empty folder" : "Re-constructed from exsiting or manually copied data");
             File.WriteAllText(manifestName, b.ToString());
         }
 

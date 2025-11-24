@@ -15,7 +15,8 @@ namespace SysWeaver.Compression
         /// <returns>The compression type or null</returns>
         public static ICompType FindResource(this Assembly asm, ref String uncompressedName)
         {
-            foreach (var t in asm.GetManifestResourceNames())
+            var allRes = asm.GetManifestResourceNames();
+            foreach (var t in allRes)
             {
                 if (!t.StartsWith(uncompressedName, StringComparison.Ordinal))
                     continue;

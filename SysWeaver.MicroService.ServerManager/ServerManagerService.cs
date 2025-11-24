@@ -84,7 +84,10 @@ namespace SysWeaver.MicroService
 
         #region IHttpServerModule
 
-        public String[] OnlyForPrefixes { get; } = ["ServerManager/Data/"];
+        public String[] OnlyForPrefixes { get; } = 
+        [
+            "ServerManager/Data/"
+        ];
 
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
@@ -624,6 +627,7 @@ namespace SysWeaver.MicroService
             return s.Convert(info => new SmServiceBrief(info, Syncer.GetFolderData(info.Syncher.Name).ToList()));
         }
 
+        const string AuditGroup = "ServerManager";
 
 
         async Task<SmServiceDetail> DoVerb(String serviceName, String verb, HttpServerRequest context)
@@ -641,43 +645,85 @@ namespace SysWeaver.MicroService
             return InternalGetDetail(info);
         }
 
-        const string AuditGroup = "ServerManager";
+        #region Verbs
 
+        /// <summary>
+        /// Restart a managed service
+        /// </summary>
+        /// <param name="serviceName">Name of the managed service</param>
+        /// <param name="context"></param>
+        /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
         public Task<SmServiceDetail> Restart(String serviceName, HttpServerRequest context)
             => DoVerb(serviceName, "restart", context);
 
+
+        /// <summary>
+        /// Pause a managed service (no web requests will be allowed)
+        /// </summary>
+        /// <param name="serviceName">Name of the managed service</param>
+        /// <param name="context"></param>
+        /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
         public Task<SmServiceDetail> Pause(String serviceName, HttpServerRequest context)
             => DoVerb(serviceName, "pause", context);
 
+        /// <summary>
+        /// Continue a managed service (after being paused)
+        /// </summary>
+        /// <param name="serviceName">Name of the managed service</param>
+        /// <param name="context"></param>
+        /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
         public Task<SmServiceDetail> Continue(String serviceName, HttpServerRequest context)
             => DoVerb(serviceName, "continue", context);
 
+        /// <summary>
+        /// Stop a managed service (will restart when computer start)
+        /// </summary>
+        /// <param name="serviceName">Name of the managed service</param>
+        /// <param name="context"></param>
+        /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
         public Task<SmServiceDetail> Stop(String serviceName, HttpServerRequest context)
             => DoVerb(serviceName, "stop", context);
 
+        /// <summary>
+        /// Start a managed service (install and start)
+        /// </summary>
+        /// <param name="serviceName">Name of the managed service</param>
+        /// <param name="context"></param>
+        /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
         public Task<SmServiceDetail> Start(String serviceName, HttpServerRequest context)
             => DoVerb(serviceName, "start", context);
 
+        /// <summary>
+        /// Uninstall a managed service (stop and uninstall)
+        /// </summary>
+        /// <param name="serviceName">Name of the managed service</param>
+        /// <param name="context"></param>
+        /// <returns>Updated service details</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
         public Task<SmServiceDetail> Uninstall(String serviceName, HttpServerRequest context)
             => DoVerb(serviceName, "uninstall", context);
+
+
+        #endregion//Verbs
+
+
 
         /// <summary>
         /// All synched folders as a table
@@ -748,6 +794,8 @@ namespace SysWeaver.MicroService
         public TableData FoldersTable(TableDataRequest r)
             => Syncer.SynchedFoldersTable(r);
 
+
+        #region Version
 
         SmServiceInfo GetValidatedVersion(out FolderSyncService.Data d, String versionName, HttpServerRequest context)
         {
@@ -920,7 +968,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
         /// <param name="context"></param>
-        /// <returns>Compressed file stats or null if not compressed</returns>
+        /// <returns>True if successful</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
@@ -940,8 +988,150 @@ namespace SysWeaver.MicroService
             return ret;
         }
 
+        /// <summary>
+        /// Delete a version
+        /// </summary>
+        /// <param name="versionName">ServiceName,UploadedTime,DiscFolder</param>
+        /// <param name="context"></param>
+        /// <returns>True if successful</returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<bool> VersionDelete(String versionName, HttpServerRequest context)
+        {
+            var info = GetValidatedVersion(out var version, versionName, context);
+            if (version == null)
+                throw new Exception("Version not found!");
+            var ret = await Syncer.Remove(new FolderSyncOperation
+            {
+                Folder = info.Syncher.Name,
+                DiscFolder = version.DiscFolder,
+            }, context).ConfigureAwait(false);
+            Syncer.GetFolderData(info.Syncher.Name);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            return ret;
+        }
+
+        #endregion//Version
+
+
+
+        /// <summary>
+        /// Add/update a master configuration file for a service
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="context"></param>
+        /// <returns>True if sucessfully updated</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<bool> SaveMasterConfig(SmSaveConfigRequest data, HttpServerRequest context)
+        {
+            var info = Validate(data.ServiceName, context);
+            if (!info.Service.MasterConfig)
+                throw new Exception("Service is not configured to have master configs!");
+            var fname = data.FileName;
+            if (!PathExt.IsValidFilename(fname))
+                throw new Exception("Invalid file name!");
+            var p = Path.GetDirectoryName(info.Syncher.DiscFolder);
+            fname = Path.Combine(p, fname);
+            if (!ServiceHost.BackupConfig(fname, Manager))
+                throw new Exception("Failed to backup exsiting file \"" + fname + "\"");
+            var d = data.Data;
+            if (d == null)
+            {
+                var ex = await PathExt.TryDeleteFileAsync(fname).ConfigureAwait(false);
+                if (ex != null)
+                    throw ex;
+            }
+            else {
+                await File.WriteAllTextAsync(fname, d).ConfigureAwait(false);
+            }
+            Syncer.GetFolderData(info.Syncher.Name);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            return true;
+        }
+
+        /// <summary>
+        /// Use a master config file (copy it into the active version folder)
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="context"></param>
+        /// <returns>True if sucessfully copied</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<bool> UseMasterConfig(SmConfigRequest data, HttpServerRequest context)
+        {
+            var info = Validate(data.ServiceName, context);
+            if (!info.Service.MasterConfig)
+                throw new Exception("Service is not configured to have master configs!");
+            var bin = info.Syncher.DiscFolder;
+            var sname = data.FileName;
+            var dname = Path.Combine(bin, sname);
+            var p = Path.GetDirectoryName(bin);
+            sname = Path.Combine(p, sname);
+            if (!File.Exists(sname))
+                throw new Exception("The master configuration file does not exist!");
+            if (!ServiceHost.BackupConfig(dname, Manager))
+                throw new Exception("Failed to backup exsiting file \"" + dname + "\"");
+            var ex = await PathExt.TryCopyFileAsync(sname, dname).ConfigureAwait(false);
+            if (ex != null)
+                throw ex;
+            Syncer.GetFolderData(info.Syncher.Name);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            return true;
+        }
+
+
+        /// <summary>
+        /// Add/update a key file
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="context"></param>
+        /// <returns>True if sucessfully updated</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth(Roles.Admin)]
+        [WebApiAudit(AuditGroup)]
+        [WebApiAuditFilterParams(nameof(SaveKeyFile_Login))]
+        public async Task<bool> SaveKeyFile(SmSaveKeyFileRequest data, HttpServerRequest context)
+        {
+            var fname = data.FileName;
+            if (!PathExt.IsValidFilename(fname))
+                throw new Exception("Invalid file name!");
+            var p = @"C:\Keys";
+            fname = Path.Combine(p, fname);
+            if (!ServiceHost.BackupConfig(fname, Manager))
+                throw new Exception("Failed to backup exsiting file \"" + fname + "\"");
+            var d = data.Data;
+            if (d == null)
+            {
+                var ex = await PathExt.TryDeleteFileAsync(fname).ConfigureAwait(false);
+                if (ex != null)
+                    throw ex;
+            }
+            else
+            {
+                await File.WriteAllTextAsync(fname, d).ConfigureAwait(false);
+            }
+            return true;
+        }
+
+
+        static Object SaveKeyFile_Login(long id, HttpServerRequest request, Object obj)
+        {
+            var data = obj as SmSaveKeyFileRequest;
+            if (data == null)
+                return obj;
+            return data.FileName;
+        }
 
     }
-
 
 }

@@ -129,8 +129,11 @@ namespace SysWeaver.Auth
 
         void UpdateUsers(bool first = false)
         {
+            var msg = Msg;
             try
             {
+                msg.AddMessage(LogPrefix + "Updating users", MessageLevels.Debug);
+                using var _ = msg.Tab();
                 var p = Params;
                 var tokenDelim = TokenDelim;
                 var a = new Dictionary<String, Tuple<Byte[], Authorization, String, bool>>(StringComparer.Ordinal);
@@ -138,10 +141,16 @@ namespace SysWeaver.Auth
                 var aba = p.AllowBasicAuth;
                 var apiKeyAuth = p.ApiKeyAuth;
                 Dictionary<String, Task<Authorization>> bearerAuths = new(StringComparer.Ordinal);
-                AddUsers(a, guidMap, p.Users, aba);
-                AddUsers(a, guidMap, FileLines, aba);
+                msg.AddMessage(LogPrefix + "Adding users from config", MessageLevels.Debug);
+                using (msg.Tab())
+                    AddUsers(a, guidMap, p.Users, aba);
+                msg.AddMessage(LogPrefix + "Adding users from file", MessageLevels.Debug);
+                using (msg.Tab())
+                    AddUsers(a, guidMap, FileLines, aba);
                 if (apiKeyAuth != null)
                 {
+                    msg.AddMessage(LogPrefix + "Adding users from api keys", MessageLevels.Debug);
+                    using var __ = msg.Tab();
                     var apiKeys = KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);
                     if (apiKeys != null)
                     {
@@ -169,14 +178,9 @@ namespace SysWeaver.Auth
                         }
                     }
                 }
-
-                
-
                 Interlocked.Exchange(ref Auths, a.Freeze());
                 Interlocked.Exchange(ref BearerAuths, bearerAuths.Freeze());
                 Interlocked.Exchange(ref AuthGuids, guidMap.Freeze());
-              
-
                 foreach (var x in changed)
                     x.Value.Item2.RequestLogout("Password or tokens have changed!");
             }
@@ -186,6 +190,7 @@ namespace SysWeaver.Auth
                     throw;
                 Fails.OnException(ex);
             }
+            msg.AddMessage(LogPrefix + "Users updated", MessageLevels.Debug);
         }
 
         void AddUsers(Dictionary<String, Tuple<Byte[], Authorization, String, bool>> a, Dictionary<String, AuthorizationInfo> guidMap, IEnumerable<String> users, bool allowBasicAuth, bool ignorePolicy = false)
@@ -243,7 +248,7 @@ namespace SysWeaver.Auth
                     var s = pol.Check(pwd);
                     if (s != PasswordStatus.Ok)
                     {
-                        Msg?.AddMessage("Error: " + s + ", password for user " + user.ToQuoted() + " doesn't meet the password policy: " + pol, MessageLevels.Warning);
+                        Msg?.AddMessage(LogPrefix + s + ", password for user " + user.ToQuoted() + " doesn't meet the password policy: " + pol, MessageLevels.Warning);
                         return null;
                     }
                 }
@@ -254,8 +259,10 @@ namespace SysWeaver.Auth
             allowBasicAuth |= auth.Tokens.Contains("service");
             guidMap[guid] = new AuthorizationInfo(auth);
             a[ul] = new Tuple<byte[], Authorization, String, bool>(Convert.FromBase64String(hash), auth, hash, allowBasicAuth);
+            Msg.AddMessage(String.Concat(LogPrefix, "Added user \"", user, '"'), MessageLevels.Debug);
             return auth;
         }
+        const String LogPrefix = "[Auth] ";
 
         static readonly Char[] TokenDelim = "|:".ToCharArray();
 

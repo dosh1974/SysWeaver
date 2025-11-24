@@ -335,37 +335,55 @@ namespace SysWeaver.OsServices
             Process.Start(p);
         }
 
-        
+        public static String GetConfigBackupName(FileInfo t)
+        {
+            var fi = t.LastWriteTimeUtc.ToString("s", System.Globalization.CultureInfo.InvariantCulture);
+            fi = fi.Replace(':', '_');
+            fi = fi.Replace('T', '_');
+            var filename = t.FullName;
+            var fn = Path.Combine(t.DirectoryName, Path.GetFileNameWithoutExtension(t.Name) + "." + fi + t.Extension);
+            return fn;
+        }
 
-        static bool Backup(String filename, ServiceManager man)
+        public static bool BackupConfig(String filename, IMessageHost log = null)
         {
             var t = new FileInfo(filename);
             if (!t.Exists)
                 return true;
-            var fi = t.LastWriteTimeUtc.ToString("s", System.Globalization.CultureInfo.InvariantCulture);
-            fi = fi.Replace(':', '_');
-            fi = fi.Replace('T', '_');
-            var fn = Path.Combine(Path.GetDirectoryName(filename), Path.GetFileNameWithoutExtension(filename) + "." + fi + Path.GetExtension(filename));
+            var fn = GetConfigBackupName(t);
             try
             {
-                File.Copy(filename, fn, true);
-                if (man == null)
-                    Console.WriteLine("Backed up file " + filename.ToQuoted() + " to " + fn.ToQuoted());
-                else
-                    man.AddMessage("Backed up file " + filename.ToQuoted() + " to " + fn.ToQuoted());
-                return true;
+                if (File.Exists(fn))
+                    if (FileHash.FilesAreEqual(filename, fn))
+                        return true;
             }
-            catch (Exception ex)
+            catch (Exception ex2)
             {
-                if (man == null)
+                if (log == null)
+                {
+                    Console.WriteLine("Failed to compare " + filename.ToQuoted() + " to " + fn.ToQuoted());
+                    Console.WriteLine("Exception: " + ex2);
+                }
+                else
+                    log.AddMessage("Failed to compare " + filename.ToQuoted() + " to " + fn.ToQuoted(), ex2, MessageLevels.Warning);
+            }
+            var ex = PathExt.TryCopyFile(filename, fn);
+            if (ex != null)
+            {
+                if (log == null)
                 {
                     Console.WriteLine("Failed to back up file " + filename.ToQuoted() + " to " + fn.ToQuoted());
                     Console.WriteLine("Exception: " + ex);
                 }
                 else
-                    man.AddMessage("Failed to back up file " + filename.ToQuoted() + " to " + fn.ToQuoted(), ex, MessageLevels.Warning);
+                    log.AddMessage("Failed to back up file " + filename.ToQuoted() + " to " + fn.ToQuoted(), ex, MessageLevels.Warning);
+                return false;
             }
-            return false;
+            if (log == null)
+                Console.WriteLine("Backed up file " + filename.ToQuoted() + " to " + fn.ToQuoted());
+            else
+                log.AddMessage("Backed up file " + filename.ToQuoted() + " to " + fn.ToQuoted());
+            return true;
         }
 
         static void SaveWorkingManifest(ServiceManager man)
@@ -378,7 +396,7 @@ namespace SysWeaver.OsServices
             var lastGood = baseName + ".LastGood" + Path.GetExtension(current);
             if (FileHash.FilesAreEqual(current, lastGood))
                 return;
-            Backup(lastGood, man);
+            BackupConfig(lastGood, man);
             try
             {
                 File.Copy(current, lastGood, true);
@@ -431,7 +449,7 @@ namespace SysWeaver.OsServices
                 Console.WriteLine("Won't replace the current configuration since we couldn't back it up hence won't restart the service.");
                 return;
             }
-            Backup(current, null);
+            BackupConfig(current, null);
             try
             {
                 File.Copy(lastGood, current, true);
