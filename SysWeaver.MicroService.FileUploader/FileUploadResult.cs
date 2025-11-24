@@ -34,6 +34,43 @@ namespace SysWeaver.MicroService
         public override string ToString()
             => String.Concat(Result, " (", (int)Result, ") ", Url?.ToQuoted());
 #endif//DEBUG
+
+
+        public static readonly FileUploadResult AlreadyUploaded = new FileUploadResult
+        {
+            Result = FileUploadStatus.AlreadyUploaded,
+        };
+
+        public static readonly FileUploadResult Upload = new FileUploadResult
+        {
+            Result = FileUploadStatus.Upload,
+        };
+
+        public static readonly FileUploadResult RefuseSize = new FileUploadResult
+        {
+            Result = FileUploadStatus.RefuseSize,
+        };
+
+        public static readonly FileUploadResult RefuseExtension = new FileUploadResult
+        {
+            Result = FileUploadStatus.RefuseExtension,
+        };
+
+        public static readonly FileUploadResult Refuse = new FileUploadResult
+        {
+            Result = FileUploadStatus.Refuse,
+        };
+
+        public static readonly FileUploadResult NotAuthorized = new FileUploadResult
+        {
+            Result = FileUploadStatus.NotAuthorized,
+        };
+
+        public static readonly FileUploadResult None = new FileUploadResult
+        {
+            Result = FileUploadStatus.None,
+        };
+
     }
 
 

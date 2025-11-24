@@ -9,6 +9,18 @@ namespace SysWeaver
     public static unsafe class HashTools
     {
         /// <summary>
+        /// Convert a compact hash of length 26 to a hexadecimal hash of length 32
+        /// </summary>
+        /// <param name="hashStringh16">A string of length 26 with an encoded hash</param>
+        /// <returns>Hex hash</returns>
+        public static String ToHexHash(String hashStringh16)
+        {
+            Span<Byte> d = new byte[16];
+            HashTools.GetHashFromString26(d, hashStringh16);
+            return d.ToHexString();
+        }
+
+        /// <summary>
         /// Get a string of length 26 for a given text string
         /// </summary>
         /// <param name="text">The 16 byte hash</param>

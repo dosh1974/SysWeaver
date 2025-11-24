@@ -362,8 +362,9 @@ async function fileUploaderClick(ev) {
  * @param {function(HTMLElement, File[], string)} onstart Optional function to invoke when an upload is starting (any function found in the "data-onstart" attribute is also invoked).
  * @param {function(HTMLElement, object, File[], string)} onresults Optional function to invoke when an upload is starting (any function found in the "data-onresults" attribute is also invoked).
  * @param {string} apiBase Base url to the upload Api's, defaults to "../upload/" (if not set the "data-apibase" attribute of the element is used if it exist).
+ * @param {boolean} allowMultiple If true, multiple files may be uploaded at once.
  */
-function fileUploaderSetup(el, repo, onstart, onresults, apiBase) {
+function fileUploaderSetup(el, repo, onstart, onresults, apiBase, allowMultiple) {
 
     el.addEventListener("click", fileUploaderClick);
     el.addEventListener("drop", fileUploaderDrop);
@@ -374,6 +375,8 @@ function fileUploaderSetup(el, repo, onstart, onresults, apiBase) {
         el.setAttribute("data-apibase", apiBase);
     if (repo)
         el.setAttribute("data-repo", repo);
+    if (allowMultiple)
+        el.setAttribute("data-multiple", "true");
     if (onstart)
         el.OnUploadStart = onstart;
     if (onresults)

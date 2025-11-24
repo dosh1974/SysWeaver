@@ -191,6 +191,7 @@ async function serviceInfoMain() {
 
     const configs = document.body.getElementsByTagName("si-configs")[0];
     const masterConfigs = document.body.getElementsByTagName("si-configs")[1];
+    const uploads = document.body.getElementsByTagName("si-uploads")[0];
     const versions = document.body.getElementsByTagName("si-versions")[0];
 
     function updateFileList(el, files, headerText, headerTitle, folderSuffix) {
@@ -271,8 +272,60 @@ async function serviceInfoMain() {
 
 
 
-        updateFileList(configs, data.Configs, "Active Config Files", "These are the files that are currently active");
-        updateFileList(masterConfigs, data.MasterConfigs, "Master Config Files", "These are the master config files, that get copied when a new version is uploaded", "../ServerManager/Data/");
+        if (data.Configs) {
+            updateFileList(configs, data.Configs, "Active Config Files", "These are the files that are currently active");
+            configs.classList.add("Show");
+        } else {
+            configs.classList.remove("Show");
+
+        }
+
+
+        if (data.MasterConfigs) {
+            updateFileList(masterConfigs, data.MasterConfigs, "Master Config Files", "These are the master config files, that get copied when a new version is uploaded", "../ServerManager/Data/");
+            uploads.classList.add("Show");
+            masterConfigs.classList.add("Show");
+            if (first) 
+                fileUploaderSetup(uploads, service, null, (e, res, files) => {
+                    const err = res.Error;
+                    if (err) {
+                        Fail(err);
+                        return;
+                    }
+                    const ss = res.Status;
+                    const sl = ss.length;
+                    for (let i = 0; i < sl; ++i) {
+                        const res0 = ss[i];
+                        switch (res0) {
+                            case UploadStatus.AlreadyUploaded:
+                            case UploadStatus.None:
+                                break;
+                            default:
+                                Fail(_T("{0}, when uploading \"{1}\"", fileUploaderStatusText(res0), files[i].name, "Text displayed when uploading of a file to a server failed.{0} is replaced with a message as to why the file failed.{1} is replaced with the name of the file"));
+                                return;
+                        }
+                    }
+                    for (let i = 0; i < sl; ++i) {
+                        const res0 = ss[i];
+                        if (res0 === UploadStatus.AlreadyUploaded) {
+                            Info(_T("File \"{0}\" was already uploaded", files[i].name, "Text displayed when a file have already been uploaded to a server.{0} is replaced with the name of the file"));
+                            return;
+                        }
+                    }
+                    for (let i = 0; i < sl; ++i) {
+                        const res0 = ss[i];
+                        if (res0 === UploadStatus.None) {
+                            Info(_T("Uploaded \"{0}\"", files[i].name, "Text displayed when a file was succesfully uploaded to a server.{0} is replaced with the name of the file"));
+                            update();
+                            return;
+                        }
+                    }
+                }, null, true);
+
+        } else {
+            uploads.classList.remove("Show");
+            masterConfigs.classList.remove("Show");
+        }
 
         const updater = BeginElementChildUpdate(versions);
         const vs = data.Versions;

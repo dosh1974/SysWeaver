@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SysWeaver.MicroService.ChartJs\SysWeaver.MicroService.ChartJs.csproj" />
+    <ProjectReference Include="..\SysWeaver.MicroService.FileUploader\SysWeaver.MicroService.FileUploader.csproj" />
     <ProjectReference Include="..\SysWeaver.MicroService.FolderSync\SysWeaver.MicroService.FolderSync.csproj" />
     <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
     <ProjectReference Include="..\SysWeaver.OsServices\SysWeaver.OsServices.csproj" />

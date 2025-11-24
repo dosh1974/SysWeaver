@@ -16,7 +16,17 @@ namespace SysWeaver
     /// </summary>
     public static class FileHash
     {
-
+        /// <summary>
+        /// Convert a compact hash of length 26 to a hexadecimal hash of length 32
+        /// </summary>
+        /// <param name="hashStringh16">A string of length 26 with an encoded hash</param>
+        /// <returns>Hex hash</returns>
+        public static String ToHexHash(String hashStringh16)
+        {
+            Span<Byte> d = new byte[16];
+            HashTools.GetHashFromString26(d, hashStringh16);
+            return d.ToHexString();
+        }
 
         /// <summary>
         /// Determines if two files have equal content.

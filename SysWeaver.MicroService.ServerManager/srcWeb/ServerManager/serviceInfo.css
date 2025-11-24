@@ -177,7 +177,7 @@ si-debugbuttons {
 
 
 si-configs {
-    display: grid;
+    display: none;
     grid-template-columns: 32px auto auto auto;
     grid-gap: 0.25em 1em;
     max-width: var(--MaxW);
@@ -187,6 +187,55 @@ si-configs {
     padding-bottom: 0.25em;
     overflow: hidden;
 }
+
+    si-configs.Show {
+        display: grid;
+    }
+
+si-uploads {
+    display: block;
+    width: 64px;
+    height: 64px;
+    margin: auto;
+    border: 2px solid transparent;
+    transition: border linear var(--ThemeFadeDuration);
+    position: relative;
+    border-radius: 8px;
+    cursor: pointer;
+}
+    si-uploads:after {
+        transition: opacity linear var(--ThemeFadeDuration);
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        background-color: var(--ThemeMain);
+        mask-repeat: no-repeat;
+        mask-size: contain;
+        mask-image: url("../icons/plus.svg");
+        opacity: 0.8;
+    }
+
+    si-uploads:hover:after {
+        opacity: 1;
+    }
+
+
+    si-uploads.Dragging {
+        border: 2px dashed var(--ThemeAcc1);
+    }
+
+    si-uploads.Selecting:after {
+        opacity: 0.5;
+        mask-image: url("../icons/disc.svg");
+    }
+
+    si-uploads.Uploading:after {
+        opacity: 0.5;
+        mask-image: url("../icons/Loading.svg");
+    }
 
 @media screen and (max-width: 600px) {
     si-configs {
