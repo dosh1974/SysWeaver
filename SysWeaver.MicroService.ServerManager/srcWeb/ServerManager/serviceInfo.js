@@ -190,18 +190,60 @@ async function serviceInfoMain() {
 
 
     const configs = document.body.getElementsByTagName("si-configs")[0];
-    const masterConfigs = document.body.getElementsByTagName("si-configs")[1];
     const uploads = document.body.getElementsByTagName("si-uploads")[0];
+    const masterConfigs = document.body.getElementsByTagName("si-configs")[1];
+    const masterUploads = document.body.getElementsByTagName("si-uploads")[1];
     const versions = document.body.getElementsByTagName("si-versions")[0];
 
-    function updateFileList(el, files, headerText, headerTitle, folderSuffix) {
+    const bakMap = new Map();
+    bakMap.set(4, '-');
+    bakMap.set(7, '-');
+    bakMap.set(10, '_');
+    bakMap.set(13, '_');
+    bakMap.set(16, '_');
 
+    const digitMap = new Map();
+    digitMap.set('0', true);
+
+    function isBackup(fn) {
+        let e = fn.lastIndexOf('.');
+        if (e < 0)
+            return false;
+        fn = fn.substring(0, e);
+        e = fn.lastIndexOf('.');
+        if (e < 0)
+            return false;
+        fn = fn.substring(e + 1);
+        if (fn === "LastGood")
+            return true;
+        if (fn.length != 19)
+            return false;
+        for (let i = 0; i < 19; ++i) {
+
+            const c = fn.charAt(i);
+            const m = bakMap.get(i);
+            if (m) {
+                if (c === m)
+                    continue;
+            }
+            if (c < '0')
+                return false;
+            if (c > '9')
+                return false;
+        }
+        return true;
+    }
+
+    function updateFileList(el, files, headerText, headerTitle, folderSuffix, isMaster) {
+
+        isMaster = !!isMaster;
         const updater = BeginElementChildUpdate(el)
         if (files) {
             const cl = files.length;
             if (cl > 0) {
                 if (!folderSuffix)
                     folderSuffix = "../FolderSync/Folders/";
+                const discSuffix = isMaster ? "" : "bin\\";
                 const header = document.createElement("si-file-header");
                 header.innerText = headerText;
                 if (headerTitle)
@@ -212,9 +254,165 @@ async function serviceInfoMain() {
                     const fn = f.Name;
                     const icon = document.createElement("si-file-icon");
                     const ext = fn.substring(fn.lastIndexOf('.') + 1);
-
+                    const folder = data.Folder + discSuffix;
+                    const path = folder + "\\" + fn;
                     icon.style.backgroundImage = "url('../icons/ext/" + ext + ".svg')";
-                    updater.Add(icon);
+                    icon.title = "Click to show options";
+                    icon.onclick = async ev => {
+                        if (badClick(ev))
+                            return;
+                        await PopUpMenu(icon, (close, el) => {
+                            el.classList.add("Rel");
+                            const menu = new WebMenu();
+                            menu.Name = "SmConfigFiles";
+                            menu.Items.push(WebMenuItem.From({
+                                Name: _TF("View", "The text of a menu option that when clicked will exit from full screen mode"),
+                                Flags: 0,
+                                IconClass: "../icons/notes.svg",
+                                Title: _TF("View the file content", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                Data: async () => {
+
+                                    Open("../logFile/logfile.html?api=" + folderSuffix + service + "/" + fn, "_self");
+                                    close();
+                                },
+                            }));
+                            if (bak) {
+                                menu.Items.push(WebMenuItem.From({
+                                    Name: _TF("Activate", "The text of a menu option that when clicked will exit from full screen mode"),
+                                    Flags: 0,
+                                    IconClass: "../icons/fav_on.svg",
+                                    Title: _TF("Use this as the active config:\n1. Rename any original (backup)\n2. Rename this to original name", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                    Data: async () => {
+                                        try {
+                                            if (!await sendRequest("ActivateConfig", {
+                                                ServiceName: service,
+                                                Config: fn,
+                                                IsMaster: isMaster,
+                                            })) {
+                                                Fail("Failed to activate the config!");
+                                                return;
+                                            }
+                                            update();
+                                        }
+                                        catch (e) {
+                                            Fail("Failed to activate the config! " + e);
+                                        }
+                                        close();
+                                    },
+                                }));
+                            }
+
+                            if (isMaster) {
+                                menu.Items.push(WebMenuItem.From({
+                                    Name: _TF("Use as current", "The text of a menu option that when clicked will exit from full screen mode"),
+                                    Flags: 0,
+                                    IconClass: "../icons/fav_on.svg",
+                                    Title: _TF("Copy this configuration to the current version", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                    Data: async () => {
+                                        try {
+                                            if (!await sendRequest("UseMasterConfig", {
+                                                ServiceName: service,
+                                                Config: fn,
+                                                IsMaster: isMaster,
+                                            })) {
+                                                Fail("Failed to copy the configuration to the current version!");
+                                                return;
+                                            }
+                                            update();
+                                        }
+                                        catch (e) {
+                                            Fail("Failed to copy the configuration to the current version! " + e);
+                                        }
+                                        close();
+                                    },
+                                }));
+                            }
+
+                            menu.Items.push(WebMenuItem.From({
+                                Name: _TF("Copy file name", "The text of a menu option that when clicked will exit from full screen mode"),
+                                Flags: 0,
+                                IconClass: "../icons/copy.svg",
+                                Title: _T("Click to copy \"{0}\" to the clipboard", fn, "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                Data: async () => {
+                                    ValueFormat.copyToClipboardInfo(fn);
+                                    close();
+                                },
+                            }));
+                            menu.Items.push(WebMenuItem.From({
+                                Name: _TF("Copy local path", "The text of a menu option that when clicked will exit from full screen mode"),
+                                Flags: 0,
+                                IconClass: "../icons/copy.svg",
+                                Title: _T("Click to copy \"{0}\" to the clipboard", path, "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                Data: async () => {
+
+                                    ValueFormat.copyToClipboardInfo(path);
+                                    close();
+                                },
+                            }));
+                            menu.Items.push(WebMenuItem.From({
+                                Name: _TF("Copy local folder", "The text of a menu option that when clicked will exit from full screen mode"),
+                                Flags: 0,
+                                IconClass: "../icons/copy.svg",
+                                Title: _T("Click to copy \"{0}\" to the clipboard", folder, "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                Data: async () => {
+
+                                    ValueFormat.copyToClipboardInfo(folder);
+                                    close();
+                                },
+                            }));
+
+
+                            menu.Items.push(WebMenuItem.From({
+                                Name: _TF("Delete", "The text of a menu option that when clicked will exit from full screen mode"),
+                                Flags: 0,
+                                IconClass: "../icons/close.svg",
+                                Title: _TF("Delete the file", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                Data: async () => {
+
+                                    if (await Confirm("Delete",
+                                        "Delete the configuration file:\n\n" +
+                                        '"' + path + '"\n\n' +
+                                        "The file will be permamently removed!\n" +
+                                        "Are you sure ?",
+                                        "Yes, Delete!",
+                                        "No, Keep it!",
+                                        "../icons/close.svg",
+                                        "../icons/fav_on.svg",
+                                        "Click to pemamently delete the file",
+                                        "Click to keep the file")) {
+                                        try {
+                                            if (!await sendRequest("DeleteConfig", {
+                                                ServiceName: service,
+                                                Config: fn,
+                                                IsMaster: isMaster,
+                                            })) {
+                                                Fail("Failed to delete configuration file!");
+                                                return;
+                                            }
+                                            update();
+                                        }
+                                        catch (e) {
+                                            Fail("Failed to delete configuration file! " + e);
+                                        }
+                                    }
+                                    close();
+                                },
+                            }));
+                            return menu;
+                        }, true);
+                    };
+                    keyboardClick(icon);
+                    rightClick(icon);
+
+                    const state = document.createElement("si-file-state");
+                    const bak = isBackup(fn);
+                    state.title = _TF("This file is not a backup");
+                    if (bak)
+                        state.classList.remove("Show");
+                    else
+                        state.classList.add("Show");
+
+
                     const name = document.createElement("si-file-name");
                     name.innerText = fn;
                     name.onclick = ev => {
@@ -223,12 +421,10 @@ async function serviceInfoMain() {
                         Open("../logFile/logfile.html?api=" + folderSuffix + service + "/" + fn, "_self");
                     }; 
                     keyboardClick(name);
-                    updater.Add(name);
 
                     const size = document.createElement("si-file-size");
                     size.innerText = ValueFormat.formatByteSize(f.Size);
                     ValueFormat.copyOnClick(size, f.Size, false, true);
-                    updater.Add(size);
 
                     const time = document.createElement("si-file-time");
                     const dd = new Date(f.LastModified);
@@ -236,6 +432,12 @@ async function serviceInfoMain() {
                     time.title = "Last modified\n" + v[0];
                     ValueFormat.copyOnClick(time, f.LastModified, false, true);
                     time.innerText = v[1];
+
+
+                    updater.Add(state);
+                    updater.Add(icon);
+                    updater.Add(name);
+                    updater.Add(size);
                     updater.Add(time);
 
                 }
@@ -270,11 +472,51 @@ async function serviceInfoMain() {
         states[3].innerText = "Cpu: " + ValueFormat.toString(data.CpuUsage, 2) + " %";
         states[4].innerText = "Tot: " + ValueFormat.formatTimeSpan(data.TotalProcessorTime);
 
+        function UploadCompleted(e, res, files) {
+            const err = res.Error;
+            if (err) {
+                Fail(err);
+                return;
+            }
+            const ss = res.Status;
+            const sl = ss.length;
+            for (let i = 0; i < sl; ++i) {
+                const res0 = ss[i];
+                switch (res0) {
+                    case UploadStatus.AlreadyUploaded:
+                    case UploadStatus.None:
+                        break;
+                    default:
+                        Fail(_T("{0}, when uploading \"{1}\"", fileUploaderStatusText(res0), files[i].name, "Text displayed when uploading of a file to a server failed.{0} is replaced with a message as to why the file failed.{1} is replaced with the name of the file"));
+                        return;
+                }
+            }
+            for (let i = 0; i < sl; ++i) {
+                const res0 = ss[i];
+                if (res0 === UploadStatus.AlreadyUploaded) {
+                    Info(_T("File \"{0}\" was already uploaded", files[i].name, "Text displayed when a file have already been uploaded to a server.{0} is replaced with the name of the file"));
+                    return;
+                }
+            }
+            for (let i = 0; i < sl; ++i) {
+                const res0 = ss[i];
+                if (res0 === UploadStatus.None) {
+                    Info(_T("Uploaded \"{0}\"", files[i].name, "Text displayed when a file was succesfully uploaded to a server.{0} is replaced with the name of the file"));
+                    update();
+                    return;
+                }
+            }
+        }
 
 
         if (data.Configs) {
             updateFileList(configs, data.Configs, "Active Config Files", "These are the files that are currently active");
             configs.classList.add("Show");
+            if (first) {
+                fileUploaderSetup(uploads, "Current_" + service, null, UploadCompleted, null, true);
+                keyboardClick(uploads);
+            }
+            uploads.classList.add("Show");
         } else {
             configs.classList.remove("Show");
 
@@ -282,48 +524,16 @@ async function serviceInfoMain() {
 
 
         if (data.MasterConfigs) {
-            updateFileList(masterConfigs, data.MasterConfigs, "Master Config Files", "These are the master config files, that get copied when a new version is uploaded", "../ServerManager/Data/");
-            uploads.classList.add("Show");
+            updateFileList(masterConfigs, data.MasterConfigs, "Master Config Files", "These are the master config files, that get copied when a new version is uploaded", "../ServerManager/Data/", true);
             masterConfigs.classList.add("Show");
-            if (first) 
-                fileUploaderSetup(uploads, service, null, (e, res, files) => {
-                    const err = res.Error;
-                    if (err) {
-                        Fail(err);
-                        return;
-                    }
-                    const ss = res.Status;
-                    const sl = ss.length;
-                    for (let i = 0; i < sl; ++i) {
-                        const res0 = ss[i];
-                        switch (res0) {
-                            case UploadStatus.AlreadyUploaded:
-                            case UploadStatus.None:
-                                break;
-                            default:
-                                Fail(_T("{0}, when uploading \"{1}\"", fileUploaderStatusText(res0), files[i].name, "Text displayed when uploading of a file to a server failed.{0} is replaced with a message as to why the file failed.{1} is replaced with the name of the file"));
-                                return;
-                        }
-                    }
-                    for (let i = 0; i < sl; ++i) {
-                        const res0 = ss[i];
-                        if (res0 === UploadStatus.AlreadyUploaded) {
-                            Info(_T("File \"{0}\" was already uploaded", files[i].name, "Text displayed when a file have already been uploaded to a server.{0} is replaced with the name of the file"));
-                            return;
-                        }
-                    }
-                    for (let i = 0; i < sl; ++i) {
-                        const res0 = ss[i];
-                        if (res0 === UploadStatus.None) {
-                            Info(_T("Uploaded \"{0}\"", files[i].name, "Text displayed when a file was succesfully uploaded to a server.{0} is replaced with the name of the file"));
-                            update();
-                            return;
-                        }
-                    }
-                }, null, true);
+            if (first) {
+                fileUploaderSetup(masterUploads, "Master_" + service, null, UploadCompleted, null, true);
+                keyboardClick(masterUploads);
+            }
+            masterUploads.classList.add("Show");
 
         } else {
-            uploads.classList.remove("Show");
+            masterUploads.classList.remove("Show");
             masterConfigs.classList.remove("Show");
         }
 

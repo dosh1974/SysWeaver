@@ -12,7 +12,14 @@
         /// Configuration filename
         /// </summary>
         [EditMin(1)]
-        public string FileName;
+        public string Config;
+
+        /// <summary>
+        /// If true this is the master config
+        /// </summary>
+        public bool IsMaster;
     }
+
+
 
 }

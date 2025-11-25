@@ -22,6 +22,12 @@ namespace SysWeaver.MicroService
     public sealed partial class ServerManagerService : IDisposable, IHttpServerModule, IFileRepoContainer
     {
 
+        static readonly IReadOnlySet<String> ValidConfigExt = ReadOnlyData.Set<String>(StringComparer.Ordinal,
+              ".txt",
+              ".json",
+              ".config"
+        );
+
         sealed class BackupFileRepo : IFileRepo
         {
             readonly ServerManagerService Manager;
@@ -42,11 +48,7 @@ namespace SysWeaver.MicroService
 
             public IReadOnlyList<FileHttpServerModuleFolder> ExposeFolders => null;
 
-            static readonly IReadOnlySet<String> ValidConfigExt = ReadOnlyData.Set<String>(StringComparer.Ordinal,
-                ".txt",
-                ".json",
-                ".config"
-            );
+
 
             static readonly IReadOnlySet<String> ValidKeyExt = ReadOnlyData.Set<String>(StringComparer.Ordinal,
                 ".txt"
@@ -56,7 +58,7 @@ namespace SysWeaver.MicroService
 
             public string UploadAuth { get; init; }
 
-            async ValueTask<FileUploadResult> CanFileBeUploaded(FileUploadInfo file)
+            async ValueTask<FileUploadResult> CheckFile(FileUploadInfo file)
             {
                 var dest = Path.Combine(DiscFolder, file.Name);
                 if (File.Exists(dest))
@@ -79,14 +81,15 @@ namespace SysWeaver.MicroService
                 {
                     try
                     {
-                        Manager.Validate(Key, r);
+                        Key.SplitFirst('_', out var serviceName);
+                        Manager.Validate(serviceName, r);
                     }
                     catch
                     {
                         return ValueTask.FromResult(ArrayExt.Create(info.Length, FileUploadResult.NotAuthorized));
                     }
                 }
-                return info.ConvertAsyncValue(CanFileBeUploaded);
+                return info.ConvertAsyncValue(CheckFile);
             }
 
             public async ValueTask<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
@@ -95,14 +98,15 @@ namespace SysWeaver.MicroService
                 {
                     try
                     {
-                        Manager.Validate(Key, r);
+                        Key.SplitFirst('_', out var serviceName);
+                        Manager.Validate(serviceName, r);
                     }
                     catch
                     {
                         return FileUploadResult.NotAuthorized;
                     }
                 }
-                var res = await CanFileBeUploaded(file).ConfigureAwait(false);
+                var res = await CheckFile(file).ConfigureAwait(false);
                 var dest = Path.Combine(DiscFolder, file.Name);
                 if (res.Result != FileUploadStatus.Upload)
                     return res;
@@ -202,8 +206,9 @@ namespace SysWeaver.MicroService
                 if (!ss.TryAdd(f.Name.FastToLower(), new SmServiceInfo(f, v, p)))
                     throw new Exception("Must have a unique name!");
                 var folder = s.AddFolder(v);
+                repos.Add(new BackupFileRepo("Current_" + f.Name, folder, this));
                 if (f.MasterConfig)
-                    repos.Add(new BackupFileRepo(f.Name, Path.GetDirectoryName(folder), this));
+                    repos.Add(new BackupFileRepo("Master_" + f.Name, Path.GetDirectoryName(folder), this));
                 
             }
             Repos = repos.ToArray();
@@ -275,45 +280,65 @@ namespace SysWeaver.MicroService
             return null;
         }
 
+        static bool IsValidConfigName(String filename)
+        {
+            var ext = Path.GetExtension(filename).FastToLower();
+            if (!ValidConfigExt.Contains(ext))
+                return false;
+            return !filename.FastEquals("_FolderSync.txt");
+        }
+
+        static readonly IReadOnlyDictionary<int, char> BackLocs = new Dictionary<int, char>
+        {
+            { 4, '-' },
+            { 7, '-' },
+            { 10, '_' },
+            { 13, '_' },
+            { 16, '_' },
+        }.Freeze();
+
+        public bool IsBackupName(String filename, out string orgName)
+        {
+            orgName = null;
+            var e = filename.LastIndexOf('.');
+            if (e < 0)
+                return false;
+            var ext = filename.Substring(e);
+            filename = filename.Substring(0, e);
+            e = filename.LastIndexOf('.');
+            if (e < 0)
+                return false;
+            orgName = filename.Substring(0, e) + ext;
+            filename = filename.Substring(e + 1);
+            if (filename.FastEquals("LastGood"))
+                return true;
+            if (filename.Length != 19)
+                return false;
+            var bl = BackLocs;
+            for (int i = 0; i < 19; ++i)
+            {
+                var c = filename[i];
+                if (bl.TryGetValue(i, out var m))
+                {
+                    if (m == c)
+                        continue;
+                }
+                if (c < '0')
+                    return false;
+                if (c > '9')
+                    return false;
+            }
+            return true;
+        }
+
         static HashSet<String> GetConfigs(String path, String name)
         {
             var h = new HashSet<String>(StringComparer.Ordinal);
-            foreach (var x in Directory.GetFiles(path, name + ".*.json"))
+            foreach (var x in Directory.GetFiles(path))
             {
                 var fn = Path.GetFileName(x);
-                var l = fn.FastToLower();
-                if (l.IndexOf(".lastgood.") >= 0)
-                    continue;
-                if (l.IndexOf(".deps.") >= 0)
-                    continue;
-                if (l.IndexOf(".replace.") >= 0)
-                    continue;
-                var bits = l.Split('.');
-                var bl = bits.Length;
-                if (bits.Length > 2)
-                {
-                    var date = bits[bl - 2];
-                    var p = date.Replace('-', '_').Split('_');
-                    if (p.Length == 6)
-                    {
-                        var ds = String.Concat(
-                            p[0], '-',
-                            p[1], '-',
-                            p[2], ' ',
-                            p[3], ':',
-                            p[4], ':',
-                            p[5]);
-                        if (DateTime.TryParse(ds, out var res))
-                            continue;
-                    }
-                }
-                h.Add(fn);
-            }
-            foreach (var x in Directory.GetFiles(path, name + ".*.config"))
-            {
-                var fn = Path.GetFileName(x);
-                var l = fn.FastToLower();
-                h.Add(fn);
+                if (IsValidConfigName(fn))
+                    h.Add(fn);
             }
             return h;
         }
@@ -1169,8 +1194,10 @@ namespace SysWeaver.MicroService
             var info = Validate(data.ServiceName, context);
             if (!info.Service.MasterConfig)
                 throw new Exception("Service is not configured to have master configs!");
+            var sname = data.Config;
+            if (!IsValidConfigName(sname))
+                throw new Exception("Invalid config name!");
             var bin = info.Syncher.DiscFolder;
-            var sname = data.FileName;
             var dname = Path.Combine(bin, sname);
             var p = Path.GetDirectoryName(bin);
             sname = Path.Combine(p, sname);
@@ -1187,8 +1214,85 @@ namespace SysWeaver.MicroService
             return true;
         }
 
+        /// <summary>
+        /// Make a backup config file, the active config file
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="context"></param>
+        /// <returns>True if sucessfully renamed</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<bool> ActivateConfig(SmConfigRequest data, HttpServerRequest context)
+        {
+            var info = Validate(data.ServiceName, context);
+            var bin = info.Syncher.DiscFolder;
+            if (data.IsMaster)
+            {
+                if (!info.Service.MasterConfig)
+                    throw new Exception("Service is not configured to have master configs!");
+                bin = Path.GetDirectoryName(bin);
+            }
+            var sname = data.Config;
+            if (!IsValidConfigName(sname))
+                throw new Exception("Invalid config name!");
+            if (!IsBackupName(sname, out var dname))
+                throw new Exception("Config is not a backup!");
+           
+            sname = Path.Combine(bin, sname);
+            dname = Path.Combine(bin, dname);
+            if (!File.Exists(sname))
+                throw new Exception("The master configuration file does not exist!");
+            if (!ServiceHost.BackupConfig(dname, Manager))
+                throw new Exception("Failed to backup exsiting file \"" + dname + "\"");
+            var ex = await PathExt.TryMoveFileAsync(sname, dname).ConfigureAwait(false);
+            if (ex != null)
+                throw ex;
+            Syncer.GetFolderData(info.Syncher.Name);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            return true;
+        }
+
+        /// <summary>
+        /// Make a backup config file, the active config file
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="context"></param>
+        /// <returns>True if sucessfully renamed</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<bool> DeleteConfig(SmConfigRequest data, HttpServerRequest context)
+        {
+            var info = Validate(data.ServiceName, context);
+            var bin = info.Syncher.DiscFolder;
+            if (data.IsMaster)
+            {
+                if (!info.Service.MasterConfig)
+                    throw new Exception("Service is not configured to have master configs!");
+                bin = Path.GetDirectoryName(bin);
+            }
+            var sname = data.Config;
+            if (!IsValidConfigName(sname))
+                throw new Exception("Invalid config name!");
+            sname = Path.Combine(bin, sname);
+            if (!File.Exists(sname))
+                throw new Exception("The configuration file does not exist!");
 
 
+/*            if (!ServiceHost.BackupConfig(dname, Manager))
+                throw new Exception("Failed to backup exsiting file \"" + dname + "\"");
+            var ex = await PathExt.TryMoveFileAsync(sname, dname).ConfigureAwait(false);
+            if (ex != null)
+                throw ex;
+            Syncer.GetFolderData(info.Syncher.Name);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();*/
+            return true;
+        }
 
     }
 

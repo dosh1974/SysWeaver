@@ -371,6 +371,11 @@ SysWeaver-PopupMenuBack {
         --MenuSubBack: var(--ThemeMain);
     }
 
+    SysWeaver-PopupMenuBack.Rel {
+        position: relative;
+    }
+
+
     SysWeaver-Blocker {
         position: fixed;
         display: block;

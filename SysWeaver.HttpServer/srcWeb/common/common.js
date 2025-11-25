@@ -1773,6 +1773,11 @@ function tabToNextOnEnter(inputElement, onNextItemFn) {
     };
 }
 
+/**
+ * Enabled keyboard focus on an element and "click" the elemnt of Space or Enter press (when focused)
+ * @param {HTMLElement} element The element to enable keyboard focus for
+ * @returns {HTMLElement} The supplied element (allowing for chaining)
+ */
 function keyboardClick(element) {
     const e = element;
     if ((!e.tabIndex) || (e.tabIndex < 0))
@@ -1790,6 +1795,11 @@ function keyboardClick(element) {
     return e;
 }
 
+/**
+ * Disable keyboard click on an element
+ * @param {HTMLElement} element The element to disable keyboard click for
+ * @returns {HTMLElement} The supplied element (allowing for chaining)
+ */
 function removeKeyboardClick(element) {
     const e = element;
     e.tabIndex = null;
@@ -1797,6 +1807,33 @@ function removeKeyboardClick(element) {
     e.onkeyup = null;
     return e;
 }
+
+/**
+ * Enabled right clicking of an element (performing the click action on right click)
+ * @param {HTMLElement} element The element to enable right click for
+ * @returns {HTMLElement} The supplied element (allowing for chaining)
+ */
+function rightClick(element) {
+    const e = element;
+    e.oncontextmenu = ev => {
+        if (badClick(ev, true))
+            return true;
+        e.click();
+        return false;
+    };
+    return e;
+}
+
+/**
+ * Disable right clicking of an element
+ * @param {HTMLElement} element The element to disable right click for
+ * @returns {HTMLElement} The supplied element (allowing for chaining)
+ */
+function removeRightClick(element) {
+    e.oncontextmenu = null;
+    return e;
+}
+
 
 function isPureClick(ev) {
     if (!ev)
