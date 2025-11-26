@@ -179,7 +179,7 @@ si-debugbuttons {
 
 
 si-uploads {
-    display: block;
+    display: none;
     width: 64px;
     height: 64px;
     margin: auto;
@@ -190,6 +190,10 @@ si-uploads {
     border-radius: 8px;
     cursor: pointer;
 }
+
+    si-uploads.Show {
+        display: block;
+    }
 
     si-uploads:focus {
         outline: 2px solid var(--ThemeAcc1);

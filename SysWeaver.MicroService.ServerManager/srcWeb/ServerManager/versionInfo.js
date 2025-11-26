@@ -6,13 +6,14 @@
         if (cindex >= ccl) {
             ++cindex;
             el.appendChild(e);
-            return;
+            return e;
         }
         const cc = el.children[cindex];
         ++cindex;
         if (cc.outerHTML === e.outerHTML)
-            return;
+            return cc;
         el.replaceChild(e, cc);
+        return e;
     }
     function complete() {
         while (ccl > cindex) {
@@ -167,6 +168,20 @@ async function versionInfoMain() {
 
             tt = "Delete this version";
             deleteButton = new Button(null, "Delete", tt, "../icons/close.svg", false, () => doWork(deleteButton, async () => {
+                if (await Confirm("Delete",
+                    "Delete this version:\n\n" +
+                    '"' + data.FullPath + '"\n\n' +
+                    "The folder will be permamently removed!\n" +
+                    "Are you sure ?",
+                    "Yes, Delete!",
+                    "No, Keep it!",
+                    "../icons/close.svg",
+                    "../icons/fav_on.svg",
+                    "Click to pemamently delete the folder containing this version",
+                    "Click to keep this version")) {
+                        if (await sendRequest("VersionDelete", version))
+                            History.back();
+                }
             }));
             actions.appendChild(deleteButton.Element);
 

@@ -7,13 +7,14 @@ function BeginElementChildUpdate(targetElement) {
         if (cindex >= ccl) {
             ++cindex;
             el.appendChild(e);
-            return;
+            return e;
         }
         const cc = el.children[cindex];
         ++cindex;
         if (cc.outerHTML === e.outerHTML)
-            return;
+            return cc;
         el.replaceChild(e, cc);
+        return e;
     }
     function complete() {
         while (ccl > cindex) {
@@ -27,7 +28,6 @@ function BeginElementChildUpdate(targetElement) {
         Complete: complete,
     };
 }
-
 
 async function serviceInfoMain() {
     const p = getUrlParams();
@@ -70,6 +70,12 @@ async function serviceInfoMain() {
     const abortWait = new AbortHandler();
     let updateButtons = () => { };
 
+    function updateNow() {
+        abortWait.raise();
+    }
+
+    let exploreButton = null;
+    let logButton = null;
     if (!viewOnly) {
 
         const serviceButtons = document.body.getElementsByTagName("si-servicebuttons")[0];
@@ -88,7 +94,7 @@ async function serviceInfoMain() {
                 }
                 data = newData;
                 blockButtonStates = false;
-                update();
+                updateNow();
                 Info(ValueFormat.stringFormat(okText, service));
             }
             catch (e) {
@@ -134,11 +140,11 @@ async function serviceInfoMain() {
 
 
         const debugButtons = document.body.getElementsByTagName("si-debugbuttons")[0];
-        const exploreButton = new Button(null, "Explore", "Explore the files", "si-icon-explore", true, async () => {
+        exploreButton = new Button(null, "Explore", "Explore the active files", "si-icon-explore", true, async () => {
             Open("../FolderSync/Folders/" + service + "/explore", "_self");
         });
 
-        const logButton = new Button(null, "View log", "View the log", "si-icon-log", true, async () => {
+        logButton = new Button(null, "View log", "View the current log", "si-icon-log", true, async () => {
             Open("../logFile/logfile.html?api=../FolderSync/Folders/" + service + "/" + data.Log.Name, "_self");
         });
 
@@ -238,176 +244,192 @@ async function serviceInfoMain() {
 
         isMaster = !!isMaster;
         const updater = BeginElementChildUpdate(el)
+        if (!folderSuffix)
+            folderSuffix = "../FolderSync/Folders/";
+        const header = document.createElement("si-file-header");
+        header.innerText = headerText;
+        if (headerTitle)
+            header.title = headerTitle;
+        updater.Add(header);
         if (files) {
             const cl = files.length;
             if (cl > 0) {
-                if (!folderSuffix)
-                    folderSuffix = "../FolderSync/Folders/";
-                const discSuffix = isMaster ? "" : "bin\\";
-                const header = document.createElement("si-file-header");
-                header.innerText = headerText;
-                if (headerTitle)
-                    header.title = headerTitle;
-                updater.Add(header);
                 for (let i = 0; i < cl; ++i) {
                     const f = files[i];
                     const fn = f.Name;
                     const icon = document.createElement("si-file-icon");
                     const ext = fn.substring(fn.lastIndexOf('.') + 1);
-                    const folder = data.Folder + discSuffix;
-                    const path = folder + "\\" + fn;
                     icon.style.backgroundImage = "url('../icons/ext/" + ext + ".svg')";
-                    icon.title = "Click to show options";
-                    icon.onclick = async ev => {
-                        if (badClick(ev))
-                            return;
-                        await PopUpMenu(icon, (close, el) => {
-                            el.classList.add("Rel");
-                            const menu = new WebMenu();
-                            menu.Name = "SmConfigFiles";
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("View", "The text of a menu option that when clicked will exit from full screen mode"),
-                                Flags: 0,
-                                IconClass: "../icons/notes.svg",
-                                Title: _TF("View the file content", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
-                                Data: async () => {
-
-                                    Open("../logFile/logfile.html?api=" + folderSuffix + service + "/" + fn, "_self");
-                                    close();
-                                },
-                            }));
-                            if (bak) {
+                    if (!viewOnly) {
+                        icon.title = "Click to show options";
+                        icon.onclick = async ev => {
+                            if (badClick(ev))
+                                return;
+                            const f = ev.target.Config;
+                            const fn = f.Name;
+                            const folder = isMaster ? data.Folder : data.CurrentFolder;
+                            const path = folder + "\\" + fn;
+                            await PopUpMenu(icon, (close, el) => {
+                                el.classList.add("Rel");
+                                const menu = new WebMenu();
+                                menu.Name = "SmConfigFiles";
                                 menu.Items.push(WebMenuItem.From({
-                                    Name: _TF("Activate", "The text of a menu option that when clicked will exit from full screen mode"),
+                                    Name: _TF("View", "The text of a menu option that when clicked will exit from full screen mode"),
                                     Flags: 0,
-                                    IconClass: "../icons/fav_on.svg",
-                                    Title: _TF("Use this as the active config:\n1. Rename any original (backup)\n2. Rename this to original name", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                    IconClass: "../icons/notes.svg",
+                                    Title: _TF("View the file content", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
                                     Data: async () => {
-                                        try {
-                                            if (!await sendRequest("ActivateConfig", {
-                                                ServiceName: service,
-                                                Config: fn,
-                                                IsMaster: isMaster,
-                                            })) {
-                                                Fail("Failed to activate the config!");
-                                                return;
+
+                                        Open("../logFile/logfile.html?api=" + folderSuffix + service + "/" + fn, "_self");
+                                        close();
+                                    },
+                                }));
+                                if (isBackup(fn)) {
+                                    menu.Items.push(WebMenuItem.From({
+                                        Name: _TF("Activate", "The text of a menu option that when clicked will exit from full screen mode"),
+                                        Flags: 0,
+                                        IconClass: "../icons/fav_on.svg",
+                                        Title: _TF("Use this as the active config:\n1. Rename any original (backup)\n2. Rename this to original name", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                        Data: async () => {
+                                            try {
+                                                if (!await sendRequest("ActivateConfig", {
+                                                    ServiceName: service,
+                                                    Config: fn,
+                                                    IsMaster: isMaster,
+                                                })) {
+                                                    Fail("Failed to activate the config!");
+                                                    return;
+                                                }
+                                                updateNow();
                                             }
-                                            update();
-                                        }
-                                        catch (e) {
-                                            Fail("Failed to activate the config! " + e);
+                                            catch (e) {
+                                                Fail("Failed to activate the config! " + e);
+                                            }
+                                            close();
+                                        },
+                                    }));
+                                }
+
+                                if (isMaster) {
+                                    menu.Items.push(WebMenuItem.From({
+                                        Name: _TF("Use as current", "The text of a menu option that when clicked will exit from full screen mode"),
+                                        Flags: 0,
+                                        IconClass: "../icons/preview_play.svg",
+                                        Title: _TF("Copy this configuration to the current version", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                        Data: async () => {
+                                            try {
+                                                if (!await sendRequest("UseMasterConfig", {
+                                                    ServiceName: service,
+                                                    Config: fn,
+                                                    IsMaster: isMaster,
+                                                })) {
+                                                    Fail("Failed to copy the configuration to the current version!");
+                                                    return;
+                                                }
+                                                updateNow();
+                                            }
+                                            catch (e) {
+                                                Fail("Failed to copy the configuration to the current version! " + e);
+                                            }
+                                            close();
+                                        },
+                                    }));
+                                }
+
+                                menu.Items.push(WebMenuItem.From({
+                                    Name: _TF("Copy file name", "The text of a menu option that when clicked will exit from full screen mode"),
+                                    Flags: 0,
+                                    IconClass: "../icons/copy.svg",
+                                    Title: _T("Click to copy \"{0}\" to the clipboard", fn, "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                    Data: async () => {
+                                        ValueFormat.copyToClipboardInfo(fn);
+                                        close();
+                                    },
+                                }));
+                                menu.Items.push(WebMenuItem.From({
+                                    Name: _TF("Copy local path", "The text of a menu option that when clicked will exit from full screen mode"),
+                                    Flags: 0,
+                                    IconClass: "../icons/copy.svg",
+                                    Title: _T("Click to copy \"{0}\" to the clipboard", path, "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                    Data: async () => {
+
+                                        ValueFormat.copyToClipboardInfo(path);
+                                        close();
+                                    },
+                                }));
+                                menu.Items.push(WebMenuItem.From({
+                                    Name: _TF("Copy local folder", "The text of a menu option that when clicked will exit from full screen mode"),
+                                    Flags: 0,
+                                    IconClass: "../icons/copy.svg",
+                                    Title: _T("Click to copy \"{0}\" to the clipboard", folder, "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                    Data: async () => {
+
+                                        ValueFormat.copyToClipboardInfo(folder);
+                                        close();
+                                    },
+                                }));
+
+                                menu.Items.push(WebMenuItem.From({
+                                    Name: _TF("Download", "The text of a menu option that when clicked will exit from full screen mode"),
+                                    Flags: 0,
+                                    IconClass: "../icons/disc.svg",
+                                    Title: _T("Click to download the \"{0}\" config", folder, "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                    Data: async () => {
+
+                                        downloadFile(fn, folderSuffix + service + "/" + fn);
+                                        close();
+                                    },
+                                }));
+
+
+                                menu.Items.push(WebMenuItem.From({
+                                    Name: _TF("Delete", "The text of a menu option that when clicked will exit from full screen mode"),
+                                    Flags: 0,
+                                    IconClass: "../icons/close.svg",
+                                    Title: _TF("Delete the file", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                    Data: async () => {
+
+                                        if (await Confirm("Delete",
+                                            "Delete the configuration file:\n\n" +
+                                            '"' + path + '"\n\n' +
+                                            "The file will be permamently removed!\n" +
+                                            "Are you sure ?",
+                                            "Yes, Delete!",
+                                            "No, Keep it!",
+                                            "../icons/close.svg",
+                                            "../icons/fav_on.svg",
+                                            "Click to pemamently delete the file",
+                                            "Click to keep the file")) {
+                                            downloadFile(fn, folderSuffix + service + "/" + fn);
+                                            await delay(500);
+                                            try {
+                                                if (!await sendRequest("DeleteConfig", {
+                                                    ServiceName: service,
+                                                    Config: fn,
+                                                    IsMaster: isMaster,
+                                                })) {
+                                                    Fail("Failed to delete configuration file!");
+                                                    return;
+                                                }
+                                                updateNow();
+                                            }
+                                            catch (e) {
+                                                Fail("Failed to delete configuration file! " + e);
+                                            }
                                         }
                                         close();
                                     },
                                 }));
-                            }
-
-                            if (isMaster) {
-                                menu.Items.push(WebMenuItem.From({
-                                    Name: _TF("Use as current", "The text of a menu option that when clicked will exit from full screen mode"),
-                                    Flags: 0,
-                                    IconClass: "../icons/fav_on.svg",
-                                    Title: _TF("Copy this configuration to the current version", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
-                                    Data: async () => {
-                                        try {
-                                            if (!await sendRequest("UseMasterConfig", {
-                                                ServiceName: service,
-                                                Config: fn,
-                                                IsMaster: isMaster,
-                                            })) {
-                                                Fail("Failed to copy the configuration to the current version!");
-                                                return;
-                                            }
-                                            update();
-                                        }
-                                        catch (e) {
-                                            Fail("Failed to copy the configuration to the current version! " + e);
-                                        }
-                                        close();
-                                    },
-                                }));
-                            }
-
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Copy file name", "The text of a menu option that when clicked will exit from full screen mode"),
-                                Flags: 0,
-                                IconClass: "../icons/copy.svg",
-                                Title: _T("Click to copy \"{0}\" to the clipboard", fn, "The tool tip description of a menu option that when clicked will exit from full screen mode"),
-                                Data: async () => {
-                                    ValueFormat.copyToClipboardInfo(fn);
-                                    close();
-                                },
-                            }));
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Copy local path", "The text of a menu option that when clicked will exit from full screen mode"),
-                                Flags: 0,
-                                IconClass: "../icons/copy.svg",
-                                Title: _T("Click to copy \"{0}\" to the clipboard", path, "The tool tip description of a menu option that when clicked will exit from full screen mode"),
-                                Data: async () => {
-
-                                    ValueFormat.copyToClipboardInfo(path);
-                                    close();
-                                },
-                            }));
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Copy local folder", "The text of a menu option that when clicked will exit from full screen mode"),
-                                Flags: 0,
-                                IconClass: "../icons/copy.svg",
-                                Title: _T("Click to copy \"{0}\" to the clipboard", folder, "The tool tip description of a menu option that when clicked will exit from full screen mode"),
-                                Data: async () => {
-
-                                    ValueFormat.copyToClipboardInfo(folder);
-                                    close();
-                                },
-                            }));
-
-
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Delete", "The text of a menu option that when clicked will exit from full screen mode"),
-                                Flags: 0,
-                                IconClass: "../icons/close.svg",
-                                Title: _TF("Delete the file", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
-                                Data: async () => {
-
-                                    if (await Confirm("Delete",
-                                        "Delete the configuration file:\n\n" +
-                                        '"' + path + '"\n\n' +
-                                        "The file will be permamently removed!\n" +
-                                        "Are you sure ?",
-                                        "Yes, Delete!",
-                                        "No, Keep it!",
-                                        "../icons/close.svg",
-                                        "../icons/fav_on.svg",
-                                        "Click to pemamently delete the file",
-                                        "Click to keep the file")) {
-                                        try {
-                                            if (!await sendRequest("DeleteConfig", {
-                                                ServiceName: service,
-                                                Config: fn,
-                                                IsMaster: isMaster,
-                                            })) {
-                                                Fail("Failed to delete configuration file!");
-                                                return;
-                                            }
-                                            update();
-                                        }
-                                        catch (e) {
-                                            Fail("Failed to delete configuration file! " + e);
-                                        }
-                                    }
-                                    close();
-                                },
-                            }));
-                            return menu;
-                        }, true);
-                    };
-                    keyboardClick(icon);
-                    rightClick(icon);
+                                return menu;
+                            }, true);
+                        };
+                        keyboardClick(icon);
+                        rightClick(icon);
+                    }
 
                     const state = document.createElement("si-file-state");
-                    const bak = isBackup(fn);
                     state.title = _TF("This file is not a backup");
-                    if (bak)
+                    if (isBackup(fn))
                         state.classList.remove("Show");
                     else
                         state.classList.add("Show");
@@ -435,7 +457,7 @@ async function serviceInfoMain() {
 
 
                     updater.Add(state);
-                    updater.Add(icon);
+                    updater.Add(icon).Config = f;
                     updater.Add(name);
                     updater.Add(size);
                     updater.Add(time);
@@ -458,6 +480,16 @@ async function serviceInfoMain() {
         state.innerText = status;
         state.className = "";
         state.classList.add(stateMap.get(status));
+        const masterFolder = data.Folder;
+        const currentFolder = data.CurrentFolder;
+        if (first) {
+            if (exploreButton)
+                exploreButton.ChangeTitle("Explore the active files.\n\nLocated in this folder:\n" + currentFolder);
+            if (logButton)
+                logButton.ChangeTitle("View the current log file.\n\nLocated here:\n" + currentFolder + "\\" + data.Log?.Name);
+            uploads.title = "Click to upload config files into the current version.\n\nLocated in this folder:\n" + currentFolder;
+            masterUploads.title = "Click to upload config files into the master configs.\n\nLocated in this folder:\n" + masterFolder;
+        }
 
         const hide = data.ProcId === 0;
         if (hide) {
@@ -502,7 +534,7 @@ async function serviceInfoMain() {
                 const res0 = ss[i];
                 if (res0 === UploadStatus.None) {
                     Info(_T("Uploaded \"{0}\"", files[i].name, "Text displayed when a file was succesfully uploaded to a server.{0} is replaced with the name of the file"));
-                    update();
+                    updateNow();
                     return;
                 }
             }
@@ -510,13 +542,13 @@ async function serviceInfoMain() {
 
 
         if (data.Configs) {
-            updateFileList(configs, data.Configs, "Active Config Files", "These are the files that are currently active");
+            updateFileList(configs, data.Configs, "Active Config Files", "These are the files that are currently active.\n\nLocated in this folder:\n" + currentFolder);
             configs.classList.add("Show");
-            if (first) {
+            if ((!viewOnly) && first) {
                 fileUploaderSetup(uploads, "Current_" + service, null, UploadCompleted, null, true);
                 keyboardClick(uploads);
+                uploads.classList.add("Show");
             }
-            uploads.classList.add("Show");
         } else {
             configs.classList.remove("Show");
 
@@ -524,13 +556,13 @@ async function serviceInfoMain() {
 
 
         if (data.MasterConfigs) {
-            updateFileList(masterConfigs, data.MasterConfigs, "Master Config Files", "These are the master config files, that get copied when a new version is uploaded", "../ServerManager/Data/", true);
+            updateFileList(masterConfigs, data.MasterConfigs, "Master Config Files", "These are the master config files, that get copied when a new version is uploaded..\n\nLocated in this folder:\n" + masterFolder, "../ServerManager/Data/", true);
             masterConfigs.classList.add("Show");
-            if (first) {
+            if ((!viewOnly) && first) {
                 fileUploaderSetup(masterUploads, "Master_" + service, null, UploadCompleted, null, true);
                 keyboardClick(masterUploads);
+                masterUploads.classList.add("Show");
             }
-            masterUploads.classList.add("Show");
 
         } else {
             masterUploads.classList.remove("Show");

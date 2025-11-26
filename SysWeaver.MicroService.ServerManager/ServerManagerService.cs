@@ -4,10 +4,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using SysWeaver.Compression;
 using SysWeaver.Data;
 using SysWeaver.FolderSync;
 using SysWeaver.Net;
@@ -19,7 +17,7 @@ namespace SysWeaver.MicroService
 
     [RequiredDep<FolderSyncService>()]
     [WebApiUrl("../ServerManager")]
-    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule, IFileRepoContainer
+    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule
     {
 
         static readonly IReadOnlySet<String> ValidConfigExt = ReadOnlyData.Set<String>(StringComparer.Ordinal,
@@ -28,138 +26,25 @@ namespace SysWeaver.MicroService
               ".config"
         );
 
-        sealed class BackupFileRepo : IFileRepo
-        {
-            readonly ServerManagerService Manager;
-
-            public BackupFileRepo(String key, String discFolder, ServerManagerService manager, bool isKey = false)
-            {
-                Manager = manager;
-                IsKey = isKey;
-                Key = key;
-                DiscFolder = discFolder;
-                UploadAuth = isKey ? Roles.Admin : "";
-                ValidExt = isKey ? ValidKeyExt : ValidConfigExt;
-            }
-            readonly bool IsKey;
-            readonly String DiscFolder;
-
-            public string Key { get; init; }
-
-            public IReadOnlyList<FileHttpServerModuleFolder> ExposeFolders => null;
-
-
-
-            static readonly IReadOnlySet<String> ValidKeyExt = ReadOnlyData.Set<String>(StringComparer.Ordinal,
-                ".txt"
-            );
-
-            readonly IReadOnlySet<String> ValidExt;
-
-            public string UploadAuth { get; init; }
-
-            async ValueTask<FileUploadResult> CheckFile(FileUploadInfo file)
-            {
-                var dest = Path.Combine(DiscFolder, file.Name);
-                if (File.Exists(dest))
-                {
-                    var h = await FileHash.GetHashAsync(dest).ConfigureAwait(false);
-                    h = HashTools.ToHexHash(h);
-                    if (h.FastEquals(file.Hash))
-                        return FileUploadResult.AlreadyUploaded;
-                }
-                if (!ValidExt.Contains(file.GetExtension().FastToLower()))
-                    return FileUploadResult.RefuseExtension;
-                if (file.Length > (64 << 10))
-                    return FileUploadResult.RefuseSize;
-                return FileUploadResult.Upload;
-            }
-
-            public ValueTask<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r)
-            {
-                if (!IsKey)
-                {
-                    try
-                    {
-                        Key.SplitFirst('_', out var serviceName);
-                        Manager.Validate(serviceName, r);
-                    }
-                    catch
-                    {
-                        return ValueTask.FromResult(ArrayExt.Create(info.Length, FileUploadResult.NotAuthorized));
-                    }
-                }
-                return info.ConvertAsyncValue(CheckFile);
-            }
-
-            public async ValueTask<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
-            {
-                if (!IsKey)
-                {
-                    try
-                    {
-                        Key.SplitFirst('_', out var serviceName);
-                        Manager.Validate(serviceName, r);
-                    }
-                    catch
-                    {
-                        return FileUploadResult.NotAuthorized;
-                    }
-                }
-                var res = await CheckFile(file).ConfigureAwait(false);
-                var dest = Path.Combine(DiscFolder, file.Name);
-                if (res.Result != FileUploadStatus.Upload)
-                    return res;
-
-                var a = Manager.Audit;
-                HttpApiAudit ad = null;
-                long id = 0;
-                if (a != null)
-                {
-                    id = ApiAudit.GetId();
-                    ad = new HttpApiAudit(String.Concat("Upload ", Key, '/', file.Name), AuditGroup);
-                    a.OnApiBegin(id, r, ad, file.Hash);
-                }
-                try
-                {
-                    if (!ServiceHost.BackupConfig(dest, Manager.Manager))
-                    {
-                        if (a != null)
-                            a.OnApiException(id, r, ad, new Exception("Backup failed"));
-                        return FileUploadResult.Refuse;
-                    }
-                    var data = await s.ReadAllMemoryAsync().ConfigureAwait(false);
-                    if (decoder != null)
-                        data = decoder.GetDecompressed(data.Span);
-                    var text = Encoding.UTF8.GetString(data.Span);
-                    await FileExt.WriteMemoryAsync(dest, data, true).ConfigureAwait(false);
-                    if (a != null)
-                        a.OnApiEnd(id, r, ad, IsKey ? "** PROTECTED **" : text.LimitLength(2048));
-                    Manager.Syncer.GetFolderData(Key);
-                    r.Session.InvalidateCache();
-                    r.Server.InvalidateCache();
-                    return FileUploadResult.None;
-                }
-                catch (Exception ex)
-                {
-                    if (a != null)
-                        a.OnApiException(id, r, ad, ex);
-                    throw;
-                }
-            }
-        }
-
-        public IFileRepo[] Repos { get; init;  }
 
         readonly IApiAuditService Audit;
+
+        const String ServerManagerServicesKey = "ServerManagerServices";
+
+        readonly String[] DestFolders;
+        readonly ServerManagerParams P;
+        readonly FileUploaderService FileUploader;
+        readonly IFileRepo KeyRepo;
 
         public ServerManagerService(ServiceManager manager, ServerManagerParams p)
         {
             p = p ?? new ServerManagerParams();
+            P = p;
             Audit = manager.TryGet<IApiAuditService>();
             var removeServiceBackupsDays = Math.Max(3, p.RemoveServiceBackupsDays);
             RemoveServiceBackupsDays = removeServiceBackupsDays;
             var s = manager.Get<FolderSyncService>();
+            FileUploader = manager.Get<FileUploaderService>();
             Manager = manager;
             Syncer = s;
             foreach (var f in p.Folders.Nullable())
@@ -174,50 +59,84 @@ namespace SysWeaver.MicroService
                 PathExt.EnsureFolderExist(f);
                 PathExt.AllowAllAccess(f);
             }
+            DestFolders = destFolders;
             var ss = Services;
-            List<IFileRepo> repos = new List<IFileRepo>();
-            repos.Add(new BackupFileRepo("Keys", @"C:\Keys", this, true));
-            foreach (var f in p.Services.Nullable())
-            {
-                var df = f.DiscFolder;
-                if (String.IsNullOrEmpty(df))
-                {
-                    df = Path.GetFullPath(Folders.SelectFolder(destFolders, f.Name));
-                    df = Path.Combine(df, f.Name, "bin");
-                    PathExt.EnsureFolderExist(df);
-                    PathExt.AllowAllAccess(df);
-                    PathExt.AllowAllAccess(Path.Combine(df, f.Name));
-                }
-                else
-                {
-                    df = PathTemplate.Resolve(df);
-                }
-                var v = new FolderSyncFolder
-                {
-                    Name = f.Name,
-                    DiscFolder = df,
-                    Compress = p.CompressServices,
-                    Auth = f.SyncAuth ?? p.SyncAuth,
-                    RemoveBackupsDays = removeServiceBackupsDays,
-                    OnNewFolderAsync = OnNewFolder,
-                    OnActivateAsync = OnServiceActivate,
-                    OnDeactivateAsync = OnServiceDeactivate,
-                };
-                if (!ss.TryAdd(f.Name.FastToLower(), new SmServiceInfo(f, v, p)))
-                    throw new Exception("Must have a unique name!");
-                var folder = s.AddFolder(v);
-                repos.Add(new BackupFileRepo("Current_" + f.Name, folder, this));
-                if (f.MasterConfig)
-                    repos.Add(new BackupFileRepo("Master_" + f.Name, Path.GetDirectoryName(folder), this));
-                
-            }
-            Repos = repos.ToArray();
+            KeyRepo = new BackupFileRepo("Keys", @"C:\Keys", this, true);
+            FileUploader.AddRepo(KeyRepo);
+
+            var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
+            foreach (var f in p.Services.Nullable().Concat(savedServices.Nullable()))
+                InternalAddService(f);
             UpdateTask = new PeriodicTask(UpdateMetrics, 5000);
         }
+
+
+        void InternalAddService(ManagedService f)
+        {
+            var p = P;
+            var df = f.DiscFolder;
+            if (String.IsNullOrEmpty(df))
+            {
+                df = Path.GetFullPath(Folders.SelectFolder(DestFolders, f.Name));
+                df = Path.Combine(df, f.Name, "bin");
+            }
+            else
+            {
+                df = PathTemplate.Resolve(df);
+            }
+            PathExt.EnsureFolderExist(df);
+            PathExt.AllowAllAccess(Path.GetDirectoryName(df));
+            PathExt.AllowAllAccess(df);
+            var v = new FolderSyncFolder
+            {
+                Name = f.Name,
+                DiscFolder = df,
+                Compress = p.CompressServices,
+                Auth = f.SyncAuth ?? p.SyncAuth,
+                RemoveBackupsDays = RemoveServiceBackupsDays,
+                OnNewFolderAsync = OnNewFolder,
+                OnActivateAsync = OnServiceActivate,
+                OnDeactivateAsync = OnServiceDeactivate,
+            };
+            var folder = Syncer.AddFolder(v);
+            var currentRepo = new BackupFileRepo("Current_" + f.Name, folder, this);
+            var masterRepo = f.MasterConfig ? new BackupFileRepo("Master_" + f.Name, Path.GetDirectoryName(folder), this) : null;
+            if (!Services.TryAdd(f.Name.FastToLower(), new SmServiceInfo(f, v, p, currentRepo, masterRepo)))
+            {
+                Syncer.RemoveFolder(v);
+                throw new Exception("Must have a unique name!");
+            }
+            FileUploader.AddRepo(currentRepo);
+            FileUploader.AddRepo(masterRepo);
+        }
+
+        bool InternalRemoveService(String serviceName)
+        {
+            if (!Services.TryRemove(serviceName.FastToLower(), out var info))
+                return false;
+            Syncer.RemoveFolder(info.Syncher);
+            FileUploader.RemoveRepo(info.Master);
+            FileUploader.RemoveRepo(info.Current);
+            return true;
+        }
+
 
         public void Dispose()
         {
             Interlocked.Exchange(ref UpdateTask, null)?.Dispose();
+            var fu = FileUploader;
+            var sy = Syncer;
+            var ss = Services;
+            var d = ss.Keys.ToList();
+            foreach (var k in d)
+            {
+                if (!ss.TryGetValue(k, out var s))
+                    continue;
+                fu.RemoveRepo(s.Master);
+                fu.RemoveRepo(s.Current);
+                sy.RemoveFolder(s.Syncher);
+            }
+            fu.RemoveRepo(KeyRepo);
         }
 
         readonly int RemoveServiceBackupsDays;
@@ -753,19 +672,19 @@ namespace SysWeaver.MicroService
             var data = Syncer.GetFolderData(info.Service.Name).ToList();
             var discFolder = info.Syncher.DiscFolder;
             var exeName = FindServiceExe(discFolder);
+            SmFileInfo[] configs = GetConfigs(discFolder, "*").Select(x => GetFileInfo(Path.Combine(discFolder, x))).OrderByDescending(x => x.LastModified).ToArray();
+
             SmFileInfo logFile = null;
-            SmFileInfo[] configs = null;
             if (exeName != null)
             {
                 exeName = Path.GetFileName(exeName);
                 var baseName = Path.GetFileNameWithoutExtension(exeName);
-                configs = GetConfigs(discFolder, baseName).OrderBy(x => x).Select(x => GetFileInfo(Path.Combine(discFolder, x))).ToArray();
                 logFile = GetFileInfo(Path.Combine(discFolder, baseName + ".log"));
             }
             var masterFolder = Path.GetDirectoryName(discFolder);
             SmFileInfo[] masterConfigs = null;
             if (info.Service.MasterConfig)
-                masterConfigs = GetConfigs(masterFolder, "*").OrderBy(x => x).Select(x => GetFileInfo(Path.Combine(masterFolder, x))).ToArray();
+                masterConfigs = GetConfigs(masterFolder, "*").Select(x => GetFileInfo(Path.Combine(masterFolder, x))).OrderByDescending(x => x.LastModified).ToArray();
             return new SmServiceDetail(info, data, exeName, logFile, configs, masterConfigs);
         }
 
@@ -1243,7 +1162,7 @@ namespace SysWeaver.MicroService
             sname = Path.Combine(bin, sname);
             dname = Path.Combine(bin, dname);
             if (!File.Exists(sname))
-                throw new Exception("The master configuration file does not exist!");
+                throw new Exception("The configuration file does not exist!");
             if (!ServiceHost.BackupConfig(dname, Manager))
                 throw new Exception("Failed to backup exsiting file \"" + dname + "\"");
             var ex = await PathExt.TryMoveFileAsync(sname, dname).ConfigureAwait(false);
@@ -1256,7 +1175,8 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Make a backup config file, the active config file
+        /// Delete a config file.
+        /// WARNING no backup is made!
         /// </summary>
         /// <param name="data"></param>
         /// <param name="context"></param>
@@ -1281,18 +1201,76 @@ namespace SysWeaver.MicroService
             sname = Path.Combine(bin, sname);
             if (!File.Exists(sname))
                 throw new Exception("The configuration file does not exist!");
-
-
-/*            if (!ServiceHost.BackupConfig(dname, Manager))
-                throw new Exception("Failed to backup exsiting file \"" + dname + "\"");
-            var ex = await PathExt.TryMoveFileAsync(sname, dname).ConfigureAwait(false);
+            var ex = await PathExt.TryDeleteFileAsync(sname).ConfigureAwait(false);
             if (ex != null)
                 throw ex;
             Syncer.GetFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
-            context.Server.InvalidateCache();*/
+            context.Server.InvalidateCache();
             return true;
         }
+
+
+        readonly Object ServiceLock = new object();
+
+        /// <summary>
+        /// Add a new managed service
+        /// </summary>
+        /// <param name="service">Service params</param>
+        /// <param name="context"></param>
+        /// <returns>True if sucessfully added</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth(Roles.Admin)]
+        [WebApiAudit(AuditGroup)]
+        public bool AddService(ManagedService service, HttpServerRequest context)
+        {
+            var name = service.Name.Trim();
+            if (String.IsNullOrEmpty(name))
+                throw new Exception("Invalid name! May not be empty or null!");
+            if (!PathExt.IsValidFilename(name))
+                throw new Exception("Invalid name! May only contain valid file name characters!");
+            if (!PathExt.IsValidSubPath(name))
+                throw new Exception("Invalid name! May only contain valid folder name characters!");
+            service.Name = name;
+            lock (ServiceLock)
+            {
+                InternalAddService(service);
+                var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
+                savedServices = savedServices.Push(service);
+                KeyValueStore.AllApp.Set(ServerManagerServicesKey, savedServices);
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Remove a service from the Service Managers control
+        /// </summary>
+        /// <param name="serviceName">Service params</param>
+        /// <param name="context"></param>
+        /// <returns>True if sucessfully removed</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth(Roles.Admin)]
+        [WebApiAudit(AuditGroup)]
+        public bool RemoveService(String serviceName, HttpServerRequest context)
+        {
+            lock (ServiceLock)
+            {
+                if (!InternalRemoveService(serviceName))
+                    return false;
+                var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
+                if (savedServices == null)
+                    return false;
+                var i = savedServices.IndexOf(x => x.Name.FastEquals(serviceName));
+                if (i < 0)
+                    return false;
+                savedServices = savedServices.RemoveAt(i);
+                KeyValueStore.AllApp.Set(ServerManagerServicesKey, savedServices.Length == 0 ? null : savedServices);
+            }
+            return true;
+        }
+
 
     }
 

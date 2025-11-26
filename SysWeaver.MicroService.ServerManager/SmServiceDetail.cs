@@ -41,6 +41,11 @@ namespace SysWeaver.MicroService
         /// </summary>
         public SmVersionBrief[] Versions;
 
+        /// <summary>
+        /// The folder that contains the actual files
+        /// </summary>
+        public String CurrentFolder;
+
         public SmServiceDetail()
         {
         }
@@ -55,6 +60,7 @@ namespace SysWeaver.MicroService
             Configs = configs;
             MasterConfigs = masterConfigs;
             Versions = data.Convert(x => new SmVersionBrief(x));
+            CurrentFolder = info.Syncher.DiscFolder;
             Array.Sort(Versions);
 
         }

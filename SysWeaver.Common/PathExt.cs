@@ -374,6 +374,39 @@ namespace SysWeaver
         }
 
 
+        static void InternalCopy(String source, String dest)
+        {
+            var fi = new FileInfo(source);
+            var ct = fi.CreationTimeUtc;
+            var lwt = fi.LastWriteTimeUtc;
+            var la = fi.LastAccessTimeUtc;
+            var di = new FileInfo(dest);
+            if (di.Exists && di.IsReadOnly)
+                di.IsReadOnly = false;
+            File.Copy(source, dest, true);
+            di = new FileInfo(dest);
+            di.CreationTimeUtc = ct;
+            di.LastWriteTimeUtc = lwt;
+            di.LastAccessTimeUtc = la;
+        }
+
+        static void InternalMove(String source, String dest)
+        {
+            var fi = new FileInfo(source);
+            var ct = fi.CreationTimeUtc;
+            var lwt = fi.LastWriteTimeUtc;
+            var la = fi.LastAccessTimeUtc;
+            var di = new FileInfo(dest);
+            if (di.Exists && di.IsReadOnly)
+                di.IsReadOnly = false;
+            File.Move(source, dest, true);
+            di = new FileInfo(dest);
+            di.CreationTimeUtc = ct;
+            di.LastWriteTimeUtc = lwt;
+            di.LastAccessTimeUtc = la;
+        }
+
+
         /// <summary>
         /// Try to copy a file.
         /// If it fails, retry at least N times.
@@ -387,7 +420,7 @@ namespace SysWeaver
         {
             try
             {
-                Retry.Op(() => File.Copy(source, dest, true), retryCount, delayInMs);
+                Retry.Op(() => InternalCopy(source, dest), retryCount, delayInMs);
                 return null;
             }
             catch (Exception ex)
@@ -409,7 +442,29 @@ namespace SysWeaver
         {
             try
             {
-                await Retry.OpAsync(() => File.Copy(source, dest, true), retryCount, delayInMs).ConfigureAwait(false);
+                await Retry.OpAsync(() => InternalCopy(source, dest), retryCount, delayInMs).ConfigureAwait(false);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return ex;
+            }
+        }
+
+        /// <summary>
+        /// Try to move / rename a file.
+        /// If it fails, retry at least N times.
+        /// </summary>
+        /// <param name="source">The file to move</param>
+        /// <param name="dest">The file to overwrite or create</param>
+        /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
+        /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+        /// <returns>Null if the file was copied successfully, else the exception</returns>
+        public static Exception TryMoveFile(String source, String dest, int retryCount = 10, int delayInMs = 100)
+        {
+            try
+            {
+                Retry.Op(() => InternalMove(source, dest), retryCount, delayInMs);
                 return null;
             }
             catch (Exception ex)
@@ -431,7 +486,7 @@ namespace SysWeaver
         {
             try
             {
-                await Retry.OpAsync(() => File.Move(source, dest, true), retryCount, delayInMs).ConfigureAwait(false);
+                await Retry.OpAsync(() => InternalMove(source, dest), retryCount, delayInMs).ConfigureAwait(false);
                 return null;
             }
             catch (Exception ex)
@@ -781,7 +836,6 @@ namespace SysWeaver
                 return true;
             try
             {
-                Directory.CreateDirectory(folder);
                 if (EnvInfo.OsPlatform.FastEquals("windows"))
                 {
 #pragma warning disable CA1416

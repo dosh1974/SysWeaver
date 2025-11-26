@@ -7,12 +7,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Name of repository, used when synching
         /// </summary>
+        [EditMin(1)]
         public String Name;
-
-        /// <summary>
-        /// The folder to manage on disc
-        /// </summary>
-        public String DiscFolder;
 
         /// <summary>
         /// If true, a "master" configs are stored and copied into new folders
@@ -20,9 +16,19 @@ namespace SysWeaver.MicroService
         public bool MasterConfig = true;
 
         /// <summary>
-        /// The auth required to sync this folder
-        /// null is equal to Roles.Debug
+        /// The folder to manage on disc, leave null or blank to use the default location (recommended)
         /// </summary>
+        [EditAllowNull]
+        [EditDefault(null)]
+        public String DiscFolder;
+
+
+        /// <summary>
+        /// The auth required to sync this folder.
+        /// null is equal to using the service default (recommended).
+        /// </summary>
+        [EditAllowNull]
+        [EditDefault(null)]
         public String SyncAuth;
 
 

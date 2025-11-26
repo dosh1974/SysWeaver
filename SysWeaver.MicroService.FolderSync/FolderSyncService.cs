@@ -175,6 +175,22 @@ namespace SysWeaver.MicroService
             return path;
         }
 
+        public bool RemoveFolder(FolderSyncFolder x)
+        {
+            var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
+            var name = x.Name;
+            path = new DirectoryInfo(path).FullName;
+            if (String.IsNullOrEmpty(name))
+                name = Path.GetFileName(path);
+            if (!Folders.TryRemove(name.FastToLower(), out var folder))
+                return false;
+            var fm = FileMod;
+            if (fm != null)
+                fm.RemoveFolder(folder.ModFolder);
+            return true;
+        }
+
+
         readonly FileHttpServerModule FileMod;
         readonly ServiceManager Manager;
 

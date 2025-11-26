@@ -14,13 +14,17 @@ namespace SysWeaver.MicroService
         public readonly FolderSyncFolder Syncher;
         public readonly IReadOnlyList<string> Auth;
         public readonly RequestOptions Options;
+        public readonly IFileRepo Current;
+        public readonly IFileRepo Master;
 
-        public SmServiceInfo(ManagedService service, FolderSyncFolder syncher, ServerManagerParams p)
+        public SmServiceInfo(ManagedService service, FolderSyncFolder syncher, ServerManagerParams p, IFileRepo current, IFileRepo master)
         {
             Service = service;
             Syncher = syncher;
             Auth = Authorization.GetRequiredTokens(service.SyncAuth ?? p.SyncAuth ?? Roles.Debug);
             Options = new RequestOptions(5, 4, 32, "br:Balanced,deflate:Balanced,gzip:Balanced", String.Join(',', Auth));
+            Current = current;
+            Master = master;
         }
 
         public long LastCpu;
