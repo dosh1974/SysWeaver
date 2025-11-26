@@ -358,6 +358,7 @@ namespace SysWeaver.MicroService
                 return -42;
             }
             var m = Manager;
+            m.AddMessage(LogPrefix + "Executing: " + cmd);
             using var _ = m.Tab();
             try
             {
@@ -662,8 +663,7 @@ namespace SysWeaver.MicroService
 
         [WebApi]
         [WebApiAuth]
-        [WebApiClientCache(4)]
-        [WebApiRequestCache(3)]
+        [WebApiRequestCache(4)]
         public SmServiceDetail GetDetail(String serviceName, HttpServerRequest context)
             => InternalGetDetail(Validate(serviceName, context));
 
@@ -691,8 +691,7 @@ namespace SysWeaver.MicroService
 
         [WebApi]
         [WebApiAuth]
-        [WebApiClientCache(4)]
-        [WebApiRequestCache(3)]
+        [WebApiRequestCache(4)]
         public SmServiceBrief[] GetServices(HttpServerRequest context)
         {
             var session = context.Session;
@@ -805,6 +804,53 @@ namespace SysWeaver.MicroService
 
         #endregion//Verbs
 
+        /// <summary>
+        /// Kill the service process
+        /// </summary>
+        /// <param name="serviceName">Name of the managed service</param>
+        /// <param name="context"></param>
+        /// <returns>Updated service details</returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<SmServiceDetail> Kill(String serviceName, HttpServerRequest context)
+        {
+            var info = Validate(serviceName, context);
+            var pid = info.Metrics.ProcessHandle;
+            if (pid == 0)
+                throw new Exception("The process isn't running!");
+            Process h = Process.GetProcessById((int)pid);
+            if (h == null)
+                throw new Exception("Couldn't find a process with id " + pid);
+            var exe = FindServiceExe(info.Syncher.DiscFolder);
+            if (exe == null)
+                return null;
+            try
+            {
+                await RunCommand(exe.ToQuoted() + " stop").ConfigureAwait(false);
+                try
+                {
+                    h = Process.GetProcessById((int)pid);
+                }
+                catch
+                {
+                    h = null;
+                }
+            }
+            catch
+            {
+            }
+            if (h != null)
+            {
+                Manager.AddMessage(LogPrefix + "Terminating process " + serviceName + ":" + pid + " and all child processes");
+                h.Kill(true);
+            }
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            info.Metrics.Status = await CheckStatus(exe).ConfigureAwait(false);
+            return InternalGetDetail(info);
+
+        }
 
 
         /// <summary>
@@ -816,8 +862,7 @@ namespace SysWeaver.MicroService
         [WebApi]
         [WebApiAuth]
         [WebMenuTable(null, "Services", "Services", "Services", "../icons/settings.svg", -7)]
-        [WebApiClientCache(4)]
-        [WebApiRequestCache(3)]
+        [WebApiRequestCache(4)]
         public TableData ServicesTable(TableDataRequest r, HttpServerRequest context)
             => TableDataTools.Get(r, 5000, GetServices(context));
 
@@ -871,8 +916,7 @@ namespace SysWeaver.MicroService
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebMenuTable(null, "Folders", "All folders", "All the managed folders", "../icons/sync.svg", -5)]
-        [WebApiClientCache(4)]
-        [WebApiRequestCache(3)]
+        [WebApiRequestCache(4)]
         public TableData FoldersTable(TableDataRequest r)
             => Syncer.SynchedFoldersTable(r);
 
@@ -928,8 +972,7 @@ namespace SysWeaver.MicroService
         /// <exception cref="Exception"></exception>
         [WebApi]
         [WebApiAuth]
-        [WebApiClientCache(4)]
-        [WebApiRequestCache(3)]
+        [WebApiRequestCache(4)]
         public SmVersionDetail GetVersion(String versionName, HttpServerRequest context)
         {
             var info = GetValidatedVersion(out var version, versionName, context);

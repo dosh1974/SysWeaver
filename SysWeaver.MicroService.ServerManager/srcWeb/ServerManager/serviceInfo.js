@@ -131,12 +131,28 @@ async function serviceInfoMain() {
             await DoVerb(disableButton, "Uninstall", "Disabled {0}");
         });
 
+        const killButton = new Button(null, "Kill", "Click to kill the service process.\nWARNING! This can cause problems!\nTry to stop the service first.", "si-icon-kill", true, async () => {
+            if (await Confirm("Kill",
+                "Forcefully kill the service process?\n\n" +
+                "WARNING! This can cause errors!\n\n" +
+                "Are you sure?",
+                "Yes, Kill!",
+                "No, Leave it!",
+                "../icons/skull.svg",
+                "../icons/preview_play.svg",
+                "Click to terminate the service process",
+                "Click to leave it running")) {
+                await DoVerb(disableButton, "Kill", "Terminated {0}");
+            }
+        });
+
         serviceButtons.appendChild(restartButton.Element);
         serviceButtons.appendChild(pauseButton.Element);
         serviceButtons.appendChild(resumeButton.Element);
         serviceButtons.appendChild(stopButton.Element);
         serviceButtons.appendChild(startButton.Element);
         serviceButtons.appendChild(disableButton.Element);
+        serviceButtons.appendChild(killButton.Element);
 
 
         const debugButtons = document.body.getElementsByTagName("si-debugbuttons")[0];
@@ -160,8 +176,9 @@ async function serviceInfoMain() {
                 pauseButton.SetEnabled(isRunning);
                 resumeButton.SetEnabled(isPaused);
                 stopButton.SetEnabled(isRunning || isPaused);
-                startButton.SetEnabled(isStopped || status === "NotInstalled");
+                startButton.SetEnabled(isStopped || status === "NotInstalled" || status === "Unknown");
                 disableButton.SetEnabled(isStopped || isRunning || isPaused);
+                killButton.SetEnabled(data.ProcId > 0);
             }
             logButton.SetEnabled(!!data.Log);
 

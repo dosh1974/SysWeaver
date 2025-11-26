@@ -477,3 +477,7 @@ si-version-last {
 .si-icon-log {
     mask-image: url("../icons/notes.svg");
 }
+
+.si-icon-kill {
+    mask-image: url("../icons/skull.svg");
+}

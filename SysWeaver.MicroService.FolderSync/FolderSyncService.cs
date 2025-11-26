@@ -396,7 +396,11 @@ namespace SysWeaver.MicroService
             //  De-compress stored
                 var compact = from + ContentDependentChunking.DotFileExt;
                 if (File.Exists(compact))
-                    return (await TryExpandFolderLog(compact).ConfigureAwait(false)).Item1;
+                {
+                    var ex2 = (await TryExpandFolderLog(compact).ConfigureAwait(false)).Item1;
+                    if (ex2 != null)
+                        return ex2;
+                }
             }
             var destFolder = folder.DestPath;
             var cmd = folder.OnDeactivate;
