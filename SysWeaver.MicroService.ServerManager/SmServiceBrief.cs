@@ -74,6 +74,21 @@ namespace SysWeaver.MicroService
         {
         }
 
+        public void CopyTo(SmServiceBrief to)
+        {
+            to.Name = Name;
+            to.Status = Status;
+            to.MemUsage = MemUsage;
+            to.CpuUsage = CpuUsage;
+            to.VersionCount = VersionCount;
+            to.Uploaded = Uploaded;
+            to.User = User;
+            to.Machine = Machine;
+            to.Comment = Comment;
+            to.Folder = Folder;
+            to.Auth = Auth;
+        }
+
         internal SmServiceBrief(SmServiceInfo info, IReadOnlyList<FolderSyncService.Data> data)
         {
             var s = info.Service;
@@ -92,5 +107,25 @@ namespace SysWeaver.MicroService
             MemUsage = m.MemUsage;
             CpuUsage = m.CpuUsage;
         }
+    }
+
+
+    public class SmServiceBriefActions : SmServiceBrief
+    {
+        public SmServiceBriefActions(SmServiceBrief b)
+        {
+            b.CopyTo(this);
+        }
+
+        /// <summary>
+        /// Actions that can be performed
+        /// </summary>
+        [TableDataActions(
+            "Remove",
+            "Remove management of the service, this will not Stop or Disable the service, nor remove any files",
+            "../ServerManager/RemoveService?\"{0}\"", "../icons/close.svg"
+            )]
+        public String Actions => Name;
+
     }
 }

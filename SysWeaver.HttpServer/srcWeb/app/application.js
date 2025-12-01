@@ -674,6 +674,13 @@ function CreatePopUpAtElement(element, widthScale, heightScale, offsetX, offsetY
     return [popupMenuElement, close, block];
 }
 
+/**
+ * Create a visual pop-up that blocks input behind, positioned and tracked using some element as anchor.
+ * @param {HTMLElement} element The element used to position the pop-up.
+ * @param {function(HTMLElement, function():Promise<void>):Promise<void>} build Async function that should build the visual DOM on the supplied element. First argument is the HTMLElement to put content, second is an async function that closes the PopUp and continues execution.
+ * @param {boolean} rightAlign If true the pop-up is right aligned (else it left aligned).
+ * @param {boolean} bottomAlign If true the pop-up is bottom aligned (else it top aligned).
+ */
 function PopUpMenu(element, build, rightAlign, bottomAlign) {
 
 /*
@@ -720,8 +727,6 @@ function PopUpMenu(element, build, rightAlign, bottomAlign) {
 }
 
 
-// build is async and takes 2 arguments, first is the target element (add html there), second is a function that when called closes the pop up.
-// The position can be adjusted, like: dx = widthScale * element.width + offsetX, dy = heightScale * element.height + offsetY.
 /**
  * Create a visual pop-up that blocks input behind, positioned and tracked using some element as anchor.
  * The position can be adjusted, like: dx = widthScale * element.width + offsetX, dy = heightScale * element.height + offsetY.
@@ -762,8 +767,6 @@ async function PopUpElement(element, build, blockUntilClosed, dontAllowClose, on
     }
 }
 
-
-
 /**
  * Create a visual pop-up that blocks input behind, positioned and tracked using some element as anchor.
  * Useful for context menues etc.
@@ -791,8 +794,6 @@ async function PopUpElementMenu(element, build, blockUntilClosed, dontAllowClose
 }
 
 
-
-
 /**
  * Create a visual pop-up that blocks input behind.
  * @param {function(HTMLElement, function():Promise<void>, HTMLElement):Promise<void>} build Async function that should build the visual DOM on the supplied element. First argument is the HTMLElement to put content, second is an async function that closes the PopUp and continues execution. Third argument is the container for the close button, other button may be added here (can be null).
@@ -800,7 +801,7 @@ async function PopUpElementMenu(element, build, blockUntilClosed, dontAllowClose
  * @param {boolean} dontAllowClose If true, no close button will be available and it can't be closed by clicking outside (the closePopup function must be called).
  * @param {function():Promise<void>} onClose An optional function to call when the pop-up is closed.
  * @param {boolean} haveCloseButton If true, a close button will be visible (unless dontAllowClose is true).
- * @returns {function():Promise<void>} The async function to use for closing the pop-up (only usefull when blockUntilClosed is false).
+ * @returns {function():Promise<void>} The async function to use for closing the pop-up (only useful when blockUntilClosed is false).
  */
 async function PopUp(build, blockUntilClosed, dontAllowClose, onClose, haveCloseButton) {
 
@@ -863,9 +864,17 @@ async function PopUp(build, blockUntilClosed, dontAllowClose, onClose, haveClose
     }
 }
 
-
+/**
+ * Popup a dialog when some work is being done
+ * @param {string} title The title text of the dialog
+ * @param {string} text The text to display
+ * @param {string} iconClass Optional class to use for the working icon.
+ * @param {number} iconWidth Optional width in pixels of the working icon.
+ * @param {number} iconHeight Optional height in pixels of the working icon.
+ * @returns {function():Promise<void>} The async function to use for closing the pop-up (only useful when blockUntilClosed is false).
+*/
 async function PopUpWorking(title, text, iconClass, iconWidth, iconHeight) {
-    return await PopUp(el => {
+    return PopUp(el => {
         if (title) {
             const t = document.createElement("SysWeaver-PopUpWorkingTitle");
             t.innerText = title;
@@ -990,6 +999,79 @@ async function PopUpSelection(text, title, getItems, startText, getAll, blockUnt
     }, blockUntilClosed, dontAllowClose, onClose);
 }
 
+
+/**
+ * Pop-up a property editor and wait until it's closed or accepted
+ * @param {string|object} type The dotnet name of the type to edit or a type specifier object
+ * @param {any} obj An optional object of that type to edit (inital value)
+ * @param {string} buttonText Text on the accept button
+ * @param {string} buttonIcon Optional, class name or icon url 
+ * @param {string} buttonToolTip Tool tip for the button
+ * @param {string} title Optional title
+ * @param {string} titleToolTip Optional tool tip on the title
+ * @param {string} primName If the type is primitve, use this as the display name
+ */
+async function PopUpEdit(type, obj, buttonText, buttonIcon, buttonToolTip, title, titleToolTip, primName) {
+    let ret = null;
+    await PopUp(async (e, closeFn) => {
+        if (title) {
+            const t = document.createElement("SysWeaver-ConfTitle");
+            t.innerText = title;
+            if (titleToolTip)
+                t.title = titleToolTip;
+            e.appendChild(t);
+        }
+        if (typeof type === "string") {
+            try {
+                type = await sendRequest("../edit/GetTypeInfo", type);
+                if (!type) {
+                    Fail(_TF("Invalid typename!", "Error message displayed when a type with the given name wasn't found"));
+                    return;
+                }
+            }
+            catch (e) {
+                Fail(_TF("Failed to get type info", "Error message displayed when there was a failure to get type information for the given type") + ". " + e.message);
+                return;
+            }
+            if ((type.Flags & TypeMemberFlags.IsPrimitive) !== 0) {
+                const n = primName ?? title ?? _TF("Value", "Short header of a property");
+                type.DisplayName = n;
+                type.Members[0].DisplayName = n;
+            }
+        }
+        const opt = new EditOptions();
+        opt.Title = false;
+        opt.Border = false;
+        const pe = new Edit(type, undefined, opt);
+        await pe.SetObject(obj)
+        e.appendChild(pe.Element);
+        pe.Element.style.marginTop = "3em";
+
+        const bs = document.createElement("SysWeaver-ConfButtons");
+        const apply = new Button(null, buttonText ?? _TF("OK", "Text on a button that when pressed will accept"), buttonToolTip, buttonIcon, true, () => {
+            ret = pe.GetObject();
+            closeFn();
+        });
+        bs.appendChild(apply.Element);
+        e.appendChild(bs);
+    }, true);
+    return ret;
+}
+
+/**
+ * Popup a confirm dialog that let the user acccept or reject something
+ * @param {string} title Title of the confirmation dialog
+ * @param {string} text Text of the confirmation dialog
+ * @param {string} okButtonText Text on the OK button
+ * @param {string} cancelButtonText Text on the CANCEL button
+ * @param {string} okButtonImageClass Optional image to use on the OK button (class name or image url)
+ * @param {string} cancelButtonImageClass Optional image to use on the CANCEL button (class name or image url)
+ * @param {string} okButtonTitle Optional tool tip text on the OK button
+ * @param {string} cancelButtonTitle Optional tool tip text on the CANCEL button
+ * @param {string} okStyle Optional css class to add to the OK button
+ * @param {string} cancelStyle Optional css class to add to the CANCEL button
+ * @returns {boolean} True if the user pressed the ok button
+ */
 async function Confirm(title, text, okButtonText, cancelButtonText, okButtonImageClass, cancelButtonImageClass, okButtonTitle, cancelButtonTitle, okStyle, cancelStyle)
 {
     let ok = false;

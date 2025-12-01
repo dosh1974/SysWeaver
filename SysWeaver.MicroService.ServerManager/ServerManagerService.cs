@@ -17,8 +17,12 @@ namespace SysWeaver.MicroService
 
     [RequiredDep<FolderSyncService>()]
     [WebApiUrl("../ServerManager")]
+    [WebMenuEmbedded(null, "Services", "Managed services", "ServerManager/services.html", "View all managed services", "../icons/settings.svg", -7, "")]
+    [WebMenuEmbedded(null, "Keys", "Key files", "ServerManager/keys.html", "Managed key files located in the key file folder", "../icons/key.svg", -6, Roles.Admin)]
     public sealed partial class ServerManagerService : IDisposable, IHttpServerModule
     {
+
+        readonly String KeyFolder = @"C:\Keys";
 
         static readonly IReadOnlySet<String> ValidConfigExt = ReadOnlyData.Set<String>(StringComparer.Ordinal,
               ".txt",
@@ -61,7 +65,7 @@ namespace SysWeaver.MicroService
             }
             DestFolders = destFolders;
             var ss = Services;
-            KeyRepo = new BackupFileRepo("Keys", @"C:\Keys", this, true);
+            KeyRepo = new BackupFileRepo("Keys", KeyFolder, this, true);
             FileUploader.AddRepo(KeyRepo);
 
             var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
@@ -482,6 +486,12 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// Get Memory graph for a managed service
+        /// </summary>
+        /// <param name="serviceName">Name of the service</param>
+        /// <param name="context"></param>
+        /// <returns>Graph data as json</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiClientCache(4)]
@@ -564,6 +574,12 @@ namespace SysWeaver.MicroService
         }
 
 
+        /// <summary>
+        /// Get Cpu graph for a managed service
+        /// </summary>
+        /// <param name="serviceName">Name of the service</param>
+        /// <param name="context"></param>
+        /// <returns>Graph data as json</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiClientCache(4)]
@@ -661,6 +677,12 @@ namespace SysWeaver.MicroService
             };
         }
 
+        /// <summary>
+        /// Get details of a managed service
+        /// </summary>
+        /// <param name="serviceName">Name of the managed service</param>
+        /// <param name="context"></param>
+        /// <returns>Details</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiRequestCache(4)]
@@ -688,7 +710,11 @@ namespace SysWeaver.MicroService
             return new SmServiceDetail(info, data, exeName, logFile, configs, masterConfigs);
         }
 
-
+        /// <summary>
+        /// Get a list of all services that is managed
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns>List of services</returns>
         [WebApi]
         [WebApiAuth]
         [WebApiRequestCache(4)]
@@ -852,7 +878,6 @@ namespace SysWeaver.MicroService
 
         }
 
-
         /// <summary>
         /// All synched folders as a table
         /// </summary>
@@ -861,10 +886,15 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth]
-        [WebMenuTable(null, "Services", "Services", "Services", "../icons/settings.svg", -7)]
         [WebApiRequestCache(4)]
         public TableData ServicesTable(TableDataRequest r, HttpServerRequest context)
-            => TableDataTools.Get(r, 5000, GetServices(context));
+        {
+            var d = GetServices(context);
+            if (!context.Session.IsValid(Auth.AuthTools.AdminAuth))
+                return TableDataTools.Get(r, 5000, d);
+            return TableDataTools.Get(r, 5000, d.Convert(x => new SmServiceBriefActions(x)));
+
+        }
 
 
         /// <summary>
@@ -901,25 +931,11 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
-        [WebMenuTable(null, "ChunkStorage", "Chunk storage", "Analysis of the chunk storage", "../icons/disc.svg", -6)]
+        [WebMenuTable(null, "ChunkStorage", "Chunk storage", "Analysis of the chunk storage", "../icons/disc.svg", -5)]
         [WebApiClientCache(14)]
         [WebApiRequestCache(10)]
         public async Task<TableData> StorageStatsTable(TableDataRequest r)
             => TableDataTools.Get(r, 15000, await GetStorageStats().ConfigureAwait(false));
-
-
-        /// <summary>
-        /// Statistics about the managed folders
-        /// </summary>
-        /// <param name="r"></param>
-        /// <returns></returns>
-        [WebApi]
-        [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, "Folders", "All folders", "All the managed folders", "../icons/sync.svg", -5)]
-        [WebApiRequestCache(4)]
-        public TableData FoldersTable(TableDataRequest r)
-            => Syncer.SynchedFoldersTable(r);
-
 
         #region Version
 
@@ -1140,6 +1156,7 @@ namespace SysWeaver.MicroService
 
         #endregion//Version
 
+        #region Configs
 
         /// <summary>
         /// Use a master config file (copy it into the active version folder)
@@ -1253,6 +1270,9 @@ namespace SysWeaver.MicroService
             return true;
         }
 
+        #endregion//Configs
+
+        #region Service management
 
         readonly Object ServiceLock = new object();
 
@@ -1260,15 +1280,14 @@ namespace SysWeaver.MicroService
         /// Add a new managed service
         /// </summary>
         /// <param name="service">Service params</param>
-        /// <param name="context"></param>
         /// <returns>True if sucessfully added</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
         [WebApiAuth(Roles.Admin)]
         [WebApiAudit(AuditGroup)]
-        public bool AddService(ManagedService service, HttpServerRequest context)
+        public bool AddService(ManagedService service)
         {
-            var name = service.Name.Trim();
+            var name = service?.Name?.Trim();
             if (String.IsNullOrEmpty(name))
                 throw new Exception("Invalid name! May not be empty or null!");
             if (!PathExt.IsValidFilename(name))
@@ -1287,16 +1306,16 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Remove a service from the Service Managers control
+        /// Remove a service from the Service Managers control.
+        /// This will NOT stop, uninstall and remove the service from disc,
         /// </summary>
-        /// <param name="serviceName">Service params</param>
-        /// <param name="context"></param>
+        /// <param name="serviceName">Name of the service</param>
         /// <returns>True if sucessfully removed</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
         [WebApiAuth(Roles.Admin)]
         [WebApiAudit(AuditGroup)]
-        public bool RemoveService(String serviceName, HttpServerRequest context)
+        public bool RemoveService(String serviceName)
         {
             lock (ServiceLock)
             {
@@ -1313,6 +1332,53 @@ namespace SysWeaver.MicroService
             }
             return true;
         }
+
+        #endregion//Service management
+
+        #region Keys
+
+        /// <summary>
+        /// Get a table of all key files found in the key folder
+        /// </summary>
+        /// <param name="r"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.Admin)]
+        [WebApiRequestCache(4)]
+        public TableData KeysTable(TableDataRequest r)
+            => TableDataTools.Get(r, 5000, GetKeys());
+
+
+        /// <summary>
+        /// Get a list of all key files found in the key folder
+        /// </summary>
+        /// <returns>List of key files</returns>
+        [WebApi]
+        [WebApiAuth(Roles.Admin)]
+        [WebApiRequestCache(4)]
+        public SmKeyFile[] GetKeys()
+        {
+            List<SmKeyFile> files = new();
+            if (Directory.Exists(KeyFolder))
+            {
+                foreach (var x in Directory.GetFiles(KeyFolder))
+                {
+                    var fi = new FileInfo(x);
+                    var n = fi.Name;
+                    bool bak = IsBackupName(n, out var o);
+                    files.Add(new SmKeyFile
+                    {
+                        Name = n,
+                        Size = fi.Length,
+                        LastModified = fi.LastWriteTimeUtc,
+                        Backup = bak
+                    });
+                }
+            }
+            return files.ToArray();
+        }
+
+        #endregion//Keys
 
 
     }

@@ -171,7 +171,6 @@ namespace SysWeaver.Net
             if (certs.Count > 0)
             {
                 msg?.AddMessage(Prefix + "Binding certificates to ports");
-                var retry = DateTime.UtcNow.AddSeconds(FirstCertRetryMinutes);
                 using var t = msg?.Tab();
                 {
                     foreach (var x in certs)
@@ -182,6 +181,7 @@ namespace SysWeaver.Net
 
                         if (!TaskExt.RunAsync(CertificateBinder.BindHttps(pre, cert, OnCertChanged, msg, Prefix)))
                         {
+                            var retry = DateTime.UtcNow.AddMinutes(FirstCertRetryMinutes);
                             msg?.AddMessage(Prefix + "Will try to get new certificate at " + retry.ToString("o"));
                             Scheduler.Add(retry, () => SwitchCert(cert, pre));
                         }
