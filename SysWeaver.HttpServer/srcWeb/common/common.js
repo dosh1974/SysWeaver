@@ -5959,34 +5959,121 @@ function SysWeaverIgnoreUserChanges() {
 }
 
 
-
+/**
+ * Executes on page load.
+ * This will set-up a bunch of stuff:
+ * - Mobile:
+ *      window.Mobile = true on mobile devices.
+ *      body class "SwMobile" or "SwDesktop" will be set.
+ *      Can be forced using url params: mobile=true or mobile=false.
+ *      Can be forced using local storage: "SysWeaver.Mobile"
+ * - Size handling (will change on resize):
+ *      window.Portrait = true if aspect ratio is less or equal to 1.
+ *      window.Narrow = true if width is less or equal than threshold (600 atm).
+ *      body class "SwPortrait" or "SwLandscape" will be set.
+ *      body class "SwNarrow" or "SwWide" will be set.
+ *      "SwOrientation" event will be posted on the body (on change).
+ *      "SwPortrait" or "SwLandscape" event will be posted on the body (on change).
+ *      "SwLayout" event will be posted on the body (on change).
+ *      "SwNarrow" or "SwWide" event will be posted on the body (on change).
+ * - Theming
+ *      html "data-theme" attribute will be set.
+ *      Can be forced using url params: useTheme (ex ?useTheme=Dark).
+ *      Can be forced (and set as default) using url params: setTheme (ex ?setTheme=Dark).
+ *      Can be forced using local storage: "SysWeaver.Theme".
+ * - Server push messaging
+ *      Handle reload on user login/sign out
+ *      Server messages
+ * @returns
+ */
 async function SysWeaverInit() {
     if (window.HaveSysWeaverInit)
         return;
     window.HaveSysWeaverInit = true;
-
     const ps = getUrlParams();
-    const css = ps.get('css');
-    if (css)
-        await includeCss(null, css);
-    const setTheme = ps.get('settheme');
-    if (setTheme)
-        localStorage.setItem("SysWeaver.Theme", setTheme);
-    const useTheme = ps.get('usetheme');
-    if (useTheme)
-        window.UseTheme = useTheme;
+
+    let mob = ps.get("mobile");
+    if (mob === null)
+        mob = localStorage.getItem("SysWeaver.Mobile");
+    if (mob != null)
+        mob = JSON.parse(mob);
+    else
+        mob = isMobile();
+    window.Mobile = mob;
+
+
+
+    function onSizeChange() {
+        const ww = window.innerWidth;
+        const wh = window.innerHeight;
+        let wp = ww <= wh;
+        let wn = ww <= 600;
+        const b = document.body;
+        const nwp = window.Portrait !== wp;
+        const nwn = window.Narrow !== wn;
+        window.Portrait = wp;
+        window.Narrow = wn;
+        if (b) {
+            const l = b.classList;
+            if (wp) {
+                if (!l.contains("SwPortrait")) {
+                    l.add("SwPortrait");
+                    l.remove("SwLandscape");
+                }
+            }
+            else {
+                if (!l.contains("SwLandscape")) {
+                    l.add("SwLandscape");
+                    l.remove("SwPortrait");
+                }
+            }
+
+            if (wn) {
+                if (!l.contains("SwNarrow")) {
+                    l.add("SwNarrow");
+                    l.remove("SwWide");
+                }
+            }
+            else {
+                if (!l.contains("SwWide")) {
+                    l.add("SwWide");
+                    l.remove("SwNarrow");
+                }
+            }
+
+            if (nwp) {
+                const o = { detail: wp };
+                b.dispatchEvent(new CustomEvent("SwOrientation", o));
+                b.dispatchEvent(new CustomEvent(wp ? "SwPortrait" : "SwLandscape", o));
+            }
+
+            if (nwn) {
+                const o = { detail: wn };
+                b.dispatchEvent(new CustomEvent("SwLayout", o));
+                b.dispatchEvent(new CustomEvent(wn ? "SwNarrow" : "SwWide", o));
+            }
+        }
+    }
+
+    onSizeChange();
+    new ResizeObserver(onSizeChange).observe(document.documentElement);
+
+
     window.addEventListener("load", () => {
+        const b = document.body;
+        if (mob)
+            b.classList.add("SwMobile");
+        else
+            b.classList.add("SwDesktop");
+        onSizeChange();
         if (ps.get("transparent")) {
             const bod = b.body;
             if (bod)
-                bod.classList.add("Embedded");
+                b.add("Embedded");
         }
+
     });
 
-
-
-    await applyTheme();
-   
     const didReload = (
         (window.performance.navigation && window.performance.navigation.type === 1) ||
         window.performance
@@ -5996,6 +6083,10 @@ async function SysWeaverInit() {
     );
     if (didReload)
         ClearHistoryState();
+
+
+
+   
 
     let isProcessingScroll = false;
 
@@ -6052,7 +6143,7 @@ async function SysWeaverInit() {
     b.addEventListener("beforeunload ", saveScroll);
     const id = InterOp.Id;
     const logPrefix = "SysWeaver: "
-    const childLogPrefix = "SysWeaver [" + id + "]: ";
+    //const childLogPrefix = "SysWeaver [" + id + "]: ";
     const wtop = window.top;
     const wself = window.self;
     let isSameDomain = false;
@@ -6276,6 +6367,18 @@ async function SysWeaverInit() {
         if (document.readyState === "complete") StartBlock("Server is paused.", "Waiting for server to resume.", "IconServerPaused");
     });
     */
+
+    const css = ps.get('css');
+    if (css)
+        await includeCss(null, css);
+    const setTheme = ps.get('settheme');
+    if (setTheme)
+        localStorage.setItem("SysWeaver.Theme", setTheme);
+    const useTheme = ps.get('usetheme');
+    if (useTheme)
+        window.UseTheme = useTheme;
+    await applyTheme();
+
 }
 
 SysWeaverInit();

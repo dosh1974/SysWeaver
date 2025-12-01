@@ -626,10 +626,18 @@ function CreatePopUpBlocker(dontAllowClose, onClose) {
 }
 
 
-// Creates a "blocker" element that captures all clicks, dims the background etc.
+/**
 // Position of the popup element is by default at the normal flow position.
 // The position can be adjusted, like: dx = widthScale * element.width + offsetX, dy = heightScale * element.height + offsetY.
-// Returns [popup element (build on this), async close function, blocker element]
+ * @param {HTMLElement} element The element to position the pop-up relative to
+ * @param {number} widthScale Optional scaling of the horizontal position: dx = widthScale * element.width + offsetX
+ * @param {number} heightScale Optional scaling of the vertical position: dy = heightScale * element.height + offsetY.
+ * @param {number} offsetX Optional offset of the horizontal position: dx = widthScale * element.width + offsetX
+ * @param {number} offsetY Optional offset of the vertical position: dy = heightScale * element.height + offsetY.
+ * @param {bool} dontAllowClose If true, the pop-up can't be closed besides calling the returned close function.
+ * @param {function():Promise} onClose Optional async function that get's called when closed.
+ * @returns {array} [0] = The HTMLElement to add pop-up content to, [1] = an async function that when called removes the blocker. [2] = The HTMLElement of the blocker.
+ */
 function CreatePopUpAtElement(element, widthScale, heightScale, offsetX, offsetY, dontAllowClose, onClose) {
     if (typeof widthScale !== "number")
         widthScale = 0;
@@ -674,28 +682,19 @@ function CreatePopUpAtElement(element, widthScale, heightScale, offsetX, offsetY
     return [popupMenuElement, close, block];
 }
 
+
+
+/**
+ * Create a popup menu relative to some element
+ * @param {HTMLElement} element The element used to position the pop-up.
+ * @param {function(function():Promise<void>):Promise<void>, HTMLElement):WebMenu}: build Async function that should build and return a WebMenu object.
+ * @param {boolean} rightAlign If true the pop-up is right aligned (else it left aligned).
+ * @param {boolean} bottomAlign If true the pop-up is bottom aligned (else it top aligned).
+ */
 function PopUpMenu(element, build, rightAlign, bottomAlign) {
-
-/*
-    const scaleX = rightAlign ? -0.25 : -0.75;
-    const scaleY = bottomAlign ? 0 : 1;
-    const offsetY = bottomAlign ? -8 : 8;
-
-    const bec = CreatePopUpAtElement(element, scaleX, scaleY, 0, offsetY);
-    const popupMenuElement = bec[0];
-    const close = bec[1];
-    const block = bec[2];
-
-    const popupMenuBackElement = document.createElement("SysWeaver-PopupMenuBack");
-    popupMenuElement.appendChild(popupMenuBackElement);
-    if (rightAlign)
-        popupMenuBackElement.classList.add("Right");
-*/
 
     PopUpElementMenu(element, (popupMenuBackElement, close) =>
     {
-
-
         popupMenuBackElement.classList.add("DefaultMenu");
 
         const menuStyle = new MainMenuStyle();
@@ -864,6 +863,15 @@ async function PopUp(build, blockUntilClosed, dontAllowClose, onClose, haveClose
 }
 
 
+/**
+ * Pop-up a "working" "in progress" pop-up
+ * @param {string} title Optional title of the pop-up
+ * @param {string} text Optional text of the pop-up
+ * @param {string} iconClass Optional icon class name or uri
+ * @param {number} iconWidth Optional width in pixels of the icon (defaults to 64)
+ * @param {number} iconHeight Optional height in pixels of the icon (defaults to 64)
+ * @returns {function()} The function to execute to close the pop-up
+ */
 async function PopUpWorking(title, text, iconClass, iconWidth, iconHeight) {
     return await PopUp(el => {
         if (title) {
@@ -990,6 +998,20 @@ async function PopUpSelection(text, title, getItems, startText, getAll, blockUnt
     }, blockUntilClosed, dontAllowClose, onClose);
 }
 
+/**
+ * Creates a confirmation dialog with an OK button and a CANCEL button
+ * @param {string} title Optional title of the pop-up
+ * @param {string} text Optional text of the pop-up
+ * @param {string} okButtonText Optional text on the OK button, default is "Ok"
+ * @param {string} cancelButtonText Optional text on the CANCEL button, default is "Cancel"
+ * @param {string} okButtonImageClass Optional icon class name or uri to use on the OK button, default is "IconOk"
+ * @param {string} cancelButtonImageClass Optional icon class name or uri to use on the CANCEL button, default is "IconCancel"
+ * @param {string} okButtonTitle Optional title (tool-tip) to use on the OK button
+ * @param {string} cancelButtonTitle Optional title (tool-tip) to use on the CANCEL button
+ * @param {string} okStyle Optional class name to apply to the OK button
+ * @param {string} cancelStyle Optional class name to apply to the CANCEL button
+ * @returns {Promise<bool>} True if the user pressed on the ok button, else false
+ */
 async function Confirm(title, text, okButtonText, cancelButtonText, okButtonImageClass, cancelButtonImageClass, okButtonTitle, cancelButtonTitle, okStyle, cancelStyle)
 {
     let ok = false;
@@ -1235,8 +1257,10 @@ class AppParams {
     PageElement = null;
     MainMenu = true;
     MainMenus = null;
+    MainMenuPinned = false;
+
     Content = true;
-    Navigation = true;
+    Navigation = null;
     SettingsButton = true;
     SettingMenus = null;
     SettingsFs = true;
@@ -1254,6 +1278,7 @@ class App {
     Content;
     AppMenuButton;
     AppBackButton;
+    PinButton;
     Title;
     InitPage;
 
@@ -1272,7 +1297,8 @@ class App {
         window.SysWeaverApp = t;
         const page = params.PageElement || document.body;
         t.Page = page;
-        const collapsedStyle = "Collapsed";
+        const collapsedStyle = "SwCollapsed";
+        const pinnedStyle = "SwPinned";
         //  Header
         const appHeader = document.createElement("app-header");
         t.AppHeader = appHeader;
@@ -1280,6 +1306,7 @@ class App {
         const appHeaderMiddle = document.createElement("app-ContentTitle")
         t.Title = appHeaderMiddle;
         appHeader.appendChild(appHeaderMiddle);
+        //  Settings
         if (params.SettingsButton) {
             const appSettingsButton = document.createElement("app-SettingsButton")
             appHeader.appendChild(appSettingsButton);
@@ -1352,8 +1379,9 @@ class App {
 
         }
 
-
-        if (params.Navigation) {
+        //  Back button
+        const n = params.Navigation;
+        if (n === null ? window.Mobile : n) {
             const appBackButton = document.createElement("app-BackButton")
             t.AppBackButton = appBackButton;
             appHeader.appendChild(appBackButton);
@@ -1371,6 +1399,22 @@ class App {
 
         }
 
+        //  Pin
+        {
+            const pinButton = document.createElement("app-PinButton")
+            t.PinButton = pinButton;
+            appHeader.appendChild(pinButton);
+
+            const backIcon = new ColorIcon("IconLock", "IconColorThemeBackground", 48, 48,
+                _TF("Click to lock the menu in the extapnded state", "The tool tip description on a button that when clicked will always show the menu"),
+                ev => {
+                    setPinned(true);
+                    localStorage.setItem("SysWeaver.Pinned", true);
+                });
+            backIcon.Element.classList.add("IconButton");
+            pinButton.appendChild(backIcon.Element);
+        }
+
 
         //  Content
         if (params.Content) {
@@ -1380,13 +1424,50 @@ class App {
             page.appendChild(appContent);
         }
 
+        let setPinned = null;
+        const bcl = document.body.classList;
 
         //  Main menu
         if (params.MainMenu) {
             const appMenu = document.createElement("app-menu");
             t.AppMenu = appMenu;
             page.appendChild(appMenu);
-            appMenu.classList.add("Collapsed");
+
+
+
+            let pinned = null;
+            setPinned  = p => {
+                if (window.Narrow) {
+                    bcl.add(collapsedStyle);
+                    bcl.remove(pinnedStyle);
+                    pinned = p;
+                    return;
+                } else {
+                    if (p)
+                        pinned = !p;
+                }
+                if (p === pinned)
+                    return;
+                pinned = p;
+                if (pinned) {
+                    bcl.add(pinnedStyle);
+                    bcl.remove(collapsedStyle);
+                } else {
+                    bcl.remove(pinnedStyle);
+                    bcl.add(collapsedStyle);
+                }
+            }
+
+            document.body.addEventListener("SwLayout", () => setPinned(pinned));
+
+
+            if (window.Mobile) {
+                setPinned(false);
+            } else {
+                const np = localStorage.getItem("SysWeaver.Pinned");
+                setPinned(np === null ? params.MainMenuPinned : JSON.parse(np));
+            }
+
             const appMenuButton = document.createElement("app-MenuButton")
             t.AppMenuButton = appMenuButton;
             appHeader.appendChild(appMenuButton);
@@ -1402,12 +1483,15 @@ class App {
             };
 
             const menuHide = function () {
-                if (appMenu.classList.contains(collapsedStyle))
+                if (bcl.contains(collapsedStyle))
                     return;
+                if (pinned)
+                    if (!window.Narrow)
+                        return;
                 console.log("hide");
                 appMenuCapture.remove();
                 document.body.removeEventListener("mouseover", menuCapture);
-                appMenu.classList.add(collapsedStyle);
+                bcl.add(collapsedStyle);
                 tempDisableAutoShow();
             }
 
@@ -1424,17 +1508,22 @@ class App {
             }
 
             const menuShow = function () {
-                if (!appMenu.classList.contains(collapsedStyle))
+                if (!bcl.contains(collapsedStyle))
                     return;
                 console.log("Menu show");
                 document.body.appendChild(appMenuCapture);
                 document.body.addEventListener("mouseover", menuCapture, true);
-                appMenu.classList.remove(collapsedStyle);
+                bcl.remove(collapsedStyle);
             }
 
 
             const menuToggle = function () {
-                if (appMenu.classList.contains(collapsedStyle))
+                if (bcl.contains(pinnedStyle)) {
+                    setPinned(false);
+                    localStorage.setItem("SysWeaver.Pinned", false);
+                    return;
+                }
+                if (bcl.contains(collapsedStyle))
                     menuShow();
                 else
                     menuHide();
@@ -1443,7 +1532,7 @@ class App {
             const noOpenWidth = 4;
 
             mouseOverFn = ev => {
-                if (!appMenu.classList.contains(collapsedStyle))
+                if (!bcl.contains(collapsedStyle))
                     return;
 
                 //const maxX = ev.target.getBoundingClientRect().width - noOpenWidth;
