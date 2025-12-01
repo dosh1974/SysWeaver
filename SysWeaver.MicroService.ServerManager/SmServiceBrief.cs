@@ -125,6 +125,7 @@ namespace SysWeaver.MicroService
             "Remove management of the service, this will not Stop or Disable the service, nor remove any files",
             "../ServerManager/RemoveService?\"{0}\"", "../icons/close.svg"
             )]
+        [TableDataOrder(10)]
         public String Actions => Name;
 
     }
