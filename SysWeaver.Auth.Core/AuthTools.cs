@@ -119,7 +119,7 @@ namespace SysWeaver.Auth
 
 
 
-        static IReadOnlyList<String> GetList(String tokens)
+        public static IReadOnlyList<String> GetList(String tokens)
         {
             var t = new HashSet<String>(StringComparer.Ordinal);
             foreach (var x in tokens.Split(','))
@@ -128,6 +128,7 @@ namespace SysWeaver.Auth
         }
 
         public static readonly IReadOnlyList<String> DebugAuth = GetList(Roles.Debug);
+        public static readonly IReadOnlyList<String> AdminAuth = GetList(Roles.Admin);
         public static readonly IReadOnlyList<String> DevAuth = GetList(Roles.Dev);
 
         public static void ValidateUserGuid(String guid)

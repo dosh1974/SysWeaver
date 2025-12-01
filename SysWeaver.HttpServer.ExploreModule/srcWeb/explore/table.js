@@ -1155,9 +1155,9 @@ class Table {
         let didChange = false;
         const onChangeFn = () => {
             //console.log("Request changed! Sort: " + requestParams.SortCol + (requestParams.SortReverse ? " revered" : ""));
-            aborter.raise();
             save();
             didChange = true;
+            UpdateNow();
         }
 
         //  Define on resize chnage
@@ -1368,7 +1368,27 @@ class Table {
 
         let first = true;
         //  Update loop
-        for (; ;) {
+
+        let timeout = null;
+        let isUpdating = false;
+
+        async function UpdateNow() {
+            while (isUpdating) {
+                await delay(10);
+            }
+            if (timeout)
+                clearTimeout(timeout);
+            timeout = null;
+            Update();
+        }
+
+        async function Update()
+        {
+            while (isUpdating) {
+                await delay(10);
+            }
+            timeout = null;
+            isUpdating = true;
             try {
                 //  Try to fetch new data
                 requestParams.Cc = cc;
@@ -1400,8 +1420,8 @@ class Table {
                         }
                     }
                     first = false;
-                    await delayWithAbort(3000, aborter);
-                    continue;
+                    timeout = setTimeout(Update, 3000);
+                    return;
                 }
                 if (first) {
                     if ((data.Rows.length <= 0) && (requestParams.Row > 0)) {
@@ -1450,7 +1470,8 @@ class Table {
                     onFirstData = null;
                 }
                 //  Wait for the delay duration (or an abort happens)
-                await delayWithAbort(refreshRate, aborter);
+                timeout = setTimeout(Update, refreshRate);
+
             }
             catch (ex) {
                 //  If we failed to fetch the data, retry in a second
@@ -1459,9 +1480,14 @@ class Table {
                     onFirstLoad();
                     onFirstLoad = null;
                 }
-                await delayWithAbort(3000, aborter);
+                timeout = setTimeout(Update, 3000);
+            }
+            finally {
+                isUpdating = false;
             }
         }
+        Update();
+
     }
 
 

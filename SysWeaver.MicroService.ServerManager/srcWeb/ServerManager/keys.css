@@ -1,0 +1,70 @@
+﻿
+:root {
+    --MaxW: 100ch;
+}
+
+*
+{
+    box-sizing: border-box;
+}
+
+body {
+    padding: 0;
+    margin: 0;
+    width: 100%;
+}
+
+kf-upload {
+    display: block;
+    width: 64px;
+    height: 64px;
+    margin: auto;
+    border: 2px solid transparent;
+    outline: 2px solid transparent;
+    transition: border linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
+    position: relative;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+    kf-upload.Show {
+        display: block;
+    }
+
+    kf-upload:focus {
+        outline: 2px solid var(--ThemeAcc1);
+    }
+
+    kf-upload:after {
+        transition: opacity linear var(--ThemeFadeDuration);
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        background-color: var(--ThemeMain);
+        mask-repeat: no-repeat;
+        mask-size: contain;
+        mask-image: url("../icons/plus.svg");
+        opacity: 0.8;
+    }
+
+    kf-upload:hover:after {
+        opacity: 1;
+    }
+
+
+    kf-upload.Dragging {
+        border: 2px dashed var(--ThemeAcc1);
+    }
+
+    kf-upload.Selecting:after {
+        opacity: 0.5;
+        mask-image: url("../icons/disc.svg");
+    }
+
+    kf-upload.Uploading:after {
+        opacity: 0.5;
+        mask-image: url("../icons/Loading.svg");
+    }
