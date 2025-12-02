@@ -6,6 +6,8 @@ using SysWeaver.Data;
 
 namespace SysWeaver.MicroService
 {
+
+    [TableDataPrimaryKey(nameof(Name))]
     public class SmServiceBrief
     {
         /// <summary>

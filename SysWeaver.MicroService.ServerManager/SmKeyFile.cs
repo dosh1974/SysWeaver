@@ -3,6 +3,8 @@ using SysWeaver.Data;
 
 namespace SysWeaver.MicroService
 {
+
+    [TableDataPrimaryKey(nameof(Name))]
     public sealed class SmKeyFile
     {
         /// <summary>

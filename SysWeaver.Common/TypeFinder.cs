@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Concurrent;
+using System.IO;
+using System.Reflection;
 
 namespace SysWeaver
 {
@@ -27,11 +29,27 @@ namespace SysWeaver
                 types.TryAdd(typeName, t);
                 return t;
             }
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (var asm in AppDomain.CurrentDomain?.GetAssemblies()?.Nullable())
             {
+                if (asm == null)
+                    continue;
                 t = asm.GetType(typeName, false);
                 if (t != null)
                 {
+                    types.TryAdd(typeName, t);
+                    return t;
+                }
+            }
+
+            var s = typeName.LastIndexOf(',');
+            if (s >= 0)
+            {
+                var asmName = typeName.Substring(s + 1).TrimStart();
+                if (PathExt.IsValidFilename(asmName))
+                {
+                    var dllName = Path.Combine(EnvInfo.ExecutableDir, asmName + ".dll");
+                    var nasm = Assembly.LoadFile(dllName);
+                    t = nasm.GetType(typeName.Substring(0, s).TrimEnd());
                     types.TryAdd(typeName, t);
                     return t;
                 }

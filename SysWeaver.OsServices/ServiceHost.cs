@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using SysWeaver.Auth;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace SysWeaver.OsServices
 {
@@ -519,14 +520,51 @@ namespace SysWeaver.OsServices
                 {
                     var dtype = TypeFinder.Get(dname);
                     if (dtype == null)
-                        dtype = TypeFinder.Get(String.Join(", ", dname, dname));
-                    if (typeof(IServiceHostFactory).IsAssignableFrom(dtype))
                     {
-                        serviceManager = (Activator.CreateInstance(dtype) as IServiceHostFactory).Create(p);
+                        var asmName = String.Concat(dname, ", ", dname);
+                        dtype = TypeFinder.Get(asmName);
+                    }
+                    if (dtype == null)
+                    {
+                        var dllName = Path.Combine(EnvInfo.ExecutableDir, dname + ".dll");
+                        var asm = Assembly.LoadFile(dllName);
+                        dtype = asm.GetType(dname);
+                        if (dtype == null)
+                            dtype = TypeFinder.Get(dname);
+                    }
+                    if (dtype != null)
+                    {
+                        if (typeof(IServiceHostFactory).IsAssignableFrom(dtype))
+                        {
+                            try
+                            {
+                                serviceManager = (Activator.CreateInstance(dtype) as IServiceHostFactory).Create(p);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                Console.WriteLine("Failed to create service manager instance for type: \"" + dtype.FullName + "\", exception: " + ex);
+                                Console.ResetColor();
+                            }
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.WriteLine("Service manager type \"" + dtype.FullName + "\" doesn't implement the expected \"" + typeof(IServiceHostFactory).FullName + "\" interface!");
+                            Console.ResetColor();
+                        }
+                    }else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine("The type: \"" + dname + "\" can't be found!");
+                        Console.ResetColor();
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine("Failed to load service manager type: \"" + dname + "\", exception: " + ex);
+                    Console.ResetColor();
                 }
 
                 ServiceVerbs verb = ServiceVerbs.None;
@@ -559,9 +597,11 @@ namespace SysWeaver.OsServices
                     if (RequireServiceHost.Contains(verb))
                     {
                         Header(p, serviceManager);
+                        Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine();
                         Console.WriteLine("Couldn't find a service system for this OS (" + Environment.OSVersion.Platform + ").");
                         Console.WriteLine("Expected a " + nameof(IServiceHostFactory).ToQuoted() + " type implementation named " + dname.ToQuoted());
+                        Console.ResetColor();
                         return (int)ServiceResponse.UnhandledOs;
                     }
                 }

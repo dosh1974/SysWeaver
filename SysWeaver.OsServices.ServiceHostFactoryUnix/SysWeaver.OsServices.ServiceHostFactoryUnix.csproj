@@ -9,6 +9,5 @@
 	<ItemGroup>
 		<ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
 		<ProjectReference Include="..\SysWeaver.OsServices\SysWeaver.OsServices.csproj" />
-		<ProjectReference Include="..\SysWeaver.Remote\SysWeaver.Remote.csproj" />
 	</ItemGroup>
 </Project>
