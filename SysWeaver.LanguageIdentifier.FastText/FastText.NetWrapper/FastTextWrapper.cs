@@ -35,7 +35,7 @@ public partial class FastTextWrapper : IDisposable
 				config.CreateMap<QuantizedSupervisedArgs, FastTextArgsStruct>();
 				config.CreateMap<UnsupervisedArgs, FastTextArgsStruct>();
 				config.CreateMap<AutotuneArgs, AutotuneArgsStruct>();
-			})
+			}, null)
 			.CreateMapper();
 
 		_fastText = CreateFastText();
@@ -64,7 +64,7 @@ public partial class FastTextWrapper : IDisposable
 				config.CreateMap<QuantizedSupervisedArgs, FastTextArgsStruct>();
 				config.CreateMap<UnsupervisedArgs, FastTextArgsStruct>();
 				config.CreateMap<AutotuneArgs, AutotuneArgsStruct>();
-			})
+			}, null)
 			.CreateMapper();
 
 		_fastText = CreateFastText();

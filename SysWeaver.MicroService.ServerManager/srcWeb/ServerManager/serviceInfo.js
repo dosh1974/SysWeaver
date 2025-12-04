@@ -142,7 +142,7 @@ async function serviceInfoMain() {
                 "../icons/preview_play.svg",
                 "Click to terminate the service process",
                 "Click to leave it running")) {
-                await DoVerb(disableButton, "Kill", "Terminated {0}");
+                await DoVerb(killButton, "Kill", "Terminated {0}");
             }
         });
 

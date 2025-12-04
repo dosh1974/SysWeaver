@@ -280,16 +280,16 @@ namespace SysWeaver.MicroService
                 return null;
             var ename = Path.GetFileNameWithoutExtension(exe);
             var parent = Path.GetDirectoryName(path);
-            var existing = GetConfigs(parent, ename);
+            var masterConfigs = GetConfigs(parent, ename);
             var m = Manager;
             Exception ex = null;
             foreach (var config in GetConfigs(path, ename).OrderBy(x => x).ToList())
             {
+                if (IsBackupName(config, out var o))
+                    continue;
                 var master = Path.Combine(parent, config);
                 var version = Path.Combine(path, config);
-
-
-                if (existing.Remove(config))
+                if (masterConfigs.Remove(config))
                 {
                     m.AddMessage(String.Concat(LogPrefix, "Replacing config \"", version, "\" with master config"));
                     ex = ex ?? await PathExt.TryCopyFileAsync(master, version).ConfigureAwait(false);
@@ -300,8 +300,10 @@ namespace SysWeaver.MicroService
                     ex = ex ?? await PathExt.TryCopyFileAsync(version, master).ConfigureAwait(false);
                 }
             }
-            foreach (var config in existing.OrderBy(x => x).ToList())
+            foreach (var config in masterConfigs.OrderBy(x => x).ToList())
             {
+                if (IsBackupName(config, out var o))
+                    continue;
                 var master = Path.Combine(parent, config);
                 var version = Path.Combine(path, config);
                 m.AddMessage(String.Concat(LogPrefix, "Creating new config from master \"", version, '"'));

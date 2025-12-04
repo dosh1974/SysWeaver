@@ -133,7 +133,7 @@ public abstract class FastTextArgs
             config.CreateMap<FastTextWrapper.FastTextArgsStruct, SupervisedArgs>();
             config.CreateMap<FastTextWrapper.FastTextArgsStruct, UnsupervisedArgs>();
             config.CreateMap<FastTextWrapper.FastTextArgsStruct, QuantizedSupervisedArgs>();
-        }).CreateMapper();
+        }, null).CreateMapper();
     }
         
     /// <summary>

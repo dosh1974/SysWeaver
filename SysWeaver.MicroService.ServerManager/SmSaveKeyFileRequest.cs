@@ -7,6 +7,7 @@
         /// </summary>
         [EditMin(1)]
         public string FileName;
+
         /// <summary>
         /// Key file data
         /// </summary>

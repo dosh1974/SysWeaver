@@ -26,7 +26,7 @@ public static class TrustAnchor
 
                 for (int i = 0; i < attestationRootCertificates.Length; i++)
                 {
-                    attestationRootCertificates[i] = new X509Certificate2(Convert.FromBase64String(certStrings[i]));
+                    attestationRootCertificates[i] = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(certStrings[i]));
                 }
 
                 if (!CryptoUtils.ValidateTrustChain(trustPath, attestationRootCertificates))

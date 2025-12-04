@@ -23,7 +23,7 @@ namespace SysWeaver.Media
                 destHeight = sourceHeight;
             DestWidth = destWidth;
             DestHeight = destHeight;
-            _pConvertContext = ffmpeg.sws_getContext(sourceWidth, sourceHeight, sourcePixelFormat, destWidth, destHeight, destinationPixelFormat, ffmpeg.SWS_FAST_BILINEAR, null, null, null);
+            _pConvertContext = ffmpeg.sws_getContext(sourceWidth, sourceHeight, sourcePixelFormat, destWidth, destHeight, destinationPixelFormat, (int)SwsFlags.SWS_FAST_BILINEAR, null, null, null);
             if (_pConvertContext == null) 
                 throw new ApplicationException("Could not initialize the conversion context.");
 

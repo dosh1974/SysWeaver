@@ -32,7 +32,7 @@ internal static class X509CertificateHelper
     {
         try
         {
-            return new X509Certificate2(rawData);
+            return X509CertificateLoader.LoadCertificate(rawData);
         }
         catch (Exception ex)
         {
