@@ -1,14 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using SysWeaver.Remote;
 
 namespace SysWeaver.ExchangeRate.Sources
 {
     public interface IRemote : IDisposable
     {
+        [RemoteEndPoint("Api/ExchangeRates/" + nameof(SyncRates), HttpEndPointTypes.Post)]
         Task<Rates> SyncRates(DateTime newerThan);
     }
 

@@ -234,6 +234,8 @@ body.SwNarrow app-content {
 
 .DefaultMenu {
     --MenuSubBack: var(--ThemeMain);
+    --MenuBg: var(--ThemeAcc1);
+    --MenuFg: var(--ThemeBackground);
 }
 
 .DefaultMenu table {
@@ -295,7 +297,7 @@ SysWeaver-PopupMenu.DefaultMenu table table {
     }
 
 .DefaultMenu tr.MenuData.SubMenu {
-    background-image: linear-gradient(to bottom right, color-mix(in srgb, var(--MenuSubBack) 15%, transparent 85%), color-mix(in srgb, var(--MenuSubBack) 60%, transparent 40%));
+    box-shadow: 3px 0px 1px var(--ThemeBackground75);
     transition: opacity linear 0.1s;
 }
 

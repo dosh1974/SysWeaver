@@ -210,7 +210,7 @@ namespace SysWeaver.Remote
                 },
             };
             ClientHandler = handler;
-            UrlBase = p.BaseUrl;
+            UrlBase = p.BaseUrl.TrimEnd('/') + '/';
             var c = new HttpClient(handler)
             {
                 DefaultRequestVersion = HttpVersion.Version10,

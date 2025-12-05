@@ -1569,7 +1569,7 @@ namespace SysWeaver.Net
             catch (Exception ex)
             {
                 msg?.AddMessage(Prefix + "Failed to get certificate for " + pre.ToQuoted() + ", continue to use current", ex, MessageLevels.Warning);
-                var retry = DateTime.UtcNow.AddSeconds(CertRetryMinutes);
+                var retry = DateTime.UtcNow.AddMinutes(CertRetryMinutes);
                 msg?.AddMessage(Prefix + "Will try to get new certificate at " + retry.ToString("o"));
                 Scheduler.Add(retry, () => SwitchCert(cert, pre));
                 return;
