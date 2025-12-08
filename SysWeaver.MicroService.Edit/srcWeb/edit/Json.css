@@ -1,0 +1,182 @@
+﻿body {
+    margin: 0;
+    background-color: var(--ThemeBackground);
+    user-select: none;
+    font-family: var(--ThemeFont);
+    text-align: center;
+    width: 100svw;
+    height: 100svh;
+}
+
+
+
+SysWeaver-CenterBlock {
+    margin-top: 0;
+    width: calc(100% - 2em);
+    padding: 0.25em 1em;
+    top: 0;
+    left: 0;
+    position: fixed;
+    box-shadow: rgba(0,0,0,0.4) 0 4px 4px;
+    background-color: var(--ThemeBackground);
+}
+
+div {
+    position: absolute;
+    display: block;
+    left: 0;
+    top: 0;
+    width: 100svw;
+    height: 100svh;
+    white-space: pre;
+}
+
+
+
+
+
+
+.ace-sysweaver .ace_gutter {
+    background: var(--ThemeBackground);
+    color: var(--ThemeMain);
+}
+
+.ace-sysweaver .ace_print-margin {
+    width: 1px;
+    background: var(--ThemeMain25);
+}
+
+.ace-sysweaver {
+    background: var(--ThemeBackground25);
+    color: var(--ThemeMain50);
+    font-family: var(--ThemeFontMono);
+    font-size: 125%;
+}
+
+    .ace-sysweaver .ace_cursor {
+        color: var(--ThemeAcc1);
+    }
+
+    .ace-sysweaver .ace_marker-layer .ace_selection {
+        background: var(--ThemeAcc225);
+    }
+
+    .ace-sysweaver.ace_multiselect .ace_selection.ace_start {
+        box-shadow: 0 0 3px 0px var(--ThemeAcc250);
+    }
+
+    .ace-sysweaver .ace_marker-layer .ace_step {
+        background: rgb(102, 82, 0)
+    }
+
+    .ace-sysweaver .ace_marker-layer .ace_bracket {
+        margin: -2px 0 0 -2px;
+        border: 2px solid var(--ThemeAcc150);
+    }
+
+    .ace-sysweaver .ace_marker-layer .ace_active-line {
+        background: rgba(var(--ThemeMainRGB), 0.1);
+    }
+
+    .ace-sysweaver .ace_gutter-active-line {
+        background: rgba(var(--ThemeMainRGB), 0.05);
+    }
+
+    .ace-sysweaver .ace_marker-layer .ace_selected-word {
+        border: 2px solid var(--ThemeAcc1);
+    }
+
+    .ace-sysweaver .ace_invisible {
+        color: rgba(255, 255, 255, 0.25)
+    }
+
+    .ace-sysweaver .ace_keyword,
+    .ace-sysweaver .ace_meta {
+        color: var(--ThemeAcc2);
+    }
+
+    .ace-sysweaver .ace_constant,
+    .ace-sysweaver .ace_constant.ace_character,
+    .ace-sysweaver .ace_constant.ace_other,
+    .ace-sysweaver .ace_constant.ace_numeric,
+    .ace-sysweaver .ace_heading,
+    .ace-sysweaver .ace_markup.ace_heading,
+    .ace-sysweaver .ace_support.ace_constant {
+        color: var(--ThemeAcc275);
+    }
+
+        .ace-sysweaver .ace_constant.ace_escape
+        {
+            font-weight: bold;
+            color: var(--ThemeAcc1);
+        }
+
+    .ace-sysweaver .ace_constant.ace_boolean {
+        color: var(--ThemeAcc2);
+    }
+
+    .ace-sysweaver .ace_invalid.ace_illegal {
+        color: #F8F8F8;
+        background-color: rgba(86, 45, 86, 0.75)
+    }
+
+    .ace-sysweaver .ace_invalid.ace_deprecated {
+        text-decoration: underline;
+        font-style: italic;
+        color: #D2A8A1
+    }
+
+    .ace-sysweaver .ace_support {
+        color: #9B859D
+    }
+
+    .ace-sysweaver .ace_fold {
+        background-color: #AC885B;
+        border-color: #F8F8F8
+    }
+
+    .ace-sysweaver .ace_support.ace_function {
+        color: #DAD085
+    }
+
+    .ace-sysweaver .ace_list,
+    .ace-sysweaver .ace_markup.ace_list,
+    .ace-sysweaver .ace_storage {
+        color: #F9EE98
+    }
+
+    .ace-sysweaver .ace_entity.ace_name.ace_function,
+    .ace-sysweaver .ace_meta.ace_tag {
+        color: #AC885B
+    }
+
+    .ace-sysweaver .ace_string {
+        color: var(--ThemeAcc175);
+    }
+
+        .ace-sysweaver .ace_string.ace_regexp {
+            color: var(--ThemeAcc2);
+        }
+
+    .ace-sysweaver .ace_comment {
+        font-style: italic;
+        color: var(--ThemeMain50);
+    }
+
+    .ace-sysweaver .ace_variable {
+        color: var(--ThemeMain);
+    }
+
+    .ace-sysweaver .ace_xml-pe {
+        color: #494949
+    }
+
+    .ace-sysweaver .ace_indent-guide {
+        background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAEklEQVQImWMQERFpYLC1tf0PAAgOAnPnhxyiAAAAAElFTkSuQmCC) right repeat-y
+    }
+
+    .ace-sysweaver .ace_indent-guide-active {
+        background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAEklEQVQIW2PQ1dX9zzBz5sz/ABCcBFFentLlAAAAAElFTkSuQmCC) right repeat-y;
+    }
+
+

@@ -398,7 +398,7 @@ namespace SysWeaver.Auth
 
         public override Task<String> GetSaltAsync(string userName)
         {
-            userName = userName.FastToLower();
+            userName = (userName ?? "").FastToLower();
             if (!Auths.ContainsKey(userName))
                 return TaskTupleStringStringNull;
             return Task.FromResult(AuthTools.ComputeSimpleSalt(userName));
