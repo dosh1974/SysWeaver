@@ -26,7 +26,7 @@ namespace SysWeaver.Chat
             p = p ?? new MySqlChatParams();
             Storage = manager.TryGet<IUserStorageService>();
             Name = p.ProviderId ?? "MySql";
-            Db = new MySqlDbSimpleStack(p);
+            Db = new MySqlDbSimpleStack(p, manager);
             InitDb(Db, p.Rooms).RunAsync();
         }
 

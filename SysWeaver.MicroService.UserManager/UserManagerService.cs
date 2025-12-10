@@ -230,7 +230,7 @@ namespace SysWeaver.MicroService
 
 
             Manager = manager;
-            var db = new MySqlDbSimpleStack(p);
+            var db = new MySqlDbSimpleStack(p, manager);
             Db = db;
             Data = DataBlob.Get("json", "br", CompEncoderLevels.Best);
 

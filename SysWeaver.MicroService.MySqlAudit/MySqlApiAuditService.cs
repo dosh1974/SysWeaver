@@ -21,7 +21,7 @@ namespace SysWeaver.MicroService
         public MySqlApiAuditService(ServiceManager manager, MySqlApiAuditParams p = null)
         {
             p = p ?? new MySqlApiAuditParams();
-            Db = new MySqlDbSimpleStack(p);
+            Db = new MySqlDbSimpleStack(p, manager);
             InitDb(Db).RunAsync();
             WriteTask = new PeriodicTask(WriteData, 100);
         }

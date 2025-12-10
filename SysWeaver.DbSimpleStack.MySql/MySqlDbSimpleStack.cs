@@ -29,7 +29,12 @@ namespace SysWeaver.Db
     public class MySqlDbSimpleStack : DbSimpleStack
     {
         static readonly ConcurrentDictionary<Tuple<ModelDefinition, String>, String[]> Upserts = new ConcurrentDictionary<Tuple<ModelDefinition, string>, string[]>();
-        
+
+        /// <summary>
+        /// Name of the database provider
+        /// </summary>
+        public override String Name => "MySql";
+
         public static String[] GetUpsert(ModelDefinition def, string tableName)
         {
             var dp = MySqlConnectorDialectProvider.Instance;
@@ -350,7 +355,7 @@ namespace SysWeaver.Db
 
 
 
-        public MySqlDbSimpleStack(MySqlDbParams p) : base(p, MySqlConnectorDialectProvider.Instance, typeof(MySqlDbParams))
+        public MySqlDbSimpleStack(MySqlDbParams p, IMessageHost msg = null) : base(p, MySqlConnectorDialectProvider.Instance, typeof(MySqlDbParams), msg)
         {
             P = p;
             DP = base.DP as MySqlConnectorDialectProvider;

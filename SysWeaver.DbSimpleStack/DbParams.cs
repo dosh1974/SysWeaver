@@ -62,6 +62,12 @@ namespace SysWeaver.Db
         public bool ReadOnly {  get; set; }
 
         /// <summary>
+        /// Number of seconds to retry the init operation (waiting for the db service to start before failing)
+        /// </summary>
+        public int InitRetrySeconds { get; set; } = 5 * 60;
+
+
+        /// <summary>
         /// Builds a connection string using the current property values
         /// </summary>
         /// <param name="useSchema">If true the ConnectionString is used, else the ConnectionStringNoSchema is used</param>

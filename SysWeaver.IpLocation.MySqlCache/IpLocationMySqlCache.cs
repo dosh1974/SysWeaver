@@ -11,11 +11,11 @@ namespace SysWeaver.IpLocation.Caches
 
     public sealed class IpLocationMySqlCache : IIpLocationCache
     {
-        public IpLocationMySqlCache(IpLocationMySqlCacheParams p = null)
+        public IpLocationMySqlCache(IMessageHost msg = null, IpLocationMySqlCacheParams p = null)
         {
             p = p ?? new IpLocationMySqlCacheParams();
             MaxDays = Math.Max(1, p.DbCachedDays);
-            var db = new MySqlDbSimpleStack(p);
+            var db = new MySqlDbSimpleStack(p, msg);
             Db = db;
             Init(db).RunAsync();
             Cache = new FastMemCache<string, IpLocation>(TimeSpan.FromMinutes(Math.Max(1, p.MaxMemCachedMinutes)), StringComparer.Ordinal);

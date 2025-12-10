@@ -77,8 +77,10 @@ namespace SysWeaver.Db
         /// <param name="p"></param>
         /// <param name="dp"></param>
         /// <param name="paramType">The type of p</param>
-        public DbSimpleStack(DbParams p, IDialectProvider dp, Type paramType)
+        /// <param name="msg">Optional message host</param>
+        public DbSimpleStack(DbParams p, IDialectProvider dp, Type paramType, IMessageHost msg)
         {
+            Msg = msg;
             paramType = paramType ?? typeof(DbParams);
             if (p == null)
                 p = Activator.CreateInstance(paramType) as DbParams;
@@ -91,11 +93,17 @@ namespace SysWeaver.Db
                 Path.Combine("DbConfigs", String.Concat(paramType.Name, '_', PathExt.SafeFilename(p.Server), '_', p.Port, ".json")), 
                 String.Concat("These settings are forced for all SysWeaver application in this system.\nFor all db connections to ", p.Server, ':', p.Port)
                 );
+            LogPrefix = String.Concat('[', Name, '@', p.Server, ':', p.Port, "] ");
             P = p;
             DP = dp;
             BlobSer = SerManager.Get(p.BlobSer);
             BlobComp = CompManager.GetFromHttp(p.BlobComp);
         }
+
+
+        public readonly String LogPrefix;
+
+        public readonly IMessageHost Msg;
 
         #region Blob
 
@@ -203,6 +211,12 @@ namespace SysWeaver.Db
         /// <returns>True if indices was removed</returns>
         public virtual Task<bool> RemoveIndices(OrmConnection con, Type t, String tableName = null) => Task.FromResult(false);
 
+
+        /// <summary>
+        /// Name of the database provider
+        /// </summary>
+        public abstract String Name { get; }
+
         /// <summary>
         /// Call init once to init the db (creates the schema if it doesn't exist and creates the connection facotry etc)
         /// </summary>
@@ -214,11 +228,33 @@ namespace SysWeaver.Db
             if (f != null)
                 return;
             var p = P;
-            if (!p.ReadOnly)
-                await CreateSchemaIfNotExist(p.Schema).ConfigureAwait(false);
             f = new OrmConnectionFactory(DP, p.BuildConnectionString());
             f.DefaultCommandTimeout = Math.Max(1, p.TimeOut);
             F = f;
+            var s = p.InitRetrySeconds;
+            var end = DateTime.UtcNow.AddSeconds(Math.Max(s, 0));
+            var m = Msg;
+            for (long i = 0; ;++i)
+            {
+                try
+                {
+                    using var c = await f.OpenConnectionAsync().ConfigureAwait(false);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    if (i == 0)
+                        m?.AddMessage(LogPrefix + "Connection problems, will retry in a while: " + ex.Message, MessageLevels.Warning);
+                    if (i > 0)
+                        if (DateTime.UtcNow > end)
+                            throw;
+                    await Task.Delay(1000).ConfigureAwait(false);
+                    m?.AddMessage(LogPrefix + "Retrying connection", MessageLevels.Debug);
+                }
+            }
+            if (!p.ReadOnly)
+                await CreateSchemaIfNotExist(p.Schema).ConfigureAwait(false);
+            m?.AddMessage(LogPrefix + "Connected!", MessageLevels.Debug);
         }
 
         public String[] Partitions { get; protected set; }

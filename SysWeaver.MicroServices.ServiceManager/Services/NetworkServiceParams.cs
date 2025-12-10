@@ -6,7 +6,7 @@ namespace SysWeaver.MicroService
     public sealed class NetworkServiceParams
     {
         /// <summary>
-        /// Number of seconds to wait for a network connerction
+        /// Number of seconds to wait for a network connection
         /// </summary>
         public int TimeOutSeconds = 30;
 
@@ -20,12 +20,21 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String MustStartWith = null;
 
-        /*
         /// <summary>
         /// True to wait for internet connection
         /// </summary>
         public bool WaitForInternet = false;
-        */
+
+        /// <summary>
+        /// Number of seconds to wait for a internet
+        /// </summary>
+        public int InternetTimeOutSeconds = 60;
+
+        /// <summary>
+        /// True to throw an exception when no internet is found
+        /// </summary>
+        public bool FailIfNoInternetFound = true;
+
     }
 
 

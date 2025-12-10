@@ -38,7 +38,7 @@ namespace SysWeaver.MicroService
             MaxRandomMask = MaxRandom.MaxMask();
 
             T = manager.Get<IInternalTranslator>(p.TranslatorInstance);
-            var db = new MySqlDbSimpleStack(p);
+            var db = new MySqlDbSimpleStack(p, manager);
             Db = db;
             Init(db, p).RunAsync();
             PruneTask = new PeriodicTask(Prune, 60000);

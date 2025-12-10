@@ -139,7 +139,7 @@ namespace SysWeaver.Net
             feps["auth/redirect"] = HandleAuthRedirect;
             feps["auth/logout_user"] = HandleLogoutUser;
             feps["serverTime"] = HandleServerTime;
-            
+
 
 
             var oeps = new Dictionary<string, Func<HttpServerRequest, HttpSession, ValueTask<IHttpRequestHandler>>>(StringComparer.Ordinal);
@@ -200,6 +200,16 @@ namespace SysWeaver.Net
             }
             CookieOptions = p.CorsCookies ? "/;HttpOnly;SameSite=None;Secure" : "/;HttpOnly";
             PruneTask = new PeriodicTask(Prune, 3000);
+
+            var ip = NetworkTools.GetAnyLanIP();
+            if (ip == null)
+            {
+                const int timeOut = 60;
+                msg?.AddMessage(Prefix + "Waiting up to " + timeOut + " seconds for a valid LAN ip");
+                ip = NetworkTools.WaitForLanIp(timeOut);
+                if (ip == null)
+                    msg?.AddMessage(Prefix + "No LAN ip found!", MessageLevels.Warning);
+            }
         }
 
         public static String[] ValidateLanguageList(String[] languages)
