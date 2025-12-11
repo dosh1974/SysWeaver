@@ -452,6 +452,36 @@ body {
                 color: var(--ThemeAcc2);
             }
 
+
+        .DataTable td.ValueFormatDt {
+            padding-left: 24px;
+            position: relative;
+        }
+
+            .DataTable td.ValueFormatDt:after {
+                --s: calc(20px * var(--ThemeIconSize));
+                content: '';
+                position: absolute;
+                left: 0;
+                top: 3px;
+                width: var(--s);
+                height: var(--s);
+                background-color: var(--ThemeMain);
+                opacity: 0;
+                transition: opacity linear var(--ThemeFadeDuration);
+                mask-image: url('../icons/table_country.svg');
+            }
+
+        .DataTable td.ValueFormatDt.ValueFormatDtutc:after {
+            opacity: 0.5;
+        }
+
+        .DataTable td.ValueFormatDt.ValueFormatDtlocal:after {
+            opacity: 0.5;
+            mask-image: url('../icons/home.svg');
+        }
+
+
 SysWeaver-toggle {
     user-select: none;
     display: inline-block;
@@ -670,6 +700,9 @@ SysWeaver-PopupMenu.Table SysWeaver-PopupMenuBack {
     mask-image: url("../icons/share.svg");
 }
 
+.IconClock {
+    mask-image: url("../icons/clock.svg");
+}
 
 datatable-footer {
     position: fixed;

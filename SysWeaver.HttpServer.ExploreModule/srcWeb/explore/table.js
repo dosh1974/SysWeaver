@@ -129,6 +129,7 @@ class TableDataState {
     Expanded = 1;
     RequestParams = Table.tableDefaultRequest();
     AutoRowCount = true;
+    TimeMode = null;
 }
 
 
@@ -261,7 +262,7 @@ class Table {
             o.splice(3, ol - 3);
     }
 
-    static tableUpdateHeader(cols, table, state, onChangeFn) {
+    static tableUpdateHeader(cols, table, state, onChangeFn, saveFn) {
         const requestParams = state.RequestParams;
         let sourceIndex = -1;
         let cellIndex = 1;
@@ -319,7 +320,7 @@ class Table {
                             Table.updateSort(requestParams, col.Name, defRev);
                             console.log("New sort order: " + JSON.stringify(requestParams.Order));
                             requestParams.Row = 0;
-                            Table.tableUpdateHeader(cols, table, state, onChangeFn);
+                            Table.tableUpdateHeader(cols, table, state, onChangeFn, saveFn);
                             onChangeFn();
                         };
                     } else {
@@ -339,7 +340,7 @@ class Table {
                             Table.updateSort(requestParams, col.Name, rev);
                             console.log("New sort order: " + JSON.stringify(requestParams.Order));
                             requestParams.Row = 0;
-                            Table.tableUpdateHeader(cols, table, state, onChangeFn);
+                            Table.tableUpdateHeader(cols, table, state, onChangeFn, saveFn);
                             onChangeFn();
                         };
                     }
@@ -401,7 +402,7 @@ class Table {
                                         Table.updateSort(requestParams, col.Name, false);
                                     console.log("New sort order: " + JSON.stringify(requestParams.Order));
                                     requestParams.Row = 0;
-                                    Table.tableUpdateHeader(cols, table, state, onChangeFn);
+                                    Table.tableUpdateHeader(cols, table, state, onChangeFn, saveFn);
                                     onChangeFn();
                                     close();
                                 }
@@ -425,7 +426,7 @@ class Table {
                                         Table.updateSort(requestParams, col.Name, true);
                                     console.log("New sort order: " + JSON.stringify(requestParams.Order));
                                     requestParams.Row = 0;
-                                    Table.tableUpdateHeader(cols, table, state, onChangeFn);
+                                    Table.tableUpdateHeader(cols, table, state, onChangeFn, saveFn);
                                     onChangeFn();
                                     close();
                                 }
@@ -441,7 +442,7 @@ class Table {
                                     requestParams.Order = null;
                                     console.log("New sort order: " + JSON.stringify(requestParams.Order));
                                     requestParams.Row = 0;
-                                    Table.tableUpdateHeader(cols, table, state, onChangeFn);
+                                    Table.tableUpdateHeader(cols, table, state, onChangeFn, saveFn);
                                     onChangeFn();
                                     close();
                                 }
@@ -506,9 +507,34 @@ class Table {
                                 }));
                             }
                         }
+                        if ((col.Type === "System.DateTime") && (!col.Format)) {
+                            if (state.TimeMode) {
+                                menu.Items.push(WebMenuItem.From({
+                                    Name: _TF("Show local times", "The text of a menu item on a table column header that if clicked will show time stamps as local time instead of UTC"),
+                                    IconClass: "IconClock",
+                                    Title: _TF("Click to show local time stamps", "The tool tip description of a menu item on a table column header if clicked will show time stamps as local time instead of UTC"),
+                                    Data: () => {
+                                        state.TimeMode = null;
+                                        saveFn();
+                                        onChangeFn();
+                                        close();
+                                    },
+                                }));
 
-
-
+                            } else {
+                                menu.Items.push(WebMenuItem.From({
+                                    Name: _TF("Show UTC times", "The text of a menu item on a table column header that if clicked will show time stamps as UTC instead of local time"),
+                                    IconClass: "IconClock",
+                                    Title: _TF("Click to show UTC time stamps", "The tool tip description of a menu item on a table column header if clicked will show time stamps as UTC instead of local time"),
+                                    Data: () => {
+                                        state.TimeMode = "utc";
+                                        saveFn();
+                                        onChangeFn();
+                                        close();
+                                    },
+                                }));
+                            }
+                        }
                         return menu;
                     });
                     return false;
@@ -965,7 +991,7 @@ class Table {
                 rowIndex += 3;
             }
             Table.tableUpdateFilterIcon(table, state);
-            Table.tableUpdateHeader(cols, table, state, onChangeFn);
+            Table.tableUpdateHeader(cols, table, state, onChangeFn, saveFn);
         } else {
             cols = table["Cols"];
         }
@@ -974,6 +1000,7 @@ class Table {
         const colCount = cols.length;
         let dataRow = requestParams.Row + 1;
         const drows = data.Rows;
+        const timeMode = state.TimeMode;
         drows.forEach(drow => {
             const trow = trowCount <= rowIndex ? table.insertRow() : trows[rowIndex];
             const er = trow["DataRow"];
@@ -983,7 +1010,7 @@ class Table {
             let cellIndex = 0;
             const cell = cellIndex < cellCount ? cells[cellIndex] : trow.insertCell();
             ++cellIndex;
-            if (cell["Value"] != dataRow) {
+            if (cell["Value"] !== dataRow) {
                 cell["Value"] = dataRow;
                 if (ValueFormat.updateText(cell, dataRow))
                     cell.classList.add("Right");
@@ -995,17 +1022,22 @@ class Table {
                 if ((col.Props & TableDataProps.Hide) !== 0)
                     continue;
                 const value = dvalues[i];
+                const type = col.Type;
+                let fmt = col.Format;
+                if ((type === "System.DateTime") && (fmt === null))
+                    fmt = timeMode;
+                const cValue = value + "|" + fmt;
                 const cell = cellIndex < cellCount ? cells[cellIndex] : trow.insertCell();
                 if (!newCol) {
-                    if (cell["Value"] == value)
+                    if (cell["Value"] === cValue)
                     {
                         ++cellIndex;
                         continue;
                     }
                 }
                 const next = (i + 1) < colCount ? dvalues[i + 1] : undefined;
-                cell["Value"] = value;
-                ValueFormat.update(cell, col.Type, value, flash, col.Format, next, onChangeFn);
+                cell["Value"] = cValue;
+                ValueFormat.update(cell, type, value, flash, fmt, next, onChangeFn);
                 ++cellIndex;
             }
             ++dataRow;

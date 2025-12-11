@@ -3247,6 +3247,12 @@ class ValueFormat {
         return sb;
     }
 
+    /**
+     * Convert a number to a string, using thousands separator and fixed number of digits
+     * @param {number} value The value to convert
+     * @param {integer} decimals Number of decimals, if less than zero, decimals are only shown if required (i.e not for integers)
+     * @returns {string} The resulting string
+     */
     static toString = function (value, decimals) {
         if (decimals < 0) {
             if (Math.floor(value) === value)
@@ -3844,11 +3850,30 @@ class ValueFormat {
     }
 
 
-    static getTimeStampTitle(dd, onlyDate, prefix, tab) {
+/**
+ * 
+ * @param {string|number|Date} dd The date
+ * @param {boolean} onlyDate True to only show the date part
+ * @param {string} prefix Optional prefix
+ * @param {string} tab Optional tab prefix for tool tip.
+ * @param {string} fmt Optional format, optionally set to "utc" or "local"
+ * @returns {array} [0] = Tool tip, [1] = value string.
+ */
+    static getTimeStampTitle(dd, onlyDate, prefix, tab, fmt) {
         if (typeof dd === "string")
             dd = new Date(dd);
         if (typeof dd === "number")
             dd = new Date(dd);
+        const utc = dd;
+        let loc = dd;
+        let isLocal = false;
+        if (fmt === "utc") {
+            loc = ValueFormat.convertLocalDateToUTCDate(dd);
+        } else {
+            isLocal = fmt === "local";
+            if (!isLocal)
+                dd = ValueFormat.convertUTCDateToLocalDate(dd);
+        }
         if (!tab)
             tab = "";
         if (!prefix)
@@ -3858,14 +3883,36 @@ class ValueFormat {
         c = c[0] + " " + c[1].split('.')[0];
         if (onlyDate)
             c = c.substring(0, c.length - 9);
-        const title = prefix + c + tab +
-            _TF("Local", "Tool tip row prefix to some time stamp written using js Date.toLocaleString() syntax") + ": " + dd.toLocaleString() + tab + 
-            _TF("UTC", "Tool tip row prefix to some time stamp written using js Date.toUTCString() syntax") + ": " + dd.toUTCString() + tab +
-            _TF("Full", "Tool tip row prefix to some time stamp written using js Date.toString() syntax") + ": " + dd.toString() + tab +
-            _TF("ISO", "Tool tip row prefix to some time stamp written using js Date.toISOString() syntax") + ": " + dd.toISOString();
+        let title = prefix + c;
+        if (!isLocal) {
+            title += tab +
+                _TF("Local", "Tool tip row prefix to some time stamp written using js Date.toLocaleString() syntax") + ": " + loc.toLocaleString() + tab +
+                _TF("Full", "Tool tip row prefix to some time stamp written using js Date.toString() syntax") + ": " + utc.toString() + tab +
+                _TF("UTC", "Tool tip row prefix to some time stamp written using js Date.toUTCString() syntax") + ": " + utc.toUTCString() + tab +
+                _TF("ISO", "Tool tip row prefix to some time stamp written using js Date.toISOString() syntax") + ": " + utc.toISOString();
+        }
+        let uc = utc.toISOString().split('T');
+        uc = uc[0] + " " + uc[1].split('.')[0];
+        if (onlyDate)
+            uc = uc.substring(0, uc.length - 9);
         return [title, c];
     }
 
+    static convertLocalDateToUTCDate(date) {
+        const newDate = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
+        const offset = date.getTimezoneOffset() / 60;
+        const hours = date.getHours();
+        newDate.setHours(hours + offset);
+        return newDate;
+    }
+
+    static convertUTCDateToLocalDate(date) {
+        const newDate = new Date(date.getTime() + date.getTimezoneOffset() * 60 * 1000);
+        const offset = date.getTimezoneOffset() / 60;
+        const hours = date.getHours();
+        newDate.setHours(hours - offset);
+        return newDate;
+    }
 
     static updateDateTimeLive(el, value, formats, nextValue, flash, type, onRefresh, noCopy, blankIfNeg, invert) {
         if (ValueFormat.updateFormat(el, "DateTime")) {
@@ -3915,9 +3962,13 @@ class ValueFormat {
     }
 
     static updateDateTime(el, value, formats, nextValue, flash, type, onRefresh, onlyDate, noCopy) {
-        if (ValueFormat.updateFormat(el, "DateTime")) {
-            el.classList.add("Monospaced");
-            el.classList.add("Right");
+        const fmt = formats ? formats[0] : null;
+        const cl = el.classList;
+        if (ValueFormat.updateFormat(el, "DateTime" + (fmt ?? ""))) {
+            cl.add("ValueFormatDt");
+            cl.add("ValueFormatDt" + fmt);
+            cl.add("Monospaced");
+            cl.add("Right");
         }
         if (value === "0001-01-01T00:00:00") {
             ValueFormat.updateText(el, "-", _TF("Not set", "Tool tip indicating that the value is not set (is undefined or null)"), flash);
@@ -3943,8 +3994,7 @@ class ValueFormat {
             update();
             return el;
         }
-        const dd = new Date(value);
-        const v = ValueFormat.getTimeStampTitle(dd);
+        const v = ValueFormat.getTimeStampTitle(value, false, null, null, fmt);
         let title = v[0];
         if (!noCopy)
             title += "\n\n" + ValueFormat.copyOnClick(el, value);
