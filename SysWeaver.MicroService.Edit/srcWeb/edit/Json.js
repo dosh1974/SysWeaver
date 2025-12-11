@@ -9,19 +9,21 @@ async function jsonMain() {
             return;
         }
 
+        const name = url.substring(url.lastIndexOf('/') + 1);
+        document.title = name;
         const target = document.body;
-        const edit = document.createElement("div");
-        edit.id = "editor";
+
+
         const br = Button.CreateRow();
-        //target.appendChild(br);
+        target.appendChild(br);
+        const edit = document.createElement("SysWeaver-AceEditor");
         target.appendChild(edit);
 
 
         const d = new Button("", "Download", "Click to download the file", "../icons/disc.svg", true, async () => {
             d.StartWorking();
             try {
-                const name = url.substring(url.lastIndexOf('/') + 1);
-                downloadText(name, text);
+                downloadText(name, editor.session.getValue());
             }
             catch (e) {
                 Fail("Failed to download the file:\n" + e);
@@ -39,10 +41,43 @@ async function jsonMain() {
         {
         }
         edit.textContent = text;
-            
-        const editor = ace.edit("editor");
+        const readOnly = false;
+
+        const options = {   
+            readOnly: readOnly,
+            animatedScroll: true,
+            displayIndentGuides: true,
+            enableAutoIndent: true,
+            firstLineNumber: 1,
+            highlightGutterLine: true,
+            showFoldWidgets: true,
+            showFoldedAnnotations: true,
+            showLineNumbers: true,
+            enableBasicAutocompletion: true,
+            enableLiveAutocompletion: true,
+            useSvgGutterIcons: true,
+            useWorker: !readOnly,
+        };
+
+        const editor = ace.edit(edit, options);
         edit.classList.add("ace-sysweaver");
         editor.session.setMode("ace/mode/json");
+
+        new MutationObserver(mut => {
+            const c = target.children;
+            const cl = c.length;
+            for (let i = 0; i < cl; ++i) {
+                const cc = c[i];
+                if (cc.tagName !== "DIV")
+                    continue;
+                if (!cc.classList.contains("ace_editor"))
+                    if (!cc.classList.contains("ace_tooltip"))
+                        continue;
+                cc.classList.add("ace-sysweaver");
+            }
+        }).observe(edit.parentElement, { childList: true})
+
+        //editor.session.setMode("ace/mode/plain_text");
         editor.setShowPrintMargin(false);
 
 

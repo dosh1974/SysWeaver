@@ -1,44 +1,194 @@
 ﻿body {
     margin: 0;
+    padding: 0;
     background-color: var(--ThemeBackground);
     user-select: none;
     font-family: var(--ThemeFont);
     text-align: center;
     width: 100svw;
     height: 100svh;
+    display: grid;
+    overflow: hidden;
+    grid-template-rows: min-content auto;
+    grid-row-gap: 4px;
 }
 
 
 
 SysWeaver-CenterBlock {
-    margin-top: 0;
-    width: calc(100% - 2em);
+    grid-row: 1;
+    width: 100%;
     padding: 0.25em 1em;
-    top: 0;
-    left: 0;
-    position: fixed;
     box-shadow: rgba(0,0,0,0.4) 0 4px 4px;
-    background-color: var(--ThemeBackground);
+    background-color: var(--ThemeBackground50);
 }
 
-div {
-    position: absolute;
+SysWeaver-AceEditor {
+    grid-row: 2;
     display: block;
-    left: 0;
-    top: 0;
-    width: 100svw;
-    height: 100svh;
-    white-space: pre;
 }
 
 
 
 
+.ace-sysweaver.ace_tooltip,
+.ace-sysweaver .ace_tooltip,
+.ace-sysweaver .ace_search {
+    background-color: var(--ThemeBackground);
+    color: var(--ThemeAcc1);
+    border-radius: var(--ThemeRad);
+    border: 2px solid var(--ThemeMain75);
+    padding: 4px;
+    font-family: var(--ThemeFont);
+}
 
+.ace-sysweaver .ace_button {
+    color: var(--ThemeAcc2);
+    border-radius: var(--ThemeRadInp);
+    border: 1px solid var(--ThemeAcc250);
+    transition: color linear var(--ThemeFadeDuration), opacity linear var(--ThemeFadeDuration), background-color linear var(--ThemeFadeDuration)
+}
+
+    .ace-sysweaver .ace_button.checked {
+        color: var(--ThemeAcc2);
+        background-color: var(--ThemeAcc225);
+        border: 2px solid var(--ThemeAcc2);
+    }
+
+
+.ace-sysweaver .ace_button:hover {
+    color: var(--ThemeBackground);
+    background-color: var(--ThemeAcc2);
+}
+
+.ace-sysweaver .ace_searchbtn_close {
+    color: var(--ThemeBackground);
+    background-color: var(--ThemeAcc1);
+}
+
+
+.ace-sysweaver .ace_searchbtn {
+    color: var(--ThemeBackground);
+    background-color: var(--ThemeMain);
+    border: none;
+    border-left: 1px solid var(--ThemeBackground25);
+    opacity: 0.8;
+    transition: opacity linear var(--ThemeFadeDuration);
+}
+
+.ace-sysweaver .ace_searchbtn:hover {
+    opacity: 1;
+}
+
+
+    .ace-sysweaver .ace_searchbtn:last-child {
+        border-radius: var(--ThemeRadInp);
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+    }
+
+    .ace-sysweaver .ace_searchbtn.prev:after {
+        border: solid 2px var(--ThemeBackground);
+        border-width: 2px 0 0 2px;
+    }
+
+    .ace-sysweaver .ace_searchbtn.next:after {
+        border: solid 2px var(--ThemeBackground);
+        border-width: 0 2px 2px 0;
+    }
+
+
+.ace-sysweaver .ace_search_form,
+.ace-sysweaver .ace_replace_form {
+    border-radius: var(--ThemeRadInp);
+    border: 1px solid var(--ThemeMain25);
+    color: var(--ThemeMain);
+    background-color: var(--ThemeBackground);
+    overflow: hidden;
+}
+
+    .ace-sysweaver .ace_search_form.ace_nomatch {
+        outline: 2px solid var(--ThemeError);
+    }
+
+.ace-sysweaver .ace_search_field {
+    color: var(--ThemeMain);
+    background-color: var(--ThemeBackground);
+    border: none;
+    outline: none;
+}
+
+.ace-sysweaver .ace_search_field::placeholder {
+    color: var(--ThemeMain25);
+    font-style: italic;
+}
+
+
+.ace-sysweaver.ace_editor.ace_autocomplete {
+    overflow: hidden;
+    border-radius: var(--ThemeRadInp);
+    border: 2px solid var(--ThemeMain75);
+    background: var(--ThemeBackground);
+    color: var(--ThemeAcc1);
+    font-family: var(--ThemeFontMono);
+    font-size: 100%;
+}
+
+    .ace-sysweaver.ace_editor.ace_autocomplete .ace_marker-layer .ace_active-line {
+        background: var(--ThemeMain50);
+    }
+
+    .ace-sysweaver.ace_editor.ace_autocomplete .ace_completion-highlight {
+        color: var(--ThemeAcc2);
+    }
+
+    .ace-sysweaver.ace_editor.ace_autocomplete .ace_completion-meta {
+        font-size: 75%;
+        font-family: var(--ThemeFont);
+        color: var(--ThemeAcc175);
+    }
+
+    .ace-sysweaver.ace_editor.ace_autocomplete .ace_selected {
+        color: var(--ThemeBackground);
+    }
+
+    .ace-sysweaver.ace_editor.ace_autocomplete .ace_selected .ace_completion-highlight {
+        color: var(--ThemeAcc2);
+    }
+
+        .ace-sysweaver.ace_editor.ace_autocomplete .ace_selected .ace_completion-meta {
+            color: var(--ThemeBackground75);
+        }
+
+
+
+
+
+
+
+        .ace-sysweaver .ace_icon_svg {
+            vertical-align: middle;
+            width: 16px;
+        }
+
+
+.ace-sysweaver .ace_icon_svg.ace_error
+{
+    background-color: var(--ThemeError);
+}
+
+.ace-sysweaver .ace_gutter-cell
+{
+    width: 100%;
+    padding-left: 0;
+}
 
 .ace-sysweaver .ace_gutter {
     background: var(--ThemeBackground);
-    color: var(--ThemeMain);
+    color: var(--ThemeMain25);
+    font-size: 75%;
+    line-height: 150%;
+
 }
 
 .ace-sysweaver .ace_print-margin {
@@ -48,14 +198,15 @@ div {
 
 .ace-sysweaver {
     background: var(--ThemeBackground25);
-    color: var(--ThemeMain50);
+    color: var(--ThemeMain);
     font-family: var(--ThemeFontMono);
-    font-size: 125%;
+    font-size: 100%;
 }
 
     .ace-sysweaver .ace_cursor {
         color: var(--ThemeAcc1);
     }
+
 
     .ace-sysweaver .ace_marker-layer .ace_selection {
         background: var(--ThemeAcc225);
@@ -83,7 +234,8 @@ div {
     }
 
     .ace-sysweaver .ace_marker-layer .ace_selected-word {
-        border: 2px solid var(--ThemeAcc1);
+        background: rgba(var(--ThemeAcc1), 0.25);
+        border: 1px solid var(--ThemeAcc150);
     }
 
     .ace-sysweaver .ace_invisible {
@@ -93,6 +245,23 @@ div {
     .ace-sysweaver .ace_keyword,
     .ace-sysweaver .ace_meta {
         color: var(--ThemeAcc2);
+    
+        
+        }
+
+    .ace-sysweaver .ace_comment {
+        font-style: italic;
+        color: var(--ThemeAcc250);
+    }
+
+    .ace-sysweaver .ace_variable {
+        color: var(--ThemeMain75);
+    }
+
+
+    .ace-sysweaver .ace_paren,
+    .ace-sysweaver .ace_operator {
+        color: var(--ThemeMain50);
     }
 
     .ace-sysweaver .ace_constant,
@@ -102,18 +271,24 @@ div {
     .ace-sysweaver .ace_heading,
     .ace-sysweaver .ace_markup.ace_heading,
     .ace-sysweaver .ace_support.ace_constant {
-        color: var(--ThemeAcc275);
+        color: var(--ThemeAcc2);
     }
 
+
+    .ace-sysweaver .ace_string {
+        color: var(--ThemeAcc1);
+    }
         .ace-sysweaver .ace_constant.ace_escape
         {
             font-weight: bold;
-            color: var(--ThemeAcc1);
+            color: var(--ThemeAcc2);
         }
 
     .ace-sysweaver .ace_constant.ace_boolean {
         color: var(--ThemeAcc2);
     }
+
+
 
     .ace-sysweaver .ace_invalid.ace_illegal {
         color: #F8F8F8;
@@ -123,7 +298,7 @@ div {
     .ace-sysweaver .ace_invalid.ace_deprecated {
         text-decoration: underline;
         font-style: italic;
-        color: #D2A8A1
+        color: var(--ThemeWarning);
     }
 
     .ace-sysweaver .ace_support {
@@ -131,8 +306,9 @@ div {
     }
 
     .ace-sysweaver .ace_fold {
-        background-color: #AC885B;
-        border-color: #F8F8F8
+        background-color: var(--ThemeAcc225);
+        border-color: var(--ThemeAcc2);
+        color: var(--ThemeAcc2);
     }
 
     .ace-sysweaver .ace_support.ace_function {
@@ -150,33 +326,22 @@ div {
         color: #AC885B
     }
 
-    .ace-sysweaver .ace_string {
-        color: var(--ThemeAcc175);
-    }
 
         .ace-sysweaver .ace_string.ace_regexp {
             color: var(--ThemeAcc2);
         }
-
-    .ace-sysweaver .ace_comment {
-        font-style: italic;
-        color: var(--ThemeMain50);
-    }
-
-    .ace-sysweaver .ace_variable {
-        color: var(--ThemeMain);
-    }
 
     .ace-sysweaver .ace_xml-pe {
         color: #494949
     }
 
     .ace-sysweaver .ace_indent-guide {
-        background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAEklEQVQImWMQERFpYLC1tf0PAAgOAnPnhxyiAAAAAElFTkSuQmCC) right repeat-y
+        background: none;
+        border-right: 1px solid var(--ThemeMain25);
     }
 
     .ace-sysweaver .ace_indent-guide-active {
-        background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAEklEQVQIW2PQ1dX9zzBz5sz/ABCcBFFentLlAAAAAElFTkSuQmCC) right repeat-y;
+        border-right: 1px solid var(--ThemeAcc125);
     }
 
 
