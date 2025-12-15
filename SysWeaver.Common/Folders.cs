@@ -52,8 +52,16 @@ namespace SysWeaver
         {
             var ti = roots.Count;
             var d = new String[ti];
-            for (int i = 0; i < ti; ++i)
-                d[i] = Path.Combine(roots[i], paths);
+            if (String.IsNullOrEmpty(paths))
+            {
+                for (int i = 0; i < ti; ++i)
+                    d[i] = roots[i];
+            }
+            else
+            {
+                for (int i = 0; i < ti; ++i)
+                    d[i] = Path.Combine(roots[i], paths);
+            }
             Validate(d, allowAll);
             return d;
         }
@@ -182,8 +190,17 @@ namespace SysWeaver
 #pragma warning restore CA1416
                     }
                 }
-                
-
+                var di = new DirectoryInfo(fp);
+                if ((di.Attributes & FileAttributes.NotContentIndexed) == 0)
+                {
+                    try
+                    {
+                        di.Attributes |= FileAttributes.NotContentIndexed;
+                    }
+                    catch
+                    {
+                    }
+                }
                 paths[i] = fp;
             }
         }
