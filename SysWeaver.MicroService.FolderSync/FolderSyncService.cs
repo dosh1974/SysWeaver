@@ -155,9 +155,7 @@ namespace SysWeaver.MicroService
             var folders = Folders;
             var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
             var name = x.Name;
-            PathExt.EnsureFolderExist(path);
-            PathExt.AllowAllAccess(path);
-            path = new DirectoryInfo(path).FullName;
+            path = PathExt.CreateDataFolder(path);
             if (String.IsNullOrEmpty(name))
                 name = Path.GetFileName(path);
             var auth = x.Auth ?? Roles.Debug;
@@ -1176,6 +1174,7 @@ namespace SysWeaver.MicroService
                                 throw ex;
                         }
                         PathExt.AllowAllAccess(newFolderName);
+                        PathExt.DisableIndexing(newFolderName);
                     }
                     await Task.Delay(1).ConfigureAwait(false);
                 }
@@ -1187,8 +1186,7 @@ namespace SysWeaver.MicroService
                     foreach (var name in copy.Keys)
                     {
                         var destFile = Path.Combine(newFolderName, name);
-                        PathExt.EnsureFolderExist(Path.GetDirectoryName(destFile));
-                        PathExt.AllowAllAccess(newFolderName);
+                        PathExt.CreateDataFolder(Path.GetDirectoryName(destFile));
                         var sourceFile = Path.Combine(dest, name);
                         File.Copy(sourceFile, destFile);
                         copySize += new FileInfo(sourceFile).Length;

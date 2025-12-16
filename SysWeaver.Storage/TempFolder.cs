@@ -26,9 +26,7 @@ namespace SysWeaver
                 cc = new CleanUp(keyType, cacheExpirationDays);
                 if (!c.TryAdd(key, cc))
                     throw new Exception("Internal error!");
-                var p = cc.P;
-                PathExt.AllowAllAccess(p);
-                return p;
+                return cc.P;
             }
         }
 
@@ -119,7 +117,8 @@ namespace SysWeaver
                 }
                 p = p ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SysWeaver_" + keyType);
                 P = PathExt.RootExecutable(p);
-                PathExt.EnsureFolderExist(p);
+                PathExt.CreateDataFolder(p);
+
             }
 
         }

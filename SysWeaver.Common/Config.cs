@@ -269,8 +269,7 @@ namespace SysWeaver
                     try
                     {
                         var dir = Path.GetDirectoryName(name);
-                        PathExt.EnsureFolderExist(dir);
-                        PathExt.AllowAllAccess(dir);
+                        PathExt.CreateDataFolder(dir);
                         File.WriteAllText(name, s);
                     }
                     catch

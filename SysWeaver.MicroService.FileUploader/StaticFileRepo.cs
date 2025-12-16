@@ -163,10 +163,7 @@ namespace SysWeaver.MicroService
                     folders = (SharedFolder ? Folders.AllSharedFolders : Folders.AllAppFolders).Select(x => Path.Combine(x, t)).ToArray();
                 }
                 foreach (var x in folders)
-                {
-                    var ex = PathExt.EnsureFolderExist(x);
-                    PathExt.AllowAllAccess(x);
-                }
+                    PathExt.CreateDataFolder(x);
                 SaveFolders = folders;
                 if (ServeFiles)
                 {

@@ -832,15 +832,15 @@ namespace SysWeaver
         /// <returns></returns>
         public static bool AllowAllAccess(String folder)
         {
-            if (!Directory.Exists(folder))
-                return true;
             try
             {
                 if (EnvInfo.OsPlatform.FastEquals("windows"))
                 {
 #pragma warning disable CA1416
-                    DirectoryInfo dInfo = new DirectoryInfo(folder);
-                    DirectorySecurity dSecurity = dInfo.GetAccessControl();
+                    var dInfo = new DirectoryInfo(folder);
+                    if (!dInfo.Exists)
+                        return true;
+                    var dSecurity = dInfo.GetAccessControl();
                     var sid = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
                     var rule = new FileSystemAccessRule(sid, FileSystemRights.FullControl, InheritanceFlags.ObjectInherit | InheritanceFlags.ContainerInherit, PropagationFlags.NoPropagateInherit, AccessControlType.Allow);
                     bool found = false;
@@ -875,6 +875,62 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Disable content indexing of a folder
+        /// </summary>
+        /// <param name="folder">The folder</param>
+        /// <returns>False on error</returns>
+        public static bool DisableIndexing(String folder)
+        {
+            try
+            {
+                var dInfo = new DirectoryInfo(folder);
+                if (!dInfo.Exists)
+                    return true;
+                if ((dInfo.Attributes & FileAttributes.NotContentIndexed) != 0)
+                    return true;
+                dInfo.Attributes |= FileAttributes.NotContentIndexed;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+
+        /// <summary>
+        /// Create a folder if it doesn't exist and set it up for data usage (enable all access and disable indexing).
+        /// If the folder exist nothing will be done
+        /// </summary>
+        /// <param name="path">The folder to setup</param>
+        /// <param name="forceSetup">If true the enabling of all access and disabling indexing will be enforced, if false it will only be applied if the folder was created</param>
+        /// <returns>The full path</returns>
+        public static String CreateDataFolder(String path, bool forceSetup = true)
+        {
+            bool isNew = forceSetup || (!Path.Exists(path));
+            var ex = PathExt.EnsureFolderExist(path);
+            if (ex != null)
+                return null;
+            path = new DirectoryInfo(path).FullName;
+            if (isNew)
+                SetupDataFolder(path);
+            return path;
+
+        }
+
+
+        /// <summary>
+        /// Set up a folder for data: disable content indexing and allow it to be accessed by eveyone
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns>False on error</returns>
+        public static bool SetupDataFolder(String path)
+        {
+            bool r = PathExt.AllowAllAccess(path);
+            r &= PathExt.DisableIndexing(path);
+            return r;
+        }
 
         /// <summary>
         /// Gety the directory name and file mask from a path (typically containing wild cards).

@@ -59,10 +59,7 @@ namespace SysWeaver.MicroService
 
             var destFolders = PathTemplate.Resolve(String.IsNullOrEmpty(p.ServiceFolder) ? @"$(CommonApplicationData)\SysWeaver\ManagedServices" : p.ServiceFolder).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             foreach (var f in destFolders)
-            {
-                PathExt.EnsureFolderExist(f);
-                PathExt.AllowAllAccess(f);
-            }
+                PathExt.CreateDataFolder(f);
             DestFolders = destFolders;
             var ss = Services;
             KeyRepo = new BackupFileRepo("Keys", KeyFolder, this, true);
@@ -88,9 +85,8 @@ namespace SysWeaver.MicroService
             {
                 df = PathTemplate.Resolve(df);
             }
-            PathExt.EnsureFolderExist(df);
-            PathExt.AllowAllAccess(Path.GetDirectoryName(df));
-            PathExt.AllowAllAccess(df);
+            PathExt.CreateDataFolder(df);
+            PathExt.SetupDataFolder(Path.GetDirectoryName(df));
             var v = new FolderSyncFolder
             {
                 Name = f.Name,

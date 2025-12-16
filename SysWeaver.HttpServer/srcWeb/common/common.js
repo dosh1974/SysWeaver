@@ -866,9 +866,12 @@ class InterOp {
         return new InterOpWindows();
     }();
 
-    // type is the message type as a string (will be added into data.Type).
-    // data is an optional object with data (must be an object, can't be string, number, etc).
-    // Field names Type and To are reserved
+    /**
+     * Post a message to all windows
+     * @param {string} type The message type as a string (will be added into data.Type)
+     * @param {object} data Optional object with data (must be an object, can't be string, number, etc). Field names Type, From and To are reserved and may not be used.
+     * @param {bool} isFromServer Never use, always set to false
+     */
     static Post(type, data, isFromServer) {
         if (typeof data === "object")
             data.Type = type;

@@ -297,7 +297,7 @@ SysWeaver-PopupMenu.DefaultMenu table table {
     }
 
 .DefaultMenu tr.MenuData.SubMenu {
-    box-shadow: 3px 0px 1px var(--ThemeBackground75);
+    box-shadow: 3px 0.25px 0px var(--ThemeBackground75);
     transition: opacity linear 0.1s;
 }
 
