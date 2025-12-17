@@ -255,7 +255,8 @@ SysWeaver-AceEditor {
 
     .ace-sysweaver .ace_keyword,
     .ace-sysweaver .ace_meta {
-        color: var(--ThemeAcc2);
+        color: var(--ThemeAcc275);
+        font-weight: bold;
     
         
         }
@@ -265,10 +266,43 @@ SysWeaver-AceEditor {
         color: var(--ThemeAcc250);
     }
 
+    .ace-sysweaver .ace_comment.ace_doc {
+        font-style: italic;
+        color: var(--ThemeAcc275);
+    }
+
+        .ace-sysweaver .ace_comment.ace_doc.ace_tag {
+            font-style: italic;
+            color: var(--ThemeAcc250);
+        }
+
+        .ace-sysweaver .ace_lparen.ace_doc {
+            font-style: italic;
+            color: var(--ThemeAcc225);
+        }
+
+    .ace-sysweaver .ace_rparen.ace_doc {
+        font-style: italic;
+        color: var(--ThemeAcc225);
+    }
+
+    .ace-sysweaver .ace_variable.ace_doc {
+        color: var(--ThemeAcc175);
+    }
+    
+    .ace-sysweaver .ace_text.ace_doc {
+        color: var(--ThemeMain75);
+    }
+
+
     .ace-sysweaver .ace_variable {
         color: var(--ThemeMain75);
     }
 
+        .ace-sysweaver .ace_variable.ace_language {
+            color: var(--ThemeMain75);
+            font-weight: bold;
+        }
 
     .ace-sysweaver .ace_paren,
     .ace-sysweaver .ace_operator {
@@ -285,19 +319,22 @@ SysWeaver-AceEditor {
         color: var(--ThemeAcc2);
     }
 
+        .ace-sysweaver .ace_constant.ace_language,
+        .ace-sysweaver .ace_constant.ace_boolean {
+            font-style: italic;
+            color: var(--ThemeAcc2);
+        }
 
     .ace-sysweaver .ace_string {
         color: var(--ThemeAcc1);
     }
-        .ace-sysweaver .ace_constant.ace_escape
-        {
-            font-weight: bold;
-            color: var(--ThemeAcc2);
-        }
 
-    .ace-sysweaver .ace_constant.ace_boolean {
+    .ace-sysweaver .ace_constant.ace_escape
+    {
+        font-weight: bold;
         color: var(--ThemeAcc2);
     }
+
 
 
 
@@ -323,18 +360,20 @@ SysWeaver-AceEditor {
     }
 
     .ace-sysweaver .ace_support.ace_function {
-        color: #DAD085
+        color: var(--ThemeAcc175);
+        font-weight: bold;
     }
 
     .ace-sysweaver .ace_list,
     .ace-sysweaver .ace_markup.ace_list,
     .ace-sysweaver .ace_storage {
-        color: #F9EE98
+        color: var(--ThemeAcc175);
+        font-weight: bold;
     }
 
     .ace-sysweaver .ace_entity.ace_name.ace_function,
     .ace-sysweaver .ace_meta.ace_tag {
-        color: #AC885B
+        color: var(--ThemeAcc2);
     }
 
 

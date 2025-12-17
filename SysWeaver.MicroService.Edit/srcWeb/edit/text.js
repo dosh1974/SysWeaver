@@ -45,11 +45,36 @@ async function textMain() {
                 m.set("svg", "svg");
                 m.set("xml", "xml");
                 m.set("config", "xml");
+                m.set("csproj", "xml");
                 const ext = name.substring(extp + 1).toLowerCase();
                 type = m.get(ext) ?? type;
             }
         }
         console.log("Type: " + type);
+
+        const bmap = new Map();
+        /*
+        bmap.set("json", x => vkbeautify.json(x, "\t"));
+        bmap.set("json5", x => vkbeautify.json(x, "\t"));
+        bmap.set("css", x => vkbeautify.css(x, "\t"));
+        bmap.set("mysql", x => vkbeautify.sql(x, "\t"));
+        bmap.set("xml", x => vkbeautify.xml(x, "\t"));
+        bmap.set("html", x => vkbeautify.xml(x, "\t"));
+        */
+
+
+        bmap.set("json", x => prettier.format(x, { parser: "json5", plugins: prettierPlugins, useTabs: true }));
+        bmap.set("json5", x => prettier.format(x, { parser: "json5", plugins: prettierPlugins, useTabs: true }));
+        bmap.set("css", x => prettier.format(x, { parser: "css", plugins: prettierPlugins, useTabs: true }));
+        bmap.set("html", x => prettier.format(x, { parser: "html", plugins: prettierPlugins, useTabs: true }));
+        bmap.set("markdown", x => prettier.format(x, { parser: "markdown", plugins: prettierPlugins, useTabs: true }));
+        bmap.set("javascript", x => prettier.format(x, { parser: "typescript", plugins: prettierPlugins, useTabs: true }));
+        bmap.set("xml", x => prettier.format(x, { parser: "xml", plugins: prettierPlugins, useTabs: true }));
+
+        const beautify = bmap.get(type);
+
+
+
         const br = Button.CreateRow();
         target.appendChild(br);
         const edit = document.createElement("SysWeaver-AceEditor");
@@ -57,6 +82,24 @@ async function textMain() {
         let downloadButton = null;
         let saveButton = null;
         let deleteButton = null;
+
+
+        if (beautify) {
+            beautifyButton = new Button("", _TF("Beautify", "Text on a button that when clicked will beatify some source code text"),
+                _TF("Click to beautify the text", "Tool tip description on a button that when clicked will beatify some source code text"), "../icons/disc.svg", true, async () => {
+                    beautifyButton.StartWorking();
+                    try {
+                        text = await beautify(editor.session.getValue());
+                        editor.session.setValue(text);
+                    }
+                    catch (e) {
+                        Fail(e.message);
+                    }
+                    beautifyButton.StopWorking();
+            });
+            br.appendChild(beautifyButton.Element);
+        }
+
         if (download){
             downloadButton = new Button("", _TF("Download", "Text on a button that when clicked will download the file"), _TF("Click to download the file", "Tool tip description on a button that when clicked will download the file"), "../icons/disc.svg", true, async () => {
                 downloadButton.StartWorking();
@@ -138,10 +181,10 @@ async function textMain() {
 
 
 
-
         let text = await getRequest(url, false, false, null, r => r.text());
         try {
             //text = JSON.stringify(JSON.parse(text), null, "\t");
+  
         }
         catch
         {
@@ -199,7 +242,8 @@ async function textMain() {
 
     }
     catch (e) {
-        Fail(e.message);
+        document.body.innerText = "";
+        Fail(e.message, 30000, true);
     }
     finally {
         PageLoaded();
