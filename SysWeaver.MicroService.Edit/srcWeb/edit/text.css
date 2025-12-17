@@ -19,16 +19,16 @@ SysWeaver-CenterBlock {
     grid-row: 1;
     width: 100%;
     padding: 0.25em 1em;
+    margin: 0;
     box-shadow: rgba(0,0,0,0.4) 0 4px 4px;
     background-color: var(--ThemeBackground50);
+    justify-content: space-around;
 }
 
 SysWeaver-AceEditor {
     grid-row: 2;
     display: block;
 }
-
-
 
 
 .ace-sysweaver.ace_tooltip,
@@ -135,8 +135,15 @@ SysWeaver-AceEditor {
 }
 
     .ace-sysweaver.ace_editor.ace_autocomplete .ace_marker-layer .ace_active-line {
-        background: var(--ThemeMain50);
+        background-color: var(--ThemeMain25);
     }
+
+    .ace-sysweaver.ace_editor.ace_autocomplete .ace_marker-layer .ace_line-hover {
+        background-color: rgba(var(--ThemeMainRGB), 0.1);
+        outline: none;
+        border: none;
+    }
+
 
     .ace-sysweaver.ace_editor.ace_autocomplete .ace_completion-highlight {
         color: var(--ThemeAcc2);
@@ -149,7 +156,7 @@ SysWeaver-AceEditor {
     }
 
     .ace-sysweaver.ace_editor.ace_autocomplete .ace_selected {
-        color: var(--ThemeBackground);
+        /*color: var(--ThemeBackground);*/
     }
 
     .ace-sysweaver.ace_editor.ace_autocomplete .ace_selected .ace_completion-highlight {
@@ -202,6 +209,10 @@ SysWeaver-AceEditor {
     font-family: var(--ThemeFontMono);
     font-size: 100%;
 }
+
+    .ace-sysweaver .ace_layer, .ace-sysweaver .ace_content {
+        overflow: visible !important;
+    }
 
     .ace-sysweaver .ace_cursor {
         color: var(--ThemeAcc1);

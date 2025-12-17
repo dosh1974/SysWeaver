@@ -1,6 +1,6 @@
 ﻿
 
-async function jsonMain() {
+async function textMain() {
     try {
         const p = getUrlParams();
         const url = p.get("r");
@@ -11,7 +11,10 @@ async function jsonMain() {
         const del = p.get("d");
         const update = p.get("u");
         const download = (p.get("download") !== "false");
+        const scrollToEnd = (p.get("scrolltoend") === "true");
+
         let type = p.get("t");
+
 
         const readOnly = !update;
         const name = url.substring(url.lastIndexOf('/') + 1);
@@ -73,11 +76,14 @@ async function jsonMain() {
                 if (deleteButton)
                     deleteButton.Disable();
                 try {
-                    await sendRequest(update, {
+                    const m = {
                         Url: url,
                         Name: name,
                         Content: editor.session.getValue(),
-                    });
+                    };
+                    await sendRequest(update, m);
+                    InterOp.Post("FileSaved", m);
+                    Info(_T("File \"{0}\" saved!", name, "An information message that is displayed whan a file was saved. {0} is replaced by the name of the file that was saved"));
                 }
                 catch (e) {
                     Fail(_TF("Failed to save the file", "Error message displayed when the file failed to be saved") + ":\n" + e);
@@ -91,26 +97,40 @@ async function jsonMain() {
         if (del) {
             deleteButton = new Button("", _TF("Delete", "Text on a button that when clicked will delete the file from the server"), _TF("Click to delete the file", "Tool tip description on a button that when clicked will delete the file from the server"), "../icons/close.svg", true, async () => {
                 deleteButton.StartWorking();
-                if (saveButton)
-                    saveButton.Disable();
-                try {
-                    const m = {
-                        Url: url,
-                        Name: name,
-                    };
-                    await sendRequest(del, m);
-                    InterOp.Post("FileClose", m);
-                    if (downloadButton)
-                        downloadButton.Disable();
-                    deleteButton.StopWorking();
-                    deleteButton.Disable();
-                    return;
+                if (await Confirm(
+                    _TF("Delete file", "Title of a pop-up dialog that confirms that the user wants to delete a file"),
+                    _T("The file \"{0}\" will be deleted!", name, "Text of of a pop-up dialog that confirms that the user wants to delete a file. {0} is replaced by the name of the file") + "\n\n" +
+                    _TF("Are you sure that you want to delete the file?", "Text of of a pop-up dialog that confirms that the user wants to delete a file"),
+                    _TF("Yes, delete", "Text of a button that when clicked will delete a file"),
+                    _TF("No, keep it", "Text of a button that when clicked will leave a file as is, as opposed to deleting it"),
+                    "../icons/close.svg",
+                    "../icons/fav_on.svg",
+                    _TF("Click to delete the file permamently", "Tool tip description of a button that when clicked will delete a file"),
+                    _TF("Click to keep the file as is", "Tool tip description of a button that when clicked will leave a file as is, as opposed to deleting it")
+                )) {
+                    if (saveButton)
+                        saveButton.Disable();
+                    try {
+                        const m = {
+                            Url: url,
+                            Name: name,
+                        };
+                        await sendRequest(del, m);
+                        InterOp.Post("FileDeleted", m);
+                        if (downloadButton)
+                            downloadButton.Disable();
+                        deleteButton.StopWorking();
+                        deleteButton.Disable();
+                        edit.remove();
+                        Info(_T("File \"{0}\" deleted!", name, "An information message that is displayed whan a file was deleted. {0} is replaced by the name of the file that was deleted"));
+                        return;
+                    }
+                    catch (e) {
+                        Fail(_TF("Failed to delete the file", "Error message displayed when the file failed to be deleted") + ":\n" + e);
+                    }
+                    if (saveButton)
+                        saveButton.Enable();
                 }
-                catch (e) {
-                    Fail(_TF("Failed to delete the file", "Error message displayed when the file failed to be deleted") + ":\n" + e);
-                }
-                if (saveButton)
-                    saveButton.Enable();
                 deleteButton.StopWorking();
             });
             br.appendChild(deleteButton.Element);
@@ -147,6 +167,13 @@ async function jsonMain() {
         const editor = ace.edit(edit, options);
         edit.classList.add("ace-sysweaver");
         editor.session.setMode("ace/mode/" + type);
+        editor.renderer.setScrollMargin(2, 2);
+        if (scrollToEnd) {
+            const lastLine = 10000000;
+            editor.resize(true);
+            editor.scrollToLine(lastLine, false, false);
+            editor.gotoLine(lastLine, 0, false);
+        }
 
         //var beautify = ace.require("ace/ext/beautify"); // get reference to extension
         //beautify.beautify(editor.session);

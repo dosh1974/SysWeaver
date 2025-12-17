@@ -336,14 +336,79 @@ namespace SysWeaver.OsServices
             Process.Start(p);
         }
 
+        static readonly IReadOnlyDictionary<int, char> BackLocs = new Dictionary<int, char>
+        {
+            { 4, '-' },
+            { 7, '-' },
+            { 10, '_' },
+            { 13, '_' },
+            { 16, '_' },
+        }.Freeze();
+
+        public static bool IsConfigBackupName(String filename, out string orgName)
+        {
+            orgName = null;
+            var e = filename.LastIndexOf('.');
+            if (e < 0)
+                return false;
+            var ext = filename.Substring(e);
+            filename = filename.Substring(0, e);
+            e = filename.LastIndexOf('.');
+            if (e < 0)
+                return false;
+            orgName = filename.Substring(0, e) + ext;
+            filename = filename.Substring(e + 1);
+            if (filename.FastEquals("LastGood"))
+                return true;
+            var len = filename.Length;
+            if (len < 19)
+                return false;
+            var bl = BackLocs;
+            for (int i = 0; i < 19; ++i)
+            {
+                var c = filename[i];
+                if (bl.TryGetValue(i, out var m))
+                {
+                    if (m == c)
+                        continue;
+                }
+                if (c < '0')
+                    return false;
+                if (c > '9')
+                    return false;
+            }
+            if (len == 19)
+                return true;
+            if (filename[19] != '_')
+                return false;
+            for (int i = 20; i < len; ++ i)
+            {
+                var c = filename[i];
+                if (c < '0')
+                    return false;
+                if (c > '9')
+                    return false;
+            }
+            return true;
+        }
+
         public static String GetConfigBackupName(FileInfo t)
         {
+            var name = t.Name;
+            if (IsConfigBackupName(t.Name, out var org))
+                name = org;
             var fi = t.LastWriteTimeUtc.ToString("s", System.Globalization.CultureInfo.InvariantCulture);
             fi = fi.Replace(':', '_');
             fi = fi.Replace('T', '_');
             var filename = t.FullName;
-            var fn = Path.Combine(t.DirectoryName, Path.GetFileNameWithoutExtension(t.Name) + "." + fi + t.Extension);
-            return fn;
+            var bname = Path.Combine(t.DirectoryName, Path.GetFileNameWithoutExtension(name) + "." + fi);
+            var ext = t.Extension;
+            for (long i = 0; ; ++ i)
+            {
+                var fn = bname + (i <= 0 ? "" : "_" + i) + ext;
+                if (!File.Exists(fn))
+                    return fn;
+            }
         }
 
         public static bool BackupConfig(String filename, IMessageHost log = null)

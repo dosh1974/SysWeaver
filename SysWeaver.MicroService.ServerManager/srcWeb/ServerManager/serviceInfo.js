@@ -239,7 +239,8 @@ async function serviceInfoMain() {
         fn = fn.substring(e + 1);
         if (fn === "LastGood")
             return true;
-        if (fn.length != 19)
+        const len = fn.length;
+        if (len < 19)
             return false;
         for (let i = 0; i < 19; ++i) {
 
@@ -249,6 +250,18 @@ async function serviceInfoMain() {
                 if (c === m)
                     continue;
             }
+            if (c < '0')
+                return false;
+            if (c > '9')
+                return false;
+        }
+        if (len === 19)
+            return true;
+        if (fn.charAt(19) !== '_')
+            return false;
+        for (let i = 20; i < len; ++i)
+        {
+            const c = fn.charAt(i);
             if (c < '0')
                 return false;
             if (c > '9')
@@ -417,8 +430,8 @@ async function serviceInfoMain() {
                                             "../icons/fav_on.svg",
                                             "Click to pemamently delete the file",
                                             "Click to keep the file")) {
-                                            downloadFile(fn, folderSuffix + service + "/" + fn);
-                                            await delay(500);
+                                            //downloadFile(fn, folderSuffix + service + "/" + fn);
+                                            //await delay(500);
                                             try {
                                                 if (!await sendRequest("DeleteConfig", {
                                                     ServiceName: service,
@@ -457,7 +470,10 @@ async function serviceInfoMain() {
                     name.onclick = ev => {
                         if (badClick(ev))
                             return;
-                        Open("../logFile/logfile.html?api=" + folderSuffix + service + "/" + fn, "_self");
+                        Open("../edit/text.html?r=" + folderSuffix + service + "/" + fn + 
+                            "&u=../ServerManager/UpdateConfig" +
+                            "&d=../ServerManager/DeleteConfigFile"
+                        , "_self");
                     }; 
                     keyboardClick(name);
 

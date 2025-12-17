@@ -207,49 +207,6 @@ namespace SysWeaver.MicroService
             return !filename.FastEquals("_FolderSync.txt");
         }
 
-        static readonly IReadOnlyDictionary<int, char> BackLocs = new Dictionary<int, char>
-        {
-            { 4, '-' },
-            { 7, '-' },
-            { 10, '_' },
-            { 13, '_' },
-            { 16, '_' },
-        }.Freeze();
-
-        public bool IsBackupName(String filename, out string orgName)
-        {
-            orgName = null;
-            var e = filename.LastIndexOf('.');
-            if (e < 0)
-                return false;
-            var ext = filename.Substring(e);
-            filename = filename.Substring(0, e);
-            e = filename.LastIndexOf('.');
-            if (e < 0)
-                return false;
-            orgName = filename.Substring(0, e) + ext;
-            filename = filename.Substring(e + 1);
-            if (filename.FastEquals("LastGood"))
-                return true;
-            if (filename.Length != 19)
-                return false;
-            var bl = BackLocs;
-            for (int i = 0; i < 19; ++i)
-            {
-                var c = filename[i];
-                if (bl.TryGetValue(i, out var m))
-                {
-                    if (m == c)
-                        continue;
-                }
-                if (c < '0')
-                    return false;
-                if (c > '9')
-                    return false;
-            }
-            return true;
-        }
-
         static HashSet<String> GetConfigs(String path, String name)
         {
             var h = new HashSet<String>(StringComparer.Ordinal);
@@ -281,7 +238,7 @@ namespace SysWeaver.MicroService
             Exception ex = null;
             foreach (var config in GetConfigs(path, ename).OrderBy(x => x).ToList())
             {
-                if (IsBackupName(config, out var o))
+                if (ServiceHost.IsConfigBackupName(config, out var o))
                     continue;
                 var master = Path.Combine(parent, config);
                 var version = Path.Combine(path, config);
@@ -298,7 +255,7 @@ namespace SysWeaver.MicroService
             }
             foreach (var config in masterConfigs.OrderBy(x => x).ToList())
             {
-                if (IsBackupName(config, out var o))
+                if (ServiceHost.IsConfigBackupName(config, out var o))
                     continue;
                 var master = Path.Combine(parent, config);
                 var version = Path.Combine(path, config);
@@ -1214,7 +1171,7 @@ namespace SysWeaver.MicroService
             var sname = data.Config;
             if (!IsValidConfigName(sname))
                 throw new Exception("Invalid config name!");
-            if (!IsBackupName(sname, out var dname))
+            if (!ServiceHost.IsConfigBackupName(sname, out var dname))
                 throw new Exception("Config is not a backup!");
            
             sname = Path.Combine(bin, sname);
@@ -1247,25 +1204,107 @@ namespace SysWeaver.MicroService
         {
             var info = Validate(data.ServiceName, context);
             var bin = info.Syncher.DiscFolder;
+            var masterBin = Path.GetDirectoryName(bin);
             if (data.IsMaster)
+            {
+                if (!info.Service.MasterConfig)
+                    throw new Exception("Service is not configured to have master configs!");
+                bin = masterBin;
+            }
+            var sname = data.Config;
+            if (!IsValidConfigName(sname))
+                throw new Exception("Invalid config name!");
+            var fileName = sname;
+            sname = Path.Combine(bin, sname);
+            if (!File.Exists(sname))
+                throw new Exception("The configuration file does not exist!");
+            var bak = Path.Combine(masterBin, "bak");
+            if (await PathExt.EnsureFolderExistAsync(bak).ConfigureAwait(false) == null)
+            {
+                var bakDest = Path.Combine(bak, fileName);
+                if (File.Exists(bakDest))
+                    ServiceHost.BackupConfig(bakDest, Manager);
+                var ex = await PathExt.TryMoveFileAsync(sname, bakDest).ConfigureAwait(false);
+                if (ex != null)
+                    throw ex;
+            }
+            else
+            {
+                var ex = await PathExt.TryDeleteFileAsync(sname).ConfigureAwait(false);
+                if (ex != null)
+                    throw ex;
+            }
+            Syncer.GetFolderData(info.Syncher.Name);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            return true;
+        }
+
+
+        /// <summary>
+        /// Update a config file
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="context"></param>
+        /// <returns>True if sucessfully renamed</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<bool> UpdateConfig(EditSaveFile data, HttpServerRequest context)
+        {
+            var t = data.Url.Split('/');
+            var tl = t.Length;
+            var serviceName = t[tl - 2];
+            bool isMaster = t[tl - 3].FastEquals("Data");
+            var sname = t[tl - 1];
+
+            var info = Validate(serviceName, context);
+            var bin = info.Syncher.DiscFolder;
+            if (isMaster)
             {
                 if (!info.Service.MasterConfig)
                     throw new Exception("Service is not configured to have master configs!");
                 bin = Path.GetDirectoryName(bin);
             }
-            var sname = data.Config;
             if (!IsValidConfigName(sname))
                 throw new Exception("Invalid config name!");
             sname = Path.Combine(bin, sname);
             if (!File.Exists(sname))
                 throw new Exception("The configuration file does not exist!");
-            var ex = await PathExt.TryDeleteFileAsync(sname).ConfigureAwait(false);
-            if (ex != null)
-                throw ex;
+            if (!ServiceHost.BackupConfig(sname, Manager))
+                throw new Exception("Failed to backup exsiting file \"" + sname + "\"");
+            await File.WriteAllTextAsync(sname, data.Content).ConfigureAwait(false);
             Syncer.GetFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
+        }
+
+        /// <summary>
+        /// Delete a config file.
+        /// WARNING no backup is made!
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="context"></param>
+        /// <returns>True if sucessfully renamed</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public Task<bool> DeleteConfigFile(EditSaveFile data, HttpServerRequest context)
+        {
+            var t = data.Url.Split('/');
+            var tl = t.Length;
+            var serviceName = t[tl - 2];
+            bool isMaster = t[tl - 3].FastEquals("Data");
+            var sname = t[tl - 1];
+            return DeleteConfig(new SmConfigRequest
+            {
+                Config = sname,
+                ServiceName = serviceName,
+                IsMaster = isMaster,
+            }, context);
         }
 
         #endregion//Configs
@@ -1274,64 +1313,64 @@ namespace SysWeaver.MicroService
 
         readonly Object ServiceLock = new object();
 
-        /// <summary>
-        /// Add a new managed service
-        /// </summary>
-        /// <param name="service">Service params</param>
-        /// <returns>True if sucessfully added</returns>
-        /// <exception cref="Exception"></exception>
-        [WebApi]
-        [WebApiAuth(Roles.Admin)]
-        [WebApiAudit(AuditGroup)]
-        public bool AddService(ManagedService service)
+    /// <summary>
+    /// Add a new managed service
+    /// </summary>
+    /// <param name="service">Service params</param>
+    /// <returns>True if sucessfully added</returns>
+    /// <exception cref="Exception"></exception>
+    [WebApi]
+    [WebApiAuth(Roles.Admin)]
+    [WebApiAudit(AuditGroup)]
+    public bool AddService(ManagedService service)
+    {
+        var name = service?.Name?.Trim();
+        if (String.IsNullOrEmpty(name))
+            throw new Exception("Invalid name! May not be empty or null!");
+        if (!PathExt.IsValidFilename(name))
+            throw new Exception("Invalid name! May only contain valid file name characters!");
+        if (!PathExt.IsValidSubPath(name))
+            throw new Exception("Invalid name! May only contain valid folder name characters!");
+        service.Name = name;
+        lock (ServiceLock)
         {
-            var name = service?.Name?.Trim();
-            if (String.IsNullOrEmpty(name))
-                throw new Exception("Invalid name! May not be empty or null!");
-            if (!PathExt.IsValidFilename(name))
-                throw new Exception("Invalid name! May only contain valid file name characters!");
-            if (!PathExt.IsValidSubPath(name))
-                throw new Exception("Invalid name! May only contain valid folder name characters!");
-            service.Name = name;
-            lock (ServiceLock)
-            {
-                InternalAddService(service);
-                var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
-                savedServices = savedServices.Push(service);
-                KeyValueStore.AllApp.Set(ServerManagerServicesKey, savedServices);
-            }
-            return true;
+            InternalAddService(service);
+            var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
+            savedServices = savedServices.Push(service);
+            KeyValueStore.AllApp.Set(ServerManagerServicesKey, savedServices);
         }
+        return true;
+    }
 
-        /// <summary>
-        /// Remove a service from the Service Managers control.
-        /// This will NOT stop, uninstall and remove the service from disc,
-        /// </summary>
-        /// <param name="serviceName">Name of the service</param>
-        /// <returns>True if sucessfully removed</returns>
-        /// <exception cref="Exception"></exception>
-        [WebApi]
-        [WebApiAuth(Roles.Admin)]
-        [WebApiAudit(AuditGroup)]
-        public bool RemoveService(String serviceName)
+    /// <summary>
+    /// Remove a service from the Service Managers control.
+    /// This will NOT stop, uninstall and remove the service from disc,
+    /// </summary>
+    /// <param name="serviceName">Name of the service</param>
+    /// <returns>True if sucessfully removed</returns>
+    /// <exception cref="Exception"></exception>
+    [WebApi]
+    [WebApiAuth(Roles.Admin)]
+    [WebApiAudit(AuditGroup)]
+    public bool RemoveService(String serviceName)
+    {
+        lock (ServiceLock)
         {
-            lock (ServiceLock)
-            {
-                if (!InternalRemoveService(serviceName))
-                    return false;
-                var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
-                if (savedServices == null)
-                    return false;
-                var i = savedServices.IndexOf(x => x.Name.FastEquals(serviceName));
-                if (i < 0)
-                    return false;
-                savedServices = savedServices.RemoveAt(i);
-                KeyValueStore.AllApp.Set(ServerManagerServicesKey, savedServices.Length == 0 ? null : savedServices);
-            }
-            return true;
+            if (!InternalRemoveService(serviceName))
+                return false;
+            var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
+            if (savedServices == null)
+                return false;
+            var i = savedServices.IndexOf(x => x.Name.FastEquals(serviceName));
+            if (i < 0)
+                return false;
+            savedServices = savedServices.RemoveAt(i);
+            KeyValueStore.AllApp.Set(ServerManagerServicesKey, savedServices.Length == 0 ? null : savedServices);
         }
+        return true;
+    }
 
-        #endregion//Service management
+    #endregion//Service management
 
         #region Keys
 
@@ -1363,7 +1402,7 @@ namespace SysWeaver.MicroService
                 {
                     var fi = new FileInfo(x);
                     var n = fi.Name;
-                    bool bak = IsBackupName(n, out var o);
+                    bool bak = ServiceHost.IsConfigBackupName(n, out var o);
                     files.Add(new SmKeyFile
                     {
                         Name = n,
@@ -1381,4 +1420,22 @@ namespace SysWeaver.MicroService
 
     }
 
+
+    public sealed class EditSaveFile
+    {
+        /// <summary>
+        /// The url used to read the file
+        /// </summary>
+        public String Url;
+        
+        /// <summary>
+        /// The name of the file (filename of url)
+        /// </summary>
+        public String Name;
+
+        /// <summary>
+        /// The new content
+        /// </summary>
+        public String Content;
+    }
 }

@@ -6,6 +6,11 @@
 
 async function logFileMain() {
 
+    if (await sendRequest("../Api/HaveService", "SysWeaver.MicroService.TypeService"))
+    {
+        location.replace("../edit/text.html?r=../Api/logFile/LogFile.txt&d=../Api/logFile/DeleteLogFile&scrollToEnd=true");
+        return;
+    }
     try {
         const ps = getUrlParams();
         const url = ps.get("api");
