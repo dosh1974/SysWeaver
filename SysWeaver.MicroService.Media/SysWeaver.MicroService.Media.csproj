@@ -16,5 +16,6 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+	  <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
 	</ItemGroup>
 </Project>

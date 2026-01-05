@@ -26,6 +26,7 @@ async function textMain() {
             const extp = name.lastIndexOf('.');
             if (extp > 0) {
                 const m = new Map();
+                // Should be synched with the TextExtensions in TypeService.cs
                 m.set("c", "c_cpp");
                 m.set("c++", "c_cpp");
                 m.set("cpp", "c_cpp");
@@ -41,6 +42,10 @@ async function textMain() {
                 m.set("json", "json");
                 m.set("md", "markdown");
                 m.set("txt", "plain_text");
+                m.set("log", "plain_text");
+                m.set("cfg", "plain_text");
+                m.set("bat", "batchfile");
+                m.set("cmd", "batchfile");
                 m.set("sql", "mysql");
                 m.set("svg", "svg");
                 m.set("xml", "xml");

@@ -1251,7 +1251,7 @@ namespace SysWeaver.MicroService
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
-        public async Task<bool> UpdateConfig(EditSaveFile data, HttpServerRequest context)
+        public async Task<bool> UpdateConfig(EditSaveTextFile data, HttpServerRequest context)
         {
             var t = data.Url.Split('/');
             var tl = t.Length;
@@ -1292,7 +1292,7 @@ namespace SysWeaver.MicroService
         [WebApi]
         [WebApiAuth]
         [WebApiAudit(AuditGroup)]
-        public Task<bool> DeleteConfigFile(EditSaveFile data, HttpServerRequest context)
+        public Task<bool> DeleteConfigFile(EditFile data, HttpServerRequest context)
         {
             var t = data.Url.Split('/');
             var tl = t.Length;
@@ -1421,21 +1421,4 @@ namespace SysWeaver.MicroService
     }
 
 
-    public sealed class EditSaveFile
-    {
-        /// <summary>
-        /// The url used to read the file
-        /// </summary>
-        public String Url;
-        
-        /// <summary>
-        /// The name of the file (filename of url)
-        /// </summary>
-        public String Name;
-
-        /// <summary>
-        /// The new content
-        /// </summary>
-        public String Content;
-    }
 }

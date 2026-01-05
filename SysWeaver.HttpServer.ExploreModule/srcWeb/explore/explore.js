@@ -504,7 +504,6 @@ function BuildTable(data, set)
                 break;
         }
     }
-
     const href = window.location.href;
     const li = href.indexOf('?');
     const qp = li <= 0 ? "" : href.substring(li);
@@ -525,6 +524,8 @@ function BuildTable(data, set)
         const localName = data.LocalUrl + fname;
 
         let open = "\n\n" + _T('Click to open "{0}"', absName, "A tool tip description on an item that when clicked will open a url.{0} is replaced with the url");
+        let editT = "\n\n" + _T('Click to view "{0}"', absName, "A tool tip description on an item that when clicked will view the document at an url.{0} is replaced with the url");
+        let edit = false;
         switch (type) {
 
             case 0:
@@ -548,6 +549,7 @@ function BuildTable(data, set)
                 img = data.ExtIconBase + (ext === "" ? "bin" : ext) + ".svg";
                 size = item.Size;
                 isRes = true;
+                edit = true;
                 break;
             case 3:
                 ext = GetFileExtension(fname);
@@ -577,15 +579,7 @@ function BuildTable(data, set)
                         const c = row.insertCell();
                         c.classList.add("ExploreIcon");
                         if (img) {
-                            //const a = document.createElement("a");
-                            //if (newWindow)
-                                //a.target = "_blank";
-                            //a.href = link;
-                            const a = ValueFormat.createLink(link, img, newWindow ? "_blank" : "_self", (item.Mime ?? item.Location) + open, true);
-                            //const imgE = document.createElement("img");
-                            //imgE.src = img;
-                            //imgE.title = (item.Mime ?? item.Location) + open;
-                            //a.appendChild(imgE);
+                            const a = ValueFormat.createLink(link, img, newWindow ? "_blank" : "_self", (item.Mime ?? item.Location) + (edit ? editT : open), true, false, edit, false);
                             c.appendChild(a);
                         }
                         break;
@@ -595,14 +589,7 @@ function BuildTable(data, set)
                     {
                         const c = row.insertCell();
                         c.classList.add("ExploreName");
-                        /*const a = document.createElement("a");
-                        if (newWindow)
-                            a.target = "_blank";
-                        a.href = link;
-                        a.innerText = fname;
-                        a.title = item.Location + open;
-                        */
-                        const a = ValueFormat.createLink(link, fname, newWindow ? "_blank" : "_self", item.Location + open);
+                        const a = ValueFormat.createLink(link, fname, newWindow ? "_blank" : "_self", item.Location + open, false, false, false, edit);
                         if (!accent)
                             a.classList.add("ThemeMain");
                         accent = !accent;

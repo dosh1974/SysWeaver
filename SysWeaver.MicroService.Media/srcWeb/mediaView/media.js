@@ -930,24 +930,60 @@ async function mediaEditMain() {
     }
     PageLoaded();
 }
+
+class SsHask {
+    isSupported() {
+        console.log("isSupported()");
+    }
+
+    setSize(width, height) {
+        console.log("setSize(" + width + ", " + height + ")");
+    }
+
+    doIt(duration, fps, error) {
+        console.log("doIt(" + duration + ", " + fps + ", " + error + ")");
+
+    }
+}
+
+function mediaGetTypeFromUrl(url) {
+    const ext = getFileExtension(url).toLowerCase();
+    if (isImageExt(ext))
+        return MediaTypes.Image;
+    if (isVideoExt(ext))
+        return MediaTypes.Video;
+    if (isAudioExt(ext))
+        return MediaTypes.Audio;
+    if (ext === "glsl")
+        return MediaTypes.Effect;
+    return -1;
+}
+
 async function mediaViewMain() {
     const target = document.body;
     try {
         const ps = getUrlParams();
         const stats = !ps.has('no_stats');
         const controls = !ps.has('no_controls');
-        let type = ps.get('type') ?? ps.get('t');
-        if (!type) {
-            Fail("No type parameter 'type' supplied!");
-            return;
-        }
-        type = parseInt(type);
 
         const data = ps.get('link') ?? ps.get('d');
         if (!data) {
             Fail("No link parameter 'link' supplied!");
             return;
         }
+
+        let type = ps.get('type') ?? ps.get('t');
+        if (!type) {
+            type = mediaGetTypeFromUrl(data);
+            if (type < 0) {
+                Fail("No type parameter 'type' supplied!");
+                return;
+            }
+        } else {
+            type = parseInt(type);
+        }
+
+
         let props = ps.get('props');
         if (props) {
             props = JSON.parse(props);
@@ -1110,23 +1146,6 @@ async function mediaViewMain() {
     PageLoaded();
 }
 
-class SsHask {
-    isSupported() {
-        console.log("isSupported()");
-    }
-
-    setSize(width, height) {
-        console.log("setSize(" + width + ", " + height + ")");
-    }
-
-    doIt(duration, fps, error) {
-        console.log("doIt(" + duration + ", " + fps + ", " + error + ")");
-
-    }
-}
-
-
-
 async function mediaPreviewMain() {
     const target = document.body;
     try {
@@ -1152,17 +1171,24 @@ async function mediaPreviewMain() {
         const fill = ps.has('fill') || shost;
         const full = ps.has('full');
         const back = ps.has('back');
-        let type = ps.get('type') ?? ps.get('t');
-        if (!type) {
-            Fail("No type parameter 'type' supplied!");
-            return;
-        }
-        type = parseInt(type);
+
         const data = ps.get('link') ?? ps.get('d');
         if (!data) {
             Fail("No link parameter 'link' supplied!");
             return;
         }
+
+        let type = ps.get('type') ?? ps.get('t');
+        if (!type) {
+            type = mediaGetTypeFromUrl(data);
+            if (type < 0) {
+                Fail("No type parameter 'type' supplied!");
+                return;
+            }
+        } else {
+            type = parseInt(type);
+        }
+
         let pos = ps.get("pos")
         pos = pos ? parseFloat(pos) : 0;
         let props = ps.get('props');

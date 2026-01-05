@@ -2323,6 +2323,11 @@ function PostTop(name, data, targetOrigin) {
     }
 }
 
+/**
+ * Open an url
+ * @param {string} l The url to open
+ * @param {string} target Optional target ("_self", "_blank")
+ */
 function Open(l, target) {
     if (target === "_self") {
         if ((!IsAbsolutePath(l)) || IsSameOrigin(l)) {
@@ -2344,13 +2349,56 @@ function Open(l, target) {
     window.open(appendTheme(l), target ? target : "_blank");
 }
 
+/**
+ * Edit an url
+ * @param {String} read The url to use for reading
+ * @param {string} target Optional target to use for non editable files ("_self", "_blank")
+ * @param {String} save Optional url to use for saving
+ * @param {String} remove Optional url to use for removing
+ */
+async function EditUrl(read, target, save, remove) {
+    const u = await sendRequest("/Api/GetExtensionEditor", {
+        Read: GetAbsolutePath(read),
+        Save: GetAbsolutePath(save), 
+        Delete: GetAbsolutePath(remove),
+    });
+    if (!u) {
+        Open(read, target);
+    } else {
+        Open("/" + u, "_self");
+    }
+}
 
+/**
+ * View an url
+ * @param {String} read The url to use for reading
+ * @param {string} target Optional target to use for non editable files ("_self", "_blank")
+ */
+async function ViewUrl(read, target) {
+    const u = await sendRequest("/Api/GetExtensionViewer", GetAbsolutePath(read));
+    if (!u) {
+        Open(read, target);
+    } else {
+        Open("/" + u, "_self");
+    }
+}
+
+/**
+ * Check if an url is from the same origin as the current page
+ * @param {String} url The url to check
+ * @returns {Boolean} true if the url is from the same origin
+ */
 function IsSameOrigin(url) {
     const urlA = window.location;
     const urlB = new URL(url);
     return urlA.origin === urlB.origin;
 }
 
+/**
+ * Check if an url is an absolute url (starts with http)
+ * @param {String} url The url to check
+ * @returns {Boolean} true if the url is absolute
+ */
 function IsAbsolutePath(url) {
     if (url.startsWith("http://"))
         return true;
@@ -2359,7 +2407,15 @@ function IsAbsolutePath(url) {
     return false;
 }
 
+/**
+ * Get the absolute path of an url
+ * @param {String} url The url to make absolute (if not already)
+ * @param {String} current Optional current url
+ * @returns {Boolean} The absolute path
+ */
 function GetAbsolutePath(url, current) {
+    if (!url)
+        return null;
     if (IsAbsolutePath(url))
         return url;
     return new URL(url, current ? current : window.location.href).href;
@@ -3134,9 +3190,19 @@ function RankScoreMatch(searchFor, ...inTexts) {
 }
 
 
-function onLink(ev, url, target) {
-    if (badClick(ev))
+function onLink(ev, url, target, useEdit, useView) {
+    if (badClick(ev)) {
+        ValueFormat.copyToClipboardInfo(url);
         return;
+    }
+    if (useView) {
+        ViewUrl(url, target);
+        return;
+    }
+    if (useEdit) {
+        EditUrl(url, target);
+        return;
+    }
     Open(url, target);
 }
 
@@ -3165,6 +3231,9 @@ function fixLinks() {
         }
     }
 }
+
+
+
 
 
 class ValueFormat {
@@ -3744,7 +3813,7 @@ class ValueFormat {
 
 
 
-    static createLink(url, text, target, title, isImage, useAttr) {
+    static createLink(url, text, target, title, isImage, useAttr, useEdit, useView) {
         const a = document.createElement("SysWeaver-Link");
         a.tabIndex = "0";
         const u = url;
@@ -3752,7 +3821,7 @@ class ValueFormat {
         if (useAttr)
             ValueFormat.setOnClickAttr(a, u, t);
         else {
-            a.onclick = ev => onLink(ev, u, t);
+            a.onclick = ev => onLink(ev, u, t, useEdit, useView);
             keyboardClick(a);
         }
         if (text) {
@@ -5158,6 +5227,13 @@ const videoExtensions = Object.freeze({
     mov: 1,
 });
 
+
+const audioExtensions = Object.freeze({
+    mp3: 1,
+    wav: 1,
+    aac: 1,
+});
+
 const programmingExtensions = Object.freeze({
     js: 1,
     json: 1,
@@ -5182,6 +5258,10 @@ const compressExtensions = Object.freeze({
 
 function isImageExt(ext) {
     return imageExtensions[ext] == 1;
+}
+
+function isAudioExt(ext) {
+    return audioExtensions[ext] == 1;
 }
 
 function isProgrammingExt(ext) {

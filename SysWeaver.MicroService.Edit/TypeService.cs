@@ -32,7 +32,43 @@ namespace SysWeaver.MicroService
             ApiMod = manager.TryGet<ApiHttpServerModule>();
             manager.OnServiceAdded += OnServiceAdded;
             manager.OnServiceRemoved += OnServiceRemoved;
+
+            var te = TextEditor;
+            foreach (var x in TextExtensions)
+                manager.TryAddExtensionEditor(x, te);
         }
+        
+        const string TextEditor = "edit/text.html?r={0}&u={1}&d={2}";
+        
+        /// <summary>
+        /// Should be synched with the extensions supported in text.js
+        /// </summary>
+        static readonly String[] TextExtensions = [
+                "bat",
+                "cmd",
+                "c", 
+                "c++", 
+                "cpp", 
+                "h", 
+                "hpp", 
+                "cs", 
+                "css", 
+                "csv", 
+                "glsl", 
+                "htm", 
+                "html", 
+                "js", 
+                "json", 
+                "md", 
+                "txt", 
+                "sql", 
+                "svg", 
+                "xml", 
+                "config", 
+                "csproj", 
+                "log",
+                "cfg",
+            ];
 
 
         public void Dispose()
@@ -40,6 +76,8 @@ namespace SysWeaver.MicroService
             var manager = Manager;
             manager.OnServiceRemoved -= OnServiceRemoved;
             manager.OnServiceAdded -= OnServiceAdded;
+            foreach (var x in TextExtensions)
+                manager.TryRemoveExtensionEditor(x, out var _);
         }
 
         void OnServiceRemoved(object arg1, ServiceInfo arg2)
@@ -684,7 +722,7 @@ namespace SysWeaver.MicroService
 
     }
 
-
+#if DEBUG
 
 
     static class EditTestAttributes
@@ -850,5 +888,6 @@ namespace SysWeaver.MicroService
        
     }
 
+#endif//DEBUG
 
 }

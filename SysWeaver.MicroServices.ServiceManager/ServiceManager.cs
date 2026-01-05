@@ -1673,7 +1673,249 @@ namespace SysWeaver.MicroService
         #endregion//One time pad
 
 
+        #region Extension editors
+
+        /// <summary>
+        /// Add an editor url for a file extension
+        /// </summary>
+        /// <param name="extension">The file extension, preferable lowercase without the leading dot</param>
+        /// <param name="url">The url format to use for editing.
+        /// The url should be from the site root (applications typically need to prefix with "../" etc)
+        /// {0} is the read url.
+        /// {1} is the save url, argument should be one of the EditSave*File objects. Ex: EditSaveTextFile.
+        /// {2} is the delete url, argument should be EditFile
+        /// </param>
+        /// <returns>True if extension was added</returns>
+        public bool TryAddExtensionEditor(String extension, String url)
+            => Editors.TryAdd(extension.FastToLower().TrimStart('.'), url);
+
+
+        /// <summary>
+        /// Remove an extension editor
+        /// </summary>
+        /// <param name="extension">The file extension, preferable lowercase without the leading dot</param>
+        /// <param name="url">The url format to used for editing from site root.
+        /// {0} is the read url.
+        /// {1} is the save url, argument should be one of the EditSave*File objects. Ex: EditSaveTextFile.
+        /// {2} is the delete url, argument should be EditFile
+        /// </param>
+        /// <returns>True if extension was removed</returns>
+        public bool TryRemoveExtensionEditor(String extension, out String url)
+            => Editors.TryRemove(extension.FastToLower().TrimStart('.'), out url);
+
+        /// <summary>
+        /// Get an editor url fro a file extension
+        /// </summary>
+        /// <param name="extension">The file extension, preferable lowercase without the leading dot</param>
+        /// <returns>
+        /// null if the extension doesn't have a handle, else the url format to use (from site root).
+        /// {0} is the read url.
+        /// {1} is the save url, argument should be one of the EditSave*File objects. Ex: EditSaveTextFile.
+        /// {2} is the delete url, argument should be EditFile
+        /// </returns>
+        [WebApi]
+        [WebApiClientCacheStatic]
+        [WebApiRequestCacheStatic]
+        public String GetExtensionEditorFormat(String extension)
+            => Editors.TryGetValue(extension.FastToLower().TrimStart('.'), out var url) ? url : null;
+
+        /// <summary>
+        /// Get the extension editor url
+        /// </summary>
+        /// <param name="extension">The file extension, preferable lowercase without the leading dot</param>
+        /// <param name="read">The url to use for reading (use "../" to get to site root, editors should always be one folder in from site root)</param>
+        /// <param name="save">The url to use for saving the file, argument should be one of the EditSave*File objects. Ex: EditSaveTextFile</param>
+        /// <param name="delete">The url to use for deleting the file, argument should be EditFile</param>
+        /// <returns></returns>
+        public String GetExtensionEditor(String extension, String read, String save = null, String delete = null)
+        {
+            var fmt = GetExtensionEditorFormat(extension);
+            if (fmt == null)
+                return null;
+            return String.Format(fmt, read ?? "", save ?? null, delete ?? null);
+        }
+
+        /// <summary>
+        /// Get the url to use for editing an url
+        /// </summary>
+        /// <param name="r">The read and optional save and delete urls</param>
+        /// <returns>The url to use for editing (or null if no editor exists)</returns>
+        [WebApi]
+        [WebApiClientCacheStatic]
+        [WebApiRequestCache(15)]
+        public String GetExtensionEditor(EditFileRequest r)
+        {
+            var read = r.Read;
+            if (read == null)
+                return null;
+            var ext = read.SplitFirst('?');
+            var i = ext.LastIndexOf('.');
+            if (i < 0)
+                return null;
+            ext = ext.Substring(i + 1);
+            var x = GetExtensionEditor(ext, read, r.Save, r.Delete);
+            if (x != null)
+                return x;
+            return GetExtensionViewer(ext, read);
+        }
+
+        readonly SemiFrozenDictionary<String, String> Editors = new SemiFrozenDictionary<string, string>(StringComparer.Ordinal);
+
+        #endregion//Extension editors
+
+
+
+        #region Extension viewers
+
+        /// <summary>
+        /// Add an viewer url for a file extension
+        /// </summary>
+        /// <param name="extension">The file extension, preferable lowercase without the leading dot</param>
+        /// <param name="url">The url format to use for editing.
+        /// The url should be from the site root (applications typically need to prefix with "../" etc)
+        /// {0} is the read url.
+        /// {1} is the save url, argument should be one of the EditSave*File objects. Ex: EditSaveTextFile.
+        /// {2} is the delete url, argument should be EditFile
+        /// </param>
+        /// <returns>True if extension was added</returns>
+        public bool TryAddExtensionViewer(String extension, String url)
+            => Viewers.TryAdd(extension.FastToLower().TrimStart('.'), url);
+
+
+        /// <summary>
+        /// Remove an extension viewer
+        /// </summary>
+        /// <param name="extension">The file extension, preferable lowercase without the leading dot</param>
+        /// <param name="url">The url format to used for editing from site root.
+        /// {0} is the read url.
+        /// {1} is the save url, argument should be one of the EditSave*File objects. Ex: EditSaveTextFile.
+        /// {2} is the delete url, argument should be EditFile
+        /// </param>
+        /// <returns>True if extension was removed</returns>
+        public bool TryRemoveExtensionViewer(String extension, out String url)
+            => Viewers.TryRemove(extension.FastToLower().TrimStart('.'), out url);
+
+        /// <summary>
+        /// Get an viewer url fro a file extension
+        /// </summary>
+        /// <param name="extension">The file extension, preferable lowercase without the leading dot</param>
+        /// <returns>
+        /// null if the extension doesn't have a handle, else the url format to use (from site root).
+        /// {0} is the read url.
+        /// {1} is the save url, argument should be one of the EditSave*File objects. Ex: EditSaveTextFile.
+        /// {2} is the delete url, argument should be EditFile
+        /// </returns>
+        [WebApi]
+        [WebApiClientCacheStatic]
+        [WebApiRequestCacheStatic]
+        public String GetExtensionViewerFormat(String extension)
+            => Viewers.TryGetValue(extension.FastToLower().TrimStart('.'), out var url) ? url : null;
+
+        /// <summary>
+        /// Get the extension viewer url
+        /// </summary>
+        /// <param name="extension">The file extension, preferable lowercase without the leading dot</param>
+        /// <param name="read">The url to use for reading (use "../" to get to site root, viewers should always be one folder in from site root)</param>
+        /// <returns></returns>
+        public String GetExtensionViewer(String extension, String read)
+        {
+            var fmt = GetExtensionViewerFormat(extension);
+            if (fmt == null)
+                return null;
+            return String.Format(fmt, read ?? "");
+        }
+
+        /// <summary>
+        /// Get the url to use for editing an url
+        /// </summary>
+        /// <param name="read">The url to use for reading (use "../" to get to site root, viewers should always be one folder in from site root)</param>
+        /// <returns>The url to use for editing (or null if no viewer exists)</returns>
+        [WebApi]
+        [WebApiClientCacheStatic]
+        [WebApiRequestCache(15)]
+        public String GetExtensionViewer(String read)
+        {
+            if (read == null)
+                return null;
+            var ext = read.SplitFirst('?');
+            var i = ext.LastIndexOf('.');
+            if (i < 0)
+                return null;
+            ext = ext.Substring(i + 1).FastToLower();
+            var x = GetExtensionViewer(ext, read);
+            if (x != null)
+                return x;
+            if (WebFiles.Contains(ext))
+                return read;
+            return GetExtensionEditor(ext, read);
+        }
+
+        static readonly IReadOnlySet<String> WebFiles = ReadOnlyData.Set(
+            "html",
+            "htm",
+            "svg"
+            );
+
+
+        readonly SemiFrozenDictionary<String, String> Viewers = new SemiFrozenDictionary<string, string>(StringComparer.Ordinal);
+
+        #endregion//Extension viewers
+
     }
 
+    public class EditFileRequest
+    {
+        /// <summary>
+        /// The url to use for reading (use "../" to get to site root, editors should always be one folder in from site root)
+        /// </summary>
+        [EditMin(1)]
+        public String Read;
+
+        /// <summary>
+        /// Optional, the url to use for saving the file, argument should be one of the EditSave*File objects. Ex: EditSaveTextFile
+        /// </summary>
+        [EditAllowNull]
+        public String Save;
+
+        /// <summary>
+        /// Optional, the url to use for deleting the file, argument should be EditFile
+        /// </summary>
+        [EditAllowNull]
+        public String Delete;
+
+    }
+
+
+    public class EditFile
+    {
+        /// <summary>
+        /// The url used to read the file
+        /// </summary>
+        public String Url;
+
+        /// <summary>
+        /// The name of the file (filename of url)
+        /// </summary>
+        public String Name;
+
+    }
+
+    public sealed class EditSaveTextFile : EditFile
+    {
+
+        /// <summary>
+        /// The new content
+        /// </summary>
+        public String Content;
+    }
+
+    public sealed class EditSaveBinFile : EditFile
+    {
+
+        /// <summary>
+        /// The new content
+        /// </summary>
+        public Byte[] Content;
+    }
 
 }
