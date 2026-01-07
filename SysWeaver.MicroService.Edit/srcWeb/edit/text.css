@@ -305,9 +305,15 @@ SysWeaver-AceEditor {
         }
 
     .ace-sysweaver .ace_paren,
+    .ace-sysweaver .ace_support,
     .ace-sysweaver .ace_operator {
         color: var(--ThemeMain50);
     }
+
+        .ace-sysweaver .ace_support.ace_type
+        {
+            color: var(--ThemeMain);
+        }
 
     .ace-sysweaver .ace_constant,
     .ace-sysweaver .ace_constant.ace_character,
@@ -347,10 +353,6 @@ SysWeaver-AceEditor {
         text-decoration: underline;
         font-style: italic;
         color: var(--ThemeWarning);
-    }
-
-    .ace-sysweaver .ace_support {
-        color: #9B859D
     }
 
     .ace-sysweaver .ace_fold {

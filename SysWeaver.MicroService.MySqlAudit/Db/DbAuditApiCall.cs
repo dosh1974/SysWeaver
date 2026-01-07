@@ -24,6 +24,7 @@ namespace SysWeaver.MicroService.Db
         [Index]
         [Ascii]
         [StringLength(128)]
+        [TableDataUrl("{0}", "*api.html?q={0}")]
         public string Api { get; set; }
 
 

@@ -91,7 +91,7 @@ async function textMain() {
 
         if (beautify) {
             beautifyButton = new Button("", _TF("Beautify", "Text on a button that when clicked will beatify some source code text"),
-                _TF("Click to beautify the text", "Tool tip description on a button that when clicked will beatify some source code text"), "../icons/disc.svg", true, async () => {
+                _TF("Click to beautify the text", "Tool tip description on a button that when clicked will beatify some source code text"), "../icons/organize.svg", true, async () => {
                     beautifyButton.StartWorking();
                     try {
                         text = await beautify(editor.session.getValue());
@@ -106,7 +106,7 @@ async function textMain() {
         }
 
         if (download){
-            downloadButton = new Button("", _TF("Download", "Text on a button that when clicked will download the file"), _TF("Click to download the file", "Tool tip description on a button that when clicked will download the file"), "../icons/disc.svg", true, async () => {
+            downloadButton = new Button("", _TF("Download", "Text on a button that when clicked will download the file"), _TF("Click to download the file", "Tool tip description on a button that when clicked will download the file"), "../icons/download.svg", true, async () => {
                 downloadButton.StartWorking();
                 try {
                     downloadText(name, editor.session.getValue());

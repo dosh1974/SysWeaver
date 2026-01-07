@@ -212,7 +212,7 @@ si-uploads {
         background-color: var(--ThemeMain);
         mask-repeat: no-repeat;
         mask-size: contain;
-        mask-image: url("../icons/plus.svg");
+        mask-image: url("../icons/upload.svg");
         opacity: 0.8;
     }
 

@@ -1037,3 +1037,11 @@ SysWeaver-PopUpWorkingText {
 .IconSync {
     mask-image: url("../icons/sync.svg");
 }
+
+.IconUpload {
+    mask-image: url("../icons/upload.svg");
+}
+
+.IconDownload {
+    mask-image: url("../icons/download.svg");
+}

@@ -886,7 +886,7 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
-        [WebMenuTable(null, "ChunkStorage", "Chunk storage", "Analysis of the chunk storage", "../icons/disc.svg", -5)]
+        [WebMenuTable(null, "ChunkStorage", "Chunk storage", "Analysis of the chunk storage", "../icons/brick.svg", -5)]
         [WebApiClientCache(14)]
         [WebApiRequestCache(10)]
         public async Task<TableData> StorageStatsTable(TableDataRequest r)

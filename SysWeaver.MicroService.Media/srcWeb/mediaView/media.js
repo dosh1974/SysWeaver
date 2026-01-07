@@ -546,7 +546,7 @@ async function mediaCreatePlayer(target, type, data, props, noControls, before, 
             }
         }
         const buttonShow = new Button(bs, "Source", "Click to open the source in a new tab", "MediaIconExpand", true, async button => {
-            Open(player.Source);
+            EditOrOpenUrl(player.Source);
         });
         p.appendChild(buttonShow.Element);
 

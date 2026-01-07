@@ -2349,6 +2349,36 @@ function Open(l, target) {
     window.open(appendTheme(l), target ? target : "_blank");
 }
 
+
+/**
+ * Edit an url if there is an editor (that doesn't match the viewer)
+ * @param {String} read The url to use for reading
+ * @param {string} target Optional target to use for non editable files ("_self", "_blank")
+ * @param {String} save Optional url to use for saving
+ * @param {String} remove Optional url to use for removing
+ */
+async function EditOrOpenUrl(read, target, save, remove) {
+    const rr = GetAbsolutePath(read);
+    const u = await sendRequest("/Api/GetExtensionEditor", {
+        Read: rr,
+        Save: GetAbsolutePath(save),
+        Delete: GetAbsolutePath(remove),
+    });
+    if (!u) {
+        Open(read, target);
+    } else {
+        if (await sendRequest("/Api/GetExtensionViewer", rr) === u) {
+            Open(read, target);
+        } else {
+            if (IsAbsolutePath(u))
+                Open(u, "_blank");
+            else
+                Open("/" + u, "_self");
+        }
+    }
+}
+
+
 /**
  * Edit an url
  * @param {String} read The url to use for reading
@@ -2365,7 +2395,10 @@ async function EditUrl(read, target, save, remove) {
     if (!u) {
         Open(read, target);
     } else {
-        Open("/" + u, "_self");
+        if (IsAbsolutePath(u))
+            Open(u, "_blank");
+        else
+            Open("/" + u, "_self");
     }
 }
 
@@ -2379,7 +2412,10 @@ async function ViewUrl(read, target) {
     if (!u) {
         Open(read, target);
     } else {
-        Open("/" + u, "_self");
+        if (IsAbsolutePath(u))
+            Open(u, "_blank");
+        else
+            Open("/" + u, "_self");
     }
 }
 
