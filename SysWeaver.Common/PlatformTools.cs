@@ -73,6 +73,8 @@ namespace SysWeaver
 
         bool FlushToDisc(SafeHandle h);
 
+        bool GetMemorySize(out ulong availableBytes, out ulong totalBytes);
+
     }
 
     public sealed class DummyPlatformTools : IPlatformTools
@@ -85,6 +87,13 @@ namespace SysWeaver
         public string Name { get; init; }
 
         public bool FlushToDisc(SafeHandle h) => true;
+        public bool GetMemorySize(out ulong availableBytes, out ulong totalBytes)
+        {
+            availableBytes = 0;
+            totalBytes = 0;
+            return false;
+        }
+
     }
 
 

@@ -6235,12 +6235,8 @@ async function SysWeaverInit() {
         else
             b.classList.add("SwDesktop");
         onSizeChange();
-        if (ps.get("transparent")) {
-            const bod = b.body;
-            if (bod)
-                b.add("Embedded");
-        }
-
+        if (ps.get("transparent"))
+            b.classList.add("Embedded");
     });
 
     const didReload = (

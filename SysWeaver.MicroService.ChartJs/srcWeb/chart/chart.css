@@ -15,6 +15,12 @@ SysWeaver-Chart {
     width: 100vw;
     height: 100vh;
     position: relative;
+    background-color: rgba(var(--ThemeBackgroundRGB), 0.5);
+}
+
+
+html:not([data-theme]) SysWeaver-Chart {
+    background-color: rgba(var(--ThemeBackgroundRGB), 0.9);
 }
 
 

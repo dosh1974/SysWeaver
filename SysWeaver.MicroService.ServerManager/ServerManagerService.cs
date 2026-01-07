@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -426,8 +427,222 @@ namespace SysWeaver.MicroService
                         break;
                 }
             }).ConfigureAwait(false);
+
+
+            var drives = DriveInfo.GetDrives();
+            var dis = drives.Convert(x =>
+            {
+                var free = x.TotalFreeSpace;
+                var tot = x.TotalSize;
+                return new SmDriveInfo
+                {
+                    Drive = x.Name,
+                    Label = x.VolumeLabel,
+                    Format = x.DriveFormat,
+                    Type = x.DriveType.ToString(),
+                    Free = free,
+                    Total = tot,
+                    Used = (double)((tot - free) * 100M / Math.Max(1M, tot))
+                };
+            });
+            DriveInfos = dis;
+            if (PlatformTools.Current.GetMemorySize(out var free, out var tot))
+            {
+                MemInfo = new SmMemoryInfo
+                {
+                    Free = (long)free,
+                    Total = (long)tot,
+                    Used = (double)((tot - free) * 100M / Math.Max(1M, tot))
+                };
+            }
             return true;
         }
+
+        const decimal GbSize = 1024M * 1024M * 1024M;
+
+        #region RAM info
+
+        SmMemoryInfo MemInfo;
+
+        /// <summary>
+        /// RAM memory information
+        /// </summary>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(9)]
+        [WebApiRequestCache(4)]
+        public SmMemoryInfo GetMemoryInfo() => MemInfo;
+
+        /// <summary>
+        /// Get a chart for a single drive, start at 0 and increase until null is returned
+        /// </summary>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(9)]
+        [WebApiRequestCache(4)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetMemoryChart()
+        {
+            var drive = MemInfo;
+            if (drive == null)
+                return null;
+
+            var f = drive.Free;
+            var tot = drive.Total;
+
+
+
+            var free = (double)((Decimal)f / GbSize);
+            var used = (double)((Decimal)(tot - f) / GbSize);
+            var title = "Memory use";
+            var mem = String.Concat(drive.Used.ToString("0.00", CultureInfo.InvariantCulture), "% of ",
+                (tot / GbSize).ToString("### ### ##0.00", CultureInfo.InvariantCulture).TrimStart() + " GB");
+            return ChartJsService.ChartSerialize(new ChartJsConfig
+            {
+                RefreshRate = 10000,
+                Title = title,
+                type = "doughnut",
+                Precision = 1,
+                ValidTypes = ["doughnut"],
+                ValueSuffix = " GB",
+                ValueLabel = 1,
+                data = new ChartJsData
+                {
+                    labels = ["Used", "Free"],
+                    datasets = [
+                        new ChartJsDataSet
+                        {
+                            data = [ used, free ],
+                            backgroundColor = ["#55ff66", "#118833" ],
+                            borderWidth = 0,
+                        }
+                    ]
+                },
+                options = new ChartJsOptions
+                {
+                    plugins = new ChartJsPlugins
+                    {
+                        datalabels = new ChartJsDataLabels
+                        {
+                            display = true,
+                        },
+                        legend = new ChartJsLegend
+                        {
+                            display = false,
+                        },
+                        title = new ChartJsTitle
+                        {
+                            text = [title, mem],
+                            display = true,
+                        }
+
+                    }
+                }
+
+            });
+        }
+
+        #endregion//RAM info
+
+        #region Drive info
+
+        SmDriveInfo[] DriveInfos;
+
+
+        /// <summary>
+        /// Information of the server drives
+        /// </summary>
+        /// <param name="r"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebMenuTable(null, "DriveInfo", "Drive information", "Information of the server drives", "../icons/ssd.svg", -4)]
+        [WebApiClientCache(9)]
+        [WebApiRequestCache(4)]
+        public TableData DriveInfoTable(TableDataRequest r)
+            => TableDataTools.Get(r, 10000, DriveInfos.Nullable());
+
+
+        /// <summary>
+        /// Get a chart for a single drive, start at 0 and increase until null is returned
+        /// </summary>
+        /// <param name="chartIndex"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(9)]
+        [WebApiRequestCache(4)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetDriveChart(int chartIndex)
+        {
+            if (chartIndex < 0)
+                return null;
+            var t = DriveInfos;
+            if (t == null)
+                return null;
+            if (chartIndex >= t.Length)
+                return null;
+            var drive = t[chartIndex];
+
+            var f = drive.Free;
+            var tot = drive.Total;
+            var free = (double)((Decimal)f / GbSize);
+            var used = (double)((Decimal)(tot - f) / GbSize);
+            var title = String.Concat(drive.Drive, ' ', drive.Label);
+            var mem = String.Concat(drive.Used.ToString("0.00", CultureInfo.InvariantCulture), "% of ",
+                (tot / GbSize).ToString("### ### ##0.00", CultureInfo.InvariantCulture).TrimStart() + " GB");
+
+            return ChartJsService.ChartSerialize(new ChartJsConfig
+            {
+                RefreshRate = 10000,
+                Title = title,
+                type = "doughnut",
+                Precision = 1,
+                ValidTypes = ["doughnut"],
+                ValueSuffix = " GB",
+                ValueLabel = 1,
+                data = new ChartJsData
+                {
+                    labels = ["Used", "Free" ],
+                    datasets = [
+                        new ChartJsDataSet
+                        {
+                            data = [ used, free ],
+                            backgroundColor = ["#5566ff", "#113388" ],
+                            borderWidth = 0,
+                        }
+                    ]
+                },
+                options = new ChartJsOptions
+                {
+                    plugins = new ChartJsPlugins
+                    {
+                        datalabels = new ChartJsDataLabels
+                        {
+                            display = true,
+                        },
+                        legend = new ChartJsLegend
+                        {
+                            display = false,
+                        },
+                        title = new ChartJsTitle
+                        {
+                            text = [title, mem],
+                            display = true,
+                        }
+                        
+                    }
+                }
+
+            });
+
+        }
+
+
+        #endregion//Drive info
+
 
 
         SmServiceInfo Validate(String serviceName, HttpServerRequest context)
@@ -1419,6 +1634,5 @@ namespace SysWeaver.MicroService
 
 
     }
-
 
 }

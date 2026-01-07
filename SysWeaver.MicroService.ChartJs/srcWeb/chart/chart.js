@@ -1612,7 +1612,8 @@ class CanvasChart {
                     const nl = nd.labels;
                     const nll = nl.length;
                     const tt = data.options?.plugins?.title?.text;
-                    if (tt && (tt.length > 0)) {
+                    const haveText = tt && (tt.length > 0);
+                    if (haveText) {
                         const t0 = tt[0];
                         if (t0 && (document.title !== t0))
                             document.title = t0;
@@ -1626,6 +1627,15 @@ class CanvasChart {
                             onFirstLoad = null;
                         }
                     } else {
+                        if (haveText) {
+                            if (!main.options)
+                                main.options = {};
+                            if (!main.options.plugins)
+                                main.options.plugins = {};
+                            if (!main.options.plugins.title)
+                                main.options.plugins.title = {};
+                            main.options.plugins.title.text = tt;
+                        }
                         //  Determine deleted and added data sets (analyse current)
                         const cd = main.data;
                         const cds = cd.datasets;
