@@ -44,7 +44,23 @@
             <param name="name">The name of the resource</param>
             <returns>The data of the resource</returns>
         </member>
+        <member name="M:SysWeaver.Compression.AsmResExt.GetResourceDataBytes(System.Reflection.Assembly,System.String)">
+            <summary>
+            Get the data of an embedded resource as a byte array
+            </summary>
+            <param name="asm">The assembly that contain the resource</param>
+            <param name="name">The name of the resource</param>
+            <returns>The data of the resource</returns>
+        </member>
         <member name="M:SysWeaver.Compression.AsmResExt.GetUncompressedResourceData(System.Type,System.String)">
+            <summary>
+            Get the data of an embedded resource, if it's compressed it will be decompressed
+            </summary>
+            <param name="asmType">A type in the assembly that contain the resource</param>
+            <param name="uncompressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+            <returns>The uncompressed data of the resource</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.AsmResExt.GetUncompressedResourceDataBytes(System.Type,System.String)">
             <summary>
             Get the data of an embedded resource, if it's compressed it will be decompressed
             </summary>

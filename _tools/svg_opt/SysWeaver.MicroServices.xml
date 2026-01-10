@@ -117,12 +117,18 @@
             True to compress the output, null = use mime default
             </summary>
         </member>
-        <member name="M:SysWeaver.MicroService.WebApiRawAttribute.#ctor(System.String,System.Boolean)">
+        <member name="F:SysWeaver.MicroService.WebApiRawAttribute.IsTranslated">
+            <summary>
+            Set to true if the response data is localized (different pending on the specified language)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiRawAttribute.#ctor(System.String,System.Boolean,System.Boolean)">
             <summary>
             The method must returns some readonly memory, and in that case the function should be treated as raw data (i.e no serialization will happen).
             </summary>
             <param name="mime">The mimetype of the raw output data</param>
             <param name="disableCompression">True to automatically detect if compression should happen, else the default behaviour is used</param>
+            <param name="isTranslated">Set to true if the response data is localized (different pending on the specified language)</param>
         </member>
         <member name="T:SysWeaver.MicroService.WebApiRawTextAttribute">
             <summary>
@@ -134,6 +140,34 @@
             The method must returns some readonly memory containg UTF8 encoded text, and in that case the function should be treated as raw data (i.e no serialization will happen).
             </summary>
             <param name="disableCompression">True to automatically detect if compression should happen, else the default behaviour is used</param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiServiceRateLimitAttribute">
+            <summary>
+            Limit the call rate to an API on the service process level
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiServiceRateLimitAttribute.#ctor(System.Int32,System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Limit the call rate to an API on the service process level
+            </summary>
+            <param name="count">Number of request</param>
+            <param name="duration">Over this time frame in seconds</param>
+            <param name="maxQueue">The maximum number of request to keep queued</param>
+            <param name="maxDelay">The maximum time to delay a request</param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiSessionRateLimitAttribute">
+            <summary>
+            Limit the call rate to an API per session
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiSessionRateLimitAttribute.#ctor(System.Int32,System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Limit the call rate to an API per session
+            </summary>
+            <param name="count">Number of request</param>
+            <param name="duration">Over this time frame in seconds</param>
+            <param name="maxQueue">The maximum number of request to keep queued</param>
+            <param name="maxDelay">The maximum time to delay a request</param>
         </member>
         <member name="T:SysWeaver.MicroService.WebApiAuditAttribute">
             <summary>
@@ -150,6 +184,42 @@
             <summary>
             Optional group
             </summary>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiAuditFilterParamsAttribute">
+            <summary>
+            Use this to modify the audit parameters value.
+            The function must NEVER modify the actual value (rather return a new modified value of the same or any other type).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiAuditFilterParamsAttribute.#ctor(System.String)">
+            <summary>
+            Use this to modify the audit parameters value.
+            The function must NEVER modify the actual value (rather return a new modified value of the same or any other type).
+            </summary>
+            <param name="methodName">
+            Name of a method in the type where the method is defined with the following signature: 
+            Object Function(long callId, HttpServerRequest request, Object paramsValue); 
+            or
+            Object Function(long callId, Object paramsValue); 
+            </param>
+        </member>
+        <member name="T:SysWeaver.MicroService.WebApiAuditFilterReturnAttribute">
+            <summary>
+            Use this to modify the audit return value.
+            The function must NEVER modify the actual value (rather return a new modified value of the same or any other type).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiAuditFilterReturnAttribute.#ctor(System.String)">
+            <summary>
+            Use this to modify the audit return value.
+            The function must NEVER modify the actual value (rather return a new modified value of the same or any other type).
+            </summary>
+            <param name="methodName">
+            Name of a method in the type where the method is defined with the following signature: 
+            Object Function(long callId, HttpServerRequest request, Object returnValue);
+            or
+            Object Function(long callId, Object returnValue); 
+            </param>
         </member>
         <member name="T:SysWeaver.MicroService.WebApiAuthAttribute">
             <summary>
@@ -412,7 +482,14 @@
             <param name="order">Optional sort order (items with same order values will be sorted by Name)</param>
             <param name="auth">The auth required for this item to be available in thew menu</param>
             <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
-            <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
+            <param name="dynamic">
+            Dynamically modify item, this is a type name followed by a . and then the method name to invoke or just the method name (of the existing type), ex:
+            SomeOtherClass.Func or Func (in the type that the attribute is put on).
+            The method signature is:
+            Task&lt;bool&gt; Func(HttpServerRequest context, WebMenuItem item)
+            or
+            Task&lt;bool&gt; Func(Authorization auth, WebMenuItem item)
+            </param>
         </member>
         <member name="T:SysWeaver.MicroService.WebMenuItem">
             <summary>
@@ -537,7 +614,7 @@
             <param name="auth">The auth required for this item to be available in the menu</param>
             <param name="noUserRequired">If true, this menu item is only available if there is no user</param>
             <param name="dynamic">Dynamically modify item, this is a type name followed by a . and then the method name to invoke</param>
-            <param name="data">The table API (only set if using on a type)</param>
+            <param name="data">The table API is required if the attribute is on a type, else it's optional where {0} is replaced with the API name.</param>
         </member>
     </members>
 </doc>

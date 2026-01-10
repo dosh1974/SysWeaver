@@ -1202,7 +1202,6 @@ namespace SysWeaver
 
         public static BigRat Parse(ReadOnlySpan<char> s, NumberStyles style = NumberStyles.Float | NumberStyles.AllowThousands, IFormatProvider provider = null)
         {
-            if (s == null) throw new ArgumentNullException(nameof(s));
             if ((style & NumberStyles.AllowHexSpecifier) != 0) throw new ArgumentException(nameof(style));
             if (!TryParse(s, style, provider, out var result)) throw new ArgumentException(); return result;
         }

@@ -69,11 +69,34 @@ namespace SysWeaver
 
     public interface IPlatformTools
     {
+        /// <summary>
+        /// Name of the platform
+        /// </summary>
         String Name { get; }
 
+        /// <summary>
+        /// Flush (write through) a file to disc
+        /// </summary>
+        /// <param name="h">The handle to the file</param>
+        /// <returns>True if successful (and supported)</returns>
         bool FlushToDisc(SafeHandle h);
 
+        /// <summary>
+        /// Get system memory information (physical)
+        /// </summary>
+        /// <param name="availableBytes">Current number of free bytes</param>
+        /// <param name="totalBytes">Installed (available) memory bytes</param>
+        /// <returns>True if successful (and supported)</returns>
         bool GetMemorySize(out ulong availableBytes, out ulong totalBytes);
+
+
+
+        /// <summary>
+        /// Get the current CPU usage as a percentage
+        /// </summary>
+        /// <param name="cpuUsage">[0, 100] the cpu usage as a percentage</param>
+        /// <returns>True if successful (and supported)</returns>
+        bool GetCpuUsage(out double cpuUsage);
 
     }
 
@@ -93,6 +116,12 @@ namespace SysWeaver
             totalBytes = 0;
             return false;
         }
+        public bool GetCpuUsage(out double cpuUsage)
+        {
+            cpuUsage = 0;
+            return false;
+        }
+
 
     }
 

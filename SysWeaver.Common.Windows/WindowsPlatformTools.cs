@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
+using System.Management;
 
 namespace SysWeaver
 {
@@ -17,16 +19,55 @@ namespace SysWeaver
 
         public bool GetMemorySize(out ulong availableBytes, out ulong totalBytes)
         {
-            lock (_winMemoryLock) // lock because of reusing the static class _memStatus
+            try
             {
-                GlobalMemoryStatusEx(_memStatus);
-
-                availableBytes = _memStatus.ullAvailPhys;
-                totalBytes = _memStatus.ullTotalPhys;
+                lock (_winMemoryLock) // lock because of reusing the static class _memStatus
+                {
+                    GlobalMemoryStatusEx(_memStatus);
+                    availableBytes = _memStatus.ullAvailPhys;
+                    totalBytes = _memStatus.ullTotalPhys;
+                }
+                return true;
             }
-            return true;
+            catch
+            {
+                availableBytes = 0;
+                totalBytes = 0;
+                return false;
+            }
         }
 
+        #pragma warning disable CA1416
+
+        static readonly ManagementObjectSearcher CpuUseSsearcher = new ManagementObjectSearcher("SELECT * FROM Win32_PerfFormattedData_PerfOS_Processor WHERE Name=\"_Total\"");
+
+        public bool GetCpuUsage(out double cpuUsage)
+        {
+            try
+            {
+                using var cpuTimes = CpuUseSsearcher.Get();
+                using var e = cpuTimes.GetEnumerator();
+                if (e.MoveNext())
+                {
+                    var mo = e.Current as ManagementObject;
+                    var o = mo["PercentIdleTime"];
+                    long u = 100L - (long)(ulong)o;
+                    if (u < 0)
+                        u = 0;
+                    if (u > 100)
+                        u = 100;
+                    cpuUsage = u;
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+            cpuUsage = 0;
+            return false;
+        }
+
+        #pragma warning restore CA1416
 
         #region Imports
 
@@ -59,6 +100,9 @@ namespace SysWeaver
 
 
         #endregion//Imports
+
+
+
 
     }
 

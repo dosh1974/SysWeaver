@@ -1097,31 +1097,6 @@
             </summary>
             <returns></returns>
         </member>
-        <member name="T:SysWeaver.CompactStringTreeExt">
-            <summary>
-            Extension methods to CompactStringTree instances
-            </summary>
-        </member>
-        <member name="M:SysWeaver.CompactStringTreeExt.IndexOfAny(SysWeaver.CompactStringTree,System.String@,System.String,System.Int32)">
-            <summary>
-            Find the index of the first matching string (from the tree)
-            </summary>
-            <param name="tree">The tree to use</param>
-            <param name="match">The first matching string (if found) or null</param>
-            <param name="text">The text to find the first matching string in</param>
-            <param name="start">An optional start offset</param>
-            <returns>The position of the first matching string or -1 if no match is found</returns>
-        </member>
-        <member name="M:SysWeaver.CompactStringTreeExt.LastIndexOfAny(SysWeaver.CompactStringTree,System.String@,System.String,System.Int32)">
-            <summary>
-            Find the index of the last matching string (from the tree)
-            </summary>
-            <param name="tree">The tree to use</param>
-            <param name="match">The last  matching string (if found) or null</param>
-            <param name="text">The text to find the last  matching string in</param>
-            <param name="start">An optional start offset, or -1 to start at the end of the string</param>
-            <returns>The position of the last  matching string or -1 if no match is found</returns>
-        </member>
         <member name="T:SysWeaver.ConcurrentCount`1">
             <summary>
             Concurrent collection for keeping track of some counts
@@ -3568,6 +3543,13 @@
             Default uses the Folders.AllSharedFolders locations.
             </summary>
         </member>
+        <member name="M:SysWeaver.FileHash.ToHexHash(System.String)">
+            <summary>
+            Convert a compact hash of length 26 to a hexadecimal hash of length 32
+            </summary>
+            <param name="hashStringh16">A string of length 26 with an encoded hash</param>
+            <returns>Hex hash</returns>
+        </member>
         <member name="M:SysWeaver.FileHash.FilesAreEqual(System.String,System.String)">
             <summary>
             Determines if two files have equal content.
@@ -3703,6 +3685,192 @@
             <param name="perApp">Get a unique path per application</param>
             <returns>The base paths to use</returns>
         </member>
+        <member name="T:SysWeaver.FrozenStringTree">
+            <summary>
+            A string tree stores a bunch of strings in a way that makes it fast to check if a test string starts with ANY of the contained strings.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.FrozenStringTree.IsCaseInSensitive">
+            <summary>
+            True if the tree is case in-sensitive
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.Build(System.Collections.Generic.IEnumerable{System.String},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.StartsWithAny(System.String,System.Int32)">
+            <summary>
+            Find the longest string (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>The longest found match or null if no match is found</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.AllStartsWithAny(System.String,System.Int32)">
+            <summary>
+            Find all matching strings (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>A list of matches, orderer from shortest match to longest match</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.PrefixesOf(System.String,System.Int32)">
+            <summary>
+            Find all strings (in the tree), that is a prefix of the text
+            </summary>
+            <param name="text">The text to find prefixes (in the tree) for </param>
+            <param name="start">An optional start offset</param>
+            <returns>A list of matches, ordered by name</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.InternalAddAllInOrder(System.Collections.Generic.List{System.String},SysWeaver.FrozenStringTree)">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.InternalAddAll(System.Collections.Generic.List{System.String},SysWeaver.FrozenStringTree)">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.GetAll">
+            <summary>
+            Get all string contained in the string tree, in any order
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.GetAllInOrder">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.GetAllInReverseOrder">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList.Build``1(System.Collections.Generic.IEnumerable{System.Tuple{System.String,``0}},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList.Build``1(System.Collections.Generic.IEnumerable{System.Collections.Generic.KeyValuePair{System.String,``0}},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList.Build``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.String},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="values">The values to add, may not contain null</param>
+            <param name="getKey">Function that extracts the string key</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="T:SysWeaver.FrozenStringTreeList`1">
+            <summary>
+            A string tree stores a bunch of strings in a way that makes it fast to check if a test string starts with ANY of the contained strings.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.FrozenStringTreeList`1.IsCaseInSensitive">
+            <summary>
+            True if the tree is case in-sensitive
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.Build(System.Collections.Generic.IEnumerable{System.Tuple{System.String,`0}},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.Build(System.Collections.Generic.IEnumerable{System.Collections.Generic.KeyValuePair{System.String,`0}},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.Build(System.Collections.Generic.IEnumerable{`0},System.Func{`0,System.String},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="values">The values to add, may not contain null</param>
+            <param name="getKey">Function that extracts the string key</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.StartsWithAny(System.String,System.Int32)">
+            <summary>
+            Find the longest string (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>The longest found match or null if no match is found</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.AllStartsWithAny(System.String,System.Int32)">
+            <summary>
+            Find all matching strings (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>A list of matches, ordered by name</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.PrefixesOf(System.String,System.Int32)">
+            <summary>
+            Find all matching strings (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>A list of matches, ordered by name</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.InternalAddAllInOrder(System.Collections.Generic.List{System.Collections.Generic.IReadOnlyList{`0}},SysWeaver.FrozenStringTreeList{`0})">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.InternalAddAll(System.Collections.Generic.List{System.Collections.Generic.IReadOnlyList{`0}},SysWeaver.FrozenStringTreeList{`0})">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.GetAll">
+            <summary>
+            Get all string contained in the string tree, in any order
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.GetAllInOrder">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.GetAllInReverseOrder">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
         <member name="M:SysWeaver.GxHash.Hash32(System.ReadOnlySpan{System.Byte},System.UInt128)">
             <summary>
             Hash a span of bytes into an 32-bit signed integer, using the given seed
@@ -3751,6 +3919,13 @@
             </summary>
             <param name="reference"></param>
             <returns></returns>
+        </member>
+        <member name="M:SysWeaver.HashTools.ToHexHash(System.String)">
+            <summary>
+            Convert a compact hash of length 26 to a hexadecimal hash of length 32
+            </summary>
+            <param name="hashStringh16">A string of length 26 with an encoded hash</param>
+            <returns>Hex hash</returns>
         </member>
         <member name="M:SysWeaver.HashTools.GetHashString(System.String)">
             <summary>
@@ -4192,6 +4367,31 @@
             <summary>
             Called whenever a service is resumed
             </summary>
+        </member>
+        <member name="T:SysWeaver.IStringTreeExt">
+            <summary>
+            Extension methods to StringTree instances
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IStringTreeExt.IndexOfAny(SysWeaver.IStringTree,System.String@,System.String,System.Int32)">
+            <summary>
+            Find the index of the first matching string (from the tree)
+            </summary>
+            <param name="tree">The tree to use</param>
+            <param name="match">The first matching string (if found) or null</param>
+            <param name="text">The text to find the first matching string in</param>
+            <param name="start">An optional start offset</param>
+            <returns>The position of the first matching string or -1 if no match is found</returns>
+        </member>
+        <member name="M:SysWeaver.IStringTreeExt.LastIndexOfAny(SysWeaver.IStringTree,System.String@,System.String,System.Int32)">
+            <summary>
+            Find the index of the last matching string (from the tree)
+            </summary>
+            <param name="tree">The tree to use</param>
+            <param name="match">The last  matching string (if found) or null</param>
+            <param name="text">The text to find the last  matching string in</param>
+            <param name="start">An optional start offset, or -1 to start at the end of the string</param>
+            <returns>The position of the last  matching string or -1 if no match is found</returns>
         </member>
         <member name="P:SysWeaver.LanguageTemplate.ExtBuilders">
             <summary>
@@ -4819,6 +5019,28 @@
             </summary>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.NetworkTools.IsRoutableAddress(System.Net.IPAddress)">
+            <summary>
+            Check if an ip address is routable (i.e on the internet)
+            </summary>
+            <param name="addr"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.NetworkTools.IsConnectedToInternetAsync(System.Int32)">
+            <summary>
+            Check if internet is available
+            </summary>
+            <param name="maxHops">Maximum number of hops when pinging (if the application is running where deep into some internal network, VM's in VM's etc, then maybe imcrease this)</param>
+            <returns>The IP of the closest route to the internet</returns>
+        </member>
+        <member name="M:SysWeaver.NetworkTools.WaitForInternetConnectionAsync(System.Int32,System.Int32)">
+            <summary>
+            Wait for an internet connection
+            </summary>
+            <param name="maxSeconds">Maximum number of seconds to wait</param>
+            <param name="maxHops">Maximum number of hops when pinging (if the application is running where deep into some internal network, VM's in VM's etc, then maybe imcrease this)</param>
+            <returns>The IP of the closest route to the internet</returns>
+        </member>
         <member name="T:SysWeaver.ObjectHash">
             <summary>
             Contains methods for getting and mixing hashcodes.
@@ -5154,6 +5376,28 @@
             <param name="delayInMs">Number of milli seconds to wait between any retries</param>
             <returns>Null if the file was copied successfully, else the exception</returns>
         </member>
+        <member name="M:SysWeaver.PathExt.TryMoveFile(System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Try to move / rename a file.
+            If it fails, retry at least N times.
+            </summary>
+            <param name="source">The file to move</param>
+            <param name="dest">The file to overwrite or create</param>
+            <param name="retryCount">Number of times to retry the operation (create folder)</param>
+            <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+            <returns>Null if the file was copied successfully, else the exception</returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.TryMoveFileAsync(System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Try to move / rename a file.
+            If it fails, retry at least N times.
+            </summary>
+            <param name="source">The file to move</param>
+            <param name="dest">The file to overwrite or create</param>
+            <param name="retryCount">Number of times to retry the operation (create folder)</param>
+            <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+            <returns>Null if the file was copied successfully, else the exception</returns>
+        </member>
         <member name="M:SysWeaver.PathExt.TryDeleteDirectory(System.String,System.Boolean,System.Int32,System.Int32)">
             <summary>
             Delete a directory if it exists.
@@ -5267,6 +5511,29 @@
             </summary>
             <param name="folder"></param>
             <returns></returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.DisableIndexing(System.String)">
+            <summary>
+            Disable content indexing of a folder
+            </summary>
+            <param name="folder">The folder</param>
+            <returns>False on error</returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.CreateDataFolder(System.String,System.Boolean)">
+            <summary>
+            Create a folder if it doesn't exist and set it up for data usage (enable all access and disable indexing).
+            If the folder exist nothing will be done
+            </summary>
+            <param name="path">The folder to setup</param>
+            <param name="forceSetup">If true the enabling of all access and disabling indexing will be enforced, if false it will only be applied if the folder was created</param>
+            <returns>The full path</returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.SetupDataFolder(System.String)">
+            <summary>
+            Set up a folder for data: disable content indexing and allow it to be accessed by eveyone
+            </summary>
+            <param name="path"></param>
+            <returns>False on error</returns>
         </member>
         <member name="M:SysWeaver.PathExt.GetDirectoryAndMask(System.String,System.String@)">
             <summary>
@@ -6854,6 +7121,14 @@
             <param name="prefix">An optional prefix to use instead of filling with *'s</param>
             <returns>The "secure" string</returns>
         </member>
+        <member name="M:SysWeaver.IStringTree.StartsWithAny(System.String,System.Int32)">
+            <summary>
+            Find the longest string (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>The longest found match or null if no match is found</returns>
+        </member>
         <member name="T:SysWeaver.StringTree">
             <summary>
             A string tree stores a bunch of strings in a way that makes it fast to check if a test string starts with ANY of the contained strings.
@@ -6949,31 +7224,6 @@
             Make a copy of a tree
             </summary>
             <returns></returns>
-        </member>
-        <member name="T:SysWeaver.StringTreeExt">
-            <summary>
-            Extension methods to StringTree instances
-            </summary>
-        </member>
-        <member name="M:SysWeaver.StringTreeExt.IndexOfAny(SysWeaver.StringTree,System.String@,System.String,System.Int32)">
-            <summary>
-            Find the index of the first matching string (from the tree)
-            </summary>
-            <param name="tree">The tree to use</param>
-            <param name="match">The first matching string (if found) or null</param>
-            <param name="text">The text to find the first matching string in</param>
-            <param name="start">An optional start offset</param>
-            <returns>The position of the first matching string or -1 if no match is found</returns>
-        </member>
-        <member name="M:SysWeaver.StringTreeExt.LastIndexOfAny(SysWeaver.StringTree,System.String@,System.String,System.Int32)">
-            <summary>
-            Find the index of the last matching string (from the tree)
-            </summary>
-            <param name="tree">The tree to use</param>
-            <param name="match">The last  matching string (if found) or null</param>
-            <param name="text">The text to find the last  matching string in</param>
-            <param name="start">An optional start offset, or -1 to start at the end of the string</param>
-            <returns>The position of the last  matching string or -1 if no match is found</returns>
         </member>
         <member name="M:SysWeaver.StringTreeList.Build``1(System.Collections.Generic.IEnumerable{System.Tuple{System.String,``0}},System.Boolean)">
             <summary>

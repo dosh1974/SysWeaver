@@ -92,6 +92,38 @@
             <param name="enc"></param>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.Serialization.SerTools.SerializeWithoutType(SysWeaver.Serialization.ISerializer,System.Object,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serialize an object as if if was of it's own type, thus without type information (uses GetType() to determine the type and then serialize as that.
+            Example:
+                SomeType data = new SomeType();
+                Object obj = data;
+                var a = serializer.Serialize(data);
+                var b = serializer.Serialize(obj);
+                var c = serializer.SerializeWithoutType(obj);
+            For the above, a and c will be equal, b will contain type information.
+            </summary>
+            <param name="serializer">The serializer</param>
+            <param name="obj">The object to serialize</param>
+            <param name="options">The object to serialize</param>
+            <returns>The serialized data</returns>
+        </member>
+        <member name="M:SysWeaver.Serialization.TextSerTools.ToStringWithoutType(SysWeaver.Serialization.ITextSerializer,System.Object,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Serialize an object as if if was of it's own type, thus without type information (uses GetType() to determine the type and then serialize as that.
+            Example:
+                SomeType data = new SomeType();
+                Object obj = data;
+                var a = serializer.Serialize(data);
+                var b = serializer.Serialize(obj);
+                var c = serializer.SerializeWithoutType(obj);
+            For the above, a and c will be equal, b will contain type information.
+            </summary>
+            <param name="serializer">The serializer</param>
+            <param name="obj">The object to serialize</param>
+            <param name="options">The object to serialize</param>
+            <returns>The serialized data</returns>
+        </member>
         <member name="T:SysWeaver.Serialization.TypeNameResolver">
             <summary>
             Try (real hard) to find a type for the given type name

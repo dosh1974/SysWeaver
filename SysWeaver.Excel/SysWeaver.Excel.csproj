@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="GemBox.Spreadsheet" Version="2025.11.106" />
+    <PackageReference Include="GemBox.Spreadsheet" Version="2025.12.105" />
   </ItemGroup>
 
   <ItemGroup>

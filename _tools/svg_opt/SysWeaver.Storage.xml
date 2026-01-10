@@ -4,6 +4,60 @@
         <name>SysWeaver.Storage</name>
     </assembly>
     <members>
+        <member name="T:SysWeaver.CompressedChunkedStream">
+            <summary>
+            Create an uncompressed stream as the contatenation of several compressed streams
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressedChunkedStream.#ctor(System.Func{System.Int32,System.IO.Stream},SysWeaver.Compression.ICompDecoder)">
+            <summary>
+            Create an uncompressed stream as the contatenation of several compressed streams
+            </summary>
+            <param name="streamOpener">A function that opens one stream chunk, the paramter start at 0 and is incremented every time a new chunk is required, return null to signal end of data</param>
+            <param name="comp">The compression type of the streams</param>
+        </member>
+        <member name="T:SysWeaver.CompressedFile">
+            <summary>
+            Utility class to open a compressed version of a file.
+            Files are cached so re-opening will be faster.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.CompressedFile.Open(System.String,SysWeaver.Compression.ICompType,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Open a compressed version of a file, with caching etc.
+            </summary>
+            <param name="file">The name of the file to get the compressed data for</param>
+            <param name="compType">The compression type</param>
+            <param name="level">The desired compression level</param>
+            <returns>A compressed stream</returns>
+        </member>
+        <member name="M:SysWeaver.CompressedFile.OpenAsync(System.String,SysWeaver.Compression.ICompType,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Open a compressed version of a file, with caching etc.
+            </summary>
+            <param name="file">The name of the file to get the compressed data for</param>
+            <param name="compType">The compression type</param>
+            <param name="level">The desired compression level</param>
+            <returns>A compressed stream</returns>
+        </member>
+        <member name="M:SysWeaver.CompressedFile.ReadAllBytes(System.String,SysWeaver.Compression.ICompType,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Read all compressed bytes from a file (with caching etc)
+            </summary>
+            <param name="file"></param>
+            <param name="compType"></param>
+            <param name="level"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.CompressedFile.ReadAllBytesAsync(System.String,SysWeaver.Compression.ICompType,SysWeaver.Compression.CompEncoderLevels)">
+            <summary>
+            Read all compressed bytes from a file (with caching etc)
+            </summary>
+            <param name="file"></param>
+            <param name="compType"></param>
+            <param name="level"></param>
+            <returns></returns>
+        </member>
         <member name="T:SysWeaver.DecompressedFileHash">
             <summary>
             Computes and caches file hashes of the decompressed content (automatic pruning).
@@ -278,6 +332,75 @@
             <summary>
             If folders isn't use, indicate if this store should be per app or not.
             </summary>
+        </member>
+        <member name="M:SysWeaver.StorageTypeExt.GetManifestResourceStream(System.Type,System.String,System.Boolean)">
+            <summary>
+            Get a stream to an embedded resource in an assembly based of the type (uses the namespace of the type as a prefix).
+            If the resource is stored compressed, the stream returned is the uncompressed data.
+            Ex:
+            Type namespace = "SysWeaver.Test"
+            Compressed resource: "MyText.txt.br".
+            
+            Use:
+            using var s = type.GetManifestResourceStream("MyText.txt");
+            </summary>
+            <param name="t">The type</param>
+            <param name="resourceName">Name of the resource (without name space)</param>
+            <param name="noThrow">If true, return null if not found instead of throwing an error</param>
+            <returns>A stream to the (uncompressed) resource data.</returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="M:SysWeaver.StorageTypeExt.GetManifestResourceData(System.Type,System.String,System.Boolean)">
+            <summary>
+            Get the data contained in an embedded resource in an assembly based of the type (uses the namespace of the type as a prefix).
+            If the resource is stored compressed, the data returned is the uncompressed data.
+            Ex:
+            Type namespace = "SysWeaver.Test"
+            Compressed resource: "MyText.bin.br".
+            
+            Use:
+            var data = type.GetManifestResourceData("MyText.bin");
+            </summary>
+            <param name="t">The type</param>
+            <param name="resourceName">Name of the resource (without name space)</param>
+            <param name="noThrow">If true, return default if not found instead of throwing an error</param>
+            <returns>The (uncompressed) data of the embedded resource</returns>
+        </member>
+        <member name="M:SysWeaver.StorageTypeExt.GetManifestResourceText(System.Type,System.String,System.Boolean,System.Text.Encoding)">
+            <summary>
+            Get the text contained in an embedded resource in an assembly based of the type (uses the namespace of the type as a prefix).
+            
+            Ex:
+            Type namespace = "SysWeaver.Test"
+            Compressed resource: "MyText.txt.br".
+            
+            Use:
+            var text = type.GetManifestResourceData("MyText.txt");
+            </summary>
+            <param name="t">The type</param>
+            <param name="resourceName">Name of the resource (without name space)</param>
+            <param name="noThrow">If true, return default if not found instead of throwing an error</param>
+            <param name="encoding">The encoding to use, default is to use UTF-8</param>
+            <returns>The text of the embedded resource</returns>
+        </member>
+        <member name="M:SysWeaver.StorageTypeExt.GetManifestResourceObject``1(System.Type,System.String,System.Boolean)">
+            <summary>
+            Create an object from the data contained in an embedded resource in an assembly based of the type (uses the namespace of the type as a prefix).
+            The deserializer to use is based on the file extension.
+            
+            Ex:
+            Type namespace = "SysWeaver.Test"
+            Compressed resource: "MyData.json.br".
+            
+            Use:
+            var data = type.GetManifestResourceData("MyData.json");
+            </summary>
+            <typeparam name="T">The type of the stored object</typeparam>
+            <param name="t">The type</param>
+            <param name="resourceName">Name of the resource (without name space)</param>
+            <param name="noThrow">If true, return default if not found instead of throwing an error</param>
+            <returns>The object stored in the embedded resource</returns>
+            <exception cref="T:System.Exception"></exception>
         </member>
         <member name="T:SysWeaver.SystemLock">
             <summary>

@@ -113,6 +113,51 @@
             Can be set to empty for no tool prefix.
             </summary>
         </member>
+        <member name="T:SysWeaver.Roles">
+            <summary>
+            Defines some roles that should be used as defautl auth requirements
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Roles.Debug">
+            <summary>
+            API's that should only be used during development of the back-end service.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Roles.Admin">
+            <summary>
+            API's that an admin should be able to access, think of this as a non-technical repsonible person.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Roles.Dev">
+            <summary>
+            API's that a front-end or service cosumer developer should have access to.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Roles.Ops">
+            <summary>
+            API's that a op-manager (it-technician) should have access to.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Roles.Service">
+            <summary>
+            API's that is intended to be consumed by some service
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Roles.Disabled">
+            <summary>
+            This will disable anyone from accessing the API
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Roles.AdminOps">
+            <summary>
+            Combined Admin and Ops
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Roles.OpsDev">
+            <summary>
+            Combined Ops and Dev
+            </summary>
+        </member>
         <member name="T:SysWeaver.ResourceOrderAttribute">
             <summary>
             Use to specify the order (priority) of embedded resources (when serving them as files)
@@ -146,12 +191,12 @@
         </member>
         <member name="P:SysWeaver.ApiKeyParams.ApiKey">
             <summary>
-            Username or key
+            The Api Key, optionally use the CredFile instead to read it from a file.
             </summary>
         </member>
         <member name="P:SysWeaver.ApiKeyParams.CredFile">
             <summary>
-            Filename, if specified the user and password is read from the file (should be single line of text in the user:key format)
+            Filename, if specified the API key is read from the file (should be single line of text, lines starting with '#' is considered a comment and not read).
             </summary>
         </member>
         <member name="M:SysWeaver.ApiKeyParams.GetApiKey(System.Boolean)">
@@ -259,6 +304,38 @@
             <typeparam name="D"></typeparam>
             <typeparam name="S"></typeparam>
             <param name="array"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.ArrayExt.Convert``2(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,``1})">
+            <summary>
+            Convert an array to another element type using a function
+            </summary>
+            <typeparam name="E"></typeparam>
+            <typeparam name="T"></typeparam>
+            <param name="array"></param>
+            <param name="func"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.ArrayExt.ConvertAsync``2(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.Task{``1}})">
+            <summary>
+            Convert an array to another element type using a function.
+            Elements are converted in paralell (async).
+            </summary>
+            <typeparam name="E"></typeparam>
+            <typeparam name="T"></typeparam>
+            <param name="array"></param>
+            <param name="func"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.ArrayExt.ConvertAsyncValue``2(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.ValueTask{``1}})">
+            <summary>
+            Convert an array to another element type using a function.
+            Elements are converted in paralell (async).
+            </summary>
+            <typeparam name="E"></typeparam>
+            <typeparam name="T"></typeparam>
+            <param name="array"></param>
+            <param name="func"></param>
             <returns></returns>
         </member>
         <member name="F:SysWeaver.AsyncLock.NoLock">
@@ -570,6 +647,17 @@
             <summary>
             Chart exports (can be use to export charts)
             </summary>
+        </member>
+        <member name="T:SysWeaver.ChunkedStream">
+            <summary>
+            Create a stream as the contatenation of several streams
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ChunkedStream.#ctor(System.Func{System.Int32,System.IO.Stream})">
+            <summary>
+            Create a stream as the contatenation of several streams
+            </summary>
+            <param name="streamOpener">A function that opens one stream chunk, the paramter start at 0 and is incremented every time a new chunk is required, return null to signal end of data</param>
         </member>
         <member name="P:SysWeaver.ICodeGenerator.StrLen">
             <summary>
@@ -1009,36 +1097,83 @@
             </summary>
             <returns></returns>
         </member>
-        <member name="T:SysWeaver.CompactStringTreeExt">
-            <summary>
-            Extension methods to CompactStringTree instances
-            </summary>
-        </member>
-        <member name="M:SysWeaver.CompactStringTreeExt.IndexOfAny(SysWeaver.CompactStringTree,System.String@,System.String,System.Int32)">
-            <summary>
-            Find the index of the first matching string (from the tree)
-            </summary>
-            <param name="tree">The tree to use</param>
-            <param name="match">The first matching string (if found) or null</param>
-            <param name="text">The text to find the first matching string in</param>
-            <param name="start">An optional start offset</param>
-            <returns>The position of the first matching string or -1 if no match is found</returns>
-        </member>
-        <member name="M:SysWeaver.CompactStringTreeExt.LastIndexOfAny(SysWeaver.CompactStringTree,System.String@,System.String,System.Int32)">
-            <summary>
-            Find the index of the last matching string (from the tree)
-            </summary>
-            <param name="tree">The tree to use</param>
-            <param name="match">The last  matching string (if found) or null</param>
-            <param name="text">The text to find the last  matching string in</param>
-            <param name="start">An optional start offset, or -1 to start at the end of the string</param>
-            <returns>The position of the last  matching string or -1 if no match is found</returns>
-        </member>
         <member name="T:SysWeaver.ConcurrentCount`1">
             <summary>
             Concurrent collection for keeping track of some counts
             </summary>
             <typeparam name="TKey"></typeparam>
+        </member>
+        <member name="M:SysWeaver.ConcurrentCount`1.IncValue(`0)">
+            <summary>
+            Increment the value at key
+            </summary>
+            <param name="key"></param>
+            <returns>The incremented value</returns>
+        </member>
+        <member name="M:SysWeaver.ConcurrentCount`1.DecValue(`0)">
+            <summary>
+            Decrement the value at key
+            </summary>
+            <param name="key"></param>
+            <returns>The decremented value</returns>
+        </member>
+        <member name="M:SysWeaver.ConcurrentCount`1.AddValue(`0,System.Int64)">
+            <summary>
+            Add the value at key
+            </summary>
+            <param name="key"></param>
+            <param name="value">The value to add</param>
+            <returns>The value after addition</returns>
+        </member>
+        <member name="M:SysWeaver.ConcurrentCount`1.AndValue(`0,System.Int64)">
+            <summary>
+            And a value to the value at the key
+            </summary>
+            <param name="key"></param>
+            <param name="value">The value to and</param>
+            <returns>The value after and</returns>
+        </member>
+        <member name="M:SysWeaver.ConcurrentCount`1.OrValue(`0,System.Int64)">
+            <summary>
+            Or a value to the value at the key
+            </summary>
+            <param name="key"></param>
+            <param name="value">The value to or</param>
+            <returns>The value after or</returns>
+        </member>
+        <member name="M:SysWeaver.ConcurrentCount`1.CompareExchangeValue(`0,System.Int64,System.Int64)">
+            <summary>
+            Exchange a value if the current value matches a comparand.
+            newValue = currentValue == comparand ? value : curretValue
+            </summary>
+            <param name="key"></param>
+            <param name="value">The value to replace with</param>
+            <param name="comparand">The value to compare with</param>
+            <returns>The orignal value</returns>
+        </member>
+        <member name="M:SysWeaver.ConcurrentCount`1.ExchangeValue(`0,System.Int64)">
+            <summary>
+            Replace the value at the key
+            </summary>
+            <param name="key"></param>
+            <param name="value">The value to replace to</param>
+            <returns>The orignal value</returns>
+        </member>
+        <member name="M:SysWeaver.ConcurrentCount`1.MaxValue(`0,System.Int64)">
+            <summary>
+            Takes the maximum value of the current and supplied value
+            </summary>
+            <param name="key"></param>
+            <param name="value">The value to max with</param>
+            <returns>The value after max</returns>        
+        </member>
+        <member name="M:SysWeaver.ConcurrentCount`1.MinValue(`0,System.Int64)">
+            <summary>
+            Takes the minimum value of the current and supplied value
+            </summary>
+            <param name="key"></param>
+            <param name="value">The value to min with</param>
+            <returns>The value after min</returns>        
         </member>
         <member name="M:SysWeaver.ConcurrentCount`1.GetValue(`0)">
             <summary>
@@ -1046,6 +1181,18 @@
             </summary>
             <param name="key"></param>
             <returns></returns>
+        </member>
+        <member name="P:SysWeaver.DefaultConfig.AllFolders">
+            <summary>
+            One or more paths to use for data (common to all users).
+            Separate multiple path with semi colon (;).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.DefaultConfig.UserFolders">
+            <summary>
+            One or more paths to use for user specific data.
+            Separate multiple path with semi colon (;).
+            </summary>
         </member>
         <member name="T:SysWeaver.Config">
             <summary>
@@ -1198,7 +1345,7 @@
             </summary>
             <param name="text">Text of the button</param>
             <param name="title">Title (tool tip) of the button</param>
-            <param name="url">Url to the get request that will be performed on click</param>
+            <param name="url">Url to the get request that will be performed on click.\nIf it start's with a '@' the url will be opened in a new tab.\nIf it start's with a '&amp;' the url will be opened in the same tab.</param>
             <param name="icon">Icon class name or url</param>
             <param name="moreButtons">An optional array of extra buttons, 4 strings per button following a: "text", "title", "url" and "icon" pattern</param>
         </member>
@@ -1383,6 +1530,11 @@
             The column is the seventh part of the primary key (typically for a chart / graph)
             </summary>
         </member>
+        <member name="F:SysWeaver.Data.TableDataColumnProps.IsComputed">
+            <summary>
+            If true the column is computed (and can't be searched etc)
+            </summary>
+        </member>
         <member name="T:SysWeaver.Data.TableDataConsts">
             <summary>
             Helpers and constants for table data
@@ -1531,7 +1683,7 @@
             Will show the full version of the text on click.
             </summary>
         </member>
-        <member name="M:SysWeaver.Data.TableDataTextAttribute.#ctor(System.Int32,System.String,System.String)">
+        <member name="M:SysWeaver.Data.TableDataTextAttribute.#ctor(System.Int32,System.String,System.String,System.Boolean)">
             <summary>
             Format some long multiline text.
             Will show a capped version of the text.
@@ -1546,6 +1698,7 @@
             {0} = Value.
             {1} = Capped value.
             </param>
+            <param name="monoSpaced">If true, display using a fixed width font</param>
         </member>
         <member name="T:SysWeaver.Data.TableDataMdAttribute">
             <summary>
@@ -1568,6 +1721,23 @@
             <param name="copyOnClick">Copy the original value to the clipboard on click (if not null).
             {0} = Value.
             {1} = Capped value.
+            </param>
+        </member>
+        <member name="T:SysWeaver.Data.TableDataExpandAttribute">
+            <summary>
+            Put on a type to expand it when used in a data table
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Data.TableDataExpandAttribute.#ctor(System.String,System.String)">
+            <summary>
+            Make the object expand into columns
+            </summary>
+            <param name="memberNamePrefix">The name prefix to use.
+            {0} = Member name.
+            </param>
+            <param name="titlePrefix">The title prefix to use.
+            {0} = Member name.
+            {1} = Decamel cased member name.
             </param>
         </member>
         <member name="F:SysWeaver.Data.TableDataFilterBase.Invert">
@@ -1899,30 +2069,13 @@
             Put on a member to ignore it when using the type in a data table
             </summary>
         </member>
-        <member name="T:SysWeaver.Data.TableDataExpandAttribute">
-            <summary>
-            Put on a type to expand it when used in a data table
-            </summary>
-        </member>
-        <member name="M:SysWeaver.Data.TableDataExpandAttribute.#ctor(System.String,System.String)">
-            <summary>
-            Make the object expand into columns
-            </summary>
-            <param name="memberNamePrefix">The name prefix to use.
-            {0} = Member name.
-            </param>
-            <param name="titlePrefix">The title prefix to use.
-            {0} = Member name.
-            {1} = Decamel cased member name.
-            </param>
-        </member>
         <member name="T:SysWeaver.Data.TableDataImgAttribute">
             <summary>
             Format valus as:
             A clickable image link.
             </summary>
         </member>
-        <member name="M:SysWeaver.Data.TableDataImgAttribute.#ctor(System.String,System.String,System.String,System.Int32,System.Int32)">
+        <member name="M:SysWeaver.Data.TableDataImgAttribute.#ctor(System.String,System.String,System.String,System.Int32,System.Int32,System.String)">
             <summary>
             A clickable image.
             </summary>
@@ -1952,6 +2105,7 @@
             </param>
             <param name="maxWidth">If greater than 0, set the max-width property</param>
             <param name="maxHeight">If greater than 0, set the max-height property</param>
+            <param name="relativeUrlPrefix">If this is non-empty AND the url value is a non-absolute url, the prefix is added to the relative url</param>
         </member>
         <member name="M:SysWeaver.Data.TableDataUserIconAttribute.#ctor(System.String,System.String,System.String,System.String,System.Int32,System.Int32)">
             <summary>
@@ -2175,7 +2329,8 @@
         </member>
         <member name="F:SysWeaver.Data.TableDataRequest.SearchText">
             <summary>
-            The full text search (null or empty to do a regular table data request)
+            The full text search (null or empty to do a regular table data request).
+            Only available on Database mirrored tables that have a full text search index.
             </summary>
         </member>
         <member name="F:SysWeaver.Data.TableDataRequest.SearchNatural">
@@ -2325,6 +2480,69 @@
             </summary>
             <param name="time">The timestamp</param>
             <returns>[1, 53] week number</returns>
+        </member>
+        <member name="M:SysWeaver.DateTimeExt.ElapsedTime(System.TimeSpan,System.String)">
+            <summary>
+            Get a human friendly text from a time span
+            </summary>
+            <param name="value">The time span</param>
+            <param name="zeroAsThis">If exactly zerom return this value</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.DateTimeExt.ToStartOfYear(System.DateTime,System.Int32,System.Double)">
+            <summary>
+            Given a time stamp, get the start of the year that includes the time stamp
+            Example: 2024-03-15 11:05:33 => 2024-01-01 00:00:00.
+            </summary>
+            <param name="value">The time stamp</param>
+            <param name="extraMonths">Number of months to add to the start of the year</param>
+            <param name="extraDays">Number of days to add to the start of the month</param>
+            <returns>A new time stamp</returns>
+        </member>
+        <member name="M:SysWeaver.DateTimeExt.ToStartOfMonth(System.DateTime,System.Double)">
+            <summary>
+            Given a time stamp, get the start of the month that includes the time stamp
+            Example: 2024-03-15 11:05:33 => 2024-03-01 00:00:00.
+            </summary>
+            <param name="value">The time stamp</param>
+            <param name="extraDays">Number of days to add to the start of the month</param>
+            <returns>A new time stamp</returns>
+        </member>
+        <member name="M:SysWeaver.DateTimeExt.ToStartOfDay(System.DateTime,System.Double)">
+            <summary>
+            Given a time stamp, get the start of the day that includes the time stamp.
+            Example: 2024-03-15 11:05:33 => 2024-03-15 00:00:00.
+            </summary>
+            <param name="value">The time stamp</param>
+            <param name="extraHours">Number of hours to add to the start of the day</param>
+            <returns>A new time stamp</returns>
+        </member>
+        <member name="M:SysWeaver.DateTimeExt.ToStartOfHour(System.DateTime,System.Double)">
+            <summary>
+            Given a time stamp, get the start of the hour that includes the time stamp.
+            Example: 2024-03-15 11:05:33 => 2024-03-15 11:00:00.
+            </summary>
+            <param name="value">The time stamp</param>
+            <param name="extraMinutes">Number of minutes to add to the start of the hour</param>
+            <returns>A new time stamp</returns>
+        </member>
+        <member name="M:SysWeaver.DateTimeExt.ToStartOfMinute(System.DateTime,System.Double)">
+            <summary>
+            Given a time stamp, get the start of the minute that includes the time stamp.
+            Example: 2024-03-15 11:05:33 => 2024-03-15 11:05:00.
+            </summary>
+            <param name="value">The time stamp</param>
+            <param name="extraSeconds">Number of seconds to add to the start of the minute</param>
+            <returns>A new time stamp</returns>
+        </member>
+        <member name="M:SysWeaver.DateTimeExt.ToStartOSecond(System.DateTime,System.Double)">
+            <summary>
+            Given a time stamp, get the start of the seconds that includes the time stamp.
+            Example: 2024-03-15 11:05:33,123 => 2024-03-15 11:05:33,000.
+            </summary>
+            <param name="value">The time stamp</param>
+            <param name="extraMs">Number of millie seconds to add to the start of the second</param>
+            <returns>A new time stamp</returns>
         </member>
         <member name="T:SysWeaver.DebugMessageHandler">
             <summary>
@@ -2685,6 +2903,120 @@
             <param name="comparer">Optional comparer</param>
             <returns>A concurrent dictionary with the values</returns>
         </member>
+        <member name="M:SysWeaver.EnumerableExt.AsEnumerable``1(``0)">
+            <summary>
+            Return a single value as an enumerable
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="value">The value to return as an IEnumerable</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.EnumerableExt.Process``1(System.Collections.Generic.IReadOnlyList{``0},System.Action{``0})">
+            <summary>
+            Process all elements in a list.
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="list">The list to process</param>
+            <param name="action">The action to perform on each element</param>
+        </member>
+        <member name="M:SysWeaver.EnumerableExt.Process``1(System.Collections.Generic.IEnumerable{``0},System.Action{``0})">
+            <summary>
+            Process all elements in an enumerable.
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="enumerable">The enumerable to process</param>
+            <param name="action">The action to perform on each element</param>
+        </member>
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsync``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.Task})">
+            <summary>
+            Process all elements in a list.
+            Elements are processed in paralell (async).
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="list">The list to process</param>
+            <param name="action">The action to perform on each element</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsync``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Threading.Tasks.Task})">
+            <summary>
+            Process all elements in an enumerable.
+            Elements are processed in paralell (async).
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="enumerable">The enumerable to process</param>
+            <param name="action">The action to perform on each element</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.ValueTask})">
+            <summary>
+            Process all elements in a list.
+            Elements are processed in paralell (async).
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="list">The list to process</param>
+            <param name="action">The action to perform on each element</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Threading.Tasks.ValueTask})">
+            <summary>
+            Process all elements in an enumerable.
+            Elements are processed in paralell (async).
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="enumerable">The enumerable to process</param>
+            <param name="action">The action to perform on each element</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsync``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Int32,System.Threading.Tasks.Task})">
+            <summary>
+            Process all elements in a list.
+            Elements are processed in paralell (async).
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="list">The list to process</param>
+            <param name="action">The action to perform on each element</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsync``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Int32,System.Threading.Tasks.Task})">
+            <summary>
+            Process all elements in an enumerable.
+            Elements are processed in paralell (async).
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="enumerable">The enumerable to process</param>
+            <param name="action">The action to perform on each element</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Int32,System.Threading.Tasks.ValueTask})">
+            <summary>
+            Process all elements in a list.
+            Elements are processed in paralell (async).
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="list">The list to process</param>
+            <param name="action">The action to perform on each element</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Int32,System.Threading.Tasks.ValueTask})">
+            <summary>
+            Process all elements in an enumerable.
+            Elements are processed in paralell (async).
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="enumerable">The enumerable to process</param>
+            <param name="action">The action to perform on each element</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.EnumerableExt.WithUniqueKeys``2(System.Collections.Generic.IEnumerable{System.Collections.Generic.KeyValuePair{``0,``1}},System.Collections.Generic.IEqualityComparer{``0})">
+            <summary>
+            Only return unqiue keys
+            </summary>
+            <typeparam name="K"></typeparam>
+            <typeparam name="V"></typeparam>
+            <param name="enumerable"></param>
+            <param name="comparer"></param>
+            <returns></returns>
+        </member>
         <member name="T:SysWeaver.EnvInfo">
             <summary>
             Additional information about the runtime environment
@@ -2802,9 +3134,10 @@
                         "AppAssemblyName" = Application assembly name (typically the exe name), "ExchangeRateService".
                         "AppGuid" = A unique guid for this appllication, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
                         "UserName" = The environment user name, ex: "John Doe".
-                        "Is64BitProcess" = "True" if the process is running as a 64-bit process, else "False"
-                        "OSVersion" = The version of the OS
+                        "Is64BitProcess" = "True" if the process is running as a 64-bit process, else "False".
+                        "OSVersion" = The version of the OS.
                         "Platform" = The platform, ex "WinNT", "Unix".
+                        "MachineName" = The computer name.
             </summary>
         </member>
         <member name="P:SysWeaver.EnvInfo.TextVarsCaseInsensitive">
@@ -2817,9 +3150,10 @@
                         "appassemblyname" = Application assembly name (typically the exe name), "ExchangeRateService".
                         "appguid" = A unique guid for this appllication, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
                         "username" = The environment user name, ex: "John Doe".
-                        "is64bitprocess" = "True" if the process is running as a 64-bit process, else "False"
-                        "osversion" = The version of the OS
+                        "is64bitprocess" = "True" if the process is running as a 64-bit process, else "False".
+                        "osversion" = The version of the OS.
                         "platform" = The platform, ex "WinNT", "Unix".
+                        "machinename" = The computer name.
             </summary>
         </member>
         <member name="M:SysWeaver.EnvInfo.ResolveText(System.String,System.Boolean,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String})">
@@ -2835,6 +3169,7 @@
                         $(Is64BitProcess) = "True" if the process is running as a 64-bit process, else "False".
                         $(OSVersion) = The version of the OS.
                         $(Platform) = The platform, ex "WinNT", "Unix".
+                        $(MachineName) = The computer name.
             </summary>
             <param name="template">The template, variables start with "$(" and ends with ")".
                         $(AppName) = Application name.
@@ -2847,6 +3182,7 @@
                         $(Is64BitProcess) = "True" if the process is running as a 64-bit process, else "False".
                         $(OSVersion) = The version of the OS.
                         $(Platform) = The platform, ex "WinNT", "Unix".
+                        $(MachineName) = The computer name.
             </param>
             <param name="caseInSensitive">If true the variable names is case in-sensitive</param>
             <param name="extra">Optional extra variables</param>
@@ -2941,6 +3277,17 @@
             <param name="onExit">Optionally called when the process completed or on error, paramaters are: exitCode, exception, duration and the last X stdout/stderr lines of output</param>
             <returns>The process exit code</returns>
         </member>
+        <member name="M:SysWeaver.ExternalProcess.RunAsync(System.String,System.String,System.Action{System.String,System.Boolean},System.Action{System.Int32,System.Exception,System.TimeSpan,System.Collections.Generic.IEnumerable{System.String}},System.Nullable{System.Threading.CancellationToken})">
+            <summary>
+            Run an external command
+            </summary>
+            <param name="cmd">The command to run</param>
+            <param name="args">Optional command arguments</param>
+            <param name="onMessage">Optionally called on every line outputted, second parameter is false for stdout and true for stderr</param>
+            <param name="onExit">Optionally called when the process completed or on error, paramaters are: exitCode, exception, duration and the last X stdout/stderr lines of output</param>
+            <param name="cancelWait">An optional cancellation token</param>
+            <returns>The process exit code</returns>
+        </member>
         <member name="T:SysWeaver.FastByteArrayEqualityComparer">
             <summary>
             A fast equality comparer for byte array's that can be used if all these conditions are met:
@@ -2978,6 +3325,21 @@
             <param name="func">The delegate used to create a non-existing item</param>
             <returns>The value of the item</returns>
         </member>
+        <member name="M:SysWeaver.FastMemCache`2.Set(`0,`1)">
+            <summary>
+            Set a new value
+            </summary>
+            <param name="key">Tke key</param>
+            <param name="value">The new value</param>
+        </member>
+        <member name="M:SysWeaver.FastMemCache`2.TryGet(`0,`1@)">
+            <summary>
+            Get an item if it's cached
+            </summary>
+            <param name="key">Tke key</param>
+            <param name="value">The cached value or default it it deosn't exist</param>
+            <returns>True if a value exist</returns>
+        </member>
         <member name="M:SysWeaver.FastMemCache`2.GetOrUpdate``1(`0,System.Func{`0,``0,`1},``0)">
             <summary>
             Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
@@ -2986,6 +3348,17 @@
             <param name="key">Tke key</param>
             <param name="func">The delegate used to create a non-existing item</param>
             <param name="arg">A custom argument that is passed to the delegate if invoked</param>
+            <returns>The value of the item</returns>
+        </member>
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdate``2(`0,System.Func{`0,``0,``1,`1},``0,``1)">
+            <summary>
+            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+            </summary>
+            <param name="key">Tke key</param>
+            <param name="func">The delegate used to create a non-existing item</param>
+            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
+            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
             <returns>The value of the item</returns>
         </member>
         <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateAsync(`0,System.Func{`0,System.Threading.Tasks.Task{`1}},System.Boolean)">
@@ -3009,10 +3382,62 @@
             <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
             <returns>The value of the item</returns>
         </member>
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateAsync``2(`0,System.Func{`0,``0,``1,System.Threading.Tasks.Task{`1}},``0,``1,System.Boolean)">
+            <summary>
+            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+            </summary>
+            <param name="key">Tke key</param>
+            <param name="func">The delegate used to create a non-existing item</param>
+            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
+            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
+            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+            <returns>The value of the item</returns>
+        </member>
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateValueAsync(`0,System.Func{`0,System.Threading.Tasks.ValueTask{`1}},System.Boolean)">
+            <summary>
+            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+            </summary>
+            <param name="key">Tke key</param>
+            <param name="func">The delegate used to create a non-existing item</param>
+            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+            <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        </member>
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateValueAsync``1(`0,System.Func{`0,``0,System.Threading.Tasks.ValueTask{`1}},``0,System.Boolean)">
+            <summary>
+            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+            </summary>
+            <param name="key">Tke key</param>
+            <param name="func">The delegate used to create a non-existing item</param>
+            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
+            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+            <returns>The value of the item</returns>
+        </member>
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateValueAsync``2(`0,System.Func{`0,``0,``1,System.Threading.Tasks.ValueTask{`1}},``0,``1,System.Boolean)">
+            <summary>
+            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+            </summary>
+            <param name="key">Tke key</param>
+            <param name="func">The delegate used to create a non-existing item</param>
+            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
+            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
+            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+            <returns>The value of the item</returns>
+        </member>
         <member name="M:SysWeaver.FastMemCache`2.Prune">
             <summary>
             Call to manually prune (remove) old items, no real need to call this unless memory usage is the primary concern
             </summary>
+        </member>
+        <member name="M:SysWeaver.FastMemCache`2.Remove(`0)">
+            <summary>
+            Remove an entry from the cache
+            </summary>
+            <param name="key"></param>
+            <returns></returns>
         </member>
         <member name="M:SysWeaver.FastMemCache`2.Clear">
             <summary>
@@ -3090,6 +3515,13 @@
             <param name="memory">The memory to save</param>
             <param name="filename">The file to write to (overwites existing)</param>
         </member>
+        <member name="M:SysWeaver.FileExt.WriteToFileAsync(System.Memory{System.Byte},System.String)">
+            <summary>
+            Save all memory to disc
+            </summary>
+            <param name="memory">The memory to save</param>
+            <param name="filename">The file to write to (overwites existing)</param>
+        </member>
         <member name="M:SysWeaver.FileExt.WriteSpan(System.String,System.ReadOnlySpan{System.Byte})">
             <summary>
             Save all span to disc
@@ -3110,6 +3542,13 @@
             Folders can be overridden using the key "FileHashFolders" in the ApplicationName.Config.json file (shared with DecompressedFileHash).
             Default uses the Folders.AllSharedFolders locations.
             </summary>
+        </member>
+        <member name="M:SysWeaver.FileHash.ToHexHash(System.String)">
+            <summary>
+            Convert a compact hash of length 26 to a hexadecimal hash of length 32
+            </summary>
+            <param name="hashStringh16">A string of length 26 with an encoded hash</param>
+            <returns>Hex hash</returns>
         </member>
         <member name="M:SysWeaver.FileHash.FilesAreEqual(System.String,System.String)">
             <summary>
@@ -3201,30 +3640,33 @@
             Folders to use for private data for this app, unique to the running user.
             </summary>
         </member>
-        <member name="M:SysWeaver.Folders.Append(System.Collections.Generic.IReadOnlyList{System.String},System.String)">
+        <member name="M:SysWeaver.Folders.Append(System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Boolean)">
             <summary>
             Append a path to a set of root paths
             </summary>
             <param name="roots">Root paths</param>
             <param name="paths">The path(s) to append (using Path.Combine)</param>
+            <param name="allowAll">Allow all users</param>
             <returns>Resulting paths</returns>
         </member>
-        <member name="M:SysWeaver.Folders.FromConfig(System.String,System.Collections.Generic.IReadOnlyList{System.String},System.String)">
+        <member name="M:SysWeaver.Folders.FromConfig(System.String,System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Boolean)">
             <summary>
             Get a set of folders from config or using defaults.
             </summary>
             <param name="keyName">The config key to use, can contains any number of folders separated by a ;, is resolved using the PathTemplate.Resolve methods so any variables can be used</param>
             <param name="defaultRoots">If the key is not in the config use these root paths</param>
             <param name="defaultPath">If the key is not in the config, append this path to the roots</param>
+            <param name="allowAll">Allow all users</param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.Folders.FromString(System.String,System.Collections.Generic.IReadOnlyList{System.String},System.String)">
+        <member name="M:SysWeaver.Folders.FromString(System.String,System.Collections.Generic.IReadOnlyList{System.String},System.String,System.Boolean)">
             <summary>
             Get a set of folders from config or using defaults.
             </summary>
             <param name="paths">The paths to use, can be null or empty to use defaults, can contains any number of folders separated by a ;, is resolved using the PathTemplate.Resolve methods so any variables can be used</param>
             <param name="defaultRoots">If the key is not in the config use these root paths</param>
             <param name="defaultPath">If the key is not in the config, append this path to the roots</param>
+            <param name="allowAll">Allow all users</param>
             <returns></returns>
         </member>
         <member name="M:SysWeaver.Folders.SelectFolder(System.Collections.Generic.IReadOnlyList{System.String},System.String)">
@@ -3242,6 +3684,248 @@
             <param name="perUser">Get a unique path per user or not</param>
             <param name="perApp">Get a unique path per application</param>
             <returns>The base paths to use</returns>
+        </member>
+        <member name="T:SysWeaver.FrozenStringTree">
+            <summary>
+            A string tree stores a bunch of strings in a way that makes it fast to check if a test string starts with ANY of the contained strings.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.FrozenStringTree.IsCaseInSensitive">
+            <summary>
+            True if the tree is case in-sensitive
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.Build(System.Collections.Generic.IEnumerable{System.String},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.StartsWithAny(System.String,System.Int32)">
+            <summary>
+            Find the longest string (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>The longest found match or null if no match is found</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.AllStartsWithAny(System.String,System.Int32)">
+            <summary>
+            Find all matching strings (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>A list of matches, orderer from shortest match to longest match</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.PrefixesOf(System.String,System.Int32)">
+            <summary>
+            Find all strings (in the tree), that is a prefix of the text
+            </summary>
+            <param name="text">The text to find prefixes (in the tree) for </param>
+            <param name="start">An optional start offset</param>
+            <returns>A list of matches, ordered by name</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.InternalAddAllInOrder(System.Collections.Generic.List{System.String},SysWeaver.FrozenStringTree)">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.InternalAddAll(System.Collections.Generic.List{System.String},SysWeaver.FrozenStringTree)">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.GetAll">
+            <summary>
+            Get all string contained in the string tree, in any order
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.GetAllInOrder">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTree.GetAllInReverseOrder">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList.Build``1(System.Collections.Generic.IEnumerable{System.Tuple{System.String,``0}},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList.Build``1(System.Collections.Generic.IEnumerable{System.Collections.Generic.KeyValuePair{System.String,``0}},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList.Build``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.String},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="values">The values to add, may not contain null</param>
+            <param name="getKey">Function that extracts the string key</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="T:SysWeaver.FrozenStringTreeList`1">
+            <summary>
+            A string tree stores a bunch of strings in a way that makes it fast to check if a test string starts with ANY of the contained strings.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.FrozenStringTreeList`1.IsCaseInSensitive">
+            <summary>
+            True if the tree is case in-sensitive
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.Build(System.Collections.Generic.IEnumerable{System.Tuple{System.String,`0}},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.Build(System.Collections.Generic.IEnumerable{System.Collections.Generic.KeyValuePair{System.String,`0}},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.Build(System.Collections.Generic.IEnumerable{`0},System.Func{`0,System.String},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="values">The values to add, may not contain null</param>
+            <param name="getKey">Function that extracts the string key</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.StartsWithAny(System.String,System.Int32)">
+            <summary>
+            Find the longest string (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>The longest found match or null if no match is found</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.AllStartsWithAny(System.String,System.Int32)">
+            <summary>
+            Find all matching strings (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>A list of matches, ordered by name</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.PrefixesOf(System.String,System.Int32)">
+            <summary>
+            Find all matching strings (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>A list of matches, ordered by name</returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.InternalAddAllInOrder(System.Collections.Generic.List{System.Collections.Generic.IReadOnlyList{`0}},SysWeaver.FrozenStringTreeList{`0})">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.InternalAddAll(System.Collections.Generic.List{System.Collections.Generic.IReadOnlyList{`0}},SysWeaver.FrozenStringTreeList{`0})">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.GetAll">
+            <summary>
+            Get all string contained in the string tree, in any order
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.GetAllInOrder">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.GetAllInReverseOrder">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.GxHash.Hash32(System.ReadOnlySpan{System.Byte},System.UInt128)">
+            <summary>
+            Hash a span of bytes into an 32-bit signed integer, using the given seed
+            </summary>
+            <param name="bytes">The input bytes to hash</param>
+            <param name="seed">A 128-bit seed</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.GxHash.HashU32(System.ReadOnlySpan{System.Byte},System.UInt128)">
+            <summary>
+            Hash a span of bytes into an 32-bit signed integer, using the given seed
+            </summary>
+            <param name="bytes">The input bytes to hash</param>
+            <param name="seed">A 128-bit seed</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.GxHash.Hash64(System.ReadOnlySpan{System.Byte},System.UInt128)">
+            <summary>
+            Hash a span of bytes into an 64-bit signed integer, using the given seed
+            </summary>
+            <param name="bytes">The input bytes to hash</param>
+            <param name="seed">A 128-bit seed</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.GxHash.HashU64(System.ReadOnlySpan{System.Byte},System.UInt128)">
+            <summary>
+            Hash a span of bytes into an 64-bit unsigned integer, using the given seed
+            </summary>
+            <param name="bytes">The input bytes to hash</param>
+            <param name="seed">A 128-bit seed</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.GxHash.Hash128(System.ReadOnlySpan{System.Byte},System.UInt128)">
+            <summary>
+            Hash a span of bytes into an 128-bit unsigned integer, using the given seed
+            </summary>
+            <param name="bytes">The input bytes to hash</param>
+            <param name="seed">A 128-bit seed</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.GxHash.IsReadBeyondSafe(System.Runtime.Intrinsics.Vector128{System.Byte}@)">
+            <summary>
+            Returns true if reading the ref value is safe.
+            This is done using the pointer address and making sure we aren't going to
+            read past the end of the current memory page (which could produce segfaults)
+            </summary>
+            <param name="reference"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.HashTools.ToHexHash(System.String)">
+            <summary>
+            Convert a compact hash of length 26 to a hexadecimal hash of length 32
+            </summary>
+            <param name="hashStringh16">A string of length 26 with an encoded hash</param>
+            <returns>Hex hash</returns>
         </member>
         <member name="M:SysWeaver.HashTools.GetHashString(System.String)">
             <summary>
@@ -3336,6 +4020,14 @@
             <param name="a">[0, 1] Alpha component</param>
             <returns>A html color string</returns>
         </member>
+        <member name="M:SysWeaver.HtmlColors.MakeHtmlColor(System.UInt32,System.Double)">
+            <summary>
+            Make the shortest html color string for the given red, green, blue and alpha components.
+            </summary>
+            <param name="rgb">0xrrggbb</param>
+            <param name="a">[0, 1] Alpha component</param>
+            <returns>A html color string</returns>
+        </member>
         <member name="M:SysWeaver.HtmlColors.MakeTransparent(System.String,System.Double)">
             <summary>
             Make the given color transparent
@@ -3352,6 +4044,32 @@
             <param name="htmlColorB">A html color, can be a name [Red], a hex value [#f00] or [#ff0000], rgb [rgb(255,0,0)] or rgba [rgba(255,0,0,1.0)]</param>
             <param name="distance">The distance to move from A to B</param>
             <returns>The resulting color</returns>
+        </member>
+        <member name="F:SysWeaver.HttpRateLimiter.MaxQueue">
+            <summary>
+            The maximum number of request to keep queued
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpRateLimiter.MaxWait">
+            <summary>
+            The maximum time to delay a request
+            </summary>
+        </member>
+        <member name="M:SysWeaver.HttpRateLimiter.IsOverTheLimit">
+            <summary>
+            Check if we're exceeding the limit, wait if enabled and required
+            </summary>
+            <returns>True if the limit is exceeded (return 429)</returns>
+        </member>
+        <member name="F:SysWeaver.HttpRateLimiterParams.MaxQueue">
+            <summary>
+            The maximum number of request to keep queued
+            </summary>
+        </member>
+        <member name="F:SysWeaver.HttpRateLimiterParams.MaxDelay">
+            <summary>
+            The maximum time to delay a request
+            </summary>
         </member>
         <member name="T:SysWeaver.ICloneable`1">
             <summary>
@@ -3402,6 +4120,18 @@
             Extensions to integer types to handle power of two scenarios
             </summary>
         </member>
+        <member name="M:SysWeaver.IntegerBitExt.MaxMask(System.UInt64)">
+            <summary>
+            Create a mask that includes the value minue one.
+            Examples:
+             5 returns 0x07.
+            15 returns 0x0f.
+            16 returns 0x0f.
+            17 returns 0x1f.
+            </summary>
+            <param name="v">The max value (non-exclusive)</param>
+            <returns>The bit mask</returns>
+        </member>
         <member name="M:SysWeaver.IntegerBitExt.IsPow2(System.UInt64)">
             <summary>
             Test if an integer value is a power of two
@@ -3422,6 +4152,18 @@
             </summary>
             <param name="v">The value to test</param>
             <returns>A value that is the a power of two</returns>
+        </member>
+        <member name="M:SysWeaver.IntegerBitExt.MaxMask(System.UInt32)">
+            <summary>
+            Create a mask that includes the value minue one.
+            Examples:
+             5 returns 0x07.
+            15 returns 0x0f.
+            16 returns 0x0f.
+            17 returns 0x1f.
+            </summary>
+            <param name="v">The max value (non-exclusive)</param>
+            <returns>The bit mask</returns>
         </member>
         <member name="M:SysWeaver.IntegerBitExt.IsPow2(System.UInt32)">
             <summary>
@@ -3444,6 +4186,18 @@
             <param name="v">The value to test</param>
             <returns>A value that is the a power of two</returns>
         </member>
+        <member name="M:SysWeaver.IntegerBitExt.MaxMask(System.Int64)">
+            <summary>
+            Create a mask that includes the value minue one.
+            Examples:
+             5 returns 0x07.
+            15 returns 0x0f.
+            16 returns 0x0f.
+            17 returns 0x1f.
+            </summary>
+            <param name="vv">The max value (non-exclusive)</param>
+            <returns>The bit mask</returns>
+        </member>
         <member name="M:SysWeaver.IntegerBitExt.IsPow2(System.Int64)">
             <summary>
             Test if an integer value is a power of two
@@ -3464,6 +4218,18 @@
             </summary>
             <param name="vv">The value to test</param>
             <returns>A value that is the a power of two</returns>
+        </member>
+        <member name="M:SysWeaver.IntegerBitExt.MaxMask(System.Int32)">
+            <summary>
+            Create a mask that includes the value minue one.
+            Examples:
+             5 returns 0x07.
+            15 returns 0x0f.
+            16 returns 0x0f.
+            17 returns 0x1f.
+            </summary>
+            <param name="vv">The max value (non-exclusive)</param>
+            <returns>The bit mask</returns>
         </member>
         <member name="M:SysWeaver.IntegerBitExt.IsPow2(System.Int32)">
             <summary>
@@ -3600,6 +4366,61 @@
         <member name="M:SysWeaver.IServicePausable.Continue">
             <summary>
             Called whenever a service is resumed
+            </summary>
+        </member>
+        <member name="T:SysWeaver.IStringTreeExt">
+            <summary>
+            Extension methods to StringTree instances
+            </summary>
+        </member>
+        <member name="M:SysWeaver.IStringTreeExt.IndexOfAny(SysWeaver.IStringTree,System.String@,System.String,System.Int32)">
+            <summary>
+            Find the index of the first matching string (from the tree)
+            </summary>
+            <param name="tree">The tree to use</param>
+            <param name="match">The first matching string (if found) or null</param>
+            <param name="text">The text to find the first matching string in</param>
+            <param name="start">An optional start offset</param>
+            <returns>The position of the first matching string or -1 if no match is found</returns>
+        </member>
+        <member name="M:SysWeaver.IStringTreeExt.LastIndexOfAny(SysWeaver.IStringTree,System.String@,System.String,System.Int32)">
+            <summary>
+            Find the index of the last matching string (from the tree)
+            </summary>
+            <param name="tree">The tree to use</param>
+            <param name="match">The last  matching string (if found) or null</param>
+            <param name="text">The text to find the last  matching string in</param>
+            <param name="start">An optional start offset, or -1 to start at the end of the string</param>
+            <returns>The position of the last  matching string or -1 if no match is found</returns>
+        </member>
+        <member name="P:SysWeaver.LanguageTemplate.ExtBuilders">
+            <summary>
+            Map for handling different extensions
+            </summary>
+        </member>
+        <member name="M:SysWeaver.LanguageTemplate.AddHandler(System.String,SysWeaver.LanguageTemplate.LangHandler)">
+            <summary>
+            Add an extension handler
+            </summary>
+            <param name="ext">The file extension to add a handler for</param>
+            <param name="fn">The function that create a language template for that extension</param>
+            <returns>True if the handler was added, else false</returns>
+        </member>
+        <member name="M:SysWeaver.LanguageTemplate.RemoveHandler(System.String)">
+            <summary>
+            Remove an extension handler
+            </summary>
+            <param name="ext">The file extension to remove the handler for</param>
+            <returns>True if the handler was removed, else false</returns>
+        </member>
+        <member name="F:SysWeaver.LanguageTemplate.Text">
+            <summary>
+            The modified text (with variables using the ${Var} syntax.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.LanguageTemplate.Vars">
+            <summary>
+            The variables used in the text.
             </summary>
         </member>
         <member name="T:SysWeaver.ManagedFile">
@@ -4093,6 +4914,76 @@
             The log level of the message
             </summary>
         </member>
+        <member name="T:SysWeaver.MimeTypeMap">
+            <summary>
+            Class MimeTypeMap.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MimeTypeMap.Utf8Suffix">
+            <summary>
+            Mime type suffix for Utf8 encoded content
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MimeTypeMap.PlainText">
+            <summary>
+            UTF8 encoded plain text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MimeTypeMap.Html">
+            <summary>
+            UTF8 encoded html document
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MimeTypeMap.Json">
+            <summary>
+            UTF8 encoded json
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MimeTypeMap.Xml">
+            <summary>
+            UTF8 encoded xml
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MimeTypeMap.Svg">
+            <summary>
+            UTF8 encoded svg
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MimeTypeMap.Data">
+            <summary>
+            Raw data
+            </summary>
+        </member>
+        <member name="F:SysWeaver.MimeTypeMap.FormUrlEncoded">
+            <summary>
+            UTF8 encoded Form Url Encoded
+            </summary>
+        </member>
+        <member name="M:SysWeaver.MimeTypeMap.TryGetMimeType(System.String,System.Tuple{System.String,System.Boolean}@,System.Boolean)">
+            <summary>
+            Tries to get the type of the MIME from the provided string.
+            </summary>
+            <param name="str">The filename or extension.</param>
+            <param name="mimeType">The variable to store the MIME type.</param>
+            <param name="withCharset">Adds a charset=UTF-8 to text documents</param>
+            <returns>The MIME type and if the type is compressible</returns>
+        </member>
+        <member name="M:SysWeaver.MimeTypeMap.GetMimeType(System.String,System.Boolean)">
+            <summary>
+            Gets the type of the MIME from the provided string.
+            </summary>
+            <param name="str">The filename or extension.</param>
+            <param name="withCharset">Adds a charset=UTF-8 to text documents</param>
+            <returns>The MIME type and if the type is compressible</returns>
+        </member>
+        <member name="M:SysWeaver.MimeTypeMap.TryGetExtensions(System.String,System.Collections.Generic.IReadOnlyList{System.String}@)">
+            <summary>
+            Get file extensions associated with a mime
+            </summary>
+            <param name="mime">The mime</param>
+            <param name="extensions">A list of extensions that maps to the mime</param>
+            <returns>True if some extensions are found</returns>
+        </member>
         <member name="M:SysWeaver.NetworkTools.GetAnyLanIP(System.String)">
             <summary>
             Get the first valid LAN ip found
@@ -4127,6 +5018,28 @@
             Return a list of LAN ip's
             </summary>
             <returns></returns>
+        </member>
+        <member name="M:SysWeaver.NetworkTools.IsRoutableAddress(System.Net.IPAddress)">
+            <summary>
+            Check if an ip address is routable (i.e on the internet)
+            </summary>
+            <param name="addr"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.NetworkTools.IsConnectedToInternetAsync(System.Int32)">
+            <summary>
+            Check if internet is available
+            </summary>
+            <param name="maxHops">Maximum number of hops when pinging (if the application is running where deep into some internal network, VM's in VM's etc, then maybe imcrease this)</param>
+            <returns>The IP of the closest route to the internet</returns>
+        </member>
+        <member name="M:SysWeaver.NetworkTools.WaitForInternetConnectionAsync(System.Int32,System.Int32)">
+            <summary>
+            Wait for an internet connection
+            </summary>
+            <param name="maxSeconds">Maximum number of seconds to wait</param>
+            <param name="maxHops">Maximum number of hops when pinging (if the application is running where deep into some internal network, VM's in VM's etc, then maybe imcrease this)</param>
+            <returns>The IP of the closest route to the internet</returns>
         </member>
         <member name="T:SysWeaver.ObjectHash">
             <summary>
@@ -4299,6 +5212,21 @@
             <param name="lists">Array of lists to merge</param>
             <returns>A new merged ordered list</returns>
         </member>
+        <member name="M:SysWeaver.PathExt.StripExtension(System.String)">
+            <summary>
+            Remove the extension from a path.
+            Example: "C:\Windows\Temp\Data.dll" to "C:\Windows\Temp\Data"
+            Example: "C:\Windows\Temp\NoExt" to "C:\Windows\Temp\NoExt"
+            </summary>
+            <param name="path">A path with an extension.
+            Example: "C:\Windows\Temp\Data.dll" to "C:\Windows\Temp\Data"
+            Example: "C:\Windows\Temp\NoExt" to "C:\Windows\Temp\NoExt"
+            </param>
+            <returns>The path without an extension or the original path if non exist.
+            Example: "C:\Windows\Temp\Data.dll" to "C:\Windows\Temp\Data"
+            Example: "C:\Windows\Temp\NoExt" to "C:\Windows\Temp\NoExt"
+            </returns>
+        </member>
         <member name="M:SysWeaver.PathExt.RootExecutable(System.String)">
             <summary>
             Make a path relative to the executables path if it's not already rooted
@@ -4426,6 +5354,50 @@
             <param name="delayInMs">Number of milli seconds to wait between any retries</param>
             <returns>Null if the file doesn't exist anymore, else the exception</returns>
         </member>
+        <member name="M:SysWeaver.PathExt.TryCopyFile(System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Try to copy a file.
+            If it fails, retry at least N times.
+            </summary>
+            <param name="source">The file to copy</param>
+            <param name="dest">The file to overwrite or create</param>
+            <param name="retryCount">Number of times to retry the operation (create folder)</param>
+            <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+            <returns>Null if the file was copied successfully, else the exception</returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.TryCopyFileAsync(System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Try to copy a file.
+            If it fails, retry at least N times.
+            </summary>
+            <param name="source">The file to copy</param>
+            <param name="dest">The file to overwrite or create</param>
+            <param name="retryCount">Number of times to retry the operation (create folder)</param>
+            <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+            <returns>Null if the file was copied successfully, else the exception</returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.TryMoveFile(System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Try to move / rename a file.
+            If it fails, retry at least N times.
+            </summary>
+            <param name="source">The file to move</param>
+            <param name="dest">The file to overwrite or create</param>
+            <param name="retryCount">Number of times to retry the operation (create folder)</param>
+            <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+            <returns>Null if the file was copied successfully, else the exception</returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.TryMoveFileAsync(System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Try to move / rename a file.
+            If it fails, retry at least N times.
+            </summary>
+            <param name="source">The file to move</param>
+            <param name="dest">The file to overwrite or create</param>
+            <param name="retryCount">Number of times to retry the operation (create folder)</param>
+            <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+            <returns>Null if the file was copied successfully, else the exception</returns>
+        </member>
         <member name="M:SysWeaver.PathExt.TryDeleteDirectory(System.String,System.Boolean,System.Int32,System.Int32)">
             <summary>
             Delete a directory if it exists.
@@ -4444,6 +5416,19 @@
             </summary>
             <param name="directory">The directory to delete</param>
             <param name="onlyEmpty">Only delete the directory if it's empty</param>
+            <param name="retryCount">Number of times to retry the operation (create folder)</param>
+            <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+            <returns>Null if the directory doesn't exists, else the exception</returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.TryCleanDirectoryAsync(System.String,System.Func{System.String,System.Boolean,System.Boolean},System.Boolean,System.Int32,System.Int32)">
+            <summary>
+            Clean a directory, decide on a per file and per folder basis if it should be deleted
+            If a delete operation fails, retry at least N times.
+            </summary>
+            <param name="directory">The directory to delete</param>
+            <param name="doDelete">Callback used to determine if it should be deleted or not, first argument is the file or folder name, if the second argument is true, it's a folder.
+            The callback will be executed in paralell so it must be thread safe</param>
+            <param name="continueOnError">Continue to delete as much as possible on delete errors, will return the first exception as usual</param>
             <param name="retryCount">Number of times to retry the operation (create folder)</param>
             <param name="delayInMs">Number of milli seconds to wait between any retries</param>
             <returns>Null if the directory doesn't exists, else the exception</returns>
@@ -4481,6 +5466,84 @@
             </summary>
             <param name="filename"></param>
             <returns></returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.TryMoveFolder(System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Renames / moves a folder
+            </summary>
+            <param name="from">The existing folder that should be moved</param>
+            <param name="to">The desired name of the target folder</param>
+            <param name="retryCount">Number of times to retry the operation (create folder)</param>
+            <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+        </member>
+        <member name="M:SysWeaver.PathExt.TryMoveFolderAsync(System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Renames / moves a folder
+            </summary>
+            <param name="from">The existing folder that should be moved</param>
+            <param name="to">The desired name of the target folder</param>
+            <param name="retryCount">Number of times to retry the operation (create folder)</param>
+            <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+        </member>
+        <member name="M:SysWeaver.PathExt.TryFolderSwap(System.String,System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Renames the target folder to backup folder then renames the new folder to target folder.
+            </summary>
+            <param name="targetFolder">The folder that should be replaced</param>
+            <param name="backupFolder">The backup name of the folder that is replaced</param>
+            <param name="newFolder">The folder that should replace the target folder</param>
+            <param name="retryCount">Number of times to retry the operation (create folder)</param>
+            <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+        </member>
+        <member name="M:SysWeaver.PathExt.TryFolderSwapAsync(System.String,System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Renames the target folder to backup folder then renames the new folder to target folder.
+            </summary>
+            <param name="targetFolder">The folder that should be replaced</param>
+            <param name="backupFolder">The backup name of the folder that is replaced</param>
+            <param name="newFolder">The folder that should replace the target folder</param>
+            <param name="retryCount">Number of times to retry the operation (create folder)</param>
+            <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+        </member>
+        <member name="M:SysWeaver.PathExt.AllowAllAccess(System.String)">
+            <summary>
+            Allow all users to read / write a folder 
+            </summary>
+            <param name="folder"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.DisableIndexing(System.String)">
+            <summary>
+            Disable content indexing of a folder
+            </summary>
+            <param name="folder">The folder</param>
+            <returns>False on error</returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.CreateDataFolder(System.String,System.Boolean)">
+            <summary>
+            Create a folder if it doesn't exist and set it up for data usage (enable all access and disable indexing).
+            If the folder exist nothing will be done
+            </summary>
+            <param name="path">The folder to setup</param>
+            <param name="forceSetup">If true the enabling of all access and disabling indexing will be enforced, if false it will only be applied if the folder was created</param>
+            <returns>The full path</returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.SetupDataFolder(System.String)">
+            <summary>
+            Set up a folder for data: disable content indexing and allow it to be accessed by eveyone
+            </summary>
+            <param name="path"></param>
+            <returns>False on error</returns>
+        </member>
+        <member name="M:SysWeaver.PathExt.GetDirectoryAndMask(System.String,System.String@)">
+            <summary>
+            Gety the directory name and file mask from a path (typically containing wild cards).
+            Example: "D:\Temp\*.png" => "D:\Temp" and fileMask = "*.png".
+            Handles cases like having no directory (uses Environment.CurrentDirectory), ex: "*.png", "..\*.txt", ".\*.exe", "Sub\*.jpg" and so on.
+            </summary>
+            <param name="pathWithMask">Path (directory and file mask), ex: "D:\Temp\*.png"</param>
+            <param name="fileMask">Will be filled in with the file mask</param>
+            <returns>Will return the rooted directory part of the path</returns>
         </member>
         <member name="T:SysWeaver.PathTemplate">
             <summary>
@@ -4720,7 +5783,27 @@
             <param name="continueOnException">If set to true and the task or it's creation casts an exception, continue the periodic execution anyway</param>
             <param name="initialDelay">If runNow is true, delay the first execution using the sleepMs parameter</param>
         </member>
+        <member name="M:SysWeaver.PeriodicTask.#ctor(System.Func{System.Threading.Tasks.ValueTask{System.Boolean}},System.Int32,System.Boolean,System.Boolean,System.Boolean)">
+            <summary>
+            Runs a task concurrently periodically with the specfied delay inbetween
+            </summary>
+            <param name="createTask">A function that creates the task to run at the given interval</param>
+            <param name="sleepMs">Number of milliseconds to to pause between each task execution</param>
+            <param name="runNow">Set to true to start immediately</param>
+            <param name="continueOnException">If set to true and the task or it's creation casts an exception, continue the periodic execution anyway</param>
+            <param name="initialDelay">If runNow is true, delay the first execution using the sleepMs parameter</param>
+        </member>
         <member name="M:SysWeaver.PeriodicTask.#ctor(System.Func{System.Threading.CancellationToken,System.Threading.Tasks.Task{System.Boolean}},System.Int32,System.Boolean,System.Boolean,System.Boolean)">
+            <summary>
+            Runs a task concurrently periodically with the specfied delay inbetween, this task can be cancelled
+            </summary>
+            <param name="createTask">A function that creates the task to run at the given interval, this task should be able to cancle using the canellation token provided</param>
+            <param name="sleepMs">Number of milliseconds to to pause between each task execution</param>
+            <param name="runNow">Set to true to start immediately</param>
+            <param name="continueOnException">If set to true and the task or it's creation casts an exception, continue the periodic execution anyway</param>
+            <param name="initialDelay">If runNow is true, delay the first execution using the sleepMs parameter</param>
+        </member>
+        <member name="M:SysWeaver.PeriodicTask.#ctor(System.Func{System.Threading.CancellationToken,System.Threading.Tasks.ValueTask{System.Boolean}},System.Int32,System.Boolean,System.Boolean,System.Boolean)">
             <summary>
             Runs a task concurrently periodically with the specfied delay inbetween, this task can be cancelled
             </summary>
@@ -4832,6 +5915,59 @@
             <param name="data">The data to compute a hash over</param>
             <param name="seed">An optional seed</param>
             <returns>A 32-bit hash of the data</returns>
+        </member>
+        <member name="T:SysWeaver.RateLimiter">
+            <summary>
+            A simple rate limiter
+            </summary>
+        </member>
+        <member name="M:SysWeaver.RateLimiter.#ctor(System.Int32,System.Int64)">
+            <summary>
+            
+            </summary>
+            <param name="maxCount">The maximum number of requests within the specified time frame</param>
+            <param name="limitDuration">The duration time time span ticks that the max count refers to</param>
+            <exception cref="T:System.ArgumentException"></exception>
+        </member>
+        <member name="M:SysWeaver.RateLimiter.#ctor(System.Int32,System.TimeSpan)">
+            <summary>
+            
+            </summary>
+            <param name="maxCount">The maximum number of requests within the specified time frame</param>
+            <param name="limitDuration">The duration that the max count refers to</param>
+            <exception cref="T:System.ArgumentException"></exception>
+        </member>
+        <member name="M:SysWeaver.RateLimiter.IsOverLimit(System.Int64@)">
+            <summary>
+            Update a rate limiter and test if the call rate is too high
+            </summary>
+            <param name="ticksToNextFree">Number of ticks to the next free</param>
+            <returns>True if the rate exceeds the limit</returns>
+        </member>
+        <member name="F:SysWeaver.RateLimiter.MaxCount">
+            <summary>
+            Maximum number of request
+            </summary>
+        </member>
+        <member name="F:SysWeaver.RateLimiter.LimitDuration">
+            <summary>
+            Over this time frame in time span ticks
+            </summary>
+        </member>
+        <member name="T:SysWeaver.RateLimiterParams">
+            <summary>
+            A parameters for a rate limiter
+            </summary>
+        </member>
+        <member name="F:SysWeaver.RateLimiterParams.Count">
+            <summary>
+            Number of request
+            </summary>
+        </member>
+        <member name="F:SysWeaver.RateLimiterParams.Duration">
+            <summary>
+            Over this time frame in seconds
+            </summary>
         </member>
         <member name="T:SysWeaver.DictionaryExt">
             <summary>
@@ -5076,6 +6212,123 @@
             <param name="noThrow">If true, return null instead of throwing exception</param>
             <returns>An object that can be disposed to prevent execution of the task in the future</returns>
         </member>
+        <member name="M:SysWeaver.SecureRngExt.GetUInt32Max(SysWeaver.SecureRng,System.UInt32,System.UInt32)">
+            <summary>
+            Get a random value below some max value [0, maxValue).
+            </summary>
+            <param name="r">The rng to use</param>
+            <param name="maxValue">The maximum values (exclusive)</param>
+            <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask()</param>
+            <returns>A random values in the [0, maxValue) interval</returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="M:SysWeaver.SecureRngExt.GetUInt64Max(SysWeaver.SecureRng,System.UInt64,System.UInt64)">
+            <summary>
+            Get a random value below some max value [0, maxValue).
+            </summary>
+            <param name="r">The rng to use</param>
+            <param name="maxValue">The maximum values (exclusive)</param>
+            <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask()</param>
+            <returns>A random values in the [0, maxValue) interval</returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="M:SysWeaver.SecureRngExt.GetInt32Max(SysWeaver.SecureRng,System.Int32,System.Int32)">
+            <summary>
+            Get a random value below some max value [0, maxValue).
+            </summary>
+            <param name="r">The rng to use</param>
+            <param name="maxValue">The maximum values (exclusive)</param>
+            <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask()</param>
+            <returns>A random values in the [0, maxValue) interval</returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="M:SysWeaver.SecureRngExt.GetInt64Max(SysWeaver.SecureRng,System.Int64,System.Int64)">
+            <summary>
+            Get a random value below some max value [0, maxValue).
+            </summary>
+            <param name="r">The rng to use</param>
+            <param name="maxValue">The maximum values (exclusive)</param>
+            <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask()</param>
+            <returns>A random values in the [0, maxValue) interval</returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="M:SysWeaver.SecureRngExt.InRangeInt32(SysWeaver.SecureRng,System.Int32,System.Int32)">
+            <summary>
+            Get a random number with in an inclusive range [min, max]
+            </summary>
+            <param name="r">The rng to use</param>
+            <param name="min">The minimum inclusive value</param>
+            <param name="max">The maximum inclusive value</param>
+            <returns>A random values in the [min, max] interval</returns>
+        </member>
+        <member name="M:SysWeaver.SecureRngExt.InRangeInt64(SysWeaver.SecureRng,System.Int64,System.Int64)">
+            <summary>
+            Get a random number with in an inclusive range [min, max]
+            </summary>
+            <param name="r">The rng to use</param>
+            <param name="min">The minimum inclusive value</param>
+            <param name="max">The maximum inclusive value</param>
+            <returns>A random values in the [min, max] interval</returns>
+        </member>
+        <member name="M:SysWeaver.SecureRngExt.InRangeUInt32(SysWeaver.SecureRng,System.UInt32,System.UInt32)">
+            <summary>
+            Get a random number with in an inclusive range [min, max]
+            </summary>
+            <param name="r">The rng to use</param>
+            <param name="min">The minimum inclusive value</param>
+            <param name="max">The maximum inclusive value</param>
+            <returns>A random values in the [min, max] interval</returns>
+        </member>
+        <member name="M:SysWeaver.SecureRngExt.InRangeUInt64(SysWeaver.SecureRng,System.UInt64,System.UInt64)">
+            <summary>
+            Get a random number with in an inclusive range [min, max]
+            </summary>
+            <param name="r">The rng to use</param>
+            <param name="min">The minimum inclusive value</param>
+            <param name="max">The maximum inclusive value</param>
+            <returns>A random values in the [min, max] interval</returns>
+        </member>
+        <member name="M:SysWeaver.NumericCodeRngExt.GetNumericCode(SysWeaver.SecureRng,System.Int32,System.Int32,System.Int32,System.Boolean)">
+            <summary>
+            Get a random numeric code of N-digits as a string
+            </summary>
+            <param name="r">The rng to use</param>
+            <param name="numDigits">Number of digits (min 1)</param>
+            <param name="maxRepeat">Maximum number of repeated digits, Ex: if 2, "223311" is ok, "153444" is not ok</param>
+            <param name="maxInc">Maximum number of digits in an increasing or decreasing series, Ex: if 3, "123890" is ok, "543299" is not ok</param>
+            <param name="nonZeroFirst">If true, the first number may not be 0</param>
+            <returns>A "random" numerical string obeying the above rules</returns>
+        </member>
+        <member name="M:SysWeaver.GuidRngExt.GetGuid24(SysWeaver.SecureRng)">
+            <summary>
+            Create a 24 character long GUID (144 bits, 18 bytes of rng)
+            </summary>
+            <param name="r">The rng to use</param>
+            <returns>A GUID as a string</returns>
+        </member>
+        <member name="M:SysWeaver.GuidRngExt.GetGuid48(SysWeaver.SecureRng)">
+            <summary>
+            Create a 48 character long GUID (288 bits, 36 bytes of rng)
+            </summary>
+            <param name="r">The rng to use</param>
+            <returns>A GUID as a string</returns>
+        </member>
+        <member name="M:SysWeaver.GuidRngExt.GetTimeStampGuid24(SysWeaver.SecureRng,System.Int64)">
+            <summary>
+            Create a 24 character long GUID (144 bits, 10 bytes of rng and 8 bytes of time stamp)
+            </summary>
+            <param name="r">The rng to use</param>
+            <param name="lifeTimeTicks">Ticks that get added to the time stamp</param>
+            <returns>A GUID as a string</returns>
+        </member>
+        <member name="M:SysWeaver.GuidRngExt.GetTimeStampGuid48(SysWeaver.SecureRng,System.Int64)">
+            <summary>
+            Create a 48 character long GUID (288 bits, 28 bytes of rng and 8 bytes of time stamp)
+            </summary>
+            <param name="r">The rng to use</param>
+            <param name="lifeTimeTicks">Ticks that get added to the time stamp</param>
+            <returns>A GUID as a string</returns>
+        </member>
         <member name="M:SysWeaver.SecureRng.GetHashGuid24(System.ReadOnlySpan{System.Byte})">
             <summary>
             Create a 24 character long GUID (144 bits, 18 bytes of hash value)
@@ -5088,32 +6341,6 @@
             Create a 48 character long GUID (288 bits, 36 bytes of hash value)
             </summary>
             <param name="data">Some data (that will get hashed)</param>
-            <returns>A GUID as a string</returns>
-        </member>
-        <member name="M:SysWeaver.SecureRng.GetGuid24">
-            <summary>
-            Create a 24 character long GUID (144 bits, 18 bytes of rng)
-            </summary>
-            <returns>A GUID as a string</returns>
-        </member>
-        <member name="M:SysWeaver.SecureRng.GetGuid48">
-            <summary>
-            Create a 48 character long GUID (288 bits, 36 bytes of rng)
-            </summary>
-            <returns>A GUID as a string</returns>
-        </member>
-        <member name="M:SysWeaver.SecureRng.GetTimeStampGuid24(System.Int64)">
-            <summary>
-            Create a 24 character long GUID (144 bits, 10 bytes of rng and 8 bytes of time stamp)
-            </summary>
-            <param name="lifeTimeTicks">Ticks that get added to the time stamp</param>
-            <returns>A GUID as a string</returns>
-        </member>
-        <member name="M:SysWeaver.SecureRng.GetTimeStampGuid48(System.Int64)">
-            <summary>
-            Create a 48 character long GUID (288 bits, 28 bytes of rng and 8 bytes of time stamp)
-            </summary>
-            <param name="lifeTimeTicks">Ticks that get added to the time stamp</param>
             <returns>A GUID as a string</returns>
         </member>
         <member name="M:SysWeaver.SecureRng.GetTimeStampFromGuid(System.String)">
@@ -5129,6 +6356,18 @@
             </summary>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.SecureRng.GetSByte">
+            <summary>
+            Get 8 random bits
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.SecureRng.GetUInt16">
+            <summary>
+            Get 16 random bits
+            </summary>
+            <returns></returns>
+        </member>
         <member name="M:SysWeaver.SecureRng.GetUInt32">
             <summary>
             Get 32 random bits
@@ -5141,15 +6380,23 @@
             </summary>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.SecureRng.GetNumericCode(System.Int32,System.Int32,System.Int32,System.Boolean)">
+        <member name="M:SysWeaver.SecureRng.GetInt16">
             <summary>
-            Get a random numeric code of N-digits as a string
+            Get 16 random bits
             </summary>
-            <param name="numDigits">Number of digits (min 1)</param>
-            <param name="maxRepeat">Maximum number of repeated digits, Ex: if 2, "223311" is ok, "153444" is not ok</param>
-            <param name="maxInc">Maximum number of digits in an increasing or decreasing series, Ex: if 3, "123890" is ok, "543299" is not ok</param>
-            <param name="nonZeroFirst">If true, the first number may not be 0</param>
-            <returns>A "random" numerical string obeying the above rules</returns>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.SecureRng.GetInt32">
+            <summary>
+            Get 32 random bits
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.SecureRng.GetInt64">
+            <summary>
+            Get 64 random bits
+            </summary>
+            <returns></returns>
         </member>
         <member name="M:SysWeaver.Security.CertificateTools.GetExpiration(System.Security.Cryptography.X509Certificates.X509Certificate2)">
             <summary>
@@ -5222,6 +6469,16 @@
             <param name="msg">Message handler</param>
             <param name="messagePrefix">Message prefix</param>
             <returns>True if the rule was found and removed or if the rule doesn't exist, else false</returns>
+        </member>
+        <member name="T:SysWeaver.SemiFrozenDictionary`2">
+            <summary>
+            Use this dictionary when number of reads far exceeds the number of modificatiions.
+            This is thread safe in the same sense as a ConcurrentDictionary.
+            Aall reads are done on a frozen copy of the underlaying dictionary.
+            Mutating underlaying dictionary is done using locks and the frozen copy is invalidated.
+            </summary>
+            <typeparam name="TKey"></typeparam>
+            <typeparam name="TValue"></typeparam>
         </member>
         <member name="M:SysWeaver.SpanExt.ToHexString(System.Span{System.Byte})">
             <summary>
@@ -5303,65 +6560,6 @@
             <param name="stream">The stream to read from</param>
             <param name="leaveOpen">True will leave the stream opened, false will close it</param>
             <param name="encoding">The text encoding to use, default (null) is UTF8</param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.StreamExt.ContainsWord(System.String,System.String,System.StringComparison)">
-            <summary>
-            Check if a word is found in some text, the glyph before a word may no be a letter, the glyph after a word may not be a letter.
-            </summary>
-            <param name="sentence"></param>
-            <param name="word"></param>
-            <param name="cmp"></param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.StreamExt.RemoveDiacritics(System.String)">
-            <summary>
-            Remove all diacritics from a string (replaces them with base values)
-            </summary>
-            <param name="text"></param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.StreamExt.RemoveQuotes(System.String)">
-            <summary>
-            Remove one set of quotes from a a string (if they exist).
-            Ex: "apa" => apa
-            'banana' => banana
-            ""monkey"" => "monkey"
-            </summary>
-            <param name="text"></param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.StreamExt.Count(System.String,System.String,System.StringComparison)">
-            <summary>
-            Count the number of occurances of a substring
-            </summary>
-            <param name="text"></param>
-            <param name="subString"></param>
-            <param name="com"></param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.StreamExt.RemoveChars(System.String,System.Char[])">
-            <summary>
-            Remove all occurances of some chars from a string.
-            </summary>
-            <param name="text"></param>
-            <param name="removeChars">The chars to remove</param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.StreamExt.RemoveChars(System.String,System.String)">
-            <summary>
-            Remove all occurances of some chars from a string.
-            </summary>
-            <param name="text"></param>
-            <param name="removeChars">The chars to remove</param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.StreamExt.RemoveChars(System.String,System.Collections.Generic.IReadOnlySet{System.Char})">
-            <summary>
-            Remove all occurances of some chars from a string.
-            </summary>
-            <param name="text"></param>
-            <param name="removeChars">The chars to remove</param>
             <returns></returns>
         </member>
         <member name="F:SysWeaver.StringExt.FastLower">
@@ -5456,6 +6654,75 @@
             </summary>
             <param name="separator"></param>
             <param name="texts"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.Interleave(System.String,System.String)">
+            <summary>
+            Interleaves the characters from two equally length strings.
+            Ex: "abc", "123" => "a1b2c3".
+            </summary>
+            <param name="a">One string, ex: "abc"</param>
+            <param name="b">Another string, ex: "123"</param>
+            <returns>The interleaved result, ex: "a1b2c3"</returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="M:SysWeaver.StringExt.ContainsWord(System.String,System.String,System.StringComparison)">
+            <summary>
+            Check if a word is found in some text, the glyph before a word may no be a letter, the glyph after a word may not be a letter.
+            </summary>
+            <param name="sentence"></param>
+            <param name="word"></param>
+            <param name="cmp"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.RemoveDiacritics(System.String)">
+            <summary>
+            Remove all diacritics from a string (replaces them with base values)
+            </summary>
+            <param name="text"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.RemoveQuotes(System.String)">
+            <summary>
+            Remove one set of quotes from a a string (if they exist).
+            Ex: "apa" => apa
+            'banana' => banana
+            ""monkey"" => "monkey"
+            </summary>
+            <param name="text"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.Count(System.String,System.String,System.StringComparison)">
+            <summary>
+            Count the number of occurances of a substring
+            </summary>
+            <param name="text"></param>
+            <param name="subString"></param>
+            <param name="com"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.RemoveChars(System.String,System.Char[])">
+            <summary>
+            Remove all occurances of some chars from a string.
+            </summary>
+            <param name="text"></param>
+            <param name="removeChars">The chars to remove</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.RemoveChars(System.String,System.String)">
+            <summary>
+            Remove all occurances of some chars from a string.
+            </summary>
+            <param name="text"></param>
+            <param name="removeChars">The chars to remove</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.RemoveChars(System.String,System.Collections.Generic.IReadOnlySet{System.Char})">
+            <summary>
+            Remove all occurances of some chars from a string.
+            </summary>
+            <param name="text"></param>
+            <param name="removeChars">The chars to remove</param>
             <returns></returns>
         </member>
         <member name="M:SysWeaver.StringTools.GetHashCode(System.String)">
@@ -5768,6 +7035,100 @@
             <param name="value">The string to check</param>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.StringTools.Filter(System.String,System.Collections.Generic.IReadOnlySet{System.Char})">
+            <summary>
+            Filter a string, just keeping the allowed chars
+            </summary>
+            <param name="value">The string to filter</param>
+            <param name="keep">The chars to keep</param>
+            <returns>The filtered string</returns>
+        </member>
+        <member name="M:SysWeaver.StringTools.Filter(System.String,System.Func{System.Char,System.Boolean})">
+            <summary>
+            Filter a string, just keeping the allowed chars
+            </summary>
+            <param name="value">The string to filter</param>
+            <param name="keepFn">A function that is called to determine if a char should be kept, return true to keep the char</param>
+            <returns>The filtered string</returns>
+        </member>
+        <member name="M:SysWeaver.StringTools.Filter(System.String,System.Char,System.Char)">
+            <summary>
+            Filter a string, just keeping the allowed chars
+            </summary>
+            <param name="value">The string to filter</param>
+            <param name="minInclusive">The first char in the range to keep</param>
+            <param name="maxInclusive">The last char in the range to keep</param>
+            <returns>The filtered string</returns>
+        </member>
+        <member name="M:SysWeaver.StringTools.FilterUInt(System.String)">
+            <summary>
+            Filter a string, just keeping numerical digits (for parsing an unsigned integer)
+            </summary>
+            <param name="value">The string to filter</param>
+            <returns>The filtered string</returns>
+        </member>
+        <member name="M:SysWeaver.StringTools.FilterInt(System.String)">
+            <summary>
+            Filter a string, just keeping numerical digits and allowing a leading '-' (for parsing a signed integer)
+            </summary>
+            <param name="value">The string to filter</param>
+            <returns>The filtered string</returns>
+        </member>
+        <member name="M:SysWeaver.StringTools.SplitFirst(System.String,System.Char,System.String@)">
+            <summary>
+            Split a string into two parts on the first occurance of a char.
+            Example:
+            var left = "name@example.com".SplitFirst('@', out var right);
+            left = "name";
+            right = "example.com";
+            </summary>
+            <param name="value">The value to split into two parts</param>
+            <param name="split">The character to split</param>
+            <param name="right">The right part, null if the split char isn't found</param>
+            <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned)</returns>
+        </member>
+        <member name="M:SysWeaver.StringTools.SplitFirst(System.String,System.Char)">
+            <summary>
+            Split a string into two parts (keeping the left part) on the first occurance of a char.
+            Example:
+            "name@example.com".SplitFirst('@') => "name"
+            </summary>
+            <param name="value">The value to split into two parts</param>
+            <param name="split">The character to split</param>
+            <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned), semantically the same as value.Split(split)[0]</returns>
+        </member>
+        <member name="M:SysWeaver.StringTools.SecureEnd(System.String,System.Int32,System.String)">
+            <summary>
+            Make a string "secure" by only keeping a few chars "visible".
+            Examples:
+            "1234abcd5678".SecureEnd() => "1234********";
+            "1234abcd5678".SecureEnd(4, "..") => "1234..";
+            </summary>
+            <param name="value">The value to "secure"</param>
+            <param name="keep">The number of chars to keep, this is capped to at most half the number of chars in the input</param>
+            <param name="suffix">An optional suffix to use instead of filling with *'s</param>
+            <returns>The "secure" string</returns>
+        </member>
+        <member name="M:SysWeaver.StringTools.SecureStart(System.String,System.Int32,System.String)">
+            <summary>
+            Make a string "secure" by only keeping a few chars "visible".
+            Examples:
+            "1234abcd5678".SecureStart() => "********5678";
+            "1234abcd5678".SecureStart(4, "..") => "..5678";
+            </summary>
+            <param name="value">The value to "secure"</param>
+            <param name="keep">The number of chars to keep, this is capped to at most half the number of chars in the input</param>
+            <param name="prefix">An optional prefix to use instead of filling with *'s</param>
+            <returns>The "secure" string</returns>
+        </member>
+        <member name="M:SysWeaver.IStringTree.StartsWithAny(System.String,System.Int32)">
+            <summary>
+            Find the longest string (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>The longest found match or null if no match is found</returns>
+        </member>
         <member name="T:SysWeaver.StringTree">
             <summary>
             A string tree stores a bunch of strings in a way that makes it fast to check if a test string starts with ANY of the contained strings.
@@ -5820,6 +7181,26 @@
             <param name="start">An optional start offset</param>
             <returns>A list of matches, orderer from shortest match to longest match</returns>
         </member>
+        <member name="M:SysWeaver.StringTree.PrefixesOf(System.String,System.Int32)">
+            <summary>
+            Find all strings (in the tree), that is a prefix of the text
+            </summary>
+            <param name="text">The text to find prefixes (in the tree) for </param>
+            <param name="start">An optional start offset</param>
+            <returns>A list of matches, ordered by name</returns>
+        </member>
+        <member name="M:SysWeaver.StringTree.InternalAddAllInOrder(System.Collections.Generic.List{System.String},SysWeaver.StringTree)">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringTree.InternalAddAll(System.Collections.Generic.List{System.String},SysWeaver.StringTree)">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
         <member name="M:SysWeaver.StringTree.GetAll">
             <summary>
             Get all string contained in the string tree, in any order
@@ -5844,12 +7225,37 @@
             </summary>
             <returns></returns>
         </member>
-        <member name="T:SysWeaver.StringTreeExt">
+        <member name="M:SysWeaver.StringTreeList.Build``1(System.Collections.Generic.IEnumerable{System.Tuple{System.String,``0}},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList.Build``1(System.Collections.Generic.IEnumerable{System.Collections.Generic.KeyValuePair{System.String,``0}},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList.Build``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.String},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="values">The values to add, may not contain null</param>
+            <param name="getKey">Function that extracts the string key</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="T:SysWeaver.StringTreeListExt">
             <summary>
             Extension methods to StringTree instances
             </summary>
         </member>
-        <member name="M:SysWeaver.StringTreeExt.IndexOfAny(SysWeaver.StringTree,System.String@,System.String,System.Int32)">
+        <member name="M:SysWeaver.StringTreeListExt.IndexOfAny``1(SysWeaver.StringTreeList{``0},System.Collections.Generic.IReadOnlyList{``0}@,System.String,System.Int32)">
             <summary>
             Find the index of the first matching string (from the tree)
             </summary>
@@ -5859,7 +7265,7 @@
             <param name="start">An optional start offset</param>
             <returns>The position of the first matching string or -1 if no match is found</returns>
         </member>
-        <member name="M:SysWeaver.StringTreeExt.LastIndexOfAny(SysWeaver.StringTree,System.String@,System.String,System.Int32)">
+        <member name="M:SysWeaver.StringTreeListExt.LastIndexOfAny``1(SysWeaver.StringTreeList{``0},System.Collections.Generic.IReadOnlyList{``0}@,System.String,System.Int32)">
             <summary>
             Find the index of the last matching string (from the tree)
             </summary>
@@ -5867,7 +7273,122 @@
             <param name="match">The last  matching string (if found) or null</param>
             <param name="text">The text to find the last  matching string in</param>
             <param name="start">An optional start offset, or -1 to start at the end of the string</param>
-            <returns>The position of the last  matching string or -1 if no match is found</returns>
+            <returns>The position of the last matching string or -1 if no match is found</returns>
+        </member>
+        <member name="T:SysWeaver.StringTreeList`1">
+            <summary>
+            A string tree stores a bunch of strings in a way that makes it fast to check if a test string starts with ANY of the contained strings.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.StringTreeList`1.IsCaseInSensitive">
+            <summary>
+            True if the tree is case in-sensitive
+            </summary>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.Build(System.Collections.Generic.IEnumerable{System.Tuple{System.String,`0}},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.Build(System.Collections.Generic.IEnumerable{System.Collections.Generic.KeyValuePair{System.String,`0}},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="strings">The strings to build a tree from, may not contain null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.Build(System.Collections.Generic.IEnumerable{`0},System.Func{`0,System.String},System.Boolean)">
+            <summary>
+            Build a tree from a bunch of strings
+            </summary>
+            <param name="values">The values to add, may not contain null</param>
+            <param name="getKey">Function that extracts the string key</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
+            <returns>The tree</returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.Add(System.String,`0,System.Boolean,SysWeaver.StringTreeList{`0})">
+            <summary>
+            Add a string to a new or existing tree
+            </summary>
+            <param name="text">The string to add, may not be null</param>
+            <param name="value">The value associated with the string, may not be null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree, if the tree already exists, the casing from that tree is used</param>
+            <param name="parent">An existing tree</param>
+            <returns>The new tree (or the existing)</returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.TryAdd(SysWeaver.StringTreeList{`0}@,System.String,`0,System.Boolean)">
+            <summary>
+            Try to add a string to a new or existing tree
+            </summary>
+            <param name="parent">An existing or new tree to update</param>
+            <param name="text">The string to add, may not be null</param>
+            <param name="value">The value associated with the string, may not be null</param>
+            <param name="caseInSensitive">Set to true to make a case in-sensitive tree, if the tree already exists, the casing from that tree is used</param>
+            <returns>True if the string was added, false if it already existed</returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.StartsWithAny(System.String,System.Int32)">
+            <summary>
+            Find the longest string (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>The longest found match or null if no match is found</returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.AllStartsWithAny(System.String,System.Int32)">
+            <summary>
+            Find all matching strings (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>A list of matches, ordered by name</returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.PrefixesOf(System.String,System.Int32)">
+            <summary>
+            Find all matching strings (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="start">An optional start offset</param>
+            <returns>A list of matches, ordered by name</returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.InternalAddAllInOrder(System.Collections.Generic.List{System.Collections.Generic.List{`0}},SysWeaver.StringTreeList{`0})">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.InternalAddAll(System.Collections.Generic.List{System.Collections.Generic.List{`0}},SysWeaver.StringTreeList{`0})">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.GetAll">
+            <summary>
+            Get all string contained in the string tree, in any order
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.GetAllInOrder">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.GetAllInReverseOrder">
+            <summary>
+            Get all string contained in the string tree, ordered by key
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.StringTreeList`1.Clone">
+            <summary>
+            Make a copy of a tree
+            </summary>
+            <returns></returns>
         </member>
         <member name="M:SysWeaver.StringValidate.ComputerName(System.String)">
             <summary>
@@ -5985,6 +7506,32 @@
             </summary>
             <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
         </member>
+        <member name="M:SysWeaver.TaskExt.StartNewAsyncChain(System.Func{System.Runtime.CompilerServices.ConfiguredValueTaskAwaitable})">
+            <summary>
+            Start a new async task (new thread / new chain)
+            </summary>
+            <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
+        </member>
+        <member name="M:SysWeaver.TaskExt.StartNewAsyncChain(System.Func{System.Threading.Tasks.ValueTask})">
+            <summary>
+            Start a new async task (new thread / new chain)
+            </summary>
+            <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
+        </member>
+        <member name="M:SysWeaver.TaskExt.RunAsync``1(System.Threading.Tasks.ValueTask{``0})">
+            <summary>
+            Run a task in a new thread / chain, then wait for the task to complete and return it's value
+            </summary>
+            <typeparam name="T">Return value type</typeparam>
+            <param name="t">The task to run</param>
+            <returns>The return value of the task</returns>
+        </member>
+        <member name="M:SysWeaver.TaskExt.RunAsync(System.Threading.Tasks.ValueTask)">
+            <summary>
+            Run a task in a new thread / chain, then wait for the task to complete
+            </summary>
+            <param name="t">The task to run</param>
+        </member>
         <member name="M:SysWeaver.TaskExt.RunAsync``1(System.Threading.Tasks.Task{``0})">
             <summary>
             Run a task in a new thread / chain, then wait for the task to complete and return it's value
@@ -6019,6 +7566,26 @@
             A complete task for a True boolean
             </summary>
         </member>
+        <member name="F:SysWeaver.TaskExt.NullStringValueTask">
+            <summary>
+            A complete value task for a null string
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TaskExt.EmptyStringValueTask">
+            <summary>
+            A complete value task for a null string
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TaskExt.TrueValueTask">
+            <summary>
+            A complete value task for a True boolean
+            </summary>
+        </member>
+        <member name="F:SysWeaver.TaskExt.FalseValueTask">
+            <summary>
+            A complete value task for a True boolean
+            </summary>
+        </member>
         <member name="M:SysWeaver.TaskExt.RandomDelay(System.Int32,System.Int32)">
             <summary>
             Task that delays a small random amount
@@ -6047,6 +7614,181 @@
             </summary>
             <param name="tasks"></param>
             <returns></returns>
+        </member>
+        <member name="M:SysWeaver.TaskExt.WhenAll``1(System.Collections.Generic.IReadOnlyList{System.Threading.Tasks.ValueTask{``0}})">
+            <summary>
+            Creates a task that will complete when all of the supplied tasks have completed.
+            </summary>
+            <param name="tasks">The tasks to wait on for completion.</param>
+            <returns>A task that represents the completion of all of the supplied tasks.</returns>
+            <remarks>
+            <para>
+            If any of the supplied tasks completes in a faulted state, the returned task will also complete in a Faulted state,
+            where its exceptions will contain the aggregation of the set of unwrapped exceptions from each of the supplied tasks.
+            </para>
+            <para>
+            If none of the supplied tasks faulted but at least one of them was canceled, the returned task will end in the Canceled state.
+            </para>
+            <para>
+            If none of the tasks faulted and none of the tasks were canceled, the resulting task will end in the RanToCompletion state.
+            </para>
+            <para>
+            If the supplied array/enumerable contains no tasks, the returned task will immediately transition to a RanToCompletion
+            state before it's returned to the caller.
+            </para>
+            </remarks>
+            <exception cref="T:System.ArgumentNullException">
+            The <paramref name="tasks"/> argument was null.
+            </exception>
+            <exception cref="T:System.ArgumentException">
+            The <paramref name="tasks"/> array contained a null task.
+            </exception>
+        </member>
+        <member name="M:SysWeaver.TaskExt.WhenAll``1(System.Collections.Generic.IEnumerable{System.Threading.Tasks.ValueTask{``0}})">
+            <summary>
+            Creates a task that will complete when all of the supplied tasks have completed.
+            </summary>
+            <param name="tasks">The tasks to wait on for completion.</param>
+            <returns>A task that represents the completion of all of the supplied tasks.</returns>
+            <remarks>
+            <para>
+            If any of the supplied tasks completes in a faulted state, the returned task will also complete in a Faulted state,
+            where its exceptions will contain the aggregation of the set of unwrapped exceptions from each of the supplied tasks.
+            </para>
+            <para>
+            If none of the supplied tasks faulted but at least one of them was canceled, the returned task will end in the Canceled state.
+            </para>
+            <para>
+            If none of the tasks faulted and none of the tasks were canceled, the resulting task will end in the RanToCompletion state.
+            </para>
+            <para>
+            If the supplied array/enumerable contains no tasks, the returned task will immediately transition to a RanToCompletion
+            state before it's returned to the caller.
+            </para>
+            </remarks>
+            <exception cref="T:System.ArgumentNullException">
+            The <paramref name="tasks"/> argument was null.
+            </exception>
+            <exception cref="T:System.ArgumentException">
+            The <paramref name="tasks"/> array contained a null task.
+            </exception>
+        </member>
+        <member name="M:SysWeaver.TaskExt.WhenAll``1(System.Threading.Tasks.ValueTask{``0}[])">
+            <summary>
+            Creates a task that will complete when all of the supplied tasks have completed.
+            </summary>
+            <param name="tasks">The tasks to wait on for completion.</param>
+            <returns>A task that represents the completion of all of the supplied tasks.</returns>
+            <remarks>
+            <para>
+            If any of the supplied tasks completes in a faulted state, the returned task will also complete in a Faulted state,
+            where its exceptions will contain the aggregation of the set of unwrapped exceptions from each of the supplied tasks.
+            </para>
+            <para>
+            If none of the supplied tasks faulted but at least one of them was canceled, the returned task will end in the Canceled state.
+            </para>
+            <para>
+            If none of the tasks faulted and none of the tasks were canceled, the resulting task will end in the RanToCompletion state.
+            </para>
+            <para>
+            If the supplied array/enumerable contains no tasks, the returned task will immediately transition to a RanToCompletion
+            state before it's returned to the caller.
+            </para>
+            </remarks>
+            <exception cref="T:System.ArgumentNullException">
+            The <paramref name="tasks"/> argument was null.
+            </exception>
+            <exception cref="T:System.ArgumentException">
+            The <paramref name="tasks"/> array contained a null task.
+            </exception>        
+        </member>
+        <member name="M:SysWeaver.TaskExt.WhenAll(System.Collections.Generic.IReadOnlyList{System.Threading.Tasks.ValueTask})">
+            
+            <summary>
+            Creates a task that will complete when all of the supplied tasks have completed.
+            </summary>
+            <param name="tasks">The tasks to wait on for completion.</param>
+            <returns>A task that represents the completion of all of the supplied tasks.</returns>
+            <remarks>
+            <para>
+            If any of the supplied tasks completes in a faulted state, the returned task will also complete in a Faulted state,
+            where its exceptions will contain the aggregation of the set of unwrapped exceptions from each of the supplied tasks.
+            </para>
+            <para>
+            If none of the supplied tasks faulted but at least one of them was canceled, the returned task will end in the Canceled state.
+            </para>
+            <para>
+            If none of the tasks faulted and none of the tasks were canceled, the resulting task will end in the RanToCompletion state.
+            </para>
+            <para>
+            If the supplied array/enumerable contains no tasks, the returned task will immediately transition to a RanToCompletion
+            state before it's returned to the caller.
+            </para>
+            </remarks>
+            <exception cref="T:System.ArgumentNullException">
+            The <paramref name="tasks"/> argument was null.
+            </exception>
+            <exception cref="T:System.ArgumentException">
+            The <paramref name="tasks"/> array contained a null task.
+            </exception>
+        </member>
+        <member name="M:SysWeaver.TaskExt.WhenAll(System.Collections.Generic.IEnumerable{System.Threading.Tasks.ValueTask})">
+            <summary>
+            Creates a task that will complete when all of the supplied tasks have completed.
+            </summary>
+            <param name="tasks">The tasks to wait on for completion.</param>
+            <returns>A task that represents the completion of all of the supplied tasks.</returns>
+            <remarks>
+            <para>
+            If any of the supplied tasks completes in a faulted state, the returned task will also complete in a Faulted state,
+            where its exceptions will contain the aggregation of the set of unwrapped exceptions from each of the supplied tasks.
+            </para>
+            <para>
+            If none of the supplied tasks faulted but at least one of them was canceled, the returned task will end in the Canceled state.
+            </para>
+            <para>
+            If none of the tasks faulted and none of the tasks were canceled, the resulting task will end in the RanToCompletion state.
+            </para>
+            <para>
+            If the supplied array/enumerable contains no tasks, the returned task will immediately transition to a RanToCompletion
+            state before it's returned to the caller.
+            </para>
+            </remarks>
+            <exception cref="T:System.ArgumentNullException">
+            The <paramref name="tasks"/> argument was null.
+            </exception>
+            <exception cref="T:System.ArgumentException">
+            The <paramref name="tasks"/> array contained a null task.
+            </exception>
+        </member>
+        <member name="M:SysWeaver.TaskExt.WhenAll(System.Threading.Tasks.ValueTask[])">
+            <summary>
+            Creates a task that will complete when all of the supplied tasks have completed.
+            </summary>
+            <param name="tasks">The tasks to wait on for completion.</param>
+            <returns>A task that represents the completion of all of the supplied tasks.</returns>
+            <remarks>
+            <para>
+            If any of the supplied tasks completes in a faulted state, the returned task will also complete in a Faulted state,
+            where its exceptions will contain the aggregation of the set of unwrapped exceptions from each of the supplied tasks.
+            </para>
+            <para>
+            If none of the supplied tasks faulted but at least one of them was canceled, the returned task will end in the Canceled state.
+            </para>
+            <para>
+            If none of the tasks faulted and none of the tasks were canceled, the resulting task will end in the RanToCompletion state.
+            </para>
+            <para>
+            If the supplied array/enumerable contains no tasks, the returned task will immediately transition to a RanToCompletion
+            state before it's returned to the caller.
+            </para>
+            </remarks>
+            <exception cref="T:System.ArgumentNullException">
+            The <paramref name="tasks"/> argument was null.
+            </exception>
+            <exception cref="T:System.ArgumentException">
+            The <paramref name="tasks"/> array contained a null task.
+            </exception>        
         </member>
         <member name="T:SysWeaver.TernaryTree`1">
             <summary>
@@ -6252,9 +7994,11 @@
               # = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
               % = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
               $ = Make javascript string safe (HttpUtility.JavaScriptStringEncode), ex: "Hello world!".
+              £ = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = $(£Var); => var x = "Hello world!".
+              ¤ = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = $(¤Var); => var x = "12 &lt; 42".
               * = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
             Only one of _ , ^ and ~ may be used.
-            Only one of @, #, %, $ and * may be used.
+            Only one of @, #, %, $, £, ¤ and * may be used.
             _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: _#, ^$
             </summary>
         </member>
@@ -6275,9 +8019,11 @@
             $(#Var) = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
             $(%Var) = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
             $($Var) = Make javascript string safe (HttpUtility.JavaScriptStringEncode ), ex: "Hello world!".
+            $(£Var) = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = $(£Var); => var x = "Hello world!".
+            $(¤Var) = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = $(¤Var); => var x = "12 &lt; 42".
             $(*Var) = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
             Only one of _ , ^ and ~ may be used.
-            Only one of @, #, %, $ and * may be used.
+            Only one of @, #, %, $, £, ¤ and * may be used.
             _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: $(_#Var)
             </param>/// 
         </member>
@@ -6297,9 +8043,11 @@
             [#Var] = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
             [%Var] = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
             [$Var] = Make javascript string safe (HttpUtility.JavaScriptStringEncode ), ex: "Hello world!".
+            [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
+            [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
             [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
             Only one of _ , ^ and ~ may be used.
-            Only one of @, #, %, $ and * may be used.
+            Only one of @, #, %, $, £, ¤ and * may be used.
             _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: [_#Var]
             </param>
         </member>
@@ -6319,9 +8067,11 @@
             [#Var] = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
             [%Var] = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
             [$Var] = Make javascript string safe (HttpUtility.JavaScriptStringEncode ), ex: "Hello world!".
+            [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
+            [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
             [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
             Only one of _ , ^ and ~ may be used.
-            Only one of @, #, %, $ and * may be used.
+            Only one of @, #, %, $, £, ¤ and * may be used.
             _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: [_#Var]
             </param>
         </member>
@@ -6378,10 +8128,39 @@
             [@Var] = Make html attribute safe (HttpUtility.HtmlAttributeEncode), ex: "Hello world!".
             [#Var] = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
             [%Var] = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
-            [$Var] = Make javascript string safe (HttpUtility.JavaScriptStringEncode ), ex: "Hello world!".
+            [$Var] = Make javascript string safe (HttpUtility.JavaScriptStringEncode), ex: "Hello world!".
+            [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
+            [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
             [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
             Only one of _ , ^ and ~ may be used.
-            Only one of @, #, %, $ and * may be used.
+            Only one of @, #, %, $, £, ¤ and * may be used.
+            _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: [_#Var]
+            </param>
+            <returns>The text with all replacements made</returns>
+        </member>
+        <member name="M:SysWeaver.TextTemplate.SearchAndReplaceVars(System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},System.String,System.String,System.Boolean,System.Boolean)">
+            <summary>
+            Replaces a bunch of key value pairs in a text
+            </summary>
+            <param name="text">The text to replace data in</param>
+            <param name="varBegin">Variable begin with this</param>
+            <param name="varEnd">Variables end with this</param>
+            <param name="values">A key value dictionary with replacements to be made</param>
+            <param name="caseInSensitive">true to make the search case insensitive</param>
+            <param name="allowTransforms">If true, the variable can be transformed according to:
+            [Var] = Variable, ex: "Hello world!".
+            [_Var] = Make lower case, ex: "hello world!".
+            [^Var] = Make upper case, ex: "HELLO WORLD!".
+            [~Var] = Remove camel case, ex: "MyCoolType" => "My cool type".
+            [@Var] = Make html attribute safe (HttpUtility.HtmlAttributeEncode), ex: "Hello world!".
+            [#Var] = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
+            [%Var] = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
+            [$Var] = Make javascript string safe (HttpUtility.JavaScriptStringEncode), ex: "Hello world!".
+            [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
+            [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
+            [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
+            Only one of _ , ^ and ~ may be used.
+            Only one of @, #, %, $, £, ¤ and * may be used.
             _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: [_#Var]
             </param>
             <returns>The text with all replacements made</returns>
@@ -6405,6 +8184,165 @@
             <summary>
             The proxy to use to route through tor
             </summary>
+        </member>
+        <member name="T:SysWeaver.AutoTranslateAttribute">
+            <summary>
+            Put this attribute on a member to allow it to be automatically translated when returned in an API call (if auto-translation is enabled etc).
+            By default the translation context will be created using the code summary of the member.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AutoTranslateAttribute.#ctor(System.String,System.Boolean)">
+            <summary>
+            Put this attribute on a member to allow it to be automatically translated when returned in an API call (if auto-translation is enabled etc).
+            </summary>
+            <param name="fromLanguage">The source language (ISO code) if not english</param>
+            <param name="contextFromDesc">If true, the code summary of the member will be included in the context</param>
+        </member>
+        <member name="M:SysWeaver.AutoTranslateAttribute.#ctor(System.Boolean)">
+            <summary>
+            Put this attribute on a member to allow it to be automatically translated when returned in an API call (if auto-translation is enabled etc).
+            </summary>
+            <param name="contextFromDesc">If true, the code summary of the member will be included in the context</param>
+        </member>
+        <member name="T:SysWeaver.AutoTranslateContextAttribute">
+            <summary>
+            Put this attribute on an auto translated member to add additional context when auto translating this member.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AutoTranslateContextAttribute.#ctor(System.String,System.String[])">
+            <summary>
+            Put this attribute on an auto translated member to add additional context when auto translating this member.
+            </summary>
+            <param name="contextText">The additional context to add when auto translating this member.
+            Then final text will use String.Format(contextText, ...);
+            ... = The values of the members passed in as arguments.</param>
+            <param name="memberNames">List of type members who's values will be passed in as arguments
+            If any member value is null or empty, the whole context string is ignored.
+            </param>
+        </member>
+        <member name="T:SysWeaver.AutoTranslateTypeAttribute">
+            <summary>
+            Put this attribute on a member to indicate that the text is of a specfic type that needs to be handles differently.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AutoTranslateTypeAttribute.#ctor(SysWeaver.Translation.TranslatorTypes)">
+            <summary>
+            Put this attribute on a member to indicate that the text is of a specfic type that needs to be handles differently.
+            </summary>
+            <param name="type">The type of text that this member should be treated as</param>
+        </member>
+        <member name="T:SysWeaver.AutoTranslateDynLanguageAttribute">
+            <summary>
+            Put this attribute on a member to specify a property that returns the language to translate from.
+            By default the language specified in the AutoTranslateContextAttribute is used. 
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AutoTranslateDynLanguageAttribute.#ctor(System.String)">
+            <summary>
+            Put this attribute on a member to specify a property that returns the language to translate from.
+            By default the language specified in the AutoTranslateContextAttribute is used. 
+            </summary>
+            <param name="memberName">The name of a member in the declaring type that is a String with the language code</param>
+        </member>
+        <member name="M:SysWeaver.LanguageIdentifier.ILanguageIdentifier.Identify(System.String,System.String,System.Double,System.Double)">
+            <summary>
+            Try to identify a langauge used by some text
+            </summary>
+            <param name="text">The text to identify</param>
+            <param name="userLanguge">An optional two letter ISO 639-1 language code that will have some bias for being more likely</param>
+            <param name="userLanguageBias">How much to bias the user language [0, 1]</param>
+            <param name="minConfidence">The minimum confidence required to return a lanmguage</param>
+            <returns>A two letter ISO 639-1 language code of the identified language or null if the language couldn't be identified</returns>
+        </member>
+        <member name="M:SysWeaver.LanguageIdentifier.ILanguageIdentifier.Identify(System.String,System.Int32,System.String,System.Double)">
+            <summary>
+            Try to identify a langauge used by some text, returns up to N number of guesses and a confidence score
+            </summary>
+            <param name="text">The text to identify</param>
+            <param name="numberOfResults">Maximum number of results</param>
+            <param name="userLanguge">An optional two letter ISO 639-1 language code that will have some bias for being more likely</param>
+            <param name="userLanguageBias">How much to bias the user language [0, 1]</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.Translation.IInternalTranslator.Translate(System.String,System.String,System.String,System.String,SysWeaver.Translation.TranslationEffort,SysWeaver.Translation.TranslationCacheRetention)">
+            <summary>
+            Translate some text to one or more languages
+            </summary>
+            <param name="text">The text to translate</param>
+            <param name="to">The two letter ISO-639-1 language code of the target language (with an optional two letter ISO-3166-a2 country code appended with a hyphen, ex: "zw-CH").
+            Multiple targets can be set by using a comma separation.</param>
+            <param name="from">The two letter ISO-639-1 language code of the source language (the supplied text).
+            "*" can be used to let the translator identify the source language.</param>
+            <param name="context">An optional context that describes in what situation this text is being used</param>
+            <param name="effort">The effort to use when translating</param>
+            <param name="retention">The duration to cache the translation</param>
+            <returns>Translations in the same order as specified in the parameters</returns>
+        </member>
+        <member name="M:SysWeaver.Translation.IInternalTranslator.TranslateMultiple(System.String[],System.String,System.String,System.String,SysWeaver.Translation.TranslationEffort,SysWeaver.Translation.TranslationCacheRetention)">
+            <summary>
+            Translate multiple texts to one or more languages
+            </summary>
+            <param name="texts">The texts to translate</param>
+            <param name="to">The two letter ISO-639-1 language code of the target language (with an optional two letter ISO-3166-a2 country code appended with a hyphen, ex: "zw-CH").
+            Multiple targets can be set by using a comma separation.</param>
+            <param name="from">The two letter ISO-639-1 language code of the source language (the supplied text).
+            "*" can be used to let the translator identify the source language.</param>
+            <param name="context">An optional context that describes in what situation that the texts are being used</param>
+            <param name="effort">The effort to use when translating</param>
+            <param name="retention">The duration to cache the translation</param>
+            <returns>Translations in the same order as specified in the parameters</returns>
+        </member>
+        <member name="M:SysWeaver.Translation.IInternalTranslator.TranslateOne(System.String,System.String,System.String,System.String,SysWeaver.Translation.TranslationEffort,SysWeaver.Translation.TranslationCacheRetention)">
+            <summary>
+            Translate some text to a new language
+            </summary>
+            <param name="text">The text to translate</param>
+            <param name="to">The two letter ISO-639-1 language code of the target language (with an optional two letter ISO-3166-a2 country code appended with a hyphen, ex: "zw-CH").</param>
+            <param name="from">The two letter ISO-639-1 language code of the source language (the supplied text).
+            "*" can be used to let the translator identify the source language.</param>
+            <param name="context">An optional context that describes in what situation this text is being used</param>
+            <param name="effort">The effort to use when translating</param>
+            <param name="retention">The duration to cache the translation</param>
+            <returns>Translated text</returns>
+        </member>
+        <member name="M:SysWeaver.Translation.IInternalTranslator.RequestOne(System.String,System.String,System.String,System.String,SysWeaver.Translation.TranslationEffort,SysWeaver.Translation.TranslationCacheRetention)">
+            <summary>
+            Perform a request bypassing any caches, you probably shouldn't use this!
+            </summary>
+            <param name="from">The two letter ISO-639-1 language code of the source language (the supplied text).
+            "*" can be used to let the translator identify the source language.</param>
+            <param name="to">The two letter ISO-639-1 language code of the target language (with an optional two letter ISO-3166-a2 country code appended with a hyphen, ex: "zw-CH").</param>
+            <param name="text">The text to translate</param>
+            <param name="context">An optional context that describes in what situation this text is being used</param>
+            <param name="effort">The effort to use when translating</param>
+            <param name="retention">The duration to cache the translation</param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.Translation.IInternalTranslator.SupportedSourceLanguages">
+            <summary>
+            Return a list of supported source languages
+            </summary>
+            <returns>A list of supported source languages</returns>
+        </member>
+        <member name="M:SysWeaver.Translation.IInternalTranslator.SupportedTargetLanguages">
+            <summary>
+            Return a list of supported target languages
+            </summary>
+            <returns>A list of supported target languages</returns>
+        </member>
+        <member name="M:SysWeaver.Translation.IInternalTranslator.CanTranslateFrom(System.String)">
+            <summary>
+            Returns a formatted from language if it's valid, else null
+            </summary>
+            <param name="from"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.Translation.IInternalTranslator.CanTranslateTo(System.String)">
+            <summary>
+            Returns a formatted to language if it's valid, else null
+            </summary>
+            <param name="to"></param>
+            <returns></returns>
         </member>
         <member name="M:SysWeaver.Translation.ITranslator.Translate(SysWeaver.Translation.TranslateRequest)">
             <summary>
@@ -6453,78 +8391,6 @@
             <param name="to"></param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.Translation.IInternalTranslator.Translate(System.String,System.String,System.String,System.String)">
-            <summary>
-            Translate some text to one or more languages
-            </summary>
-            <param name="text">The text to translate</param>
-            <param name="to">The two letter ISO-639-1 language code of the target language (with an optional two letter ISO-3166-a2 country code appended with a hyphen, ex: "zw-CH").
-            Multiple targets can be set by using a comma separation.</param>
-            <param name="from">The two letter ISO-639-1 language code of the source language (the supplied text).
-            "*" can be used to let the translator identify the source language.</param>
-            <param name="context">An optional context that describes in what situation this text is being used</param>
-            <returns>Translations in the same order as specified in the parameters</returns>
-        </member>
-        <member name="M:SysWeaver.Translation.IInternalTranslator.TranslateMultiple(System.String[],System.String,System.String,System.String)">
-            <summary>
-            Translate multiple texts to one or more languages
-            </summary>
-            <param name="texts">The texts to translate</param>
-            <param name="to">The two letter ISO-639-1 language code of the target language (with an optional two letter ISO-3166-a2 country code appended with a hyphen, ex: "zw-CH").
-            Multiple targets can be set by using a comma separation.</param>
-            <param name="from">The two letter ISO-639-1 language code of the source language (the supplied text).
-            "*" can be used to let the translator identify the source language.</param>
-            <param name="context">An optional context that describes in what situation that the texts are being used</param>
-            <returns>Translations in the same order as specified in the parameters</returns>
-        </member>
-        <member name="M:SysWeaver.Translation.IInternalTranslator.TranslateOne(System.String,System.String,System.String,System.String)">
-            <summary>
-            Translate some text to a new language
-            </summary>
-            <param name="text">The text to translate</param>
-            <param name="to">The two letter ISO-639-1 language code of the target language (with an optional two letter ISO-3166-a2 country code appended with a hyphen, ex: "zw-CH").</param>
-            <param name="from">The two letter ISO-639-1 language code of the source language (the supplied text).
-            "*" can be used to let the translator identify the source language.</param>
-            <param name="context">An optional context that describes in what situation this text is being used</param>
-            <returns>Translated text</returns>
-        </member>
-        <member name="M:SysWeaver.Translation.IInternalTranslator.RequestOne(System.String,System.String,System.String,System.String)">
-            <summary>
-            Perform a request by passing any caches, you probably shouldn't use this!
-            </summary>
-            <param name="from">The two letter ISO-639-1 language code of the source language (the supplied text).
-            "*" can be used to let the translator identify the source language.</param>
-            <param name="to">The two letter ISO-639-1 language code of the target language (with an optional two letter ISO-3166-a2 country code appended with a hyphen, ex: "zw-CH").</param>
-            <param name="text">The text to translate</param>
-            <param name="context">An optional context that describes in what situation this text is being used</param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.Translation.IInternalTranslator.SupportedSourceLanguages">
-            <summary>
-            Return a list of supported source languages
-            </summary>
-            <returns>A list of supported source languages</returns>
-        </member>
-        <member name="M:SysWeaver.Translation.IInternalTranslator.SupportedTargetLanguages">
-            <summary>
-            Return a list of supported target languages
-            </summary>
-            <returns>A list of supported target languages</returns>
-        </member>
-        <member name="M:SysWeaver.Translation.IInternalTranslator.CanTranslateFrom(System.String)">
-            <summary>
-            Returns a formatted from language if it's valid, else null
-            </summary>
-            <param name="from"></param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.Translation.IInternalTranslator.CanTranslateTo(System.String)">
-            <summary>
-            Returns a formatted to language if it's valid, else null
-            </summary>
-            <param name="to"></param>
-            <returns></returns>
-        </member>
         <member name="T:SysWeaver.Translation.TranslateMultipleRequest">
             <summary>
             Translates multiple texts
@@ -6553,6 +8419,16 @@
             An optional context that describes in what situation the texts are being used
             </summary>
         </member>
+        <member name="P:SysWeaver.Translation.TranslateMultipleRequest.Effort">
+            <summary>
+            The effort to use when translating
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Translation.TranslateMultipleRequest.Retention">
+            <summary>
+            The duration to cache the translation
+            </summary>
+        </member>
         <member name="T:SysWeaver.Translation.TranslateRequest">
             <summary>
             Translates a single text 
@@ -6579,6 +8455,80 @@
         <member name="P:SysWeaver.Translation.TranslateRequest.Context">
             <summary>
             An optional context that describes in what situation this text is being used
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Translation.TranslateRequest.Effort">
+            <summary>
+            The effort to use when translating
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Translation.TranslateRequest.Retention">
+            <summary>
+            The duration to cache the translation
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslationCacheRetention.Short">
+            <summary>
+            Short term caching (typically less than a month).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslationCacheRetention.Medium">
+            <summary>
+            Medium cache duration (typically around 3 months).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslationCacheRetention.Long">
+            <summary>
+            Long term caching (typically more than a year).
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Translation.TranslationEffort">
+            <summary>
+            How much time / cost to spend on a translation
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslationEffort.Low">
+            <summary>
+            Translate as quick as possible, prefer low cost over quality.
+            Typically use a cheaper LLM or some other cheap translation API.
+            Use this for high volume translations such as chat messages and "uncontrollable" inputs.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslationEffort.Medium">
+            <summary>
+            Balanced approach, typically using a mid range LLM.
+            Perfect for push messages and more controlled texts.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslationEffort.High">
+            <summary>
+            High quality translation, typically using a more expensive LLM.
+            For static resources, typically combined with long retention.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslationTools.NoTranslatePrefix">
+            <summary>
+            Any string that starts with this sequence will NOT be translated.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslationTools.NoTranslatePrefixLength">
+            <summary>
+            Lemgth of the NoTranslatePrefix
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslatorTypes.Text">
+            <summary>
+            The text is pure text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslatorTypes.MD">
+            <summary>
+            The text is using MarkDown syntax
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslatorTypes.Html">
+            <summary>
+            The text is html code
             </summary>
         </member>
         <member name="T:SysWeaver.TypeExtensions">
@@ -6697,16 +8647,99 @@
             <param name="typeName">The name of the type to find</param>
             <returns>The type or null if it can't be found</returns>
         </member>
+        <member name="T:SysWeaver.ValueFormat">
+            <summary>
+            Fast and advanced value formatting
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ValueFormat.ToValueString(System.Int64,System.String,System.String,System.Int32,System.Char,System.Char)">
+            <summary>
+            Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+            </summary>
+            <param name="value">The value</param>
+            <param name="prefix">Optional prefix, added before the value string</param>
+            <param name="suffix">Optional suffix, added after the value string</param>
+            <param name="minPadLeft">Pad the string (to the left) to this minimum length</param>
+            <param name="thousandSeparator">The thousand separator char to use</param>
+            <param name="padChar">The padding char to use</param>
+            <returns>A string of the format: OptionalPad + Prefix + ValueStr + Suffix</returns>
+        </member>
+        <member name="M:SysWeaver.ValueFormat.ToValueString(System.UInt64,System.String,System.String,System.Int32,System.Char,System.Char)">
+            <summary>
+            Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+            </summary>
+            <param name="value">The value</param>
+            <param name="prefix">Optional prefix, added before the value string</param>
+            <param name="suffix">Optional suffix, added after the value string</param>
+            <param name="minPadLeft">Pad the string (to the left) to this minimum length</param>
+            <param name="thousandSeparator">The thousand separator char to use</param>
+            <param name="padChar">The padding char to use</param>
+            <returns>A string of the format: OptionalPad + Prefix + ValueStr + Suffix</returns>
+        </member>
+        <member name="M:SysWeaver.ValueFormat.ToValueString(System.Int32,System.String,System.String,System.Int32,System.Char,System.Char)">
+            <summary>
+            Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+            </summary>
+            <param name="value">The value</param>
+            <param name="prefix">Optional prefix, added before the value string</param>
+            <param name="suffix">Optional suffix, added after the value string</param>
+            <param name="minPadLeft">Pad the string (to the left) to this minimum length</param>
+            <param name="thousandSeparator">The thousand separator char to use</param>
+            <param name="padChar">The padding char to use</param>
+            <returns>A string of the format: OptionalPad + Prefix + ValueStr + Suffix</returns>
+        </member>
+        <member name="M:SysWeaver.ValueFormat.ToValueString(System.UInt32,System.String,System.String,System.Int32,System.Char,System.Char)">
+            <summary>
+            Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+            </summary>
+            <param name="value">The value</param>
+            <param name="prefix">Optional prefix, added before the value string</param>
+            <param name="suffix">Optional suffix, added after the value string</param>
+            <param name="minPadLeft">Pad the string (to the left) to this minimum length</param>
+            <param name="thousandSeparator">The thousand separator char to use</param>
+            <param name="padChar">The padding char to use</param>
+            <returns>A string of the format: OptionalPad + Prefix + ValueStr + Suffix</returns>
+        </member>
+        <member name="M:SysWeaver.ValueFormat.ToValueString(System.Double,System.Int32,System.String,System.String,System.Int32,System.Char,System.Char,System.Char)">
+            <summary>
+            Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+            </summary>
+            <param name="value">The value</param>
+            <param name="decimalCount">Numer of decimals</param>
+            <param name="prefix">Optional prefix, added before the value string</param>
+            <param name="suffix">Optional suffix, added after the value string</param>
+            <param name="minPadLeft">Pad the string (to the left) to this minimum length</param>
+            <param name="thousandSeparator">The thousand separator char to use</param>
+            <param name="padChar">The padding char to use</param>
+            <param name="decimalChar">The char to use as a decimal sparator</param>
+            <returns>A string of the format: OptionalPad + Prefix + ValueStr + Suffix</returns>
+        </member>
+        <member name="M:SysWeaver.ValueFormat.ToValueString(System.Decimal,System.Int32,System.String,System.String,System.Int32,System.Char,System.Char,System.Char)">
+            <summary>
+            Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+            </summary>
+            <param name="value">The value</param>
+            <param name="decimalCount">Numer of decimals</param>
+            <param name="prefix">Optional prefix, added before the value string</param>
+            <param name="suffix">Optional suffix, added after the value string</param>
+            <param name="minPadLeft">Pad the string (to the left) to this minimum length</param>
+            <param name="thousandSeparator">The thousand separator char to use</param>
+            <param name="padChar">The padding char to use</param>
+            <param name="decimalChar">The char to use as a decimal sparator</param>
+            <returns>A string of the format: OptionalPad + Prefix + ValueStr + Suffix</returns>
+        </member>
         <member name="F:SysWeaver.WebTools.UserAgent">
             <summary>
             User agent to use for HttpClient's
             </summary>
         </member>
-        <member name="M:SysWeaver.WebTools.CreateHttpClient(System.Boolean)">
+        <member name="M:SysWeaver.WebTools.CreateHttpClient(System.Boolean,System.Boolean,System.Boolean)">
             <summary>
             Create a http client with a user agent and automatic decompression
             </summary>
             <param name="useTor">If true, the client will proxy through the tor network (must be available)</param>
+            <param name="ignoreCertErrors">If true, the client will ignore any certificate errors (all certificates is ok - very dangerous)</param>
+            <param name="autoDecompress">If true, the client will automatically decompress any compressed response data</param>
             <returns></returns>
         </member>
         <member name="M:SysWeaver.WebTools.GetHttpClient(System.Int32,System.Boolean)">
@@ -6723,7 +8756,14 @@
             <summary>
             A shared http client that you can use.
             Do NOT dispose!
-            Do NOT modify  the state of the client!
+            Do NOT modify the state of the client!
+            </summary>
+        </member>
+        <member name="M:SysWeaver.WebTools.GetSharedHttpClient(System.Boolean,System.Boolean,System.Boolean)">
+            <summary>
+            Get shared http client that you can use.
+            Do NOT dispose!
+            Do NOT modify the state of the client!
             </summary>
         </member>
     </members>

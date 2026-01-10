@@ -70,6 +70,7 @@ namespace SysWeaver.MicroService
             foreach (var f in p.Services.Nullable().Concat(savedServices.Nullable()))
                 InternalAddService(f);
             UpdateTask = new PeriodicTask(UpdateMetrics, 5000);
+            UpdateStatsTask = new PeriodicTask(UpdateStats, 500);
         }
 
 
@@ -124,6 +125,7 @@ namespace SysWeaver.MicroService
 
         public void Dispose()
         {
+            Interlocked.Exchange(ref UpdateStatsTask, null)?.Dispose();
             Interlocked.Exchange(ref UpdateTask, null)?.Dispose();
             var fu = FileUploader;
             var sy = Syncer;
@@ -185,6 +187,7 @@ namespace SysWeaver.MicroService
         #endregion//IHttpServerModule
 
         PeriodicTask UpdateTask;
+        PeriodicTask UpdateStatsTask;
 
         readonly ConcurrentDictionary<String, SmServiceInfo> Services = new ConcurrentDictionary<string, SmServiceInfo>(StringComparer.Ordinal);
         readonly ServiceManager Manager;
@@ -361,6 +364,24 @@ namespace SysWeaver.MicroService
         readonly FolderSyncService Syncer;
 
         readonly int MaxUpdateConcurrency = Math.Max(2, (Environment.ProcessorCount + 1) >> 1);
+        
+        
+        async ValueTask<bool> UpdateStats()
+        {
+            var os = PlatformTools.Current;
+            if (os.GetMemorySize(out var free, out var tot))
+            {
+                MemInfo = new SmMemoryInfo
+                {
+                    Free = (long)free,
+                    Total = (long)tot,
+                    Used = (double)((tot - free) * 100M / Math.Max(1M, tot))
+                };
+            }
+            if (os.GetCpuUsage(out var cpu))
+                CpuUsage = (float)cpu;
+            return true;
+        }
 
         async ValueTask<bool> UpdateMetrics()
         {
@@ -446,42 +467,112 @@ namespace SysWeaver.MicroService
                 };
             });
             DriveInfos = dis;
-            if (PlatformTools.Current.GetMemorySize(out var free, out var tot))
-            {
-                MemInfo = new SmMemoryInfo
-                {
-                    Free = (long)free,
-                    Total = (long)tot,
-                    Used = (double)((tot - free) * 100M / Math.Max(1M, tot))
-                };
-            }
+
             return true;
         }
 
         const decimal GbSize = 1024M * 1024M * 1024M;
+
+        #region CPU info
+
+        float CpuUsage;
+
+        /// <summary>
+        /// Get the current CPU usage as a percentage
+        /// </summary>
+        /// <returns>[0, 100] current cpu usage</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        public float GetCpuUsage() => CpuUsage;
+
+
+        /// <summary>
+        /// Current CPU usage chart
+        /// </summary>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetCpuUsageChart()
+        {
+            double used = CpuUsage;
+            double idle = 100.0 - used;
+            var title = "CPU use";
+            var mem = String.Concat(used.ToString("0.00", CultureInfo.InvariantCulture), '%');
+            return ChartJsService.ChartSerialize(new ChartJsConfig
+            {
+                RefreshRate = 2000,
+                Title = title,
+                type = "doughnut",
+                Precision = 1,
+                ValidTypes = ["doughnut"],
+                ValueSuffix = " %",
+                ValueLabel = 1,
+                data = new ChartJsData
+                {
+                    labels = ["Use", "Idle"],
+                    datasets = [
+                        new ChartJsDataSet
+                        {
+                            data = [ used, idle ],
+                            backgroundColor = ["#ff5566", "#881133" ],
+                            borderWidth = 0,
+                        }
+                    ]
+                },
+                options = new ChartJsOptions
+                {
+                    plugins = new ChartJsPlugins
+                    {
+                        datalabels = new ChartJsDataLabels
+                        {
+                            display = true,
+                        },
+                        legend = new ChartJsLegend
+                        {
+                            display = false,
+                        },
+                        title = new ChartJsTitle
+                        {
+                            text = [title, mem],
+                            display = true,
+                        }
+
+                    }
+                }
+
+            });
+        }
+
+        #endregion//CPU info
+
 
         #region RAM info
 
         SmMemoryInfo MemInfo;
 
         /// <summary>
-        /// RAM memory information
+        /// Current system memory usage and size
         /// </summary>
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebApiClientCache(9)]
-        [WebApiRequestCache(4)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
         public SmMemoryInfo GetMemoryInfo() => MemInfo;
 
         /// <summary>
-        /// Get a chart for a single drive, start at 0 and increase until null is returned
+        /// Current system memory usage chart
         /// </summary>
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebApiClientCache(9)]
-        [WebApiRequestCache(4)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
         [WebApiRaw(HttpServerTools.JsonMime)]
         public ReadOnlyMemory<Byte> GetMemoryChart()
         {
@@ -501,7 +592,7 @@ namespace SysWeaver.MicroService
                 (tot / GbSize).ToString("### ### ##0.00", CultureInfo.InvariantCulture).TrimStart() + " GB");
             return ChartJsService.ChartSerialize(new ChartJsConfig
             {
-                RefreshRate = 10000,
+                RefreshRate = 2000,
                 Title = title,
                 type = "doughnut",
                 Precision = 1,
