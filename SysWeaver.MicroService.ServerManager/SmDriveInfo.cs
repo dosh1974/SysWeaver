@@ -30,6 +30,12 @@ namespace SysWeaver.MicroService
     public sealed class SmDriveInfo
     {
         /// <summary>
+        /// Index
+        /// </summary>
+        [TableDataUrl("{0}", "*../chart/chart.html?q=../ServerManager/GetDriveChart?{0}")]
+        public int Index;
+
+        /// <summary>
         /// The drive letter
         /// </summary>
         public String Drive;

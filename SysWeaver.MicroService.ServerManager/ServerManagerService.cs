@@ -15,7 +15,6 @@ using SysWeaver.OsServices;
 namespace SysWeaver.MicroService
 {
 
-
     [RequiredDep<FolderSyncService>()]
     [WebApiUrl("../ServerManager")]
     [WebMenuEmbedded(null, "Server", "Server", "ServerManager/server.html", "View server stats", "../icons/computer.svg", -9, "")]
@@ -70,8 +69,8 @@ namespace SysWeaver.MicroService
             var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
             foreach (var f in p.Services.Nullable().Concat(savedServices.Nullable()))
                 InternalAddService(f);
-            UpdateTask = new PeriodicTask(UpdateMetrics, 5000);
-            UpdateStatsTask = new PeriodicTask(UpdateStats, 500);
+            UpdateTask = new PeriodicTask(UpdateMetrics, 4000);
+            UpdateStatsTask = new PeriodicTask(UpdateStats, 200);
         }
 
 
@@ -372,15 +371,22 @@ namespace SysWeaver.MicroService
             var os = PlatformTools.Current;
             if (os.GetMemorySize(out var free, out var tot))
             {
+                double used = (double)((tot - free) * 100M / Math.Max(1M, tot));
                 MemInfo = new SmMemoryInfo
                 {
                     Free = (long)free,
                     Total = (long)tot,
-                    Used = (double)((tot - free) * 100M / Math.Max(1M, tot))
+                    Used = used
                 };
+                MemUsageHistory.Add(used);
+                MemUsageHistoryShort.Add(used);
             }
             if (os.GetCpuUsage(out var cpu))
+            {
                 CpuUsage = (float)cpu;
+                CpuUsageHistory.Add(cpu);
+                CpuUsageHistoryShort.Add(cpu);
+            }
             return true;
         }
 
@@ -439,40 +445,149 @@ namespace SysWeaver.MicroService
                     m.Status = ServiceStatus.NotInstalled;
                 }
                 Interlocked.Exchange(ref i.Metrics, m);
-                var h = i.History;
-                h.Enqueue(m);
-                while (h.TryPeek(out var o))
-                {
-                    if (o.Time >= maxAge)
-                        break;
-                    if (!h.TryDequeue(out o))
-                        break;
-                }
+                var nd = new SmServiceData { MemUsage = m.MemUsage, CpuUsage = m.CpuUsage };
+                i.History.Add(nd);
+                i.HistoryShort.Add(nd);
             }).ConfigureAwait(false);
 
 
+            var now = DateTime.UtcNow;
             var drives = DriveInfo.GetDrives();
+            drives.Sort((a, b) => a.Name.CompareTo(b.Name));
+            var du = DriveUsage;
+
+            int driveIndex = -1;
             var dis = drives.Convert(x =>
             {
+                ++driveIndex;
+                var d = x.Name;
+                if (!du.TryGetValue(driveIndex, out var h))
+                {
+                    lock (du)
+                    {
+                        if (!du.TryGetValue(driveIndex, out h))
+                        {
+                            h = (d, new BucketValueHistory<double>(TimeSpan.FromHours(1), TimeSpan.FromDays(3), (a, b) => a + b));
+                            du.TryAdd(driveIndex, h);
+                        }
+                    }
+                }
                 var free = x.TotalFreeSpace;
                 var tot = x.TotalSize;
+                var used = (double)((tot - free) * 100M / Math.Max(1M, tot));
+                h.Item2.Add(used, now);
                 return new SmDriveInfo
                 {
-                    Drive = x.Name,
+                    Index = driveIndex,
+                    Drive = d,
                     Label = x.VolumeLabel,
                     Format = x.DriveFormat,
                     Type = x.DriveType.ToString(),
                     Free = free,
                     Total = tot,
-                    Used = (double)((tot - free) * 100M / Math.Max(1M, tot))
+                    Used = used
                 };
             });
             DriveInfos = dis;
-
             return true;
         }
 
+
+        readonly ConcurrentDictionary<int, ValueTuple<String, BucketValueHistory<double>>> DriveUsage = new ();
+
+
+        SmServiceInfo Validate(String serviceName, HttpServerRequest context)
+        {
+            serviceName = serviceName.FastToLower();
+            if (!Services.TryGetValue(serviceName, out var info))
+                throw new Exception("Unknown service!");
+            if (!context.Session.IsValid(info.Auth))
+                throw new Exception("Not authorized!");
+            return info;
+        }
+
         const decimal GbSize = 1024M * 1024M * 1024M;
+
+        static ReadOnlyMemory<Byte> GetHistoryChart(BucketValueHistory<double> h, String title, String label, String valueSuffix, TimeSpan duration, String timeFmt = "HH:mm:ss")
+        {
+            var min = DateTime.UtcNow - duration;
+            List<String> labels = new List<string>();
+            List<double> values = new List<double>();
+
+            foreach (var x in h)
+            {
+                var t = x.Item3;
+                if (t < min)
+                    continue;
+                var val = x.Item5 / x.Item4;
+                val = Math.Round(val * 10) * 0.1;
+                labels.Add(x.Item1.ToString(timeFmt));
+                values.Add(val);
+            }
+            const double hueMin = 120;
+            const double hueMax = 0;
+            const double dHue = hueMax - hueMin;
+            var sval = dHue / 100;
+            var colors = values.Convert(v =>
+            {
+                var rgb = ColorTools.HsvToRgb(v * sval + hueMin, 0.7, 0.9);
+                return HtmlColors.MakeHtmlColor(rgb);
+            });
+
+            return ChartJsService.ChartSerialize(new ChartJsConfig
+            {
+                RefreshRate = 2000,
+                Title = title,
+                type = "bar",
+                Precision = 1,
+                ValidTypes = ["bar"],
+                ValueSuffix = valueSuffix,
+                data = new ChartJsData
+                {
+                    labels = labels.ToArray(),
+                    datasets = [
+                        new ChartJsDataSet
+                        {
+                            label = label,
+                            categoryPercentage = 0.99,
+                            barPercentage = 1,
+                            data = values.ToArray(),
+                            backgroundColor = colors,
+                            borderRadius = new ChartJsCorner
+                            {
+                                bottomLeft = 0,
+                                bottomRight = 0,
+                                topLeft = 0,
+                                topRight = 0,
+                            }
+                        }
+                    ],
+
+                },
+                options = new ChartJsOptions
+                {
+                    barPercentage = 1,
+                    scales = new ChartJsScalesOptions
+                    {
+                        y = new ChartJsScaleOptions
+                        {
+                            min = 0,
+                            //max = 100,
+                        }
+                    },
+                    plugins = new ChartJsPlugins
+                    {
+                        datalabels = new ChartJsDataLabels
+                        {
+                            display = false,
+                        },
+                    }
+                }
+
+            });
+
+        }
+
 
         #region CPU info
 
@@ -549,8 +664,37 @@ namespace SysWeaver.MicroService
             });
         }
 
-        #endregion//CPU info
+        /// <summary>
+        /// Get a historical chart for the Cpu memory usage
+        /// </summary>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetCpuUsageHistoryChart()
+            => GetHistoryChart(CpuUsageHistory, "Cpu usage last 24 hours", "Cpu usage", "%", TimeSpan.FromHours(24), "HH:mm");
 
+
+        /// <summary>
+        /// Get a historical chart for the Cpu memory usage
+        /// </summary>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetCpuUsageHistoryShortChart()
+            => GetHistoryChart(CpuUsageHistoryShort, "Cpu usage last 3 minutes", "Cpu usage", "%", TimeSpan.FromMinutes(3), "HH:mm:ss");
+
+
+        readonly BucketValueHistory<double> CpuUsageHistory = new(TimeSpan.FromMinutes(15), TimeSpan.FromHours(24), (a, b) => a + b);
+        readonly BucketValueHistory<double> CpuUsageHistoryShort = new(TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(3), (a, b) => a + b);
+
+
+        #endregion//CPU info
 
         #region RAM info
 
@@ -635,6 +779,36 @@ namespace SysWeaver.MicroService
 
             });
         }
+
+
+        /// <summary>
+        /// Get a historical chart for the system memory usage
+        /// </summary>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetMemoryHistoryChart()
+            => GetHistoryChart(MemUsageHistory, "Memory usage last 24 hours", "Memory usage", "%", TimeSpan.FromHours(24), "HH:mm");
+
+
+        /// <summary>
+        /// Get a historical chart for the system memory usage
+        /// </summary>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetMemoryHistoryShortChart()
+            => GetHistoryChart(MemUsageHistoryShort, "Memory usage last 3 minutes", "Memory usage", "%", TimeSpan.FromMinutes(3), "HH:mm:ss");
+
+        readonly BucketValueHistory<double> MemUsageHistory = new(TimeSpan.FromMinutes(15), TimeSpan.FromHours(24), (a, b) => a + b);
+        readonly BucketValueHistory<double> MemUsageHistoryShort = new(TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(3), (a, b) => a + b);
+
 
         #endregion//RAM info
 
@@ -748,21 +922,88 @@ namespace SysWeaver.MicroService
 
         }
 
-
-        #endregion//Drive info
-
-
-
-        SmServiceInfo Validate(String serviceName, HttpServerRequest context)
+        /// <summary>
+        /// Get a historical chart for a single drive, start at 0 and increase until null is returned
+        /// </summary>
+        /// <param name="chartIndex"></param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(9)]
+        [WebApiRequestCache(4)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetDriveHistoryChart(int chartIndex)
         {
-            serviceName = serviceName.FastToLower();
-            if (!Services.TryGetValue(serviceName, out var info))
-                throw new Exception("Unknown service!");
-            if (!context.Session.IsValid(info.Auth))
-                throw new Exception("Not authorized!");
-            return info;
+            if (!DriveUsage.TryGetValue(chartIndex, out var h))
+                return null;
+            return GetHistoryChart(h.Item2, h.Item1 + " disc usage last three days", "Disc usage", "%", TimeSpan.FromDays(3), "MM-dd HH:mm");
         }
 
+
+        #endregion //Drive info
+
+        #region Services
+
+        /// <summary>
+        /// Current CPU usage chart
+        /// </summary>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetServicesChart(HttpServerRequest context)
+        {
+            var d = GetServices(context);
+            var running = d.Count(x => x.Status.FastEquals("Running"));
+            var total = d.Length;
+            var stopped = total - running;
+            var title = "Services";
+            var stats = String.Concat(running, " / ", total);
+            return ChartJsService.ChartSerialize(new ChartJsConfig
+            {
+                RefreshRate = 2000,
+                Title = title,
+                type = "doughnut",
+                Precision = 1,
+                ValidTypes = ["doughnut"],
+                ValueLabel = 1,
+                data = new ChartJsData
+                {
+                    labels = ["Running", "Stopped"],
+                    datasets = [
+                        new ChartJsDataSet
+                        {
+                            data = [ running, stopped ],
+                            backgroundColor = ["#dd55ff", "#661188" ],
+                            borderWidth = 0,
+                        }
+                    ]
+                },
+                options = new ChartJsOptions
+                {
+                    plugins = new ChartJsPlugins
+                    {
+                        datalabels = new ChartJsDataLabels
+                        {
+                            display = true,
+                        },
+                        legend = new ChartJsLegend
+                        {
+                            display = false,
+                        },
+                        title = new ChartJsTitle
+                        {
+                            text = [title, stats],
+                            display = true,
+                        }
+
+                    }
+                }
+
+            });
+        }
 
         /// <summary>
         /// Get Memory graph for a managed service
@@ -785,11 +1026,11 @@ namespace SysWeaver.MicroService
             double maxVal = double.MinValue;
             foreach (var x in info.History)
             {
-                var t = x.Time;
+                var t = x.Item3;
                 if (t < min)
                     continue;
-                var val = (Double)x.MemUsage / (1024.0 * 1024.0);
-                labels.Add(t.ToString("HH:mm:ss"));
+                var val = (Double)(x.Item5.MemUsage / (1024M * 1024.0M * x.Item4));
+                labels.Add(x.Item1.ToString("HH:mm"));
                 values.Add(val);
                 if (val < minVal)
                     minVal = val;
@@ -817,7 +1058,7 @@ namespace SysWeaver.MicroService
             return ChartJsService.ChartSerialize(new ChartJsConfig
             {
                 RefreshRate = 5000,
-                Title = serviceName + " memory usage last hour",
+                Title = serviceName + " memory usage last 24 hours",
                 type = "bar",
                 Precision = 1,
                 ValidTypes = ["bar"],
@@ -871,11 +1112,11 @@ namespace SysWeaver.MicroService
             List<double> values = new List<double>();
             foreach (var x in info.History)
             {
-                var t = x.Time;
+                var t = x.Item3;
                 if (t < min)
                     continue;
-                var val = x.CpuUsage;
-                labels.Add(t.ToString("HH:mm:ss"));
+                var val = x.Item5.CpuUsage / x.Item4;
+                labels.Add(x.Item1.ToString("HH:mm"));
                 values.Add(val);
             }
             const double hueMin = 120;
@@ -891,7 +1132,7 @@ namespace SysWeaver.MicroService
             return ChartJsService.ChartSerialize(new ChartJsConfig
             {
                 RefreshRate = 5000,
-                Title = serviceName + " Cpu usage last hour",
+                Title = serviceName + " Cpu usage last 24 hours",
                 type = "bar",
                 Precision = 1,
                 ValidTypes = ["bar"],
@@ -1175,6 +1416,11 @@ namespace SysWeaver.MicroService
         }
 
 
+        #endregion//Services
+
+
+        #region Storage
+
         /// <summary>
         /// Returns stats for folders
         /// </summary>
@@ -1214,6 +1460,9 @@ namespace SysWeaver.MicroService
         [WebApiRequestCache(10)]
         public async Task<TableData> StorageStatsTable(TableDataRequest r)
             => TableDataTools.Get(r, 15000, await GetStorageStats().ConfigureAwait(false));
+
+        #endregion//Storage
+
 
         #region Version
 

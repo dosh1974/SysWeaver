@@ -8,10 +8,11 @@
 }
 
 body {
-    --mw: calc(50svw - 1em);
+    --pad: 8px;
+    --mw: calc(50svw - var(--pad));
     --w: min(var(--mw), 400px);
     --h: calc(var(--w) + 2em);
-    padding: 1em;
+    padding: var(--pad);
     margin: 0;
     width: 100%;
     display: flex;
@@ -19,6 +20,8 @@ body {
     justify-content: space-evenly;
     align-items: center;
 }
+
+
 
 
     body server-item {
@@ -43,8 +46,8 @@ body {
             position: absolute;
             left: 0;
             top: 0;
-            width: var(--w);
-            height: var(--h);
+            right: 0;
+            bottom: 0;
             border-radius: var(--ThemeRad);
             cursor: pointer;
             outline: 1px solid transparent;
@@ -52,9 +55,44 @@ body {
         }
 
             body server-item server-itemclick:hover {
-                box-shadow: 0 0 1em rgba(var(--ThemeAcc1RGB), 0.5);
+                box-shadow: 0 0 var(--pad) rgba(var(--ThemeAcc1RGB), 0.5);
             }
 
             body server-item server-itemclick:focus {
                 outline: 1px solid var(--ThemeAcc2);
+            }
+
+
+    body.Dual {
+        --pad2: calc(var(--pad) * 2);
+        --mh: calc(100svh - var(--pad2) - var(--pad2));
+        --mw: calc(100svw - var(--pad2));
+        --mmh: calc(var(--mh) * 0.33);
+        --h: calc(min(var(--mmh), var(--mw)));
+        display: block;
+        overflow: hidden;
+    }
+
+
+        body.Dual server-item {
+            display: block;
+            width: var(--mw);
+            height: var(--h);
+        }
+
+
+        body.Dual server-item iframe {
+            width: var(--mw);
+            height: var(--h);
+        }
+
+            body.Dual server-item:last-child {
+                margin-top: var(--pad2);
+                width: var(--mw);
+                height: calc(var(--mh) - var(--h));
+            }
+
+            body.Dual server-item:last-child iframe{
+                width: var(--mw);
+                height: calc(var(--mh) - var(--h));
             }

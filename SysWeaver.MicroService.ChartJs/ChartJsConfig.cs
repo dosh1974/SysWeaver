@@ -66,11 +66,13 @@ namespace SysWeaver.MicroService
 
         /// <summary>
         /// Value label control:
-        /// 0 = Value.
+        /// 0 = Formatted Value with prefix and suffix.
         /// 1 = Label and Value.
         /// 2 = Label.
         /// 3 = First line of the label.
         /// 4 = None
+        /// 5 = Raw value 
+        /// 6 = Formatted value
         /// </summary>
         [OpenAiOptional]
         public int ValueLabel;

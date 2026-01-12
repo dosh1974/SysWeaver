@@ -30,8 +30,24 @@ namespace SysWeaver.MicroService
         public long LastCpu;
         public TimeSpan LastTotCpu;
         public volatile SmServiceMetrics Metrics = new SmServiceMetrics();
-        public readonly ConcurrentQueue<SmServiceMetrics> History = new ConcurrentQueue<SmServiceMetrics>();
+        public readonly BucketValueHistory<SmServiceData> History = new (TimeSpan.FromMinutes(15), TimeSpan.FromHours(24), SmServiceData.Add);
+        public readonly BucketValueHistory<SmServiceData> HistoryShort = new(TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(10), SmServiceData.Add);
+    }
 
+    sealed class SmServiceData
+    {
+
+        public static SmServiceData Add(SmServiceData a, SmServiceData b)
+        {
+            return new SmServiceData
+            {
+                MemUsage = a.MemUsage + b.MemUsage,
+                CpuUsage = a.CpuUsage + b.CpuUsage,
+            };
+        }
+
+        public long MemUsage;
+        public double CpuUsage;
     }
 
     sealed class SmServiceMetrics

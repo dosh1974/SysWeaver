@@ -18,10 +18,15 @@ SysWeaver-Chart {
     background-color: rgba(var(--ThemeBackgroundRGB), 0.5);
 }
 
+    SysWeaver-Chart.ChartCenter canvas
+    {
+        margin: 0 auto;
+    }
 
-html:not([data-theme]) SysWeaver-Chart {
-    background-color: rgba(var(--ThemeBackgroundRGB), 0.9);
-}
+
+    html:not([data-theme]) SysWeaver-Chart {
+        background-color: rgba(var(--ThemeBackgroundRGB), 0.9);
+    }
 
 
 

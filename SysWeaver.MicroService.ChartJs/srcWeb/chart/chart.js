@@ -71,6 +71,7 @@ class CanvasChartOptions {
     OnDefaults = null;
     OnClick = null;
     Transparent = false;
+    WaitFirst = true;
 }
 
 class CanvasChart {
@@ -327,8 +328,14 @@ class CanvasChart {
                 case 4:
                     CanvasChart.noLabels(data);
                     break;
-                default:
+                case 5:
                     CanvasChart.valueLabels(data);
+                    break;
+                case 6:
+                    CanvasChart.bareValueLabel(data);
+                    break;
+                default:
+                    CanvasChart.formattedValueLabels(data);
                     break;
             }
             if (!precision)
@@ -1595,8 +1602,10 @@ class CanvasChart {
         }
 
 
+
         let refreshRate = 15000;
-        for (; ;) {
+
+        async function DoUpdate() {
             try {
                 let data = tableParams ? await sendRequest(url, tableParams) : await getRequest(url);
                 if (data) {
@@ -1625,7 +1634,7 @@ class CanvasChart {
                             document.title = t0;
                     }
                     if (main == null) {
-//                        canvas.Scale = chartScale;
+                        //                        canvas.Scale = chartScale;
                         main = new Chart(canvas, data);
                         main.Transparent = true;
                         if (onFirstLoad) {
@@ -1758,8 +1767,8 @@ class CanvasChart {
                                     //                                    if (cv === null)
                                     if (cv !== nv)
                                         cdsd[j] = nv;
-//                                    else
-//                                        cv.y = nv.y;
+                                    //                                    else
+                                    //                                        cv.y = nv.y;
                                 }
                                 let cb = cdss.backgroundColor;
                                 let nb = ndss.backgroundColor;
@@ -1767,7 +1776,7 @@ class CanvasChart {
                                     if (Array.isArray(cb)) {
                                         const l = cb.length;
                                         for (let j = 0; j < l; ++j)
-                                                cb[j] = nb[j];
+                                            cb[j] = nb[j];
                                     }
                                 }
                                 cb = cdss.borderColor;
@@ -1776,7 +1785,7 @@ class CanvasChart {
                                     if (Array.isArray(cb)) {
                                         const l = cb.length;
                                         for (let j = 0; j < l; ++j)
-                                                cb[j] = nb[j];
+                                            cb[j] = nb[j];
                                     }
                                 }
                             }
@@ -1789,7 +1798,6 @@ class CanvasChart {
                     if (refreshRate < 500)
                         refreshRate = 500;
                 }
-                await delay(refreshRate);
             }
             catch (ex) {
                 //  If we failed to fetch the data, retry in a second
@@ -1800,7 +1808,15 @@ class CanvasChart {
                 }
                 await delay(3000);
             }
+            setTimeout(async ev => {
+                await DoUpdate();
+            }, refreshRate);
         }
+        if (chartOptions.WaitFirst)
+            await DoUpdate();
+        else
+            DoUpdate();
+        return chart;
     }
 
 
@@ -1849,6 +1865,32 @@ class CanvasChart {
         }
         l.formatter = (value, context) => {
             return (config.data.labels[context.dataIndex] ?? "").split('\n')[0];
+        };
+        l.display = true;
+    }
+
+    static formattedValueLabels(config) {
+        let l = config.options.plugins.datalabels;
+        if (!l)
+            return;
+        l.formatter = (value, context) => {
+
+            const precision = config.Precision ?? 0;
+            const valuePrefix = config.ValuePrefix ?? "";
+            const valueSuffix = config.ValueSuffix ?? "";
+            return valuePrefix + ValueFormat.toString(value, precision) + valueSuffix;
+        };
+        l.display = true;
+    }
+
+    static bareValueLabels(config) {
+        let l = config.options.plugins.datalabels;
+        if (!l)
+            return;
+        l.formatter = (value, context) => {
+
+            const precision = config.Precision ?? 0;
+            return ValueFormat.toString(value, precision);
         };
         l.display = true;
     }
@@ -2054,8 +2096,10 @@ async function chartMain() {
                 }
             };
         }
+        const el = await CanvasChart.addChart(url, null, tp, removeLoader, o);
+        if (ps.get("center") === "true")
+            el.classList.add("ChartCenter");
 
-        await CanvasChart.addChart(url, null, tp, removeLoader, o);
     }
     finally {
         removeLoader();
