@@ -1,0 +1,60 @@
+﻿
+:root {
+}
+
+*
+{
+    box-sizing: border-box;
+}
+
+body {
+    --mw: calc(50svw - 1em);
+    --w: min(var(--mw), 400px);
+    --h: calc(var(--w) + 2em);
+    padding: 1em;
+    margin: 0;
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+    align-items: center;
+}
+
+
+    body server-item {
+        position: relative;
+        width: var(--w);
+        height: var(--h);
+        display: inline-flex;
+        border-radius: var(--ThemeRad);
+    }
+
+        body server-item iframe {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: var(--w);
+            height: var(--h);
+            border: none;
+            pointer-events: none;
+        }
+
+        body server-item server-itemclick {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: var(--w);
+            height: var(--h);
+            border-radius: var(--ThemeRad);
+            cursor: pointer;
+            outline: 1px solid transparent;
+            transition: box-shadow linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
+        }
+
+            body server-item server-itemclick:hover {
+                box-shadow: 0 0 1em rgba(var(--ThemeAcc1RGB), 0.5);
+            }
+
+            body server-item server-itemclick:focus {
+                outline: 1px solid var(--ThemeAcc2);
+            }

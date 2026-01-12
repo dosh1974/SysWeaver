@@ -6520,6 +6520,14 @@ async function SysWeaverInit() {
         //  Interop responses for child windows (none top windows such as iframe's)
         if (colorSchemeMeta)
             map.set("color.scheme", msg => colorSchemeMeta.content = msg.Value);
+        map.set("theme.set", async msg => {
+            localStorage.setItem("SysWeaver.Theme", msg.Value);
+            await applyTheme();
+        });
+        map.set("theme.use", async msg => {
+            window.UseTheme = msg.Value;
+            await applyTheme();
+        });
     }
 
     InterOp.AddListener(async ev => {

@@ -70,6 +70,7 @@ namespace SysWeaver.MicroService
         /// 1 = Label and Value.
         /// 2 = Label.
         /// 3 = First line of the label.
+        /// 4 = None
         /// </summary>
         [OpenAiOptional]
         public int ValueLabel;

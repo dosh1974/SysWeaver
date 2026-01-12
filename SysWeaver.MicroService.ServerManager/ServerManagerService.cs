@@ -18,6 +18,7 @@ namespace SysWeaver.MicroService
 
     [RequiredDep<FolderSyncService>()]
     [WebApiUrl("../ServerManager")]
+    [WebMenuEmbedded(null, "Server", "Server", "ServerManager/server.html", "View server stats", "../icons/computer.svg", -9, "")]
     [WebMenuEmbedded(null, "Services", "Managed services", "ServerManager/services.html", "View all managed services", "../icons/settings.svg", -7, "")]
     [WebMenuEmbedded(null, "Keys", "Key files", "ServerManager/keys.html", "Managed key files located in the key file folder", "../icons/key.svg", -6, Roles.Admin)]
     public sealed partial class ServerManagerService : IDisposable, IHttpServerModule
@@ -655,6 +656,22 @@ namespace SysWeaver.MicroService
         public TableData DriveInfoTable(TableDataRequest r)
             => TableDataTools.Get(r, 10000, DriveInfos.Nullable());
 
+
+        /// <summary>
+        /// Get the number of drives
+        /// </summary>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(9)]
+        [WebApiRequestCache(4)]
+        public int GetDriveCount()
+        {
+            var t = DriveInfos;
+            if (t == null)
+                return 0;
+            return t.Length;
+        }
 
         /// <summary>
         /// Get a chart for a single drive, start at 0 and increase until null is returned

@@ -324,6 +324,9 @@ class CanvasChart {
                 case 3:
                     CanvasChart.firstLineDataLabels(data);
                     break;
+                case 4:
+                    CanvasChart.noLabels(data);
+                    break;
                 default:
                     CanvasChart.valueLabels(data);
                     break;
@@ -1814,6 +1817,7 @@ class CanvasChart {
             const valueSuffix = config.ValueSuffix ?? "";
             return config.data.labels[context.dataIndex] + "\n" + valuePrefix + ValueFormat.toString(value, precision) + valueSuffix;
            };
+        l.display = true;
     }
 
     static onlyDataLabels(config) {
@@ -1825,6 +1829,16 @@ class CanvasChart {
         l.formatter = (value, context) => {
             return config.data.labels[context.dataIndex];
         };
+        l.display = true;
+    }
+
+    static noLabels(config) {
+        let l = config.options.plugins.datalabels;
+        if (!l) {
+            l = {};
+            config.options.plugins.datalabels = l;
+        }
+        l.display = false;
     }
 
     static firstLineDataLabels(config) {
@@ -1836,15 +1850,15 @@ class CanvasChart {
         l.formatter = (value, context) => {
             return (config.data.labels[context.dataIndex] ?? "").split('\n')[0];
         };
+        l.display = true;
     }
-
-
 
     static valueLabels(config) {
         let l = config.options.plugins.datalabels;
         if (!l)
             return;
         l.formatter = null;
+        l.display = true;
     }
 
     
@@ -1855,7 +1869,7 @@ class CanvasChart {
 async function chartMain() {
     const removeLoader = AddLoading();
     try {
-
+        document.body.style.overflow = "hidden";
         function setValue(obj, path, v) {
             const s = path.split('.');
             const sl = s.length - 1;
@@ -1913,6 +1927,8 @@ async function chartMain() {
                 CanvasChart.addDataLabels(config);
             if (ps.get("novalues") === "true")
                 CanvasChart.onlyDataLabels(config);
+            if (ps.get("nolabels") === "true")
+                CanvasChart.noLabels(config);
             let val = ps.get("bordersize");
             if (val != null)
                 config.data.datasets[0].borderWidth = parseFloat(val);
