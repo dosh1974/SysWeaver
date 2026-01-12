@@ -70,6 +70,7 @@ class CanvasChartOptions {
     OnFixedData = null;
     OnDefaults = null;
     OnClick = null;
+    Transparent = false;
 }
 
 class CanvasChart {
@@ -144,6 +145,8 @@ class CanvasChart {
         const checkedReadonly = checked | readonly;
 
         const chart = document.createElement("SysWeaver-Chart");
+        if (chartOptions.Transparent)
+            chart.classList.add("Transparent");
         toElement.appendChild(chart);
         let canvas = document.createElement("canvas");
         chart.appendChild(canvas);
@@ -2014,8 +2017,7 @@ async function chartMain() {
                 def.font.lineHeight = parseFloat(val);
 
         };
-
-
+        o.Transparent = ps.get("transparent") === "true";
         const par = window.parent;
         if (par) {
             o.OnClick = (label, value, datasetIndex, dataIndex) => {

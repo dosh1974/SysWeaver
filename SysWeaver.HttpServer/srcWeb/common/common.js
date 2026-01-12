@@ -6171,11 +6171,12 @@ async function SysWeaverInit() {
     window.Mobile = mob;
 
     const colorScheme = ps.get("colorscheme");
+    let colorSchemeMeta = null;
     if (colorScheme) {
-        const m = document.createElement("meta");
-        m.name = "color-scheme";
-        m.content = colorScheme;
-        document.head.appendChild(m);
+        colorSchemeMeta = document.createElement("meta");
+        colorSchemeMeta.name = "color-scheme";
+        colorSchemeMeta.content = colorScheme;
+        document.head.appendChild(colorSchemeMeta);
     }
 
     function onSizeChange() {
@@ -6517,6 +6518,8 @@ async function SysWeaverInit() {
         map.set("server.restore", () => RemoveBlock());
     } else {
         //  Interop responses for child windows (none top windows such as iframe's)
+        if (colorSchemeMeta)
+            map.set("color.scheme", msg => colorSchemeMeta.content = msg.Value);
     }
 
     InterOp.AddListener(async ev => {
