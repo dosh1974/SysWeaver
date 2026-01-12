@@ -6448,6 +6448,8 @@ async function SysWeaverInit() {
     });
 
     const map = new Map();
+    const setTheme = ps.get('settheme');
+    const useTheme = ps.get('usetheme');
     
     if (isTop) {
         //  Interop responses for top windows
@@ -6520,14 +6522,16 @@ async function SysWeaverInit() {
         //  Interop responses for child windows (none top windows such as iframe's)
         if (colorSchemeMeta)
             map.set("color.scheme", msg => colorSchemeMeta.content = msg.Value);
-        map.set("theme.set", async msg => {
-            localStorage.setItem("SysWeaver.Theme", msg.Value);
-            await applyTheme();
-        });
-        map.set("theme.use", async msg => {
-            window.UseTheme = msg.Value;
-            await applyTheme();
-        });
+        if (setTheme)
+            map.set("theme.set", async msg => {
+                localStorage.setItem("SysWeaver.Theme", msg.Value);
+                await applyTheme();
+            });
+        if (useTheme)
+            map.set("theme.use", async msg => {
+                window.UseTheme = msg.Value;
+                await applyTheme();
+            });
     }
 
     InterOp.AddListener(async ev => {
@@ -6553,10 +6557,8 @@ async function SysWeaverInit() {
     const css = ps.get('css');
     if (css)
         await includeCss(null, css);
-    const setTheme = ps.get('settheme');
     if (setTheme)
         localStorage.setItem("SysWeaver.Theme", setTheme);
-    const useTheme = ps.get('usetheme');
     if (useTheme)
         window.UseTheme = useTheme;
     await applyTheme();
