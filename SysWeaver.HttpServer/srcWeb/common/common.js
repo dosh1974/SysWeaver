@@ -6170,7 +6170,13 @@ async function SysWeaverInit() {
         mob = isMobile();
     window.Mobile = mob;
 
-
+    const colorScheme = ps.get("colorscheme");
+    if (colorScheme) {
+        const m = document.createElement("meta");
+        m.name = "color-scheme";
+        m.content = colorScheme;
+        document.head.appendChild(m);
+    }
 
     function onSizeChange() {
         const ww = window.innerWidth;
