@@ -631,9 +631,9 @@ namespace SysWeaver.MicroService
         float CpuUsage;
 
         /// <summary>
-        /// Get the current CPU usage as a percentage
+        /// Get the current CPU use as a percentage
         /// </summary>
-        /// <returns>[0, 100] current cpu usage</returns>
+        /// <returns>[0, 100] current cpu use</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(1)]
@@ -642,7 +642,7 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Current CPU usage chart
+        /// Current CPU use chart
         /// </summary>
         /// <returns></returns>
         [WebApi]
@@ -702,7 +702,7 @@ namespace SysWeaver.MicroService
         }
 
         /// <summary>
-        /// Get a historical chart for the Cpu memory usage
+        /// Get a historical chart for the Cpu memory use
         /// </summary>
         /// <returns>Graph data as json</returns>
         [WebApi]
@@ -715,7 +715,7 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get a historical chart for the Cpu memory usage
+        /// Get a historical chart for the Cpu memory use
         /// </summary>
         /// <returns>Graph data as json</returns>
         [WebApi]
@@ -738,7 +738,7 @@ namespace SysWeaver.MicroService
         SmMemoryInfo MemInfo;
 
         /// <summary>
-        /// Current system memory usage and size
+        /// Current system memory use and size
         /// </summary>
         /// <returns></returns>
         [WebApi]
@@ -748,7 +748,7 @@ namespace SysWeaver.MicroService
         public SmMemoryInfo GetMemoryInfo() => MemInfo;
 
         /// <summary>
-        /// Current system memory usage chart
+        /// Current system memory use chart
         /// </summary>
         /// <returns></returns>
         [WebApi]
@@ -819,7 +819,7 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get a historical chart for the system memory usage
+        /// Get a historical chart for the system memory use
         /// </summary>
         /// <returns>Graph data as json</returns>
         [WebApi]
@@ -832,7 +832,7 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Get a historical chart for the system memory usage
+        /// Get a historical chart for the system memory use
         /// </summary>
         /// <returns>Graph data as json</returns>
         [WebApi]
@@ -1000,7 +1000,7 @@ namespace SysWeaver.MicroService
         #region Services
 
         /// <summary>
-        /// Current CPU usage chart
+        /// Current CPU use chart
         /// </summary>
         /// <returns></returns>
         [WebApi]
@@ -1096,7 +1096,7 @@ namespace SysWeaver.MicroService
             return ChartJsService.ChartSerialize(new ChartJsConfig
             {
                 RefreshRate = 5000,
-                Title = serviceName + " memory usage last 24 hours",
+                Title = serviceName + " memory use last 24 hours",
                 type = "bar",
                 Precision = 1,
                 ValidTypes = ["bar"],
@@ -1107,7 +1107,7 @@ namespace SysWeaver.MicroService
                     datasets = [
                         new ChartJsDataSet
                         {
-                            label = "Memory usage",
+                            label = "Memory use",
                             categoryPercentage = 0.99,
                             barPercentage = 1,
                             data = values.ToArray(),
@@ -1160,7 +1160,7 @@ namespace SysWeaver.MicroService
             return ChartJsService.ChartSerialize(new ChartJsConfig
             {
                 RefreshRate = 5000,
-                Title = serviceName + " Cpu usage last 24 hours",
+                Title = serviceName + " Cpu use last 24 hours",
                 type = "bar",
                 Precision = 1,
                 ValidTypes = ["bar"],
@@ -1171,7 +1171,7 @@ namespace SysWeaver.MicroService
                     datasets = [
                         new ChartJsDataSet
                         {
-                            label = "Cpu usage",
+                            label = "Cpu use",
                             categoryPercentage = 0.99,
                             barPercentage = 1,
                             data = values.ToArray(),

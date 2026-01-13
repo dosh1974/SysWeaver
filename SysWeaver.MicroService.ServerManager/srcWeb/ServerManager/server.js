@@ -37,7 +37,7 @@ async function serverMain() {
 
     const count = await getRequest("../ServerManager/GetDriveCount");
     for (let i = 0; i < count; ++ i)
-        addChart("GetDriveChart?" + i, null, "Disc usage");
+        addChart("GetDriveChart?" + i, null, "Disc use");
    
 
 

@@ -3877,7 +3877,7 @@ class ValueFormat {
 
     static updateUrl(el, value, formats, nextValue, flash, type, onRefresh) {
         ValueFormat.updateFormat(el, "Url");
-        if (!value) {
+        if (typeof value === "undefined" || value === null) {
             ValueFormat.updateText(el, "", "", flash);
             return;
         }
@@ -3902,7 +3902,7 @@ class ValueFormat {
 
     static updateImg(el, value, formats, nextValue, flash, type, onRefresh) {
         ValueFormat.updateFormat(el, "Img");
-        if (!value) {
+        if (typeof value === "undefined" || value === null) {
             ValueFormat.updateText(el, "", "", flash);
             return;
         }

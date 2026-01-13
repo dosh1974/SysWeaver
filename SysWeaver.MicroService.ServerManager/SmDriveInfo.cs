@@ -32,7 +32,8 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Index
         /// </summary>
-        [TableDataUrl("{0}", "*../chart/chart.html?q=../ServerManager/GetDriveChart?{0}")]
+        [TableDataUrl("Drive #{0}", "*../ServerManager/server_metrics.html?q1=GetDriveChart?{0}&q2=GetDriveHistoryShortChart?{0}&q3=GetDriveHistoryChart?{0}&title=Disc use")]
+
         public int Index;
 
         /// <summary>
