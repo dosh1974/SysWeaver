@@ -65,34 +65,35 @@ body {
 
     body.Dual {
         --pad2: calc(var(--pad) * 2);
-        --mh: calc(100svh - var(--pad2) - var(--pad2));
+        --mh: calc(100svh - var(--pad2) * 3);
         --mw: calc(100svw - var(--pad2));
-        --mmh: calc(var(--mh) * 0.33);
+        --mmh: calc(var(--mh) * 0.2);
         --h: calc(min(var(--mmh), var(--mw)));
+        --h2: calc((var(--mh) - var(--h)) / 2);
         display: block;
         overflow: hidden;
     }
 
 
-        body.Dual server-item {
-            display: block;
+        body.Dual server-item:first-child {
             width: var(--mw);
             height: var(--h);
         }
 
 
-        body.Dual server-item iframe {
-            width: var(--mw);
-            height: var(--h);
-        }
-
-            body.Dual server-item:last-child {
-                margin-top: var(--pad2);
+            body.Dual server-item:first-child iframe {
                 width: var(--mw);
-                height: calc(var(--mh) - var(--h));
+                height: var(--h);
             }
 
-            body.Dual server-item:last-child iframe{
+        body.Dual server-item {
+            display: block;
+            margin-top: var(--pad2);
+            width: var(--mw);
+            height: var(--h2);
+        }
+
+            body.Dual server-item iframe {
                 width: var(--mw);
-                height: calc(var(--mh) - var(--h));
+                height: var(--h2);
             }

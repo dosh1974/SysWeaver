@@ -72,6 +72,7 @@ class CanvasChartOptions {
     OnClick = null;
     Transparent = false;
     WaitFirst = true;
+    ValueLabel = null;
 }
 
 class CanvasChart {
@@ -117,6 +118,14 @@ class CanvasChart {
             "Pink",
         ];
 
+    static GradientFns = new Map([
+        ["down", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(0, y0, 0, y1) ],
+        ["up", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(0, y1, 0, y0) ],
+        ["left", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(x0, 0, x1, 0) ],
+        ["right", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(x1, 0, x0, 0) ],
+        ["cone", (ctx, x0, y0, x1, y1) => ctx.createConicGradient(-Math.PI * 0.5, (x0 + x1) * 0.5, (y0 + y1) * 0.5) ],
+    ]);
+
     /**
      * Add a chart that get it's data from the server (as a achild to some element)
      * @param {string} url The url to the API that returns the chart options
@@ -150,6 +159,8 @@ class CanvasChart {
             chart.classList.add("Transparent");
         toElement.appendChild(chart);
         let canvas = document.createElement("canvas");
+        let canvasCtx = canvas.getContext("2d");
+
         chart.appendChild(canvas);
 
 
@@ -309,13 +320,104 @@ class CanvasChart {
             return cols;
         }
 
+        const gradCache = {
+            x0: 0,
+            y0: 0,
+            x1: 0,
+            y1: 0,
+            gradients: null,
+        };
+
+        function gradientCreator(chartContext, gradData, cf, i) {
+
+            const chart = chartContext.chart;
+            const ctx = chart.ctx;
+            const chartArea = chart.chartArea;
+            if (!chartArea)
+                return "#000";
+            const x0 = 0;
+            const y0 = 0;
+            const x1 = ctx.canvas.width;
+            const y1 = ctx.canvas.height;
+/*            const x0 = Math.floor(chartArea.left);
+            const y0 = Math.floor(chartArea.top);
+            const x1 = Math.ceil(chartArea.right);
+            const y1 = Math.ceil(chartArea.bottom);*/
+            if ((x0 != gradCache.x0) || (x1 != gradCache.x1) || (y0 != gradCache.y0) || (y1 != gradCache.y1)) {
+                gradCache.x0 = x0;
+                gradCache.x1 = x1;
+                gradCache.y0 = y0;
+                gradCache.y1 = y1;
+                gradCache.gradients = new Map();
+            }
+            let g = gradCache.gradients.get(gradData);
+            if (g)
+                return g;
+            const values = gradData.substring(i + 1, gradData.length - 1).split(';');
+            if (ctx instanceof CanvasRenderingContext2D) {
+                console.log("Creating gradient: " + gradData + " (" + x0 + "," + y0 + ") - (" + x1 + ", " + y1 + ") (" + chartArea.left + "," + chartArea.top + ") - (" + chartArea.right + ", " + chartArea.bottom + ") ");
+                g = cf(ctx, x0, y0, x1, y1);
+                const vl = values.length;
+                for (let i = 0; i < vl; i += 2)
+                    g.addColorStop(parseFloat(values[i].trim()), values[i + 1].trim());
+                gradCache.gradients.set(gradData, g);
+                return g;
+            }
+            g = values[1].trim();
+            gradCache.gradients.set(gradData, g);
+            return g;
+        }
+
+
+        function resolveColor(data, v, si, vi) {
+            if (Array.isArray(v)) {
+                const vl = v.length;
+                if (vl <= 0)
+                    return "red";
+                if (vl === 1)
+                    return resolveColor(data, v[0], si);
+                let haveFn = false;
+                for (let i = 0; i < vl; ++i) {
+                    const rc = resolveColor(data, v[i], si, i);
+                    v[i] = rc;
+                    haveFn |= typeof rc !== "string";
+                }
+                if (!haveFn)
+                    return v;
+                return ctx1 => {
+                    const cd = v[ctx1.dataIndex];
+                    if (typeof cd === "function")
+                        return cd(ctx1);
+                    return cd;
+                };
+            }
+            if (typeof v !== "string")
+                return v;
+            const i = v.indexOf('(');
+            if (i > 0) {
+                const name = v.substring(0, i).trim();
+                const cf = CanvasChart.GradientFns.get(name);
+                if (cf) {
+
+                    return ct2 => gradientCreator(ct2, v, cf, i)
+                }
+
+            }
+            return v;
+        }
+
+
         function ApplyChanges(data) {
             const style = getComputedStyle(document.body);
 
             precision = data.Precision;
             valuePrefix = data.ValuePrefix ?? "";
             valueSuffix = data.ValueSuffix ?? "";
-            switch (data.ValueLabel) {
+
+            let vl = chartOptions.ValueLabel;
+            if ((!vl) && (vl !== 0))
+                vl = data.ValueLabel;
+            switch (vl) {
                 case 1:
                     CanvasChart.addDataLabels(data);
                     break;
@@ -643,6 +745,16 @@ class CanvasChart {
                 }
 
 
+            } else {
+
+                const dd = data.data;
+                const dss = dd.datasets;
+                const seriesCount = dss.length;
+                for (let si = 0; si < seriesCount; ++si) {
+                    const ds = dss[si];
+                    ds.borderColor = resolveColor(data, ds.borderColor, si);
+                    ds.backgroundColor = resolveColor(data, ds.backgroundColor, si);
+                }
             }
 
 
@@ -762,6 +874,7 @@ class CanvasChart {
             const nc = document.createElement("canvas");
             canvas.parentElement.replaceChild(nc, canvas);
             canvas = nc;
+            canvasCtx = nc.getContext("2d");
             //canvas.Scale = chartScale;
             main = new Chart(canvas, data);
             main.Transparent = true;
@@ -884,6 +997,7 @@ class CanvasChart {
             }
             close();
         }
+
         async function ExportChart(closeFn, name, desc, format, icon) {
             closeFn();
             let data = JSON.parse(orgDataStr);
@@ -1516,7 +1630,6 @@ class CanvasChart {
         Chart.register(renderBackgroundPlugin);
         Chart.register(ChartDataLabels);
 
-
         const def = Chart.defaults;
         def.plugins.datalabels = {
             display: "auto",
@@ -1531,6 +1644,8 @@ class CanvasChart {
             padding: 4,
             formatter: ValueFormatter,
         };
+
+
         def.scale.ticks.callback = ValueFormatter;
         //def.scales.category.ticks.callback = ValueFormatter;
         def.scales.linear.ticks.callback = ValueFormatter;
@@ -1575,24 +1690,6 @@ class CanvasChart {
                 setTimeout(UpdateColor, 10);
         });
 
-        function PadArray(a, l) {
-            if (!a)
-                return;
-            const al = a.length;
-            if (al === l)
-                return;
-            if (al === 0)
-                return;
-            if (al > l) {
-                a.splice(l, al - l);
-                return;
-            }
-            const p = a[al - 1]
-            while (l > al) {
-                --l;
-                a.push(p);
-            }
-        }
 
         function HaveArrayOffLen(a, l) {
             if (!a)
@@ -1616,6 +1713,7 @@ class CanvasChart {
                         data.options = {};
                     if (!data.options.plugins)
                         data.options.plugins = {};
+
                     orgDataStr = JSON.stringify(data);
                     ApplyChanges(data);
                     fn = chartOptions.OnFixedData;
@@ -1964,13 +2062,16 @@ async function chartMain() {
                 if (document.title != title)
                     document.title = title;
         };
+        if (ps.get("l") === "true")
+            o.ValueLabel = 1;
+        if (ps.get("novalues") === "true")
+            o.ValueLabel = 2;
+        if (ps.get("nolabels") === "true")
+            o.ValueLabel = 4;
+        const vl = ps.get("valuelabel");
+        if (vl)
+            o.ValueLabel = parseInt(vl);
         o.OnFixedData = config => {
-            if (ps.get("l") === "true")
-                CanvasChart.addDataLabels(config);
-            if (ps.get("novalues") === "true")
-                CanvasChart.onlyDataLabels(config);
-            if (ps.get("nolabels") === "true")
-                CanvasChart.noLabels(config);
             let val = ps.get("bordersize");
             if (val != null)
                 config.data.datasets[0].borderWidth = parseFloat(val);

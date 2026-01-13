@@ -467,7 +467,10 @@ namespace SysWeaver.MicroService
                     {
                         if (!du.TryGetValue(driveIndex, out h))
                         {
-                            h = (d, new BucketValueHistory<double>(TimeSpan.FromHours(1), TimeSpan.FromDays(3), (a, b) => a + b));
+                            h = (d, 
+                                new BucketValueHistory<double>(TimeSpan.FromHours(1), TimeSpan.FromDays(3), (a, b) => a + b),
+                                new BucketValueHistory<double>(TimeSpan.FromDays(1), TimeSpan.FromDays(90), (a, b) => a + b)
+                                );
                             du.TryAdd(driveIndex, h);
                         }
                     }
@@ -476,6 +479,7 @@ namespace SysWeaver.MicroService
                 var tot = x.TotalSize;
                 var used = (double)((tot - free) * 100M / Math.Max(1M, tot));
                 h.Item2.Add(used, now);
+                h.Item3.Add(used, now);
                 return new SmDriveInfo
                 {
                     Index = driveIndex,
@@ -493,7 +497,7 @@ namespace SysWeaver.MicroService
         }
 
 
-        readonly ConcurrentDictionary<int, ValueTuple<String, BucketValueHistory<double>>> DriveUsage = new ();
+        readonly ConcurrentDictionary<int, ValueTuple<String, BucketValueHistory<double>, BucketValueHistory<double>>> DriveUsage = new ();
 
 
         SmServiceInfo Validate(String serviceName, HttpServerRequest context)
@@ -508,7 +512,7 @@ namespace SysWeaver.MicroService
 
         const decimal GbSize = 1024M * 1024M * 1024M;
 
-        static ReadOnlyMemory<Byte> GetHistoryChart(BucketValueHistory<double> h, String title, String label, String valueSuffix, TimeSpan duration, String timeFmt = "HH:mm:ss")
+        static ReadOnlyMemory<Byte> GetHistoryChart(BucketValueHistory<double> h, String title, String label, String valueSuffix, TimeSpan duration, String[] colors, String timeFmt = "HH:mm:ss")
         {
             var min = DateTime.UtcNow - duration;
             List<String> labels = new List<string>();
@@ -524,16 +528,6 @@ namespace SysWeaver.MicroService
                 labels.Add(x.Item1.ToString(timeFmt));
                 values.Add(val);
             }
-            const double hueMin = 120;
-            const double hueMax = 0;
-            const double dHue = hueMax - hueMin;
-            var sval = dHue / 100;
-            var colors = values.Convert(v =>
-            {
-                var rgb = ColorTools.HsvToRgb(v * sval + hueMin, 0.7, 0.9);
-                return HtmlColors.MakeHtmlColor(rgb);
-            });
-
             return ChartJsService.ChartSerialize(new ChartJsConfig
             {
                 RefreshRate = 2000,
@@ -581,12 +575,55 @@ namespace SysWeaver.MicroService
                         {
                             display = false,
                         },
+                        title = new ChartJsTitle
+                        {
+                            display = true,
+                            text = [ title ],
+                        }
                     }
                 }
-
             });
 
         }
+
+
+
+        static String[] DoughnutChartColor(String start, String end)
+        {
+            var s = HtmlColors.MakeTransparent(start, 0.4);
+            var e = HtmlColors.MakeTransparent(end, 0.4);
+            return [
+                String.Concat("cone(0;", start, ";1;", end, ')'),
+                String.Concat("cone(0;", s, ";1;", e, ')'),
+            ];
+        }
+
+
+        static String[] BarChartColor(String start, String end)
+        {
+            return [
+                String.Concat("up(0;", start, ";1;", end, ')'),
+            ];
+        }
+
+
+        static readonly String[] DoughnutServiceColor = DoughnutChartColor("#966C90", "#DE8CFF");
+
+
+        static readonly String[] DoughnutCpuColor = DoughnutChartColor("#CC4343", "#EDDD53");
+        
+        static readonly String[] BarCpuColor = BarChartColor("#CC4343", "#EDDD53");
+
+
+        static readonly String[] DoughnutMemColor = DoughnutChartColor("#43CC8C", "#53DEED");
+
+        static readonly String[] BarMemColor = BarChartColor("#43CC8C", "#53DEED");
+
+
+        static readonly String[] DoughnutDriveColor = DoughnutChartColor("#435ACC", "#ED53BF");
+
+        static readonly String[] BarDriveColor = BarChartColor("#435ACC", "#ED53BF");
+
 
 
         #region CPU info
@@ -635,7 +672,7 @@ namespace SysWeaver.MicroService
                         new ChartJsDataSet
                         {
                             data = [ used, idle ],
-                            backgroundColor = ["#ff5566", "#881133" ],
+                            backgroundColor = DoughnutCpuColor,
                             borderWidth = 0,
                         }
                     ]
@@ -674,7 +711,7 @@ namespace SysWeaver.MicroService
         [WebApiRequestCache(1)]
         [WebApiRaw(HttpServerTools.JsonMime)]
         public ReadOnlyMemory<Byte> GetCpuUsageHistoryChart()
-            => GetHistoryChart(CpuUsageHistory, "Cpu usage last 24 hours", "Cpu usage", "%", TimeSpan.FromHours(24), "HH:mm");
+            => GetHistoryChart(CpuUsageHistory, "Cpu use last 24 hours", "Cpu use", "%", TimeSpan.FromHours(24), BarCpuColor, "HH:mm");
 
 
         /// <summary>
@@ -687,7 +724,7 @@ namespace SysWeaver.MicroService
         [WebApiRequestCache(1)]
         [WebApiRaw(HttpServerTools.JsonMime)]
         public ReadOnlyMemory<Byte> GetCpuUsageHistoryShortChart()
-            => GetHistoryChart(CpuUsageHistoryShort, "Cpu usage last 3 minutes", "Cpu usage", "%", TimeSpan.FromMinutes(3), "HH:mm:ss");
+            => GetHistoryChart(CpuUsageHistoryShort, "Cpu use last 3 minutes", "Cpu use", "%", TimeSpan.FromMinutes(3), BarCpuColor, "HH:mm:ss");
 
 
         readonly BucketValueHistory<double> CpuUsageHistory = new(TimeSpan.FromMinutes(15), TimeSpan.FromHours(24), (a, b) => a + b);
@@ -751,7 +788,7 @@ namespace SysWeaver.MicroService
                         new ChartJsDataSet
                         {
                             data = [ used, free ],
-                            backgroundColor = ["#55ff66", "#118833" ],
+                            backgroundColor = DoughnutMemColor,
                             borderWidth = 0,
                         }
                     ]
@@ -791,7 +828,7 @@ namespace SysWeaver.MicroService
         [WebApiRequestCache(1)]
         [WebApiRaw(HttpServerTools.JsonMime)]
         public ReadOnlyMemory<Byte> GetMemoryHistoryChart()
-            => GetHistoryChart(MemUsageHistory, "Memory usage last 24 hours", "Memory usage", "%", TimeSpan.FromHours(24), "HH:mm");
+            => GetHistoryChart(MemUsageHistory, "Memory use last 24 hours", "Memory use", "%", TimeSpan.FromHours(24), BarMemColor, "HH:mm");
 
 
         /// <summary>
@@ -804,7 +841,7 @@ namespace SysWeaver.MicroService
         [WebApiRequestCache(1)]
         [WebApiRaw(HttpServerTools.JsonMime)]
         public ReadOnlyMemory<Byte> GetMemoryHistoryShortChart()
-            => GetHistoryChart(MemUsageHistoryShort, "Memory usage last 3 minutes", "Memory usage", "%", TimeSpan.FromMinutes(3), "HH:mm:ss");
+            => GetHistoryChart(MemUsageHistoryShort, "Memory use last 3 minutes", "Memory use", "%", TimeSpan.FromMinutes(3), BarMemColor, "HH:mm:ss");
 
         readonly BucketValueHistory<double> MemUsageHistory = new(TimeSpan.FromMinutes(15), TimeSpan.FromHours(24), (a, b) => a + b);
         readonly BucketValueHistory<double> MemUsageHistoryShort = new(TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(3), (a, b) => a + b);
@@ -892,7 +929,7 @@ namespace SysWeaver.MicroService
                         new ChartJsDataSet
                         {
                             data = [ used, free ],
-                            backgroundColor = ["#5566ff", "#113388" ],
+                            backgroundColor = DoughnutDriveColor,
                             borderWidth = 0,
                         }
                     ]
@@ -936,7 +973,25 @@ namespace SysWeaver.MicroService
         {
             if (!DriveUsage.TryGetValue(chartIndex, out var h))
                 return null;
-            return GetHistoryChart(h.Item2, h.Item1 + " disc usage last three days", "Disc usage", "%", TimeSpan.FromDays(3), "MM-dd HH:mm");
+            return GetHistoryChart(h.Item3, h.Item1 + " disc use last 90 days", "Disc use", "%", TimeSpan.FromDays(90), BarDriveColor, "MM-dd");
+        }
+
+
+        /// <summary>
+        /// Get a historical chart for a single drive, start at 0 and increase until null is returned
+        /// </summary>
+        /// <param name="chartIndex"></param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(9)]
+        [WebApiRequestCache(4)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetDriveHistoryShortChart(int chartIndex)
+        {
+            if (!DriveUsage.TryGetValue(chartIndex, out var h))
+                return null;
+            return GetHistoryChart(h.Item2, h.Item1 + " disc use last three days", "Disc use", "%", TimeSpan.FromDays(3), BarDriveColor, "MM-dd HH:mm");
         }
 
 
@@ -976,7 +1031,7 @@ namespace SysWeaver.MicroService
                         new ChartJsDataSet
                         {
                             data = [ running, stopped ],
-                            backgroundColor = ["#dd55ff", "#661188" ],
+                            backgroundColor = DoughnutServiceColor,
                             borderWidth = 0,
                         }
                     ]
@@ -1038,23 +1093,6 @@ namespace SysWeaver.MicroService
                     maxVal = val;
 
             }
-            const double hueMin = 120;
-            const double hueMax = 0;
-            const double dHue = hueMax - hueMin;
-            var dval = maxVal - minVal;
-            String[] colors;
-            if (dval <= 0)
-                colors = values.Convert(x => "#0f0");
-            else
-            {
-                var sval = dHue / dval;
-                colors = values.Convert(v =>
-                {
-                    var rgb = ColorTools.HsvToRgb((v - minVal) * sval + hueMin, 0.7, 0.9);
-                    return HtmlColors.MakeHtmlColor(rgb);
-                });
-            }
-
             return ChartJsService.ChartSerialize(new ChartJsConfig
             {
                 RefreshRate = 5000,
@@ -1073,7 +1111,7 @@ namespace SysWeaver.MicroService
                             categoryPercentage = 0.99,
                             barPercentage = 1,
                             data = values.ToArray(),
-                            backgroundColor = colors,
+                            backgroundColor = BarMemColor,
                         }
                     ]
                 },
@@ -1119,16 +1157,6 @@ namespace SysWeaver.MicroService
                 labels.Add(x.Item1.ToString("HH:mm"));
                 values.Add(val);
             }
-            const double hueMin = 120;
-            const double hueMax = 0;
-            const double dHue = hueMax - hueMin;
-            var sval = dHue / 100;
-            var colors = values.Convert(v =>
-            {
-                var rgb = ColorTools.HsvToRgb(v * sval + hueMin, 0.7, 0.9);
-                return HtmlColors.MakeHtmlColor(rgb);
-            });
-
             return ChartJsService.ChartSerialize(new ChartJsConfig
             {
                 RefreshRate = 5000,
@@ -1147,7 +1175,7 @@ namespace SysWeaver.MicroService
                             categoryPercentage = 0.99,
                             barPercentage = 1,
                             data = values.ToArray(),
-                            backgroundColor = colors,
+                            backgroundColor = BarCpuColor,
                             borderRadius = new ChartJsCorner
                             {
                                 bottomLeft = 0,
