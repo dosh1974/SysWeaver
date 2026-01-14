@@ -19,5 +19,22 @@ namespace SysWeaver.Data
         }
     }
 
+    /// <summary>
+    /// Format a DateTime value as the dynamic measure time since the time
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public class TableDataUptimeAttribute : TableDataRawFormatAttribute
+    {
+
+        public static readonly TableDataUptimeAttribute Instance = new TableDataUptimeAttribute();
+
+        /// <summary>
+        /// Format a DateTime value as the dynamic measure time since the time
+        /// </summary>
+        public TableDataUptimeAttribute() : base(TableDataFormats.Uptime)
+        {
+        }
+    }
+    
 
 }

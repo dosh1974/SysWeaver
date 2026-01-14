@@ -70,6 +70,9 @@ class CanvasChartOptions {
     OnFixedData = null;
     OnDefaults = null;
     OnClick = null;
+    Transparent = false;
+    WaitFirst = true;
+    ValueLabel = null;
 }
 
 class CanvasChart {
@@ -115,6 +118,14 @@ class CanvasChart {
             "Pink",
         ];
 
+    static GradientFns = new Map([
+        ["down", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(0, y0, 0, y1) ],
+        ["up", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(0, y1, 0, y0) ],
+        ["left", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(x0, 0, x1, 0) ],
+        ["right", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(x1, 0, x0, 0) ],
+        ["cone", (ctx, x0, y0, x1, y1) => ctx.createConicGradient(-Math.PI * 0.5, (x0 + x1) * 0.5, (y0 + y1) * 0.5) ],
+    ]);
+
     /**
      * Add a chart that get it's data from the server (as a achild to some element)
      * @param {string} url The url to the API that returns the chart options
@@ -144,8 +155,12 @@ class CanvasChart {
         const checkedReadonly = checked | readonly;
 
         const chart = document.createElement("SysWeaver-Chart");
+        if (chartOptions.Transparent)
+            chart.classList.add("Transparent");
         toElement.appendChild(chart);
         let canvas = document.createElement("canvas");
+        let canvasCtx = canvas.getContext("2d");
+
         chart.appendChild(canvas);
 
 
@@ -305,13 +320,104 @@ class CanvasChart {
             return cols;
         }
 
+        const gradCache = {
+            x0: 0,
+            y0: 0,
+            x1: 0,
+            y1: 0,
+            gradients: null,
+        };
+
+        function gradientCreator(chartContext, gradData, cf, i) {
+
+            const chart = chartContext.chart;
+            const ctx = chart.ctx;
+            const chartArea = chart.chartArea;
+            if (!chartArea)
+                return "#000";
+            const x0 = 0;
+            const y0 = 0;
+            const x1 = ctx.canvas.width;
+            const y1 = ctx.canvas.height;
+/*            const x0 = Math.floor(chartArea.left);
+            const y0 = Math.floor(chartArea.top);
+            const x1 = Math.ceil(chartArea.right);
+            const y1 = Math.ceil(chartArea.bottom);*/
+            if ((x0 != gradCache.x0) || (x1 != gradCache.x1) || (y0 != gradCache.y0) || (y1 != gradCache.y1)) {
+                gradCache.x0 = x0;
+                gradCache.x1 = x1;
+                gradCache.y0 = y0;
+                gradCache.y1 = y1;
+                gradCache.gradients = new Map();
+            }
+            let g = gradCache.gradients.get(gradData);
+            if (g)
+                return g;
+            const values = gradData.substring(i + 1, gradData.length - 1).split(';');
+            if (ctx instanceof CanvasRenderingContext2D) {
+                console.log("Creating gradient: " + gradData + " (" + x0 + "," + y0 + ") - (" + x1 + ", " + y1 + ") (" + chartArea.left + "," + chartArea.top + ") - (" + chartArea.right + ", " + chartArea.bottom + ") ");
+                g = cf(ctx, x0, y0, x1, y1);
+                const vl = values.length;
+                for (let i = 0; i < vl; i += 2)
+                    g.addColorStop(parseFloat(values[i].trim()), values[i + 1].trim());
+                gradCache.gradients.set(gradData, g);
+                return g;
+            }
+            g = values[1].trim();
+            gradCache.gradients.set(gradData, g);
+            return g;
+        }
+
+
+        function resolveColor(data, v, si, vi) {
+            if (Array.isArray(v)) {
+                const vl = v.length;
+                if (vl <= 0)
+                    return "red";
+                if (vl === 1)
+                    return resolveColor(data, v[0], si);
+                let haveFn = false;
+                for (let i = 0; i < vl; ++i) {
+                    const rc = resolveColor(data, v[i], si, i);
+                    v[i] = rc;
+                    haveFn |= typeof rc !== "string";
+                }
+                if (!haveFn)
+                    return v;
+                return ctx1 => {
+                    const cd = v[ctx1.dataIndex];
+                    if (typeof cd === "function")
+                        return cd(ctx1);
+                    return cd;
+                };
+            }
+            if (typeof v !== "string")
+                return v;
+            const i = v.indexOf('(');
+            if (i > 0) {
+                const name = v.substring(0, i).trim();
+                const cf = CanvasChart.GradientFns.get(name);
+                if (cf) {
+
+                    return ct2 => gradientCreator(ct2, v, cf, i)
+                }
+
+            }
+            return v;
+        }
+
+
         function ApplyChanges(data) {
             const style = getComputedStyle(document.body);
 
             precision = data.Precision;
             valuePrefix = data.ValuePrefix ?? "";
             valueSuffix = data.ValueSuffix ?? "";
-            switch (data.ValueLabel) {
+
+            let vl = chartOptions.ValueLabel;
+            if ((!vl) && (vl !== 0))
+                vl = data.ValueLabel;
+            switch (vl) {
                 case 1:
                     CanvasChart.addDataLabels(data);
                     break;
@@ -321,8 +427,17 @@ class CanvasChart {
                 case 3:
                     CanvasChart.firstLineDataLabels(data);
                     break;
-                default:
+                case 4:
+                    CanvasChart.noLabels(data);
+                    break;
+                case 5:
                     CanvasChart.valueLabels(data);
+                    break;
+                case 6:
+                    CanvasChart.bareValueLabel(data);
+                    break;
+                default:
+                    CanvasChart.formattedValueLabels(data);
                     break;
             }
             if (!precision)
@@ -630,6 +745,16 @@ class CanvasChart {
                 }
 
 
+            } else {
+
+                const dd = data.data;
+                const dss = dd.datasets;
+                const seriesCount = dss.length;
+                for (let si = 0; si < seriesCount; ++si) {
+                    const ds = dss[si];
+                    ds.borderColor = resolveColor(data, ds.borderColor, si);
+                    ds.backgroundColor = resolveColor(data, ds.backgroundColor, si);
+                }
             }
 
 
@@ -749,6 +874,7 @@ class CanvasChart {
             const nc = document.createElement("canvas");
             canvas.parentElement.replaceChild(nc, canvas);
             canvas = nc;
+            canvasCtx = nc.getContext("2d");
             //canvas.Scale = chartScale;
             main = new Chart(canvas, data);
             main.Transparent = true;
@@ -871,6 +997,7 @@ class CanvasChart {
             }
             close();
         }
+
         async function ExportChart(closeFn, name, desc, format, icon) {
             closeFn();
             let data = JSON.parse(orgDataStr);
@@ -1503,7 +1630,6 @@ class CanvasChart {
         Chart.register(renderBackgroundPlugin);
         Chart.register(ChartDataLabels);
 
-
         const def = Chart.defaults;
         def.plugins.datalabels = {
             display: "auto",
@@ -1518,6 +1644,8 @@ class CanvasChart {
             padding: 4,
             formatter: ValueFormatter,
         };
+
+
         def.scale.ticks.callback = ValueFormatter;
         //def.scales.category.ticks.callback = ValueFormatter;
         def.scales.linear.ticks.callback = ValueFormatter;
@@ -1562,24 +1690,6 @@ class CanvasChart {
                 setTimeout(UpdateColor, 10);
         });
 
-        function PadArray(a, l) {
-            if (!a)
-                return;
-            const al = a.length;
-            if (al === l)
-                return;
-            if (al === 0)
-                return;
-            if (al > l) {
-                a.splice(l, al - l);
-                return;
-            }
-            const p = a[al - 1]
-            while (l > al) {
-                --l;
-                a.push(p);
-            }
-        }
 
         function HaveArrayOffLen(a, l) {
             if (!a)
@@ -1589,8 +1699,10 @@ class CanvasChart {
         }
 
 
+
         let refreshRate = 15000;
-        for (; ;) {
+
+        async function DoUpdate() {
             try {
                 let data = tableParams ? await sendRequest(url, tableParams) : await getRequest(url);
                 if (data) {
@@ -1601,6 +1713,7 @@ class CanvasChart {
                         data.options = {};
                     if (!data.options.plugins)
                         data.options.plugins = {};
+
                     orgDataStr = JSON.stringify(data);
                     ApplyChanges(data);
                     fn = chartOptions.OnFixedData;
@@ -1619,7 +1732,7 @@ class CanvasChart {
                             document.title = t0;
                     }
                     if (main == null) {
-//                        canvas.Scale = chartScale;
+                        //                        canvas.Scale = chartScale;
                         main = new Chart(canvas, data);
                         main.Transparent = true;
                         if (onFirstLoad) {
@@ -1752,8 +1865,8 @@ class CanvasChart {
                                     //                                    if (cv === null)
                                     if (cv !== nv)
                                         cdsd[j] = nv;
-//                                    else
-//                                        cv.y = nv.y;
+                                    //                                    else
+                                    //                                        cv.y = nv.y;
                                 }
                                 let cb = cdss.backgroundColor;
                                 let nb = ndss.backgroundColor;
@@ -1761,7 +1874,7 @@ class CanvasChart {
                                     if (Array.isArray(cb)) {
                                         const l = cb.length;
                                         for (let j = 0; j < l; ++j)
-                                                cb[j] = nb[j];
+                                            cb[j] = nb[j];
                                     }
                                 }
                                 cb = cdss.borderColor;
@@ -1770,7 +1883,7 @@ class CanvasChart {
                                     if (Array.isArray(cb)) {
                                         const l = cb.length;
                                         for (let j = 0; j < l; ++j)
-                                                cb[j] = nb[j];
+                                            cb[j] = nb[j];
                                     }
                                 }
                             }
@@ -1783,7 +1896,6 @@ class CanvasChart {
                     if (refreshRate < 500)
                         refreshRate = 500;
                 }
-                await delay(refreshRate);
             }
             catch (ex) {
                 //  If we failed to fetch the data, retry in a second
@@ -1794,7 +1906,15 @@ class CanvasChart {
                 }
                 await delay(3000);
             }
+            setTimeout(async ev => {
+                await DoUpdate();
+            }, refreshRate);
         }
+        if (chartOptions.WaitFirst)
+            await DoUpdate();
+        else
+            DoUpdate();
+        return chart;
     }
 
 
@@ -1811,6 +1931,7 @@ class CanvasChart {
             const valueSuffix = config.ValueSuffix ?? "";
             return config.data.labels[context.dataIndex] + "\n" + valuePrefix + ValueFormat.toString(value, precision) + valueSuffix;
            };
+        l.display = true;
     }
 
     static onlyDataLabels(config) {
@@ -1822,6 +1943,16 @@ class CanvasChart {
         l.formatter = (value, context) => {
             return config.data.labels[context.dataIndex];
         };
+        l.display = true;
+    }
+
+    static noLabels(config) {
+        let l = config.options.plugins.datalabels;
+        if (!l) {
+            l = {};
+            config.options.plugins.datalabels = l;
+        }
+        l.display = false;
     }
 
     static firstLineDataLabels(config) {
@@ -1833,15 +1964,41 @@ class CanvasChart {
         l.formatter = (value, context) => {
             return (config.data.labels[context.dataIndex] ?? "").split('\n')[0];
         };
+        l.display = true;
     }
 
+    static formattedValueLabels(config) {
+        let l = config.options.plugins.datalabels;
+        if (!l)
+            return;
+        l.formatter = (value, context) => {
 
+            const precision = config.Precision ?? 0;
+            const valuePrefix = config.ValuePrefix ?? "";
+            const valueSuffix = config.ValueSuffix ?? "";
+            return valuePrefix + ValueFormat.toString(value, precision) + valueSuffix;
+        };
+        l.display = true;
+    }
+
+    static bareValueLabels(config) {
+        let l = config.options.plugins.datalabels;
+        if (!l)
+            return;
+        l.formatter = (value, context) => {
+
+            const precision = config.Precision ?? 0;
+            return ValueFormat.toString(value, precision);
+        };
+        l.display = true;
+    }
 
     static valueLabels(config) {
         let l = config.options.plugins.datalabels;
         if (!l)
             return;
         l.formatter = null;
+        l.display = true;
     }
 
     
@@ -1852,7 +2009,7 @@ class CanvasChart {
 async function chartMain() {
     const removeLoader = AddLoading();
     try {
-
+        document.body.style.overflow = "hidden";
         function setValue(obj, path, v) {
             const s = path.split('.');
             const sl = s.length - 1;
@@ -1905,11 +2062,16 @@ async function chartMain() {
                 if (document.title != title)
                     document.title = title;
         };
+        if (ps.get("l") === "true")
+            o.ValueLabel = 1;
+        if (ps.get("novalues") === "true")
+            o.ValueLabel = 2;
+        if (ps.get("nolabels") === "true")
+            o.ValueLabel = 4;
+        const vl = ps.get("valuelabel");
+        if (vl)
+            o.ValueLabel = parseInt(vl);
         o.OnFixedData = config => {
-            if (ps.get("l") === "true")
-                CanvasChart.addDataLabels(config);
-            if (ps.get("novalues") === "true")
-                CanvasChart.onlyDataLabels(config);
             let val = ps.get("bordersize");
             if (val != null)
                 config.data.datasets[0].borderWidth = parseFloat(val);
@@ -2014,8 +2176,7 @@ async function chartMain() {
                 def.font.lineHeight = parseFloat(val);
 
         };
-
-
+        o.Transparent = ps.get("transparent") === "true";
         const par = window.parent;
         if (par) {
             o.OnClick = (label, value, datasetIndex, dataIndex) => {
@@ -2036,8 +2197,10 @@ async function chartMain() {
                 }
             };
         }
+        const el = await CanvasChart.addChart(url, null, tp, removeLoader, o);
+        if (ps.get("center") === "true")
+            el.classList.add("ChartCenter");
 
-        await CanvasChart.addChart(url, null, tp, removeLoader, o);
     }
     finally {
         removeLoader();

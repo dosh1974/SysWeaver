@@ -104,14 +104,14 @@ namespace SysWeaver
 
         static String GetOS()
         {
-            foreach (var x in typeof(OSPlatform).GetProperties(BindingFlags.Public | BindingFlags.Static))
-            {
-                if (x.PropertyType != typeof(OSPlatform))
-                    continue;
-                var val = (OSPlatform)x.GetValue(null);
-                if (RuntimeInformation.IsOSPlatform(val))
-                    return val.ToString().FastToLower();
-            }
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return "windows";
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                return "linux";
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                return "osx";
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD))
+                return "freebsd";
             return "unknown";
         }
 

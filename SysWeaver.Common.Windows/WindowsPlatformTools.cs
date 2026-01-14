@@ -24,24 +24,19 @@ namespace SysWeaver
             }
         }
 
-        static readonly object _winMemoryLock = new();
-        static readonly MEMORYSTATUSEX _memStatus = new();
 
         public bool GetMemorySize(out ulong availableBytes, out ulong totalBytes)
         {
             try
             {
-                lock (_winMemoryLock) // lock because of reusing the static class _memStatus
+                var ms = new MEMORYSTATUSEX();
+                if (GlobalMemoryStatusEx(ms))
                 {
-                    _memStatus.dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>();
-                    if (GlobalMemoryStatusEx(_memStatus))
-                    {
-                        availableBytes = _memStatus.ullAvailPhys;
-                        totalBytes = _memStatus.ullTotalPhys;
-                    }else
-                    {
-                        throw new Exception(String.Concat(nameof(GlobalMemoryStatusEx), " failed with error code: ", GetLastError()));
-                    }
+                    availableBytes = ms.ullAvailPhys;
+                    totalBytes = ms.ullTotalPhys;
+                }else
+                {
+                    throw new Exception(String.Concat(nameof(GlobalMemoryStatusEx), " failed with error code: ", GetLastError()));
                 }
                 return true;
             }
@@ -56,7 +51,7 @@ namespace SysWeaver
 
         #pragma warning disable CA1416
 
-        static readonly ManagementObjectSearcher CpuUseSsearcher = new ManagementObjectSearcher("SELECT * FROM Win32_PerfFormattedData_PerfOS_Processor WHERE Name=\"_Total\"");
+        readonly ManagementObjectSearcher CpuUseSsearcher = new ManagementObjectSearcher("SELECT * FROM Win32_PerfFormattedData_PerfOS_Processor WHERE Name=\"_Total\"");
 
         public bool GetCpuUsage(out double cpuUsage)
         {
@@ -93,7 +88,7 @@ namespace SysWeaver
         static extern bool FlushFileBuffers(IntPtr handle);
 
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        [StructLayout(LayoutKind.Sequential)]
         sealed class MEMORYSTATUSEX
         {
             public uint dwLength;
@@ -112,11 +107,10 @@ namespace SysWeaver
             }
         }
 
-        [return: MarshalAs(UnmanagedType.Bool)]
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [DllImport("kernel32", SetLastError = true)]
         static extern bool GlobalMemoryStatusEx([In][Out] MEMORYSTATUSEX lpBuffer);
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [DllImport("kernel32")]
         static extern int GetLastError();
 
 

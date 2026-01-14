@@ -104,10 +104,13 @@ namespace SysWeaver.MicroService
             Machine = x?.Machine;
             Comment = x?.Comment;
             Auth = x?.Auth;
-            var m = info.Metrics;
-            Status = m.Status.ToString();
-            MemUsage = m.MemUsage;
-            CpuUsage = m.CpuUsage;
+            Status = info.Status.ToString();
+            var m = info.Process?.Metrics;
+            if (m != null)
+            {
+                MemUsage = m.MemUsage;
+                CpuUsage = m.CpuUsage;
+            }
         }
     }
 

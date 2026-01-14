@@ -1,0 +1,140 @@
+﻿
+:root {
+}
+
+*
+{
+    box-sizing: border-box;
+}
+
+
+body {
+    --pad: 8px;
+    --mw: calc(50svw - var(--pad));
+    --w: min(var(--mw), 400px);
+    --h: calc(var(--w) + 2em);
+    padding: var(--pad);
+    margin: 0;
+}
+
+
+server-charts {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+    align-items: center;
+}
+
+server-item {
+    position: relative;
+    width: var(--w);
+    height: var(--h);
+    display: inline-flex;
+    border-radius: var(--ThemeRad);
+}
+
+    server-item iframe {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: var(--w);
+        height: var(--h);
+        border: none;
+        pointer-events: none;
+    }
+
+    server-item server-itemclick {
+        position: absolute;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        border-radius: var(--ThemeRad);
+        cursor: pointer;
+        outline: 1px solid transparent;
+        transition: box-shadow linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
+    }
+
+        server-item server-itemclick:hover {
+            box-shadow: 0 0 var(--pad) rgba(var(--ThemeAcc1RGB), 0.5);
+        }
+
+        server-item server-itemclick:focus {
+            outline: 1px solid var(--ThemeAcc2);
+        }
+
+
+body.Dual server-charts{
+    --pad2: calc(var(--pad) * 2);
+    --mh: calc(100svh - var(--pad2) * 4);
+    --mw: calc(100svw - var(--pad2));
+    --mmh: calc(var(--mh) * 0.2);
+    --h: calc(min(var(--mmh), var(--mw)));
+    --h2: calc((var(--mh) - var(--h)) / 2);
+    display: block;
+    overflow: hidden;
+}
+
+
+    body.Dual server-item:first-child {
+        background: none;
+        width: var(--mw);
+        height: var(--h);
+    }
+
+
+        body.Dual server-item:first-child iframe {
+            width: var(--mw);
+            height: var(--h);
+        }
+
+    body.Dual server-item {
+        background-color: var(--ThemeBackground);
+        display: block;
+        margin-top: var(--pad2);
+        width: var(--mw);
+        height: var(--h2);
+    }
+
+        body.Dual server-item iframe {
+            width: var(--mw);
+            height: var(--h2);
+        }
+
+
+server-stats {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+    align-items: center;
+    padding-bottom: 2em;
+}
+
+server-stat {
+    position: relative;
+    display: inline-flex;
+    border-radius: var(--ThemeRadInp);
+    padding: 4px 1em;
+    border: 1px solid var(--ThemeMain25);
+    transition: outline linear var(--ThemeFadeDuration), border linear var(--ThemeFadeDuration);
+}
+
+    server-stat.Click:hover {
+        border: 1px solid var(--ThemeMain);
+        cursor: pointer;
+    }
+
+
+    server-stat:focus {
+        outline: 1px solid var(--ThemeAcc1);
+    }
+
+
+
+    server-text {
+        line-height: 24px;
+        vertical-align: middle;
+        padding-left: 1em;
+    }

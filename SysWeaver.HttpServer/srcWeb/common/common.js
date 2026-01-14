@@ -3877,7 +3877,7 @@ class ValueFormat {
 
     static updateUrl(el, value, formats, nextValue, flash, type, onRefresh) {
         ValueFormat.updateFormat(el, "Url");
-        if (!value) {
+        if (typeof value === "undefined" || value === null) {
             ValueFormat.updateText(el, "", "", flash);
             return;
         }
@@ -3902,7 +3902,7 @@ class ValueFormat {
 
     static updateImg(el, value, formats, nextValue, flash, type, onRefresh) {
         ValueFormat.updateFormat(el, "Img");
-        if (!value) {
+        if (typeof value === "undefined" || value === null) {
             ValueFormat.updateText(el, "", "", flash);
             return;
         }
@@ -4023,7 +4023,8 @@ class ValueFormat {
     }
 
     static updateDateTimeLive(el, value, formats, nextValue, flash, type, onRefresh, noCopy, blankIfNeg, invert) {
-        if (ValueFormat.updateFormat(el, "DateTime")) {
+        const fmt = (formats ? formats[2] : null) ?? "{0}";
+        if (ValueFormat.updateFormat(el, "DateTimeLive" + (fmt ?? ""))) {
             el.classList.add("Monospaced");
             el.classList.add("Right");
         }
@@ -4044,7 +4045,6 @@ class ValueFormat {
         const scale = invert ? -1 : 1;
         const minute = 60 * 1000;
         let elapsed = (new Date() - dd) * scale;
-        const fmt = (formats ? formats[2] : null) ?? "{0}";
 
         const tt = ValueFormat.stringFormat(fmt, ValueFormat.formatTimeSpanMs(elapsed, blankIfNeg));
         ValueFormat.updateText(el, tt, title, flash);
@@ -4761,6 +4761,7 @@ class ValueFormat {
         ["Json", ValueFormat.updateJson],
         ["Text", ValueFormat.updateLongText],
         ["MD", ValueFormat.updateMarkDown],
+        ["Uptime", ValueFormat.updateDateTimeLive],
     ]);
 
     static update = function (el, type, value, flash, format, nextValue, onRefresh) {
@@ -6170,7 +6171,14 @@ async function SysWeaverInit() {
         mob = isMobile();
     window.Mobile = mob;
 
-
+    const colorScheme = ps.get("colorscheme");
+    let colorSchemeMeta = null;
+    if (colorScheme) {
+        colorSchemeMeta = document.createElement("meta");
+        colorSchemeMeta.name = "color-scheme";
+        colorSchemeMeta.content = colorScheme;
+        document.head.appendChild(colorSchemeMeta);
+    }
 
     function onSizeChange() {
         const ww = window.innerWidth;
@@ -6441,6 +6449,8 @@ async function SysWeaverInit() {
     });
 
     const map = new Map();
+    const setTheme = ps.get('settheme');
+    const useTheme = ps.get('usetheme');
     
     if (isTop) {
         //  Interop responses for top windows
@@ -6511,6 +6521,18 @@ async function SysWeaverInit() {
         map.set("server.restore", () => RemoveBlock());
     } else {
         //  Interop responses for child windows (none top windows such as iframe's)
+        if (colorSchemeMeta)
+            map.set("color.scheme", msg => colorSchemeMeta.content = msg.Value);
+        if (setTheme)
+            map.set("theme.set", async msg => {
+                localStorage.setItem("SysWeaver.Theme", msg.Value);
+                await applyTheme();
+            });
+        if (useTheme)
+            map.set("theme.use", async msg => {
+                window.UseTheme = msg.Value;
+                await applyTheme();
+            });
     }
 
     InterOp.AddListener(async ev => {
@@ -6536,10 +6558,8 @@ async function SysWeaverInit() {
     const css = ps.get('css');
     if (css)
         await includeCss(null, css);
-    const setTheme = ps.get('settheme');
     if (setTheme)
         localStorage.setItem("SysWeaver.Theme", setTheme);
-    const useTheme = ps.get('usetheme');
     if (useTheme)
         window.UseTheme = useTheme;
     await applyTheme();

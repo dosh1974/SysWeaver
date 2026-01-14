@@ -52,9 +52,10 @@ namespace SysWeaver.MicroService
 
         internal SmServiceDetail(SmServiceInfo info, IReadOnlyList<FolderSyncService.Data> data, String exeName, SmFileInfo log, SmFileInfo[] configs, SmFileInfo[] masterConfigs) : base(info, data)
         {
-            var m = info.Metrics;
-            ProcId = m.ProcessHandle;
-            TotalProcessorTime = m.TotalProcessorTime;
+            var p = info.Process;
+            var m = p?.Metrics;
+            ProcId = p?.Id ?? 0;
+            TotalProcessorTime = m?.TotalCpuTime ?? TimeSpan.Zero;
             ExeName = exeName;
             Log = log;
             Configs = configs;

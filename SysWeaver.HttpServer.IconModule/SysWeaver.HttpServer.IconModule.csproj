@@ -26,13 +26,14 @@
 	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
 		<Exec Command="rmdir /S /Q .\srcWeb\icons\.opt" />
 		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare -RemoveFill -RemoveSize .\srcWeb\icons\*.svg .\srcWeb\icons\.opt\" />
-		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare -RemoveSize .\srcWeb\icons\external\*.svg .\srcWeb\icons\.opt\external\" />
-		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare -RemoveSize .\srcWeb\icons\color\*.svg+ .\srcWeb\icons\.opt\" />
+		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompareExternal -RemoveSize .\srcWeb\icons\external\*.svg .\srcWeb\icons\.opt\external\" />
+		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompareColor -RemoveSize .\srcWeb\icons\color\*.svg+ .\srcWeb\icons\.opt\" />
+		<!--Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompareExt -RemoveSize .\srcWeb\icons\ext\*.svg .\srcWeb\icons\.opt\ext\" /-->
 		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\icons\.opt\*.svg+ .\web\icons" />
 		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\icons\ext\*.svg+ .\web\icons\ext" />
 		<Exec Command="rmdir /S /Q .\srcData\.opt" />
 		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\DataCompare -RemoveSize .\srcData\*.svg .\srcData\.opt\" />
-		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\DataCompare -RemoveSize .\srcData\flags\*.svg .\srcData\.opt\flags\" />
+		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\DataCompareFlags -RemoveSize .\srcData\flags\*.svg .\srcData\.opt\flags\" />
 		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcData\.opt\*+ .\data" />
 		<ItemGroup>
 			<EmbeddedResource Include="web\**\*.br" Visible="false" />

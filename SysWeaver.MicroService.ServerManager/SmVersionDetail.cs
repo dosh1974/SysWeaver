@@ -50,7 +50,7 @@ namespace SysWeaver.MicroService
             Size = s.Size;
             Comp = s.Comp;
             FullPath = s.FullPath;
-            IsRunning = (info.Metrics?.ProcessHandle ?? 0) != 0;
+            IsRunning = (info.Process?.Id ?? 0) != 0;
             IsCompressedService = info.Syncher.Compress;
         }
 

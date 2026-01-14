@@ -15,12 +15,12 @@ using SysWeaver.OsServices;
 namespace SysWeaver.MicroService
 {
 
-
     [RequiredDep<FolderSyncService>()]
     [WebApiUrl("../ServerManager")]
+    [WebMenuEmbedded(null, "Server", "Server", "ServerManager/server.html", "View server stats", "../icons/computer.svg", -9, "")]
     [WebMenuEmbedded(null, "Services", "Managed services", "ServerManager/services.html", "View all managed services", "../icons/settings.svg", -7, "")]
     [WebMenuEmbedded(null, "Keys", "Key files", "ServerManager/keys.html", "Managed key files located in the key file folder", "../icons/key.svg", -6, Roles.Admin)]
-    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule, IHaveStats
+    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule
     {
 
         readonly String KeyFolder = @"C:\Keys";
@@ -28,7 +28,7 @@ namespace SysWeaver.MicroService
         static readonly IReadOnlySet<String> ValidConfigExt = ReadOnlyData.Set<String>(StringComparer.Ordinal,
               ".txt",
               ".json",
-              ".config"
+              ".config" 
         );
 
 
@@ -69,8 +69,9 @@ namespace SysWeaver.MicroService
             var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
             foreach (var f in p.Services.Nullable().Concat(savedServices.Nullable()))
                 InternalAddService(f);
-            UpdateTask = new PeriodicTask(UpdateMetrics, 5000);
-            UpdateStatsTask = new PeriodicTask(UpdateStats, 500);
+            UpdateStats().RunAsync();
+            UpdateTask = new PeriodicTask(UpdateMetrics, 4000);
+            UpdateStatsTask = new PeriodicTask(UpdateStats, 200);
         }
 
 
@@ -371,108 +372,183 @@ namespace SysWeaver.MicroService
             var os = PlatformTools.Current;
             if (os.GetMemorySize(out var free, out var tot))
             {
+                double used = (double)((tot - free) * 100M / Math.Max(1M, tot));
                 MemInfo = new SmMemoryInfo
                 {
                     Free = (long)free,
                     Total = (long)tot,
-                    Used = (double)((tot - free) * 100M / Math.Max(1M, tot))
+                    Used = used
                 };
+                MemUsageHistory.Add(used);
+                MemUsageHistoryShort.Add(used);
             }
             if (os.GetCpuUsage(out var cpu))
+            {
                 CpuUsage = (float)cpu;
+                CpuUsageHistory.Add(cpu);
+                CpuUsageHistoryShort.Add(cpu);
+            }
             return true;
         }
 
+
+
+
+        static T SafeRead<T>(Func<T> f, T def = default)
+        {
+            try
+            {
+                return f();
+            }
+            catch
+            {
+            }
+            return def;
+        }
+
+        readonly ConcurrentDictionary<long, SmProcess> Processes = new ();
+
         async ValueTask<bool> UpdateMetrics()
         {
-            Dictionary<String, Process> procExes = new Dictionary<string, Process>(StringComparer.Ordinal);
+            Dictionary<String, SmProcess> procExes = new Dictionary<string, SmProcess>(StringComparer.Ordinal);
+            var pp = Processes;
+            HashSet<long> current = new (pp.Keys);
             foreach (var p in Process.GetProcesses())
             {
                 try
                 {
-                    var mod = p.MainModule.FileName;
-                    procExes[mod] = p;
+                    var id = (long)p.Id;
+                    current.Remove(id);
+                    if (!pp.TryGetValue(id, out var i))
+                    {
+                        i = new SmProcess(id,
+                            SafeRead(() => p.ProcessName),
+                            SafeRead(() => p.StartTime),
+                            SafeRead(() => p.MainModule?.FileName)
+                            );
+                        pp.TryAdd(id, i);
+                    }
+
+                    var lastCpu = i.LastCpu;
+                    var now = Stopwatch.GetTimestamp();
+                    var time = SafeRead(() => p.TotalProcessorTime);
+                    var m = new SmProcessMetrics(i)
+                    {
+                        HandleCount = SafeRead(() => p.HandleCount),
+
+                        MemUsage = SafeRead(() => p.WorkingSet64),
+                        PeakMemUsage = SafeRead(() => (long)p.PeakWorkingSet64),
+                        MaxMemUsage = SafeRead(() => (long)p.MaxWorkingSet),
+
+                        PriorityClass = SafeRead(() =>
+                        {
+                            var c = p.PriorityClass;
+                            return String.Concat("0x", ((int)c).ToString("x").PadLeft(4, '0'), ": ", c.ToString());
+                        }),
+                        BasePriority = SafeRead(() => p.BasePriority),
+                        PriorityBoost = SafeRead(() => p.PriorityBoostEnabled),
+
+                        NonpagedSystemMemory = SafeRead(() => p.NonpagedSystemMemorySize64),
+                        PagedSystemMemory = SafeRead(() => p.PagedSystemMemorySize64),
+
+                        PagedMemory = SafeRead(() => p.PagedMemorySize64),
+                        PeakPagedMemory = SafeRead(() => p.PeakPagedMemorySize64),
+
+                        VirtualMemory = SafeRead(() => p.VirtualMemorySize64),
+                        PeakVirtualMemory = SafeRead(() => p.PeakVirtualMemorySize64),
+
+                        PrivateMemory = SafeRead(() => p.PrivateMemorySize64),
+
+                        TotalCpuTime = time,
+                        TotalSystemCpuTime = SafeRead(() => p.PrivilegedProcessorTime),
+                        TotalUserCpuTime = SafeRead(() => p.UserProcessorTime),
+                    };
+                    if (lastCpu != 0)
+                    {
+                        var du = (Decimal)(time - i.LastTotCpu).TotalSeconds;
+                        var dt = (Decimal)(now - lastCpu) / (Decimal)Stopwatch.Frequency;
+                        if (dt > 0)
+                            m.CpuUsage = Math.Max(0, Math.Min(100, (double)((du * 100) / (dt * Environment.ProcessorCount))));
+                    }
+                    i.LastCpu = now;
+                    i.LastTotCpu = time;
+                    var fn = i.MainFilename;
+                    if (fn != null)
+                        procExes[fn] = i;
+
+                    Interlocked.Exchange(ref i.Metrics, m);
+                    var nd = new SmServiceData { MemUsage = m.MemUsage, CpuUsage = m.CpuUsage };
+                    i.History.Add(nd);
+                    i.HistoryShort.Add(nd);
                 }
                 catch
                 {
                 }
             }
+            foreach (var x in current)
+                pp.TryRemove(x, out var _);
+
             var s = Services.Values.ToList();
             var l = new AsyncLock(MaxUpdateConcurrency);
             var maxAge = DateTime.UtcNow - TimeSpan.FromHours(24);
             await s.ProcessAsyncValue(async i =>
             {
                 using var _ = await l.Lock().ConfigureAwait(false);
-                var m = new SmServiceMetrics();
                 var exe = FindServiceExe(i.Syncher.DiscFolder);
                 if (exe != null)
                 {
                     if (procExes.TryGetValue(exe, out var p))
-                    {
-                        try
-                        {
-                            m.ProcessHandle = (long)p.Id;
-                            m.MemUsage = (long)p.WorkingSet64;
-                            var l = i.LastCpu;
-                            var now = Stopwatch.GetTimestamp();
-                            var time = p.TotalProcessorTime;
-                            m.TotalProcessorTime = time;
-                            if (l != 0)
-                            {
-                                var du = (Decimal)(time - i.LastTotCpu).TotalSeconds;
-                                var dt = (Decimal)(now - l) / (Decimal)Stopwatch.Frequency;
-                                if (dt > 0)
-                                    m.CpuUsage = Math.Max(0, Math.Min(100, (double)((du * 100) / (dt * Environment.ProcessorCount))));
-                            }
-                            i.LastCpu = now;
-                            i.LastTotCpu = time;
-                        }
-                        catch
-                        {
-                        }
-                    }
-                    m.Status = await CheckStatus(exe).ConfigureAwait(false);
+                        Interlocked.Exchange(ref i.Process, p);
+                    Interlocked.Exchange(ref i.Status, await CheckStatus(exe).ConfigureAwait(false));
                 }
                 else
                 {
-                    m.Status = ServiceStatus.NotInstalled;
-                }
-                Interlocked.Exchange(ref i.Metrics, m);
-                var h = i.History;
-                h.Enqueue(m);
-                while (h.TryPeek(out var o))
-                {
-                    if (o.Time >= maxAge)
-                        break;
-                    if (!h.TryDequeue(out o))
-                        break;
+                    Interlocked.Exchange(ref i.Status, ServiceStatus.NotInstalled);
                 }
             }).ConfigureAwait(false);
+
             try
             {
+                var now = DateTime.UtcNow;
                 var drives = DriveInfo.GetDrives();
+                drives.Sort((a, b) => a.Name.CompareTo(b.Name));
+                var du = DriveUsage;
+
+                int driveIndex = -1;
                 var dis = drives.Select(x =>
                 {
-                    try
+                    ++driveIndex;
+                    var d = x.Name;
+                    if (!du.TryGetValue(driveIndex, out var h))
                     {
-                        var free = x.TotalFreeSpace;
-                        var tot = x.TotalSize;
-                        return new SmDriveInfo
+                        lock (du)
                         {
-                            Drive = x.Name,
-                            Label = x.VolumeLabel,
-                            Format = x.DriveFormat,
-                            Type = x.DriveType.ToString(),
-                            Free = free,
-                            Total = tot,
-                            Used = (double)((tot - free) * 100M / Math.Max(1M, tot))
-                        };
+                            if (!du.TryGetValue(driveIndex, out h))
+                            {
+                                h = (d, 
+                                    new BucketValueHistory<double>(TimeSpan.FromHours(1), TimeSpan.FromDays(3), (a, b) => a + b),
+                                    new BucketValueHistory<double>(TimeSpan.FromDays(1), TimeSpan.FromDays(90), (a, b) => a + b)
+                                    );
+                                du.TryAdd(driveIndex, h);
+                            }
+                        }
                     }
-                    catch (Exception ex)
+                    var free = x.TotalFreeSpace;
+                    var tot = x.TotalSize;
+                    var used = (double)((tot - free) * 100M / Math.Max(1M, tot));
+                    h.Item2.Add(used, now);
+                    h.Item3.Add(used, now);
+                    return new SmDriveInfo
                     {
-                        DriveEx.OnException(ex);
-                        return null;
-                    }
+                        Index = driveIndex,
+                        Drive = d,
+                        Label = x.VolumeLabel,
+                        Format = x.DriveFormat,
+                        Type = x.DriveType.ToString(),
+                        Free = free,
+                        Total = tot,
+                        Used = used
+                    };
                 }).Where(x => x != null).ToArray();
                 DriveInfos = dis;
             }
@@ -480,23 +556,289 @@ namespace SysWeaver.MicroService
             {
                 DriveEx.OnException(ex);
             }
-
             return true;
         }
 
         readonly ExceptionTracker DriveEx = new ExceptionTracker();
 
+        readonly ConcurrentDictionary<int, ValueTuple<String, BucketValueHistory<double>, BucketValueHistory<double>>> DriveUsage = new ();
+
+
+        SmServiceInfo Validate(String serviceName, HttpServerRequest context)
+        {
+            serviceName = serviceName.FastToLower();
+            if (!Services.TryGetValue(serviceName, out var info))
+                throw new Exception("Unknown service!");
+            if (!context.Session.IsValid(info.Auth))
+                throw new Exception("Not authorized!");
+            return info;
+        }
 
         const decimal GbSize = 1024M * 1024M * 1024M;
+
+        static ReadOnlyMemory<Byte> GetHistoryChart<T>(BucketValueHistory<T> h, Func<T, double> getValue, String title, String label, String valueSuffix, TimeSpan duration, String[] colors, String timeFmt = "HH:mm:ss", double scale = 1, int precision = 1)
+        {
+            var min = DateTime.UtcNow - duration;
+            List<String> labels = new (128);
+            List<double> values = new (128);
+            if (h != null)
+            {
+                foreach (var x in h)
+                {
+                    var t = x.Item3;
+                    if (t < min)
+                        continue;
+                    var val = scale * getValue(x.Item5) / x.Item4;
+                    labels.Add(x.Item1.ToString(timeFmt));
+                    values.Add(val);
+                }
+            }
+            return ChartJsService.ChartSerialize(new ChartJsConfig
+            {
+                RefreshRate = 2000,
+                Title = title,
+                type = "bar",
+                Precision = precision,
+                ValidTypes = ["bar"],
+                ValueSuffix = valueSuffix,
+                ValueLabel = 4,
+                data = new ChartJsData
+                {
+                    labels = labels.ToArray(),
+                    datasets = [
+                        new ChartJsDataSet
+                        {
+                            label = label,
+                            categoryPercentage = 0.99,
+                            barPercentage = 1,
+                            data = values.ToArray(),
+                            backgroundColor = colors,
+                            borderRadius = new ChartJsCorner
+                            {
+                                bottomLeft = 0,
+                                bottomRight = 0,
+                                topLeft = 0,
+                                topRight = 0,
+                            }
+                        }
+                    ],
+
+                },
+                options = new ChartJsOptions
+                {
+                    barPercentage = 1,
+                    scales = new ChartJsScalesOptions
+                    {
+                        y = new ChartJsScaleOptions
+                        {
+                            min = 0,
+                            //max = 100,
+                        }
+                    },
+                    plugins = new ChartJsPlugins
+                    {
+                        datalabels = new ChartJsDataLabels
+                        {
+                            display = false,
+                        },
+                        title = new ChartJsTitle
+                        {
+                            display = true,
+                            text = [ title ],
+                        }
+                    }
+                }
+            });
+
+        }
+
+        static String[] DoughnutChartColor(String start, String end)
+        {
+            var s = HtmlColors.MakeTransparent(start, 0.2);
+            var e = HtmlColors.MakeTransparent(end, 0.2);
+            return [
+                String.Concat("cone(0;", start, ";1;", end, ')'),
+                String.Concat("cone(0;", s, ";1;", e, ')'),
+            ];
+        }
+
+
+        static String[] BarChartColor(String start, String end)
+        {
+            return [
+                String.Concat("up(0;", start, ";1;", end, ')'),
+            ];
+        }
+
+
+        static readonly String[] DoughnutServiceColor = DoughnutChartColor("#966C90", "#DE8CFF");
+
+
+        static readonly String[] DoughnutCpuColor = DoughnutChartColor("#CC4343", "#EDDD53");
+        
+        static readonly String[] BarCpuColor = BarChartColor("#CC4343", "#EDDD53");
+
+
+        static readonly String[] DoughnutMemColor = DoughnutChartColor("#43CC8C", "#53DEED");
+
+        static readonly String[] BarMemColor = BarChartColor("#43CC8C", "#53DEED");
+
+
+        static readonly String[] DoughnutDriveColor = DoughnutChartColor("#435ACC", "#ED53BF");
+
+        static readonly String[] BarDriveColor = BarChartColor("#435ACC", "#ED53BF");
+
+        #region Process info
+
+        /// <summary>
+        /// Information about running processes
+        /// </summary>
+        /// <param name="r"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebMenuTable(null, "ProcessInfo", "Process information", "Information about running processes", "../icons/table_services.svg", -5)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        public TableData ProcessInfoTable(TableDataRequest r)
+            => TableDataTools.Get(r, 5000, Processes.Values.Select(x => x.Metrics).Where(x => x != null));
+
+        SmProcess ValidateProcess(long processId)
+        {
+            if (!Processes.TryGetValue(processId, out var i))
+                throw new Exception(String.Concat("Process #", processId, " not found!"));
+            return i;
+        }
+
+        SmProcessMetrics ValidateProcessMetrics(long processId)
+        {
+            if (!Processes.TryGetValue(processId, out var i))
+                throw new Exception(String.Concat("Process #", processId, " not found!"));
+            var m = i.Metrics;
+            if (m == null)
+                throw new Exception(String.Concat("Can't get information about process #", processId));
+            return m;
+        }
+
+        /// <summary>
+        /// Get memory graph for a process
+        /// </summary>
+        /// <param name="processId">Id of the process</param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetProcessMemChart(long processId)
+        {
+            var info = ValidateProcessMetrics(processId);
+            var mi = MemInfo;
+            if (mi == null)
+                return null;
+            var tot = mi.Total;
+            var used = info.MemUsage;
+            double usedP = (double)(used * 100M / Math.Max(1M, tot));
+            return GetMemChart(Math.Max(0, tot - used), tot, usedP, String.Concat(processId, ": ", info.Name, " memory use"));
+        }
+
+
+        /// <summary>
+        /// Get Cpu graph for a process
+        /// </summary>
+        /// <param name="processId">Id of the process</param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetProcessCpuChart(long processId)
+        {
+            var info = ValidateProcessMetrics(processId);
+            return GetCpuChart(info.CpuUsage, String.Concat(processId, ": ", info.Name, " Cpu use"));
+        }
+
+        /// <summary>
+        /// Get Memory graph for a process
+        /// </summary>
+        /// <param name="processId">Id of the process</param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetProcessMemHistoryChart(long processId)
+        {
+            var info = ValidateProcess(processId);
+            return GetHistoryChart(info.History, x => x.MemUsage, String.Concat(processId, ": ", info.Name, " memory use last 24 hours"), "Memory use", "Mb", TimeSpan.FromHours(24), BarMemColor, "HH:mm", 1.0 / (1024 * 1024), 2);
+        }
+
+
+        /// <summary>
+        /// Get Cpu graph for a process
+        /// </summary>
+        /// <param name="processId">Id of the process</param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetProcessCpuHistoryChart(long processId)
+        {
+            var info = ValidateProcess(processId);
+            return GetHistoryChart(info.History, x => x.CpuUsage, String.Concat(processId, ": ", info.Name, " Cpu use last 24 hours"), "Cpu use", "%", TimeSpan.FromHours(24), BarCpuColor, "HH:mm");
+        }
+
+        /// <summary>
+        /// Get Memory graph for a process
+        /// </summary>
+        /// <param name="processId">Id of the process</param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetProcessMemHistoryShortChart(long processId)
+        {
+            var info = ValidateProcess(processId);
+            return GetHistoryChart(info.HistoryShort, x => x.MemUsage, String.Concat(processId, ": ", info.Name, " memory use last 3 minutes"), "Memory use", "Mb", TimeSpan.FromMinutes(3), BarMemColor, "HH:mm:ss", 1.0 / (1024 * 1024), 2);
+        }
+
+
+        /// <summary>
+        /// Get Cpu graph for a process
+        /// </summary>
+        /// <param name="processId">Id of the process</param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetProcessCpuHistoryShortChart(long processId)
+        {
+            var info = ValidateProcess(processId);
+            return GetHistoryChart(info.HistoryShort, x => x.CpuUsage, String.Concat(processId, ": ", info.Name, " Cpu use last 3 minutes"), "Cpu use", "%", TimeSpan.FromMinutes(3), BarCpuColor, "HH:mm:ss");
+        }
+
+
+
+        #endregion//Process info
+
+
 
         #region CPU info
 
         float CpuUsage;
 
         /// <summary>
-        /// Get the current CPU usage as a percentage
+        /// Get the current CPU use as a percentage
         /// </summary>
-        /// <returns>[0, 100] current cpu usage</returns>
+        /// <returns>[0, 100] current cpu use</returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(1)]
@@ -505,7 +847,7 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
-        /// Current CPU usage chart
+        /// Current CPU use chart
         /// </summary>
         /// <returns></returns>
         [WebApi]
@@ -513,18 +855,18 @@ namespace SysWeaver.MicroService
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
         [WebApiRaw(HttpServerTools.JsonMime)]
-        public ReadOnlyMemory<Byte> GetCpuUsageChart()
+        public ReadOnlyMemory<Byte> GetCpuChart() => GetCpuChart(CpuUsage);
+        
+        ReadOnlyMemory<Byte> GetCpuChart(double used, String title = "Cpu use")
         {
-            double used = CpuUsage;
             double idle = 100.0 - used;
-            var title = "CPU use";
             var mem = String.Concat(used.ToString("0.00", CultureInfo.InvariantCulture), '%');
             return ChartJsService.ChartSerialize(new ChartJsConfig
             {
                 RefreshRate = 2000,
                 Title = title,
                 type = "doughnut",
-                Precision = 1,
+                Precision = 2,
                 ValidTypes = ["doughnut"],
                 ValueSuffix = " %",
                 ValueLabel = 1,
@@ -535,7 +877,7 @@ namespace SysWeaver.MicroService
                         new ChartJsDataSet
                         {
                             data = [ used, idle ],
-                            backgroundColor = ["#ff5566", "#881133" ],
+                            backgroundColor = DoughnutCpuColor,
                             borderWidth = 0,
                         }
                     ]
@@ -564,25 +906,54 @@ namespace SysWeaver.MicroService
             });
         }
 
-        #endregion//CPU info
+        /// <summary>
+        /// Get a historical chart for the Cpu memory use
+        /// </summary>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetCpuHistoryChart()
+            => GetHistoryChart(CpuUsageHistory, x => x, "Cpu use last 24 hours", "Cpu use", "%", TimeSpan.FromHours(24), BarCpuColor, "HH:mm");
 
+
+        /// <summary>
+        /// Get a historical chart for the Cpu memory use
+        /// </summary>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetCpuHistoryShortChart()
+            => GetHistoryChart(CpuUsageHistoryShort, x => x, "Cpu use last 3 minutes", "Cpu use", "%", TimeSpan.FromMinutes(3), BarCpuColor, "HH:mm:ss");
+
+
+        readonly BucketValueHistory<double> CpuUsageHistory = new(TimeSpan.FromMinutes(15), TimeSpan.FromHours(24), (a, b) => a + b);
+        readonly BucketValueHistory<double> CpuUsageHistoryShort = new(TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(3), (a, b) => a + b);
+
+
+        #endregion//CPU info
 
         #region RAM info
 
         SmMemoryInfo MemInfo;
 
         /// <summary>
-        /// Current system memory usage and size
+        /// Current system memory use and size
         /// </summary>
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
-        public SmMemoryInfo GetMemoryInfo() => MemInfo;
+        public SmMemoryInfo GetMemInfo() => MemInfo;
 
         /// <summary>
-        /// Current system memory usage chart
+        /// Current system memory use chart
         /// </summary>
         /// <returns></returns>
         [WebApi]
@@ -590,28 +961,27 @@ namespace SysWeaver.MicroService
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
         [WebApiRaw(HttpServerTools.JsonMime)]
-        public ReadOnlyMemory<Byte> GetMemoryChart()
+        public ReadOnlyMemory<Byte> GetMemChart() => GetMemChart(MemInfo);
+        
+        ReadOnlyMemory<Byte> GetMemChart(SmMemoryInfo sm, String title = "Memory use")
         {
-            var drive = MemInfo;
-            if (drive == null)
+            if (sm == null)
                 return null;
+            return GetMemChart(sm.Free, sm.Total, sm.Used, title);
+        }
 
-            var f = drive.Free;
-            var tot = drive.Total;
-
-
-
-            var free = (double)((Decimal)f / GbSize);
-            var used = (double)((Decimal)(tot - f) / GbSize);
-            var title = "Memory use";
-            var mem = String.Concat(drive.Used.ToString("0.00", CultureInfo.InvariantCulture), "% of ",
-                (tot / GbSize).ToString("### ### ##0.00", CultureInfo.InvariantCulture).TrimStart() + " GB");
+        ReadOnlyMemory<Byte> GetMemChart(long freeBytes, long totalBytes, double usedPercentage, String title = "Memory use")
+        {
+            var freeGb = (double)((Decimal)freeBytes / GbSize);
+            var usedGb = (double)((Decimal)(totalBytes - freeBytes) / GbSize);
+            var mem = String.Concat(usedPercentage.ToString("0.00", CultureInfo.InvariantCulture), "% of ",
+                (totalBytes / GbSize).ToString("### ### ##0.00", CultureInfo.InvariantCulture).TrimStart() + " GB");
             return ChartJsService.ChartSerialize(new ChartJsConfig
             {
                 RefreshRate = 2000,
                 Title = title,
                 type = "doughnut",
-                Precision = 1,
+                Precision = 2,
                 ValidTypes = ["doughnut"],
                 ValueSuffix = " GB",
                 ValueLabel = 1,
@@ -621,8 +991,8 @@ namespace SysWeaver.MicroService
                     datasets = [
                         new ChartJsDataSet
                         {
-                            data = [ used, free ],
-                            backgroundColor = ["#55ff66", "#118833" ],
+                            data = [ usedGb, freeGb ],
+                            backgroundColor = DoughnutMemColor,
                             borderWidth = 0,
                         }
                     ]
@@ -650,6 +1020,35 @@ namespace SysWeaver.MicroService
 
             });
         }
+
+        /// <summary>
+        /// Get a historical chart for the system memory use
+        /// </summary>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetMemHistoryChart()
+            => GetHistoryChart(MemUsageHistory, x => x, "Memory use last 24 hours", "Memory use", "%", TimeSpan.FromHours(24), BarMemColor, "HH:mm");
+
+
+        /// <summary>
+        /// Get a historical chart for the system memory use
+        /// </summary>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetMemHistoryShortChart()
+            => GetHistoryChart(MemUsageHistoryShort, x => x, "Memory use last 3 minutes", "Memory use", "%", TimeSpan.FromMinutes(3), BarMemColor, "HH:mm:ss");
+
+        readonly BucketValueHistory<double> MemUsageHistory = new(TimeSpan.FromMinutes(15), TimeSpan.FromHours(24), (a, b) => a + b);
+        readonly BucketValueHistory<double> MemUsageHistoryShort = new(TimeSpan.FromSeconds(1), TimeSpan.FromMinutes(3), (a, b) => a + b);
+
 
         #endregion//RAM info
 
@@ -670,6 +1069,46 @@ namespace SysWeaver.MicroService
         [WebApiRequestCache(4)]
         public TableData DriveInfoTable(TableDataRequest r)
             => TableDataTools.Get(r, 10000, DriveInfos.Nullable());
+
+
+        /// <summary>
+        /// Get static server info
+        /// </summary>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCacheStatic]
+        [WebApiRequestCacheStatic]
+        public SmServerInfo GetServerInfo()
+        {
+            var mi = MemInfo;
+            return new SmServerInfo
+            {
+                ProcessorCount = Environment.ProcessorCount,
+                Machine = Environment.MachineName,
+                Os = Environment.OSVersion.VersionString,
+                OsBase = EnvInfo.OsPlatform,
+                DriveCount = DriveInfos?.Length ?? 0,
+                ProcessCount = Processes?.Count ?? 0,
+                Memory = mi?.Total ?? 0
+            };
+        }
+
+        /// <summary>
+        /// Get dynamic server stats
+        /// </summary>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        public SmServerStats GetServerStats()
+        {
+            return new SmServerStats
+            {
+                ProcessCount = Processes?.Count ?? 0,
+            };
+        }
 
 
         /// <summary>
@@ -717,7 +1156,7 @@ namespace SysWeaver.MicroService
                         new ChartJsDataSet
                         {
                             data = [ used, free ],
-                            backgroundColor = ["#5566ff", "#113388" ],
+                            backgroundColor = DoughnutDriveColor,
                             borderWidth = 0,
                         }
                     ]
@@ -747,21 +1186,106 @@ namespace SysWeaver.MicroService
 
         }
 
-
-        #endregion//Drive info
-
-
-
-        SmServiceInfo Validate(String serviceName, HttpServerRequest context)
+        /// <summary>
+        /// Get a historical chart for a single drive, start at 0 and increase until null is returned
+        /// </summary>
+        /// <param name="chartIndex"></param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(9)]
+        [WebApiRequestCache(4)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetDriveHistoryChart(int chartIndex)
         {
-            serviceName = serviceName.FastToLower();
-            if (!Services.TryGetValue(serviceName, out var info))
-                throw new Exception("Unknown service!");
-            if (!context.Session.IsValid(info.Auth))
-                throw new Exception("Not authorized!");
-            return info;
+            if (!DriveUsage.TryGetValue(chartIndex, out var h))
+                return null;
+            return GetHistoryChart(h.Item3, x => x, h.Item1 + " disc use last 90 days", "Disc use", "%", TimeSpan.FromDays(90), BarDriveColor, "MM-dd");
         }
 
+
+        /// <summary>
+        /// Get a historical chart for a single drive, start at 0 and increase until null is returned
+        /// </summary>
+        /// <param name="chartIndex"></param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(9)]
+        [WebApiRequestCache(4)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetDriveHistoryShortChart(int chartIndex)
+        {
+            if (!DriveUsage.TryGetValue(chartIndex, out var h))
+                return null;
+            return GetHistoryChart(h.Item2, x => x, h.Item1 + " disc use last three days", "Disc use", "%", TimeSpan.FromDays(3), BarDriveColor, "MM-dd HH:mm");
+        }
+
+
+        #endregion //Drive info
+
+        #region Services
+
+        /// <summary>
+        /// Current CPU use chart
+        /// </summary>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetServicesChart(HttpServerRequest context)
+        {
+            var d = GetServices(context);
+            var running = d.Count(x => x.Status.FastEquals("Running"));
+            var total = d.Length;
+            var stopped = total - running;
+            var title = "Running services";
+            var stats = String.Concat(running, " / ", total);
+            return ChartJsService.ChartSerialize(new ChartJsConfig
+            {
+                RefreshRate = 2000,
+                Title = title,
+                type = "doughnut",
+                Precision = 1,
+                ValidTypes = ["doughnut"],
+                ValueLabel = 1,
+                data = new ChartJsData
+                {
+                    labels = ["Running", "Stopped"],
+                    datasets = [
+                        new ChartJsDataSet
+                        {
+                            data = [ running, stopped ],
+                            backgroundColor = DoughnutServiceColor,
+                            borderWidth = 0,
+                        }
+                    ]
+                },
+                options = new ChartJsOptions
+                {
+                    plugins = new ChartJsPlugins
+                    {
+                        datalabels = new ChartJsDataLabels
+                        {
+                            display = true,
+                        },
+                        legend = new ChartJsLegend
+                        {
+                            display = false,
+                        },
+                        title = new ChartJsTitle
+                        {
+                            text = [title, stats],
+                            display = true,
+                        }
+
+                    }
+                }
+
+            });
+        }
 
         /// <summary>
         /// Get Memory graph for a managed service
@@ -774,80 +1298,16 @@ namespace SysWeaver.MicroService
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         [WebApiRaw(HttpServerTools.JsonMime)]
-        public ReadOnlyMemory<Byte> GetMem(String serviceName, HttpServerRequest context)
+        public ReadOnlyMemory<Byte> GetServiceMemChart(String serviceName, HttpServerRequest context)
         {
             var info = Validate(serviceName, context);
-            var min = DateTime.UtcNow - TimeSpan.FromMinutes(5);
-            List<String> labels = new List<string>();
-            List<double> values = new List<double>();
-            double minVal = double.MaxValue;
-            double maxVal = double.MinValue;
-            foreach (var x in info.History)
-            {
-                var t = x.Time;
-                if (t < min)
-                    continue;
-                var val = (Double)x.MemUsage / (1024.0 * 1024.0);
-                labels.Add(t.ToString("HH:mm:ss"));
-                values.Add(val);
-                if (val < minVal)
-                    minVal = val;
-                if (val > maxVal)
-                    maxVal = val;
-
-            }
-            const double hueMin = 120;
-            const double hueMax = 0;
-            const double dHue = hueMax - hueMin;
-            var dval = maxVal - minVal;
-            String[] colors;
-            if (dval <= 0)
-                colors = values.Convert(x => "#0f0");
-            else
-            {
-                var sval = dHue / dval;
-                colors = values.Convert(v =>
-                {
-                    var rgb = ColorTools.HsvToRgb((v - minVal) * sval + hueMin, 0.7, 0.9);
-                    return HtmlColors.MakeHtmlColor(rgb);
-                });
-            }
-
-            return ChartJsService.ChartSerialize(new ChartJsConfig
-            {
-                RefreshRate = 5000,
-                Title = serviceName + " memory usage last hour",
-                type = "bar",
-                Precision = 1,
-                ValidTypes = ["bar"],
-                ValueSuffix = " MB",
-                data = new ChartJsData
-                {
-                    labels = labels.ToArray(),
-                    datasets = [
-                        new ChartJsDataSet
-                        {
-                            label = "Memory usage",
-                            categoryPercentage = 0.99,
-                            barPercentage = 1,
-                            data = values.ToArray(),
-                            backgroundColor = colors,
-                        }
-                    ]
-                },
-                options = new ChartJsOptions
-                {
-                    barPercentage = 1,
-                    plugins = new ChartJsPlugins
-                    {
-                        datalabels = new ChartJsDataLabels
-                        {
-                            display = false,
-                        }
-                    }
-                }
-
-            });
+            var mi = MemInfo;
+            if (mi == null)
+                return null;
+            var tot = mi.Total;
+            var used = info.Process?.Metrics?.MemUsage ?? 0;
+            double usedP = (double)(used * 100M / Math.Max(1M, tot));
+            return GetMemChart(Math.Max(0, tot - used), tot, usedP, serviceName + " memory use");
         }
 
 
@@ -862,84 +1322,82 @@ namespace SysWeaver.MicroService
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         [WebApiRaw(HttpServerTools.JsonMime)]
-        public ReadOnlyMemory<Byte> GetCpu(String serviceName, HttpServerRequest context)
+        public ReadOnlyMemory<Byte> GetServiceCpuChart(String serviceName, HttpServerRequest context)
         {
             var info = Validate(serviceName, context);
-            var min = DateTime.UtcNow - TimeSpan.FromMinutes(5);
-            List<String> labels = new List<string>();
-            List<double> values = new List<double>();
-            foreach (var x in info.History)
-            {
-                var t = x.Time;
-                if (t < min)
-                    continue;
-                var val = x.CpuUsage;
-                labels.Add(t.ToString("HH:mm:ss"));
-                values.Add(val);
-            }
-            const double hueMin = 120;
-            const double hueMax = 0;
-            const double dHue = hueMax - hueMin;
-            var sval = dHue / 100;
-            var colors = values.Convert(v =>
-            {
-                var rgb = ColorTools.HsvToRgb(v * sval + hueMin, 0.7, 0.9);
-                return HtmlColors.MakeHtmlColor(rgb);
-            });
-
-            return ChartJsService.ChartSerialize(new ChartJsConfig
-            {
-                RefreshRate = 5000,
-                Title = serviceName + " Cpu usage last hour",
-                type = "bar",
-                Precision = 1,
-                ValidTypes = ["bar"],
-                ValueSuffix = "%",
-                data = new ChartJsData
-                {
-                    labels = labels.ToArray(),
-                    datasets = [
-                        new ChartJsDataSet
-                        {
-                            label = "Cpu usage",
-                            categoryPercentage = 0.99,
-                            barPercentage = 1,
-                            data = values.ToArray(),
-                            backgroundColor = colors,
-                            borderRadius = new ChartJsCorner
-                            {
-                                bottomLeft = 0,
-                                bottomRight = 0,
-                                topLeft = 0,
-                                topRight = 0,
-                            }
-                        }
-                    ],
-
-                },
-                options = new ChartJsOptions
-                {
-                    barPercentage = 1,
-                    scales = new ChartJsScalesOptions
-                    {
-                        y = new ChartJsScaleOptions
-                        {
-                            min = 0,
-                            //max = 100,
-                        }
-                    },
-                    plugins = new ChartJsPlugins
-                    {
-                        datalabels = new ChartJsDataLabels
-                        {
-                            display = false,
-                        },
-                    }
-                }
-
-            });
+            return GetCpuChart(info.Process?.Metrics.CpuUsage ?? 0, serviceName + " Cpu use");
         }
 
+
+        /// <summary>
+        /// Get Memory graph for a managed service
+        /// </summary>
+        /// <param name="serviceName">Name of the service</param>
+        /// <param name="context"></param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetServiceMemHistoryChart(String serviceName, HttpServerRequest context)
+        {
+            var info = Validate(serviceName, context);
+            return GetHistoryChart(info.Process?.History, x => x.MemUsage, serviceName + " memory use last 24 hours", "Memory use", "Mb", TimeSpan.FromHours(24), BarMemColor, "HH:mm", 1.0 / (1024 * 1024), 2);
+        }
+
+
+        /// <summary>
+        /// Get Cpu graph for a managed service
+        /// </summary>
+        /// <param name="serviceName">Name of the service</param>
+        /// <param name="context"></param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetServiceCpuHistoryChart(String serviceName, HttpServerRequest context)
+        {
+            var info = Validate(serviceName, context);
+            return GetHistoryChart(info.Process?.History, x => x.CpuUsage, serviceName + " Cpu use last 24 hours", "Cpu use", "%", TimeSpan.FromHours(24), BarCpuColor, "HH:mm");
+        }
+
+        /// <summary>
+        /// Get Memory graph for a managed service
+        /// </summary>
+        /// <param name="serviceName">Name of the service</param>
+        /// <param name="context"></param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetServiceMemHistoryShortChart(String serviceName, HttpServerRequest context)
+        {
+            var info = Validate(serviceName, context);
+            return GetHistoryChart(info.Process?.HistoryShort, x => x.MemUsage, serviceName + " memory use last 3 minutes", "Memory use", "Mb", TimeSpan.FromMinutes(3), BarMemColor, "HH:mm:ss", 1.0 / (1024 * 1024), 2);
+        }
+
+
+        /// <summary>
+        /// Get Cpu graph for a managed service
+        /// </summary>
+        /// <param name="serviceName">Name of the service</param>
+        /// <param name="context"></param>
+        /// <returns>Graph data as json</returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        [WebApiRaw(HttpServerTools.JsonMime)]
+        public ReadOnlyMemory<Byte> GetServiceCpuHistoryShortChart(String serviceName, HttpServerRequest context)
+        {
+            var info = Validate(serviceName, context);
+            return GetHistoryChart(info.Process?.HistoryShort, x => x.CpuUsage, serviceName + " Cpu use last 3 minutes", "Cpu use", "%", TimeSpan.FromMinutes(3), BarCpuColor, "HH:mm:ss");
+        }
 
         static SmFileInfo GetFileInfo(String fullname)
         {
@@ -1025,7 +1483,7 @@ namespace SysWeaver.MicroService
                 throw new Exception("Failed to start service \"" + serviceName + "\", error: " + res);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
-            info.Metrics.Status = await CheckStatus(exe).ConfigureAwait(false);
+            Interlocked.Exchange(ref info.Status, await CheckStatus(exe).ConfigureAwait(false));
             return InternalGetDetail(info);
         }
 
@@ -1119,7 +1577,7 @@ namespace SysWeaver.MicroService
         public async Task<SmServiceDetail> Kill(String serviceName, HttpServerRequest context)
         {
             var info = Validate(serviceName, context);
-            var pid = info.Metrics.ProcessHandle;
+            var pid = info.Process?.Id ?? 0;
             if (pid == 0)
                 throw new Exception("The process isn't running!");
             Process h = Process.GetProcessById((int)pid);
@@ -1150,7 +1608,7 @@ namespace SysWeaver.MicroService
             }
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
-            info.Metrics.Status = await CheckStatus(exe).ConfigureAwait(false);
+            Interlocked.Exchange(ref info.Status, await CheckStatus(exe).ConfigureAwait(false));
             return InternalGetDetail(info);
 
         }
@@ -1173,6 +1631,11 @@ namespace SysWeaver.MicroService
 
         }
 
+
+        #endregion//Services
+
+
+        #region Storage
 
         /// <summary>
         /// Returns stats for folders
@@ -1208,11 +1671,14 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
-        [WebMenuTable(null, "ChunkStorage", "Chunk storage", "Analysis of the chunk storage", "../icons/brick.svg", -5)]
+        [WebMenuTable(null, "ChunkStorage", "Chunk storage", "Analysis of the chunk storage", "../icons/brick.svg", -3)]
         [WebApiClientCache(14)]
         [WebApiRequestCache(10)]
         public async Task<TableData> StorageStatsTable(TableDataRequest r)
             => TableDataTools.Get(r, 15000, await GetStorageStats().ConfigureAwait(false));
+
+        #endregion//Storage
+
 
         #region Version
 
@@ -1300,7 +1766,7 @@ namespace SysWeaver.MicroService
             Syncer.GetFolderData(info.Syncher.Name);
             var exe = FindServiceExe(info.Syncher.DiscFolder);
             if (exe != null)
-                info.Metrics.Status = await CheckStatus(exe).ConfigureAwait(false);
+                Interlocked.Exchange(ref info.Status, await CheckStatus(exe).ConfigureAwait(false));
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
@@ -1751,7 +2217,7 @@ namespace SysWeaver.MicroService
         }
 
         #endregion//IHaveStats
-
     }
+
 
 }

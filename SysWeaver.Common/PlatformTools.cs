@@ -16,7 +16,7 @@ namespace SysWeaver
         {
             if (p == null)
                 return Dummy;
-            var name = p.FastToLower().MakeFirstUppercase();
+            var name = p.MakeFirstUppercase();
             var tools = Tools;
             if (tools.TryGetValue(name, out var tool))
                 return tool;

@@ -48,21 +48,22 @@ async function serviceInfoMain() {
 
     const graphs = document.body.getElementsByTagName("si-graph");
     let ifr = graphs[0].getElementsByTagName("iframe")[0];
-    ifr.src = "../chart/chart.html?transparent=true&m=false&aspect=false&q=../ServerManager/GetMem?\"" + service + "\"";
+    const serviceArg = "?\"" + service + "\"";
+    ifr.src = "../chart/chart.html?transparent=true&m=false&aspect=false&q=../ServerManager/GetServiceCpuChart" + serviceArg;
     ifr.tabIndex = "-1";
     ifr = graphs[1].getElementsByTagName("iframe")[0];
     ifr.tabIndex = "-1";
-    ifr.src = "../chart/chart.html?transparent=true&m=false&aspect=false&q=../ServerManager/GetCpu?\"" + service + "\"";
+    ifr.src = "../chart/chart.html?transparent=true&m=false&aspect=false&q=../ServerManager/GetServiceMemChart" + serviceArg;
     if (!viewOnly) {
         graphs[0].onclick = ev => {
             if (badClick(ev))
                 return;
-            Open("../chart/chart.html?q=../ServerManager/GetMem?\"" + service + "\"", "_self");
+            Open("server_metrics.html?q1=GetServiceCpuChart" + serviceArg + "&q2=GetServiceCpuHistoryShortChart" + serviceArg + "&q3=GetServiceCpuHistoryChart" + serviceArg + "&title=" + service + " Cpu use", "_self");
         };
         graphs[1].onclick = ev => {
             if (badClick(ev))
                 return;
-            Open("../chart/chart.html?q=../ServerManager/GetCpu?\"" + service + "\"", "_self");
+            Open("server_metrics.html?q1=GetServiceMemChart" + serviceArg + "&q2=GetServiceMemHistoryShortChart" + serviceArg + "&q3=GetServiceMemHistoryChart" + serviceArg + "&title=" + service + " memory use", "_self");
         };
         keyboardClick(graphs[0]);
         keyboardClick(graphs[1]);

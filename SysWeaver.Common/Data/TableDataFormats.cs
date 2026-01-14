@@ -151,6 +151,12 @@ namespace SysWeaver.Data
         /// Format as multiline mark down, only the first line (or max length) in shown.
         /// </summary>
         MD,
+
+        /// <summary>
+        /// Format a DateTime value as the dynamic measure time since the time
+        /// </summary>
+        Uptime,
+
     }
 
 

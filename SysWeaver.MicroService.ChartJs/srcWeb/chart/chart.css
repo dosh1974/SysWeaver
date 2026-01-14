@@ -2,9 +2,9 @@
 body {
     padding: 0;
     margin: 0;
-    width: 100vw;
-    height: 100vh;
-
+    width: 100svw;
+    height: 100svh;
+    display: block;
 }
 
 SysWeaver-Chart {
@@ -12,25 +12,35 @@ SysWeaver-Chart {
     margin: 0;
     padding: 0;
     display: block;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     position: relative;
     background-color: rgba(var(--ThemeBackgroundRGB), 0.5);
 }
 
+    SysWeaver-Chart.ChartCenter canvas
+    {
+        margin: 0 auto;
+    }
 
-html:not([data-theme]) SysWeaver-Chart {
-    background-color: rgba(var(--ThemeBackgroundRGB), 0.9);
+
+    html:not([data-theme]) SysWeaver-Chart {
+        background-color: rgba(var(--ThemeBackgroundRGB), 0.9);
+    }
+
+
+
+SysWeaver-Chart.Transparent {
+    background: none transparent !important;
 }
 
-
-    SysWeaver-Chart canvas {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        height: 100%;
-    }
+SysWeaver-Chart canvas {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+}
 
     SysWeaver-Chart icon-32x32.IconButton {
         position: absolute;

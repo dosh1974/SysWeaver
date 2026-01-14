@@ -27,13 +27,31 @@ namespace SysWeaver.MicroService
             Master = master;
         }
 
-        public long LastCpu;
-        public TimeSpan LastTotCpu;
-        public volatile SmServiceMetrics Metrics = new SmServiceMetrics();
-        public readonly ConcurrentQueue<SmServiceMetrics> History = new ConcurrentQueue<SmServiceMetrics>();
+        //public long LastCpu;
+        //        public TimeSpan LastTotCpu;
+        public volatile ServiceStatus Status;
 
+        public volatile SmProcess Process;
+        //public readonly BucketValueHistory<SmServiceData> History = new (TimeSpan.FromMinutes(15), TimeSpan.FromHours(24), SmServiceData.Add);
+        //public readonly BucketValueHistory<SmServiceData> HistoryShort = new(TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(3), SmServiceData.Add);
     }
 
+    sealed class SmServiceData
+    {
+
+        public static SmServiceData Add(SmServiceData a, SmServiceData b)
+        {
+            return new SmServiceData
+            {
+                MemUsage = a.MemUsage + b.MemUsage,
+                CpuUsage = a.CpuUsage + b.CpuUsage,
+            };
+        }
+
+        public long MemUsage;
+        public double CpuUsage;
+    }
+/*
     sealed class SmServiceMetrics
     {
         public readonly DateTime Time = DateTime.UtcNow;
@@ -45,5 +63,5 @@ namespace SysWeaver.MicroService
 
 
     }
-
+*/
 }
