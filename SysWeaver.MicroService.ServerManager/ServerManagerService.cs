@@ -20,7 +20,7 @@ namespace SysWeaver.MicroService
     [WebApiUrl("../ServerManager")]
     [WebMenuEmbedded(null, "Services", "Managed services", "ServerManager/services.html", "View all managed services", "../icons/settings.svg", -7, "")]
     [WebMenuEmbedded(null, "Keys", "Key files", "ServerManager/keys.html", "Managed key files located in the key file folder", "../icons/key.svg", -6, Roles.Admin)]
-    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule
+    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule, IHaveStats
     {
 
         readonly String KeyFolder = @"C:\Keys";
@@ -448,28 +448,44 @@ namespace SysWeaver.MicroService
                         break;
                 }
             }).ConfigureAwait(false);
-
-
-            var drives = DriveInfo.GetDrives();
-            var dis = drives.Convert(x =>
+            try
             {
-                var free = x.TotalFreeSpace;
-                var tot = x.TotalSize;
-                return new SmDriveInfo
+                var drives = DriveInfo.GetDrives();
+                var dis = drives.Select(x =>
                 {
-                    Drive = x.Name,
-                    Label = x.VolumeLabel,
-                    Format = x.DriveFormat,
-                    Type = x.DriveType.ToString(),
-                    Free = free,
-                    Total = tot,
-                    Used = (double)((tot - free) * 100M / Math.Max(1M, tot))
-                };
-            });
-            DriveInfos = dis;
+                    try
+                    {
+                        var free = x.TotalFreeSpace;
+                        var tot = x.TotalSize;
+                        return new SmDriveInfo
+                        {
+                            Drive = x.Name,
+                            Label = x.VolumeLabel,
+                            Format = x.DriveFormat,
+                            Type = x.DriveType.ToString(),
+                            Free = free,
+                            Total = tot,
+                            Used = (double)((tot - free) * 100M / Math.Max(1M, tot))
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        DriveEx.OnException(ex);
+                        return null;
+                    }
+                }).Where(x => x != null).ToArray();
+                DriveInfos = dis;
+            }
+            catch (Exception ex)
+            {
+                DriveEx.OnException(ex);
+            }
 
             return true;
         }
+
+        readonly ExceptionTracker DriveEx = new ExceptionTracker();
+
 
         const decimal GbSize = 1024M * 1024M * 1024M;
 
@@ -1723,6 +1739,18 @@ namespace SysWeaver.MicroService
 
         #endregion//Keys
 
+        #region IHaveStats
+
+        public IEnumerable<Stats> GetStats()
+        {
+            var sys = nameof(ServerManagerService);
+            foreach (var x in StatusEx.GetStats(sys, "StatusExs."))
+                yield return x;
+            foreach (var x in DriveEx.GetStats(sys, "DriveExs."))
+                yield return x;
+        }
+
+        #endregion//IHaveStats
 
     }
 

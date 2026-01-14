@@ -1401,7 +1401,10 @@ namespace SysWeaver.MicroService
                 foreach (var x in s.GetStats())
                     yield return x;
             }
+            foreach (var x in PlatformTools.Current.GetStats())
+                yield return x;
         }
+
         /// <summary>
         /// Return all perfmonitors
         /// </summary>

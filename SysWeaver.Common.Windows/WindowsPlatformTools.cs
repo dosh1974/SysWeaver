@@ -2,6 +2,8 @@
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Management;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace SysWeaver
 {
@@ -11,7 +13,15 @@ namespace SysWeaver
 
         public bool FlushToDisc(SafeHandle h)
         {
-            return FlushFileBuffers(h.DangerousGetHandle());
+            try
+            {
+                return FlushFileBuffers(h.DangerousGetHandle());
+            }
+            catch (Exception ex)
+            {
+                Exs.OnException(ex);
+                return false;
+            }
         }
 
         static readonly object _winMemoryLock = new();
@@ -23,14 +33,21 @@ namespace SysWeaver
             {
                 lock (_winMemoryLock) // lock because of reusing the static class _memStatus
                 {
-                    GlobalMemoryStatusEx(_memStatus);
-                    availableBytes = _memStatus.ullAvailPhys;
-                    totalBytes = _memStatus.ullTotalPhys;
+                    _memStatus.dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>();
+                    if (GlobalMemoryStatusEx(_memStatus))
+                    {
+                        availableBytes = _memStatus.ullAvailPhys;
+                        totalBytes = _memStatus.ullTotalPhys;
+                    }else
+                    {
+                        throw new Exception(String.Concat(nameof(GlobalMemoryStatusEx), " failed with error code: ", GetLastError()));
+                    }
                 }
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                Exs.OnException(ex);
                 availableBytes = 0;
                 totalBytes = 0;
                 return false;
@@ -60,8 +77,9 @@ namespace SysWeaver
                     return true;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                Exs.OnException(ex);
             }
             cpuUsage = 0;
             return false;
@@ -98,11 +116,20 @@ namespace SysWeaver
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         static extern bool GlobalMemoryStatusEx([In][Out] MEMORYSTATUSEX lpBuffer);
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        static extern int GetLastError();
+
 
         #endregion//Imports
 
+        #region IHaveStats
 
+        readonly ExceptionTracker Exs = new ExceptionTracker();
 
+        public IEnumerable<Stats> GetStats()
+            => Exs.GetStats("Windows.Platform", "Exception.");
+
+        #endregion//IHaveStats
 
     }
 

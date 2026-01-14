@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -30,8 +32,9 @@ namespace SysWeaver
                 }
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                Exs.OnException(ex);
                 availableBytes = 0;
                 totalBytes = 0;
                 return false;
@@ -88,15 +91,24 @@ namespace SysWeaver
                         return true;
                     }
                 }
-                cpuUsage = 0;
-                return false;
+                throw new Exception("No \"%Cpu(s)\" row found in the output from \"top -b -n 1\"");
             }
-            catch
+            catch (Exception ex)
             {
+                Exs.OnException(ex);
                 cpuUsage = 0;
                 return false;
             }
         }
+
+        #region IHaveStats
+
+        readonly ExceptionTracker Exs = new ExceptionTracker();
+
+        public IEnumerable<Stats> GetStats()
+            => Exs.GetStats("Linux.Platform", "Exception.");
+
+        #endregion//IHaveStats
 
 
     }

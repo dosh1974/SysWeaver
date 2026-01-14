@@ -67,7 +67,7 @@ namespace SysWeaver
     }
 
 
-    public interface IPlatformTools
+    public interface IPlatformTools : IHaveStats
     {
         /// <summary>
         /// Name of the platform
@@ -122,6 +122,11 @@ namespace SysWeaver
             return false;
         }
 
+        #region IHaveStats
+
+        public IEnumerable<Stats> GetStats() => Enumerable.Empty<Stats>();
+
+        #endregion//IHaveStats
 
     }
 
