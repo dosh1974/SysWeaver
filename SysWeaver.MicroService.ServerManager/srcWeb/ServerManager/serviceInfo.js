@@ -49,11 +49,11 @@ async function serviceInfoMain() {
     const graphs = document.body.getElementsByTagName("si-graph");
     let ifr = graphs[0].getElementsByTagName("iframe")[0];
     const serviceArg = "?\"" + service + "\"";
-    ifr.src = "../chart/chart.html?transparent=true&m=false&aspect=false&q=../ServerManager/GetServiceCpuChart" + serviceArg;
+    ifr.src = "../chart/chart.html?transparent=true&m=false&aspect=false&noLabels=true&center=true&q=../ServerManager/GetServiceCpuChart" + serviceArg;
     ifr.tabIndex = "-1";
     ifr = graphs[1].getElementsByTagName("iframe")[0];
     ifr.tabIndex = "-1";
-    ifr.src = "../chart/chart.html?transparent=true&m=false&aspect=false&q=../ServerManager/GetServiceMemChart" + serviceArg;
+    ifr.src = "../chart/chart.html?transparent=true&m=false&aspect=false&noLabels=true&center=true&q=../ServerManager/GetServiceMemChart" + serviceArg;
     if (!viewOnly) {
         graphs[0].onclick = ev => {
             if (badClick(ev))

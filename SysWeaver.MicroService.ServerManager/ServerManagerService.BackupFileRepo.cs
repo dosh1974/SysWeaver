@@ -23,6 +23,7 @@ namespace SysWeaver.MicroService
                 DiscFolder = discFolder;
                 UploadAuth = isKey ? Roles.Admin : "";
                 ValidExt = isKey ? ValidKeyExt : ValidConfigExt;
+                InvalidSuffixes = isKey ? ReadOnlySet<String>.Empty : InvalidConfigSuffixes;
             }
             readonly bool IsKey;
             readonly String DiscFolder;
@@ -31,12 +32,7 @@ namespace SysWeaver.MicroService
 
             public IReadOnlyList<FileHttpServerModuleFolder> ExposeFolders => null;
 
-
-
-            static readonly IReadOnlySet<String> ValidKeyExt = ReadOnlyData.Set<String>(StringComparer.Ordinal,
-                ".txt"
-            );
-
+            readonly IReadOnlySet<String> InvalidSuffixes;
             readonly IReadOnlySet<String> ValidExt;
 
             public string UploadAuth { get; init; }
@@ -53,6 +49,10 @@ namespace SysWeaver.MicroService
                 }
                 if (!ValidExt.Contains(file.GetExtension().FastToLower()))
                     return FileUploadResult.RefuseExtension;
+                var lfile = file.Name.FastToLower();
+                foreach (var x in InvalidSuffixes)
+                    if (lfile.FastEndsWith(x))
+                        return FileUploadResult.Refuse;
                 if (file.Length > (64 << 10))
                     return FileUploadResult.RefuseSize;
                 return FileUploadResult.Upload;

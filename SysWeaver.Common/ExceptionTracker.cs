@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using SysWeaver.Data;
 
 namespace SysWeaver
 {
@@ -61,9 +62,11 @@ namespace SysWeaver
                 var lastException = InternalException;
                 yield return new Stats(system, prefix + "Count", l, "Total number of exceptions registered");
                 yield return new Stats(system, prefix + "Time", new DateTime(lastTime, DateTimeKind.Utc), "The last time an exception was registered");
-                yield return new Stats(system, prefix + "Exception", lastException.Message, "The message of the last exception");
+                yield return new Stats(system, prefix + "Exception", lastException.ToString(), "The message of the last exception", ExMessageText);
             }
         }
+
+        static readonly TableDataTextAttribute ExMessageText = new (64);
 
 
     }

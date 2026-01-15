@@ -19,7 +19,6 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// The type of the service
         /// </summary>
-        [TableDataFormat]
         public Type Type => Instance?.GetType();
 
         /// <summary>

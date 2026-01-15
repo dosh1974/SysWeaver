@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
-using System.Management;
+//using System.Management;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace SysWeaver
 {
@@ -49,28 +50,27 @@ namespace SysWeaver
             }
         }
 
-        #pragma warning disable CA1416
+#pragma warning disable CA1416
 
-        readonly ManagementObjectSearcher CpuUseSsearcher = new ManagementObjectSearcher("SELECT * FROM Win32_PerfFormattedData_PerfOS_Processor WHERE Name=\"_Total\"");
+        static readonly PerformanceCounter CpuCounter;
+
+        static WindowsPlatformTools()
+        {
+            var c = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+            CpuCounter = c;
+            c.NextValue();
+            Thread.Sleep(10);
+            c.NextValue();
+        }
 
         public bool GetCpuUsage(out double cpuUsage)
         {
             try
             {
-                using var cpuTimes = CpuUseSsearcher.Get();
-                using var e = cpuTimes.GetEnumerator();
-                if (e.MoveNext())
-                {
-                    var mo = e.Current as ManagementObject;
-                    var o = mo["PercentIdleTime"];
-                    long u = 100L - (long)(ulong)o;
-                    if (u < 0)
-                        u = 0;
-                    if (u > 100)
-                        u = 100;
-                    cpuUsage = u;
-                    return true;
-                }
+                var c = CpuCounter;
+                lock (c)
+                    cpuUsage = c.NextValue();
+                return true;
             }
             catch (Exception ex)
             {

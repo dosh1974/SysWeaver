@@ -20,7 +20,7 @@ namespace SysWeaver.MicroService
     [WebMenuEmbedded(null, "Server", "Server", "ServerManager/server.html", "View server stats", "../icons/computer.svg", -9, "")]
     [WebMenuEmbedded(null, "Services", "Managed services", "ServerManager/services.html", "View all managed services", "../icons/settings.svg", -7, "")]
     [WebMenuEmbedded(null, "Keys", "Key files", "ServerManager/keys.html", "Managed key files located in the key file folder", "../icons/key.svg", -6, Roles.Admin)]
-    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule
+    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule, IHaveStats, IPerfMonitored
     {
 
         readonly String KeyFolder = @"C:\Keys";
@@ -28,9 +28,19 @@ namespace SysWeaver.MicroService
         static readonly IReadOnlySet<String> ValidConfigExt = ReadOnlyData.Set<String>(StringComparer.Ordinal,
               ".txt",
               ".json",
-              ".config" 
+              ".config"
         );
 
+
+        static readonly IReadOnlySet<String> InvalidConfigSuffixes = ReadOnlyData.Set<String>(StringComparer.Ordinal,
+               "_foldersync.txt",
+              ".deps.json",
+              ".runtimeconfig.json"
+        );
+
+        static readonly IReadOnlySet<String> ValidKeyExt = ReadOnlyData.Set<String>(StringComparer.Ordinal,
+            ".txt"
+        );
 
         readonly IApiAuditService Audit;
 
@@ -69,11 +79,21 @@ namespace SysWeaver.MicroService
             var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
             foreach (var f in p.Services.Nullable().Concat(savedServices.Nullable()))
                 InternalAddService(f);
-            UpdateStats().RunAsync();
+            try
+            {
+                InitAsync().RunAsync();
+            }
+            catch (Exception ex)
+            {
+                manager.AddMessage("Failed to init", ex, MessageLevels.Warning);
+            }
             UpdateTask = new PeriodicTask(UpdateMetrics, 4000);
             UpdateStatsTask = new PeriodicTask(UpdateStats, 200);
         }
 
+        ValueTask<bool[]> InitAsync()
+            => TaskExt.WhenAll(UpdateStats(), UpdateMetrics());
+        
 
         void InternalAddService(ManagedService f)
         {
@@ -153,11 +173,14 @@ namespace SysWeaver.MicroService
             "ServerManager/Data/"
         ];
 
+        public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(ServerManagerService));
+
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             var lurl = context.LocalUrl.Split('/');
             if (lurl.Length != 4)
                 return null;
+            using var _ = PerfMon.Track(nameof(Handler));
             var serviceName = lurl[2];
             SmServiceInfo info;
             try
@@ -209,7 +232,11 @@ namespace SysWeaver.MicroService
             var ext = Path.GetExtension(filename).FastToLower();
             if (!ValidConfigExt.Contains(ext))
                 return false;
-            return !filename.FastEquals("_FolderSync.txt");
+            var lf = filename.FastToLower();
+            foreach (var x in InvalidConfigSuffixes)
+                if (lf.FastEndsWith(x))
+                    return false;
+            return true;
         }
 
         static HashSet<String> GetConfigs(String path, String name)
@@ -274,6 +301,7 @@ namespace SysWeaver.MicroService
 
         async ValueTask<ServiceStatus> CheckStatus(String exe)
         {
+            using var _ = PerfMon.Track(nameof(CheckStatus));
             ServiceStatus status = ServiceStatus.Unknown;
             try
             {
@@ -369,29 +397,43 @@ namespace SysWeaver.MicroService
         
         async ValueTask<bool> UpdateStats()
         {
-            var os = PlatformTools.Current;
-            if (os.GetMemorySize(out var free, out var tot))
+            using var _ = PerfMon.Track(nameof(UpdateStats));
+            try
             {
-                double used = (double)((tot - free) * 100M / Math.Max(1M, tot));
-                MemInfo = new SmMemoryInfo
+                var os = PlatformTools.Current;
+                if (os.GetMemorySize(out var free, out var tot))
                 {
-                    Free = (long)free,
-                    Total = (long)tot,
-                    Used = used
-                };
-                MemUsageHistory.Add(used);
-                MemUsageHistoryShort.Add(used);
+                    double used = (double)((tot - free) * 100M / Math.Max(1M, tot));
+                    MemInfo = new SmMemoryInfo
+                    {
+                        Free = (long)free,
+                        Total = (long)tot,
+                        Used = used
+                    };
+                    MemUsageHistory.Add(used);
+                    MemUsageHistoryShort.Add(used);
+                }else
+                {
+                    StatsExs.OnException(new Exception("Failed to get memory size!"));
+                }
+                if (os.GetCpuUsage(out var cpu))
+                {
+                    CpuUsage = (float)cpu;
+                    CpuUsageHistory.Add(cpu);
+                    CpuUsageHistoryShort.Add(cpu);
+                }else
+                {
+                    StatsExs.OnException(new Exception("Failed to get cpu usage!"));
+                }
             }
-            if (os.GetCpuUsage(out var cpu))
+            catch (Exception ex)
             {
-                CpuUsage = (float)cpu;
-                CpuUsageHistory.Add(cpu);
-                CpuUsageHistoryShort.Add(cpu);
+                StatsExs.OnException(ex);
             }
             return true;
         }
 
-
+        readonly ExceptionTracker StatsExs = new ExceptionTracker();
 
 
         static T SafeRead<T>(Func<T> f, T def = default)
@@ -410,6 +452,7 @@ namespace SysWeaver.MicroService
 
         async ValueTask<bool> UpdateMetrics()
         {
+            using var _ = PerfMon.Track(nameof(UpdateMetrics));
             Dictionary<String, SmProcess> procExes = new Dictionary<string, SmProcess>(StringComparer.Ordinal);
             var pp = Processes;
             HashSet<long> current = new (pp.Keys);
@@ -513,42 +556,58 @@ namespace SysWeaver.MicroService
                 var drives = DriveInfo.GetDrives();
                 drives.Sort((a, b) => a.Name.CompareTo(b.Name));
                 var du = DriveUsage;
-
                 int driveIndex = -1;
                 var dis = drives.Select(x =>
                 {
-                    ++driveIndex;
-                    var d = x.Name;
-                    if (!du.TryGetValue(driveIndex, out var h))
+                    try
                     {
-                        lock (du)
+                        var type = x.DriveType;
+                        switch (type)
                         {
-                            if (!du.TryGetValue(driveIndex, out h))
+                            case DriveType.Fixed:
+                            case DriveType.Ram:
+                                break;
+                            default:
+                                return null;
+                        }
+                        ++driveIndex;
+                        var d = x.Name;
+                        if (!du.TryGetValue(driveIndex, out var h))
+                        {
+                            lock (du)
                             {
-                                h = (d, 
-                                    new BucketValueHistory<double>(TimeSpan.FromHours(1), TimeSpan.FromDays(3), (a, b) => a + b),
-                                    new BucketValueHistory<double>(TimeSpan.FromDays(1), TimeSpan.FromDays(90), (a, b) => a + b)
-                                    );
-                                du.TryAdd(driveIndex, h);
+                                if (!du.TryGetValue(driveIndex, out h))
+                                {
+                                    h = (d,
+                                        new BucketValueHistory<double>(TimeSpan.FromHours(1), TimeSpan.FromDays(3), (a, b) => a + b),
+                                        new BucketValueHistory<double>(TimeSpan.FromDays(1), TimeSpan.FromDays(90), (a, b) => a + b)
+                                        );
+                                    du.TryAdd(driveIndex, h);
+                                }
                             }
                         }
+                        long free = SafeRead(() => x.TotalFreeSpace);
+                        long tot = SafeRead(() => x.TotalSize);
+                        var used = (double)((tot - free) * 100M / Math.Max(1M, tot));
+                        h.Item2.Add(used, now);
+                        h.Item3.Add(used, now);
+                        return new SmDriveInfo
+                        {
+                            Index = driveIndex,
+                            Drive = d,
+                            Label = SafeRead(() => x.VolumeLabel, "-"),
+                            Format = SafeRead(() => x.DriveFormat, "-"),
+                            Type = type.ToString(),
+                            Free = free,
+                            Total = tot,
+                            Used = used
+                        };
                     }
-                    var free = x.TotalFreeSpace;
-                    var tot = x.TotalSize;
-                    var used = (double)((tot - free) * 100M / Math.Max(1M, tot));
-                    h.Item2.Add(used, now);
-                    h.Item3.Add(used, now);
-                    return new SmDriveInfo
+                    catch (Exception ex)
                     {
-                        Index = driveIndex,
-                        Drive = d,
-                        Label = x.VolumeLabel,
-                        Format = x.DriveFormat,
-                        Type = x.DriveType.ToString(),
-                        Free = free,
-                        Total = tot,
-                        Used = used
-                    };
+                        DriveEx.OnException(ex);
+                        return null;
+                    }
                 }).Where(x => x != null).ToArray();
                 DriveInfos = dis;
             }
@@ -736,10 +795,11 @@ namespace SysWeaver.MicroService
             var mi = MemInfo;
             if (mi == null)
                 return null;
-            var tot = mi.Total;
+            //var tot = mi.Total;
+            var tot = mi.Total - mi.Free;
             var used = info.MemUsage;
             double usedP = (double)(used * 100M / Math.Max(1M, tot));
-            return GetMemChart(Math.Max(0, tot - used), tot, usedP, String.Concat(processId, ": ", info.Name, " memory use"));
+            return GetMemChart(Math.Max(0, tot - used), tot, usedP, String.Concat(processId, ": ", info.Name, " memory use"), "Allocated");
         }
 
 
@@ -970,7 +1030,7 @@ namespace SysWeaver.MicroService
             return GetMemChart(sm.Free, sm.Total, sm.Used, title);
         }
 
-        ReadOnlyMemory<Byte> GetMemChart(long freeBytes, long totalBytes, double usedPercentage, String title = "Memory use")
+        ReadOnlyMemory<Byte> GetMemChart(long freeBytes, long totalBytes, double usedPercentage, String title = "Memory use", String freeLabel = "Free")
         {
             var freeGb = (double)((Decimal)freeBytes / GbSize);
             var usedGb = (double)((Decimal)(totalBytes - freeBytes) / GbSize);
@@ -987,7 +1047,7 @@ namespace SysWeaver.MicroService
                 ValueLabel = 1,
                 data = new ChartJsData
                 {
-                    labels = ["Used", "Free"],
+                    labels = ["Used", freeLabel],
                     datasets = [
                         new ChartJsDataSet
                         {
@@ -1304,10 +1364,10 @@ namespace SysWeaver.MicroService
             var mi = MemInfo;
             if (mi == null)
                 return null;
-            var tot = mi.Total;
+            var tot = mi.Total - mi.Free;
             var used = info.Process?.Metrics?.MemUsage ?? 0;
             double usedP = (double)(used * 100M / Math.Max(1M, tot));
-            return GetMemChart(Math.Max(0, tot - used), tot, usedP, serviceName + " memory use");
+            return GetMemChart(Math.Max(0, tot - used), tot, usedP, serviceName + " memory use", "Allocated");
         }
 
 
@@ -2213,6 +2273,8 @@ namespace SysWeaver.MicroService
             foreach (var x in StatusEx.GetStats(sys, "StatusExs."))
                 yield return x;
             foreach (var x in DriveEx.GetStats(sys, "DriveExs."))
+                yield return x;
+            foreach (var x in StatsExs.GetStats(sys, "StatsExs."))
                 yield return x;
         }
 

@@ -62,6 +62,7 @@ namespace SysWeaver.MicroService
         public ServiceManager(bool registerFromManifestFile = true, Action<ServiceManager> runBeforeRegister = null, Action<ServiceManager> restartFn = null) : base()
         {
             using var perfMon = PerfMon.Track("Constructor");
+
             HostRestart = restartFn;
             if (Debugger.IsAttached)
             {
@@ -96,6 +97,7 @@ namespace SysWeaver.MicroService
                     RegisterManifestFile(fn);
                 }
             }
+            AddMessage("Platform: " + PlatformTools.Current.Name, MessageLevels.Debug);
             PruneTask = new PeriodicTask(Prune, 2000);
         }
 
