@@ -1,4 +1,5 @@
-﻿using SysWeaver.AI;
+﻿using System;
+using SysWeaver.AI;
 
 namespace SysWeaver.MicroService
 {
@@ -21,6 +22,43 @@ namespace SysWeaver.MicroService
         /// </summary>
         [OpenAiOptional]
         public ChartJsDataLabels datalabels;
+
+
+        /// <summary>
+        /// Shadows
+        /// </summary>
+        [OpenAiOptional]
+        public ChartJsShadow shadow;
+
+    }
+
+
+    public sealed class ChartJsShadow
+    {
+        /// <summary>
+        /// Shadow offset X in pixels
+        /// </summary>
+        [OpenAiOptional]
+        public double? dx = 2;
+
+        /// <summary>
+        /// Shadow offset Y in pixels
+        /// </summary>
+        [OpenAiOptional]
+        public double? dy = 4;
+
+        /// <summary>
+        /// Blur radius in pixels
+        /// </summary>
+        [OpenAiOptional]
+        public double? rad = 8;
+
+        /// <summary>
+        /// Shadow color
+        /// </summary>
+        [OpenAiOptional]
+        public String color;
+
 
     }
 

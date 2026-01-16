@@ -124,7 +124,7 @@ class CanvasChart {
         ["up", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(0, y1, 0, y0) ],
         ["left", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(x0, 0, x1, 0) ],
         ["right", (ctx, x0, y0, x1, y1) => ctx.createLinearGradient(x1, 0, x0, 0) ],
-        ["cone", (ctx, x0, y0, x1, y1) => ctx.createConicGradient(-Math.PI * 0.5, (x0 + x1) * 0.5, (y0 + y1) * 0.5) ],
+        ["cone", (ctx, x0, y0, x1, y1) => ctx.createConicGradient(-Math.PI * 0.5, Math.floor((x0 + x1) * 0.5), (y0 + y1) * 0.5) ],
     ]);
 
     /**
@@ -356,7 +356,7 @@ class CanvasChart {
                 return g;
             const values = gradData.substring(i + 1, gradData.length - 1).split(';');
             if (ctx instanceof CanvasRenderingContext2D) {
-                console.log("Creating gradient: " + gradData + " (" + x0 + "," + y0 + ") - (" + x1 + ", " + y1 + ") (" + chartArea.left + "," + chartArea.top + ") - (" + chartArea.right + ", " + chartArea.bottom + ") ");
+                //console.log("Creating gradient: " + gradData + " (" + x0 + "," + y0 + ") - (" + x1 + ", " + y1 + ") (" + chartArea.left + "," + chartArea.top + ") - (" + chartArea.right + ", " + chartArea.bottom + ") ");
                 g = cf(ctx, x0, y0, x1, y1);
                 const vl = values.length;
                 for (let i = 0; i < vl; i += 2)
@@ -410,6 +410,11 @@ class CanvasChart {
 
         function ApplyChanges(data) {
             const style = getComputedStyle(document.body);
+
+            data.options.responsive = true;
+            data.options.maintainAspectRatio = false;
+
+
 
             precision = data.Precision;
             valuePrefix = data.ValuePrefix ?? "";
@@ -534,9 +539,6 @@ class CanvasChart {
                     }
                 }
             }
-            if (!data.options.layout)
-                data.options.layout = {};
-
             if (forcedOrder !== 0) {
                 const newOrder = [];
                 const dd = data.data;
@@ -882,14 +884,14 @@ class CanvasChart {
                     };
                 }
             }
-            const ow = canvas.width;
-            const oh = canvas.height;
+            //const ow = canvas.width;
+            //const oh = canvas.height;
             main.destroy();
             const nc = document.createElement("canvas");
             canvas.parentElement.replaceChild(nc, canvas);
             canvas = nc;
-            canvas.width = ow;
-            canvas.height = oh;
+            //canvas.width = ow;
+            //canvas.height = oh;
             main = new Chart(canvas, data);
             main.Transparent = true;
             main.update();
@@ -1627,6 +1629,7 @@ class CanvasChart {
         let themeBackgroundColor;
         const renderBackgroundPlugin = {
             id: 'customCanvasBackgroundColor',
+            
             beforeLayout: (chart, args, options) => {
                 const s = chart.ctx.canvas.Scale;
                 if ((s) && (s !== 1)) {
@@ -1640,7 +1643,7 @@ class CanvasChart {
                         bottom: h - ((h - 8) / s) + 4,
                     };
                 } else {
-                    chart.config.options.layout.padding = 0;
+                    chart.config.options.layout.padding = 4;
                 }
             },
 
@@ -1666,7 +1669,78 @@ class CanvasChart {
             }
         };
 
+        const dropShadowPlugin = {
+            id: 'dropShadow',
+
+            beforeLayout: (chart, args, options) => {
+                const so = chart.config?.options?.plugins?.shadow;
+                if (!so)
+                    return;
+                const dx = so.dx;
+                const dy = so.dy;
+                let rad = so.rad;
+                if (rad <= 0)
+                    rad = 0;
+                const pdist = Math.max(Math.abs(dx), Math.abs(dy)) + rad;
+                const o = chart.config.options;
+                const l = o.layout;
+                if (l) {
+                    const p = l.padding;
+                    if (p) {
+                        if (typeof p === "number") {
+                            if (p < pdist)
+                                l.padding = pdist;
+                        } else {
+                            if (p.top < pdist)
+                                p.top = pdist;
+                            if (p.right < pdist)
+                                p.right = pdist;
+                            if (p.bottom < pdist)
+                                p.bottom = pdist;
+                            if (p.left < pdist)
+                                p.left = pdist;
+                        }
+                    } else {
+                        l.padding = pdist;
+                    }
+                } else {
+                    o.layout = {
+                        padding: pdist,
+                    };
+                }
+            },
+            beforeDatasetDraw: (chart, args, options) => {
+                const so = chart.config?.options?.plugins?.shadow;
+                if (!so)
+                    return;
+                const dx = so.dx;
+                const dy = so.dy;
+                let rad = so.rad;
+                if (rad <= 0)
+                    rad = 0;
+                let col = so.color;
+                if (!col)
+                    col = "rgba(0,0,0,0.5)";
+
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.shadowColor = col;
+                ctx.shadowOffsetX = dx;
+                ctx.shadowOffsetY = dy;
+                ctx.shadowBlur = rad;
+            },
+            afterDatasetDraw: (chart, args, options) => {
+                const so = chart.config?.options?.plugins?.shadow;
+                if (!so)
+                    return;
+                chart.ctx.restore();
+            }
+        };
+
+
+
         Chart.register(renderBackgroundPlugin);
+        Chart.register(dropShadowPlugin);
         Chart.register(ChartDataLabels);
 
         const def = Chart.defaults;
@@ -1684,6 +1758,7 @@ class CanvasChart {
             formatter: ValueFormatter,
         };
 
+ 
 
         def.scale.ticks.callback = ValueFormatter;
         //def.scales.category.ticks.callback = ValueFormatter;
@@ -1738,6 +1813,19 @@ class CanvasChart {
         }
 
 
+        /*
+        new ResizeObserver(() => {
+            const nw = chart.parentElement.offsetWidth;
+            const nh = chart.parentElement.offsetHeight;
+            console.warn("Resize " + nw + "x" + nh);
+            if (chart) {
+                chart.style.width = nw + "px";
+                chart.style.height = nh + "px";
+            }
+            if (main)
+                main.update();
+        }).observe(chart.parentElement);
+        */
 
         let refreshRate = 15000;
 
@@ -1752,6 +1840,8 @@ class CanvasChart {
                         data.options = {};
                     if (!data.options.plugins)
                         data.options.plugins = {};
+                    if (!data.options.layout)
+                        data.options.layout = {};
 
                     orgDataStr = JSON.stringify(data);
                     const currentIsHorizontal = data.options.indexAxis === "y";
@@ -2046,30 +2136,31 @@ class CanvasChart {
 
 }
 
+function setValue(obj, path, v) {
+    const s = path.split('.');
+    const sl = s.length - 1;
+    for (let i = 0; i < sl; ++i) {
+        let vv = s[i];
+        const me = vv[0] === '*';
+        if (me)
+            vv = vv.substring(1);
+        let v = obj[vv];
+        if (!v) {
+            if (me)
+                return;
+            v = {};
+            obj[vv] = v;
+        }
+        obj = v;
+    }
+    obj[s[sl]] = v;
+}
 
 async function chartMain() {
     const removeLoader = AddLoading();
     try {
         document.body.style.overflow = "hidden";
-        function setValue(obj, path, v) {
-            const s = path.split('.');
-            const sl = s.length - 1;
-            for (let i = 0; i < sl; ++i) {
-                let vv = s[i];
-                const me = vv[0] === '*';
-                if (me)
-                    vv = vv.substring(1);
-                let v = obj[vv];
-                if (!v) {
-                    if (me)
-                        return;
-                    v = {};
-                    obj[vv] = v;
-                }
-                obj = v;
-            }
-            obj[s[sl]] = v;
-        }
+
 
 
         const ps = getUrlParams();

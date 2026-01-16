@@ -658,7 +658,7 @@ namespace SysWeaver.MicroService
                 Title = title,
                 type = "bar",
                 Precision = precision,
-                ValidTypes = ["bar"],
+                ValidTypes = ["linev"],
                 ValueSuffix = valueSuffix,
                 ValueLabel = 4,
                 data = new ChartJsData
@@ -668,7 +668,7 @@ namespace SysWeaver.MicroService
                         new ChartJsDataSet
                         {
                             label = label,
-                            categoryPercentage = 0.99,
+                            categoryPercentage = 0.9,
                             barPercentage = 1,
                             data = values.ToArray(),
                             backgroundColor = colors,
@@ -704,6 +704,13 @@ namespace SysWeaver.MicroService
                         {
                             display = true,
                             text = [ title ],
+                        }
+                        ,
+                        shadow = new ChartJsShadow
+                        {
+                            dx = 0.5,
+                            dy = 1,
+                            rad = 2,
                         }
                     }
                 }
@@ -927,7 +934,7 @@ namespace SysWeaver.MicroService
                 Title = title,
                 type = "doughnut",
                 Precision = 2,
-                ValidTypes = ["doughnut"],
+                ValidTypes = ["pie"],
                 ValueSuffix = " %",
                 ValueLabel = 1,
                 data = new ChartJsData
@@ -958,6 +965,9 @@ namespace SysWeaver.MicroService
                         {
                             text = [title, mem],
                             display = true,
+                        },
+                        shadow = new ChartJsShadow
+                        {
                         }
 
                     }
@@ -1042,7 +1052,7 @@ namespace SysWeaver.MicroService
                 Title = title,
                 type = "doughnut",
                 Precision = 2,
-                ValidTypes = ["doughnut"],
+                ValidTypes = ["pie"],
                 ValueSuffix = " GB",
                 ValueLabel = 1,
                 data = new ChartJsData
@@ -1073,6 +1083,9 @@ namespace SysWeaver.MicroService
                         {
                             text = [title, mem],
                             display = true,
+                        },
+                        shadow = new ChartJsShadow
+                        {
                         }
 
                     }
@@ -1206,7 +1219,7 @@ namespace SysWeaver.MicroService
                 Title = title,
                 type = "doughnut",
                 Precision = 1,
-                ValidTypes = ["doughnut"],
+                ValidTypes = ["pie"],
                 ValueSuffix = " GB",
                 ValueLabel = 1,
                 data = new ChartJsData
@@ -1237,8 +1250,11 @@ namespace SysWeaver.MicroService
                         {
                             text = [title, mem],
                             display = true,
+                        },
+                        shadow = new ChartJsShadow
+                        {
                         }
-                        
+
                     }
                 }
 
@@ -1309,7 +1325,7 @@ namespace SysWeaver.MicroService
                 Title = title,
                 type = "doughnut",
                 Precision = 1,
-                ValidTypes = ["doughnut"],
+                ValidTypes = ["pie"],
                 ValueLabel = 1,
                 data = new ChartJsData
                 {
@@ -1339,6 +1355,9 @@ namespace SysWeaver.MicroService
                         {
                             text = [title, stats],
                             display = true,
+                        },
+                        shadow = new ChartJsShadow
+                        {
                         }
 
                     }

@@ -2,8 +2,8 @@
 body {
     padding: 0;
     margin: 0;
-    width: 100svw;
-    height: 100svh;
+    width: 100svw !important;
+    height: 100svh !important;
     display: block;
 }
 
@@ -12,9 +12,9 @@ SysWeaver-Chart {
     margin: 0;
     padding: 0;
     display: block;
-    width: 100%;
-    height: 100%;
     position: relative;
+    width: 100% !important;
+    height: 100% !important;
     background-color: rgba(var(--ThemeBackgroundRGB), 0.5);
 }
 
@@ -38,8 +38,8 @@ SysWeaver-Chart canvas {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    width: 100%;
-    height: 100%;
+    width: 100% !important;
+    height: 100% !important;
 }
 
     SysWeaver-Chart icon-32x32.IconButton {
