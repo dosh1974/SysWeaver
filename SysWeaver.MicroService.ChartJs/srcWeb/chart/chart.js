@@ -1,5 +1,6 @@
 ﻿
 
+
 class Random {
 
 
@@ -159,7 +160,6 @@ class CanvasChart {
             chart.classList.add("Transparent");
         toElement.appendChild(chart);
         let canvas = document.createElement("canvas");
-        let canvasCtx = canvas.getContext("2d");
 
         chart.appendChild(canvas);
 
@@ -177,6 +177,7 @@ class CanvasChart {
         let forcedOrder = 0; // 0 = Orignal, 1 = Label name, 2+ = datasets
 
         let orgDataStr = null;
+        let orgDataType = null;
         let main = null;
         let chartScale = 1;
 
@@ -443,7 +444,18 @@ class CanvasChart {
             if (!precision)
                 if (typeof precision !== "number")
                     precision = -2;
-
+            if (forceChartType === "line") {
+                const dd = data.data;
+                const ds = dd.datasets;
+                const dsl = ds.length;
+                for (let i = 0; i < dsl; ++i) {
+                    const dss = ds[i];
+                    if (!dss.borderColor)
+                        dss.borderColor = dss.backgroundColor;
+                    if (dss.borderWidth <= 0)
+                        dss.borderWidth = 2;
+                }
+            }
             data.type = forceChartType ?? data.type;
             data.options.indexAxis = forcedIndexAxis ?? data.options.indexAxis;
             const axis = data.options.indexAxis ? data.options.indexAxis : "y";
@@ -870,12 +882,14 @@ class CanvasChart {
                     };
                 }
             }
+            const ow = canvas.width;
+            const oh = canvas.height;
             main.destroy();
             const nc = document.createElement("canvas");
             canvas.parentElement.replaceChild(nc, canvas);
             canvas = nc;
-            canvasCtx = nc.getContext("2d");
-            //canvas.Scale = chartScale;
+            canvas.width = ow;
+            canvas.height = oh;
             main = new Chart(canvas, data);
             main.Transparent = true;
             main.update();
@@ -902,8 +916,8 @@ class CanvasChart {
                     canvas = document.createElement("canvas");
                     canvas.setAttribute("width", "" + width);
                     canvas.setAttribute("height", "" + height);
-                    canvas.width = width + "px";
-                    canvas.height = height + "px";
+                    canvas.width = width;
+                    canvas.height = height;
                     canvas.style.display = "none";
                     canvas.Scale = chartScale;
                     document.body.appendChild(canvas);
@@ -1110,74 +1124,99 @@ class CanvasChart {
                     menu.Name = "Chart";
                     let menuDest;
                     //  Modify type menu
-                    const typeMenu = WebMenuItem.From({
-                        Name: "Type",
-                        IconClass: "IconChartType",
-                        Title: "Options for modifying the chart type",
-                        Children: [],
-                    });
-                    menu.Items.push(typeMenu);
-
-                    menuDest = typeMenu.Children;
                     const currentType = data.type;
                     const currentIsHorizontal = data.options.indexAxis === "y";
+                    const validTypes = data.ValidTypes;
+                    let haveTypes = true;
+                    let validMap = null;
+                    if (validTypes) {
+                        const l = validTypes.length;
+                        if (l <= 0) {
+                            validTypes = haveTypes = false;
+                        } else {
+                            validMap = new Map();
+                            for (let i = 0; i < l; ++i)
+                                validMap.set(validTypes[i].toLowerCase(), 1);
+                            validMap.set(orgDataType.toLowerCase(), 1);
+                            haveTypes = validMap.size > 1;
+                        }
+                    }
+                    if (haveTypes) {
 
-                    menuDest.push(WebMenuItem.From({
-                        Name: "Bar (vertical)",
-                        Title: "Display the chart as a vertical bar chart",
-                        IconClass: "IconChartTypeBar",
-                        Flags: ((currentType === "bar") && (!currentIsHorizontal)) ? checkedReadonly : 0,
-                        Data: () => SetChartType(close, "bar"),
-                    }));
+                        const typeMenu = WebMenuItem.From({
+                            Name: "Type",
+                            IconClass: "IconChartType",
+                            Title: "Options for modifying the chart type",
+                            Children: [],
+                        });
+                        menu.Items.push(typeMenu);
 
-                    menuDest.push(WebMenuItem.From({
-                        Name: "Bar (horizontal)",
-                        Title: "Display the chart as a horizontal bar chart",
-                        IconClass: "IconChartTypeBarHorizontal",
-                        Flags: ((currentType === "bar") && (currentIsHorizontal)) ? checkedReadonly : 0,
-                        Data: () => SetChartType(close, "bar", true),
-                    }));
+                        menuDest = typeMenu.Children;
+                        if ((!validMap) || validMap.get("bar") || validMap.get("barv")) {
+                            menuDest.push(WebMenuItem.From({
+                                Name: "Bar (vertical)",
+                                Title: "Display the chart as a vertical bar chart",
+                                IconClass: "IconChartTypeBar",
+                                Flags: ((currentType === "bar") && (!currentIsHorizontal)) ? checkedReadonly : 0,
+                                Data: () => SetChartType(close, "bar"),
+                            }));
+                        }
+                        if ((!validMap) || validMap.get("bar") || validMap.get("barh")) {
+                            menuDest.push(WebMenuItem.From({
+                                Name: "Bar (horizontal)",
+                                Title: "Display the chart as a horizontal bar chart",
+                                IconClass: "IconChartTypeBarHorizontal",
+                                Flags: ((currentType === "bar") && (currentIsHorizontal)) ? checkedReadonly : 0,
+                                Data: () => SetChartType(close, "bar", true),
+                            }));
+                        }
+                        if ((!validMap) || validMap.get("line") || validMap.get("linev")) {
+                            menuDest.push(WebMenuItem.From({
+                                Name: "Line (vertical)",
+                                Title: "Display the chart as a vertical line chart",
+                                IconClass: "IconChartTypeLine",
+                                Flags: ((currentType === "line") && (!currentIsHorizontal)) ? checkedReadonly : 0,
+                                Data: () => SetChartType(close, "line"),
+                            }));
+                        }
+                        if ((!validMap) || validMap.get("line") || validMap.get("lineh")) {
+                            menuDest.push(WebMenuItem.From({
+                                Name: "Line (horizontal)",
+                                Title: "Display the chart as a horizontal line chart",
+                                IconClass: "IconChartTypeLineHorizontal",
+                                Flags: ((currentType === "line") && (currentIsHorizontal)) ? checkedReadonly : 0,
+                                Data: () => SetChartType(close, "line", true),
+                            }));
+                        }
+                        if ((!validMap) || validMap.get("pie") || validMap.get("pieh") || validMap.get("piev")) {
+                            menuDest.push(WebMenuItem.From({
+                                Name: "Pie",
+                                Title: "Display the chart as a pie chart",
+                                IconClass: "IconChartTypePie",
+                                Flags: currentType === "pie" ? checkedReadonly : 0,
+                                Data: () => SetChartType(close, "pie"),
+                            }));
+                        }
+                        if ((!validMap) || validMap.get("doughnut") || validMap.get("doughnuth") || validMap.get("doughnutv")) {
+                            menuDest.push(WebMenuItem.From({
+                                Name: "Doughnut",
+                                Title: "Display the chart as a doughnut chart",
+                                IconClass: "IconChartTypeDoughnut",
+                                Flags: currentType === "doughnut" ? checkedReadonly : 0,
+                                Data: () => SetChartType(close, "doughnut"),
+                            }));
+                        }
+                        if ((!validMap) || validMap.get("polararea") || validMap.get("polarareah") || validMap.get("polarareav")) {
 
-                    menuDest.push(WebMenuItem.From({
-                        Name: "Line (vertical)",
-                        Title: "Display the chart as a vertical line chart",
-                        IconClass: "IconChartTypeLine",
-                        Flags: ((currentType === "line") && (!currentIsHorizontal)) ? checkedReadonly : 0,
-                        Data: () => SetChartType(close, "line"),
-                    }));
-
-                    menuDest.push(WebMenuItem.From({
-                        Name: "Line (horizontal)",
-                        Title: "Display the chart as a horizontal line chart",
-                        IconClass: "IconChartTypeLineHorizontal",
-                        Flags: ((currentType === "line") && (currentIsHorizontal)) ? checkedReadonly : 0,
-                        Data: () => SetChartType(close, "line", true),
-                    }));
-
-                    menuDest.push(WebMenuItem.From({
-                        Name: "Pie",
-                        Title: "Display the chart as a pie chart",
-                        IconClass: "IconChartTypePie",
-                        Flags: currentType === "pie" ? checkedReadonly : 0,
-                        Data: () => SetChartType(close, "pie"),
-                    }));
-
-                    menuDest.push(WebMenuItem.From({
-                        Name: "Doughnut",
-                        Title: "Display the chart as a doughnut chart",
-                        IconClass: "IconChartTypeDoughnut",
-                        Flags: currentType === "doughnut" ? checkedReadonly : 0,
-                        Data: () => SetChartType(close, "doughnut"),
-                    }));
-
-                    menuDest.push(WebMenuItem.From({
-                        Name: "Polar area",
-                        Title: "Display the chart as a polar area chart",
-                        IconClass: "IconChartTypePolarArea",
-                        Flags: currentType === "polarArea" ? checkedReadonly : 0,
-                        Data: () => SetChartType(close, "polarArea"),
-                    }));
-
+                            menuDest.push(WebMenuItem.From({
+                                Name: "Polar area",
+                                Title: "Display the chart as a polar area chart",
+                                IconClass: "IconChartTypePolarArea",
+                                Flags: currentType === "polarArea" ? checkedReadonly : 0,
+                                Data: () => SetChartType(close, "polarArea"),
+                            }));
+                        }
+                    }
                     //  Sort menu
 
                     const orderMenu = WebMenuItem.From({
@@ -1715,6 +1754,8 @@ class CanvasChart {
                         data.options.plugins = {};
 
                     orgDataStr = JSON.stringify(data);
+                    const currentIsHorizontal = data.options.indexAxis === "y";
+                    orgDataType = data.type + (currentIsHorizontal ? "h" : "v");
                     ApplyChanges(data);
                     fn = chartOptions.OnFixedData;
                     if (fn != null)

@@ -29,7 +29,9 @@ namespace SysWeaver.MicroService
         public int RefreshRate;
 
         /// <summary>
-        /// What chart types this can be interchanged with
+        /// What chart types this can be interchanged with.
+        /// null means all chart types (default)
+        /// Empty array means no chart types.
         /// </summary>
         [OpenAiIgnore]
         public string[] ValidTypes;
