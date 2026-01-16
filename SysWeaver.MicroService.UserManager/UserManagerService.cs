@@ -556,7 +556,7 @@ namespace SysWeaver.MicroService
 
         static String GetNick(String userName, String mail)
         {
-            var nickName = (userName.FastEquals(mail) ? mail.Split('@')[0] : userName).LimitLength(AuhorizationLimits.MaxNickNameLength, "");
+            var nickName = (userName.FastEquals(mail) ? mail.Split('@')[0] : null).LimitLength(AuhorizationLimits.MaxNickNameLength, "");
             return nickName;
         }
 
