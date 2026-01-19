@@ -136,9 +136,9 @@ namespace SysWeaver
         public bool IsRunning => IsTaskRunning;
 
         /// <summary>
-        /// If the task throws an exception, the last one is stored here (the task continues to repeat even if there was an expcetion)
+        /// If the task throws an exception, they are tracked here
         /// </summary>
-        public Exception Exception { get; private set; }
+        public ExceptionTracker Exceptions { get; } = new ExceptionTracker();
 
         /// <summary>
         /// The token used to cancel a task
@@ -205,7 +205,7 @@ namespace SysWeaver
                     }
                     catch (Exception ex)
                     {
-                        Exception = ex;
+                        Exceptions.OnException(ex);
                         if (ContinueOnException)
                             TaskExt.StartNewAsyncChain(() => RunTask(true).ConfigureAwait(false));
                     }
@@ -218,8 +218,8 @@ namespace SysWeaver
         readonly Func<ValueTask<bool>> DoTask;
         readonly Func<bool> DoFunc;
        
-        readonly CancellationTokenSource Cancel = new CancellationTokenSource();
-        readonly ManualResetEvent IsDisposedCompleted = new ManualResetEvent(false);
+        readonly CancellationTokenSource Cancel = new ();
+        readonly ManualResetEvent IsDisposedCompleted = new (false);
         volatile bool IsTaskRunning;
     }
 

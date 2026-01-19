@@ -97,7 +97,7 @@ namespace SysWeaver.MicroService
                     RegisterManifestFile(fn);
                 }
             }
-            AddMessage("Platform: " + PlatformTools.Current.Name, MessageLevels.Debug);
+            //AddMessage("Platform: " + PlatformTools.Current.Name, MessageLevels.Debug);
             PruneTask = new PeriodicTask(Prune, 2000);
         }
 
