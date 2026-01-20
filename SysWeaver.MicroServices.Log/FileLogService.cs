@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,7 +13,7 @@ namespace SysWeaver.MicroService
     [IsMicroService]
     [WebApiUrl("logFile")]
     [WebMenuEmbedded(null, "Debug/LogFile", "Log file", "logFile/logfile.html", "View the log file", "IconTableLog", 0, "debug,ops,admin")]
-    public sealed class FileLogService : IDisposable
+    public sealed class FileLogService : IDisposable, IHaveTextFiles
     {
         public FileLogService(ServiceManager manager, FileLogParams p = null)
         {
@@ -91,6 +92,38 @@ namespace SysWeaver.MicroService
             h.Dispose();
             M.Unregister(h);
         }
+
+        #region IHaveTextFiles
+
+        
+
+        public IEnumerable<TextFile> GetTextFiles()
+        {
+            var h = H;
+            var fn = h.Filename;
+            var fi = new FileInfo(fn);
+            if (fi.Exists)
+                yield return new TextFile
+                {
+                    Auth = Roles.AdminOps,
+                    Description = "This is the application log file.",
+                    Name = H.DownloadName,
+                    Filename = fn,
+                    Size = fi.Length,
+                    LastUpdate = fi.LastWriteTimeUtc,
+                    OpenParams = "d=../Api/logFile/" + nameof(DeleteLogFile) + "&scrollToEnd=true&",
+                };
+        }
+
+        public async ValueTask<Byte[]> TryReadTextFile(String name)
+        {
+            var h = H;
+            if (name.FastEquals(h.DownloadName))
+                return await File.ReadAllBytesAsync(h.Filename);
+            return null;
+        }
+
+        #endregion IHaveTextFiles
 
     }
 

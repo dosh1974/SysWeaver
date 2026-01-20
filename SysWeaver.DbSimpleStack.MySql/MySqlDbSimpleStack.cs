@@ -718,7 +718,59 @@ namespace SysWeaver.Db
             return true;
         }
 
-        
+
+        public enum PageCompressions
+        {
+            None = 0,
+            Zlib,
+            Lz4,
+        }
+
+        public enum RowFormats
+        {
+            Default,
+            Compact,
+            Dynamic,
+            Compressed,
+        }
+        public Task OptimizeTable(OrmConnection con, String tableName)
+            => con.ExecuteAsync("OPTIMIZE NO_WRITE_TO_BINLOG TABLE " + DP.GetQuotedTableName(tableName));
+
+        public Task SetPageCompression(OrmConnection con, String tableName, PageCompressions compression)
+        {
+            if (P.ReadOnly)
+                return Task.CompletedTask;
+            switch (compression)
+            {
+                case PageCompressions.None:
+                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " COMPRESSION=\"none\""));
+                case PageCompressions.Zlib:
+                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " COMPRESSION=\"zlib\""));
+                case PageCompressions.Lz4:
+                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " COMPRESSION=\"lz4\""));
+            }
+            throw new ArgumentException("Invalid compression value", nameof(compression));
+        }
+
+        public Task SetRowFormat(OrmConnection con, String tableName, RowFormats format)
+        {
+            if (P.ReadOnly)
+                return Task.CompletedTask;
+            switch (format)
+            {
+                case RowFormats.Default:
+                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " ROW_FORMAT=DEFAULT"));
+                case RowFormats.Compact:
+                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " ROW_FORMAT=COMPACT"));
+                case RowFormats.Dynamic:
+                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " ROW_FORMAT=DYNAMIC"));
+                case RowFormats.Compressed:
+                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " ROW_FORMAT=COMPRESSED"));
+            }
+            throw new ArgumentException("Invalid format value", nameof(format));
+        }
+
+
         public override async Task<bool> RemoveIndices(OrmConnection con, Type t, String tableName)
         {
             var dp = DP;

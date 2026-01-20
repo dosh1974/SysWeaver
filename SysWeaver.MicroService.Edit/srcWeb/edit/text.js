@@ -18,7 +18,8 @@ async function textMain() {
 
         const readOnly = !update;
         const name = url.substring(url.lastIndexOf('/') + 1);
-        document.title = name;
+        let fname = p.get("n") ?? name;
+        document.title = fname;
         const target = document.body;
 
         if (!type) {
@@ -41,6 +42,7 @@ async function textMain() {
                 m.set("js", "javascript");
                 m.set("json", "json");
                 m.set("md", "markdown");
+                m.set("err", "plain_text");
                 m.set("txt", "plain_text");
                 m.set("log", "plain_text");
                 m.set("cfg", "plain_text");
@@ -109,7 +111,7 @@ async function textMain() {
             downloadButton = new Button("", _TF("Download", "Text on a button that when clicked will download the file"), _TF("Click to download the file", "Tool tip description on a button that when clicked will download the file"), "../icons/download.svg", true, async () => {
                 downloadButton.StartWorking();
                 try {
-                    downloadText(name, editor.session.getValue());
+                    downloadText(fname, editor.session.getValue());
                 }
                 catch (e) {
                     Fail(_TF("Failed to download the file", "Error message displayed when a file download failed") + ":\n" + e);
@@ -126,12 +128,12 @@ async function textMain() {
                 try {
                     const m = {
                         Url: url,
-                        Name: name,
+                        Name: fname,
                         Content: editor.session.getValue(),
                     };
                     await sendRequest(update, m);
                     InterOp.Post("FileSaved", m);
-                    Info(_T("File \"{0}\" saved!", name, "An information message that is displayed whan a file was saved. {0} is replaced by the name of the file that was saved"));
+                    Info(_T("File \"{0}\" saved!", fname, "An information message that is displayed whan a file was saved. {0} is replaced by the name of the file that was saved"));
                 }
                 catch (e) {
                     Fail(_TF("Failed to save the file", "Error message displayed when the file failed to be saved") + ":\n" + e);
@@ -147,7 +149,7 @@ async function textMain() {
                 deleteButton.StartWorking();
                 if (await Confirm(
                     _TF("Delete file", "Title of a pop-up dialog that confirms that the user wants to delete a file"),
-                    _T("The file \"{0}\" will be deleted!", name, "Text of of a pop-up dialog that confirms that the user wants to delete a file. {0} is replaced by the name of the file") + "\n\n" +
+                    _T("The file \"{0}\" will be deleted!", fname, "Text of of a pop-up dialog that confirms that the user wants to delete a file. {0} is replaced by the name of the file") + "\n\n" +
                     _TF("Are you sure that you want to delete the file?", "Text of of a pop-up dialog that confirms that the user wants to delete a file"),
                     _TF("Yes, delete", "Text of a button that when clicked will delete a file"),
                     _TF("No, keep it", "Text of a button that when clicked will leave a file as is, as opposed to deleting it"),
@@ -161,7 +163,7 @@ async function textMain() {
                     try {
                         const m = {
                             Url: url,
-                            Name: name,
+                            Name: fname,
                         };
                         await sendRequest(del, m);
                         InterOp.Post("FileDeleted", m);
@@ -170,7 +172,7 @@ async function textMain() {
                         deleteButton.StopWorking();
                         deleteButton.Disable();
                         edit.remove();
-                        Info(_T("File \"{0}\" deleted!", name, "An information message that is displayed whan a file was deleted. {0} is replaced by the name of the file that was deleted"));
+                        Info(_T("File \"{0}\" deleted!", fname, "An information message that is displayed whan a file was deleted. {0} is replaced by the name of the file that was deleted"));
                         return;
                     }
                     catch (e) {

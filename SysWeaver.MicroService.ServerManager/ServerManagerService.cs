@@ -20,7 +20,7 @@ namespace SysWeaver.MicroService
     [WebMenuEmbedded(null, "Server", "Server", "ServerManager/server.html", "View server stats", "../icons/computer.svg", -9, "")]
     [WebMenuEmbedded(null, "Services", "Managed services", "ServerManager/services.html", "View all managed services", "../icons/settings.svg", -7, "")]
     [WebMenuEmbedded(null, "Keys", "Key files", "ServerManager/keys.html", "Managed key files located in the key file folder", "../icons/key.svg", -6, Roles.Admin)]
-    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule, IHaveStats, IPerfMonitored
+    public sealed partial class ServerManagerService : IDisposable, IHttpServerModule, IHaveStats, IPerfMonitored, IHaveTextFiles
     {
 
         readonly String KeyFolder = @"C:\Keys";
@@ -79,6 +79,18 @@ namespace SysWeaver.MicroService
             var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
             foreach (var f in p.Services.Nullable().Concat(savedServices.Nullable()))
                 InternalAddService(f);
+
+            var tf = new Dictionary<string, InternalTextFile>(StringComparer.Ordinal);
+            foreach (var f in p.TextFiles.Nullable())
+            {
+                var fn = PathTemplate.Resolve(f.Filename);
+                f.Filename = fn;
+                var name = Path.GetFileName(fn);
+                if (!tf.TryAdd(name, new InternalTextFile(name, f)))
+                    throw new Exception("A text file named \"" + name + "\" have already been added!");
+            }
+            TextFiles = tf.Freeze();
+
             try
             {
                 InitAsync().RunAsync();
@@ -90,6 +102,9 @@ namespace SysWeaver.MicroService
             UpdateTask = new PeriodicTask(UpdateMetrics, 4000);
             UpdateStatsTask = new PeriodicTask(UpdateStats, 200);
         }
+
+
+
 
         ValueTask<bool[]> InitAsync()
             => TaskExt.WhenAll(UpdateStats(), UpdateMetrics());
@@ -2298,6 +2313,135 @@ namespace SysWeaver.MicroService
         }
 
         #endregion//IHaveStats
+
+        #region IHaveTextFiles
+
+        sealed class InternalTextFile : SmTextFile
+        {
+            public InternalTextFile(String name, SmTextFile s)
+            {
+                Name = name;
+                CopyFrom(s);
+                String p = "";
+                if (s.AllowDelete)
+                    p += "d=../ServerManager/" + nameof(DeleteTextFile) + "&";
+                if (s.ScrollToEnd)
+                    p += "scrollToEnd=true&";
+                OpenParams = p;
+            }
+            public readonly String Name;
+            public readonly String OpenParams;
+        }
+
+        readonly IReadOnlyDictionary<string, InternalTextFile> TextFiles;
+
+        /// <summary>
+        /// Information about files on the system
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebMenuTable(null, "Files", "Files", "Information about files on the system", "../icons/organize.svg", -1)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        public TableData Files(TableDataRequest r, HttpServerRequest context)
+            => Manager.TextFilesTable(r, context, 5000);
+
+        /// <summary>
+        /// Delete a text file
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<bool> DeleteTextFile(EditFile file, HttpServerRequest context)
+        {
+            if (!TextFiles.TryGetValue(file.Name, out var x))
+                throw new Exception("Unknown file!");
+            if (!x.AllowDelete)
+                throw new Exception("May not delete this file!");
+            if (!context.Session.Auth.IsValid(x.Auth))
+                throw new Exception("Not authorized to delete this file!");
+            var ex = await PathExt.TryDeleteFileAsync(x.Filename).ConfigureAwait(false);
+            if (ex != null)
+                throw ex;
+            return true;
+        }
+
+
+
+        static String GetHostsFile()
+        {
+            String fn = null;
+            var p = PlatformTools.Current.Name;
+            if (p.FastEquals("Windows"))
+                fn = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "Drivers", "etc", "hosts");
+            if (p.FastEquals("Linux"))
+                fn = "/etc/hosts";
+            return fn;
+
+        }
+
+        public IEnumerable<TextFile> GetTextFiles()
+        {
+            var fn = GetHostsFile();
+            if (fn != null) 
+            {
+                var fi = new FileInfo(fn);
+                if (fi.Exists)
+                    yield return new TextFile
+                    {
+                        Auth = Roles.AdminOps,
+                        Description = "This is the hosts redirection file.",
+                        Name = "hosts",
+                        Filename = fn,
+                        Size = fi.Length,
+                        LastUpdate = fi.LastWriteTimeUtc,
+                    };
+            }
+            foreach (var x in TextFiles.Values)
+            {
+                fn = x.Filename;
+                var fi = new FileInfo(fn);
+                if (fi.Exists)
+                    yield return new TextFile
+                    {
+                        Auth = x.Auth,
+                        Description = x.Desc,
+                        Name = x.Name,
+                        Filename = fn,
+                        Size = fi.Length,
+                        LastUpdate = fi.LastWriteTimeUtc,
+                        OpenParams = x.OpenParams,
+                    };
+
+            }
+
+        }
+
+        public async ValueTask<Byte[]> TryReadTextFile(String name)
+        {
+            if (TextFiles.TryGetValue(name, out var x))
+            {
+                var fn = x.Filename;
+                if ((fn != null) && File.Exists(fn))
+                    return await File.ReadAllBytesAsync(fn).ConfigureAwait(false);
+            }
+            if (name.FastEquals("hosts"))
+            {
+                var fn = GetHostsFile();
+                if ((fn != null) && File.Exists(fn))
+                    return await File.ReadAllBytesAsync(fn).ConfigureAwait(false);
+            }
+            return null;
+        }
+
+        #endregion//IHaveTextFiles
+
     }
 
 

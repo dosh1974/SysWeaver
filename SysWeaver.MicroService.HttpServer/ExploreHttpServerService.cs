@@ -348,7 +348,21 @@ namespace SysWeaver.MicroService
         [WebMenuTable(null, "Debug/{0}", "Log", null, "IconTableLog")]
         public TableData LogTable(TableDataRequest r) => TableDataTools.Get(r, 1000, Manager.Messages);
 
+
+        /// <summary>
+        /// Read the content of one of the available text files
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiRawText]
+        public Task<ReadOnlyMemory<Byte>> ReadTextFile(String name, HttpServerRequest context)
+            => Manager.ReadTextFile(name, context);
+
         #endregion//Tables
+
 
     }
 

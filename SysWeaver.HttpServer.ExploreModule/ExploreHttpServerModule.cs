@@ -65,6 +65,7 @@ namespace SysWeaver.Net.ExploreModule
         readonly IconHttpServerModule Icons;
 
 
+
         #region IHttpServerModule
 
         public IHttpRequestHandler Handler(HttpServerRequest context)
@@ -410,6 +411,8 @@ namespace SysWeaver.Net.ExploreModule
 
 
         #endregion//Data References
+
+
     }
 
     public sealed class IconInfo

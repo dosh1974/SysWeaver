@@ -1677,7 +1677,6 @@ namespace SysWeaver.MicroService
 
         #endregion//One time pad
 
-
         #region Extension editors
 
         /// <summary>
@@ -1767,8 +1766,6 @@ namespace SysWeaver.MicroService
         readonly SemiFrozenDictionary<String, String> Editors = new SemiFrozenDictionary<string, string>(StringComparer.Ordinal);
 
         #endregion//Extension editors
-
-
 
         #region Extension viewers
 
@@ -1865,6 +1862,85 @@ namespace SysWeaver.MicroService
         readonly SemiFrozenDictionary<String, String> Viewers = new SemiFrozenDictionary<string, string>(StringComparer.Ordinal);
 
         #endregion//Extension viewers
+
+        #region Files
+
+        /// <summary>
+        /// Get all text files as a table
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="context"></param>
+        /// <param name="refreshRate"></param>
+        /// <returns></returns>
+        public TableData TextFilesTable(TableDataRequest r, HttpServerRequest context, int refreshRate = 15000)
+            => TableDataTools.Get(r, refreshRate, GetTextFiles(context));
+
+        /// <summary>
+        /// Get all available text files
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        public IEnumerable<TextFile> GetTextFiles(HttpServerRequest context)
+        {
+            var a = context.Session.Auth;
+            foreach (var x in UniqueInstances)
+            {
+                var t = x as IHaveTextFiles;
+                if (t == null)
+                    continue;
+                foreach (var f in t.GetTextFiles())
+                {
+                    if (!a.IsValid(f.Auth))
+                        continue;
+                    var o = f.OpenParams;
+                    if (o == null)
+                        f.OpenParams = "";
+                    else
+                    {
+                        var l = o.Length;
+                        if ((l > 0) && (o[l - 1] != '&'))
+                            f.OpenParams += '&';
+                        yield return f;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Read a text file
+        /// </summary>
+        /// <param name="name">Name of the file</param>
+        /// <param name="context"></param>
+        /// <returns>The data contained is the table ref</returns>
+        public async Task<ReadOnlyMemory<Byte>> ReadTextFile(String name, HttpServerRequest context)
+        {
+            var a = context.Session.Auth;
+            foreach (var x in UniqueInstances)
+            {
+                var t = x as IHaveTextFiles;
+                if (t == null)
+                    continue;
+                foreach (var f in t.GetTextFiles())
+                {
+                    if (!a.IsValid(f.Auth))
+                        continue;
+                    try
+                    {
+                        var d = await t.TryReadTextFile(name).ConfigureAwait(false);
+                        if (d != null)
+                            return d;
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+            return null;
+        }
+
+
+        #endregion//Files
+
 
     }
 
