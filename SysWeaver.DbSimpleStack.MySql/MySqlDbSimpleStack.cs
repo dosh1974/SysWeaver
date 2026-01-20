@@ -736,36 +736,54 @@ namespace SysWeaver.Db
         public Task OptimizeTable(OrmConnection con, String tableName)
             => con.ExecuteAsync("OPTIMIZE NO_WRITE_TO_BINLOG TABLE " + DP.GetQuotedTableName(tableName));
 
-        public Task SetPageCompression(OrmConnection con, String tableName, PageCompressions compression)
+        public async Task SetPageCompression(OrmConnection con, String tableName, PageCompressions compression)
         {
             if (P.ReadOnly)
-                return Task.CompletedTask;
+                return;
+            var cmd = "SELECT `CREATE_OPTIONS` FROM `information_schema`.`tables` WHERE `table_schema`=\"" + con.Database + "\" AND `table_name`=\"" + tableName + "\"";
+            var options = (await con.ExecuteScalarAsync<String>(cmd).ConfigureAwait(false) ?? "").FastToLower();
+            var test = "compression=\"" + compression.ToString().FastToLower() + "\"";
+            if (options.Contains(test))
+                return;
             switch (compression)
             {
                 case PageCompressions.None:
-                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " COMPRESSION=\"none\""));
+                    if (options.IndexOf("compression=\"") < 0)
+                        return;
+                    await con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " COMPRESSION=\"none\"")).ConfigureAwait(false);
+                    return;
                 case PageCompressions.Zlib:
-                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " COMPRESSION=\"zlib\""));
+                    await con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " COMPRESSION=\"zlib\"")).ConfigureAwait(false);
+                    return;
                 case PageCompressions.Lz4:
-                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " COMPRESSION=\"lz4\""));
+                    await con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " COMPRESSION=\"lz4\"")).ConfigureAwait(false);
+                    return;
             }
             throw new ArgumentException("Invalid compression value", nameof(compression));
         }
 
-        public Task SetRowFormat(OrmConnection con, String tableName, RowFormats format)
+        public async Task SetRowFormat(OrmConnection con, String tableName, RowFormats format)
         {
             if (P.ReadOnly)
-                return Task.CompletedTask;
+                return;
+            var cmd = "SELECT `ROW_FORMAT` FROM `information_schema`.`tables` WHERE `table_schema`=\"" + con.Database + "\" AND `table_name`=\"" + tableName + "\"";
+            var options = (await con.ExecuteScalarAsync<String>(cmd).ConfigureAwait(false) ?? "").FastToLower();
+            if (options.FastEquals(format.ToString().FastToLower()))
+                return;
             switch (format)
             {
                 case RowFormats.Default:
-                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " ROW_FORMAT=DEFAULT"));
+                    await con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " ROW_FORMAT=DEFAULT"));
+                    return;
                 case RowFormats.Compact:
-                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " ROW_FORMAT=COMPACT"));
+                    await con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " ROW_FORMAT=COMPACT"));
+                    return;
                 case RowFormats.Dynamic:
-                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " ROW_FORMAT=DYNAMIC"));
+                    await con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " ROW_FORMAT=DYNAMIC"));
+                    return;
                 case RowFormats.Compressed:
-                    return con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " ROW_FORMAT=COMPRESSED"));
+                    await con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " ROW_FORMAT=COMPRESSED"));
+                    return;
             }
             throw new ArgumentException("Invalid format value", nameof(format));
         }
