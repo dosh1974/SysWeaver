@@ -358,6 +358,8 @@ namespace SysWeaver.MicroService
         [WebApi]
         [WebApiAuth]
         [WebApiRawText]
+        [WebApiClientCache(2)]
+        [WebApiRequestCache(1)]
         public Task<ReadOnlyMemory<Byte>> ReadTextFile(String name, HttpServerRequest context)
             => Manager.ReadTextFile(name, context);
 

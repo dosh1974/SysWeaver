@@ -2346,7 +2346,7 @@ namespace SysWeaver.MicroService
         [WebMenuTable(null, "Files", "Files", "Information about files on the system", "../icons/organize.svg", -1)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
-        public TableData Files(TableDataRequest r, HttpServerRequest context)
+        public TableData TextFilesTable(TableDataRequest r, HttpServerRequest context)
             => Manager.TextFilesTable(r, context, 5000);
 
         /// <summary>
