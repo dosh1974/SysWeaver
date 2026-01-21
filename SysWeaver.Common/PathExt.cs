@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Threading;
@@ -383,8 +384,11 @@ namespace SysWeaver
             var di = new FileInfo(dest);
             if (di.Exists && di.IsReadOnly)
                 di.IsReadOnly = false;
+            var dir = di.Directory;
+            if (!dir.Exists)
+                dir.Create();
             File.Copy(source, dest, true);
-            di = new FileInfo(dest);
+            //di = new FileInfo(dest);
             di.CreationTimeUtc = ct;
             di.LastWriteTimeUtc = lwt;
             di.LastAccessTimeUtc = la;
@@ -399,13 +403,64 @@ namespace SysWeaver
             var di = new FileInfo(dest);
             if (di.Exists && di.IsReadOnly)
                 di.IsReadOnly = false;
+            var dir = di.Directory;
+            if (!dir.Exists)
+                dir.Create();
             File.Move(source, dest, true);
-            di = new FileInfo(dest);
+            //di = new FileInfo(dest);
             di.CreationTimeUtc = ct;
             di.LastWriteTimeUtc = lwt;
             di.LastAccessTimeUtc = la;
         }
 
+
+        static void InternalCompress(String source, String dest, CompressionLevel level)
+        {
+            var fi = new FileInfo(source);
+            var ct = fi.CreationTimeUtc;
+            var lwt = fi.LastWriteTimeUtc;
+            var la = fi.LastAccessTimeUtc;
+            var di = new FileInfo(dest);
+            if (di.Exists && di.IsReadOnly)
+                di.IsReadOnly = false;
+            var dir = di.Directory;
+            if (!dir.Exists)
+                dir.Create();
+            using (var src = fi.OpenRead())
+            {
+                using var dst = di.OpenWrite();
+                using var x = new GZipStream(dst, level);
+                src.CopyTo(x);
+            }
+            //di = new FileInfo(dest);
+            di.CreationTimeUtc = ct;
+            di.LastWriteTimeUtc = lwt;
+            di.LastAccessTimeUtc = la;
+        }
+
+        static async Task InternalCompressAsync(String source, String dest, CompressionLevel level)
+        {
+            var fi = new FileInfo(source);
+            var ct = fi.CreationTimeUtc;
+            var lwt = fi.LastWriteTimeUtc;
+            var la = fi.LastAccessTimeUtc;
+            var di = new FileInfo(dest);
+            if (di.Exists && di.IsReadOnly)
+                di.IsReadOnly = false;
+            var dir = di.Directory;
+            if (!dir.Exists)
+                dir.Create();
+            using (var src = fi.OpenRead())
+            {
+                using var dst = di.OpenWrite();
+                using var x = new GZipStream(dst, level);
+                await src.CopyToAsync(x).ConfigureAwait(false);
+            }
+            //di = new FileInfo(dest);
+            di.CreationTimeUtc = ct;
+            di.LastWriteTimeUtc = lwt;
+            di.LastAccessTimeUtc = la;
+        }
 
         /// <summary>
         /// Try to copy a file.
@@ -494,6 +549,54 @@ namespace SysWeaver
                 return ex;
             }
         }
+
+
+        /// <summary>
+        /// Try to Gzip-zompress a file.
+        /// If it fails, retry at least N times.
+        /// </summary>
+        /// <param name="source">The file to compress</param>
+        /// <param name="dest">The file to overwrite or create</param>
+        /// <param name="compressionLevel">The compression level to use</param>
+        /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
+        /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+        /// <returns>Null if the file was compressed  successfully, else the exception</returns>
+        public static Exception TryGZipFile(String source, String dest, CompressionLevel compressionLevel = CompressionLevel.Optimal, int retryCount = 3, int delayInMs = 100)
+        {
+            try
+            {
+                Retry.Op(() => InternalCompress(source, dest, compressionLevel), retryCount, delayInMs);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return ex;
+            }
+        }
+
+        /// <summary>
+        /// Try to Gzip-zompress a file.
+        /// If it fails, retry at least N times.
+        /// </summary>
+        /// <param name="source">The file to compress</param>
+        /// <param name="dest">The file to overwrite or create</param>
+        /// <param name="compressionLevel">The compression level to use</param>
+        /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
+        /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+        /// <returns>Null if the file was compressed successfully, else the exception</returns>
+        public static async ValueTask<Exception> TryGZipFileAsync(String source, String dest, CompressionLevel compressionLevel = CompressionLevel.Optimal, int retryCount = 3, int delayInMs = 100)
+        {
+            try
+            {
+                await Retry.OpAsync(() => InternalCompressAsync(source, dest, compressionLevel), retryCount, delayInMs).ConfigureAwait(false);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return ex;
+            }
+        }
+
 
 
         /// <summary>

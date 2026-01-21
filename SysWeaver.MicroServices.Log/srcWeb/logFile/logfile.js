@@ -6,14 +6,17 @@
 
 async function logFileMain() {
 
+    const ps = getUrlParams();
+    const url = ps.get("api");
     if (await sendRequest("../Api/HaveService", "SysWeaver.MicroService.TypeService"))
     {
-        location.replace("../edit/text.html?r=../Api/logFile/LogFile.txt&d=../Api/logFile/DeleteLogFile&scrollToEnd=true");
+        if (url)
+            location.replace("../edit/text.html?r=" + url + "&scrollToEnd=true");
+        else
+            location.replace("../edit/text.html?r=../Api/logFile/LogFile.txt&d=../Api/logFile/DeleteLogFile&scrollToEnd=true");
         return;
     }
     try {
-        const ps = getUrlParams();
-        const url = ps.get("api");
         const target = document.body;
         const p = document.createElement("pre");
         target.appendChild(p);

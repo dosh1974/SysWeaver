@@ -162,7 +162,9 @@ async function serviceInfoMain() {
         });
 
         logButton = new Button(null, "View log", "View the current log", "si-icon-log", true, async () => {
-            Open("../logFile/logfile.html?api=../FolderSync/Folders/" + service + "/" + data.Log.Name, "_self");
+            Open("../edit/text.html?scrollToEnd=true&r=../FolderSync/Folders/" + service + "/" + data.Log.Name
+                + "&d=../ServerManager/DeleteLogFile", "_self");
+
         });
 
         debugButtons.appendChild(exploreButton.Element);

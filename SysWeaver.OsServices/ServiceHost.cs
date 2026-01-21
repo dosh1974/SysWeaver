@@ -392,23 +392,29 @@ namespace SysWeaver.OsServices
             return true;
         }
 
-        public static String GetConfigBackupName(FileInfo t)
+        public static String AppendDateAndMakeUnique(FileInfo t)
         {
             var name = t.Name;
-            if (IsConfigBackupName(t.Name, out var org))
-                name = org;
-            var fi = t.LastWriteTimeUtc.ToString("s", System.Globalization.CultureInfo.InvariantCulture);
+            var fi = (t.Exists ? t.LastWriteTime : DateTime.Now).ToString("s", System.Globalization.CultureInfo.InvariantCulture);
             fi = fi.Replace(':', '_');
             fi = fi.Replace('T', '_');
             var filename = t.FullName;
             var bname = Path.Combine(t.DirectoryName, Path.GetFileNameWithoutExtension(name) + "." + fi);
             var ext = t.Extension;
-            for (long i = 0; ; ++ i)
+            for (long i = 0; ; ++i)
             {
                 var fn = bname + (i <= 0 ? "" : "_" + i) + ext;
                 if (!File.Exists(fn))
                     return fn;
             }
+        }
+
+        public static String GetConfigBackupName(FileInfo t)
+        {
+            var name = t.Name;
+            if (IsConfigBackupName(t.Name, out var org))
+                name = org;
+            return AppendDateAndMakeUnique(t);
         }
 
         public static bool BackupConfig(String filename, IMessageHost log = null)

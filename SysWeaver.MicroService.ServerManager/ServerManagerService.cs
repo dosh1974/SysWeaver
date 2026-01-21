@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -2073,11 +2074,11 @@ namespace SysWeaver.MicroService
 
         /// <summary>
         /// Delete a config file.
-        /// WARNING no backup is made!
+        /// WARNING backup is not guaranteed!
         /// </summary>
         /// <param name="data"></param>
         /// <param name="context"></param>
-        /// <returns>True if sucessfully renamed</returns>
+        /// <returns>True if sucessfully deleted</returns>
         /// <exception cref="Exception"></exception>
         [WebApi]
         [WebApiAuth]
@@ -2103,25 +2104,73 @@ namespace SysWeaver.MicroService
             var bak = Path.Combine(masterBin, "bak");
             if (await PathExt.EnsureFolderExistAsync(bak).ConfigureAwait(false) == null)
             {
-                var bakDest = Path.Combine(bak, fileName);
-                if (File.Exists(bakDest))
-                    ServiceHost.BackupConfig(bakDest, Manager);
-                var ex = await PathExt.TryMoveFileAsync(sname, bakDest).ConfigureAwait(false);
+                var fi = new FileInfo(Path.Combine(bak, fileName));
+                var dname = ServiceHost.AppendDateAndMakeUnique(fi);
+                var ex = await PathExt.TryGZipFileAsync(sname, dname + ".gz", CompressionLevel.SmallestSize).ConfigureAwait(false);
                 if (ex != null)
-                    throw ex;
+                {
+                    ex = await PathExt.TryCopyFileAsync(sname, dname).ConfigureAwait(false);
+                    if (ex != null)
+                        throw ex;
+                }
             }
-            else
-            {
-                var ex = await PathExt.TryDeleteFileAsync(sname).ConfigureAwait(false);
-                if (ex != null)
-                    throw ex;
-            }
+            var ex2 = await PathExt.TryDeleteFileAsync(sname).ConfigureAwait(false);
+            if (ex2 != null)
+                throw ex2;
             Syncer.GetFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
         }
 
+
+        /// <summary>
+        /// Delete a log file.
+        /// WARNING backup is not guaranteed!
+        /// </summary>
+        /// <param name="serviceName">Name of the service</param>
+        /// <param name="context"></param>
+        /// <returns>True if sucessfully deleted</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<bool> DeleteLog(String serviceName, HttpServerRequest context)
+        {
+            var info = Validate(serviceName, context);
+            var discFolder = info.Syncher.DiscFolder;
+            var exeName = FindServiceExe(discFolder);
+            if ((exeName == null))
+                throw new Exception("No log found!");
+            exeName = Path.GetFileName(exeName);
+            var baseName = Path.GetFileNameWithoutExtension(exeName);
+            var sname = Path.Combine(discFolder, baseName + ".log");
+            if (!File.Exists(sname))
+                throw new Exception("No log found!");
+
+
+            var masterBin = Path.GetDirectoryName(discFolder);
+            var bak = Path.Combine(masterBin, "bak");
+            if (await PathExt.EnsureFolderExistAsync(bak).ConfigureAwait(false) == null)
+            {
+                var fi = new FileInfo(Path.Combine(bak, baseName + ".log"));
+                var dname = ServiceHost.AppendDateAndMakeUnique(fi);
+                var ex = await PathExt.TryGZipFileAsync(sname, dname + ".gz", CompressionLevel.SmallestSize).ConfigureAwait(false);
+                if (ex != null)
+                {
+                    ex = await PathExt.TryCopyFileAsync(sname, dname).ConfigureAwait(false);
+                    if (ex != null)
+                        throw ex;
+                }
+            }
+            var ex2 = await PathExt.TryDeleteFileAsync(sname).ConfigureAwait(false);
+            if (ex2 != null)
+                throw ex2;
+            Syncer.GetFolderData(info.Syncher.Name);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            return true;
+        }
 
         /// <summary>
         /// Update a config file
@@ -2188,6 +2237,28 @@ namespace SysWeaver.MicroService
                 IsMaster = isMaster,
             }, context);
         }
+
+
+
+        /// <summary>
+        /// Delete a log file.
+        /// WARNING backup is not guaranteed!
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="context"></param>
+        /// <returns>True if sucessfully renamed</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public Task<bool> DeleteLogFile(EditFile data, HttpServerRequest context)
+        {
+            var t = data.Url.Split('/');
+            var tl = t.Length;
+            var serviceName = t[tl - 2];
+            return DeleteLog(serviceName, context);
+        }
+
 
         #endregion//Configs
 
