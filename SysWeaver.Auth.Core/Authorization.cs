@@ -8,7 +8,6 @@ using SysWeaver.Data;
 namespace SysWeaver.Auth
 {
 
-
     /// <summary>
     /// The auhorization for a user
     /// </summary>
@@ -146,13 +145,22 @@ namespace SysWeaver.Auth
         }
 
 
-        public Authorization(AuthorizerBase auth, string username, IReadOnlySet<string> tokens, String guid, string email = null, string nickName = null, object authContext = null, String domain = null, string language = null)
+        public Authorization(AuthorizerBase auth, string username, IReadOnlySet<string> tokens, bool weakMethod, String guid, string email = null, string nickName = null, object authContext = null, String domain = null, string language = null)
             : base(username, tokens, language, domain, email, guid, nickName)
         {
+            WeakMethod = weakMethod;
             Auth = auth;
             Cc = auth.ChangeCounter;
             AuthContext = authContext;
         }
+
+
+        /// <summary>
+        /// If true, a weak auth method was used (Basic auth, Bearer token etc).
+        /// If false, a proper login request was used
+        /// </summary>
+        public readonly bool WeakMethod;
+
         
         /// <summary>
         /// Use this to "lock" some operation for a specific user

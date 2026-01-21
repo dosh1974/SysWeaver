@@ -5,32 +5,29 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using SysWeaver.Data;
 
 namespace SysWeaver
 {
 
-
-
-
-
     /// <summary>
-    /// Implements a cache that removes it's items after the specified duration (after last request).
-    /// Item's have the same expiration duration.
-    /// If you need to have per itgem life times, use the MemCache class instead.
+    /// Implements a cache that removes an item after it's expiration.
+    /// Item's can have different expiration times.
+    /// If the lifetime is the same for all items use the FastMemCache class instead.
     /// </summary>
     /// <typeparam name="K">The type of the key</typeparam>
     /// <typeparam name="V">The type of the value</typeparam>
-    public sealed class FastMemCache<K, V> : IMemCache<K, V>
+    public sealed class MemCache<K, V> : IMemCache<K, V>
     {
-        
+
         /// <summary>
         /// Creates a cache that removes it's items after the specified duration (after last request)
         /// </summary>
-        /// <param name="timeout">The duration to keep items in the cache (after last request)</param>
+        /// <param name="getExpirationTimeUtc">A function that gets the expiration time (as UTC) of a value</param>
         /// <param name="comparer">An optional comparer</param>
-        public FastMemCache(TimeSpan timeout, IEqualityComparer<K> comparer = null)
+        public MemCache(Func<V, DateTime> getExpirationTimeUtc, IEqualityComparer<K> comparer = null)
         {
-            TimeOut = timeout;
+            GetExpirationTimeUtc = getExpirationTimeUtc;
             if (comparer == null)
             {
                 C = new ConcurrentDictionary<K, (DateTime, V, Task<V>)>();
@@ -40,9 +37,11 @@ namespace SysWeaver
             {
                 C = new ConcurrentDictionary<K, (DateTime, V, Task<V>)>(comparer);
                 Locks = new ConcurrentDictionary<K, int>(comparer);
+                Comparer = comparer;
             }
         }
-
+        readonly IEqualityComparer<K> Comparer;
+        readonly Func<V, DateTime> GetExpirationTimeUtc;
 
         /// <summary>
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
@@ -65,7 +64,7 @@ namespace SysWeaver
             Lock(key);
             try
             {
-            //  Test if someone else added this cache entry
+                //  Test if someone else added this cache entry
                 if (c.TryGetValue(key, out val))
                 {
                     if (DateTime.UtcNow < val.Item1)
@@ -75,9 +74,11 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
-                val = ValueTuple.Create(DateTime.UtcNow + TimeOut, func(key), (Task<V>)null);
+                var e = func(key);
+                var exp = GetExpirationTimeUtc(e);
+                val = ValueTuple.Create(exp, e, (Task<V>)null);
                 c[key] = val;
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                UpdatePrio(key, exp);
                 return val.Item2;
             }
             finally
@@ -86,6 +87,14 @@ namespace SysWeaver
             }
         }
 
+        void UpdatePrio(K key, DateTime exp)
+        {
+            var q = Q;
+            lock (q)
+            {
+                q.Enqueue(key, exp);
+            }
+        }
 
         /// <summary>
         /// Set a new value
@@ -98,9 +107,10 @@ namespace SysWeaver
             Lock(key);
             try
             {
-                var val = ValueTuple.Create(DateTime.UtcNow + TimeOut, value, (Task<V>)null);
+                var exp = GetExpirationTimeUtc(value);
+                var val = ValueTuple.Create(exp, value, (Task<V>)null);
                 c[key] = val;
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                UpdatePrio(key, exp);
             }
             finally
             {
@@ -162,9 +172,11 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
-                val = ValueTuple.Create(DateTime.UtcNow + TimeOut, func(key, arg), (Task<V>)null);
+                var e = func(key, arg);
+                var exp = GetExpirationTimeUtc(e);
+                val = ValueTuple.Create(exp, e, (Task<V>)null);
                 c[key] = val;
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                UpdatePrio(key, exp);
                 return val.Item2;
             }
             finally
@@ -207,9 +219,11 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
-                val = ValueTuple.Create(DateTime.UtcNow + TimeOut, func(key, arg0, arg1), (Task<V>)null);
+                var e = func(key, arg0, arg1);
+                var exp = GetExpirationTimeUtc(e);
+                val = ValueTuple.Create(exp, e, (Task<V>)null);
                 c[key] = val;
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                UpdatePrio(key, exp);
                 return val.Item2;
             }
             finally
@@ -268,34 +282,38 @@ namespace SysWeaver
                 Interlocked.Increment(ref MissCount);
                 if (waitUntilReady)
                 {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key).ConfigureAwait(false), (Task<V>)null);
+                    var e = await func(key).ConfigureAwait(false);
+                    var exp = GetExpirationTimeUtc(e);
+                    val = ValueTuple.Create(exp, e, (Task<V>)null);
                     c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    UpdatePrio(key, exp);
                     return val.Item2;
-                }else
+                }
+                else
                 {
                     async Task<V> build()
                     {
-                        V v = default;
+                        V e = default;
                         try
                         {
-                            v = await func(key).ConfigureAwait(false);
+                            e = await func(key).ConfigureAwait(false);
                         }
                         catch
                         {
                             c.TryRemove(key, out var _);
                             throw;
                         }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
+                        var exp = GetExpirationTimeUtc(e);
+                        val = ValueTuple.Create(exp, e, (Task<V>)null);
                         try
                         {
                             c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                            UpdatePrio(key, exp);
                         }
                         finally
                         {
                         }
-                        return v;
+                        return e;
                     }
                     var task = build();
                     if (task.IsCompleted)
@@ -362,35 +380,38 @@ namespace SysWeaver
                 Interlocked.Increment(ref MissCount);
                 if (waitUntilReady)
                 {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, arg).ConfigureAwait(false), (Task<V>)null);
+                    var e = await func(key, arg).ConfigureAwait(false);
+                    var exp = GetExpirationTimeUtc(e);
+                    val = ValueTuple.Create(exp, e, (Task<V>)null);
                     c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    UpdatePrio(key, exp);
                     return val.Item2;
                 }
                 else
                 {
                     async Task<V> build()
                     {
-                        V v = default;
+                        V e = default;
                         try
                         {
-                            v = await func(key, arg).ConfigureAwait(false);
+                            e = await func(key, arg).ConfigureAwait(false);
                         }
                         catch
                         {
                             c.TryRemove(key, out var _);
                             throw;
                         }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
+                        var exp = GetExpirationTimeUtc(e);
+                        val = ValueTuple.Create(exp, e, (Task<V>)null);
                         try
                         {
                             c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                            UpdatePrio(key, exp);
                         }
                         finally
                         {
                         }
-                        return v;
+                        return e;
                     }
                     var task = build();
                     if (task.IsCompleted)
@@ -458,35 +479,38 @@ namespace SysWeaver
                 Interlocked.Increment(ref MissCount);
                 if (waitUntilReady)
                 {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, arg0, arg1).ConfigureAwait(false), (Task<V>)null);
+                    var e = await func(key, arg0, arg1).ConfigureAwait(false);
+                    var exp = GetExpirationTimeUtc(e);
+                    val = ValueTuple.Create(exp, e, (Task<V>)null);
                     c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    UpdatePrio(key, exp);
                     return val.Item2;
                 }
                 else
                 {
                     async Task<V> build()
                     {
-                        V v = default;
+                        V e = default;
                         try
                         {
-                            v = await func(key, arg0, arg1).ConfigureAwait(false);
+                            e = await func(key, arg0, arg1).ConfigureAwait(false);
                         }
                         catch
                         {
                             c.TryRemove(key, out var _);
                             throw;
                         }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
+                        var exp = GetExpirationTimeUtc(e);
+                        val = ValueTuple.Create(exp, e, (Task<V>)null);
                         try
                         {
                             c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                            UpdatePrio(key, exp);
                         }
                         finally
                         {
                         }
-                        return v;
+                        return e;
                     }
                     var task = build();
                     if (task.IsCompleted)
@@ -554,35 +578,38 @@ namespace SysWeaver
                 Interlocked.Increment(ref MissCount);
                 if (waitUntilReady)
                 {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key).ConfigureAwait(false), (Task<V>)null);
+                    var e = await func(key).ConfigureAwait(false);
+                    var exp = GetExpirationTimeUtc(e);
+                    val = ValueTuple.Create(exp, e, (Task<V>)null);
                     c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    UpdatePrio(key, exp);
                     return val.Item2;
                 }
                 else
                 {
                     async Task<V> build()
                     {
-                        V v = default;
+                        V e = default;
                         try
                         {
-                            v = await func(key).ConfigureAwait(false);
+                            e = await func(key).ConfigureAwait(false);
                         }
                         catch
                         {
                             c.TryRemove(key, out var _);
                             throw;
                         }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
+                        var exp = GetExpirationTimeUtc(e);
+                        val = ValueTuple.Create(exp, e, (Task<V>)null);
                         try
                         {
                             c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                            UpdatePrio(key, exp);
                         }
                         finally
                         {
                         }
-                        return v;
+                        return e;
                     }
                     var task = build();
                     if (task.IsCompleted)
@@ -649,35 +676,38 @@ namespace SysWeaver
                 Interlocked.Increment(ref MissCount);
                 if (waitUntilReady)
                 {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, arg).ConfigureAwait(false), (Task<V>)null);
+                    var e = await func(key, arg).ConfigureAwait(false);
+                    var exp = GetExpirationTimeUtc(e);
+                    val = ValueTuple.Create(exp, e, (Task<V>)null);
                     c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    UpdatePrio(key, exp);
                     return val.Item2;
                 }
                 else
                 {
                     async Task<V> build()
                     {
-                        V v = default;
+                        V e = default;
                         try
                         {
-                            v = await func(key, arg).ConfigureAwait(false);
+                            e = await func(key, arg).ConfigureAwait(false);
                         }
                         catch
                         {
                             c.TryRemove(key, out var _);
                             throw;
                         }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
+                        var exp = GetExpirationTimeUtc(e);
+                        val = ValueTuple.Create(exp, e, (Task<V>)null);
                         try
                         {
                             c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                            UpdatePrio(key, exp);
                         }
                         finally
                         {
                         }
-                        return v;
+                        return e;
                     }
                     var task = build();
                     if (task.IsCompleted)
@@ -746,35 +776,38 @@ namespace SysWeaver
                 Interlocked.Increment(ref MissCount);
                 if (waitUntilReady)
                 {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, arg0, arg1).ConfigureAwait(false), (Task<V>)null);
+                    var e = await func(key, arg0, arg1).ConfigureAwait(false);
+                    var exp = GetExpirationTimeUtc(e);
+                    val = ValueTuple.Create(exp, e, (Task<V>)null);
                     c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    UpdatePrio(key, exp);
                     return val.Item2;
                 }
                 else
                 {
                     async Task<V> build()
                     {
-                        V v = default;
+                        V e = default;
                         try
                         {
-                            v = await func(key, arg0, arg1).ConfigureAwait(false);
+                            e = await func(key, arg0, arg1).ConfigureAwait(false);
                         }
                         catch
                         {
                             c.TryRemove(key, out var _);
                             throw;
                         }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
+                        var exp = GetExpirationTimeUtc(e);
+                        val = ValueTuple.Create(exp, e, (Task<V>)null);
                         try
                         {
                             c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                            UpdatePrio(key, exp);
                         }
                         finally
                         {
                         }
-                        return v;
+                        return e;
                     }
                     var task = build();
                     if (task.IsCompleted)
@@ -799,10 +832,10 @@ namespace SysWeaver
         public void Prune()
         {
             var q = Q;
-            if (!q.TryPeek(out var v))
+            if (!q.TryPeek(out var key, out var dt))
                 return;
             var exp = DateTime.UtcNow;
-            if (exp < v.Item1)
+            if (exp < dt)
                 return;
             var c = C;
             var locks = Locks;
@@ -810,16 +843,15 @@ namespace SysWeaver
             {
                 for (; ; )
                 {
-                    if (!q.TryPeek(out v))
+                    if (!q.TryPeek(out key, out dt))
                         return;
-                    if (exp < v.Item1)
+                    if (exp < dt)
                         return;
-                    q.TryDequeue(out v);
-                    var key = v.Item2;
+                    q.TryDequeue(out key, out dt);
                     SpinWait.SpinUntil(() => locks.TryAdd(key, 0));
                     if (c.TryGetValue(key, out var val))
                     {
-                        if (val.Item1 == v.Item1)
+                        if (val.Item1 == dt)
                             c.TryRemove(key, out var _);
                     }
                     locks.TryRemove(key, out var _);
@@ -863,13 +895,12 @@ namespace SysWeaver
             {
                 for (; ; )
                 {
-                    if (!q.TryDequeue(out var v))
+                    if (!q.TryDequeue(out var key, out var dt))
                         return;
-                    var key = v.Item2;
                     SpinWait.SpinUntil(() => locks.TryAdd(key, 0));
                     if (c.TryGetValue(key, out var val))
                     {
-                        if (val.Item1 == v.Item1)
+                        if (val.Item1 == dt)
                             c.TryRemove(key, out var _);
                     }
                     locks.TryRemove(key, out var _);
@@ -896,9 +927,9 @@ namespace SysWeaver
                 tot = 1;
             yield return new Stats(system, prefix + "Size", count, "Number of items in the cache");
             yield return new Stats(system, prefix + "Total count", totOrg, "Number of times an item have been requested");
-            yield return new Stats(system, prefix + "Hit ratio", (double)(((Decimal)h) * 100M / (Decimal)tot), "The ratio of cache hits (returns an existing item)", Data.TableDataNumberAttribute.Percentage);
-            yield return new Stats(system, prefix + "Semi hit ratio", (double)(((Decimal)s) * 100M / (Decimal)tot), "The ratio of semi cache hits (returns an existing item, but had to take a lock to get it, so less optimal)", Data.TableDataNumberAttribute.Percentage);
-            yield return new Stats(system, prefix + "Miss ratio", (double)(((Decimal)m) * 100M / (Decimal)tot), "The ratio of cache misses (doesn't have an item, and a new one have to be created)", Data.TableDataNumberAttribute.Percentage);
+            yield return new Stats(system, prefix + "Hit ratio", (double)(((Decimal)h) * 100M / (Decimal)tot), "The ratio of cache hits (returns an existing item)", TableDataNumberAttribute.Percentage);
+            yield return new Stats(system, prefix + "Semi hit ratio", (double)(((Decimal)s) * 100M / (Decimal)tot), "The ratio of semi cache hits (returns an existing item, but had to take a lock to get it, so less optimal)", TableDataNumberAttribute.Percentage);
+            yield return new Stats(system, prefix + "Miss ratio", (double)(((Decimal)m) * 100M / (Decimal)tot), "The ratio of cache misses (doesn't have an item, and a new one have to be created)", TableDataNumberAttribute.Percentage);
         }
 
 
@@ -976,9 +1007,8 @@ namespace SysWeaver
 
         readonly ConcurrentDictionary<K, int> Locks;
         readonly ConcurrentDictionary<K, ValueTuple<DateTime, V, Task<V>>> C;
-        readonly ConcurrentQueue<ValueTuple<DateTime, K>> Q = new ();
+        readonly PriorityQueue<K, DateTime> Q = new();
 
-        readonly TimeSpan TimeOut;
 
         /// <summary>
         /// Get the count of cached items (somewhat slow)
@@ -989,7 +1019,5 @@ namespace SysWeaver
         public IEnumerator<(DateTime, K, V)> GetEnumerator() => C.Select(x => (x.Value.Item1, x.Key, x.Value.Item2)).GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
     }
-
 }

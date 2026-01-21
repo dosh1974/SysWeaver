@@ -175,7 +175,9 @@ namespace SysWeaver.Net
                 var e = Interlocked.Read(ref Exp);
                 if (Interlocked.Read(ref Count) > 3)
                     return e;
-                return (e - KeepAliveDurationTicks) + (TimeSpan.TicksPerMinute >> 1);
+                if (Auth?.WeakMethod ?? true)
+                    return (e - KeepAliveDurationTicks) + (TimeSpan.TicksPerMinute >> 1);
+                return e;
             }
         }
 

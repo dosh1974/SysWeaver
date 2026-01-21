@@ -859,7 +859,7 @@ namespace SysWeaver.MicroService
             HttpServer?.EnumUserSessions(userGuid, session =>
             {
                 var oldAuth = session.Auth;
-                auth = auth ?? new Authorization(this, user.UserName, oldAuth.Tokens, userGuid, newEmail ?? oldAuth.Email, user.NickName, user, user.Domain, user.Language);
+                auth = auth ?? new Authorization(this, user.UserName, oldAuth.Tokens, false, userGuid, newEmail ?? oldAuth.Email, user.NickName, user, user.Domain, user.Language);
                 session.SetAuth(auth);
                 if (clearcache)
                     session.InvalidateCache();

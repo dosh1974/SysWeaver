@@ -31,6 +31,7 @@ namespace SysWeaver.Net
                         Auth = String.Join(',', t);
                     else
                         Auth = "-";
+                    Weak = a.WeakMethod;
                 }
                 Address = s.Address;
                 UserAgent = s.UserAgent;
@@ -81,6 +82,12 @@ namespace SysWeaver.Net
             /// </summary>
             [TableDataTags]
             public readonly String Auth;
+
+            /// <summary>
+            /// If true, a weak auth method was used (Basic auth, Bearer token etc).
+            /// If false, a proper login request was used
+            /// </summary>
+            public readonly bool Weak;
 
             /// <summary>
             /// Id of the device

@@ -114,7 +114,7 @@ namespace SysWeaver.MicroService
                 if (!String.IsNullOrEmpty(v))
                     tokens.Add(v.FastToLower());
             }
-            return new Authorization(this, user.UserName, tokens, MakeGuid(userId), mail?.Email, user.NickName, user, user.Domain, user.Language);
+            return new Authorization(this, user.UserName, tokens, false, MakeGuid(userId), mail?.Email, user.NickName, user, user.Domain, user.Language);
         }
 
 

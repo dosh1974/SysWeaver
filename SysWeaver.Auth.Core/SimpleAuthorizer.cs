@@ -136,7 +136,7 @@ namespace SysWeaver.Auth
                 using var _ = msg.Tab();
                 var p = Params;
                 var tokenDelim = TokenDelim;
-                var a = new Dictionary<String, Tuple<Byte[], Authorization, String, bool>>(StringComparer.Ordinal);
+                var a = new Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>>(StringComparer.Ordinal);
                 var guidMap = new Dictionary<String, AuthorizationInfo>(StringComparer.Ordinal);
                 var aba = p.AllowBasicAuth;
                 var apiKeyAuth = p.ApiKeyAuth;
@@ -162,7 +162,7 @@ namespace SysWeaver.Auth
                         }
                     }
                 }
-                Dictionary<String, Tuple<Byte[], Authorization, String, bool>> changed = new (StringComparer.Ordinal);
+                Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>> changed = new (StringComparer.Ordinal);
                 foreach (var x in Auths)
                     changed.Add(x.Key, x.Value);
                 foreach (var x in a)
@@ -193,7 +193,7 @@ namespace SysWeaver.Auth
             msg.AddMessage(LogPrefix + "Users updated", MessageLevels.Debug);
         }
 
-        void AddUsers(Dictionary<String, Tuple<Byte[], Authorization, String, bool>> a, Dictionary<String, AuthorizationInfo> guidMap, IEnumerable<String> users, bool allowBasicAuth, bool ignorePolicy = false)
+        void AddUsers(Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>> a, Dictionary<String, AuthorizationInfo> guidMap, IEnumerable<String> users, bool allowBasicAuth, bool ignorePolicy = false)
         {
             if (users == null)
                 return;
@@ -201,7 +201,7 @@ namespace SysWeaver.Auth
                 AddUser(a, guidMap, x, allowBasicAuth, ignorePolicy);
         }
 
-        Authorization AddUser(Dictionary<String, Tuple<Byte[], Authorization, String, bool>> a, Dictionary<String, AuthorizationInfo> guidMap, String u, bool allowBasicAuth, bool ignorePolicy = false)
+        Authorization AddUser(Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>> a, Dictionary<String, AuthorizationInfo> guidMap, String u, bool allowBasicAuth, bool ignorePolicy = false)
         {
             var ud = u?.Trim();
             if (String.IsNullOrEmpty(ud))
@@ -255,12 +255,13 @@ namespace SysWeaver.Auth
                 hash = AuthTools.ComputeSimplePasswordHash(ul, pwd);
             }
             var guid = String.Concat(GuidPrefix, ':', HashTools.GetHashString(user));
-            var auth = new Authorization(this, user, Authorization.GetRequiredTokenSet(tokens), guid, user, null, null, domain);
+            var auth = new Authorization(this, user, Authorization.GetRequiredTokenSet(tokens), false, guid, user, null, null, domain);
             allowBasicAuth |= auth.Tokens.Contains("service");
+            var basicAuth = allowBasicAuth ? new Authorization(this, user, Authorization.GetRequiredTokenSet(tokens), true, guid, user, null, null, domain) : null;
             guidMap[guid] = new AuthorizationInfo(auth);
-            a[ul] = new Tuple<byte[], Authorization, String, bool>(Convert.FromBase64String(hash), auth, hash, allowBasicAuth);
+            a[ul] = new Tuple<byte[], Authorization, String, Authorization>(Convert.FromBase64String(hash), auth, hash, basicAuth);
             Msg.AddMessage(String.Concat(LogPrefix, "Added user \"", user, '"'), MessageLevels.Debug);
-            return auth;
+            return basicAuth ?? auth;
         }
         const String LogPrefix = "[Auth] ";
 
@@ -268,7 +269,7 @@ namespace SysWeaver.Auth
 
         public override string ToString() => String.Join(String.Join(", ", Auths.Keys.Select(x => x.ToQuoted())), "Users: [", ']');
 
-        IReadOnlyDictionary<String, Tuple<Byte[], Authorization, String, bool>> Auths = new Dictionary<String, Tuple<Byte[], Authorization, String, bool>>(StringComparer.Ordinal).Freeze();
+        IReadOnlyDictionary<String, Tuple<Byte[], Authorization, String, Authorization>> Auths = new Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>>(StringComparer.Ordinal).Freeze();
         IReadOnlyDictionary<String, AuthorizationInfo> AuthGuids = new Dictionary<String, AuthorizationInfo>(StringComparer.Ordinal).Freeze();
 
         IReadOnlyDictionary<String, Task<Authorization>> BearerAuths = new Dictionary<String, Task<Authorization>>(StringComparer.Ordinal).Freeze();
@@ -370,11 +371,12 @@ namespace SysWeaver.Auth
             if (!Auths.TryGetValue(userName.FastToLower(), out var data))
                 return NoAuth;
             //  Basic auth allowed
-            if (!data.Item4)
+            var ba = data.Item4;
+            if (ba == null)
                 return NoAuth;
             if (!SpanExt.ContentEqual(hash, data.Item1))
                 return NoAuth;
-            return Task.FromResult(data.Item2);
+            return Task.FromResult(ba);
         }
 
         public override Task<Authorization> BearerAuth(string token)
