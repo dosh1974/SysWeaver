@@ -351,6 +351,7 @@ namespace SysWeaver.Net
         ValueTask<IHttpRequestHandler> HandleLogoPng1024(HttpServerRequest data, HttpSession session)
             => HandleLogoPng(data, session, 1024);
 
+
         #endregion//Handlers
 
 

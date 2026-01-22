@@ -67,6 +67,7 @@ namespace SysWeaver.MicroService
                 "config", 
                 "csproj", 
                 "log",
+                "err",
                 "cfg",
             ];
 

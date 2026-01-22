@@ -78,51 +78,55 @@ namespace SysWeaver.Compression
         /// <exception cref="Exception"></exception>
         public TransformGZipToDeflateStream(Stream gzipData, bool leaveOpen = false)
         {
-            Span<Byte> tempData = stackalloc Byte[10];
-            var tempData1 = tempData.Slice(0, 1);
-            var tempData2 = tempData.Slice(0, 2);
-            if (gzipData.Read(tempData) != 10)
-                throw new Exception(Invalid);
-            if ((tempData[0] != 0x1f) || (tempData[1] != 0x8b))
-                throw new Exception("Input stream does not contain gzip compressed data!");
-            if (tempData[2] != 0x08)
-                throw new Exception("Only deflate compressed gzip data is supported!");
-            var flags = tempData[3];
-            if ((flags & 0x4) != 0) // FEXTRA 
+            var l = gzipData.Length - gzipData.Position;
+            if (l > 0)
             {
-                if (gzipData.Read(tempData2) != 2)
+                Span<Byte> tempData = stackalloc Byte[10];
+                var tempData1 = tempData.Slice(0, 1);
+                var tempData2 = tempData.Slice(0, 2);
+                if (gzipData.Read(tempData) != 10)
                     throw new Exception(Invalid);
-                int extraLen = ((int)tempData2[1]) | ((int)tempData2[0]);
-                gzipData.Position += extraLen;
-            }
-            if ((flags & 0x8) != 0) // FNAME
-            {
-                for (; ; )
+                if ((tempData[0] != 0x1f) || (tempData[1] != 0x8b))
+                    throw new Exception("Input stream does not contain gzip compressed data!");
+                if (tempData[2] != 0x08)
+                    throw new Exception("Only deflate compressed gzip data is supported!");
+                var flags = tempData[3];
+                if ((flags & 0x4) != 0) // FEXTRA 
                 {
-                    if (gzipData.Read(tempData1) != 1)
+                    if (gzipData.Read(tempData2) != 2)
                         throw new Exception(Invalid);
-                    if (tempData1[0] == 0)
-                        break;
+                    int extraLen = ((int)tempData2[1]) | ((int)tempData2[0]);
+                    gzipData.Position += extraLen;
                 }
-            }
-            if ((flags & 0x10) != 0) // FCOMMENT
-            {
-                var sb = new StringBuilder();
-                for (; ; )
+                if ((flags & 0x8) != 0) // FNAME
                 {
-                    if (gzipData.Read(tempData1) != 1)
-                        throw new Exception(Invalid);
-                    if (tempData1[0] == 0)
-                        break;
+                    for (; ; )
+                    {
+                        if (gzipData.Read(tempData1) != 1)
+                            throw new Exception(Invalid);
+                        if (tempData1[0] == 0)
+                            break;
+                    }
                 }
+                if ((flags & 0x10) != 0) // FCOMMENT
+                {
+                    var sb = new StringBuilder();
+                    for (; ; )
+                    {
+                        if (gzipData.Read(tempData1) != 1)
+                            throw new Exception(Invalid);
+                        if (tempData1[0] == 0)
+                            break;
+                    }
+                }
+                if ((flags & 0x2) != 0) // FHCRC
+                    gzipData.Position += 2;
+                InternalStart = gzipData.Position;
+                InternalLength = gzipData.Length - InternalStart - 8;
+                if (InternalLength <= 0)
+                    throw new Exception(Invalid);
+                InternalEnd = InternalStart + InternalLength;
             }
-            if ((flags & 0x2) != 0) // FHCRC
-                gzipData.Position += 2;
-            InternalStart = gzipData.Position;
-            InternalLength = gzipData.Length - InternalStart - 8;
-            if (InternalLength <= 0)
-                throw new Exception(Invalid);
-            InternalEnd = InternalStart + InternalLength;
             UnderlayingStream = gzipData;
             LeaveOpen = leaveOpen;
         }

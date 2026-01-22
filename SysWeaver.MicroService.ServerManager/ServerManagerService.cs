@@ -46,10 +46,12 @@ namespace SysWeaver.MicroService
         readonly IApiAuditService Audit;
 
         const String ServerManagerServicesKey = "ServerManagerServices";
-
+        readonly FileHttpServerModuleFolder BakModuleFolder;
+        readonly String BakFolder;
         readonly String[] DestFolders;
         readonly ServerManagerParams P;
         readonly FileUploaderService FileUploader;
+        readonly FileHttpServerModule FileModule;
         readonly IFileRepo KeyRepo;
 
         public ServerManagerService(ServiceManager manager, ServerManagerParams p)
@@ -61,6 +63,8 @@ namespace SysWeaver.MicroService
             RemoveServiceBackupsDays = removeServiceBackupsDays;
             var s = manager.Get<FolderSyncService>();
             FileUploader = manager.Get<FileUploaderService>();
+            FileModule = manager.Get<FileHttpServerModule>();
+
             Manager = manager;
             Syncer = s;
             foreach (var f in p.Folders.Nullable())
@@ -90,8 +94,38 @@ namespace SysWeaver.MicroService
                 if (!tf.TryAdd(name, new InternalTextFile(name, f)))
                     throw new Exception("A text file named \"" + name + "\" have already been added!");
             }
-            TextFiles = tf.Freeze();
 
+            TextFiles = tf.Freeze();
+            var bakFolder = Path.GetFullPath(Path.Combine(EnvInfo.ExecutableDir, "..", "bak"));
+            manager.FileDeleter = async fn =>
+            {
+                try
+                {
+                    await DeleteFileWithBackup(fn, bakFolder).ConfigureAwait(false);
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    return ex;
+                }
+            };
+
+            var bak = new FileHttpServerModuleFolder
+            {
+                AssumePreCompressed = true,
+                Auth = Roles.AdminOps,
+                ClientCacheDuration = 5,
+                DiscFolder = bakFolder,
+                RequestCacheDuration = 4,
+                WebFolder = "ServerManager/Bak/",
+            };
+            FileModule.AddFolder(bak);
+            BakModuleFolder = bak;
+            BakFolder = bakFolder;
+
+
+
+            FileUploader = manager.Get<FileUploaderService>();
             try
             {
                 InitAsync().RunAsync();
@@ -125,7 +159,8 @@ namespace SysWeaver.MicroService
                 df = PathTemplate.Resolve(df);
             }
             PathExt.CreateDataFolder(df);
-            PathExt.SetupDataFolder(Path.GetDirectoryName(df));
+            var pf = Path.GetDirectoryName(df);
+            PathExt.SetupDataFolder(pf);
             var v = new FolderSyncFolder
             {
                 Name = f.Name,
@@ -137,14 +172,25 @@ namespace SysWeaver.MicroService
                 OnActivateAsync = OnServiceActivate,
                 OnDeactivateAsync = OnServiceDeactivate,
             };
+            var bak = new FileHttpServerModuleFolder
+            {
+                AssumePreCompressed = true,
+                Auth = Roles.AdminOps,
+                ClientCacheDuration = 5,
+                DiscFolder = Path.Combine(pf, "bak"),
+                RequestCacheDuration = 4,
+                WebFolder = "ServerManager/ServiceBak/" + f.Name,
+            };
+
             var folder = Syncer.AddFolder(v);
             var currentRepo = new BackupFileRepo("Current_" + f.Name, folder, this);
             var masterRepo = f.MasterConfig ? new BackupFileRepo("Master_" + f.Name, Path.GetDirectoryName(folder), this) : null;
-            if (!Services.TryAdd(f.Name.FastToLower(), new SmServiceInfo(f, v, p, currentRepo, masterRepo)))
+            if (!Services.TryAdd(f.Name.FastToLower(), new SmServiceInfo(f, v, p, currentRepo, masterRepo, bak)))
             {
                 Syncer.RemoveFolder(v);
                 throw new Exception("Must have a unique name!");
             }
+            FileModule.AddFolder(bak);
             FileUploader.AddRepo(currentRepo);
             FileUploader.AddRepo(masterRepo);
         }
@@ -156,6 +202,7 @@ namespace SysWeaver.MicroService
             Syncer.RemoveFolder(info.Syncher);
             FileUploader.RemoveRepo(info.Master);
             FileUploader.RemoveRepo(info.Current);
+            FileModule.RemoveFolder(info.Bak);
             return true;
         }
 
@@ -165,6 +212,7 @@ namespace SysWeaver.MicroService
             Interlocked.Exchange(ref UpdateStatsTask, null)?.Dispose();
             Interlocked.Exchange(ref UpdateTask, null)?.Dispose();
             var fu = FileUploader;
+            var fm = FileModule;
             var sy = Syncer;
             var ss = Services;
             var d = ss.Keys.ToList();
@@ -175,7 +223,9 @@ namespace SysWeaver.MicroService
                 fu.RemoveRepo(s.Master);
                 fu.RemoveRepo(s.Current);
                 sy.RemoveFolder(s.Syncher);
+                fm.RemoveFolder(s.Bak);
             }
+            fm.RemoveFolder(BakModuleFolder);
             fu.RemoveRepo(KeyRepo);
         }
 
@@ -770,6 +820,29 @@ namespace SysWeaver.MicroService
 
         static readonly String[] BarDriveColor = BarChartColor("#435ACC", "#ED53BF");
 
+
+
+        /// <summary>
+        /// Reboot the computer
+        /// </summary>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiAudit(AuditGroup)]
+        public bool RebootComputer()
+        {
+            Manager.AddMessage(LogPrefix + "Rebooting", MessageLevels.Warning);
+            Scheduler.Add(DateTime.UtcNow.AddSeconds(2), 
+                async () =>
+                {
+                    var a = Manager.TryGet<IApiAuditService>();
+                    if (a != null)
+                        await a.Flush().ConfigureAwait(false);
+                    PlatformTools.Current.Reboot();
+                });
+            return true;
+        }
+
         #region Process info
 
         /// <summary>
@@ -911,8 +984,6 @@ namespace SysWeaver.MicroService
 
 
         #endregion//Process info
-
-
 
         #region CPU info
 
@@ -1166,20 +1237,28 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebApiClientCacheStatic]
-        [WebApiRequestCacheStatic]
         public SmServerInfo GetServerInfo()
         {
             var mi = MemInfo;
+            var time = DateTime.UtcNow;
+            var ltime = time.ToLocalTime();
+            var t = TimeZoneInfo.Local;
+            bool isDls = t.IsDaylightSavingTime(ltime);
             return new SmServerInfo
             {
-                ProcessorCount = Environment.ProcessorCount,
                 Machine = Environment.MachineName,
                 Os = Environment.OSVersion.VersionString,
                 OsBase = EnvInfo.OsPlatform,
                 DriveCount = DriveInfos?.Length ?? 0,
                 ProcessCount = Processes?.Count ?? 0,
-                Memory = mi?.Total ?? 0
+                Memory = mi?.Total ?? 0,
+                TzName = t.StandardName,
+                // Stats
+                ProcessorCount = Environment.ProcessorCount,
+                Utc = time,
+                Time = ltime.ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                TzDayName = isDls ? t.DaylightName : t.StandardName,
+
             };
         }
 
@@ -1189,13 +1268,18 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebApiClientCache(4)]
-        [WebApiRequestCache(3)]
         public SmServerStats GetServerStats()
         {
+            var time = DateTime.UtcNow;
+            var ltime = time.ToLocalTime();
+            var t = TimeZoneInfo.Local;
+            bool isDls = t.IsDaylightSavingTime(ltime);
             return new SmServerStats
             {
                 ProcessCount = Processes?.Count ?? 0,
+                Utc = time,
+                Time = ltime.ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                TzDayName = isDls ? t.DaylightName : t.StandardName,
             };
         }
 
@@ -1729,7 +1813,6 @@ namespace SysWeaver.MicroService
 
         #endregion//Services
 
-
         #region Storage
 
         /// <summary>
@@ -1773,7 +1856,6 @@ namespace SysWeaver.MicroService
             => TableDataTools.Get(r, 15000, await GetStorageStats().ConfigureAwait(false));
 
         #endregion//Storage
-
 
         #region Version
 
@@ -2097,32 +2179,14 @@ namespace SysWeaver.MicroService
             var sname = data.Config;
             if (!IsValidConfigName(sname))
                 throw new Exception("Invalid config name!");
-            var fileName = sname;
             sname = Path.Combine(bin, sname);
-            if (!File.Exists(sname))
-                throw new Exception("The configuration file does not exist!");
-            var bak = Path.Combine(masterBin, "bak");
-            if (await PathExt.EnsureFolderExistAsync(bak).ConfigureAwait(false) == null)
-            {
-                var fi = new FileInfo(Path.Combine(bak, fileName));
-                var dname = ServiceHost.AppendDateAndMakeUnique(fi);
-                var ex = await PathExt.TryGZipFileAsync(sname, dname + ".gz", CompressionLevel.SmallestSize).ConfigureAwait(false);
-                if (ex != null)
-                {
-                    ex = await PathExt.TryCopyFileAsync(sname, dname).ConfigureAwait(false);
-                    if (ex != null)
-                        throw ex;
-                }
-            }
-            var ex2 = await PathExt.TryDeleteFileAsync(sname).ConfigureAwait(false);
-            if (ex2 != null)
-                throw ex2;
+            if (!(await DeleteFileWithBackup(sname, Path.Combine(masterBin, "bak")).ConfigureAwait(false)))
+                return false;
             Syncer.GetFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
         }
-
 
         /// <summary>
         /// Delete a log file.
@@ -2145,27 +2209,9 @@ namespace SysWeaver.MicroService
             exeName = Path.GetFileName(exeName);
             var baseName = Path.GetFileNameWithoutExtension(exeName);
             var sname = Path.Combine(discFolder, baseName + ".log");
-            if (!File.Exists(sname))
-                throw new Exception("No log found!");
-
-
             var masterBin = Path.GetDirectoryName(discFolder);
-            var bak = Path.Combine(masterBin, "bak");
-            if (await PathExt.EnsureFolderExistAsync(bak).ConfigureAwait(false) == null)
-            {
-                var fi = new FileInfo(Path.Combine(bak, baseName + ".log"));
-                var dname = ServiceHost.AppendDateAndMakeUnique(fi);
-                var ex = await PathExt.TryGZipFileAsync(sname, dname + ".gz", CompressionLevel.SmallestSize).ConfigureAwait(false);
-                if (ex != null)
-                {
-                    ex = await PathExt.TryCopyFileAsync(sname, dname).ConfigureAwait(false);
-                    if (ex != null)
-                        throw ex;
-                }
-            }
-            var ex2 = await PathExt.TryDeleteFileAsync(sname).ConfigureAwait(false);
-            if (ex2 != null)
-                throw ex2;
+            if (!(await DeleteFileWithBackup(sname, Path.Combine(masterBin, "bak")).ConfigureAwait(false)))
+                return false;
             Syncer.GetFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
@@ -2385,6 +2431,29 @@ namespace SysWeaver.MicroService
 
         #endregion//IHaveStats
 
+
+        /// <summary>
+        /// Delete a file and create a .gz backup
+        /// </summary>
+        /// <param name="sname"></param>
+        /// <param name="bak"></param>
+        /// <returns></returns>
+        async ValueTask<bool> DeleteFileWithBackup(String sname, String bak)
+        {
+            var fi = new FileInfo(sname);
+            if (await PathExt.EnsureFolderExistAsync(bak).ConfigureAwait(false) == null)
+            {
+                var dname = ServiceHost.AppendDateAndMakeUnique(bak, fi.Name, fi.LastWriteTime);
+                var ex = await PathExt.TryMoveFileAsync(sname, dname).ConfigureAwait(false);
+                if (ex != null)
+                    throw ex;
+                if (await PathExt.TryGZipFileAsync(dname, dname + ".gz", CompressionLevel.SmallestSize).ConfigureAwait(false) == null)
+                    await PathExt.TryDeleteFileAsync(dname).ConfigureAwait(false);
+                return true;
+            }
+            return false;
+        }
+
         #region IHaveTextFiles
 
         sealed class InternalTextFile : SmTextFile
@@ -2396,6 +2465,8 @@ namespace SysWeaver.MicroService
                 String p = "";
                 if (s.AllowDelete)
                     p += "d=../ServerManager/" + nameof(DeleteTextFile) + "&";
+                if (s.AllowEdit)
+                    p += "u=../ServerManager/" + nameof(SaveTextFile) + "&";
                 if (s.ScrollToEnd)
                     p += "scrollToEnd=true&";
                 OpenParams = p;
@@ -2437,12 +2508,43 @@ namespace SysWeaver.MicroService
                 throw new Exception("May not delete this file!");
             if (!context.Session.Auth.IsValid(x.Auth))
                 throw new Exception("Not authorized to delete this file!");
-            var ex = await PathExt.TryDeleteFileAsync(x.Filename).ConfigureAwait(false);
-            if (ex != null)
-                throw ex;
-            return true;
+            return await DeleteFileWithBackup(x.Filename, Path.Combine(EnvInfo.ExecutableDir, "bak")).ConfigureAwait(false);
         }
 
+
+        /// <summary>
+        /// Save a text file
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth]
+        [WebApiAudit(AuditGroup)]
+        public async Task<bool> SaveTextFile(EditSaveTextFile file, HttpServerRequest context)
+        {
+            if (!TextFiles.TryGetValue(file.Name, out var x))
+                throw new Exception("Unknown file!");
+            if (!x.AllowEdit)
+                throw new Exception("May not save this file!");
+            if (!context.Session.Auth.IsValid(x.Auth))
+                throw new Exception("Not authorized to save this file!");
+            var dname = x.Filename;
+            var tempName = Path.Combine(Path.GetDirectoryName(dname), String.Concat("Temp", DateTime.UtcNow.Ticks, '_', Path.GetFileName(dname)));
+            await File.WriteAllTextAsync(tempName, file.Content).ConfigureAwait(false);
+            try
+            {
+                if (!(await DeleteFileWithBackup(dname, BakFolder).ConfigureAwait(false)))
+                    throw new Exception("Failed to backup the original file!");
+            }
+            catch
+            {
+                await PathExt.TryDeleteFileAsync(tempName).ConfigureAwait(false);
+                throw;
+            }
+            await PathExt.TryMoveFileAsync(tempName, dname).ConfigureAwait(false);
+            return true;
+        }
 
 
         static String GetHostsFile()

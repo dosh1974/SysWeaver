@@ -159,6 +159,10 @@ namespace SysWeaver.Net
             oeps["logo_debug.svg"] = HandleLogoDebugSvg;
             oeps["logo.png"] = HandleLogoPng1024;
 
+            oeps["app/app.css"] = HandleEmpty;
+            oeps["app/app.js"] = HandleEmpty;
+
+
             ForcedEndPoints = feps.Freeze();
             OptionalEndPoints = oeps.Freeze();
 
@@ -696,6 +700,14 @@ namespace SysWeaver.Net
         }
 
         static readonly HttpApiAudit AuthRedirectAudit = new HttpApiAudit("auth/redirect", "auth");
+
+        ValueTask<IHttpRequestHandler> HandleEmpty(HttpServerRequest data, HttpSession session)
+        {
+            data.SetResMime(MimeTypeMap.GetMimeType(data.LocalUrl).Item1 ?? MimeTypeMap.Data);
+            data.SetResStatusCode(200);
+            data.SetResHeader("Cache-Control", "max-age=" + WebApiTools.CacheClientStatic);
+            return HttpServerTools.AlreadyHandledValueTask;
+        }
 
         async ValueTask HandleAuthRedirect(HttpServerRequest data, HttpSession session)
         {

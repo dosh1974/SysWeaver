@@ -55,6 +55,12 @@ namespace SysWeaver.OsServices
             Interlocked.Exchange(ref Manager, null)?.Dispose();
         }
 
+        protected override void OnShutdown()
+        {
+            base.OnShutdown();
+            Interlocked.Exchange(ref Manager, null)?.Dispose();
+        }
+
 
 
     }

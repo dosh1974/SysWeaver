@@ -90,6 +90,21 @@ si-state {
         display: none;
     }
 
+    si-state.KeyClick {
+        cursor: pointer;
+        border: 2px solid transparent;
+        outline: 2px solid transparent;
+        transition: border linear var(--ThemeFadeDuration), outline linear var(--ThemeFadeDuration);
+    }
+
+        si-state.KeyClick:hover {
+            border: 2px solid var(--ThemeBackground);
+        }
+
+        si-state.KeyClick:focus {
+            outline: 2px solid var(--ThemeAcc1);
+        }
+
 
 si-servicebuttons {
     max-width: var(--MaxW);
@@ -107,8 +122,9 @@ si-servicebuttons {
 
 si-graphs {
     display: block;
-    width: 100%;
     padding: 0.5em 0.25em;
+    max-width: var(--MaxW);
+    margin: 0.5em auto;
 }
 
 @media screen and (max-width: 600px) {
@@ -120,17 +136,17 @@ si-graphs {
 
 si-graph {
     width: calc(50% - 1.5em);
-    height: 30svh;
-    padding: 0.5em;
+    aspect-ratio: 38 / 40;
+    padding: 0;
     margin: 0.5em;
     display: inline-block;
-    background-color: var(--ThemeBackground);
     border-radius: var(--ThemeRad);
     cursor: pointer;
     border: 2px solid transparent;
     outline: 3px solid transparent;
     transition: outline linear var(--ThemeFadeDuration), border linear var(--ThemeFadeDuration);
-    box-shadow: 0 0 32px var(--ThemeMain25);
+    /*background-color: var(--ThemeBackground);
+    box-shadow: 0 0 32px rgba(var(--ThemeMainRGB), 0.05);*/
 }
 
     si-graph:focus {
@@ -145,7 +161,7 @@ si-graph:hover
 /* Portrait */
 @media (max-aspect-ratio: 2/3) {
     si-graph {
-        width: calc(100%);
+        width: 100%;
         margin-left: 0;
         margin-right: 0;
         border-radius: 0;
@@ -165,7 +181,7 @@ si-graph iframe {
     display: block;
     border: none;
     width: 100%;
-    height: calc(100% - 24px);
+    height: 100%;
     pointer-events: none;
 }
 

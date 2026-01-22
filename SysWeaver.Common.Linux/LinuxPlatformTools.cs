@@ -64,6 +64,22 @@ namespace SysWeaver
             return bytesCount;
         }
 
+        public bool Reboot()
+        {
+            var pi = new ProcessStartInfo();
+            pi.FileName = "/usr/bin/sudo";
+            pi.Arguments = "/sbin/reboot";
+            try
+            {
+                using var _ = Process.Start(pi);
+            }
+            catch
+            {
+                return false;
+            }
+            return true;
+        }
+
         public bool GetCpuUsage(out double cpuUsage)
         {
             try

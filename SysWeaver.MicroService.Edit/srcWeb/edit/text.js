@@ -91,6 +91,32 @@ async function textMain() {
         let deleteButton = null;
 
 
+        let reloadButton = new Button("", _TF("Reload", "Text on a button that when clicked will reload a file"), _TF("Click to reload the file", "Tool tip description on a button that when clicked will reload the file"), "../icons/reload.svg", true, async () => {
+            reloadButton.StartWorking();
+            try {
+                const newText = await getRequest(url, false, false, null, r => r.text());
+                if (newText != null) {
+                    if (newText !== text) {
+                        text = newText;
+                        editor.session.setValue(text);
+                        if (scrollToEnd) {
+                            const lastLine = 10000000;
+                            editor.resize(true);
+                            editor.scrollToLine(lastLine, false, false);
+                            editor.gotoLine(lastLine, 0, false);
+                        }
+                        console.log("Reloaded");
+                    }
+                }
+            }
+            catch (e) {
+                Fail(_TF("Failed to reload the file", "Error message displayed when a file reload failed") + ":\n" + e);
+            }
+            reloadButton.StopWorking();
+        });
+        br.appendChild(reloadButton.Element);
+
+
         if (beautify) {
             beautifyButton = new Button("", _TF("Beautify", "Text on a button that when clicked will beatify some source code text"),
                 _TF("Click to beautify the text", "Tool tip description on a button that when clicked will beatify some source code text"), "../icons/organize.svg", true, async () => {

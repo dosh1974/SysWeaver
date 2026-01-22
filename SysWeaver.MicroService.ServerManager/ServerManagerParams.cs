@@ -26,6 +26,12 @@ namespace SysWeaver.MicroService
         public bool AllowDelete;
 
         /// <summary>
+        /// If true, the file way be edited (and saved)
+        /// </summary>
+        public bool AllowEdit;
+
+
+        /// <summary>
         /// If true, scroll to the end of the file by default
         /// </summary>
         public bool ScrollToEnd = true;
@@ -37,6 +43,7 @@ namespace SysWeaver.MicroService
             Auth = s.Auth;
             AllowDelete = s.AllowDelete;
             ScrollToEnd = s.ScrollToEnd;
+            AllowEdit = s.AllowEdit;
         }
     }
 

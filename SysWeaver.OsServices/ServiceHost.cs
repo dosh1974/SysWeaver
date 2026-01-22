@@ -345,7 +345,7 @@ namespace SysWeaver.OsServices
             { 16, '_' },
         }.Freeze();
 
-        public static bool IsConfigBackupName(String filename, out string orgName)
+        static bool LegacyIsConfigBackupName(String filename, out string orgName)
         {
             orgName = null;
             var e = filename.LastIndexOf('.');
@@ -392,20 +392,90 @@ namespace SysWeaver.OsServices
             return true;
         }
 
-        public static String AppendDateAndMakeUnique(FileInfo t)
+        static readonly IReadOnlyDictionary<int, char> NewBackLocs = new Dictionary<int, char>
         {
-            var name = t.Name;
-            var fi = (t.Exists ? t.LastWriteTime : DateTime.Now).ToString("s", System.Globalization.CultureInfo.InvariantCulture);
+            { 8, '-' },
+            { 11, '-' },
+            { 14, '_' },
+            { 17, '_' },
+            { 20, '_' },
+            { 23, '_' },
+            { 28, '-' },
+            { 31, '-' },
+            { 34, '_' },
+            { 37, '_' },
+        }.Freeze();
+        static bool NewIsConfigBackupName(String filename, out string orgName)
+        {
+            //"Bak_2012-12-01_09_40_20_2012-12-01_09_40_20.File.json"
+            //"Bak_2012-12-01_09_40_20_2012-12-01_09_40_20_1212.File.json"
+            orgName = null;
+            if (!filename.FastStartsWith("Bak_"))
+                return false;
+            var bak = filename.SplitFirst('.', out orgName);
+            var len = bak.Length;
+            if (len < 40)
+                return false;
+            var bl = NewBackLocs;
+            for (int i = 4; i < 40; ++ i)
+            {
+                var c = filename[i];
+                if (bl.TryGetValue(i, out var m))
+                {
+                    if (m == c)
+                        continue;
+                }
+                if (c < '0')
+                    return false;
+                if (c > '9')
+                    return false;
+            }
+            if (len == 40)
+                return true;
+            if (filename[40] != '_')
+                return false;
+            for (int i = 41; i < len; ++i)
+            {
+                var c = filename[i];
+                if (c < '0')
+                    return false;
+                if (c > '9')
+                    return false;
+            }
+            return true;
+        }
+
+        public static bool IsConfigBackupName(String filename, out string orgName)
+        {
+            if (NewIsConfigBackupName(filename, out orgName))
+                return true;
+            return LegacyIsConfigBackupName(filename, out orgName);
+        }
+
+        static String GetDateTimeFn(DateTime dt)
+        {
+            var fi = dt.ToString("s", System.Globalization.CultureInfo.InvariantCulture);
             fi = fi.Replace(':', '_');
             fi = fi.Replace('T', '_');
-            var filename = t.FullName;
-            var bname = Path.Combine(t.DirectoryName, Path.GetFileNameWithoutExtension(name) + "." + fi);
-            var ext = t.Extension;
+            return fi;
+        }
+
+        public static String AppendDateAndMakeUnique(String path, String filename, DateTime lastWrite)
+        {
+            String unique = "";
             for (long i = 0; ; ++i)
             {
-                var fn = bname + (i <= 0 ? "" : "_" + i) + ext;
+                var fn = Path.Combine(path, String.Concat(
+                "Bak_",
+                GetDateTimeFn(DateTime.Now),
+                '_',
+                GetDateTimeFn(lastWrite),
+                unique,
+                '.',
+                filename));
                 if (!File.Exists(fn))
                     return fn;
+                unique = "_" + i;
             }
         }
 
@@ -414,7 +484,7 @@ namespace SysWeaver.OsServices
             var name = t.Name;
             if (IsConfigBackupName(t.Name, out var org))
                 name = org;
-            return AppendDateAndMakeUnique(t);
+            return AppendDateAndMakeUnique(t.DirectoryName, name, t.LastWriteTime);
         }
 
         public static bool BackupConfig(String filename, IMessageHost log = null)

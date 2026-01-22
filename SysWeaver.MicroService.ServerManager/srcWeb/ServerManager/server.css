@@ -109,7 +109,8 @@ server-stats {
     flex-wrap: wrap;
     justify-content: space-evenly;
     align-items: center;
-    padding-bottom: 2em;
+    padding-bottom: 0.5em;
+    border-bottom: 1px solid rgba(var(--ThemeMainRGB), 0.15);
 }
 
 server-stat {
@@ -119,6 +120,7 @@ server-stat {
     padding: 4px 1em;
     border: 1px solid var(--ThemeMain25);
     transition: outline linear var(--ThemeFadeDuration), border linear var(--ThemeFadeDuration);
+    margin: 4px;
 }
 
     server-stat.Click:hover {
@@ -138,3 +140,49 @@ server-stat {
         vertical-align: middle;
         padding-left: 1em;
     }
+
+
+server-commands {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+    align-items: center;
+    padding-top: 0.5em;
+    padding-bottom: 0.5em;
+    border-top: 1px solid rgba(var(--ThemeMainRGB), 0.15);
+    margin-top: 0.5em;
+    color: var(--ThemeAcc2);
+}
+
+
+server-command server-text {
+    line-height: 32px;
+    font-size: 150%;
+}
+
+server-command {
+    position: relative;
+    display: inline-flex;
+    border-radius: var(--ThemeRadInp);
+    padding: 8px 1em;
+    border: 1px solid var(--ThemeAcc225);
+    transition: outline linear var(--ThemeFadeDuration), border linear var(--ThemeFadeDuration), opacity linear var(--ThemeFadeDuration);
+    margin: 4px;
+    cursor: pointer;
+}
+
+    server-command.Disabled{
+        opacity: 0.25;
+        cursor: default;
+        outline: none !important;
+    }
+
+    server-command:hover {
+        border: 1px solid var(--ThemeAcc2);
+    }
+
+    server-command:focus {
+        outline: 1px solid var(--ThemeAcc1);
+    }
+

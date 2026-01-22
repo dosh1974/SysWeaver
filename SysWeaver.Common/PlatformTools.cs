@@ -98,6 +98,12 @@ namespace SysWeaver
         /// <returns>True if successful (and supported)</returns>
         bool GetCpuUsage(out double cpuUsage);
 
+        /// <summary>
+        /// Reboot the computer
+        /// </summary>
+        /// <returns></returns>
+        bool Reboot();
+
     }
 
     public sealed class DummyPlatformTools : IPlatformTools
@@ -121,6 +127,9 @@ namespace SysWeaver
             cpuUsage = 0;
             return false;
         }
+
+        public bool Reboot()
+            => false;
 
         #region IHaveStats
 

@@ -162,6 +162,7 @@ namespace SysWeaver.Net
         public static readonly IReadOnlyList<IHttpServerEndPoint> NoEndPoints = new List<IHttpServerEndPoint>();
 
         public static readonly IHttpRequestHandler AlreadyHandled = new DummyHandler();
+        public static readonly ValueTask<IHttpRequestHandler> AlreadyHandledValueTask = ValueTask.FromResult(AlreadyHandled);
 
         sealed class DummyHandler : IHttpRequestHandler
         {

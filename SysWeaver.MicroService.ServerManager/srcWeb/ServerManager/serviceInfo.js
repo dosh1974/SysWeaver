@@ -46,6 +46,21 @@ async function serviceInfoMain() {
     document.body.getElementsByTagName("si-name")[0].innerText = service;
     const states = document.body.getElementsByTagName("si-state");
 
+    if (!viewOnly) {
+        states[2].onclick = ev => {
+            if (badClick(ev))
+                return;
+            Open("server_metrics.html?q1=GetServiceCpuChart" + serviceArg + "&q2=GetServiceCpuHistoryShortChart" + serviceArg + "&q3=GetServiceCpuHistoryChart" + serviceArg + "&title=" + service + " cpu use", "_self");
+        };
+        keyboardClick(states[2]);
+        states[3].onclick = ev => {
+            if (badClick(ev))
+                return;
+            Open("server_metrics.html?q1=GetServiceMemChart" + serviceArg + "&q2=GetServiceMemHistoryShortChart" + serviceArg + "&q3=GetServiceMemHistoryChart" + serviceArg + "&title=" + service + " memory use", "_self");
+        };
+        keyboardClick(states[3]);
+    }
+
     const graphs = document.body.getElementsByTagName("si-graph");
     let ifr = graphs[0].getElementsByTagName("iframe")[0];
     const serviceArg = "?\"" + service + "\"";
@@ -58,7 +73,7 @@ async function serviceInfoMain() {
         graphs[0].onclick = ev => {
             if (badClick(ev))
                 return;
-            Open("server_metrics.html?q1=GetServiceCpuChart" + serviceArg + "&q2=GetServiceCpuHistoryShortChart" + serviceArg + "&q3=GetServiceCpuHistoryChart" + serviceArg + "&title=" + service + " Cpu use", "_self");
+            Open("server_metrics.html?q1=GetServiceCpuChart" + serviceArg + "&q2=GetServiceCpuHistoryShortChart" + serviceArg + "&q3=GetServiceCpuHistoryChart" + serviceArg + "&title=" + service + " cpu use", "_self");
         };
         graphs[1].onclick = ev => {
             if (badClick(ev))
@@ -77,6 +92,7 @@ async function serviceInfoMain() {
 
     let exploreButton = null;
     let logButton = null;
+    let deletedButton = null;
     if (!viewOnly) {
 
         const serviceButtons = document.body.getElementsByTagName("si-servicebuttons")[0];
@@ -167,8 +183,15 @@ async function serviceInfoMain() {
 
         });
 
+        deletedButton = new Button(null, "Deleted", "Explore the backup of deleted / modified files", "../icons/trash.svg", true, async () => {
+            Open("../ServerManager/ServiceBak/" + service + "/explore", "_self");
+        });
+
+
+
         debugButtons.appendChild(exploreButton.Element);
         debugButtons.appendChild(logButton.Element);
+        debugButtons.appendChild(deletedButton.Element);
 
         updateButtons = status => {
             if (!blockButtonStates) {
@@ -536,8 +559,8 @@ async function serviceInfoMain() {
                 states[i].classList.remove("Hide");
         }
         states[1].innerText = "Id: " + data.ProcId;
-        states[2].innerText = "Mem: " + ValueFormat.formatByteSize(data.MemUsage);
-        states[3].innerText = "Cpu: " + ValueFormat.toString(data.CpuUsage, 2) + " %";
+        states[2].innerText = "Cpu: " + ValueFormat.toString(data.CpuUsage, 2) + " %";
+        states[3].innerText = "Mem: " + ValueFormat.formatByteSize(data.MemUsage);
         states[4].innerText = "Tot: " + ValueFormat.formatTimeSpan(data.TotalProcessorTime);
 
         function UploadCompleted(e, res, files) {

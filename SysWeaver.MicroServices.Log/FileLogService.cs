@@ -78,12 +78,17 @@ namespace SysWeaver.MicroService
         [WebApiAudit("Log")]
         public async Task<bool> DeleteLogFile()
         {
-            var ex = await PathExt.TryDeleteFileAsync(H.Filename).ConfigureAwait(false);
+            var fd = M.FileDeleter;
+            var fn = H.Filename;
+            var ex = fd == null ? await PathExt.TryDeleteFileAsync(fn).ConfigureAwait(false) : await fd(fn).ConfigureAwait(false);
             if (ex != null)
                 throw ex;
             return true;
         }
+
+
         
+
         public void Dispose()
         {
             var h = Interlocked.Exchange(ref H, null);

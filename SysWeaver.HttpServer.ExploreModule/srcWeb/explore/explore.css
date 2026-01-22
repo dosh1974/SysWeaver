@@ -165,6 +165,7 @@ td.ExploreSize {
 td.ExploreName {
     padding: 0px 4px 0px 4px;
     max-width: 512px;
+    overflow: clip;
 }
 
 /*

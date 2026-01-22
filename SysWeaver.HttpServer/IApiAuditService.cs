@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace SysWeaver.Net
 {
@@ -36,6 +37,11 @@ namespace SysWeaver.Net
         /// <param name="ex">The exception object thrown</param>
         void OnApiException(long id, HttpServerRequest r, IHttpApiAudit api, Exception ex);
 
+        /// <summary>
+        /// Flush pending audit data
+        /// </summary>
+        /// <returns></returns>
+        ValueTask Flush();
 
     }
 

@@ -16,8 +16,9 @@ namespace SysWeaver.MicroService
         public readonly RequestOptions Options;
         public readonly IFileRepo Current;
         public readonly IFileRepo Master;
+        public readonly FileHttpServerModuleFolder Bak;
 
-        public SmServiceInfo(ManagedService service, FolderSyncFolder syncher, ServerManagerParams p, IFileRepo current, IFileRepo master)
+        public SmServiceInfo(ManagedService service, FolderSyncFolder syncher, ServerManagerParams p, IFileRepo current, IFileRepo master, FileHttpServerModuleFolder bak)
         {
             Service = service;
             Syncher = syncher;

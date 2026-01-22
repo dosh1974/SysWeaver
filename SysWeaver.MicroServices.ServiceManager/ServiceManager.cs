@@ -1938,6 +1938,7 @@ namespace SysWeaver.MicroService
             return null;
         }
 
+        public Func<String, Task<Exception>> FileDeleter;
 
         #endregion//Files
 

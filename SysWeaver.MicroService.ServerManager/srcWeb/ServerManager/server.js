@@ -29,50 +29,132 @@ async function serverMain() {
 
     const stats = document.createElement("server-stats");
     document.body.appendChild(stats);
+    const charts = document.createElement("server-charts");
+    document.body.appendChild(charts);
+    const commands = document.createElement("server-commands");
+    document.body.appendChild(commands);
 
-    function addStats(icon, text, title, link) {
-        const e = document.createElement("server-stat");
+    function addStats(icon, text, title, link, isCommand) {
+        const e = document.createElement(isCommand ? "server-command" : "server-stat");
+        const size = isCommand ? 32 : 24;
         e.title = title;
-        e.appendChild(new ColorIcon("../icons/" + icon + ".svg", "IconColorThemeMain", 24, 24).Element);
+        e.appendChild(new ColorIcon("../icons/" + icon + ".svg", isCommand ? "IconColorThemeAcc2" : "IconColorThemeMain", size, size).Element);
         const t = document.createElement("server-text");
         t.innerText = text;
         e.appendChild(t);
         if (link) {
             e.classList.add("Click");
-            e.onclick = ev => {
+            let isProcessing = false;
+            
+            e.onclick = async ev => {
                 if (badClick(ev))
                     return;
-                Open(link, "_self");
+                if (typeof link === "string") {
+                    Open(link, "_self");
+                    return;
+                }
+                if (isProcessing)
+                    return;
+                isProcessing = true;
+                e.classList.remove("Click");
+                e.classList.add("Disabled");
+                try {
+                    await link();
+                }
+                catch (e) {
+                    Fail(e.message);
+                }
+                isProcessing = false;
+                e.classList.remove("Disabled");
+                e.classList.add("Click");
             };
             keyboardClick(e);
         }
-        stats.appendChild(e);
+        if (isCommand)
+            commands.appendChild(e);
+        else
+            stats.appendChild(e);
         return [e, t];
     }
 
+
+
+    const startTime = new Date();
     const info = await getRequest("../ServerManager/GetServerInfo");
+    let atTime = new Date();
+    const halfPingMs = (atTime - startTime) * 0.5;
 
     addStats("computer", info.Machine, "Name of the server.");
     addStats("os_" + info.OsBase, info.Os, "Operative system.");
     addStats("cpu", info.ProcessorCount, "Number of logical CPU cores.\n\nClick to show details.", "../ServerManager/server_metrics.html?q1=GetCpuChart&q2=GetCpuHistoryShortChart&q3=GetCpuHistoryChart&title=Cpu use");
     addStats("memory", ValueFormat.formatByteSize(info.Memory), "Amount of physical RAM memory.\n\nClick to show details.", "../ServerManager/server_metrics.html?q1=GetMemChart&q2=GetMemHistoryShortChart&q3=GetMemHistoryChart&title=Memory use");
-    addStats("ssd", info.DriveCount, "Number of installed drives.\n\nClick to show details.", "../explore/table.html?q=../ServerManager/DriveInfoTable");
+
+    let serverTimeStart = ValueFormat.convertUTCDateToLocalDate(new Date(new Date(info.Time).getTime() + halfPingMs)).getTime();
+    const timeStats = addStats("clock", "", "", () => {
+        const timeNow = new Date(serverTimeStart + (new Date() - atTime));
+        const c = timeNow.toISOString().split('T');
+        const t = c[0] + " " + c[1].split('.')[0];
+        ValueFormat.copyToClipboardInfo(t);
+    });
+    function updateServerTime() {
+        try {
+            const timeNow = new Date(serverTimeStart + (new Date() - atTime));
+            const c = timeNow.toISOString().split('T');
+            let t = c[1].split('.')[0];
+            let e = timeStats[1];
+            if (e.textContent !== t)
+                e.textContent = t;
+            t = "Date: " + c[0] + "\nTime zone: " + info.TzDayName;
+            if (info.TzDayName !== info.TzName)
+                t += " (" + info.TzName + ")";
+            t += "\nThis is the local server time and date.\n\nClick to copy this to the clipboard";
+            e = timeStats[0];
+            if (e.title !== t)
+                e.title = t;
+        }
+        catch (e) {
+        }
+        setTimeout(updateServerTime, 100);
+    }
+    updateServerTime();
+
     const processStats = addStats("table_services", info.ProcessCount, "Number of processors that are running.\n\nClick to show details.", "../explore/table.html?q=../ServerManager/ProcessInfoTable");
+
 
     async function updateStats() {
 
         try {
+            const startTime = new Date();
             const s = await getRequest("../ServerManager/GetServerStats");
-            processStats[1].innerText = s.ProcessCount;
+            atTime = new Date();
+            const halfPingMs = (atTime - startTime) * 0.5;
+            serverTimeStart = ValueFormat.convertUTCDateToLocalDate(new Date(new Date(s.Time).getTime() + halfPingMs)).getTime();
+            const e = processStats[1];
+            const t = "" + s.ProcessCount;
+            if (e.textContent !== t)
+                e.textContent = t;
         }
         catch (e) {
         }
         setTimeout(updateStats, 5000);
     }
 
+    addStats("power", "Reboot", "Click to reboot the server", async () => {
+        if (await Confirm("Reboot server",
+            "WARNING!\nAny unsaved data on the server will be lost!\n\nAre you sure you wan't to continue?",
+            "Yes, reboot",
+            "No, keep going",
+            "../icons/power.svg",
+            "../icons/fav_on.svg",
+            "Click to reboot the server.\n\nWARNING!\nAny unsaved data on the server will be lost!",
+            "Click to keep the server running, do nothing.")) {
+            Info("Rebooting in 5 second");
+            await getRequest("../ServerManager/RebootComputer");
+            await delay(10000);
+            }
+    }, true);
 
-    const charts = document.createElement("server-charts");
-    document.body.appendChild(charts);
+    addStats("trash", "Deleted", "Click to explore deleted / changed files", () => Open("../ServerManager/Bak/explore", "_self"), true);
 
     addChart(charts, "GetServicesChart", "services.html");
     addChart(charts, "GetCpuChart", null, "Cpu use");
