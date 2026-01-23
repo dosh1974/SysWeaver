@@ -1928,6 +1928,63 @@ function isValidEmail(s)
 }
 
 /**
+ * Set up event handlers on a html element to monitor src changes, will set opacity to 0 on the element when loading.
+ * Warning: The opacity value of the element will be overridden.. do not use!
+ * @param {HTMLElement} e The html element, typically an img or iframe.
+ * @param {boolean} showError If true and the img loading fails, the typical error img is shown
+ * @returns {HTMLElement} The element
+ */
+function fixElementWithSrc(e, showError) {
+    if (!e)
+        return null;
+    e.style.opacity = 0;
+    e.addEventListener("load", InternalSrcElementOnLoad);
+    if (showError)
+        e.addEventListener("error", InternalSrcElementOnError);
+    try {
+        const o = new MutationObserver(changes => {
+            changes.forEach(change => {
+                if (change.attributeName.includes('src'))
+                    e.style.opacity = 0;
+            });
+        });
+        o.observe(e, { attributes: true });
+        e.SrcObs = o;
+    }
+    catch (x) {
+        console.log(x);
+    }
+    return e;
+}
+
+/**
+ * Remove event handlers set by the fixElementWithSrc function.
+ * @param {HTMLElement} e The html element, typically an img or iframe.
+ * @returns {HTMLElement} The element
+ */
+function cleanElementWithSrc(e) {
+    if (!e)
+        return null;
+    const o = e.SrcObs;
+    if (o) {
+        o.disconnect();
+        delete e.SrcObs;
+    }
+    e.removeEventListener("error", InternalSrcElementOnError);
+    e.removeEventListener("load", InternalSrcElementOnLoad);
+    return e;
+}
+
+function InternalSrcElementOnLoad(ev)
+{
+    ev.target.style.opacity = null;
+}
+
+function InternalSrcElementOnError(ev) {
+    ev.target.style.opacity = null;
+}
+
+/**
  * Create an html element and monitor src changes, will set opacity to 0 on the element when loading.
  * Warning: The opacity value of the element will be overridden.. do not use!
  * @param {string} tagName Name of the tag type: "img", "iframe" etc.
@@ -1935,22 +1992,7 @@ function isValidEmail(s)
  * @returns {HTMLElement} The element
  */
 function createElementWithSrc(tagName, showError) {
-    const e = document.createElement(tagName);
-    e.style.opacity = 0;
-    e.addEventListener("load", () => e.style.opacity = null);
-    if (showError)
-        e.addEventListener("error", () => e.style.opacity = null);
-    try {
-        new MutationObserver(changes => {
-            changes.forEach(change => {
-                if (change.attributeName.includes('src'))
-                    e.style.opacity = 0;
-            });
-        }).observe(e, { attributes: true });
-    }
-    catch (e) {
-    }
-    return e;
+    return fixElementWithSrc(document.createElement(tagName), showError);
 }
 
 /**
