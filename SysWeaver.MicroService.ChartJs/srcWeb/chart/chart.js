@@ -84,12 +84,12 @@ class CanvasChart {
         if (m)
             return m;
         const current = CanvasChart.CS;
-        await Promise.all([
+        m = await Promise.all([
             includeJs(current, "external/canvas2svg.js"),
             includeJs(current, "../app/application.js"),
-            includeCss(current, "../app/application.css")
-        ]);
-        m = await getRequest("../Api/GetChartExporters");
+            includeCss(current, "../app/application.css"),
+            getRequest("../Api/GetChartExporters")
+        ])[3];
         CanvasChart.MenuExportItems = m;
         return m;
     }
