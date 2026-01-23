@@ -3,8 +3,11 @@
 
     static async Init() {
         const current = document.currentScript.src;
-        await includeJs(current, "EditCollectionArray.js");
-        await includeJs(current, "EditCollectionMap.js");
+        await Promise.all([
+            includeJs(current, "EditCollectionArray.js"),
+            includeJs(current, "EditCollectionMap.js")
+            ]
+        );
     }
 
     CreateDefault(member, options) {

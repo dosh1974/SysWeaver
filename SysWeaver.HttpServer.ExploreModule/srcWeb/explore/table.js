@@ -1069,11 +1069,12 @@ class Table {
         if (m)
             return m;
         const current = Table.CS;
-        await Promise.all([
-            await includeJs(current, "../app/application.js"),
-            await includeCss(current, "../app/application.css")
+        const res = await Promise.all([
+            includeJs(current, "../app/application.js"),
+            includeCss(current, "../app/application.css"),
+            getRequest("../Api/GetTableExporters")
         ]);
-        m = await getRequest("../Api/GetTableExporters");
+        m = res[2];
         Table.MenuExportItems = m;
         return m;
     }

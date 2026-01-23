@@ -9,9 +9,9 @@ async function homeMain() {
 
             const current = CS;
             await Promise.all([
-                await includeJs(current, "../common/md5.js"),
-                await includeJs(current, "../common/UZIP.js"),
-                await includeJs(current, "../common/fileUploader.js")
+                includeJs(current, "../common/md5.js"),
+                includeJs(current, "../common/UZIP.js"),
+                includeJs(current, "../common/fileUploader.js")
             ]);
             const el = document.body.getElementsByClassName("UserImage")[0];
             el.classList.add("CanUpload");

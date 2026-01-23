@@ -85,9 +85,9 @@ class CanvasChart {
             return m;
         const current = CanvasChart.CS;
         await Promise.all([
-            await includeJs(current, "external/canvas2svg.js"),
-            await includeJs(current, "../app/application.js"),
-            await includeCss(current, "../app/application.css")
+            includeJs(current, "external/canvas2svg.js"),
+            includeJs(current, "../app/application.js"),
+            includeCss(current, "../app/application.css")
         ]);
         m = await getRequest("../Api/GetChartExporters");
         CanvasChart.MenuExportItems = m;
