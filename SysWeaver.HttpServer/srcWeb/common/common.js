@@ -1937,6 +1937,8 @@ function isValidEmail(s)
 function fixElementWithSrc(e, showError) {
     if (!e)
         return null;
+    if (e.SrcObs)
+        return e;
     e.style.opacity = 0;
     e.addEventListener("load", InternalSrcElementOnLoad);
     if (showError)
