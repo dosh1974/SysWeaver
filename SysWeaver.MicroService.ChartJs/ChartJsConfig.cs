@@ -7,6 +7,12 @@ namespace SysWeaver.MicroService
     {
         /// <summary>
         /// The type of chart to generate
+        /// Types are:
+        /// "bar"
+        /// "line"
+        /// "pie"
+        /// "doughnut"
+        /// "polarArea"
         /// </summary>
         [OpenAiOptional]
         public string type = "bar";
@@ -32,6 +38,16 @@ namespace SysWeaver.MicroService
         /// What chart types this can be interchanged with.
         /// null means all chart types (default)
         /// Empty array means no chart types.
+        /// Types are:
+        /// "bar"
+        /// "barv"
+        /// "barh"
+        /// "line"
+        /// "linev"
+        /// "lineh"
+        /// "pie"
+        /// "doughnut"
+        /// "polararea"
         /// </summary>
         [OpenAiIgnore]
         public string[] ValidTypes;

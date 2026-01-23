@@ -191,7 +191,7 @@ class MainMenu {
         } else {
             content.innerText = "";
         }
-        const e = document.createElement("iframe");
+        const e = createIFrame();
         e.classList.add("Hidden");
         e.setAttribute("frameborder", "0");
         e.setAttribute("allowtransparency", "true");

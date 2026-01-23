@@ -46,23 +46,32 @@ namespace SysWeaver.MicroService
         /// Useful when ticks are drawn on chart area. 
         /// Values less than zero are drawn under datasets, greater than zero on top.
         /// </summary>
+        [OpenAiOptional]
         public int z = 1;
 
         /// <summary>
         /// If true, draw a background behind the tick labels.
         /// </summary>
+        [OpenAiOptional]
         public bool? showLabelBackdrop;
 
         /// <summary>
         /// If defined and stepSize is not specified, the step size will be rounded to this many decimal places.
         /// </summary>
+        [OpenAiOptional]
         public double? precision;
 
         /// <summary>
         /// User-defined fixed step size for the scale.
         /// </summary>
+        [OpenAiOptional]
         public double? stepSize;
 
+        /// <summary>
+        /// Should the data be stacked.
+        /// </summary>
+        [OpenAiOptional]
+        public bool? beginAtZero;
 
     }
 

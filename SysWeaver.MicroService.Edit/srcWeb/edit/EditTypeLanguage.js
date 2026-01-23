@@ -32,7 +32,7 @@ class EditTypeLanguage {
                 ls.classList.add("Recent");
             ls.title = "Name: " + data.Name + ".\nISO 639-1 language code: " + data.Iso639_1 + ".";
             keyboardClick(ls);
-            const img = document.createElement("img");
+            const img = createImg("img");
             img.src = "../iso_data/language/" + data.Iso639_1 + ".svg";
             ls.appendChild(img);
 
@@ -177,7 +177,7 @@ class EditTypeLanguage {
             keyboardClick(e);
         }
 
-        const icon = document.createElement("img");
+        const icon = createImg("img");
         e.appendChild(icon);
 
         const text = document.createElement("SysWeaver-EditLangText");

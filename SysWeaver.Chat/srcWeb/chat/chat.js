@@ -1642,7 +1642,7 @@ class Chat {
             //  Header language
             if (msgLanguage) {
                 keyboardClick(msgLanguage);
-                const langFlag = document.createElement("img");
+                const langFlag = createImg("img");
                 msgLanguage.appendChild(langFlag);
 
                 msgRow.UpdateLang = () => {
@@ -1737,7 +1737,7 @@ class Chat {
 
             const ttt = _TF("Click to show message menu", "Tool tip description on a button that when clicked will show a menu with options for a chat message");
             if (fi) {
-                const img = document.createElement("img");
+                const img = createImg("img");
                 msgIcon.appendChild(img);
                 SetImageSource(img, fi, null, false, isOk => {
                     if (isOk) {
@@ -1839,17 +1839,17 @@ class Chat {
                     let extraClass = null;
                     const isImage = imageExtensions[ext];
                     if (isImage) {
-                        element = document.createElement("img");
+                        element = createImg("img");
                         element.src = p;
                         canDownload = true;
                     } else {
                         if (htmlExtensions[ext]) {
-                            element = document.createElement("iframe");
+                            element = createIFrame();
                             element.sandbox = "allow-forms allow-presentation allow-scripts allow-same-origin allow-downloads allow-popups";
                             element.src = appendTheme(p);
                             canSave = false;
                         } else {
-                            element = document.createElement("img");
+                            element = createImg("img");
                             extraClass = "Extension";
                             element.src = "../icons/ext/" + ext + ".svg";
                             canDownload = true;

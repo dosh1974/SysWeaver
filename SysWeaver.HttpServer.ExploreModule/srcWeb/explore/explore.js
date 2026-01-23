@@ -174,7 +174,7 @@ function AddSortHeader(data, set, el, index, name, title, extra)
     const div = document.createElement("div");
     el.appendChild(div);
 
-    const img = document.createElement("img");
+    const img = createImg("img");
     img.src = data.IconBase + (desc ? "m_sort_desc.svg" : "m_sort_asc.svg");
     img.title = tit;
     img.onclick = click;
@@ -634,7 +634,7 @@ function BuildTable(data, set)
                             const wd = document.createElement("div");
                             c.appendChild(wd);
                             const a = item.Auth;
-                            const imgE = document.createElement("img");
+                            const imgE = createImg("img");
                             wd.appendChild(imgE);
                             if (a != null) {
                                 imgE.src = data.IconBase + "g_protected.svg";

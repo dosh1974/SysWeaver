@@ -22,7 +22,7 @@ async function iconsMain() {
         for (let i = 0; i < count; ++i) {
             const icon = icons[i];
             const item = document.createElement("SysWeaver-IconItem")
-            const img = document.createElement("img")
+            const img = createImg("img")
             const relName = icon.Url;
             ValueFormat.copyOnClick(item, relName, true);
             item.title = relName + '\n' + 

@@ -1927,6 +1927,52 @@ function isValidEmail(s)
     return true;
 }
 
+/**
+ * Create an html element and monitor src changes, will set opacity to 0 on the element when loading.
+ * Warning: The opacity value of the element will be overridden.. do not use!
+ * @param {string} tagName Name of the tag type: "img", "iframe" etc.
+ * @param {boolean} showError If true and the img loading fails, the typical error img is shown
+ * @returns {HTMLElement} The element
+ */
+function createElementWithSrc(tagName, showError) {
+    const e = document.createElement(tagName);
+    e.style.opacity = 0;
+    e.addEventListener("load", () => e.style.opacity = null);
+    if (showError)
+        e.addEventListener("error", () => e.style.opacity = null);
+    try {
+        new MutationObserver(changes => {
+            changes.forEach(change => {
+                if (change.attributeName.includes('src'))
+                    e.style.opacity = 0;
+            });
+        }).observe(e, { attributes: true });
+    }
+    catch (e) {
+    }
+    return e;
+}
+
+/**
+ * Creates an iframe that is hidden when loading.
+ * Warning: The opacity value of the element will be overridden.. do not use!
+ * @returns {HTMLIFrameElement} The iframe element
+ */
+function createIFrame() {
+    return createElementWithSrc("iframe");
+}
+
+/**
+ * Creates an img tag that is hidden when loading.
+ * Warning: The opacity value of the element will be overridden.. do not use!
+ * @param {boolean} showError If true and the img loading fails, the typical error img is shown
+ * @returns {HTMLImageElement} The img element
+ */
+function createImg(showError) {
+    return createElementWithSrc("img", showError);
+}
+
+
 function isValidPhone(s) {
     if (s.trim() != s)
         return false;
@@ -3863,7 +3909,7 @@ class ValueFormat {
         if (text) {
             if (isImage) {
                 a.classList.add("Image");
-                const i = document.createElement("img");
+                const i = createImg("img");
                 i.src = text;
                 a.appendChild(i);
             } else {

@@ -273,7 +273,7 @@ async function AuthPage(icon, build, iconIsFile) {
         let img = null;
         if (icon) {
             if ((icon.indexOf('.') > 0) || (icon.indexOf('/') > 0) || iconIsFile) {
-                img = document.createElement("img");
+                img = createImg("img");
                 img.draggable = false;
                 img.src = icon;
                 box.appendChild(img);

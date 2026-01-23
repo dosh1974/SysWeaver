@@ -3,18 +3,23 @@
 <head>
     <meta charset="utf-8" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
+    <style>
+        html, body {
+            background-color: transparent;
+        }
+    </style>
+    <title>Upload example</title>
+    <script defer src="../common/common.js"></script>
+    <script defer src="../common/md5.js"></script>
+    <script defer src="../common/UZIP.js"></script>
+    <script defer src="../common/fileUploader.js"></script>
     <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
     <link rel="icon" type="image/svg+xml" href="../icon.svg">
     <link rel="apple-touch-icon" type="image/png" href="../apple-touch-icon.png">
     <link rel="manifest" href="../app/manifest.json">
-    <title>Upload example</title>
     <link rel="stylesheet" href="../common/theme.css">
-    <script src="../common/common.js"></script>
-    <script src="../common/md5.js"></script>
-    <script src="../common/UZIP.js"></script>
-    <script src="../common/fileUploader.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -62,6 +67,7 @@
                 input:focus:hover {
                     outline: 1px solid var(--ThemeAcc250);
                 }
+
         img {
             display: block;
             margin: 2em auto;
@@ -113,7 +119,7 @@
                 mask-position: center center;
             }
 
-        /* --- Highlight on hover --- */
+            /* --- Highlight on hover --- */
             div:hover {
                 border: 4px dashed var(--ThemeAcc2);
             }
@@ -122,7 +128,7 @@
                     background-color: var(--ThemeAcc2);
                 }
 
-        /* --- Dim and change icon when selecting a local file --- */
+            /* --- Dim and change icon when selecting a local file --- */
 
             div.Selecting {
                 opacity: 0.25;
@@ -132,7 +138,7 @@
                     mask-image: url('../icons/disc.svg');
                 }
 
-        /* --- Change color and icon when dragging over --- */
+            /* --- Change color and icon when dragging over --- */
 
             div.Dragging {
                 cursor: grabbing;
@@ -144,7 +150,7 @@
                     mask-image: url('../icons/plus.svg');
                 }
 
-        /* --- "Disable" when uploading --- */
+            /* --- "Disable" when uploading --- */
 
 
             div.Uploading {
@@ -160,16 +166,13 @@
                     mask-image: url('../icons/loading.svg');
                 }
 
-                div.Uploading:after:hover {
-                    background-color: var(--ThemeAcc275);
-                }
+                    div.Uploading:after:hover {
+                        background-color: var(--ThemeAcc275);
+                    }
 
                 div.Uploading.Dragging {
                     border: 4px dashed var(--ThemeAcc275);
                 }
-
-
-
     </style>
 </head>
 <body>
@@ -195,76 +198,78 @@
          />
 
     <script type="text/javascript">
-        //  Get parameters
-        const closeLoader = AddLoading(document.body);
-        try {
 
-            const ps = getUrlParams();
-            let repo = ps.get('repo');
-            if (!repo)
-                repo = "UserImage";
+        function exampleMain() {
+            //  Get parameters
+            const closeLoader = AddLoading(document.body);
+            try {
 
-            //  Get the upload element to use and set up the initial parameters
-            const c = document.getElementById("drop");
+                const ps = getUrlParams();
+                let repo = ps.get('repo');
+                if (!repo)
+                    repo = "UserImage";
 
-            c.setAttribute("data-repo", repo);
-            if (ps.get('multiple'))
-                c.setAttribute("data-multiple", "true");
+                //  Get the upload element to use and set up the initial parameters
+                const c = document.getElementById("drop");
 
-            // Get the repo input element and set it up (changing repo on change etc)
-            const e = document.getElementById("repo");
-            e.value = repo;
-            e.onchange = () => c.setAttribute("data-repo", e.value);
+                c.setAttribute("data-repo", repo);
+                if (ps.get('multiple'))
+                    c.setAttribute("data-multiple", "true");
 
-            const img = document.getElementById("userimage");
+                // Get the repo input element and set it up (changing repo on change etc)
+                const e = document.getElementById("repo");
+                e.value = repo;
+                e.onchange = () => c.setAttribute("data-repo", e.value);
 
-            const a = document.getElementById("link");
+                const img = document.getElementById("userimage");
 
-            // Final setup of the uploader element
-            fileUploaderSetup(c, null,
-                (el, files, rr) => {
-                    //  Called when file(s) are selected for uploading
-                    Info(_T("Uploading \"{0}\"", files[0].name, "Text displayed when a file is about to be uploaded to a server.{0} is replaced with the name of the file"));
-                },
-                (el, res, files, rr) => {
-                    const err = res.Error;
-                    if (err) {
-                        a.classList.remove("Show");
-                        Fail(err);
-                        return;
+                const a = document.getElementById("link");
+
+                // Final setup of the uploader element
+                fileUploaderSetup(c, null,
+                    (el, files, rr) => {
+                        //  Called when file(s) are selected for uploading
+                        Info(_T("Uploading \"{0}\"", files[0].name, "Text displayed when a file is about to be uploaded to a server.{0} is replaced with the name of the file"));
+                    },
+                    (el, res, files, rr) => {
+                        const err = res.Error;
+                        if (err) {
+                            a.classList.remove("Show");
+                            Fail(err);
+                            return;
+                        }
+                        //  Only showing status of first file, todo: when multiple is allowed show all?
+                        const res0 = res.Status[0];
+                        const url = res.Urls[0];
+                        if (url) {
+                            a.innerText = url;
+                            a.href = "../" + url;
+                            a.classList.add("Show");
+                        } else {
+                            a.classList.remove("Show");
+                        }
+
+                        switch (res0) {
+                            case UploadStatus.AlreadyUploaded:
+                                Info(_T("File \"{0}\" was already uploaded", files[0].name, "Text displayed when a file have already been uploaded to a server.{0} is replaced with the name of the file"));
+                                break;
+                            case UploadStatus.None:
+                                Info(_T("Uploaded \"{0}\"", files[0].name, "Text displayed when a file was succesfully uploaded to a server.{0} is replaced with the name of the file"));
+                                SetImageSource(img, img.src, null, true);
+                                break;
+                            default:
+                                Fail(_T("{0}, when uploading \"{1}\"", fileUploaderStatusText(res0), files[0].name, "Text displayed when uploading of a file to a server failed.{0} is replaced with a message as to why the file failed.{1} is replaced with the name of the file"));
+                                break;
+                        }
                     }
-                    //  Only showing status of first file, todo: when multiple is allowed show all?
-                    const res0 = res.Status[0];
-                    const url = res.Urls[0];
-                    if (url) {
-                        a.innerText = url;
-                        a.href = "../" + url;
-                        a.classList.add("Show");
-                    } else {
-                        a.classList.remove("Show");
-                    }
+                );
 
-                    switch (res0) {
-                        case UploadStatus.AlreadyUploaded:
-                            Info(_T("File \"{0}\" was already uploaded", files[0].name, "Text displayed when a file have already been uploaded to a server.{0} is replaced with the name of the file"));
-                            break;
-                        case UploadStatus.None:
-                            Info(_T("Uploaded \"{0}\"", files[0].name, "Text displayed when a file was succesfully uploaded to a server.{0} is replaced with the name of the file"));
-                            SetImageSource(img, img.src, null, true);
-                            break;
-                        default:
-                            Fail(_T("{0}, when uploading \"{1}\"", fileUploaderStatusText(res0), files[0].name, "Text displayed when uploading of a file to a server failed.{0} is replaced with a message as to why the file failed.{1} is replaced with the name of the file"));
-                            break;
-                    }
-                }
-            );
-
+            }
+            catch (e) {
+                Fail(e);
+            }
+            closeLoader();
         }
-        catch (e) {
-            Fail(e);
-        }
-        closeLoader();
-
     </script>
-</body>
+</body onload="exampleMain()">
 </html>

@@ -318,7 +318,7 @@ async function apiMain() {
                     if (isRaw) {
                         title = _TF("PREVIEW", "The text of a tab header that will display the API result of a specific MIME type (as an embedded iframe)");
                         const url = URL.createObjectURL(res);
-                        const frm = document.createElement("iframe");
+                        const frm = createIFrame();
                         tc0.appendChild(frm);
                         frm.src = url;
                     } else {

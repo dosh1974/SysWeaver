@@ -16,7 +16,7 @@ async function logoMain() {
                 const num = i;
                 let seed = i === 0 ? selected : ("" + (Math.floor(Math.random() * 2147483647) | 0));
                 const item = document.createElement("SysWeaver-IconItem")
-                const img = document.createElement("img")
+                const img = createImg("img")
                 img.draggable = false;
                 pending.Start(img, "../logo_debug.svg?" + seed);
                 item.appendChild(img);

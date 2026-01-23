@@ -1,8 +1,24 @@
 ﻿<!DOCTYPE html>
-
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <meta charset="utf-8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
+    <style>
+        html, body {
+            background-color: transparent;
+        }
+    </style>
+    <title>Embed</title>
+    <script defer src="${BaseUrl}common/common.js"></script>
+    <script defer src="${BaseUrl}app/application.js"></script>
+    <link rel="icon" type="image/x-icon" href="${BaseUrl}favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="${BaseUrl}icon.svg">
+    <link rel="apple-touch-icon" type="image/png" href="${BaseUrl}apple-touch-icon.png">
+    <link rel="manifest" href="${BaseUrl}/app/manifest.json">
+    <link rel="stylesheet" href="${BaseUrl}common/theme.css">
+    <link rel="stylesheet" href="${BaseUrl}app/application.css">
     <style type="text/css">
 
 
@@ -30,20 +46,14 @@
             opacity: 0.3;
         }
 
-        Settings-Menu:hover {
-            opacity: 1;
-        }
+            Settings-Menu:hover {
+                opacity: 1;
+            }
 
             Settings-Menu:focus {
                 opacity: 1;
             }
-
-            
     </style>
-    <link rel="stylesheet" href="${BaseUrl}common/theme.css">
-    <link rel="stylesheet" href="${BaseUrl}app/application.css">
-    <script src="${BaseUrl}common/common.js"></script>
-    <script src="${BaseUrl}app/application.js"></script>
     <script type="text/javascript">
         window.onload = async () => {
             const f = document.body.getElementsByTagName("iframe")[0];
@@ -89,19 +99,19 @@
                     for (let i = 0; i < til; ++i)
                         menu.Items.push(themeItems[i]);
 
-/*                    menu.Items.push(WebMenuItem.From({
-                        Name: "Open in new tab",
-                        Flags: 0,
-                        IconClass: "IconNewTab",
-                        Title: "Open the content iframe in a new tab",
-                        Data: async () => {
-                            const contentUrl = f.src;
-                            if (contentUrl)
-                                Open(contentUrl);
-                            close();
-                        },
-                    }));
-*/
+                    /*                    menu.Items.push(WebMenuItem.From({
+                                            Name: "Open in new tab",
+                                            Flags: 0,
+                                            IconClass: "IconNewTab",
+                                            Title: "Open the content iframe in a new tab",
+                                            Data: async () => {
+                                                const contentUrl = f.src;
+                                                if (contentUrl)
+                                                    Open(contentUrl);
+                                                close();
+                                            },
+                                        }));
+                    */
                     return menu;
                 }, true);
             });

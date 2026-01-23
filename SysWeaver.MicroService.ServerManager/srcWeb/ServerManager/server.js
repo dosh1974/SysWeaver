@@ -2,7 +2,7 @@
 
 function addChart(to, fetchUrl, openOnClick, title, extra) {
     const item = document.createElement("server-item");
-    const iframe = document.createElement("iframe");
+    const iframe = createIFrame();
     if (typeof extra !== "string")
         extra = "";
     iframe.tabIndex = -1;
@@ -170,6 +170,7 @@ async function serverMain() {
 
 async function serverMetricsMain()
 {
+    const closeLoader = AddLoading();
     const p = getUrlParams();
     const q1 = p.get("q1");
     const q2 = p.get("q2");
@@ -186,6 +187,6 @@ async function serverMetricsMain()
     addChart(charts, q2, "../chart/chart.html?q=../ServerManager/" + q2 + "&aspect=false&noLabels=true", null, "&aspect=false");
     addChart(charts, q3, "../chart/chart.html?q=../ServerManager/" + q3 + "&aspect=false&noLabels=true", null, "&aspect=false");
 
-    PageLoaded();
+    closeLoader();
 
 }

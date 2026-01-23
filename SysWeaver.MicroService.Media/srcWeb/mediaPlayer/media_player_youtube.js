@@ -24,7 +24,7 @@ class MediaPlayerYoutube {
             Object.assign(cp, params);
         params = cp;
         t.Params = params;
-        const e = document.createElement("iframe");
+        const e = createIFrame();
         const audioOnly = params.Stream == 2;
         t.HaveVisual = !audioOnly;
         t.HaveAudio = params.Stream != 1;

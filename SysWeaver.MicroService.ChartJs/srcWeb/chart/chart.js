@@ -1190,7 +1190,7 @@ class CanvasChart {
                                 Data: () => SetChartType(close, "line", true),
                             }));
                         }
-                        if ((!validMap) || validMap.get("pie") || validMap.get("pieh") || validMap.get("piev")) {
+                        if ((!validMap) || validMap.get("pie")) {
                             menuDest.push(WebMenuItem.From({
                                 Name: "Pie",
                                 Title: "Display the chart as a pie chart",
@@ -1199,7 +1199,7 @@ class CanvasChart {
                                 Data: () => SetChartType(close, "pie"),
                             }));
                         }
-                        if ((!validMap) || validMap.get("doughnut") || validMap.get("doughnuth") || validMap.get("doughnutv")) {
+                        if ((!validMap) || validMap.get("doughnut")) {
                             menuDest.push(WebMenuItem.From({
                                 Name: "Doughnut",
                                 Title: "Display the chart as a doughnut chart",
@@ -1208,7 +1208,7 @@ class CanvasChart {
                                 Data: () => SetChartType(close, "doughnut"),
                             }));
                         }
-                        if ((!validMap) || validMap.get("polararea") || validMap.get("polarareah") || validMap.get("polarareav")) {
+                        if ((!validMap) || validMap.get("polararea")) {
 
                             menuDest.push(WebMenuItem.From({
                                 Name: "Polar area",

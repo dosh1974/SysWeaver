@@ -437,23 +437,27 @@ namespace SysWeaver.MicroService
             return ChartSerialize(new ChartJsConfig
             {
                 RefreshRate = 2000,
+                ValueLabel = 4,
+                ValidTypes = [ "barv", "linev", "polararea" ],
                 data = new ChartJsData
                 {
                     labels = labels,
                     datasets = [
                         new ChartJsDataSet
                         {
+                            categoryPercentage = 0.98,
                             label = "In progress",
                             data = dataInp,
                             backgroundColor = edgeCols,
                         },
                         new ChartJsDataSet
                         {
+                            categoryPercentage = 0.98,
                             label = "Max concurrency",
                             data = maxC,
                             backgroundColor = backCols,
                             borderColor = edgeCols,
-                            xAxisID = "x2",
+                            //xAxisID = "x2",
                             borderWidth = 2,
                         },
                     ]
@@ -476,9 +480,17 @@ namespace SysWeaver.MicroService
                     maintainAspectRatio = false,
                     scales = new ChartJsScalesOptions
                     {
-                        x2 = new ChartJsScaleOptions
+                        x = new ChartJsScaleOptions
                         {
-                            display = false,
+                            stacked = true,
+                        },
+                        y = new ChartJsScaleOptions
+                        {
+                            stacked = false,
+                            ticks = new ChartJsTickOptions
+                            {
+                                beginAtZero = true,
+                            },
                         }
                     }
                 }
