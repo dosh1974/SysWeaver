@@ -167,21 +167,15 @@ namespace SysWeaver.Net
         {
             var s = Res;
             var to = (toData as AspHttpServerRequest).Res;
-            to.ContentLength = Cl;
-            to.StatusCode = Status;
-            to.ContentType = Mime;
             var toh = to.Headers;
+            var toDel = toh.Where(x => !x.Key.FastEquals("Set-Cookie")).Select(x => x.Key).ToList();
+            foreach (var h in toDel)
+                toh.Remove(h);
             foreach (var h in Head)
                 toh.Append(h.Key, h.Value);
-            foreach (var c in Cok)
-                toh.Append("Set-Cookie", c.Value);
-
-/*            var toc = to.Cookies;
-            foreach (var c in Cok)
-            {
-                var v = c.Value;
-                toc.Append(c.Key, v.Item1, v.Item2);
-            }*/
+            to.ContentLength = Cl;
+            to.ContentType = Mime;
+            to.StatusCode = Status;
         }
 
 

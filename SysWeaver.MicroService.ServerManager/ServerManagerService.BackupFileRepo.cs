@@ -5,7 +5,6 @@ using System.Text;
 using System.Threading.Tasks;
 using SysWeaver.Compression;
 using SysWeaver.Net;
-using SysWeaver.OsServices;
 
 namespace SysWeaver.MicroService
 {
@@ -105,17 +104,11 @@ namespace SysWeaver.MicroService
                 }
                 try
                 {
-                    if (!ServiceHost.BackupConfig(dest, Manager.Manager))
-                    {
-                        if (a != null)
-                            a.OnApiException(id, r, ad, new Exception("Backup failed"));
-                        return FileUploadResult.Refuse;
-                    }
                     var data = await s.ReadAllMemoryAsync().ConfigureAwait(false);
                     if (decoder != null)
                         data = decoder.GetDecompressed(data.Span);
                     var text = Encoding.UTF8.GetString(data.Span);
-                    await FileExt.WriteMemoryAsync(dest, data, true).ConfigureAwait(false);
+                    await Manager.SaveWithBackup(dest, text, true).ConfigureAwait(false);
                     if (a != null)
                         a.OnApiEnd(id, r, ad, IsKey ? "** PROTECTED **" : text.LimitLength(2048));
                     Manager.Syncer.GetFolderData(Key);

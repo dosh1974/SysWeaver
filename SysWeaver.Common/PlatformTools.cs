@@ -75,6 +75,17 @@ namespace SysWeaver
         String Name { get; }
 
         /// <summary>
+        /// The friendly name of the OS
+        /// </summary>
+        String OsFriendlyName { get; }
+
+
+        /// <summary>
+        /// The default folder for key files
+        /// </summary>
+        String DefaultKeyDir { get; }
+
+        /// <summary>
         /// Flush (write through) a file to disc
         /// </summary>
         /// <param name="h">The handle to the file</param>
@@ -104,6 +115,13 @@ namespace SysWeaver
         /// <returns></returns>
         bool Reboot();
 
+        /// <summary>
+        /// Make a directory accesible to all users
+        /// </summary>
+        /// <param name="directoryName">The full patch to the directory</param>
+        /// <returns>null is succsessful</returns>
+        Exception MakeDirectoryAccessableToEveryOne(String directoryName);
+
     }
 
     public sealed class DummyPlatformTools : IPlatformTools
@@ -114,6 +132,10 @@ namespace SysWeaver
         }
 
         public string Name { get; init; }
+
+        public string OsFriendlyName { get; } = Environment.OSVersion.ToString();
+
+        public String DefaultKeyDir => @"C:\Keys";
 
         public bool FlushToDisc(SafeHandle h) => true;
         public bool GetMemorySize(out ulong availableBytes, out ulong totalBytes)
@@ -130,6 +152,8 @@ namespace SysWeaver
 
         public bool Reboot()
             => false;
+
+        public Exception MakeDirectoryAccessableToEveryOne(String directoryName) => null;
 
         #region IHaveStats
 

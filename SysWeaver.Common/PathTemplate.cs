@@ -21,6 +21,7 @@ namespace SysWeaver
     ///             $(ExecutableDir) = ExecutableDir.
     ///             $(ExecutableBase) = Full path to the folder where the application is.
     ///             $(AppInstance) = A "unique" id for this process
+    ///             $(KeyFolder) = The folder where keys are stored.
     /// </summary>
     public static class PathTemplate
     {
@@ -46,6 +47,7 @@ namespace SysWeaver
         ///             $(ExecutableDir) = ExecutableDir.
         ///             $(ExecutableBase) = Full path to the folder where the application is.
         ///             $(AppInstance) = A "unique" id for this process
+        ///             $(KeyFolder) = The folder where keys are stored.
         /// </param>
         /// <returns>The resolved path</returns>
         public static String Resolve(String template, IReadOnlyDictionary<String, String> extra = null, bool caseInSensitive = true, bool useEnv = true)

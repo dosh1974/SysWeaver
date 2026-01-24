@@ -33,7 +33,7 @@ namespace SysWeaver.MicroService
         public static String GetManifestFileName()
         {
             var b = EnvInfo.ExecutableBase;
-            var fn = String.Join('.', b, "Services", Environment.OSVersion.Platform, "json");
+            var fn = String.Join('.', b, "Services", EnvInfo.OsPlatform.MakeFirstUppercase(), "json");
             if (File.Exists(fn))
                 return fn;
             fn = String.Join('.', b, "Services", "json");

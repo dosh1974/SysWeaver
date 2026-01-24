@@ -12,6 +12,54 @@ namespace SysWeaver
     {
         public string Name => "Linux";
 
+        public string OsFriendlyName { get; } = Get("PRETTY_NAME") ?? Environment.OSVersion.ToString();
+
+        static String Get(String key) => OsData.TryGetValue(key.FastToLower(), out var v) ? v : Environment.OSVersion.ToString();
+
+        static IReadOnlyDictionary<String, String> GetOsData()
+        {
+            Dictionary<String, String> d = new Dictionary<string, string>(StringComparer.Ordinal);
+            try
+            {
+                foreach (var x in Directory.GetFiles("/etc", "*-release"))
+                {
+                    try
+                    {
+                        var lines = File.ReadAllLines(x);
+                        foreach (var line in lines)
+                        {
+                            var tl = line.Trim();
+                            if (tl.Length <= 0)
+                                continue;
+                            if (tl[0] == '#')
+                                continue;
+                            tl = tl.SplitFirst('#');
+                            tl = tl.SplitFirst('=', out var value);
+                            if (value == null)
+                                continue;
+                            tl = tl.TrimEnd();
+                            value = value.Trim().RemoveQuotes();
+                            d[tl.FastToLower()] = value;
+                        }
+                    }
+                    catch
+                    {
+
+                    }
+                }
+            }
+            catch
+            {
+            }
+            return d.Freeze();
+        }
+
+
+        static readonly IReadOnlyDictionary<String, String> OsData = GetOsData();
+
+
+        public String DefaultKeyDir => @"/etc/keys";
+
         public bool FlushToDisc(SafeHandle h)
         {
             //  TODO: What?
@@ -79,6 +127,8 @@ namespace SysWeaver
             }
             return true;
         }
+
+        public Exception MakeDirectoryAccessableToEveryOne(String directoryName) => null;
 
         public bool GetCpuUsage(out double cpuUsage)
         {

@@ -5,12 +5,21 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.IO;
+using System.Security.AccessControl;
+using System.Security.Principal;
+using System.Management;
 
 namespace SysWeaver
 {
     public sealed class WindowsPlatformTools : IPlatformTools
     {
         public string Name => "Windows";
+
+        public String DefaultKeyDir => @"C:\Keys";
+
+        public string OsFriendlyName { get; } = GetOsFriendlyName();
+
 
         public bool FlushToDisc(SafeHandle h)
         {
@@ -83,7 +92,69 @@ namespace SysWeaver
         public bool Reboot()
             => ExitWindows(ExitWindowsFlags.Reboot, ShutdownReason.FlagPlanned, true);
 
-        #pragma warning restore CA1416
+
+        static readonly SecurityIdentifier Everyone = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
+
+
+        static readonly FileSystemAccessRule FullAll = new FileSystemAccessRule(
+            Everyone,
+            FileSystemRights.FullControl,
+            InheritanceFlags.ObjectInherit | InheritanceFlags.ContainerInherit,
+            PropagationFlags.InheritOnly,
+            AccessControlType.Allow);
+
+
+        public Exception MakeDirectoryAccessableToEveryOne(String directoryName)
+        {
+            try
+            {
+                var t = new DirectoryInfo(directoryName);
+                var ac = t.GetAccessControl();
+                bool exist = false;
+                foreach (FileSystemAccessRule x in ac.GetAccessRules(true, true, typeof(SecurityIdentifier)))
+                {
+                    if (!x.IdentityReference.Value.FastEquals(Everyone.Value))
+                        continue;
+                    exist = (x.FileSystemRights == FullAll.FileSystemRights) && (x.InheritanceFlags == FullAll.InheritanceFlags) && (x.PropagationFlags != PropagationFlags.NoPropagateInherit);
+                    break;
+                }
+                if (!exist)
+                {
+                    ac.AddAccessRule(FullAll);
+                    t.SetAccessControl(ac);
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return ex;
+            }
+        }
+
+        static int GetARCHFriendlyBits(Architecture architecture)
+        {
+            return architecture switch
+            {
+                Architecture.X64 => 64,
+                Architecture.X86 => 32,
+                Architecture.Arm64 => 64,
+                Architecture.Arm => 32,
+                Architecture.Wasm => -1,
+                Architecture.S390x => -1,
+                _ => -1,
+            };
+        }
+
+        static string GetOsFriendlyName()
+        {
+            ManagementObjectSearcher searcher = new("SELECT Caption FROM Win32_OperatingSystem");
+            ManagementObject os = searcher.Get().Cast<ManagementObject>().First();
+            if (os["Caption"].ToString() is string osResult)
+                return $"{osResult} build {Environment.OSVersion.Version.Build} ({GetARCHFriendlyBits(RuntimeInformation.OSArchitecture)} bits)";
+            return $"{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})";
+        }
+
+#pragma warning restore CA1416
 
         #region Imports
 
@@ -315,6 +386,10 @@ namespace SysWeaver
             => Exs.GetStats("Windows.Platform", "Exception.");
 
         #endregion//IHaveStats
+
+
+
+
 
     }
 

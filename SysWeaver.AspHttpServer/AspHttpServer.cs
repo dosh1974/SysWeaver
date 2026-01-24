@@ -541,7 +541,7 @@ namespace SysWeaver.Net
                         return;
                     }
                     using var data = new AspHttpServerRequest(c, url, prefix, this, uri, host);
-                    data.SetResHeader("Server", "");
+                    //data.SetResHeader("Server", "");
                     await Handle(data, url).ConfigureAwait(false);
                 }
                 catch (HttpListenerException ex)

@@ -139,13 +139,14 @@ namespace SysWeaver.Net
             var to = (toData as NetHttpServerRequest).Res;
             if (s == to)
                 return;
+            foreach (String h in s.Headers)
+            {
+                if (!h.FastEquals("Set-Cookie"))
+                    to.Headers[h] = s.Headers[h];
+            }
             to.ContentLength64 = s.ContentLength64;
             to.ContentEncoding = s.ContentEncoding;
             to.StatusCode = s.StatusCode;
-            foreach (String h in s.Headers)
-                to.Headers[h] = s.Headers[h];
-            foreach (Cookie c in s.Cookies)
-                to.Cookies.Add(c);
         }
 
 

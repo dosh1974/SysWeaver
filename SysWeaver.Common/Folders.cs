@@ -42,6 +42,11 @@ namespace SysWeaver
         public static readonly IReadOnlyList<String> UserAppFolders;
 
         /// <summary>
+        /// The folder to use for key files.
+        /// </summary>
+        public static readonly String KeyFolder;
+
+        /// <summary>
         /// Append a path to a set of root paths
         /// </summary>
         /// <param name="roots">Root paths</param>
@@ -139,20 +144,6 @@ namespace SysWeaver
                 t[i] = t[i].RemoveQuotes();
             return t;
         }
-#pragma warning disable CA1416
-
-        static readonly SecurityIdentifier Everyone = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
-
-
-        static readonly FileSystemAccessRule FullAll = new FileSystemAccessRule(
-            Everyone, 
-            FileSystemRights.FullControl, 
-            InheritanceFlags.ObjectInherit | InheritanceFlags.ContainerInherit,
-            PropagationFlags.InheritOnly, 
-            AccessControlType.Allow);
-
-#pragma warning restore CA1416
-
 
         static void Validate(String[] paths, bool allowAll)
         {
@@ -162,34 +153,7 @@ namespace SysWeaver
                 var fp = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(paths[i]));
                 PathExt.EnsureFolderExist(fp);
                 if (allowAll)
-                {
-                    if (EnvInfo.OsPlatform.FastEquals("windows"))
-                    {
-#pragma warning disable CA1416
-                        try
-                        {
-                            var t = new DirectoryInfo(fp);
-                            var ac = t.GetAccessControl();
-                            bool exist = false;
-                            foreach (FileSystemAccessRule x in ac.GetAccessRules(true, true, typeof(SecurityIdentifier)))
-                            {
-                                if (!x.IdentityReference.Value.FastEquals(Everyone.Value))
-                                    continue;
-                                exist = (x.FileSystemRights == FullAll.FileSystemRights) && (x.InheritanceFlags == FullAll.InheritanceFlags) && (x.PropagationFlags != PropagationFlags.NoPropagateInherit);
-                                break;
-                            }
-                            if (!exist)
-                            {
-                                ac.AddAccessRule(FullAll);
-                                t.SetAccessControl(ac);
-                            }
-                        }
-                        catch
-                        {
-                        }
-#pragma warning restore CA1416
-                    }
-                }
+                    PlatformTools.Current.MakeDirectoryAccessableToEveryOne(fp);
                 var di = new DirectoryInfo(fp);
                 if ((di.Attributes & FileAttributes.NotContentIndexed) == 0)
                 {
@@ -209,16 +173,20 @@ namespace SysWeaver
 
         static Folders()
         {
+            Config.TryGetString("KeyFolder", out var x);
+            x = x ?? PlatformTools.Current.DefaultKeyDir;
+            KeyFolder = x.TrimEnd(Path.DirectorySeparatorChar);
             //  Base folders
-            Config.TryGetString("AllFolders", out var x);
-            var allFolders = SplitFolders(x) ?? [@"$(CommonApplicationData)\SysWeaver"];
+            Config.TryGetString("AllFolders", out x);
+            var allFolders = SplitFolders(x) ?? [@"$(CommonApplicationData)" + Path.DirectorySeparatorChar + "SysWeaver"];
             Config.TryGetString("UserFolders", out x);
-            var userFolders = SplitFolders(x) ?? [@"$(LocalApplicationData)\SysWeaver"];
+            var userFolders = SplitFolders(x) ?? [@"$(LocalApplicationData)" + Path.DirectorySeparatorChar + "SysWeaver"];
             //  Derived folders
             AllSharedFolders = FromConfig("AllSharedFolders", allFolders, "Shared", true);
             AllAppFolders = FromConfig("AllAppFolders", allFolders, "$(*AppAssemblyName)_$(*AppGuid)", true);
             UserSharedFolders = FromConfig("UserFolders", userFolders, "Shared");
             UserAppFolders = FromConfig("UserAppFolders", userFolders, "$(*AppAssemblyName)_$(*AppGuid)");
+
         }
 
 

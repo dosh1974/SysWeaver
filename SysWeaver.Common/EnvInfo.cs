@@ -124,6 +124,15 @@ namespace SysWeaver
         /// </summary>
         public static readonly String OsPlatform = GetOS();
 
+        /// <summary>
+        /// The friendly OS name
+        /// </summary>
+        public static readonly String OsName = PlatformTools.Current.OsFriendlyName;
+
+        /// <summary>
+        /// Version string of OS, ex: "Microsoft Windows NT 10.0.19045.0"
+        /// </summary>
+        public static readonly String OsVersion = Environment.OSVersion.ToString();
 
         /// <summary>
         /// Full path to the actual executable
@@ -282,6 +291,7 @@ namespace SysWeaver
                     { nameof(Environment.OSVersion.Platform), Environment.OSVersion.Platform.ToString() },
                     { nameof(Environment.MachineName), Environment.MachineName },
                     { (nameof(Environment.MachineName) + "Cased"), Environment.MachineName.FastToLower().MakeFirstUppercase() },
+                    { nameof(Folders.KeyFolder), Folders.KeyFolder},
                 }.Freeze();
                 InternalTextVars = v;
                 return v;
@@ -304,6 +314,7 @@ namespace SysWeaver
         ///             "osversion" = The version of the OS.
         ///             "platform" = The platform, ex "WinNT", "Unix".
         ///             "machinename" = The computer name.
+        ///             "keyfolder" = The folder where keys are stored.
         /// </summary>
         public static IReadOnlyDictionary<String, String> TextVarsCaseInsensitive
         {
@@ -326,6 +337,8 @@ namespace SysWeaver
                     { nameof(Environment.OSVersion.Platform).FastToLower(), Environment.OSVersion.Platform.ToString() },
                     { nameof(Environment.MachineName).FastToLower(), Environment.MachineName },
                     { (nameof(Environment.MachineName) + "Cased").FastToLower(), Environment.MachineName.FastToLower().MakeFirstUppercase() },
+                    { nameof(Folders.KeyFolder).FastToLower(), Folders.KeyFolder},
+
                 }.Freeze();
                 InternalTextVarsCaseInsensitive = v;
                 return v;
@@ -348,6 +361,7 @@ namespace SysWeaver
         ///             $(OSVersion) = The version of the OS.
         ///             $(Platform) = The platform, ex "WinNT", "Unix".
         ///             $(MachineName) = The computer name.
+        ///             $(KeyFolder) = The folder where keys are stored.
         /// </summary>
         /// <param name="template">The template, variables start with "$(" and ends with ")".
         ///             $(AppName) = Application name.
@@ -361,6 +375,7 @@ namespace SysWeaver
         ///             $(OSVersion) = The version of the OS.
         ///             $(Platform) = The platform, ex "WinNT", "Unix".
         ///             $(MachineName) = The computer name.
+        ///             $(KeyFolder) = The folder where keys are stored.
         /// </param>
         /// <param name="caseInSensitive">If true the variable names is case in-sensitive</param>
         /// <param name="extra">Optional extra variables</param>
@@ -432,9 +447,9 @@ namespace SysWeaver
             new Stats(StatsSystem , nameof(Executable), Path.GetFileName(Executable), "Name of the executable " + Executable.ToQuoted()),
             new Stats(StatsSystem , nameof(AppStart), AppStart, "When the application (process) started executing"),
             new Stats(StatsSystem , nameof(Environment.Is64BitProcess), Environment.Is64BitProcess, "True if the process runs as a 64-bit process"),
-            new Stats(StatsSystem , nameof(Environment.OSVersion), Environment.OSVersion.ToString(), "The operation system"),
-            new Stats(StatsSystem , nameof(Environment.OSVersion.Platform), Environment.OSVersion.Platform.ToString(), "The OS platform"),
             new Stats(StatsSystem , nameof(Environment.MachineName), Environment.MachineName, "The computer name"),
+            new Stats(StatsSystem , nameof(OsVersion), OsVersion, "The operation system"),
+            new Stats(StatsSystem , nameof(Environment.OSVersion.Platform), Environment.OSVersion.Platform.ToString(), "The OS platform"),
             new Stats(StatsSystem , nameof(ProcessorArchitecture), ProcessorArchitecture, "The CPU in the machine"),
             new Stats(StatsSystem , nameof(OsPlatform), OsPlatform, "The general OS type"),
         ];
@@ -527,11 +542,14 @@ namespace SysWeaver
     /// </summary>
     public sealed class AppInfo
     {
+
+        const String LogPrefix = "[AppInfo] ";
+
         public AppInfo(IMessageHost m, AppInfoParams p = null)
         {
             if (p == null)
             {
-                m?.AddMessage("No app info parameters supplied!", MessageLevels.Warning);
+                m?.AddMessage(LogPrefix  + "No app info parameters supplied!", MessageLevels.Warning);
                 return;
             }
             var name = PathTemplate.Resolve(p.AppName);
@@ -542,7 +560,7 @@ namespace SysWeaver
             {
                 if (name != EnvInfo.AppName)
                 {
-                    m?.AddMessage(String.Concat(nameof(EnvInfo), '.', nameof(EnvInfo.AppName), " changed to ", name.ToQuoted()), MessageLevels.Debug);
+                    m?.AddMessage(String.Concat(LogPrefix, nameof(EnvInfo), '.', nameof(EnvInfo.AppName), " changed to ", name.ToQuoted()), MessageLevels.Debug);
                     EnvInfo.AppName = name;
                     dispName = dispName ?? StringTools.RemoveCamelCase(name, ' ', true);
                 }
@@ -551,7 +569,7 @@ namespace SysWeaver
             {
                 if (dispName != EnvInfo.AppDisplayName)
                 {
-                    m?.AddMessage(String.Concat(nameof(EnvInfo), '.', nameof(EnvInfo.AppDisplayName), " changed to ", dispName.ToQuoted()), MessageLevels.Debug);
+                    m?.AddMessage(String.Concat(LogPrefix, nameof(EnvInfo), '.', nameof(EnvInfo.AppDisplayName), " changed to ", dispName.ToQuoted()), MessageLevels.Debug);
                     EnvInfo.AppDisplayName = dispName;
                 }
             }
@@ -559,7 +577,7 @@ namespace SysWeaver
             {
                 if (desc != EnvInfo.AppDescription)
                 {
-                    m?.AddMessage(String.Concat(nameof(EnvInfo), '.', nameof(EnvInfo.AppDescription), " changed to ", desc.ToQuoted()), MessageLevels.Debug);
+                    m?.AddMessage(String.Concat(LogPrefix, nameof(EnvInfo), '.', nameof(EnvInfo.AppDescription), " changed to ", desc.ToQuoted()), MessageLevels.Debug);
                     EnvInfo.AppDescription = desc;
                 }
             }
@@ -567,11 +585,33 @@ namespace SysWeaver
             {
                 if (lang != EnvInfo.AppLanguage)
                 {
-                    m?.AddMessage(String.Concat(nameof(EnvInfo), '.', nameof(EnvInfo.AppLanguage), " changed to ", lang.ToQuoted()), MessageLevels.Debug);
+                    m?.AddMessage(String.Concat(LogPrefix, nameof(EnvInfo), '.', nameof(EnvInfo.AppLanguage), " changed to ", lang.ToQuoted()), MessageLevels.Debug);
                     EnvInfo.AppLanguage = lang;
                 }
             }
             EnvInfo.AppSeed = p.AppSeed;
+            if (m != null)
+            {
+                m.AddMessage(String.Concat(LogPrefix, "OS name:         ", EnvInfo.OsName));
+                m.AddMessage(String.Concat(LogPrefix, "OS platform:     ", EnvInfo.OsPlatform));
+                m.AddMessage(String.Concat(LogPrefix, "OS version:      ", EnvInfo.OsVersion));
+                m.AddMessage(String.Concat(LogPrefix, "OS architecture: ", RuntimeInformation.OSArchitecture.ToString()));
+                m.AddMessage(String.Concat(LogPrefix, "Key folder:      ", Folders.KeyFolder.ToQuoted()));
+                void w(String title, IReadOnlyList<String> folders)
+                {
+                    m.AddMessage(String.Concat(LogPrefix, title, folders.Count != 1 ? "s:" : ":"));
+                    using (var t = m.Tab())
+                    {
+                        foreach (var f in folders)
+                            m.AddMessage(String.Concat(LogPrefix, '"', f, '"'));
+                    }
+                }
+                w("Current user application folder", Folders.UserAppFolders);
+                w("Current user shared folder", Folders.UserSharedFolders);
+                w("All users application folder", Folders.AllAppFolders);
+                w("All users shared folder", Folders.AllSharedFolders);
+            }
+
         }
 
         public override string ToString() => String.Concat(

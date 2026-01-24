@@ -35,6 +35,11 @@ namespace SysWeaver
         /// </summary>
         public String UserFolders { get; set; } = null;
 
+        /// <summary>
+        /// The folder to use for key files
+        /// </summary>
+        public String KeyFolder { get; set; } = null;
+
     }
 
     /// <summary>
@@ -67,9 +72,9 @@ namespace SysWeaver
             ReadConfig(keys, EnvInfo.ExecutableBase + ".Config.json");
             //  System wide forced config
             ReadConfig(keys, "ForcedSystemConfig.json", "This configuration is forced for all SysWeaver applications running on this system.\nThese settings can NOT be overriden by the application.\n\nMake sure to only include fields that you really want to enforce", typeof(DefaultConfig), true);
-
             Keys = keys.Freeze();
         }
+
 
         static readonly Func<FieldInfo, String> GetField;
         static readonly Func<PropertyInfo, String> GetProperty;

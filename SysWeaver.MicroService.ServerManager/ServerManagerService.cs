@@ -24,8 +24,6 @@ namespace SysWeaver.MicroService
     public sealed partial class ServerManagerService : IDisposable, IHttpServerModule, IHaveStats, IPerfMonitored, IHaveTextFiles
     {
 
-        readonly String KeyFolder = @"C:\Keys";
-
         static readonly IReadOnlySet<String> ValidConfigExt = ReadOnlyData.Set<String>(StringComparer.Ordinal,
               ".txt",
               ".json",
@@ -48,6 +46,7 @@ namespace SysWeaver.MicroService
         const String ServerManagerServicesKey = "ServerManagerServices";
         readonly FileHttpServerModuleFolder BakModuleFolder;
         readonly String BakFolder;
+        readonly String BakKeysFolder;
         readonly String[] DestFolders;
         readonly ServerManagerParams P;
         readonly FileUploaderService FileUploader;
@@ -78,7 +77,7 @@ namespace SysWeaver.MicroService
                 PathExt.CreateDataFolder(f);
             DestFolders = destFolders;
             var ss = Services;
-            KeyRepo = new BackupFileRepo("Keys", KeyFolder, this, true);
+            KeyRepo = new BackupFileRepo("Keys", Folders.KeyFolder, this, true);
             FileUploader.AddRepo(KeyRepo);
 
             var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
@@ -96,7 +95,7 @@ namespace SysWeaver.MicroService
             }
 
             TextFiles = tf.Freeze();
-            var bakFolder = Path.GetFullPath(Path.Combine(EnvInfo.ExecutableDir, "..", "bak"));
+            var bakFolder = Path.GetFullPath(Path.Combine(EnvInfo.ExecutableDir, "..", "Bak"));
             manager.FileDeleter = async fn =>
             {
                 try
@@ -122,8 +121,9 @@ namespace SysWeaver.MicroService
             FileModule.AddFolder(bak);
             BakModuleFolder = bak;
             BakFolder = bakFolder;
-
-
+            BakKeysFolder = bakFolder + "Keys";
+            PathExt.EnsureFolderExist(bakFolder);
+            PathExt.EnsureFolderExist(BakKeysFolder);
 
             FileUploader = manager.Get<FileUploaderService>();
             try
@@ -631,7 +631,6 @@ namespace SysWeaver.MicroService
                         switch (type)
                         {
                             case DriveType.Fixed:
-                            case DriveType.Ram:
                                 break;
                             default:
                                 return null;
@@ -1247,7 +1246,7 @@ namespace SysWeaver.MicroService
             return new SmServerInfo
             {
                 Machine = Environment.MachineName,
-                Os = Environment.OSVersion.VersionString,
+                Os = EnvInfo.OsName,
                 OsBase = EnvInfo.OsPlatform,
                 DriveCount = DriveInfos?.Length ?? 0,
                 ProcessCount = Processes?.Count ?? 0,
@@ -1309,7 +1308,7 @@ namespace SysWeaver.MicroService
             var tot = drive.Total;
             var free = (double)((Decimal)f / GbSize);
             var used = (double)((Decimal)(tot - f) / GbSize);
-            var title = String.Concat(drive.Drive, ' ', drive.Label);
+            var title = drive.Drive.FastEquals(drive.Label) ? drive.Drive : String.Concat(drive.Drive, ' ', drive.Label);
             var mem = String.Concat(drive.Used.ToString("0.00", CultureInfo.InvariantCulture), "% of ",
                 (tot / GbSize).ToString("### ### ##0.00", CultureInfo.InvariantCulture).TrimStart() + " GB");
 
@@ -2395,20 +2394,27 @@ namespace SysWeaver.MicroService
         public SmKeyFile[] GetKeys()
         {
             List<SmKeyFile> files = new();
-            if (Directory.Exists(KeyFolder))
+            var f = Folders.KeyFolder;
+            if (Directory.Exists(f))
             {
-                foreach (var x in Directory.GetFiles(KeyFolder))
+                foreach (var x in Directory.GetFiles(f))
                 {
-                    var fi = new FileInfo(x);
-                    var n = fi.Name;
-                    bool bak = ServiceHost.IsConfigBackupName(n, out var o);
-                    files.Add(new SmKeyFile
+                    try
                     {
-                        Name = n,
-                        Size = fi.Length,
-                        LastModified = fi.LastWriteTimeUtc,
-                        Backup = bak
-                    });
+                        var fi = new FileInfo(x);
+                        var n = fi.Name;
+                        bool bak = ServiceHost.IsConfigBackupName(n, out var o);
+                        files.Add(new SmKeyFile
+                        {
+                            Name = n,
+                            Size = fi.Length,
+                            LastModified = fi.LastWriteTimeUtc,
+                            Backup = bak
+                        });
+                    }
+                    catch
+                    {
+                    }
                 }
             }
             return files.ToArray();
@@ -2529,12 +2535,22 @@ namespace SysWeaver.MicroService
                 throw new Exception("May not save this file!");
             if (!context.Session.Auth.IsValid(x.Auth))
                 throw new Exception("Not authorized to save this file!");
-            var dname = x.Filename;
+            await SaveWithBackup(x.Filename, file.Content).ConfigureAwait(false);
+            return true;
+        }
+
+        async ValueTask SaveWithBackup(String dname, String textData, bool isKey = false)
+        {
+            if (!File.Exists(dname))
+            {
+                await File.WriteAllTextAsync(dname, textData).ConfigureAwait(false);
+                return;
+            }
             var tempName = Path.Combine(Path.GetDirectoryName(dname), String.Concat("Temp", DateTime.UtcNow.Ticks, '_', Path.GetFileName(dname)));
-            await File.WriteAllTextAsync(tempName, file.Content).ConfigureAwait(false);
+            await File.WriteAllTextAsync(tempName, textData).ConfigureAwait(false);
             try
             {
-                if (!(await DeleteFileWithBackup(dname, BakFolder).ConfigureAwait(false)))
+                if (!(await DeleteFileWithBackup(dname, isKey ? BakKeysFolder : BakFolder).ConfigureAwait(false)))
                     throw new Exception("Failed to backup the original file!");
             }
             catch
@@ -2543,7 +2559,7 @@ namespace SysWeaver.MicroService
                 throw;
             }
             await PathExt.TryMoveFileAsync(tempName, dname).ConfigureAwait(false);
-            return true;
+
         }
 
 
