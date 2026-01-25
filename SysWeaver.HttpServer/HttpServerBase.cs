@@ -2031,6 +2031,8 @@ namespace SysWeaver.Net
             }
         }
 
+
+        // TODO: Optimize (remove uri?)
         protected HttpServerHostInfo GetHost(out String prefix, out String url, Uri uri)
         {
             var hostName = uri.Host.FastToLower();

@@ -514,12 +514,34 @@ namespace SysWeaver.MicroService
             return def;
         }
 
+        T SafeRead<T>(long id, Func<T> f, T def = default)
+        {
+            var pids = IgnorePids;
+            if (pids.TryGetValue(id, out var _))
+                return def;
+            try
+            {
+                return f();
+            }
+            catch
+            {
+                pids[id] = 1;
+            }
+            return def;
+        }
+
         readonly ConcurrentDictionary<long, SmProcess> Processes = new ();
+
+        readonly ConcurrentDictionary<long, int> IgnorePids = new ();
+
 
         async ValueTask<bool> UpdateMetrics()
         {
             using var _ = PerfMon.Track(nameof(UpdateMetrics));
             Dictionary<String, SmProcess> procExes = new Dictionary<string, SmProcess>(StringComparer.Ordinal);
+
+            var ignorePids = IgnorePids;
+
             var pp = Processes;
             HashSet<long> current = new (pp.Keys);
             foreach (var p in Process.GetProcesses())
@@ -531,46 +553,46 @@ namespace SysWeaver.MicroService
                     if (!pp.TryGetValue(id, out var i))
                     {
                         i = new SmProcess(id,
-                            SafeRead(() => p.ProcessName),
-                            SafeRead(() => p.StartTime),
-                            SafeRead(() => p.MainModule?.FileName)
+                            SafeRead(id, () => p.ProcessName),
+                            SafeRead(id, () => p.StartTime),
+                            SafeRead(id, () => p.MainModule?.FileName)
                             );
                         pp.TryAdd(id, i);
                     }
 
                     var lastCpu = i.LastCpu;
                     var now = Stopwatch.GetTimestamp();
-                    var time = SafeRead(() => p.TotalProcessorTime);
+                    var time = SafeRead(id, () => p.TotalProcessorTime);
                     var m = new SmProcessMetrics(i)
                     {
-                        HandleCount = SafeRead(() => p.HandleCount),
+                        HandleCount = SafeRead(id, () => p.HandleCount),
 
-                        MemUsage = SafeRead(() => p.WorkingSet64),
-                        PeakMemUsage = SafeRead(() => (long)p.PeakWorkingSet64),
-                        MaxMemUsage = SafeRead(() => (long)p.MaxWorkingSet),
+                        MemUsage = SafeRead(id, () => p.WorkingSet64),
+                        PeakMemUsage = SafeRead(id, () => (long)p.PeakWorkingSet64),
+                        MaxMemUsage = SafeRead(id, () => (long)p.MaxWorkingSet),
 
-                        PriorityClass = SafeRead(() =>
+                        PriorityClass = SafeRead(id, () =>
                         {
                             var c = p.PriorityClass;
                             return String.Concat("0x", ((int)c).ToString("x").PadLeft(4, '0'), ": ", c.ToString());
                         }),
-                        BasePriority = SafeRead(() => p.BasePriority),
-                        PriorityBoost = SafeRead(() => p.PriorityBoostEnabled),
+                        BasePriority = SafeRead(id, () => p.BasePriority),
+                        PriorityBoost = SafeRead(id, () => p.PriorityBoostEnabled),
 
-                        NonpagedSystemMemory = SafeRead(() => p.NonpagedSystemMemorySize64),
-                        PagedSystemMemory = SafeRead(() => p.PagedSystemMemorySize64),
+                        NonpagedSystemMemory = SafeRead(id, () => p.NonpagedSystemMemorySize64),
+                        PagedSystemMemory = SafeRead(id, () => p.PagedSystemMemorySize64),
 
-                        PagedMemory = SafeRead(() => p.PagedMemorySize64),
-                        PeakPagedMemory = SafeRead(() => p.PeakPagedMemorySize64),
+                        PagedMemory = SafeRead(id, () => p.PagedMemorySize64),
+                        PeakPagedMemory = SafeRead(id, () => p.PeakPagedMemorySize64),
 
-                        VirtualMemory = SafeRead(() => p.VirtualMemorySize64),
-                        PeakVirtualMemory = SafeRead(() => p.PeakVirtualMemorySize64),
+                        VirtualMemory = SafeRead(id, () => p.VirtualMemorySize64),
+                        PeakVirtualMemory = SafeRead(id, () => p.PeakVirtualMemorySize64),
 
-                        PrivateMemory = SafeRead(() => p.PrivateMemorySize64),
+                        PrivateMemory = SafeRead(id, () => p.PrivateMemorySize64),
 
                         TotalCpuTime = time,
-                        TotalSystemCpuTime = SafeRead(() => p.PrivilegedProcessorTime),
-                        TotalUserCpuTime = SafeRead(() => p.UserProcessorTime),
+                        TotalSystemCpuTime = SafeRead(id, () => p.PrivilegedProcessorTime),
+                        TotalUserCpuTime = SafeRead(id, () => p.UserProcessorTime),
                     };
                     if (lastCpu != 0)
                     {
@@ -594,9 +616,12 @@ namespace SysWeaver.MicroService
                 {
                 }
             }
+            var pid = IgnorePids;
             foreach (var x in current)
+            {
                 pp.TryRemove(x, out var _);
-
+                pid.TryRemove(x, out var __);
+            }
             var s = Services.Values.ToList();
             var l = new AsyncLock(MaxUpdateConcurrency);
             var maxAge = DateTime.UtcNow - TimeSpan.FromHours(24);

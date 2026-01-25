@@ -32,12 +32,6 @@ namespace SysWeaver
         {
             if (when.Kind != DateTimeKind.Utc)
                 when = when.ToUniversalTime();
-            if (when <= DateTime.UtcNow)
-            {
-                if (noThrow)
-                    return null;
-                throw new ArgumentException("The execution time must be in the future!", nameof(when));
-            }
             var e = Entries;
             lock (e)
             {
@@ -63,12 +57,6 @@ namespace SysWeaver
         {
             if (when.Kind != DateTimeKind.Utc)
                 when = when.ToUniversalTime();
-            if (when <= DateTime.UtcNow)
-            {
-                if (noThrow)
-                    return null;
-                throw new ArgumentException("The execution time must be in the future!", nameof(when));
-            }
             var e = Entries;
             lock (e)
             {

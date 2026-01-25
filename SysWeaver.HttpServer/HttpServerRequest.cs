@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using SysWeaver.Data;
 using SysWeaver.Translation;
+using System.Buffers;
 
 namespace SysWeaver.Net
 {
@@ -269,22 +270,30 @@ namespace SysWeaver.Net
             return ip;
         }
 
+        static readonly ArrayPool<Byte> Pool = ArrayPool<Byte>.Shared;  
+
         public void SetResText(String text, String mime = "text/plain; charset=UTF-8")
         {
             var tl = text.Length;
+            var al = tl << 2;
             SetResMime(mime);
             if (tl < 1024)
             {
-                var al = tl << 2;
-                Span<Byte> tt = new Byte[al];
+                Span<Byte> tt = stackalloc Byte[al];
                 if (Encoding.UTF8.TryGetBytes(text, tt, out var wl))
                 {
                     SetResBody(tt.Slice(0, wl));
                     return;
                 }
             }
-            var t = Encoding.UTF8.GetBytes(text);
-            SetResBody(t);
+            var pool = Pool;
+            var buf = Pool.Rent(al);
+            var t = buf.AsSpan();
+            if (Encoding.UTF8.TryGetBytes(text, t, out var l))
+            {
+                SetResBody(t.Slice(0, l));
+                return;
+            }
         }
 
         public abstract void CopyHeaders(HttpServerRequest to);

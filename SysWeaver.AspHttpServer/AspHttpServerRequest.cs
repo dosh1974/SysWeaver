@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using System.IO;
 using System.Net;
+using System.Buffers;
 
 namespace SysWeaver.Net
 {
@@ -63,20 +64,77 @@ namespace SysWeaver.Net
         int Status;
 
 
+
+        IReadOnlyDictionary<String, String> Cookies;
+
+        static readonly IReadOnlyDictionary<String, String> Empty = new Dictionary<String, String>(StringComparer.Ordinal).Freeze();
+
+
+        static String Trimmed(String s, int start, int end)
+        {
+            while (start < end)
+            {
+                if (!Char.IsWhiteSpace(s[start]))
+                    break;
+                ++start;
+            }
+            while (end > start)
+            {
+                --end;
+                if (!Char.IsWhiteSpace(s[end]))
+                {
+                    ++end;
+                    break;
+                }
+            }
+            return s.Substring(start, end - start);
+        }
+
+
+        IReadOnlyDictionary<String, String> ReadCookies()
+        {
+            var s = Req.Headers.Cookie;
+            var c = s.Count;
+            if (c <= 0)
+            {
+                var e = Empty;
+                Cookies = e;
+                return e;
+            }
+            var t = new Dictionary<String, String>(c, StringComparer.Ordinal);
+            foreach (var x in s)
+            {
+                int start = 0;
+                for (; ; )
+                {
+                    var e = x.IndexOf('=', start);
+                    if (e < 0)
+                        break;
+                    var key = Trimmed(x, start, e);
+                    start = e + 1;
+                    e = x.IndexOf(';', start);
+                    if (e < 0)
+                    {
+                        var value = Trimmed(x, start, x.Length);
+                        t[key] = value;
+                        break;
+                    }
+                    var val = Trimmed(x, start, e);
+                    t[key] = val;
+                    start = e + 1;
+                }
+            }
+            Cookies = t;
+            return t;
+        }
+
         public override String GetReqCookie(String name)
         {
-            String s = Req.Headers["Cookie"];
-            if (s == null)
-                return null;
-            name += "=";
-            var i = s.IndexOf(name, StringComparison.Ordinal);
-            if (i < 0)
-                return null;
-            i += name.Length;
-            var end = s.IndexOf(';', i);
-            if (end < 0)
-                end = s.Length;
-            return s.Substring(i, end - i);
+            var cookies = Cookies;
+            if (cookies == null)
+                cookies = ReadCookies();
+            cookies.TryGetValue(name, out var cookie);
+            return cookie;
         }
 
         const String DefPath = "/;HttpOnly";
@@ -88,24 +146,6 @@ namespace SysWeaver.Net
 
         public override void UpdateCookie(String n, String value, DateTime exp, String path = DefPath)
         {
-/*            var now = DateTime.UtcNow; 
-            var maxDate = now.AddYears(1);
-            if (exp > maxDate)
-                exp = maxDate;
-            var opt = exp <= now ?
-                new CookieOptions
-                {
-                    Path = path,
-                    MaxAge = TimeSpan.Zero,
-                }
-                :
-                new CookieOptions
-                {
-                    Path = path,
-                    Expires = exp,
-                };
-            Res.Cookies.Append(n, value, opt);
-*/
             var now = DateTime.UtcNow;
             var maxDate = now.AddYears(1);
             if (exp > maxDate)
@@ -118,8 +158,8 @@ namespace SysWeaver.Net
 
 
 
-        readonly Dictionary<String, String> Cok = new Dictionary<string, String>(StringComparer.Ordinal);
-        readonly Dictionary<String, String> Head = new Dictionary<string, string>(StringComparer.Ordinal);
+        readonly Dictionary<String, String> Cok = new (StringComparer.Ordinal);
+        readonly Dictionary<String, String> Head = new (StringComparer.Ordinal);
 
         public override void SetResBody(ReadOnlySpan<Byte> data)
         {
@@ -163,14 +203,37 @@ namespace SysWeaver.Net
             }
         }
 
+        static readonly ArrayPool<String> Pool = ArrayPool<String>.Shared;
+
         public override void CopyHeaders(HttpServerRequest toData)
         {
             var s = Res;
             var to = (toData as AspHttpServerRequest).Res;
             var toh = to.Headers;
-            var toDel = toh.Where(x => !x.Key.FastEquals("Set-Cookie")).Select(x => x.Key).ToList();
-            foreach (var h in toDel)
-                toh.Remove(h);
+            var count = toh.Count;
+            var pool = Pool;
+            var toDelete = pool.Rent(count);
+            int delCount = 0;
+            foreach (var n in toh.Keys)
+            {
+                if (!n.FastEquals("Set-Cookie"))
+                {
+                    toDelete[delCount] = n;
+                    ++delCount;
+                }
+            }
+            if (delCount == count)
+            {
+                toh.Clear();
+            }else
+            {
+                while (delCount > 0)
+                {
+                    --delCount;
+                    toh.Remove(toDelete[delCount]);
+                }
+            }
+            pool.Return(toDelete);
             foreach (var h in Head)
                 toh.Append(h.Key, h.Value);
             to.ContentLength = Cl;

@@ -22,8 +22,8 @@ using Microsoft.AspNetCore.Connections;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.FileProviders;
 using System.Diagnostics.Metrics;
-using Microsoft.Extensions.Primitives;
 using SysWeaver.Translation;
+using System.Collections.Concurrent;
 
 namespace SysWeaver.Net
 {
@@ -31,7 +31,7 @@ namespace SysWeaver.Net
 
     //https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.server.kestrel.core.kestrelserver?view=aspnetcore-8.0
 
-    public class AspHttpServer : HttpServerBase, IDisposable
+    public class AspHttpServer : HttpServerBase, IDisposable, IHttpApplication<HttpContext>
     {
         sealed class Log : ILoggerProvider, ILogger
         {
@@ -123,7 +123,7 @@ namespace SysWeaver.Net
                 listenOn = [HttpServerPrefix.DefaultExternalHttps];
             var cs = p.CaseSensitive;
             var services = new ServiceCollection();
-            ServiceList = services;
+            //ServiceList = services;
             var duration = TimeSpan.FromMinutes(5);
             services.AddLogging(b =>
             {
@@ -290,13 +290,17 @@ namespace SysWeaver.Net
             services.AddSingleton<IConnectionListenerFactory, SocketTransportFactory>();
             services.AddTransient<IHttpContextFactory, DefaultHttpContextFactory>();
             services.AddSingleton(this);
-            services.AddTransient<MyHostingApplication>();
-
-
+            ServiceList = services;
 
             SecondsToWait = Math.Max(1, p.SecondsToWait);
             FirewallHandler = firewallHandler;
         }
+
+        readonly ServiceCollection ServiceList;
+
+        IHttpContextFactory Factory;
+        IServer Server;
+        IServiceProvider Prov;
 
         protected override HttpServerRequest ReplaceUrl(HttpServerRequest s, string newUrl, String newMethod = null)
         {
@@ -337,26 +341,11 @@ namespace SysWeaver.Net
 
         readonly Stack<Action> BeforeCertChanged = new Stack<Action>();
 
-
-
-        sealed class MyHostingApplication : IHttpApplication<HttpContext>
-        {
-            readonly IHttpContextFactory Factory;
-            readonly AspHttpServer Server;
-
-            public MyHostingApplication(AspHttpServer server, IHttpContextFactory httpContextFactory)
-            {
-                Server = server;
-                Factory = httpContextFactory;
-            }
-
             
-            public HttpContext CreateContext(IFeatureCollection contextFeatures) => Factory.Create(contextFeatures);
+        public HttpContext CreateContext(IFeatureCollection contextFeatures) => Factory.Create(contextFeatures);
 
-            public void DisposeContext(HttpContext context, Exception exception) => Factory.Dispose(context);
+        public void DisposeContext(HttpContext context, Exception exception) => Factory.Dispose(context);
 
-            public Task ProcessRequestAsync(HttpContext context) => Server.HandleRequest(context);
-        }
 
         readonly IFirewallHandler FirewallHandler;
         public readonly int SecondsToWait;
@@ -375,17 +364,18 @@ namespace SysWeaver.Net
                 if (IsRunning)
                     return false;
                 Msg?.AddMessage(Prefix + "Starting", MessageLevels.Debug);
-                IsRunning = true;
+                var serviceProvider = ServiceList.BuildServiceProvider();
+                Prov = serviceProvider;
+                Factory = serviceProvider.GetRequiredService<IHttpContextFactory>();
+                Server = serviceProvider.GetRequiredService<IServer>() as KestrelServer;
                 TryStart().RunAsync();
+                IsRunning = true;
                 IsPaused = false;
             }
             return true;
         }
 
-        IServer Server;
-        MyHostingApplication App;
-        readonly ServiceCollection ServiceList;
-        IServiceProvider Prov;
+
 
         protected override Task<bool> OnNewCert(ICertificateProvider cert, String pre)
         {
@@ -406,13 +396,7 @@ namespace SysWeaver.Net
         {
             try
             {
-                var services = ServiceList;
-                var serviceProvider = services.BuildServiceProvider();
-                Prov = serviceProvider;
-                App = serviceProvider.GetRequiredService<MyHostingApplication>();
-                var server = Prov.GetRequiredService<IServer>() as KestrelServer;
-                Server = server;
-                await server.StartAsync(App, default).ConfigureAwait(false);
+                await Server.StartAsync(this, default).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -424,10 +408,7 @@ namespace SysWeaver.Net
         {
             try
             {
-                var server = Interlocked.Exchange(ref Server, null) as KestrelServer;
-                await server.StopAsync(default).ConfigureAwait(false);
-                App = null;
-                (Interlocked.Exchange(ref Prov, null) as IDisposable)?.Dispose();
+                await Server.StopAsync(default).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -443,11 +424,11 @@ namespace SysWeaver.Net
                 if (!IsRunning)
                     return false;
                 Msg?.AddMessage(Prefix + "Stopping", MessageLevels.Debug);
-                //  No new reuests accepeted
+                //  No new requests accepeted
                 IsPaused = true;
                 //  Telling ongoing requests that they should stop ASAP
                 InvokeCancel();
-                //  Given pending request a change to complete (around 3 seconds at most)
+                //  Give pending request a change to complete (around 3 seconds at most)
                 for (int i = 0; i < 30; ++i)
                 {
                     if (Interlocked.Read(ref ReqCounter) == 0)
@@ -457,6 +438,9 @@ namespace SysWeaver.Net
                 }
                 //  Stop listening
                 TryStop().RunAsync();
+                Server = null;
+                Factory = null;
+                (Interlocked.Exchange(ref Prov, null) as IDisposable)?.Dispose();
                 IsRunning = false;
             }
             Msg?.AddMessage(Prefix + "Stopped", MessageLevels.Debug);
@@ -474,10 +458,7 @@ namespace SysWeaver.Net
                     return;
                 Msg?.AddMessage(Prefix + "Pausing", MessageLevels.Debug);
                 RunBeforePause();
-                IsPaused = true;
-                InvokeCancel();
-                if (Interlocked.Read(ref ReqCounter) == 0)
-                    Stop();
+                Stop();
             }
         }
 
@@ -507,41 +488,50 @@ namespace SysWeaver.Net
 
         long ReqCounter;
 
+        async ValueTask HandlePause(HttpRequest req, HttpResponse res)
+        {
+            res.StatusCode = 503;
+            var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
+            var text = await Translator.TranslateSafe("The service is temporarily paused", lang).ConfigureAwait(false);
+            await WriteResponseString(res, text).ConfigureAwait(false);
+        }
+
+        async ValueTask HandleInvalidPrefix(HttpRequest req, HttpResponse res)
+        {
+            res.StatusCode = 404;
+            var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
+            var text = await Get404Text(lang).ConfigureAwait(false);
+            await WriteResponseString(res, text).ConfigureAwait(false);
+        }
+
         /// <summary>
         /// Handles a single incoming request
         /// </summary>
         /// <param name="c"></param>
         /// <returns></returns>
-        async Task HandleRequest(HttpContext c)
+        public async Task ProcessRequestAsync(HttpContext c)
         {
-            using (PerfMon.Track(nameof(HandleRequest)))
+            using (PerfMon.Track(nameof(ProcessRequestAsync)))
             {
                 var res = c.Response;
-                String url = "";
+                var req = c.Request;
+                String url = null;
                 Interlocked.Increment(ref ReqCounter);
                 try
                 {
-                    var req = c.Request;
                     if (IsPaused)
                     {
-                        res.StatusCode = 503;
-                        var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
-                        var text = await Translator.TranslateSafe("The service is temporarily paused", lang).ConfigureAwait(false);
-                        await WriteResponseString(res, text).ConfigureAwait(false);
+                        await HandlePause(req, res).ConfigureAwait(false);
                         return;
                     }
                     var uri = new Uri(req.GetDisplayUrl());
                     var host = GetHost(out var prefix, out url, uri);
                     if (prefix == null)
                     {
-                        res.StatusCode = 404;
-                        var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
-                        var text = await Get404Text(lang).ConfigureAwait(false);
-                        await WriteResponseString(res, text).ConfigureAwait(false);
+                        await HandleInvalidPrefix(req, res).ConfigureAwait(false);
                         return;
                     }
                     using var data = new AspHttpServerRequest(c, url, prefix, this, uri, host);
-                    //data.SetResHeader("Server", "");
                     await Handle(data, url).ConfigureAwait(false);
                 }
                 catch (HttpListenerException ex)
@@ -567,8 +557,7 @@ namespace SysWeaver.Net
                     try
                     {
                         res.Body.Dispose();
-                        //res.Headers["Server"] = StringValues.Empty;
-                        c.Request.Body.Dispose();
+                        req.Body.Dispose();
                     }
                     catch (Exception ex)
                     {
@@ -577,20 +566,7 @@ namespace SysWeaver.Net
                         Msg?.AddMessage(Prefix + "Closing the response for \"" + url + "\" failed!", ex, MessageLevels.Debug);
 #endif//DEBUG
                     }
-                    if (Interlocked.Decrement(ref ReqCounter) == 0)
-                    {
-                        if (IsPaused)
-                        {
-                            lock (Lock)
-                            {
-                                if (IsPaused)
-                                {
-                                    if (IsRunning)
-                                        Stop();
-                                }
-                            }
-                        }
-                    }
+                    Interlocked.Decrement(ref ReqCounter);
                 }
             }
         }
