@@ -5,7 +5,7 @@ namespace SysWeaver.Net
     public sealed class LanguageInfo
     {
         /// <summary>
-        /// Language code
+        /// The two letter ISO 639-1 language code of this language
         /// </summary>
         public String Iso;
 
