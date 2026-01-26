@@ -41,7 +41,7 @@ namespace SysWeaver
         public MemoryFile(string name, string mime, ReadOnlySpan<Byte> data)
         {
             var l = data.Length;
-            var d = new Byte[l];
+            var d = GC.AllocateUninitializedArray<Byte>(l);
             data.CopyTo(d.AsSpan());
             Name = name;
             Mime = mime;

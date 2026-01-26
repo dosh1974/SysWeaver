@@ -475,7 +475,7 @@ namespace SysWeaver.MicroService
                     var props = CdcProps.Default;
                     var hashSize = props.HashSize;
                     var len = chunks.Length;
-                    var missing = new Byte[len];
+                    var missing = GC.AllocateUninitializedArray<Byte>(len);
                     int wo = 0;
                     for (int co = 0; co < len; co += hashSize)
                     {

@@ -3,6 +3,7 @@ using SysWeaver.Compression;
 using SysWeaver.Serialization;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Buffers;
 
 namespace SysWeaver.Auth
 {
@@ -39,11 +40,21 @@ namespace SysWeaver.Auth
         {
             var mem = Ser.Serialize(data);
             var ml = mem.Length;
-            var b = GC.AllocateUninitializedArray<Byte>(ml + (ml >> 3) + 1024);
-            var size = Comp.Compress(mem.Span, b, Level);
-            var d = GC.AllocateUninitializedArray<Byte>(size);
-            b.AsSpan().Slice(0, size).CopyTo(d);
-            return d;
+            Byte[] rented = null;
+            var l = ml + (ml >> 3) + 1024;
+            Span<Byte> b = l <= 4096 ? stackalloc Byte[l] : (rented = ArrayPool<Byte>.Shared.Rent(l));
+            try
+            {
+                var size = Comp.Compress(mem.Span, b, Level);
+                var d = GC.AllocateUninitializedArray<Byte>(size);
+                b.Slice(0, size).CopyTo(d);
+                return d;
+            }
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Byte>.Shared.Return(rented);
+            }
         }
 
         public T FromData<T>(ReadOnlySpan<Byte> data)

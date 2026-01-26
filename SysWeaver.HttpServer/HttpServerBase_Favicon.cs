@@ -86,7 +86,7 @@ namespace SysWeaver.Net
                     images[i] = d;
                     size += d.Length;
                 }
-                var icoData = new Byte[size];
+                var icoData = GC.AllocateUninitializedArray<Byte>(size);
                 WriteIcon(icoData, sizes, images);
                 IHttpRequestHandler icoHandler = new StaticMemoryHttpRequestHandler(data.LocalUrl, "Generated", icoData, IcoMime, null, 30, 25, HttpServerTools.StartedText, null);
                 ico = Tuple.Create(icoHandler, bm);

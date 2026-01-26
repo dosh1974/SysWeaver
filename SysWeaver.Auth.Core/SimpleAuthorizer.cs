@@ -233,8 +233,8 @@ namespace SysWeaver.Auth
             String hash = null;
             if (pwd.Length == 44)
             {
-                Byte[] d = new byte[32];
-                if (Convert.TryFromBase64String(pwd, d.AsSpan(), out var w))
+                Span<Byte> d = stackalloc byte[32];
+                if (Convert.TryFromBase64String(pwd, d, out var w))
                 {
                     if (w == 32)
                         hash = pwd;

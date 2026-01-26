@@ -798,7 +798,7 @@ namespace SysWeaver.Net
                     session.ClientTimeZone = ss[0];
                 }
                 var val = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                var temp = new byte[128];
+                Span<Byte> temp = stackalloc byte[128];
                 int i = 0;
                 do
                 {
@@ -817,7 +817,7 @@ namespace SysWeaver.Net
                     temp[j] = t2;
                     ++j;
                 }
-                data.SetResBody(temp.AsSpan(0, l));
+                data.SetResBody(temp.Slice(0, l));
             }
             return ValueTask.CompletedTask;
         }

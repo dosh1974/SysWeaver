@@ -23,7 +23,7 @@ namespace SysWeaver
         /// <returns>Hex hash</returns>
         public static String ToHexHash(String hashStringh16)
         {
-            Span<Byte> d = new byte[16];
+            Span<Byte> d = stackalloc byte[16];
             HashTools.GetHashFromString26(d, hashStringh16);
             return d.ToHexString();
         }

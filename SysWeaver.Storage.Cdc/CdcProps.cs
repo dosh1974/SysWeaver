@@ -69,7 +69,7 @@ namespace SysWeaver
             ChunkFolders = (folders?.Count ?? 0) > 0 ? folders : Folders.AllSharedFolders.Convert(folder => Path.Combine(folder, "ContentChunks", key));
         }
    
-        static readonly Byte[] Temp = new byte[1024];
+        static readonly Byte[] Temp = GC.AllocateUninitializedArray<Byte>(1024);
 
         public override string ToString() => Key;
 

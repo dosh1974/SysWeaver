@@ -289,7 +289,7 @@ namespace SysWeaver
         public static int Mix(IEnumerable obj)
         {
             int hash = 42;
-            int[] p = GC.AllocateUninitializedArray<int>(15);
+            Span<int> p = stackalloc int[15];
             var it = obj.GetEnumerator();
             for (; ; )
             {

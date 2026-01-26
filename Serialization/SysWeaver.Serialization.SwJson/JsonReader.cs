@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -47,7 +48,8 @@ namespace SysWeaver.Serialization.SwJson
         {
             var utf8 = Utf8Parser.UTF8;
             var size = utf8.GetMaxByteCount(s.Length);
-            var data = size <= 4096 ? stackalloc Byte[size] : GC.AllocateUninitializedArray<Byte>(size).AsSpan();
+            Byte[] d = null;
+            var data = size <= 4096 ? stackalloc Byte[size] : (d = ArrayPool<Byte>.Shared.Rent(size)).AsSpan();
             var l = utf8.GetBytes(s, data);
             fixed (Byte* ptr = data)
             {
@@ -59,6 +61,11 @@ namespace SysWeaver.Serialization.SwJson
                 catch (Exception ex)
                 {
                     throw new Exception(GetThrowDetails(state, filename), ex);
+                }
+                finally
+                {
+                    if (d != null)
+                        ArrayPool<Byte>.Shared.Return(d);
                 }
             }
         }
@@ -97,7 +104,8 @@ namespace SysWeaver.Serialization.SwJson
         {
             var utf8 = Utf8Parser.UTF8;
             var size = utf8.GetMaxByteCount(s.Length);
-            var data = size <= 4096 ? stackalloc Byte[size] : GC.AllocateUninitializedArray<Byte>(size).AsSpan();
+            Byte[] d = null;
+            var data = size <= 4096 ? stackalloc Byte[size] : (d = ArrayPool<Byte>.Shared.Rent(size)).AsSpan();
             var l = utf8.GetBytes(s, data);
             fixed (Byte* ptr = data)
             {
@@ -109,6 +117,11 @@ namespace SysWeaver.Serialization.SwJson
                 catch (Exception ex)
                 {
                     throw new Exception(GetThrowDetails(state, filename), ex);
+                }
+                finally
+                {
+                    if (d != null)
+                        ArrayPool<Byte>.Shared.Return(d);
                 }
             }
 
@@ -538,15 +551,25 @@ namespace SysWeaver.Serialization.SwJson
         static String Filter(String s)
         {
             var l = s.Length;
-            var sb = GC.AllocateUninitializedArray<Char>(l);
-            for (int i = 0; i < l; ++i)
+
+            Char[] rented = null;
+            var sb = l <= 4096 ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l)).AsSpan();
+            try
             {
-                var c = s[i];
-                if (c < 32)
-                    c = (Char)32;
-                sb[i] = c;
+                for (int i = 0; i < l; ++i)
+                {
+                    var c = s[i];
+                    if (c < 32)
+                        c = (Char)32;
+                    sb[i] = c;
+                }
+                return new String(sb);
             }
-            return new String(sb);
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+            }
         }
 
         #endregion//Exception details

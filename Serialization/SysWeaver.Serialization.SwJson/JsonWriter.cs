@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
@@ -184,50 +185,60 @@ namespace SysWeaver.Serialization.SwJson
         static String JsonEscape(String t)
         {
             var l = t.Length;
-            var d = GC.AllocateUninitializedArray<Char>((l << 2) + (l << 1));
-            int o = 0;
-            var esc = EscapeChars;
-            var me = MaxEscapedChar;
-            var h = Hex;
-            for (int i = 0; i < l; ++i)
+            Char[] rented = null;
+            var d = l <= 4096 ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l)).AsSpan();
+            try
             {
-                var x = t[i];
-                var xx = (uint)x;
-                if (xx > me)
+                int o = 0;
+                var esc = EscapeChars;
+                var me = MaxEscapedChar;
+                var h = Hex;
+                for (int i = 0; i < l; ++i)
                 {
-                    d[o] = x;
-                    ++o;
-                    continue;
-                }
-                var e = esc[xx];
-                if (e == 0)
-                {
-                    d[o] = x;
-                    ++o;
-                    continue;
-                }
-                if (e == 1)
-                {
+                    var x = t[i];
+                    var xx = (uint)x;
+                    if (xx > me)
+                    {
+                        d[o] = x;
+                        ++o;
+                        continue;
+                    }
+                    var e = esc[xx];
+                    if (e == 0)
+                    {
+                        d[o] = x;
+                        ++o;
+                        continue;
+                    }
+                    if (e == 1)
+                    {
+                        d[o] = '\\';
+                        ++o;
+                        d[o] = 'u';
+                        ++o;
+                        d[o] = h[(xx >> 12) & 0xf];
+                        ++o;
+                        d[o] = h[(xx >> 8) & 0xf];
+                        ++o;
+                        d[o] = h[(xx >> 4) & 0xf];
+                        ++o;
+                        d[o] = h[(xx) & 0xf];
+                        ++o;
+                        continue;
+                    }
                     d[o] = '\\';
                     ++o;
-                    d[o] = 'u';
+                    d[o] = (Char)e;
                     ++o;
-                    d[o] = h[(xx >> 12) & 0xf];
-                    ++o;
-                    d[o] = h[(xx >> 8) & 0xf];
-                    ++o;
-                    d[o] = h[(xx >> 4) & 0xf];
-                    ++o;
-                    d[o] = h[(xx) & 0xf];
-                    ++o;
-                    continue;
                 }
-                d[o] = '\\';
-                ++o;
-                d[o] = (Char)e;
-                ++o;
+                return o == l ? t : new string(d.Slice(0, o));
             }
-            return o == l ? t : new string(d, 0, o);
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+
+            }
         }
 
         static Byte[] GetTypeJson(Type type)
@@ -966,7 +977,7 @@ namespace SysWeaver.Serialization.SwJson
 
         static Byte[] GetEscapeChars()
         {
-            var t = new Byte[128];
+            var t = GC.AllocateUninitializedArray<Byte>(128);
             for (int i = 0; i < 31; ++i)
                 t[i] = 1;
             t[8] = (Byte)'b';

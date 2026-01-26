@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -12,17 +13,23 @@ namespace SysWeaver.Serialization.SwJson.Writer
 
         public bool TypeIsOptional = false;
 
+        Byte[] Rented;
+
         public BufferWriter(Byte[] initData, int startOffset = 0)
         {
-            var d = initData ?? GC.AllocateUninitializedArray<Byte>(4096);
+            var d = initData ?? (Rented = ArrayPool<Byte>.Shared.Rent(4096));
             Data = d;
             PinHandle = GCHandle.Alloc(d, GCHandleType.Pinned);
             DataPtr = (Byte*)PinHandle.AddrOfPinnedObject().ToPointer();
             S = d.Length;
             Offset = startOffset;
+            var a = ArrayPool<Char>.Shared.Rent(128);
+            TempBuf = a;
+            Temp = a;
         }
 
-        public readonly Memory<Char> Temp = GC.AllocateUninitializedArray<Char>(128);
+        readonly Char[] TempBuf;
+        public readonly Memory<Char> Temp;
 
         public void WriteCharTempAsAscci(int count)
         {
@@ -58,6 +65,9 @@ namespace SysWeaver.Serialization.SwJson.Writer
         {
             PinHandle.Free();
             Data = null;
+            ArrayPool<Char>.Shared.Return(TempBuf);
+            if (Rented != null)
+                ArrayPool<Byte>.Shared.Return(Rented);
             GC.SuppressFinalize(this);
         }
 
@@ -96,7 +106,7 @@ namespace SysWeaver.Serialization.SwJson.Writer
         {
             end += (4096 + 4095);
             end &= ~4095;
-            var b = GC.AllocateUninitializedArray<Byte>(end);
+            var b = ArrayPool<Byte>.Shared.Rent(end);
             var o = Offset;
             if (o > 0)
                 Data.AsSpan<Byte>().Slice(0, o).CopyTo(b.AsSpan<Byte>().Slice(0, o));
@@ -104,6 +114,9 @@ namespace SysWeaver.Serialization.SwJson.Writer
             PinHandle.Free();
             PinHandle = GCHandle.Alloc(b, GCHandleType.Pinned);
             DataPtr = (Byte*)PinHandle.AddrOfPinnedObject().ToPointer();
+            if (Rented != null)
+                ArrayPool<Byte>.Shared.Return(Rented);
+            Rented = b;
             S = end;
         }
 

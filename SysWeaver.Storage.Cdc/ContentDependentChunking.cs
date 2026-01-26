@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.HighPerformance;
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -107,7 +108,7 @@ namespace SysWeaver
 
         static async ValueTask<CdcFileHeader> ReadHeader(Stream s)
         {
-            var temp = new Byte[4];
+            var temp = GC.AllocateUninitializedArray<Byte>(4);
             if (await s.ReadAsync(temp).ConfigureAwait(false) != 4)
                 throw new Exception("Unexpected end of file! (expected header)");
             if (!IsHeader(temp))
@@ -117,7 +118,7 @@ namespace SysWeaver
             String[] files = null;
             if (dirSize > 0)
             {
-                var dir = new Byte[dirSize];
+                var dir = GC.AllocateUninitializedArray<Byte>((int)dirSize);
                 if (await s.ReadAsync(dir).ConfigureAwait(false) != dirSize)
                     throw new Exception("Unexpected end of file! (expected directory info)");
                 files = DecodeFileArray(dir);
@@ -143,7 +144,7 @@ namespace SysWeaver
             var attr = (int)ReadVar(s);
             var bsize = (long)ReadVar(s);
             bsize *= hashSize;
-            var d = new Byte[bsize];
+            var d = GC.AllocateUninitializedArray<Byte>((int)bsize);
             if (await s.ReadAsync(d).ConfigureAwait(false) != bsize)
                 throw new Exception("Unexpected end of file! (expected block info)");
             return new CdcFileData(c, w, a, attr, d);
@@ -1130,59 +1131,67 @@ namespace SysWeaver
             var hashSize = props.HashSize;
             //  Read initial data and setup buffer "pointers"
             var bufSize = maxSize << 3; // Typically 1MB
-            var data = new Byte[bufSize];
-            var dataSize = await s.ReadAsync(data).ConfigureAwait(false);
-            if (dataSize <= 0)
-                return Array.Empty<Byte>();
-            bool moreData = dataSize >= bufSize;
-            int offset = 0;
-            //  Setup hash data
-            int hashGrow = (dataSize + dataSize) / props.AverageSize;
-            if (hashGrow < 2)
-                hashGrow = 2;
-            hashGrow *= hashSize;
-            Byte[] hashes = new byte[hashGrow];
-            var hashLen = hashGrow;
-            int hashOffset = 0;
-            //  Main loop
-            while (dataSize > 0)
+            var data = ArrayPool<Byte>.Shared.Rent(bufSize);
+            try
             {
-                //  Determine chunk size
-                var chunkSize = GetCutSize(data.AsSpan(offset, dataSize), props);
-                //  Make sure we can store the hash
-                if (hashOffset >= hashLen)
+
+                var dataSize = await s.ReadAsync(data).ConfigureAwait(false);
+                if (dataSize <= 0)
+                    return Array.Empty<Byte>();
+                bool moreData = dataSize >= bufSize;
+                int offset = 0;
+                //  Setup hash data
+                int hashGrow = (dataSize + dataSize) / props.AverageSize;
+                if (hashGrow < 2)
+                    hashGrow = 2;
+                hashGrow *= hashSize;
+                Byte[] hashes = GC.AllocateUninitializedArray<Byte>(hashGrow);
+                var hashLen = hashGrow;
+                int hashOffset = 0;
+                //  Main loop
+                while (dataSize > 0)
                 {
-                    hashLen += hashGrow;
-                    Array.Resize(ref hashes, hashLen);
+                    //  Determine chunk size
+                    var chunkSize = GetCutSize(data.AsSpan(offset, dataSize), props);
+                    //  Make sure we can store the hash
+                    if (hashOffset >= hashLen)
+                    {
+                        hashLen += hashGrow;
+                        Array.Resize(ref hashes, hashLen);
+                    }
+                    if (preview)
+                    {
+                        //  Compute chunk hash 
+                        HashChunk(hashes.AsMemory(hashOffset, hashSize), data.AsMemory().Slice(offset, chunkSize), props);
+                    }
+                    else
+                    {
+                        //  Compute chunk hash and save to storage (if required)
+                        await CreateChunk(hashes.AsMemory(hashOffset, hashSize), data.AsMemory().Slice(offset, chunkSize), props).ConfigureAwait(false);
+                    }
+                    //  Step to next hash
+                    hashOffset += hashSize;
+                    //  Move to next chunk (if any left)
+                    offset += chunkSize;
+                    dataSize -= chunkSize;
+                    //  Check if we need to read more data
+                    if (moreData && (dataSize < maxSize))
+                    {
+                        //  Read more data
+                        MoveToFront(data, offset, dataSize);
+                        offset = 0;
+                        dataSize += await s.ReadAsync(data.AsMemory(dataSize)).ConfigureAwait(false);
+                        moreData = dataSize >= bufSize;
+                    }
                 }
-                if (preview)
-                {
-                    //  Compute chunk hash 
-                    HashChunk(hashes.AsMemory(hashOffset, hashSize), data.AsMemory().Slice(offset, chunkSize), props);
-                }
-                else
-                {
-                    //  Compute chunk hash and save to storage (if required)
-                    await CreateChunk(hashes.AsMemory(hashOffset, hashSize), data.AsMemory().Slice(offset, chunkSize), props).ConfigureAwait(false);
-                }
-                //  Step to next hash
-                hashOffset += hashSize;
-                //  Move to next chunk (if any left)
-                offset += chunkSize;
-                dataSize -= chunkSize;
-                //  Check if we need to read more data
-                if (moreData && (dataSize < maxSize))
-                {
-                    //  Read more data
-                    MoveToFront(data, offset, dataSize);
-                    offset = 0;
-                    dataSize += await s.ReadAsync(data.AsMemory(dataSize)).ConfigureAwait(false);
-                    moreData = dataSize >= bufSize;
-                }
+                //  Finalise hash data
+                Array.Resize(ref hashes, hashOffset);
+                return hashes;
             }
-            //  Finalise hash data
-            Array.Resize(ref hashes, hashOffset);
-            return hashes;
+            finally
+            {
+                ArrayPool<Byte>.Shared.Return(data);
+            }
         }
 
 
@@ -1285,12 +1294,12 @@ namespace SysWeaver
         {
             props = props ?? CdcProps.Default;
             var hashSize = props.HashSize;
-            var hash = new Byte[hashSize];
+            var hash = GC.AllocateUninitializedArray<Byte>(hashSize);
             while (ContentDependentChunking.TryReadVar(sourceStream, out var dataSize))
             {
                 if (await sourceStream.ReadAsync(hash).ConfigureAwait(false) != hashSize)
                     return false;
-                var data = new Byte[dataSize];
+                var data = GC.AllocateUninitializedArray<Byte>((int)dataSize);
                 if (await sourceStream.ReadAsync(data).ConfigureAwait(false) != (long)dataSize)
                     return false;
                 if (!await TrySaveChunk(hash.ToHex(), data, props).ConfigureAwait(false))

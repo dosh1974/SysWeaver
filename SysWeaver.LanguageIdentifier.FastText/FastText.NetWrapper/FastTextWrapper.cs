@@ -600,7 +600,7 @@ public partial class FastTextWrapper : IDisposable
 			return Array.Empty<byte>();
 		}
 
-		var result = new byte[len];
+		var result = GC.AllocateUninitializedArray<Byte>(len);
 		Marshal.Copy(ptr, result, 0, len);
 
 		return result;

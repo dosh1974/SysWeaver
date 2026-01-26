@@ -257,7 +257,7 @@ namespace SysWeaver
             for (int ttl = 1; ttl <= maxHops; ttl++)
             {
                 var options = new PingOptions(ttl, true);
-                byte[] buffer = new byte[32];
+                byte[] buffer = GC.AllocateUninitializedArray<Byte>(32);
                 PingReply reply;
                 try
                 {

@@ -456,7 +456,7 @@ namespace SysWeaver
                 r = comp.GetCompressed(r.Span, Level);
             var rs = r.Span;
             var l = r.Length;
-            var dest = new byte[l + 32];
+            var dest = GC.AllocateUninitializedArray<Byte>(l + 32);
             var ds = dest.AsSpan();
             rs.CopyTo(ds);
             SHA256.HashData(rs, ds.Slice(l));

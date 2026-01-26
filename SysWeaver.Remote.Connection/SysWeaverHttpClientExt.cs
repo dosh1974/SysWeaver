@@ -87,8 +87,8 @@ namespace SysWeaver
             String hash = null;
             if (password.Length == 44)
             {
-                Byte[] d = new byte[32];
-                if (Convert.TryFromBase64String(password, d.AsSpan(), out var w))
+                Span<Byte> d = stackalloc byte[32];
+                if (Convert.TryFromBase64String(password, d, out var w))
                 {
                     if (w == 32)
                         hash = password;

@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Text;
 using SysWeaver.Serialization.SwJson;
 using SysWeaver.Serialization.SwJson.Reader;
@@ -55,9 +56,18 @@ namespace SysWeaver.Serialization
         public T FromString<T>(ReadOnlySpan<char> text)
         {
             var size = Utf8Parser.UTF8.GetMaxByteCount(text.Length);
-            var data = size <= 4096 ? stackalloc Byte[size] : GC.AllocateUninitializedArray<Byte>(size).AsSpan();
-            var l = Utf8Parser.UTF8.GetBytes(text, data);
-            return JsonReader.Create<T>(data.Slice(0, l));
+            Byte[] d = null;
+            var data = size <= 4096 ? stackalloc Byte[size] : (d = ArrayPool<Byte>.Shared.Rent(size)).AsSpan();
+            try
+            {
+                var l = Utf8Parser.UTF8.GetBytes(text, data);
+                return JsonReader.Create<T>(data.Slice(0, l));
+            }
+            finally
+            {
+                if (d != null)
+                    ArrayPool<Byte>.Shared.Return(d);
+            }
         }
 
         public T FromString<T>(String text)

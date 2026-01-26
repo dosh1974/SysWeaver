@@ -77,16 +77,15 @@ namespace SysWeaver
         public override int ReadByte()
         {
             var currentSteam = GetStream();
-            Span<Byte> d = new Byte[1];
             for (; ; )
             {
                 if (currentSteam == null)
                     return -1;
-                // Read what we can from the current stream
-                if (currentSteam.Read(d) == 1)
-                {
+                var b = currentSteam.ReadByte();
+                if (b >= 0)
+                { 
                     ++Position;
-                    return d[0];
+                    return b;
                 }
                 currentSteam.Dispose();
                 currentSteam = GetNextStream();

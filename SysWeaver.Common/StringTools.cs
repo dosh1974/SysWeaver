@@ -919,7 +919,7 @@ namespace SysWeaver
             if (l <= 0)
                 return Array.Empty<Byte>();
             l >>= 1;
-            var data = new Byte[l];
+            var data = GC.AllocateUninitializedArray<Byte>(l);
             for (int i = 0, s = 0; i < l; ++ i)
             {
                 var u = value[s].HexValue();
