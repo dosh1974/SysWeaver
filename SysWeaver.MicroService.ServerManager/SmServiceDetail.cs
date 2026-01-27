@@ -46,6 +46,11 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String CurrentFolder;
 
+        /// <summary>
+        /// If true, this the service manager service
+        /// </summary>
+        public bool IsSm;
+
         public SmServiceDetail()
         {
         }
@@ -54,7 +59,9 @@ namespace SysWeaver.MicroService
         {
             var p = info.Process;
             var m = p?.Metrics;
-            ProcId = p?.Id ?? 0;
+            var pid = p?.Id ?? 0;
+            ProcId = pid;
+            IsSm = pid == EnvInfo.ProcessId;
             TotalProcessorTime = m?.TotalCpuTime ?? TimeSpan.Zero;
             ExeName = exeName;
             Log = log;

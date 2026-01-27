@@ -94,6 +94,23 @@ namespace SysWeaver.MicroService
                     throw new Exception("A text file named \"" + name + "\" have already been added!");
             }
 
+            if (p.AllowHosts)
+            {
+                var fn = GetHostsFile();
+                if (!String.IsNullOrEmpty(fn))
+                {
+                    tf.TryAdd("hosts", new InternalTextFile("hosts", new SmTextFile
+                    {
+                        Auth = Roles.AdminOps,
+                        Desc = "This is the hosts redirection file.",
+                        Filename = fn,
+                        ScrollToEnd = false,
+                        AllowDelete = false,
+                        AllowEdit = p.AllowHostsEdit,
+                    }));
+                }
+            }
+
             TextFiles = tf.Freeze();
             var bakFolder = Path.GetFullPath(Path.Combine(EnvInfo.ExecutableDir, "..", "Bak"));
             manager.FileDeleter = async fn =>
@@ -2602,24 +2619,9 @@ namespace SysWeaver.MicroService
 
         public IEnumerable<TextFile> GetTextFiles()
         {
-            var fn = GetHostsFile();
-            if (fn != null) 
-            {
-                var fi = new FileInfo(fn);
-                if (fi.Exists)
-                    yield return new TextFile
-                    {
-                        Auth = Roles.AdminOps,
-                        Description = "This is the hosts redirection file.",
-                        Name = "hosts",
-                        Filename = fn,
-                        Size = fi.Length,
-                        LastUpdate = fi.LastWriteTimeUtc,
-                    };
-            }
             foreach (var x in TextFiles.Values)
             {
-                fn = x.Filename;
+                var fn = x.Filename;
                 var fi = new FileInfo(fn);
                 if (fi.Exists)
                     yield return new TextFile
@@ -2637,19 +2639,21 @@ namespace SysWeaver.MicroService
 
         }
 
-        public async ValueTask<Byte[]> TryReadTextFile(String name)
+        public async ValueTask<ReadOnlyMemory<Byte>> TryReadTextFile(String name)
         {
+
+
             if (TextFiles.TryGetValue(name, out var x))
             {
                 var fn = x.Filename;
                 if ((fn != null) && File.Exists(fn))
-                    return await File.ReadAllBytesAsync(fn).ConfigureAwait(false);
+                    return await FileExt.TryReadBytesAsync(fn).ConfigureAwait(false);
             }
             if (name.FastEquals("hosts"))
             {
                 var fn = GetHostsFile();
                 if ((fn != null) && File.Exists(fn))
-                    return await File.ReadAllBytesAsync(fn).ConfigureAwait(false);
+                    return await FileExt.TryReadBytesAsync(fn).ConfigureAwait(false);
             }
             return null;
         }

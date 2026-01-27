@@ -123,32 +123,31 @@ async function serviceInfoMain() {
                 button.StopWorking();
             }
         }
-
-        const restartButton = new Button(null, "Restart", "Click to restart the service", "si-icon-restart", true, async () => {
+        const restartButton = new Button(null, "Restart", "Click to restart the service", "si-icon-restart", false, async () => {
             await DoVerb(restartButton, "Restart", "Restarted {0}");
         });
 
-        const pauseButton = new Button(null, "Pause", "Click to pause the service", "si-icon-pause", true, async () => {
+        const pauseButton = new Button(null, "Pause", "Click to pause the service", "si-icon-pause", false, async () => {
             await DoVerb(pauseButton, "Pause", "Paused {0}");
         });
 
-        const resumeButton = new Button(null, "Resume", "Click to resume the service", "si-icon-resume", true, async () => {
+        const resumeButton = new Button(null, "Resume", "Click to resume the service", "si-icon-resume", false, async () => {
             await DoVerb(resumeButton, "Continue", "Resumed {0}");
         });
 
-        const stopButton = new Button(null, "Stop", "Click to stop the service", "si-icon-stop", true, async () => {
+        const stopButton = new Button(null, "Stop", "Click to stop the service", "si-icon-stop", false, async () => {
             await DoVerb(stopButton, "Stop", "Stopped {0}");
         });
 
-        const startButton = new Button(null, "Start", "Click to start the service", "si-icon-start", true, async () => {
+        const startButton = new Button(null, "Start", "Click to start the service", "si-icon-start", false, async () => {
             await DoVerb(startButton, "Start", "Started {0}");
         });
 
-        const disableButton = new Button(null, "Disable", "Click to disable the service", "si-icon-disable", true, async () => {
+        const disableButton = new Button(null, "Disable", "Click to disable the service", "si-icon-disable", false, async () => {
             await DoVerb(disableButton, "Uninstall", "Disabled {0}");
         });
 
-        const killButton = new Button(null, "Kill", "Click to kill the service process.\nWARNING! This can cause problems!\nTry to stop the service first.", "si-icon-kill", true, async () => {
+        const killButton = new Button(null, "Kill", "Click to kill the service process.\nWARNING! This can cause problems!\nTry to stop the service first.", "si-icon-kill", false, async () => {
             if (await Confirm("Kill",
                 "Forcefully kill the service process?\n\n" +
                 "WARNING! This can cause errors!\n\n" +
@@ -177,7 +176,7 @@ async function serviceInfoMain() {
             Open("../FolderSync/Folders/" + service + "/explore", "_self");
         });
 
-        logButton = new Button(null, "View log", "View the current log", "si-icon-log", true, async () => {
+        logButton = new Button(null, "View log", "View the current log", "si-icon-log", false, async () => {
             Open("../edit/text.html?scrollToEnd=true&r=../FolderSync/Folders/" + service + "/" + data.Log.Name
                 + "&d=../ServerManager/DeleteLogFile", "_self");
 
@@ -195,16 +194,17 @@ async function serviceInfoMain() {
 
         updateButtons = status => {
             if (!blockButtonStates) {
+                const isNotSm = !data.IsSm;
                 const isRunning = status === "Running";
                 const isPaused = status === "Paused";
                 const isStopped = status === "Stopped";
                 restartButton.SetEnabled(isRunning);
-                pauseButton.SetEnabled(isRunning);
-                resumeButton.SetEnabled(isPaused);
-                stopButton.SetEnabled(isRunning || isPaused);
-                startButton.SetEnabled(isStopped || status === "NotInstalled" || status === "Unknown");
-                disableButton.SetEnabled(isStopped || isRunning || isPaused);
-                killButton.SetEnabled(data.ProcId > 0);
+                pauseButton.SetEnabled(isNotSm & isRunning);
+                resumeButton.SetEnabled(isNotSm & isPaused);
+                stopButton.SetEnabled(isNotSm & (isRunning || isPaused));
+                startButton.SetEnabled(isNotSm & (isStopped || status === "NotInstalled" || status === "Unknown"));
+                disableButton.SetEnabled(isNotSm & (isStopped || isRunning || isPaused));
+                killButton.SetEnabled(isNotSm & (data.ProcId > 0));
             }
             logButton.SetEnabled(!!data.Log);
 

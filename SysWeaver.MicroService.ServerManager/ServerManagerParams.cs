@@ -85,6 +85,16 @@ namespace SysWeaver.MicroService
         /// List if text files that can be viewed
         /// </summary>
         public SmTextFile[] TextFiles;
+
+        /// <summary>
+        /// If true, the hosts file is readable
+        /// </summary>
+        public bool AllowHosts = true;
+
+        /// <summary>
+        /// If true, the hosts file may be edited
+        /// </summary>
+        public bool AllowHostsEdit = true;
     }
 
 

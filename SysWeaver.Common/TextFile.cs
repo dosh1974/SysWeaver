@@ -68,7 +68,7 @@ namespace SysWeaver
         /// Read the content of a file
         /// </summary>
         /// <returns>null if the file is unknown or if it failed to be read, else the binary data of the file</returns>
-        ValueTask<Byte[]> TryReadTextFile(String name);
+        ValueTask<ReadOnlyMemory<Byte>> TryReadTextFile(String name);
     }
 
 }

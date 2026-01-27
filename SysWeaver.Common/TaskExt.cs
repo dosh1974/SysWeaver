@@ -151,6 +151,10 @@ namespace SysWeaver
         /// </summary>
         public static readonly Task<Boolean> FalseTask = Task.FromResult(false);
 
+        /// <summary>
+        /// A complete task for an empty read only memory buffer
+        /// </summary>
+        public static readonly Task<ReadOnlyMemory<Byte>> ReadonlyMemoryTask = Task.FromResult(ReadOnlyMemory<Byte>.Empty);
 
 
 
@@ -174,6 +178,10 @@ namespace SysWeaver
         /// </summary>
         public static readonly ValueTask<Boolean> FalseValueTask = ValueTask.FromResult(false);
 
+        /// <summary>
+        /// A complete task for an empty read only memory buffer
+        /// </summary>
+        public static readonly ValueTask<ReadOnlyMemory<Byte>> ReadonlyMemoryValueTask = ValueTask.FromResult(ReadOnlyMemory<Byte>.Empty);
 
 
         /// <summary>

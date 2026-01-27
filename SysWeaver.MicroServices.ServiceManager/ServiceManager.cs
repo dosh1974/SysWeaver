@@ -1403,6 +1403,8 @@ namespace SysWeaver.MicroService
                 foreach (var x in s.GetStats())
                     yield return x;
             }
+            foreach (var x in FileExs.GetStats(sys, "FileExs."))
+                yield return x;
             foreach (var x in PlatformTools.Current.GetStats())
                 yield return x;
         }
@@ -1915,6 +1917,7 @@ namespace SysWeaver.MicroService
         public async Task<ReadOnlyMemory<Byte>> ReadTextFile(String name, HttpServerRequest context)
         {
             var a = context.Session.Auth;
+            var fe = FileExs;
             foreach (var x in UniqueInstances)
             {
                 var t = x as IHaveTextFiles;
@@ -1927,18 +1930,21 @@ namespace SysWeaver.MicroService
                     try
                     {
                         var d = await t.TryReadTextFile(name).ConfigureAwait(false);
-                        if (d != null)
+                        if (!d.IsEmpty)
                             return d;
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        fe.OnException(ex);
                     }
                 }
             }
-            return null;
+            return ReadOnlyMemory<Byte>.Empty;
         }
 
         public Func<String, Task<Exception>> FileDeleter;
+
+        readonly ExceptionTracker FileExs = new ExceptionTracker();
 
         #endregion//Files
 

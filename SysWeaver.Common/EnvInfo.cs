@@ -223,6 +223,11 @@ namespace SysWeaver
         }
         static String InternalAppDescription = ExeAppDescription;
 
+        /// <summary>
+        /// The current process Id
+        /// </summary>
+        public static readonly int ProcessId = Process.GetCurrentProcess().Id;
+
 
         /// <summary>
         /// Application start time

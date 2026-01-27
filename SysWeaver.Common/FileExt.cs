@@ -96,6 +96,60 @@ namespace SysWeaver
         public static void WriteToFile(this ReadOnlySpan<Byte> span, String filename)
             => WriteSpan(filename, span);
 
+
+        /// <summary>
+        /// Read byte content of a file, allowing shared read/write
+        /// </summary>
+        /// <param name="filename">Name of the file to read</param>
+        /// <returns>Empty on error</returns>
+        public static async ValueTask<ReadOnlyMemory<Byte>> ReadBytesAsync(String filename)
+        {
+            var fi = new FileInfo(filename);
+            if (!fi.Exists)
+                return null;
+            var len = fi.Length + 8192;
+            if (len > (1L << 31))
+                len = (1L << 31);
+            using var ms = new MemoryStream((int)len);
+            using (var fs = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                await fs.CopyToAsync(ms).ConfigureAwait(false);
+            return ms.GetBuffer().AsMemory(0, (int)ms.Position);
+        }
+
+        /// <summary>
+        /// Read byte content of a file, allowing shared read/write with retying
+        /// </summary>
+        /// <param name="filename">Name of the file to read</param>
+        /// <param name="retryCount">Number of times to retry the operation</param>
+        /// <param name="delayInMs">Number of milli seconds to wait between any retries (on error)</param>
+        /// <param name="delayInMsNoExisting">Number of milli seconds to wait between any retries (when file deosn't exit)</param>
+        /// <returns>Empty on error</returns>
+        public static async ValueTask<ReadOnlyMemory<Byte>> TryReadBytesAsync(String filename, int retryCount = 10, int delayInMs = 100, int delayInMsNoExisting = 1)
+        {
+            for (; ; )
+            {
+                try
+                {
+                    var d = await ReadBytesAsync(filename).ConfigureAwait(false);
+                    if (!d.IsEmpty)
+                        return d;
+                    --retryCount;
+                    if (retryCount <= 0)
+                        return null;
+                    await Task.Delay(delayInMsNoExisting).ConfigureAwait(false);
+                }
+                catch
+                {
+                    --retryCount;
+                    if (retryCount <= 0)
+                        return null;
+                    await Task.Delay(delayInMs).ConfigureAwait(false);
+                }
+            }
+
+        }
+
+
     }
 
 }
