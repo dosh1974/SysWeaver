@@ -13,17 +13,18 @@ namespace SysWeaver.Serialization.SwJson.Writer
 
         public bool TypeIsOptional = false;
 
-        Byte[] Rented;
+        //Byte[] Rented;
 
         public BufferWriter(Byte[] initData, int startOffset = 0)
         {
-            var d = initData ?? (Rented = ArrayPool<Byte>.Shared.Rent(4096));
+            var d = initData ?? GC.AllocateUninitializedArray<Byte>(4096);//  (Rented = ArrayPool<Byte>.Shared.Rent(4096));
             Data = d;
             PinHandle = GCHandle.Alloc(d, GCHandleType.Pinned);
             DataPtr = (Byte*)PinHandle.AddrOfPinnedObject().ToPointer();
             S = d.Length;
             Offset = startOffset;
             var a = ArrayPool<Char>.Shared.Rent(128);
+            //var a = GC.AllocateUninitializedArray<Char>(128);
             TempBuf = a;
             Temp = a;
         }
@@ -66,8 +67,8 @@ namespace SysWeaver.Serialization.SwJson.Writer
             PinHandle.Free();
             Data = null;
             ArrayPool<Char>.Shared.Return(TempBuf);
-            if (Rented != null)
-                ArrayPool<Byte>.Shared.Return(Rented);
+            //if (Rented != null)
+                //ArrayPool<Byte>.Shared.Return(Rented);
             GC.SuppressFinalize(this);
         }
 
@@ -106,7 +107,8 @@ namespace SysWeaver.Serialization.SwJson.Writer
         {
             end += (4096 + 4095);
             end &= ~4095;
-            var b = ArrayPool<Byte>.Shared.Rent(end);
+            //var b = ArrayPool<Byte>.Shared.Rent(end);
+            var b = GC.AllocateUninitializedArray<Byte>(end);
             var o = Offset;
             if (o > 0)
                 Data.AsSpan<Byte>().Slice(0, o).CopyTo(b.AsSpan<Byte>().Slice(0, o));
@@ -114,9 +116,9 @@ namespace SysWeaver.Serialization.SwJson.Writer
             PinHandle.Free();
             PinHandle = GCHandle.Alloc(b, GCHandleType.Pinned);
             DataPtr = (Byte*)PinHandle.AddrOfPinnedObject().ToPointer();
-            if (Rented != null)
-                ArrayPool<Byte>.Shared.Return(Rented);
-            Rented = b;
+            //if (Rented != null)
+                //ArrayPool<Byte>.Shared.Return(Rented);
+            //Rented = b;
             S = end;
         }
 
