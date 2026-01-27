@@ -1069,13 +1069,13 @@ class Table {
         if (m)
             return m;
         const current = Table.CS;
-        m = await Promise.all([
+        const [js, css, exp] = await Promise.all([
             includeJs(current, "../app/application.js"),
             includeCss(current, "../app/application.css"),
             getRequest("../Api/GetTableExporters")
-        ])[2];
-        Table.MenuExportItems = m;
-        return m;
+        ]);
+        Table.MenuExportItems = exp;
+        return exp;
     }
 
     static CS = document.currentScript.src;
