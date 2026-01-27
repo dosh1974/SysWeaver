@@ -287,12 +287,19 @@ namespace SysWeaver.Net
                 }
             }
             var pool = Pool;
-            var buf = Pool.Rent(al);
-            var t = buf.AsSpan();
-            if (Encoding.UTF8.TryGetBytes(text, t, out var l))
+            var buf = pool.Rent(al);
+            try
             {
-                SetResBody(t.Slice(0, l));
-                return;
+                var t = buf.AsSpan();
+                if (Encoding.UTF8.TryGetBytes(text, t, out var l))
+                {
+                    SetResBody(t.Slice(0, l));
+                    return;
+                }
+            }
+            finally
+            {
+                pool.Return(buf);
             }
         }
 

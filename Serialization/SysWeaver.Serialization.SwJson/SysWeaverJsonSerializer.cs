@@ -56,8 +56,8 @@ namespace SysWeaver.Serialization
         public T FromString<T>(ReadOnlySpan<char> text)
         {
             var size = Utf8Parser.UTF8.GetMaxByteCount(text.Length);
-            Byte[] d = null;
-            var data = size <= 4096 ? stackalloc Byte[size] : (d = ArrayPool<Byte>.Shared.Rent(size)).AsSpan();
+            Byte[] rented = null;
+            var data = size <= 4096 ? stackalloc Byte[size] : (rented = ArrayPool<Byte>.Shared.Rent(size)).AsSpan();
             try
             {
                 var l = Utf8Parser.UTF8.GetBytes(text, data);
@@ -65,8 +65,8 @@ namespace SysWeaver.Serialization
             }
             finally
             {
-                if (d != null)
-                    ArrayPool<Byte>.Shared.Return(d);
+                if (rented != null)
+                    ArrayPool<Byte>.Shared.Return(rented);
             }
         }
 

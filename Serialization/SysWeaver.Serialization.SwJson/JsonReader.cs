@@ -53,7 +53,7 @@ namespace SysWeaver.Serialization.SwJson
             var l = utf8.GetBytes(s, data);
             fixed (Byte* ptr = data)
             {
-                using var state = JsonParserState.Get(ptr, data.Length);
+                using var state = JsonParserState.Get(ptr, l);
                 try
                 {
                     return InternalCreate<T>(state);
@@ -109,7 +109,7 @@ namespace SysWeaver.Serialization.SwJson
             var l = utf8.GetBytes(s, data);
             fixed (Byte* ptr = data)
             {
-                using var state = JsonParserState.Get(ptr, data.Length);
+                using var state = JsonParserState.Get(ptr, l);
                 try
                 {
                     return InternalCreate(type, state);
@@ -563,7 +563,7 @@ namespace SysWeaver.Serialization.SwJson
                         c = (Char)32;
                     sb[i] = c;
                 }
-                return new String(sb);
+                return new String(sb.Slice(0, l));
             }
             finally
             {
