@@ -12,6 +12,7 @@ using System.Net.Http.Headers;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using SysWeaver.Compression;
+using SysWeaver.Net;
 
 namespace SysWeaver.Remote
 {
@@ -291,7 +292,7 @@ namespace SysWeaver.Remote
                 }
                 catch (Exception ex)
                 {
-                    if (ex is EndPointException)
+                    if (ex is HttpResponseException)
                     {
                         GetFails.OnException(ex);
                         throw;
@@ -327,7 +328,7 @@ namespace SysWeaver.Remote
                 }
                 catch (Exception ex)
                 {
-                    if (ex is EndPointException)
+                    if (ex is HttpResponseException)
                     {
                         DeleteFails.OnException(ex);
                         throw;
@@ -353,7 +354,7 @@ namespace SysWeaver.Remote
                 }
                 catch (Exception ex)
                 {
-                    if (ex is EndPointException)
+                    if (ex is HttpResponseException)
                     {
                         PostFails.OnException(ex);
                         throw;
@@ -379,7 +380,7 @@ namespace SysWeaver.Remote
                 }
                 catch (Exception ex)
                 {
-                    if (ex is EndPointException)
+                    if (ex is HttpResponseException)
                     {
                         PutFails.OnException(ex);
                         throw;
@@ -403,7 +404,7 @@ namespace SysWeaver.Remote
                 }
                 catch (Exception ex)
                 {
-                    if (ex is EndPointException)
+                    if (ex is HttpResponseException)
                     {
                         GetFails.OnException(ex);
                         throw;
@@ -427,7 +428,7 @@ namespace SysWeaver.Remote
                 }
                 catch (Exception ex)
                 {
-                    if (ex is EndPointException)
+                    if (ex is HttpResponseException)
                     {
                         DeleteFails.OnException(ex);
                         throw;
@@ -455,7 +456,7 @@ namespace SysWeaver.Remote
                 }
                 catch (Exception ex)
                 {
-                    if (ex is EndPointException)
+                    if (ex is HttpResponseException)
                     {
                         PostFails.OnException(ex);
                         throw;
@@ -483,7 +484,7 @@ namespace SysWeaver.Remote
                 }
                 catch (Exception ex)
                 {
-                    if (ex is EndPointException)
+                    if (ex is HttpResponseException)
                     {
                         PutFails.OnException(ex);
                         throw;
@@ -552,10 +553,37 @@ namespace SysWeaver.Remote
                 var c = res.Content;
                 Memory<Byte> data = c == null ? null : await c.ReadAsByteArrayAsync().ConfigureAwait(false);
                 var code = res.StatusCode;
+                var icode = (int)code;
                 if (code != HttpStatusCode.OK)
                 {
-                    var icode = (int)code;
-                    var sex = new EndPointException(req.Method + " \"" + GetCleanUrl(req.RequestUri.ToString()) + "\", responded with " + icode + " [" + res.StatusCode + "]", icode);
+                    Exception fromText = null;
+                    try
+                    {
+                        var ct = res.Content.Headers.ContentType;
+                        if (ct != null)
+                        {
+                            if (ct.MediaType.FastStartsWith("text/"))
+                            {
+                                Encoding e = Encoding.UTF8;
+                                try
+                                {
+                                    e = Encoding.GetEncoding(ct.CharSet);
+                                }
+                                catch
+                                {
+                                }
+                                var text = e.GetString(data.Span);
+                                if (text.Length > 0)
+                                    fromText = new HttpResponseException(icode, text, false);
+                            }
+                        }
+                    }
+                    catch
+                    {
+                    }
+                    if (fromText != null)
+                        throw fromText;
+                    var sex = new HttpResponseException(icode, String.Concat(req.Method, " \"", GetCleanUrl(req.RequestUri.ToString()), "\", responded with [", code, ']'));
                     if (ce != null)
                         ce?.Invoke(rid, sex, icode, null, ref data);
                     throw sex;
@@ -567,7 +595,7 @@ namespace SysWeaver.Remote
             }
             catch (Exception ex)
             {
-                if ((ce != null) && (ex is not EndPointException))
+                if ((ce != null) && (ex is not HttpResponseException))
                 {
                     Memory<Byte> b = null;
                     ce?.Invoke(rid, ex, 0, null, ref b);
@@ -595,7 +623,34 @@ namespace SysWeaver.Remote
                     var c = res.Content;
                     Memory<Byte> data = c == null ? null : await c.ReadAsByteArrayAsync().ConfigureAwait(false);
                     var icode = (int)code;
-                    var sex = new EndPointException(req.Method + " \"" + GetCleanUrl(req.RequestUri.ToString()) + "\", responded with " + icode + " [" + res.StatusCode + "]", icode);
+                    Exception fromText = null;
+                    try
+                    {
+                        var ct = res.Content.Headers.ContentType;
+                        if (ct != null)
+                        {
+                            if (ct.MediaType.FastStartsWith("text/"))
+                            {
+                                Encoding e = Encoding.UTF8;
+                                try
+                                {
+                                    e = Encoding.GetEncoding(ct.CharSet);
+                                }
+                                catch
+                                {
+                                }
+                                var text = e.GetString(data.Span);
+                                if (text.Length > 0)
+                                    fromText = new HttpResponseException(icode, text, false);
+                            }
+                        }
+                    }
+                    catch
+                    {
+                    }
+                    if (fromText != null)
+                        throw fromText;
+                    var sex = new HttpResponseException(icode, String.Concat(req.Method, " \"", GetCleanUrl(req.RequestUri.ToString()), "\", responded with [", code, ']'));
                     if (ce != null)
                         ce?.Invoke(rid, sex, icode, null, ref data);
                     throw sex;
@@ -608,7 +663,7 @@ namespace SysWeaver.Remote
             }
             catch (Exception ex)
             {
-                if ((ce != null) && (ex is not EndPointException))
+                if ((ce != null) && (ex is not HttpResponseException))
                 {
                     Memory<Byte> data = null;
                     ce?.Invoke(rid, ex, 0, null, ref data);

@@ -1543,7 +1543,16 @@ namespace SysWeaver.Net
                     {
                         data.SetResStatusCode(re.ResponseCode);
                         if (!isHead)
-                            data.SetResText(String.Concat(re.ResponseCode, ": ", await translator.TranslateSafe(ex.Message, session.Language, "en", "This is an exception message thrown by a web server", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false)));
+                        {
+                            var text = re.Message;
+                            var tr = re.Translate;
+                            if ((translator != null) && (tr != null))
+                                text = await translator.TranslateSafe(text, session.Language, tr, "This is an exception message thrown by a web server", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false);
+                            if (re.CodePrefix)
+                                data.SetResText(String.Concat(re.ResponseCode, ": ", text));
+                            else
+                                data.SetResText(text);
+                        }
                     }
                     else
                     {

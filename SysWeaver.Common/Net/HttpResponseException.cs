@@ -18,11 +18,15 @@ namespace SysWeaver.Net
         }
 
 
-        public HttpResponseException(int responseCode, String message = null) : base(message ?? DefMsg(responseCode))
+        public HttpResponseException(int responseCode, String message = null, bool codePrefix = true, String translateFrom = "en") : base(message ?? DefMsg(responseCode))
         {
             ResponseCode = responseCode;
+            CodePrefix = codePrefix;
+            Translate = translateFrom;
         }
         public readonly int ResponseCode;
+        public readonly bool CodePrefix;
+        public readonly String Translate;
     }
 
 }
