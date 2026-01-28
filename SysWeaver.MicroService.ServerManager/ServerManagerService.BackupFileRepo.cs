@@ -111,7 +111,7 @@ namespace SysWeaver.MicroService
                     await Manager.SaveWithBackup(dest, text, true).ConfigureAwait(false);
                     if (a != null)
                         a.OnApiEnd(id, r, ad, IsKey ? "** PROTECTED **" : text.LimitLength(2048));
-                    Manager.Syncer.GetFolderData(Key);
+                    Manager.Syncer.GetPushFolderData(Key);
                     r.Session.InvalidateCache();
                     r.Server.InvalidateCache();
                     return FileUploadResult.None;

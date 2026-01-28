@@ -2,6 +2,45 @@
 
 namespace SysWeaver.FolderSync
 {
+
+
+    public sealed class FolderPullRequest
+    {
+        /// <summary>
+        /// The folder
+        /// </summary>
+        public String Folder;
+
+        /// <summary>
+        /// The files
+        /// </summary>
+        public FolderSyncFile[] Files;
+
+        /// <summary>
+        /// Populate with CdcProps.Default.Key if Cdc is requested
+        /// </summary>
+        public String Cdc;
+    }
+
+    public sealed class FolderPullResponse
+    {
+        /// <summary>
+        /// The files that need to be downloaded
+        /// </summary>
+        public String[] Download;
+
+        /// <summary>
+        /// The files that need to be copied
+        /// </summary>
+        public String[] Keep;
+
+        /// <summary>
+        /// If non-null and the CdcProps.Default.Key matches this string, prefer to use Cdc for upload
+        /// </summary>
+        public String Cdc;
+    }
+
+
     public sealed class FolderSyncRequest
     {
         /// <summary>

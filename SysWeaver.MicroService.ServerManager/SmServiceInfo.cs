@@ -11,14 +11,14 @@ namespace SysWeaver.MicroService
     sealed class SmServiceInfo
     {
         public readonly ManagedService Service;
-        public readonly FolderSyncFolder Syncher;
+        public readonly FolderPushFolder Syncher;
         public readonly IReadOnlyList<string> Auth;
         public readonly RequestOptions Options;
         public readonly IFileRepo Current;
         public readonly IFileRepo Master;
         public readonly FileHttpServerModuleFolder Bak;
 
-        public SmServiceInfo(ManagedService service, FolderSyncFolder syncher, ServerManagerParams p, IFileRepo current, IFileRepo master, FileHttpServerModuleFolder bak)
+        public SmServiceInfo(ManagedService service, FolderPushFolder syncher, ServerManagerParams p, IFileRepo current, IFileRepo master, FileHttpServerModuleFolder bak)
         {
             Service = service;
             Syncher = syncher;

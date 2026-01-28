@@ -123,11 +123,14 @@ namespace SysWeaver.MicroService
         static readonly IReadOnlySet<String> Apis = ReadOnlyData.Set(StringComparer.Ordinal,
             "explore",
             "Folders",
+            "PullFolders",
             nameof(SyncFolder),
-            nameof(SynchedFoldersTable),
+            nameof(PushFoldersTable),
             nameof(Activate),
             nameof(Remove),
             nameof(GetSynchedFolderManifest),
+            nameof(SyncPullFolder),
+            nameof(PullFoldersTable),
             ""
             );
 
@@ -139,8 +142,9 @@ namespace SysWeaver.MicroService
             Manager = manager;
             FileMod = manager.TryGet<FileHttpServerModule>();
             foreach (var x in p.Folders.Nullable())
-                AddFolder(x);
-            
+                AddPushFolder(x);
+            foreach (var x in p.SharedFolders.Nullable())
+                AddPullFolder(x);
             TempRemove = TimeSpan.Zero;
             Prune().RunAsync();
             TempRemove = TimeSpan.FromHours(12);
@@ -150,16 +154,16 @@ namespace SysWeaver.MicroService
 
 
 
-        public String AddFolder(FolderSyncFolder x)
+        public String AddPushFolder(FolderPushFolder x)
         {
-            var folders = Folders;
+            var folders = PushFolders;
             var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
             var name = x.Name;
             path = PathExt.CreateDataFolder(path);
             if (String.IsNullOrEmpty(name))
                 name = Path.GetFileName(path);
             var auth = x.Auth ?? Roles.Debug;
-            var folder = new Folder(
+            var folder = new PushFolder(
                 name,
                 path,
                 auth,
@@ -173,14 +177,14 @@ namespace SysWeaver.MicroService
             return path;
         }
 
-        public bool RemoveFolder(FolderSyncFolder x)
+        public bool RemoveFolder(FolderPushFolder x)
         {
             var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
             var name = x.Name;
             path = new DirectoryInfo(path).FullName;
             if (String.IsNullOrEmpty(name))
                 name = Path.GetFileName(path);
-            if (!Folders.TryRemove(name.FastToLower(), out var folder))
+            if (!PushFolders.TryRemove(name.FastToLower(), out var folder))
                 return false;
             var fm = FileMod;
             if (fm != null)
@@ -188,6 +192,40 @@ namespace SysWeaver.MicroService
             return true;
         }
 
+        public String AddPullFolder(FolderPullFolder x)
+        {
+            var folders = PullFolders;
+            var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
+            var name = x.Name;
+            path = PathExt.CreateDataFolder(path);
+            if (String.IsNullOrEmpty(name))
+                name = Path.GetFileName(path);
+            var auth = x.Auth ?? Roles.Debug;
+            var folder = new PullFolder(
+                name,
+                path,
+                auth);
+            folders.TryAdd(name.FastToLower(), folder);
+            var fm = FileMod;
+            if (fm != null)
+                fm.AddFolder(folder.ModFolder);
+            return path;
+        }
+
+        public bool RemoveFolder(FolderPullFolder x)
+        {
+            var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
+            var name = x.Name;
+            path = new DirectoryInfo(path).FullName;
+            if (String.IsNullOrEmpty(name))
+                name = Path.GetFileName(path);
+            if (!PullFolders.TryRemove(name.FastToLower(), out var folder))
+                return false;
+            var fm = FileMod;
+            if (fm != null)
+                fm.RemoveFolder(folder.ModFolder);
+            return true;
+        }
 
         readonly FileHttpServerModule FileMod;
         readonly ServiceManager Manager;
@@ -222,7 +260,7 @@ namespace SysWeaver.MicroService
             }
 
             var tempRemove = TempRemove;
-            foreach (var f in Folders)
+            foreach (var f in PushFolders)
             {
                 try
                 {
@@ -263,7 +301,7 @@ namespace SysWeaver.MicroService
                 using var _ = lck;
                 await TryCompressFolderLog(f).ConfigureAwait(false);
             }
-            foreach (var f in GetFolderData())
+            foreach (var f in GetPushFolderData())
             {
                 if (f.IsActive)
                     continue;
@@ -332,15 +370,14 @@ namespace SysWeaver.MicroService
             var fm = FileMod;
             if (fm != null)
             {
-                foreach (var x in Folders.Values)
+                foreach (var x in PushFolders.Values)
                     fm.RemoveFolder(x.ModFolder);
             }
         }
 
+        readonly ConcurrentDictionary<String, PushFolder> PushFolders = new ConcurrentDictionary<String, PushFolder>(StringComparer.Ordinal);
 
-        readonly ConcurrentDictionary<String, Folder> Folders = new ConcurrentDictionary<String, Folder>(StringComparer.Ordinal);
-
-
+        readonly ConcurrentDictionary<String, PullFolder> PullFolders = new ConcurrentDictionary<String, PullFolder>(StringComparer.Ordinal);
 
         readonly ConcurrentDictionary<String, Sync> SyncJobs = new ConcurrentDictionary<string, Sync>(StringComparer.Ordinal);
 
@@ -384,7 +421,7 @@ namespace SysWeaver.MicroService
         }
 
 
-        async ValueTask<Exception> InternalActivate(Folder folder, String target, String from, HttpServerRequest context)
+        async ValueTask<Exception> InternalActivate(PushFolder folder, String target, String from, HttpServerRequest context)
         {
             if (!SystemLock.TryGet("ActLock" + from, out var lck))
                 return new Exception("Folder \"" + from + "\" is in use, try later!");
@@ -798,7 +835,7 @@ namespace SysWeaver.MicroService
             if (!PathExt.IsValidFilename(discFolder))
                 throw new Exception("Invalid disc folder!");
             var folderName = r.Folder.FastToLower();
-            if (!Folders.TryGetValue(folderName, out var folder))
+            if (!PushFolders.TryGetValue(folderName, out var folder))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(folder.Auth))
                 throw new Exception("Not authorized!");
@@ -832,7 +869,7 @@ namespace SysWeaver.MicroService
             if (!PathExt.IsValidFilename(discFolder))
                 throw new Exception("Invalid disc folder!");
             var folderName = r.Folder.FastToLower();
-            if (!Folders.TryGetValue(folderName, out var folder))
+            if (!PushFolders.TryGetValue(folderName, out var folder))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(folder.Auth))
                 throw new Exception("Not authorized!");
@@ -864,7 +901,7 @@ namespace SysWeaver.MicroService
             if (!PathExt.IsValidFilename(discFolder))
                 throw new Exception("Invalid disc folder!");
             var folderName = r.Folder.FastToLower();
-            if (!Folders.TryGetValue(folderName, out var folder))
+            if (!PushFolders.TryGetValue(folderName, out var folder))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(folder.Auth))
                 throw new Exception("Not authorized!");
@@ -901,7 +938,7 @@ namespace SysWeaver.MicroService
             if (!PathExt.IsValidFilename(discFolder))
                 throw new Exception("Invalid disc folder!");
             var folderName = r.Folder.FastToLower();
-            if (!Folders.TryGetValue(folderName, out var folder))
+            if (!PushFolders.TryGetValue(folderName, out var folder))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(folder.Auth))
                 throw new Exception("Not authorized!");
@@ -939,7 +976,7 @@ namespace SysWeaver.MicroService
             if (!PathExt.IsValidFilename(discFolder))
                 throw new Exception("Invalid disc folder!");
             var folderName = r.Folder.FastToLower();
-            if (!Folders.TryGetValue(folderName, out var folder))
+            if (!PushFolders.TryGetValue(folderName, out var folder))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(folder.Auth))
                 throw new Exception("Not authorized!");
@@ -986,7 +1023,7 @@ namespace SysWeaver.MicroService
             if (!PathExt.IsValidFilename(discFolder))
                 throw new Exception("Invalid disc folder!");
             var folderName = r.Folder.FastToLower();
-            if (!Folders.TryGetValue(folderName, out var folder))
+            if (!PushFolders.TryGetValue(folderName, out var folder))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(folder.Auth))
                 throw new Exception("Not authorized!");
@@ -1017,7 +1054,7 @@ namespace SysWeaver.MicroService
 
         static String V(long value) => value.ToString("### ### ### ### ### ### ### ##0").TrimStart();
         
-        void BuildManifest(Folder ff, String manifestName)
+        void BuildManifest(PushFolder ff, String manifestName)
         {
             var start = DateTime.UtcNow;
             long totCount = 0;
@@ -1042,7 +1079,7 @@ namespace SysWeaver.MicroService
             File.WriteAllText(manifestName, b.ToString());
         }
 
-        async ValueTask WriteManifest(Folder ff, FolderSyncRequest r, String folder, long copyCount, long copySize, long uploadCount, long uploadSize, long networkSize, String user, DateTime start)
+        async ValueTask WriteManifest(PushFolder ff, FolderSyncRequest r, String folder, long copyCount, long copySize, long uploadCount, long uploadSize, long networkSize, String user, DateTime start)
         {
             var end = DateTime.UtcNow;
             var duration = end - start;
@@ -1094,8 +1131,23 @@ namespace SysWeaver.MicroService
             }
         }
 
+        static readonly IReadOnlyDictionary<String, Action<PushData, String, String[], int>> ManifestParsers = new Dictionary<String, Action<PushData, String, String[], int>>(StringComparer.Ordinal)
+        {
+            { "end", (data, value, l, i) => data.Uploaded = DateTime.Parse(value).ToUniversalTime() },
+            { "files", (data, value, l, i) => data.Count = long.Parse(value.Replace(" ", "")) },
+            { "size", (data, value, l, i) => data.Size = long.Parse(value.SplitFirst('b').Replace(" ", "")) },
+            { "user", (data, value, l, i) => data.User = value },
+            { "machine", (data, value, l, i) => data.Machine = value },
+            { "comment", (data, value, l, i) => data.Comment = String.Join('\n', l, i + 1, l.Length - i - 1).Trim() },
+
+        }.Freeze();
+
+        static readonly ITextSerializer JsonSer = SerManager.GetText("json");
+
+        #region Push folder
+
         /// <summary>
-        /// Begin sync of a folder
+        /// Begin to update a local folder
         /// </summary>
         /// <param name="r"></param>
         /// <param name="context"></param>
@@ -1110,7 +1162,7 @@ namespace SysWeaver.MicroService
         {
             DateTime start = DateTime.UtcNow;
             var folderName = r.Folder.FastToLower();
-            if (!Folders.TryGetValue(folderName, out var target))
+            if (!PushFolders.TryGetValue(folderName, out var target))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(target.Auth))
                 throw new Exception("Not authorized!");
@@ -1248,8 +1300,7 @@ namespace SysWeaver.MicroService
             }
         }
 
-
-        IEnumerable<Data> GetFolderData(Folder folder)
+        IEnumerable<PushData> GetPushFolderData(PushFolder folder)
         {
             var uploadName = folder.Name;
             var path = folder.DestPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -1279,7 +1330,7 @@ namespace SysWeaver.MicroService
                     actions = Uri.EscapeDataString(actions);
                 }
                 var a = folder.Auth;
-                var data = new Data
+                var data = new PushData
                 {
                     Name = uploadName,
                     DiscFolder = fn,
@@ -1339,13 +1390,13 @@ namespace SysWeaver.MicroService
 
         }
 
-        static readonly IEnumerable<Data> Empty = Array.Empty<Data>();
+        static readonly IEnumerable<PushData> Empty = Array.Empty<PushData>();
 
-        public IEnumerable<Data> GetFolderData(String syncName)
-            => Folders.TryGetValue(syncName.FastToLower(), out var f) ? GetFolderData(f) : Empty;
+        public IEnumerable<PushData> GetPushFolderData(String syncName)
+            => PushFolders.TryGetValue(syncName.FastToLower(), out var f) ? GetPushFolderData(f) : Empty;
 
-        public IEnumerable<Data> GetFolderData()
-            => Folders.Values.SelectMany(GetFolderData);
+        public IEnumerable<PushData> GetPushFolderData()
+            => PushFolders.Values.SelectMany(GetPushFolderData);
 
 
         /// <summary>
@@ -1355,19 +1406,19 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, "Debug/SynchedFolders", "Synched folders", "Details about folders that can be synched remotely", "IconSync", -6)]
+        [WebMenuTable(null, "Debug/PushFolders", "Push folders", "Details about folders that can be synched updated remotely", "IconSync", -6)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
-        public TableData SynchedFoldersTable(TableDataRequest r)
+        public TableData PushFoldersTable(TableDataRequest r)
         {
             if (r == null)
                 r = new TableDataRequest();
             if ((r.Order == null) || (r.Order.Length <= 0))
                 r.Order = [
-                    nameof(Data.Name),
-                    "-" + nameof(Data.Uploaded),
+                    nameof(PushData.Name),
+                    "-" + nameof(PushData.Uploaded),
                     ];
-            return TableDataTools.Get(r, 5000, GetFolderData());
+            return TableDataTools.Get(r, 5000, GetPushFolderData());
         }
 
 
@@ -1387,7 +1438,7 @@ namespace SysWeaver.MicroService
             var f = folder.Split('/');
             var folderName = f[0].FastToLower();
             var ff = f[1];
-            if (!Folders.TryGetValue(folderName, out var data))
+            if (!PushFolders.TryGetValue(folderName, out var data))
                 throw new Exception("Unknown folder id");
             var target = data.DestPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var fname = Path.GetFileName(target);
@@ -1398,18 +1449,141 @@ namespace SysWeaver.MicroService
             return await File.ReadAllBytesAsync(name).ConfigureAwait(false);
         }
 
-        static readonly IReadOnlyDictionary<String, Action<Data, String, String[], int>> ManifestParsers = new Dictionary<String, Action<Data, String, String[], int>>(StringComparer.Ordinal)
+        #endregion// Push folder
+
+
+
+        #region Pull folder
+
+
+        /// <summary>
+        /// Begin to update a remote folder
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth("")]
+        [WebApiAudit("FolderSync")]
+        [WebApiAuditFilterParams(nameof(AuditInputFilter_SyncFolder))]
+        [WebApiAuditFilterReturn(nameof(AuditOutputFilter_SyncFolder))]
+        public async Task<FolderPullResponse> SyncPullFolder(FolderPullRequest r, HttpServerRequest context)
         {
-            { "end", (data, value, l, i) => data.Uploaded = DateTime.Parse(value).ToUniversalTime() },
-            { "files", (data, value, l, i) => data.Count = long.Parse(value.Replace(" ", "")) },
-            { "size", (data, value, l, i) => data.Size = long.Parse(value.SplitFirst('b').Replace(" ", "")) },
-            { "user", (data, value, l, i) => data.User = value },
-            { "machine", (data, value, l, i) => data.Machine = value },
-            { "comment", (data, value, l, i) => data.Comment = String.Join('\n', l, i + 1, l.Length - i - 1).Trim() },
+            DateTime start = DateTime.UtcNow;
+            var folderName = r.Folder.FastToLower();
+            if (!PullFolders.TryGetValue(folderName, out var target))
+                throw new Exception("Unknown folder id");
+            if (!context.Session.IsValid(target.Auth))
+                throw new Exception("Not authorized!");
+            if (!SystemLock.TryGet(target.LockName, out var lck))
+                throw new Exception("A folder sync is already in progress!");
+            try
+            {
+                var dest = target.DestPath;
+                ConcurrentDictionary<String, FolderSyncFile> localFiles = new ConcurrentDictionary<string, FolderSyncFile>(StringComparer.Ordinal);
+                foreach (var x in r.Files.Nullable())
+                {
+                    var name = x.Name;
+                    var fullPath = new FileInfo(Path.Combine(dest, name)).FullName;
+                    if (!fullPath.FastStartsWith(dest))
+                        throw new Exception("Invalid file name!");
+                    localFiles.TryAdd(name, x);
+                }
+                ConcurrentDictionary<String, int> download = new(StringComparer.Ordinal);
+                ConcurrentDictionary<String, int> keep = new(StringComparer.Ordinal);
+                var dl = dest.Length;
+                await Directory.GetFiles(dest, "*", SearchOption.AllDirectories).ProcessAsyncValue(async x =>
+                {
+                    var localName = x.Substring(dl).Replace(Path.DirectorySeparatorChar, '/');
+                    if (localFiles.TryRemove(localName, out var f))
+                    {
+                        var hash = await FileHash.GetHashAsync(x).ConfigureAwait(false);
+                        if (hash.FastEquals(f.Hash))
+                        {
+                            keep.TryAdd(localName, 0);
+                            return;
+                        }
+                    }
+                    download.TryAdd(localName, 0);
+                }).ConfigureAwait(false);
+                return new FolderPullResponse
+                {
+                    Download = download.Count > 0 ? download.Keys.OrderBy(x => x).ToArray() : null,
+                    Keep = keep.Count > 0 ? keep.Keys.OrderBy(x => x).ToArray() : null,
+                    Cdc = CdcProps.Default.Key.FastEquals(r.Cdc) ? CdcProps.Default.Key : null,
+                };
+            }
+            finally
+            {
+                lck?.Dispose();
+            }
+        }
 
-        }.Freeze();
 
-        static readonly ITextSerializer JsonSer = SerManager.GetText("json");
+        PullData GetPullFolderData(PullFolder folder)
+        {
+            var uploadName = folder.Name;
+            var path = folder.DestPath;
+            var a = folder.Auth;
+            var data = new PullData
+            {
+                Name = uploadName,
+                DiscFolder = path,
+                Auth = a == null ? null : String.Join(',', a),
+                Folder = folder,
+            };
+            /*var mp = ManifestParsers;
+            var mn = Path.Combine(path, ManifestName);
+            if (File.Exists(mn))
+            {
+                var t = File.ReadAllLines(mn);
+                int lineIndex = 0;
+                foreach (var x in t)
+                {
+                    var line = x.Trim();
+                    var key = line.SplitFirst(':', out var value).TrimEnd().FastToLower();
+                    if (mp.TryGetValue(key, out var fnx))
+                    {
+                        try
+                        {
+                            fnx(data, value.TrimStart(), t, lineIndex);
+                        }
+                        catch
+                        {
+                        }
+                    }
+                    ++lineIndex;
+                }
+            }*/
+            return data;
+        }
+
+        public PullData GetPullFolderData(String syncName)
+            => PullFolders.TryGetValue(syncName.FastToLower(), out var f) ? GetPullFolderData(f) : null;
+
+        public IEnumerable<PullData> GetPullFolderData()
+            => PullFolders.Values.Select(GetPullFolderData);
+
+
+        /// <summary>
+        /// All synched folders as a table
+        /// </summary>
+        /// <param name="r"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebMenuTable(null, "Debug/PullFolders", "Pull folders", "Details about folders that can be synched updated remotely", "IconSync", -7)]
+        [WebApiClientCache(4)]
+        [WebApiRequestCache(3)]
+        public TableData PullFoldersTable(TableDataRequest r)
+        {
+            if (r == null)
+                r = new TableDataRequest();
+            return TableDataTools.Get(r, 5000, GetPullFolderData());
+        }
+
+        #endregion//Pull folder
 
 
     }

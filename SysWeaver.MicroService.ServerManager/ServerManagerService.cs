@@ -69,7 +69,7 @@ namespace SysWeaver.MicroService
             foreach (var f in p.Folders.Nullable())
             {
                 f.Auth = f.Auth ?? p.SyncAuth;
-                s.AddFolder(f);
+                s.AddPushFolder(f);
             }
 
             var destFolders = PathTemplate.Resolve(String.IsNullOrEmpty(p.ServiceFolder) ? @"$(CommonApplicationData)\SysWeaver\ManagedServices" : p.ServiceFolder).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -178,7 +178,7 @@ namespace SysWeaver.MicroService
             PathExt.CreateDataFolder(df);
             var pf = Path.GetDirectoryName(df);
             PathExt.SetupDataFolder(pf);
-            var v = new FolderSyncFolder
+            var v = new FolderPushFolder
             {
                 Name = f.Name,
                 DiscFolder = df,
@@ -199,7 +199,7 @@ namespace SysWeaver.MicroService
                 WebFolder = "ServerManager/ServiceBak/" + f.Name,
             };
 
-            var folder = Syncer.AddFolder(v);
+            var folder = Syncer.AddPushFolder(v);
             var currentRepo = new BackupFileRepo("Current_" + f.Name, folder, this);
             var masterRepo = f.MasterConfig ? new BackupFileRepo("Master_" + f.Name, Path.GetDirectoryName(folder), this) : null;
             if (!Services.TryAdd(f.Name.FastToLower(), new SmServiceInfo(f, v, p, currentRepo, masterRepo, bak)))
@@ -1646,7 +1646,7 @@ namespace SysWeaver.MicroService
 
         SmServiceDetail InternalGetDetail(SmServiceInfo info)
         {
-            var data = Syncer.GetFolderData(info.Service.Name).ToList();
+            var data = Syncer.GetPushFolderData(info.Service.Name).ToList();
             var discFolder = info.Syncher.DiscFolder;
             var exeName = FindServiceExe(discFolder);
             SmFileInfo[] configs = GetConfigs(discFolder, "*").Select(x => GetFileInfo(Path.Combine(discFolder, x))).OrderByDescending(x => x.LastModified).ToArray();
@@ -1686,7 +1686,7 @@ namespace SysWeaver.MicroService
                     continue;
                 s.Add(i);
             }
-            return s.Convert(info => new SmServiceBrief(info, Syncer.GetFolderData(info.Syncher.Name).ToList()));
+            return s.Convert(info => new SmServiceBrief(info, Syncer.GetPushFolderData(info.Syncher.Name).ToList()));
         }
 
         const string AuditGroup = "ServerManager";
@@ -1900,14 +1900,14 @@ namespace SysWeaver.MicroService
 
         #region Version
 
-        SmServiceInfo GetValidatedVersion(out FolderSyncService.Data d, String versionName, HttpServerRequest context)
+        SmServiceInfo GetValidatedVersion(out FolderSyncService.PushData d, String versionName, HttpServerRequest context)
         {
             var p = versionName.Split(',');
             var serviceName = p[0];
             var uploaded = DateTime.Parse(p[1]).ToUniversalTime();
             var versionFolderName = p[2];
             var info = Validate(serviceName, context);
-            var data = Syncer.GetFolderData(info.Service.Name).ToList();
+            var data = Syncer.GetPushFolderData(info.Service.Name).ToList();
             d = null;
             foreach (var x in data)
             {
@@ -1981,7 +1981,7 @@ namespace SysWeaver.MicroService
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false))
                 throw new Exception("Failed to activate \"" + version.DiscFolder + "\"");
-            Syncer.GetFolderData(info.Syncher.Name);
+            Syncer.GetPushFolderData(info.Syncher.Name);
             var exe = FindServiceExe(info.Syncher.DiscFolder);
             if (exe != null)
                 Interlocked.Exchange(ref info.Status, await CheckStatus(exe).ConfigureAwait(false));
@@ -2009,7 +2009,7 @@ namespace SysWeaver.MicroService
                 Folder = info.Syncher.Name,
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false);
-            Syncer.GetFolderData(info.Syncher.Name);
+            Syncer.GetPushFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return ret == null ? null : new SmCompFileStats(ret);
@@ -2033,7 +2033,7 @@ namespace SysWeaver.MicroService
                 Folder = info.Syncher.Name,
                 DiscFolder = version.DiscFolder,
             }, true, context).ConfigureAwait(false);
-            Syncer.GetFolderData(info.Syncher.Name);
+            Syncer.GetPushFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return ret == null ? null : new SmCompFileStats(ret);
@@ -2058,7 +2058,7 @@ namespace SysWeaver.MicroService
                 Folder = info.Syncher.Name,
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false);
-            Syncer.GetFolderData(info.Syncher.Name);
+            Syncer.GetPushFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return ret == null ? null : new SmCompFileStats(ret);
@@ -2084,7 +2084,7 @@ namespace SysWeaver.MicroService
                 Folder = info.Syncher.Name,
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false);
-            Syncer.GetFolderData(info.Syncher.Name);
+            Syncer.GetPushFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return ret;
@@ -2109,7 +2109,7 @@ namespace SysWeaver.MicroService
                 Folder = info.Syncher.Name,
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false);
-            Syncer.GetFolderData(info.Syncher.Name);
+            Syncer.GetPushFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return ret;
@@ -2148,7 +2148,7 @@ namespace SysWeaver.MicroService
             var ex = await PathExt.TryCopyFileAsync(sname, dname).ConfigureAwait(false);
             if (ex != null)
                 throw ex;
-            Syncer.GetFolderData(info.Syncher.Name);
+            Syncer.GetPushFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
@@ -2189,7 +2189,7 @@ namespace SysWeaver.MicroService
             var ex = await PathExt.TryMoveFileAsync(sname, dname).ConfigureAwait(false);
             if (ex != null)
                 throw ex;
-            Syncer.GetFolderData(info.Syncher.Name);
+            Syncer.GetPushFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
@@ -2223,7 +2223,7 @@ namespace SysWeaver.MicroService
             sname = Path.Combine(bin, sname);
             if (!(await DeleteFileWithBackup(sname, Path.Combine(masterBin, "bak")).ConfigureAwait(false)))
                 return false;
-            Syncer.GetFolderData(info.Syncher.Name);
+            Syncer.GetPushFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
@@ -2253,7 +2253,7 @@ namespace SysWeaver.MicroService
             var masterBin = Path.GetDirectoryName(discFolder);
             if (!(await DeleteFileWithBackup(sname, Path.Combine(masterBin, "bak")).ConfigureAwait(false)))
                 return false;
-            Syncer.GetFolderData(info.Syncher.Name);
+            Syncer.GetPushFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
@@ -2293,7 +2293,7 @@ namespace SysWeaver.MicroService
             if (!ServiceHost.BackupConfig(sname, Manager))
                 throw new Exception("Failed to backup exsiting file \"" + sname + "\"");
             await File.WriteAllTextAsync(sname, data.Content).ConfigureAwait(false);
-            Syncer.GetFolderData(info.Syncher.Name);
+            Syncer.GetPushFolderData(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;

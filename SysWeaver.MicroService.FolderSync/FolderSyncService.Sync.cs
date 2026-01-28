@@ -13,7 +13,7 @@ namespace SysWeaver.MicroService
         sealed class Sync
         {
             public readonly ConcurrentDictionary<String, FileSync> Files = new ConcurrentDictionary<string, FileSync>();
-            public readonly Folder Target;
+            public readonly PushFolder Target;
             public readonly String DestPath;
             public readonly bool UseFolder;
             public readonly IDisposable D;
@@ -65,7 +65,7 @@ namespace SysWeaver.MicroService
             public long NewChunkSize = 0;
 
 
-            public Sync(FolderSyncRequest r, IEnumerable<FileSync> files, string destPath, Folder target, bool activate, IDisposable d, long copyCount, long copySize, String user, DateTime start)
+            public Sync(FolderSyncRequest r, IEnumerable<FileSync> files, string destPath, PushFolder target, bool activate, IDisposable d, long copyCount, long copySize, String user, DateTime start)
             {
                 R = r;
                 var fs = Files;

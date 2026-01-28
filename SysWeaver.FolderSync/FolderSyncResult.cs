@@ -17,17 +17,17 @@ namespace SysWeaver.FolderSync
         /// <summary>
         /// Number of files that have to be uploaded
         /// </summary>
-        public long Uploaded;
+        public long TransferredCount;
 
         /// <summary>
         /// Number of source bytes that have to be uploaded
         /// </summary>
-        public long UploadedSourceBytes;
+        public long TransferredSourceBytes;
 
         /// <summary>
         /// Number of network bytes sent (excluding headers)
         /// </summary>
-        public long UploadedNetworkBytes;
+        public long TransferredNetworkSize;
 
         /// <summary>
         /// Number of file chunks sent (all chunks in all missing files)

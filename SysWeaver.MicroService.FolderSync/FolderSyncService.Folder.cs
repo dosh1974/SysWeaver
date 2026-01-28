@@ -11,7 +11,7 @@ namespace SysWeaver.MicroService
 
     public partial class FolderSyncService
     {
-        internal sealed class Folder
+        internal sealed class PushFolder
         {
 
 
@@ -30,9 +30,9 @@ namespace SysWeaver.MicroService
             /// </summary>
             public readonly String[] OnNewFolder;
 
-            public FolderSyncFolder.ActivationHandler OnActivateAsync;
-            public FolderSyncFolder.ActivationHandler OnDeactivateAsync;
-            public FolderSyncFolder.ActivationHandler OnNewFolderAsync;
+            public FolderPushFolder.ActivationHandler OnActivateAsync;
+            public FolderPushFolder.ActivationHandler OnDeactivateAsync;
+            public FolderPushFolder.ActivationHandler OnNewFolderAsync;
 
             public readonly String LockName;
             public readonly String Name;
@@ -60,7 +60,7 @@ namespace SysWeaver.MicroService
                 return r;
             }
 
-            public Folder(string name, string path, string auth, TimeSpan removeAfter, FolderSyncFolder fs)
+            public PushFolder(string name, string path, string auth, TimeSpan removeAfter, FolderPushFolder fs)
             {
                 Name = name;
                 var tp = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -77,11 +77,13 @@ namespace SysWeaver.MicroService
                     WebFolder = "FolderSync/Folders/" + name,
                     DiscFolder = tp,
                 };
-                var x = new Dictionary<String, String>(StringComparer.Ordinal);
-                x.Add("name", name);
-                x.Add("target", tp);
-                x.Add("targetname", Path.GetFileName(tp));
-                x.Add("targetdir", Path.GetDirectoryName(tp));
+                var x = new Dictionary<String, String>(StringComparer.Ordinal)
+                {
+                    { "name", name },
+                    { "target", tp },
+                    { "targetname", Path.GetFileName(tp) },
+                    { "targetdir", Path.GetDirectoryName(tp) }
+                };
                 OnActivate = ParseCommands(fs.OnActivate, x);
                 OnDeactivate = ParseCommands(fs.OnDeactivate, x);
                 OnNewFolder = fs.OnNewFolder?.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
@@ -93,6 +95,36 @@ namespace SysWeaver.MicroService
             }
         }
 
+
+
+
+        internal sealed class PullFolder
+        {
+            public readonly String LockName;
+            public readonly String Name;
+            public readonly String DestPath;
+            public readonly IReadOnlyList<String> Auth;
+            public readonly FileHttpServerModuleFolder ModFolder;
+
+            public PullFolder(string name, string path, string auth)
+            {
+                Name = name;
+                var tp = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                DestPath = tp + Path.DirectorySeparatorChar;
+                Auth = Authorization.GetRequiredTokens(auth);
+                LockName = "FolderSync_" + Encoding.UTF8.GetBytes(name.FastToLower()).ToHex();
+                ModFolder = new FileHttpServerModuleFolder
+                {
+                    AssumePreCompressed = true,
+                    Auth = auth == null ? null : String.Join(',', auth),
+                    ClientCacheDuration = 5,
+                    RequestCacheDuration = 4,
+                    WebFolder = "FolderSync/PullFolders/" + name,
+                    DiscFolder = tp,
+                };
+
+            }
+        }
 
     }
 

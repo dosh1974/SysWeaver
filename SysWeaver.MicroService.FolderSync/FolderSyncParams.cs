@@ -2,7 +2,11 @@
 {
     public sealed class FolderSyncParams
     {
-        public FolderSyncFolder[] Folders;
+        public FolderPushFolder[] Folders;
+
+        public FolderPullFolder[] SharedFolders;
+
+
 
     }
 }

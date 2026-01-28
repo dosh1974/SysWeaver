@@ -7,7 +7,7 @@ namespace SysWeaver.MicroService
 
     public partial class FolderSyncService
     {
-        public sealed class Data
+        public sealed class PushData
         {
  
 
@@ -27,7 +27,6 @@ namespace SysWeaver.MicroService
             /// </summary>
             [TableDataUrl("{0}", "*../FolderSync/Folders/{0}/explore", "Click to explore \"{3}\".")]
             public String Name;
-
 
             /// <summary>
             /// Number of files in the folder
@@ -102,7 +101,30 @@ namespace SysWeaver.MicroService
             public String Auth;
 
 
-            internal Folder Folder;
+            internal PushFolder Folder;
+        }
+
+
+        public sealed class PullData
+        {
+            /// <summary>
+            /// Name of the repo, use this when synchronizing a local folder.
+            /// </summary>
+            [TableDataUrl("{0}", "*../FolderSync/PullFolders/{0}/explore", "Click to explore \"{3}\".")]
+            public String Name;
+
+            /// <summary>
+            /// Folder name on disc
+            /// </summary>
+            public String DiscFolder;
+
+            /// <summary>
+            /// Required auth
+            /// </summary>
+            [TableDataTags]
+            public String Auth;
+
+            internal PullFolder Folder;
         }
 
 

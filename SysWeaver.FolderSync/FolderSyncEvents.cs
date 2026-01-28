@@ -17,6 +17,6 @@
         /// <summary>
         /// Called when a file have been uploaded
         /// </summary>
-        Uploaded,
+        Comnpleted,
     }
 }

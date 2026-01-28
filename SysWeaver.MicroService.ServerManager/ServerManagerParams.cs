@@ -79,7 +79,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Other folders that should be managed
         /// </summary>
-        public FolderSyncFolder[] Folders;
+        public FolderPushFolder[] Folders;
 
         /// <summary>
         /// List if text files that can be viewed

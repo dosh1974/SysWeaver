@@ -4,10 +4,7 @@ using System.Threading.Tasks;
 namespace SysWeaver.MicroService
 {
 
-
-
-
-    public sealed class FolderSyncFolder
+    public sealed class FolderPushFolder
     {
         /// <summary>
         /// Name of repository, used when synching
@@ -57,4 +54,26 @@ namespace SysWeaver.MicroService
         public ActivationHandler OnDeactivateAsync;
         public ActivationHandler OnNewFolderAsync;
     }
+
+
+    public sealed class FolderPullFolder
+    {
+        /// <summary>
+        /// Name of repository, used when synching
+        /// </summary>
+        public String Name;
+
+        /// <summary>
+        /// The folder to manage on disc
+        /// </summary>
+        public String DiscFolder;
+
+        /// <summary>
+        /// The auth required to sync this folder.
+        /// null is equal to Roles.Debug
+        /// </summary>
+        public String Auth;
+    }
+
+
 }
