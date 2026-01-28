@@ -1024,7 +1024,7 @@ namespace SysWeaver.MicroService
         {
             if (authData == null)
                 return false;
-            var hh = AuthTools.HashToString(AuthTools.ComputeHash(authData.Pwd, autheticatedRequest.OneTimePad));
+            var hh = AuthTools.ComputeHashString(authData.Pwd, autheticatedRequest.OneTimePad);
             if (hh != autheticatedRequest.Hash)
                 return false;
             return true;

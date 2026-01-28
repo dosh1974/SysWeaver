@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -16,7 +17,53 @@ namespace SysWeaver.Auth
         /// </summary>
         /// <param name="text">Password</param>
         /// <returns>Computed hash as a byte array: SHA256(UTF8(text))</returns>
-        public static Byte[] ComputeHash(String text) => SHA256.HashData(Encoding.UTF8.GetBytes(text));
+        public static Byte[] ComputeHash(String text)
+        {
+            Byte[] rented = null;
+            var l = text.Length << 2;
+            var a = ArrayPool<Byte>.Shared;
+            Span<Byte> dest = l <= 4096 ? stackalloc Byte[l] : (rented = a.Rent(l));
+            try
+            {
+                if (!Encoding.UTF8.TryGetBytes(text.AsSpan(), dest, out var size))
+                    throw new Exception("Internal error!");
+                return SHA256.HashData(dest.Slice(0, size));
+            }
+            finally
+            {
+                if (rented != null)
+                    a.Return(rented);
+            }
+        }
+
+
+        /// <summary>
+        /// Compute a hash for some given text: SHA256(UTF8(text))
+        /// </summary>
+        /// <param name="text">Password</param>
+        /// <returns>The hash as a string: ToBase64(SHA256(UTF8(text)))</returns>
+        public static String ComputeHashString(String text)
+        {
+            Byte[] rented = null;
+            var l = text.Length << 2;
+            var a = ArrayPool<Byte>.Shared;
+            Span<Byte> dest = l <= 4096 ? stackalloc Byte[l] : (rented = a.Rent(l));
+            try
+            {
+                if (!Encoding.UTF8.TryGetBytes(text.AsSpan(), dest, out var size))
+                    throw new Exception("Internal error!");
+                Span<Byte> hash = stackalloc Byte[SHA256.HashSizeInBytes];
+                if (SHA256.HashData(dest.Slice(0, size), hash) != SHA256.HashSizeInBytes)
+                    throw new Exception("Internal error!");
+                return Convert.ToBase64String(hash);
+            }
+            finally
+            {
+                if (rented != null)
+                    a.Return(rented);
+
+            }
+        }
 
         /// <summary>
         /// Compute a hash for the given password and salt: SHA256(UTF8(password|salt))
@@ -26,12 +73,22 @@ namespace SysWeaver.Auth
         /// <returns>Computed hash as a byte array: SHA256(UTF8(password|salt))</returns>
         public static Byte[] ComputeHash(String password, String userSalt) => ComputeHash(String.Join('|', password, userSalt));
 
+
+        /// <summary>
+        /// Compute a hash for the given password and salt: SHA256(UTF8(password|salt))
+        /// </summary>
+        /// <param name="password">Password</param>
+        /// <param name="userSalt">Salt</param>
+        /// <returns>The hash as a string: ToBase64(SHA256(UTF8(password|salt)))</returns>
+        /// 
+        public static String ComputeHashString(String password, String userSalt) => ComputeHashString(String.Join('|', password, userSalt));
+
         /// <summary>
         /// Convert a byte array hash to a hash string: ToBase64(hash)
         /// </summary>
         /// <param name="hash">The hash as a byte array</param>
         /// <returns>The hash as a string: ToBase64(hash)</returns>
-        public static String HashToString(Byte[] hash) => Convert.ToBase64String(hash);
+        public static String HashToString(ReadOnlySpan<Byte> hash) => Convert.ToBase64String(hash);
 
             /// <summary>
         /// Get a random salt, 24 chars using 144 random bits
@@ -78,14 +135,14 @@ namespace SysWeaver.Auth
 
         /// <summary>
         /// Compute a simple salt for given user (unique per user per application).
-        /// Salt = Hash(username + AppAssemblyName all lowercased).
+        /// Salt = Hash(username + AppAssemblyName all lowercased) + magic.
         /// </summary>
         /// <param name="user">A valid user name</param>
-        /// <returns>PLain text salt</returns>
+        /// <returns>Plain text salt</returns>
         public static String ComputeSimpleSalt(String user)
         { 
-            var hash = ComputeHash((user + EnvInfo.AppAssemblyName).FastToLower() + "XfETwfDcxBJGvHmgd");
-            return HashToString(hash);
+            var hash = ComputeHashString((user + EnvInfo.AppAssemblyName).FastToLower() + "XfETwfDcxBJGvHmgd");
+            return hash;
         }
 
         /// <summary>
@@ -97,8 +154,8 @@ namespace SysWeaver.Auth
         public static String ComputeSimplePasswordHash(String user, String password)
         {
             var salt = ComputeSimpleSalt(user);
-            var h = ComputeHash(password, salt);
-            return HashToString(h);
+            var h = ComputeHashString(password, salt);
+            return h;
         }
 
         /// <summary>

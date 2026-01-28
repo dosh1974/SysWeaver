@@ -161,16 +161,19 @@ namespace SysWeaver
             }
             else // IPv4
             {
-                byte[] bytes = addr.GetAddressBytes();
-                if (bytes[0] == 10)
+                Span<Byte> bytes = stackalloc Byte[64];
+                if (!addr.TryWriteBytes(bytes, out var len))
+                    throw new Exception("Internal error!");
+                var b0 = bytes[0];
+                if (b0 == 10)
                 {   // Class A network
                     return false;
                 }
-                else if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
+                else if (b0 == 172 && bytes[1] >= 16 && bytes[1] <= 31)
                 {   // Class B network
                     return false;
                 }
-                else if (bytes[0] == 192 && bytes[1] == 168)
+                else if (b0 == 192 && bytes[1] == 168)
                 {   // Class C network
                     return false;
                 }

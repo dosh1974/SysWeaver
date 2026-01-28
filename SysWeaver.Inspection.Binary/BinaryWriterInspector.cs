@@ -388,7 +388,7 @@ namespace SysWeaver.Inspection
             var w = Writer;
             if ((buf == null) || (buf.Length < bl))
             {
-                buf = new byte[l + 1024];
+                buf = GC.AllocateUninitializedArray<Byte>(l + 1024);
                 StringBuffer = buf;
             }
             int count = Encoding.GetBytes(v, 0, l, buf, 0);

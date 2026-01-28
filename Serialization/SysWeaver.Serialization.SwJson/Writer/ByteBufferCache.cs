@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
-
+/*
 namespace SysWeaver.Serialization.SwJson.Writer
 {
     public static class ByteBufferCache
     {
+
         /// <summary>
         /// Returns a byte buffer or null
         /// </summary>
@@ -40,3 +41,4 @@ namespace SysWeaver.Serialization.SwJson.Writer
 
 
 }
+*/

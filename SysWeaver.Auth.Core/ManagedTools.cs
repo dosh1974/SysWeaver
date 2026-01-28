@@ -16,14 +16,17 @@ namespace SysWeaver
         /// <param name="offset"></param>
         /// <param name="length"></param>
         /// <returns></returns>
-        public static String GetUtf8StringWithoutPreamble(Byte[] data, int offset, int length)
+        public static String GetUtf8StringWithoutPreamble(ReadOnlySpan<Byte> data, int offset, int length)
         {
             var encoding = Encoding.UTF8;
             var preamble = encoding.GetPreamble();
             var plen = preamble?.Length ?? 0;
-            if ((plen > 0) && (length >= plen) && data.AsSpan().Slice(offset, plen).SequenceEqual(preamble.AsSpan()))
-                return encoding.GetString(data, offset + plen, length - plen);
-            return encoding.GetString(data, offset, length);
+            if ((plen > 0) && (length >= plen) && data.Slice(offset, plen).SequenceEqual(preamble.AsSpan()))
+            {
+                offset += plen;
+                length -= plen;
+            }
+            return encoding.GetString(data.Slice(offset, length));
         }
 
 

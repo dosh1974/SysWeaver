@@ -427,7 +427,7 @@ namespace SysWeaver.Inspection
             var buf = StringBuf;
             if ((buf == null) || (buf.Length < l))
             {
-                buf = new byte[l + 1024];
+                buf = GC.AllocateUninitializedArray<Byte>(l + 1024);
                 StringBuf = buf;
             }
             l = Reader.Read(buf, 0, l);

@@ -84,11 +84,11 @@ namespace SysWeaver
             catch
             {
             }
-            Byte[] hash;
+            Span<Byte> hash = stackalloc Byte[MD5.HashSizeInBytes];
             try
             {
                 using (var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read))
-                    hash = MD5.HashData(s);
+                    MD5.HashData(s, hash);
             }
             catch
             {

@@ -80,18 +80,18 @@ class CanvasChart {
 
 
     static async getChartExportMenu() {
-        let m = CanvasChart.MenuExportItems;
+        const m = CanvasChart.MenuExportItems;
         if (m)
             return m;
         const current = CanvasChart.CS;
-        m = await Promise.all([
+        const [js1, js2, css, data] = await Promise.all([
             includeJs(current, "external/canvas2svg.js"),
             includeJs(current, "../app/application.js"),
             includeCss(current, "../app/application.css"),
             getRequest("../Api/GetChartExporters")
-        ])[3];
-        CanvasChart.MenuExportItems = m;
-        return m;
+        ]);
+        CanvasChart.MenuExportItems = data;
+        return data;
     }
 
     static CS = document.currentScript.src;
@@ -1111,11 +1111,11 @@ class CanvasChart {
         if (!chartOptions.DisableMenu) {
 
             const menuIcon = new ColorIcon("IconChartMenu", "IconColorThemeAcc2", 32, 32, "Click to show options", async ev => {
-                const menuItems = await CanvasChart.getChartExportMenu();
                 if (!orgDataStr) {
                     Fail("No data!");
                     return;
                 }
+                const menuItems = await CanvasChart.getChartExportMenu();
                 const data = JSON.parse(orgDataStr);
                 ApplyChanges(data);
                 PopUpMenu(menuIcon.Element, (close, backEl) => {

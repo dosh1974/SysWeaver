@@ -169,7 +169,7 @@ namespace SysWeaver.Inspection.Implementation
             Byte[] d = null;
             if (data != IntPtr.Zero)
             {
-                d = new Byte[length];
+                d = GC.AllocateUninitializedArray<Byte>(length);
                 if (length > 0)
                     Marshal.Copy(data, d, 0, length);
             }
