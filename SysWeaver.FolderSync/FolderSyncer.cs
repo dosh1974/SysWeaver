@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CommunityToolkit.HighPerformance;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -391,7 +392,7 @@ namespace SysWeaver.FolderSync
         /// <param name="onEvent">An optional callback used to display what's going on</param>
         /// <returns>Sync results</returns>
         /// <exception cref="Exception"></exception>
-        public async ValueTask<FolderSyncResult> PullFolders(String srcName, String destFolder, bool switchTo = false, bool useCdc = true, Action<FolderSyncEvents, String> onEvent = null)
+        public async ValueTask<FolderSyncResult> PullFolder(String srcName, String destFolder, bool switchTo = false, bool useCdc = true, Action<FolderSyncEvents, String> onEvent = null)
         {
             //var props = useCdc ? new CdcProps(folders: [@"D:\Temp\CdcSyncTest"]) : null;
             var props = useCdc ? CdcProps.Default : null;
@@ -487,13 +488,28 @@ namespace SysWeaver.FolderSync
             long transferred = 0;
             long transferredBytes = 0;
             long discBytes = 0;
+            long chunkTotalCount = 0;
+            long missingChunkCount = 0;
+            long missingChunkBytes = 0;
             //  Download files
             var dls = res.Download;
             if (dls != null)
             {
                 var remote = api as RemoteConnectionBase;
                 var client = remote.Client;
-                var baseUrl = String.Concat(remote.UrlBase, "PullFolders/", srcName, '/');
+                var baseUrl = remote.UrlBase;
+                var baseDownloadUrl = String.Concat(baseUrl, "PullFolders/", srcName, '/');
+
+                async ValueTask<ReadOnlyMemory<Byte>> CacheCdc(String fn)
+                {
+                    var dst = Path.Combine(downloadFolder, fn);
+                    if (!File.Exists(dst))
+                        dst = Path.Combine(destFolder, fn);
+                    if (File.Exists(dst))
+                        await ContentDependentChunking.Add(dst, props).ConfigureAwait(false);
+                    return ReadOnlyMemory<Byte>.Empty;
+                }
+                useCdc = res.Cdc != null;
                 await dls.ProcessAsyncValue(async x =>
                 {
                     using var _ = await throttler.Lock().ConfigureAwait(false);
@@ -502,27 +518,57 @@ namespace SysWeaver.FolderSync
                     var ex = await PathExt.EnsureCanWriteFileAsync(targetFile).ConfigureAwait(false);
                     if (ex != null)
                         throw ex;
-                    DateTime? lm;
-                    long? c;
-                    long ds;
+                    DateTime? lm = null;
+                    long? transferBytes = null;
+                    if (useCdc)
                     {
-                        using var get = await client.GetAsync(baseUrl + x).ConfigureAwait(false);
+                        var syncTask = client.PostJsonRequestRaw(baseUrl + "SyncGetChunks", new CdcFilePullRequest
+                        {
+                            File = x,
+                            Folder = srcName,
+                        });
+                        await TaskExt.WhenAll([syncTask, CacheCdc(fn)]).ConfigureAwait(false);
+                        var chunkHashes = syncTask.Result;
+                        var cl = chunkHashes.Length;
+                        var hs = props.HashSize;
+                        transferBytes = cl;
+                        chunkTotalCount += (cl / hs);
+                        var missing = ContentDependentChunking.GetMissingChunks(chunkHashes);
+                        var ml = missing.Length;
+                        if (ml > 0)
+                        {
+                            missingChunkCount += (ml / hs);
+                            var mem = await client.PostRawRequestRaw(baseUrl + "FolderSyncCdcPullChunks", missing);
+                            using (var ms = mem.AsStream())
+                                if (!await ContentDependentChunking.AddChunkList(ms, props).ConfigureAwait(false))
+                                    throw new Exception("Failed to add missing chunks!");
+                            cl = mem.Length;
+                            transferBytes += cl;
+                            missingChunkBytes += cl;
+                        }
+                        using var dest = new FileStream(targetFile, FileMode.Create, FileAccess.Write);
+                        using var src = ContentDependentChunking.OpenChunkStream(chunkHashes, props);
+                            await src.CopyToAsync(dest).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        using var get = await client.GetAsync(baseDownloadUrl + x).ConfigureAwait(false);
                         var cc = get.Content;
                         lm = cc.Headers.LastModified?.DateTime;
-                        c = cc.Headers.ContentLength;
+                        transferBytes = cc.Headers.ContentLength;
                         using var dest = new FileStream(targetFile, FileMode.Create, FileAccess.Write);
                         await cc.CopyToAsync(dest).ConfigureAwait(false);
-                        ds = dest.Position;
                     }
                     var fi = new FileInfo(targetFile);
                     if (lm != null)
                         fi.LastWriteTimeUtc = lm ?? DateTime.UtcNow;
-                    Interlocked.Add(ref discBytes, ds);
-                    Interlocked.Add(ref transferredBytes, c ?? ds);
+                    var destBytes = fi.Length;
+                    Interlocked.Add(ref discBytes, destBytes);
+                    Interlocked.Add(ref transferredBytes, transferBytes ?? destBytes);
                     Interlocked.Increment(ref transferred);
                     files.TryRemove(x, out var _);
                     Interlocked.Increment(ref sourceFileCount);
-                    Interlocked.Add(ref sourceBytes, fi.Length);
+                    Interlocked.Add(ref sourceBytes, destBytes);
                 }).ConfigureAwait(false);
             }
             //  Delete files
@@ -543,6 +589,9 @@ namespace SysWeaver.FolderSync
                 TransferredCount = transferred,
                 TransferredNetworkSize = transferredBytes,
                 TransferredSourceBytes = discBytes,
+                ChunkCount = chunkTotalCount,
+                NewChunkCount = missingChunkCount,
+                NewChunkSize = missingChunkBytes
             };
 /*
             

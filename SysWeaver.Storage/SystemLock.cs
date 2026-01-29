@@ -47,6 +47,33 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Check for a lock
+        /// </summary>
+        /// <param name="key">The key to lock on (MD5 checksum of the string is what's actually being used to allow for any text here)</param>
+        /// <returns>True if the lock is taken else false</returns>
+        public static bool IsLocked(String key)
+        {
+            var name = GetFilename(key);
+            for (int i = 1; ; ++i)
+            {
+                try
+                {
+                    lock (CheckLock)
+                    {
+                        using var x = new FileStream(name, FileMode.Create, FileAccess.Write, FileShare.None, 128, FileOptions.DeleteOnClose);
+                    }
+                    return false;
+                }
+                catch (IOException)
+                {
+                    if (i >= 3)
+                        return true;
+                }
+            }
+        }
+
+        static readonly Object CheckLock = new ();
 
         /// <summary>
         /// Try to get the lock

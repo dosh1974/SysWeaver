@@ -118,12 +118,33 @@ namespace SysWeaver
         /// </summary>
         /// <param name="filename">The existing file to get the hash of the content</param>
         /// <returns>A hash string (26 chars) or null if there is some error</returns>
-        public static Task<String> GetHashAsync(String filename)
+        public static ValueTask<String> GetHashAsync(String filename)
         {
             return InternalHashAsync(filename, IsWeb(filename));
         }
 
-        static async Task<String> InternalHashAsync(String filename, bool isWeb)
+
+        static readonly FastMemCache<String, String> Cache = new (TimeSpan.FromMinutes(30), StringComparer.Ordinal);
+
+        static ValueTask<String> InternalHashAsync(String filename, bool isWeb)
+        {
+            if (!isWeb)
+            {
+                try
+                {
+                    var fi = new FileInfo(filename);
+                    if (fi.Exists)
+                        return Cache.GetOrUpdateValueAsync(String.Join(';', filename, fi.Length, fi.LastWriteTimeUtc), async _ =>
+                            await InternalUncachedHashAsync(filename, isWeb).ConfigureAwait(false));
+                }
+                catch
+                {
+                }
+            }
+            return InternalUncachedHashAsync(filename, isWeb);
+        }
+
+        static async ValueTask<String> InternalUncachedHashAsync(String filename, bool isWeb)
         {
             var keyName = await GetCacheKeyAsync(filename, isWeb).ConfigureAwait(false);
             if (keyName == null)

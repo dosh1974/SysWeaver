@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using SysWeaver.Remote;
 
 namespace SysWeaver.FolderSync
@@ -8,6 +9,8 @@ namespace SysWeaver.FolderSync
         Task<FolderSyncResponse> SyncFolder(FolderSyncRequest r);
 
         Task<FolderPullResponse> SyncPullFolder(FolderPullRequest r);
+
+
 
     }
 }

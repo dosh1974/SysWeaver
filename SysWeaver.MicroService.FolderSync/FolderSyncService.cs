@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,7 +23,7 @@ namespace SysWeaver.MicroService
     /// </summary>
     [WebApiUrl("../FolderSync")]
     [IsMicroService]
-    public partial class FolderSyncService : IHttpServerModule, IHttpRequestHandler, IDisposable
+    public partial class FolderSyncService : IHttpServerModule, IHttpRequestHandler, IDisposable, IHaveStats, IPerfMonitored
     {
 
         #region IHttpRequestHandler
@@ -72,6 +73,22 @@ namespace SysWeaver.MicroService
                 return FalseValue;
             var x = context.LocalUrl.Split('/');
             var len = x.Length;
+            if (len < 2)
+            {
+                context.SetResMime(MimeTypeMap.Json);
+                return FalseValue;
+            }
+            var u = x[1];
+            if (u.FastEquals("FolderSyncCdcPullChunks"))
+            {
+                if (len != 2)
+                {
+                    context.SetResMime(MimeTypeMap.Json);
+                    return FalseValue;
+                }
+                context.SetResMime(MimeTypeMap.Data);
+                return await GetChunkDataFromHashList(context).ConfigureAwait(false);
+            }
             if (len < 3)
             {
                 context.SetResMime(MimeTypeMap.Json);
@@ -79,7 +96,6 @@ namespace SysWeaver.MicroService
             }
             var jobId = x[1];
             var filename = String.Join('/', x, 2, len - 2);
-            var u = x[0];
             if (u.FastEquals("FolderSync"))
             {
                 var res = await UploadFile(jobId, filename, context).ConfigureAwait(false);
@@ -110,13 +126,15 @@ namespace SysWeaver.MicroService
             "FolderSync/",
             "FolderSyncCdc/",
             "FolderSyncCdcChunks/",
+            "FolderSyncCdcPullChunks/",
         ];
 
+        public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(FolderSyncService));
 
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             context.LocalUrl.SplitFirst('/', out var r);
-            var f = r.SplitFirst('/');
+            var f = r.SplitFirst('?');
             return Apis.Contains(f) ? null : this;
         }
 
@@ -130,6 +148,7 @@ namespace SysWeaver.MicroService
             nameof(Remove),
             nameof(GetSynchedFolderManifest),
             nameof(SyncPullFolder),
+            nameof(SyncGetChunks),
             nameof(PullFoldersTable),
             ""
             );
@@ -1476,50 +1495,100 @@ namespace SysWeaver.MicroService
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(target.Auth))
                 throw new Exception("Not authorized!");
-            if (!SystemLock.TryGet(target.LockName, out var lck))
-                throw new Exception("A folder sync is already in progress!");
-            try
+            if (SystemLock.IsLocked(target.LockName))
+                throw new Exception("The folder is being updated!");
+            var dest = target.DestPath;
+            ConcurrentDictionary<String, FolderSyncFile> localFiles = new (StringComparer.Ordinal);
+            foreach (var x in r.Files.Nullable())
             {
-                var dest = target.DestPath;
-                ConcurrentDictionary<String, FolderSyncFile> localFiles = new ConcurrentDictionary<string, FolderSyncFile>(StringComparer.Ordinal);
-                foreach (var x in r.Files.Nullable())
+                var name = x.Name;
+                var fn = name.Replace('/', Path.DirectorySeparatorChar);
+                var fullPath = new FileInfo(Path.Combine(dest, fn)).FullName;
+                if (!fullPath.FastStartsWith(dest))
+                    throw new Exception("Invalid file name!");
+                localFiles.TryAdd(name, x);
+            }
+            ConcurrentDictionary<String, int> download = new(StringComparer.Ordinal);
+            ConcurrentDictionary<String, int> keep = new(StringComparer.Ordinal);
+            var dl = dest.Length;
+            await Directory.GetFiles(dest, "*", SearchOption.AllDirectories).ProcessAsyncValue(async x =>
+            {
+                var localName = x.Substring(dl).Replace(Path.DirectorySeparatorChar, '/');
+                if (localFiles.TryRemove(localName, out var f))
                 {
-                    var name = x.Name;
-                    var fullPath = new FileInfo(Path.Combine(dest, name)).FullName;
-                    if (!fullPath.FastStartsWith(dest))
-                        throw new Exception("Invalid file name!");
-                    localFiles.TryAdd(name, x);
-                }
-                ConcurrentDictionary<String, int> download = new(StringComparer.Ordinal);
-                ConcurrentDictionary<String, int> keep = new(StringComparer.Ordinal);
-                var dl = dest.Length;
-                await Directory.GetFiles(dest, "*", SearchOption.AllDirectories).ProcessAsyncValue(async x =>
-                {
-                    var localName = x.Substring(dl).Replace(Path.DirectorySeparatorChar, '/');
-                    if (localFiles.TryRemove(localName, out var f))
+                    var hash = await FileHash.GetHashAsync(x).ConfigureAwait(false);
+                    if (hash.FastEquals(f.Hash))
                     {
-                        var hash = await FileHash.GetHashAsync(x).ConfigureAwait(false);
-                        if (hash.FastEquals(f.Hash))
-                        {
-                            keep.TryAdd(localName, 0);
-                            return;
-                        }
+                        keep.TryAdd(localName, 0);
+                        return;
                     }
-                    download.TryAdd(localName, 0);
-                }).ConfigureAwait(false);
-                return new FolderPullResponse
-                {
-                    Download = download.Count > 0 ? download.Keys.OrderBy(x => x).ToArray() : null,
-                    Keep = keep.Count > 0 ? keep.Keys.OrderBy(x => x).ToArray() : null,
-                    Cdc = CdcProps.Default.Key.FastEquals(r.Cdc) ? CdcProps.Default.Key : null,
-                };
-            }
-            finally
+                }
+                download.TryAdd(localName, 0);
+            }).ConfigureAwait(false);
+            return new FolderPullResponse
             {
-                lck?.Dispose();
-            }
+                Download = download.Count > 0 ? download.Keys.OrderBy(x => x).ToArray() : null,
+                Keep = keep.Count > 0 ? keep.Keys.OrderBy(x => x).ToArray() : null,
+                Cdc = CdcProps.Default.Key.FastEquals(r.Cdc) ? CdcProps.Default.Key : null,
+            };
         }
 
+
+        /// <summary>
+        /// Begin to update a remote folder
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth("")]
+        [WebApiRaw(MimeTypeMap.Data)]
+        public async Task<ReadOnlyMemory<Byte>> SyncGetChunks(CdcFilePullRequest r, HttpServerRequest context)
+        {
+            DateTime start = DateTime.UtcNow;
+            var folderName = r.Folder.FastToLower();
+            if (!PullFolders.TryGetValue(folderName, out var target))
+                throw new Exception("Unknown folder id");
+            if (!context.Session.IsValid(target.Auth))
+                throw new Exception("Not authorized!");
+            if (SystemLock.IsLocked(target.LockName))
+                throw new Exception("The folder is being updated!");
+            var discFile = Path.Combine(target.DestPath, r.File.Replace('/', Path.DirectorySeparatorChar));
+            var props = CdcProps.Default;
+            return await ContentDependentChunking.Cut(discFile, props).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Request contains a list of chunk hashes as binary data
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns>A stream of chunks as binary data</returns>
+        async ValueTask<ReadOnlyMemory<Byte>> GetChunkDataFromHashList(HttpServerRequest context)
+        {
+            using var _ = PerfMon.Track(nameof(GetChunkDataFromHashList));
+            var data = await context.InputStream.ReadAllMemoryAsync(false).ConfigureAwait(false);
+            var props = CdcProps.Default;
+            async ValueTask<ReadOnlyMemory<Byte>> Read(String x = null)
+            {
+                using var __ = PerfMon.Track(nameof(GetChunkDataFromHashList) + '.' + nameof(Read));
+                using var ms = new MemoryStream();
+                if (!await ContentDependentChunking.TryWriteChunkList(ms, data).ConfigureAwait(false))
+                    throw new Exception("Got missing chunks!");
+                return new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Position);
+            }
+            if (data.Length > 2048)
+            {
+                using var __ = PerfMon.Track(nameof(GetChunkDataFromHashList) + ".Big");
+                return await Read().ConfigureAwait(false);
+            }
+            Span<Byte> hashData = stackalloc Byte[SHA256.HashSizeInBytes];
+            SHA256.HashData(data.Span, hashData);
+            var hash = hashData.ToHexString();
+            return await ChunkDataListCache.GetOrUpdateValueAsync(hash, Read).ConfigureAwait(false); 
+        }
+
+        readonly FastMemCache<String, ReadOnlyMemory<Byte>> ChunkDataListCache = new(TimeSpan.FromMinutes(5), StringComparer.Ordinal);
 
         PullData GetPullFolderData(PullFolder folder)
         {
@@ -1559,6 +1628,8 @@ namespace SysWeaver.MicroService
             return data;
         }
 
+
+
         public PullData GetPullFolderData(String syncName)
             => PullFolders.TryGetValue(syncName.FastToLower(), out var f) ? GetPullFolderData(f) : null;
 
@@ -1581,6 +1652,13 @@ namespace SysWeaver.MicroService
             if (r == null)
                 r = new TableDataRequest();
             return TableDataTools.Get(r, 5000, GetPullFolderData());
+        }
+
+        public IEnumerable<Stats> GetStats()
+        {
+            const String n = nameof(FolderSyncService);
+            foreach (var x in ChunkDataListCache.GetStats(n, "ChunkPullCache."))
+                yield return x;
         }
 
         #endregion//Pull folder

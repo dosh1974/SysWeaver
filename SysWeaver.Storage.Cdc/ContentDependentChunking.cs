@@ -1116,6 +1116,36 @@ namespace SysWeaver
 
 
         /// <summary>
+        /// Cut a file into chunks, return the chunk hashes as binary data.
+        /// This data is cached for 5 minutes.
+        /// </summary>
+        /// <param name="filename">The file</param>
+        /// <param name="props">The properties, if null the default properties will be used (recommended)</param>
+        /// <param name="cache">If true, data is cached</param>
+        /// <returns></returns>
+        public static async ValueTask<Byte[]> Cut(String filename, CdcProps props = null, bool cache = true)
+        {
+            props = props ?? CdcProps.Default;
+            if (!cache)
+            {
+                using var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
+                return await Cut(s, false, props).ConfigureAwait(false);
+            }
+            var hash = await FileHash.GetHashAsync(filename).ConfigureAwait(false);
+            if (hash == null)
+                throw new Exception("File doesn't exist!");
+            var key = hash + props.Key;
+            return await CutCache.GetOrUpdateValueAsync(key, async _ =>
+            {
+                using var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
+                return await Cut(s, false, props).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+        }
+
+        static readonly FastMemCache<String, Byte[]> CutCache = new(TimeSpan.FromMinutes(5), StringComparer.Ordinal);
+
+
+        /// <summary>
         /// Cut a stream into chunks, return the chunk hashes as binary data
         /// </summary>
         /// <param name="s">The stream (will not be closed)</param>
@@ -1134,7 +1164,7 @@ namespace SysWeaver
             var data = ArrayPool<Byte>.Shared.Rent(bufSize);
             try
             {
-
+                bufSize = data.Length;
                 var dataSize = await s.ReadAsync(data).ConfigureAwait(false);
                 if (dataSize <= 0)
                     return Array.Empty<Byte>();
@@ -1204,7 +1234,7 @@ namespace SysWeaver
         public static async ValueTask Add(String filename, CdcProps props = null)
         {
             using var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
-            await Cut(s, false, props);
+            await Cut(s, false, props).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -1257,6 +1287,34 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// Get alist of all chunks that are missing
+        /// </summary>
+        /// <param name="chunks">The chunks to look for as a byte array of hashses</param>
+        /// <param name="props"></param>
+        /// <returns>A byte array of hashes with missing chunks</returns>
+        public static ReadOnlyMemory<Byte> GetMissingChunks(ReadOnlyMemory<byte> chunks, CdcProps props = null)
+        {
+            props = props ?? CdcProps.Default;
+            var hashSize = props.HashSize;
+            var l = chunks.Length;
+            var missing = GC.AllocateUninitializedArray<Byte>(l);
+            var dest = missing.AsSpan();
+            int o = 0;
+            for (int i = 0; i < l; i += hashSize)
+            {
+                var src = chunks.Slice(i, hashSize).Span;
+                if (ValidateChunk(src, props, true))
+                    continue;
+                src.CopyTo(dest);
+                o += hashSize;
+                dest = dest.Slice(hashSize);
+            }
+            return new ReadOnlyMemory<byte>(missing, 0, o);
+        }
+
+
+
+        /// <summary>
         /// Open a series of chunks as a single stream
         /// </summary>
         /// <param name="chunks">The chunks</param>
@@ -1268,17 +1326,18 @@ namespace SysWeaver
             props = props ?? CdcProps.Default;
             var hashSize = props.HashSize;
             var l = chunks.Length;
-            String[] c = new String[l];
-            for (int i = 0; i < l; i += hashSize)
+            var cc = l / hashSize;
+            String[] c = new String[cc];
+            for (int i = 0, j = 0; i < l; i += hashSize, ++ j)
             {
                 var fn = TryGetChunkFile(chunks.Slice(i, hashSize).Span, props);
                 if (fn == null)
                     throw new Exception("Chunk " + chunks.Slice(i, hashSize).ToHex() + " is missing!");
-                c[i] = fn;
+                c[j] = fn;
             }
             return new CompressedChunkedStream(x =>
             {
-                if (x > l)
+                if (x >= cc)
                     return null;
                 return new FileStream(c[x], FileMode.Open, FileAccess.Read, FileShare.Read);
             }, props.Comp);
