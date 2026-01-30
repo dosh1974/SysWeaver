@@ -173,11 +173,11 @@ async function serviceInfoMain() {
 
         const debugButtons = document.body.getElementsByTagName("si-debugbuttons")[0];
         exploreButton = new Button(null, "Explore", "Explore the active files", "si-icon-explore", true, async () => {
-            Open("../FolderSync/Folders/" + service + "/explore", "_self");
+            Open("../FolderSync/ManagedFolders/" + service + "/explore", "_self");
         });
 
         logButton = new Button(null, "View log", "View the current log", "si-icon-log", false, async () => {
-            Open("../edit/text.html?scrollToEnd=true&r=../FolderSync/Folders/" + service + "/" + data.Log.Name
+            Open("../edit/text.html?scrollToEnd=true&r=../FolderSync/ManagedFolders/" + service + "/" + data.Log.Name
                 + "&d=../ServerManager/DeleteLogFile", "_self");
 
         });
@@ -251,10 +251,61 @@ async function serviceInfoMain() {
     bakMap.set(13, '_');
     bakMap.set(16, '_');
 
-    const digitMap = new Map();
-    digitMap.set('0', true);
+
+    const bakMapNew = new Map();
+    bakMapNew.set(8, '-');
+    bakMapNew.set(11, '-');
+    bakMapNew.set(14, '_');
+    bakMapNew.set(17, '_');
+    bakMapNew.set(20, '_');
+    bakMapNew.set(23, '_');
+    bakMapNew.set(28, '-');
+    bakMapNew.set(31, '-');
+    bakMapNew.set(34, '_');
+    bakMapNew.set(37, '_');
+
+
+
+    function isBackupNew(fn) {
+        const e = fn.indexOf('.');
+        if (e < 0)
+            return false;
+        if (e < 40)
+            return false;
+        if (fn.substring(0, 4) !== "Bak_")
+            return false;
+        fn = fn.substring(0, e);
+        for (let i = 4; i < 40; ++i)
+        {
+            const c = fn[i];
+            const m = bakMapNew.get(i);
+            if (m) {
+                if (c === m)
+                    continue;
+            }
+            if (c < '0')
+                return false;
+            if (c > '9')
+                return false;
+        }
+        if (e === 40)
+            return true;
+        if (fn[40] != '_')
+            return false;
+        for (let i = 41; i < e; ++i)
+        {
+            const c = fn[i];
+            if (c < '0')
+                return false;
+            if (c > '9')
+                return false;
+        }
+        return true;
+    }
 
     function isBackup(fn) {
+        if (isBackupNew(fn))
+            return true;
         let e = fn.lastIndexOf('.');
         if (e < 0)
             return false;
@@ -301,7 +352,7 @@ async function serviceInfoMain() {
         isMaster = !!isMaster;
         const updater = BeginElementChildUpdate(el)
         if (!folderSuffix)
-            folderSuffix = "../FolderSync/Folders/";
+            folderSuffix = "../FolderSync/ManagedFolders/";
         const header = document.createElement("si-file-header");
         header.innerText = headerText;
         if (headerTitle)
