@@ -40,7 +40,7 @@ namespace SysWeaver.FolderSync
         /// <summary>
         /// The files that need to be downloaded
         /// </summary>
-        public String[] Download;
+        public FolderSyncFile[] Download;
 
         /// <summary>
         /// The files that need to be copied

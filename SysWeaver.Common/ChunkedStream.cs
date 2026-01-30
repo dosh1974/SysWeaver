@@ -103,10 +103,10 @@ namespace SysWeaver
                 // Read what we can from the current stream
                 int numBytesRead = currentSteam.Read(buffer, offset, count);
                 count -= numBytesRead;
+                read += numBytesRead;
                 Position += numBytesRead;
                 if (count <= 0)
                     break;
-                read += numBytesRead;
                 offset += numBytesRead;
                 currentSteam.Dispose();
                 currentSteam = GetNextStream();
@@ -117,7 +117,6 @@ namespace SysWeaver
         public override int Read(Span<byte> buffer)
         {
             var count = buffer.Length;
-            int offset = 0;
             var currentSteam = GetStream();
             int read = 0;
             while (count > 0)
@@ -125,13 +124,13 @@ namespace SysWeaver
                 if (currentSteam == null)
                     break;
                 // Read what we can from the current stream
-                int numBytesRead = currentSteam.Read(buffer.Slice(offset, count));
+                int numBytesRead = currentSteam.Read(buffer);
                 count -= numBytesRead;
+                read += numBytesRead;
                 Position += numBytesRead;
                 if (count <= 0)
                     break;
-                read += numBytesRead;
-                offset += numBytesRead;
+                buffer = buffer[numBytesRead..];
                 currentSteam.Dispose();
                 currentSteam = GetNextStream();
             }
@@ -149,10 +148,10 @@ namespace SysWeaver
                 // Read what we can from the current stream
                 int numBytesRead = await currentSteam.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
                 count -= numBytesRead;
+                read += numBytesRead;
                 Position += numBytesRead;
                 if (count <= 0)
                     break;
-                read += numBytesRead;
                 offset += numBytesRead;
                 currentSteam.Dispose();
                 currentSteam = GetNextStream();
@@ -163,7 +162,6 @@ namespace SysWeaver
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
             var count = buffer.Length;
-            int offset = 0;
             var currentSteam = GetStream();
             int read = 0;
             while (count > 0)
@@ -171,13 +169,13 @@ namespace SysWeaver
                 if (currentSteam == null)
                     break;
                 // Read what we can from the current stream
-                int numBytesRead = await currentSteam.ReadAsync(buffer.Slice(offset, count), cancellationToken).ConfigureAwait(false);
+                int numBytesRead = await currentSteam.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
                 count -= numBytesRead;
+                read += numBytesRead;
                 Position += numBytesRead;
                 if (count <= 0)
                     break;
-                read += numBytesRead;
-                offset += numBytesRead;
+                buffer = buffer[numBytesRead..];
                 currentSteam.Dispose();
                 currentSteam = GetNextStream();
             }

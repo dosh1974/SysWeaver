@@ -275,6 +275,29 @@ namespace SysWeaver
 
 
         /// <summary>
+        /// Write a bunch of uncompressed chunks (original data) to a stream
+        /// </summary>
+        /// <param name="dest">Target stream</param>
+        /// <param name="chunkHashes">Array of binary chunk hashes </param>
+        /// <param name="props"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        public static async ValueTask WriteChunks(Stream dest, ReadOnlyMemory<Byte> chunkHashes, CdcProps props = null)
+        {
+            var sl = chunkHashes.Length;
+            props = props ?? CdcProps.Default;
+            int hashSize = props.HashSize;
+            for (int i = 0; i < sl; i += hashSize)
+            {
+                var str = chunkHashes.Span.Slice(i, hashSize).ToHexString();
+                var l = await TryDecompressChunk(dest, str, props).ConfigureAwait(false);
+                if (l <= 0)
+                    throw new Exception("Failed to write chunk");
+            }
+        }
+
+
+        /// <summary>
         /// Expand a .swcompact file into a file or folder 
         /// </summary>
         /// <param name="fileName">The .swcompact filename</param>
@@ -813,12 +836,17 @@ namespace SysWeaver
         public static async ValueTask<long> TryDecompressChunk(Stream dest, String hashStr, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
-            using var s = TryOpenCompressedChunk(hashStr, props);
-            if (s == null)
-                return 0;
-            var mem = await props.Comp.GetDecompressedAsync(s).ConfigureAwait(false);
+            ReadOnlyMemory<Byte> mem;
+            long l;
+            using (var s = TryOpenCompressedChunk(hashStr, props))
+            {
+                if (s == null)
+                    return 0;
+                mem = await props.Comp.GetDecompressedAsync(s).ConfigureAwait(false);
+                l = s.Position;
+            }
             await dest.WriteAsync(mem).ConfigureAwait(false);
-            return s.Position;
+            return l;
         }
 
         /// <summary>
@@ -1325,21 +1353,13 @@ namespace SysWeaver
         {
             props = props ?? CdcProps.Default;
             var hashSize = props.HashSize;
-            var l = chunks.Length;
-            var cc = l / hashSize;
-            String[] c = new String[cc];
-            for (int i = 0, j = 0; i < l; i += hashSize, ++ j)
-            {
-                var fn = TryGetChunkFile(chunks.Slice(i, hashSize).Span, props);
-                if (fn == null)
-                    throw new Exception("Chunk " + chunks.Slice(i, hashSize).ToHex() + " is missing!");
-                c[j] = fn;
-            }
             return new CompressedChunkedStream(x =>
             {
-                if (x >= cc)
+                if (chunks.Length <= 0)
                     return null;
-                return new FileStream(c[x], FileMode.Open, FileAccess.Read, FileShare.Read);
+                var hash = chunks[..hashSize];
+                chunks = chunks[hashSize..];
+                return TryOpenCompressedChunk(hash.Span, props);
             }, props.Comp);
         }
 

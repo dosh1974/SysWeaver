@@ -510,15 +510,15 @@ namespace SysWeaver.FolderSync
                     return ReadOnlyMemory<Byte>.Empty;
                 }
                 useCdc = res.Cdc != null;
-                await dls.ProcessAsyncValue(async x =>
+                await dls.ProcessAsyncValue(async dl =>
                 {
+                    var x = dl.Name;
                     using var _ = await throttler.Lock().ConfigureAwait(false);
                     var fn = x.Replace('/', Path.DirectorySeparatorChar);
                     var targetFile = Path.Combine(downloadFolder, fn);
                     var ex = await PathExt.EnsureCanWriteFileAsync(targetFile).ConfigureAwait(false);
                     if (ex != null)
                         throw ex;
-                    DateTime? lm = null;
                     long? transferBytes = null;
                     if (useCdc)
                     {
@@ -547,26 +547,25 @@ namespace SysWeaver.FolderSync
                             missingChunkBytes += cl;
                         }
                         using var dest = new FileStream(targetFile, FileMode.Create, FileAccess.Write);
-                        using var src = ContentDependentChunking.OpenChunkStream(chunkHashes, props);
-                            await src.CopyToAsync(dest).ConfigureAwait(false);
+                        await ContentDependentChunking.WriteChunks(dest, chunkHashes, props).ConfigureAwait(false);
                     }
                     else
                     {
                         using var get = await client.GetAsync(baseDownloadUrl + x).ConfigureAwait(false);
                         var cc = get.Content;
-                        lm = cc.Headers.LastModified?.DateTime;
                         transferBytes = cc.Headers.ContentLength;
                         using var dest = new FileStream(targetFile, FileMode.Create, FileAccess.Write);
                         await cc.CopyToAsync(dest).ConfigureAwait(false);
                     }
+                    if (!(await FileHash.GetHashAsync(targetFile).ConfigureAwait(false)).FastEquals(dl.Hash))
+                        throw new Exception("Downloaded file is corrupted!");
                     var fi = new FileInfo(targetFile);
-                    if (lm != null)
-                        fi.LastWriteTimeUtc = lm ?? DateTime.UtcNow;
+                    fi.LastWriteTimeUtc = dl.LastModified;
                     var destBytes = fi.Length;
+                    files.TryRemove(x, out var orgI);
                     Interlocked.Add(ref discBytes, destBytes);
                     Interlocked.Add(ref transferredBytes, transferBytes ?? destBytes);
                     Interlocked.Increment(ref transferred);
-                    files.TryRemove(x, out var _);
                     Interlocked.Increment(ref sourceFileCount);
                     Interlocked.Add(ref sourceBytes, destBytes);
                 }).ConfigureAwait(false);

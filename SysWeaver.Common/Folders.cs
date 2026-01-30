@@ -1,8 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Collections.Generic;
-using System.Security.AccessControl;
-using System.Security.Principal;
+using System.Collections.Concurrent;
 
 
 namespace SysWeaver
@@ -145,12 +144,18 @@ namespace SysWeaver
             return t;
         }
 
+
+        static readonly ConcurrentDictionary<String, int> Seen = new(StringComparer.Ordinal);
+
         static void Validate(String[] paths, bool allowAll)
         {
             var ti = paths.Length;
+            var seen = Seen;
             for (int i = 0; i < ti; ++i)
             {
                 var fp = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(paths[i]));
+                if (!seen.TryAdd(fp, 0))
+                    continue;
                 PathExt.EnsureFolderExist(fp);
                 if (allowAll)
                     PlatformTools.Current.MakeDirectoryAccessableToEveryOne(fp);

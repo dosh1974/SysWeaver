@@ -1508,26 +1508,31 @@ namespace SysWeaver.MicroService
                     throw new Exception("Invalid file name!");
                 localFiles.TryAdd(name, x);
             }
-            ConcurrentDictionary<String, int> download = new(StringComparer.Ordinal);
+            ConcurrentDictionary<String, FolderSyncFile> download = new(StringComparer.Ordinal);
             ConcurrentDictionary<String, int> keep = new(StringComparer.Ordinal);
             var dl = dest.Length;
             await Directory.GetFiles(dest, "*", SearchOption.AllDirectories).ProcessAsyncValue(async x =>
             {
                 var localName = x.Substring(dl).Replace(Path.DirectorySeparatorChar, '/');
+                var hash = await FileHash.GetHashAsync(x).ConfigureAwait(false);
                 if (localFiles.TryRemove(localName, out var f))
                 {
-                    var hash = await FileHash.GetHashAsync(x).ConfigureAwait(false);
                     if (hash.FastEquals(f.Hash))
                     {
                         keep.TryAdd(localName, 0);
                         return;
                     }
                 }
-                download.TryAdd(localName, 0);
+                download.TryAdd(localName, new FolderSyncFile
+                {
+                    Name = localName,
+                    Hash = hash,
+                    LastModified = new FileInfo(x).LastAccessTimeUtc,
+                });
             }).ConfigureAwait(false);
             return new FolderPullResponse
             {
-                Download = download.Count > 0 ? download.Keys.OrderBy(x => x).ToArray() : null,
+                Download = download.Count > 0 ? download.Values.OrderBy(x => x.Name).ToArray() : null,
                 Keep = keep.Count > 0 ? keep.Keys.OrderBy(x => x).ToArray() : null,
                 Cdc = CdcProps.Default.Key.FastEquals(r.Cdc) ? CdcProps.Default.Key : null,
             };
