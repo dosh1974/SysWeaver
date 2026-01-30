@@ -6,37 +6,37 @@
     <members>
         <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.Comment">
             <summary>
-            [Sync]
+            [Push]
             Optional comment to use when synching to a remote repository.
             </summary>
         </member>
         <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.Ignore">
             <summary>
-            [Sync]
+            [Push]
             One or more (separated by a ;) wild card patterns of files to ignore ("*.pdb" for instance).
             </summary>
         </member>
         <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.IgnoreCertErrors">
             <summary>
-            [Sync]
+            [Push, Pull]
             If true, and server cert errors are ignored. NOT reccomended!
             </summary>
         </member>
         <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.MaxConcurrency">
             <summary>
-            [Sync]
+            [Push, Pull]
             The maximum concurrency to use, zero or negative is based on the number of hardware threads.
             </summary>
         </member>
         <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.NoActivate">
             <summary>
-            [Sync]
+            [Push, Pull]
             If true, the synched folder won't be activated.
             </summary>
         </member>
         <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.NoCdc">
             <summary>
-            [Sync]
+            [Push, Pull]
             If true, Content Dependency Chunking optimizations won't be used.
             </summary>
         </member>
