@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -47,6 +48,54 @@ namespace SysWeaver.FolderSync
             };
             Api = rrc.Create<IFolderSyncApi>();
         }
+
+        public const String TimeFmt = "yyyy-MM-dd_HH.mm.ss_ffff";
+
+        public static String GetBakName(String folder)
+        {
+            var d = new DirectoryInfo(folder);
+            var dir = String.Concat(d.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), '_', d.LastWriteTimeUtc.ToString(TimeFmt));
+            return dir;
+        }
+
+
+        public static String ComputeCombinedHash(IReadOnlyList<String> fileNames, IReadOnlyList<String> hashStrings)
+        {
+            var h = MD5.Create();
+            var count = hashStrings.Count;
+            int maxL = 0;
+            for (int i = 0; i < count; ++ i)
+            {
+                var ll = hashStrings[i].Length;
+                if (ll > maxL)
+                    maxL = ll;
+                ll = fileNames[i].Length;
+                if (ll > maxL)
+                    maxL = ll;
+            }
+            var mem = maxL << 2;
+            Byte[] data = new Byte[mem];
+            var e = Encoding.ASCII;
+            --count;
+            int l;
+            for (int i = 0; i < count; ++ i)
+            {
+                if (!e.TryGetBytes(fileNames[i], data, out l))
+                    throw new Exception("Internal error!");
+                h.TransformBlock(data, 0, l, data, 0);
+                if (!e.TryGetBytes(hashStrings[i], data, out l))
+                    throw new Exception("Internal error!");
+                h.TransformBlock(data, 0, l, data, 0);
+            }
+            if (!e.TryGetBytes(fileNames[count], data, out l))
+                throw new Exception("Internal error!");
+            h.TransformBlock(data, 0, l, data, 0);
+            if (!e.TryGetBytes(hashStrings[count], data, out l))
+                throw new Exception("Internal error!");
+            h.TransformFinalBlock(data, 0, l);
+            return h.Hash.ToHexString();
+        }
+
 
         readonly String Comment;
         readonly int MaxThreads;
@@ -167,7 +216,7 @@ namespace SysWeaver.FolderSync
                     files[f.Item2.Name.FastToLower()] = f;
             }
             onEvent?.Invoke(FolderSyncEvents.Scanned, sourceFolders);
-            var res = await Api.SyncFolder(new FolderSyncRequest
+            var res = await Api.CheckManagedFolder(new ManagedFolderSyncRequest
             {
                 Folder = destName,
                 Files = files.Values.OrderBy(x => x.Item2.Name).Select(x => x.Item2).ToArray(),
@@ -244,7 +293,7 @@ namespace SysWeaver.FolderSync
                             Interlocked.Add(ref fileSize, fi.Length);
                             Interlocked.Add(ref payloadSize, chunks.Length);
                             Interlocked.Add(ref chunkCount, chunks.Length / hashSize);
-                            onEvent?.Invoke(FolderSyncEvents.Comnpleted, x);
+                            onEvent?.Invoke(FolderSyncEvents.Completed, x);
                             return null;
                         }
                         return new Exception(Encoding.UTF8.GetString(data));
@@ -349,7 +398,7 @@ namespace SysWeaver.FolderSync
                             Interlocked.Increment(ref fileCount);
                             Interlocked.Add(ref fileSize, fi.Length);
                             Interlocked.Add(ref payloadSize, s.Position);
-                            onEvent?.Invoke(FolderSyncEvents.Comnpleted, x);
+                            onEvent?.Invoke(FolderSyncEvents.Completed, x);
                         }
                         else
                         {
@@ -412,24 +461,7 @@ namespace SysWeaver.FolderSync
                 var sfl = sourceFolder.Length + 1;
                 var srcFiles = Directory.GetFiles(sourceFolder, "*", SearchOption.AllDirectories);
                 var l = srcFiles.Length;
-                /*                if (ignore != null)
-                                {
-                                    int o = 0;
-                                    for (int i = 0; i < l; i++)
-                                    {
-                                        var n = srcFiles[i];
-                                        if (ignore(n))
-                                            continue;
-                                        srcFiles[o] = n;
-                                        ++o;
-                                    }
-                                    if (o != l)
-                                    {
-                                        l = o;
-                                        Array.Resize(ref srcFiles, l);
-                                    }
-                                }
-                */
+
                 await srcFiles.ProcessAsyncValue(async x =>
                 {
                     using var _ = await throttler.Lock().ConfigureAwait(false);
@@ -451,7 +483,24 @@ namespace SysWeaver.FolderSync
                 }).ConfigureAwait(false);
             }
             onEvent?.Invoke(FolderSyncEvents.Scanned, destFolder);
-            var res = await api.SyncPullFolder(new FolderPullRequest
+            var t = files.Values.OrderBy(x => x.Name).ToList();
+            var version = FolderSyncer.ComputeCombinedHash(t.Select(x => x.Name).ToList(), t.Select(x => x.Hash).ToList());
+            if (files.Count > 16)
+            {
+                if (!await api.SharedFolderHasChanged(new SharedFolderSyncRequest
+                {
+                    Folder = srcName,
+                    Version = version,
+                }).ConfigureAwait(false))
+                {
+                    return new FolderSyncResult
+                    {
+                        SourceBytes = sourceBytes,
+                        SourceFiles = sourceFileCount,
+                    };
+                }
+            }
+            var res = await api.CheckSharedFolder(new LocalFolderInfo
             {
                 Folder = srcName,
                 Files = files.Values.OrderBy(x => x.Name).ToArray(),
@@ -467,6 +516,15 @@ namespace SysWeaver.FolderSync
                 };
             onEvent?.Invoke(FolderSyncEvents.Checked, destFolder);
             //  Copy files
+            if (version.FastEquals(res.Version))
+            {
+                return new FolderSyncResult
+                {
+                    SourceBytes = sourceBytes,
+                    SourceFiles = sourceFileCount,
+                };
+            }
+            version = res.Version;
             sourceBytes = 0;
             sourceFileCount = 0;
             await res.Keep.Nullable().ProcessAsyncValue(async x =>
@@ -477,9 +535,14 @@ namespace SysWeaver.FolderSync
                 var fi = new FileInfo(dst);
                 if (!fi.Exists)
                 {
-                    var ex = await PathExt.TryCopyFileAsync(Path.Combine(destFolder, fn), dst).ConfigureAwait(false);
+                    var ex = await PathExt.EnsureCanWriteFileAsync(dst).ConfigureAwait(false);
                     if (ex != null)
                         throw ex;
+                    ex = await PathExt.TryCopyFileAsync(Path.Combine(destFolder, fn), dst).ConfigureAwait(false);
+                    onEvent?.Invoke(FolderSyncEvents.Completed, dst);
+                    if (ex != null)
+                        throw ex;
+                    fi = new FileInfo(dst);
                 }
                 files.TryRemove(x, out var _);
                 Interlocked.Increment(ref sourceFileCount);
@@ -498,7 +561,7 @@ namespace SysWeaver.FolderSync
                 var remote = api as RemoteConnectionBase;
                 var client = remote.Client;
                 var baseUrl = remote.UrlBase;
-                var baseDownloadUrl = String.Concat(baseUrl, "PullFolders/", srcName, '/');
+                var baseDownloadUrl = String.Concat(baseUrl, "ManagedFolders/", srcName, '/');
 
                 async ValueTask<ReadOnlyMemory<Byte>> CacheCdc(String fn)
                 {
@@ -522,10 +585,11 @@ namespace SysWeaver.FolderSync
                     long? transferBytes = null;
                     if (useCdc)
                     {
-                        var syncTask = client.PostJsonRequestRaw(baseUrl + "SyncGetChunks", new CdcFilePullRequest
+                        var syncTask = client.PostJsonRequestRaw(baseUrl + nameof(IFolderSyncEndPoints.GetSharedFileChunks), new SharedFileChunksRequest
                         {
                             File = x,
                             Folder = srcName,
+                            Version = version,
                         });
                         await TaskExt.WhenAll([syncTask, CacheCdc(fn)]).ConfigureAwait(false);
                         var chunkHashes = syncTask.Result;
@@ -538,7 +602,7 @@ namespace SysWeaver.FolderSync
                         if (ml > 0)
                         {
                             missingChunkCount += (ml / hs);
-                            var mem = await client.PostRawRequestRaw(baseUrl + "FolderSyncCdcPullChunks", missing);
+                            var mem = await client.PostRawRequestRaw(baseUrl + nameof(IFolderSyncEndPoints.GetChunks), missing);
                             using (var ms = mem.AsStream())
                                 if (!await ContentDependentChunking.AddChunkList(ms, props).ConfigureAwait(false))
                                     throw new Exception("Failed to add missing chunks!");
@@ -568,6 +632,7 @@ namespace SysWeaver.FolderSync
                     Interlocked.Increment(ref transferred);
                     Interlocked.Increment(ref sourceFileCount);
                     Interlocked.Add(ref sourceBytes, destBytes);
+                    onEvent?.Invoke(FolderSyncEvents.Completed, targetFile);
                 }).ConfigureAwait(false);
             }
             //  Delete files
@@ -579,8 +644,16 @@ namespace SysWeaver.FolderSync
                 var ex = await PathExt.TryDeleteFileAsync(targetFile).ConfigureAwait(false);
                 if (ex != null)
                     throw ex;
+                onEvent?.Invoke(FolderSyncEvents.Completed, targetFile);
             }).ConfigureAwait(false);
             await PathExt.TryRemoveEmptyFoldersAsync(downloadFolder).ConfigureAwait(false);
+            if (switchTo)
+            {
+                var bak = GetBakName(destFolder);
+                var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder).ConfigureAwait(false);
+                if (ex != null)
+                    throw ex;
+            }
             return new FolderSyncResult
             {
                 SourceFiles = sourceFileCount,
@@ -592,205 +665,6 @@ namespace SysWeaver.FolderSync
                 NewChunkCount = missingChunkCount,
                 NewChunkSize = missingChunkBytes
             };
-/*
-            
-
-            //  Already synced
-            var uploadFiles = res.Files;
-            if (uploadFiles == null)
-                return new FolderSyncResult
-                {
-                    SourceFiles = sourceFileCount,
-                    SourceBytes = sourceBytes,
-                };
-            onEvent?.Invoke(FolderSyncEvents.Checked, destFolder);
-            var client = (Api as RemoteConnectionBase).Client;
-            long fileCount = 0;
-            long fileSize = 0;
-            long payloadSize = 0;
-            useCdc = res.Cdc.FastEquals(props.Key);
-            if (useCdc)
-            {
-                long chunkCount = 0;
-                long newChunkCount = 0;
-                long newChunkSize = 0;
-                var destPrefix = String.Concat(UploadCdcBase, res.FolderCode, '/');
-                //  Send chunk information and gather unknown chunks
-                var xfileCount = uploadFiles.Length;
-                ConcurrentDictionary<ReadOnlyMemory<Byte>, int> uniqueChunks = new(ReadOnlyMemoryComparer.GetEqualityComparer<Byte>());
-                var hashSize = props.HashSize;
-                var exceptions = await uploadFiles.ConvertAsyncValue(async x =>
-                {
-                    try
-                    {
-
-                        using var _ = await throttler.Lock().ConfigureAwait(false);
-                        var srcFile = files[x.FastToLower()].Item1;
-                        var fi = new FileInfo(srcFile);
-                        var destFile = destPrefix + x.Replace('\\', '/');
-                        Byte[] chunks;
-                        using (var fs = fi.OpenRead())
-                            chunks = await ContentDependentChunking.Cut(fs, false, props).ConfigureAwait(false);
-                        using var content = new ByteArrayContent(chunks);
-                        var res = await client.PostAsync(destFile, content).ConfigureAwait(false);
-                        var data = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-                        var ct = res.Content.Headers.ContentType.MediaType;
-                        if (ct.FastStartsWith(MimeTypeMap.Data))
-                        {
-                            var chunkMem = chunks.AsMemory();
-                            var l = data.Length;
-                            for (int i = 0; i < l; ++i)
-                            {
-                                int mask = data[i];
-                                int bc = i << 3;
-                                for (int j = 0; mask != 0; ++j, mask = mask >> 1)
-                                {
-                                    if ((mask & 1) == 0)
-                                        continue;
-                                    int chunk = bc + j;
-                                    uniqueChunks.TryAdd(chunkMem.Slice(chunk * hashSize, hashSize), 0);
-                                }
-                            }
-                            Interlocked.Increment(ref fileCount);
-                            Interlocked.Add(ref fileSize, fi.Length);
-                            Interlocked.Add(ref payloadSize, chunks.Length);
-                            Interlocked.Add(ref chunkCount, chunks.Length / hashSize);
-                            onEvent?.Invoke(FolderSyncEvents.Comnpleted, x);
-                            return null;
-                        }
-                        return new Exception(Encoding.UTF8.GetString(data));
-                    }
-                    catch (Exception ex)
-                    {
-                        return ex;
-                    }
-                }).ConfigureAwait(false);
-                var t = exceptions.Where(x => x != null).ToArray();
-                if (t.Length > 0)
-                    return new FolderSyncResult
-                    {
-                        SourceFiles = sourceFileCount,
-                        SourceBytes = sourceBytes,
-                        Errors = t
-                    };
-                //  Send missing chunks
-                var ucc = uniqueChunks.Count;
-                if (ucc > 0)
-                {
-                    Interlocked.Add(ref newChunkCount, ucc);
-                    ReadOnlyMemory<Byte> mem;
-                    using (var ms = new MemoryStream(ucc * CdcProps.Default.AverageSize + 4096))
-                    {
-                        if (!await ContentDependentChunking.TryWriteChunkList(ms, uniqueChunks.Keys, props).ConfigureAwait(false))
-                            throw new Exception("Failed to write chunks!");
-                        mem = ms.GetBuffer().AsMemory().Slice(0, (int)ms.Position);
-                    }
-                    var destFile = String.Concat(UploadChunkBase, res.FolderCode, "/Data");
-                    String data;
-                    String ct;
-                    using (var content = new ReadOnlyMemoryContent(mem))
-                    {
-                        var res2 = await client.PostAsync(destFile, content).ConfigureAwait(false);
-                        data = await res2.Content.ReadAsStringAsync().ConfigureAwait(false);
-                        ct = res2.Content.Headers.ContentType.MediaType;
-                    }
-                    if (ct.FastStartsWith("application/json"))
-                    {
-                        Interlocked.Add(ref newChunkSize, mem.Length);
-                        if (!data.FastEquals("true"))
-                            return new FolderSyncResult
-                            {
-                                SourceFiles = sourceFileCount,
-                                SourceBytes = sourceBytes,
-                                Errors = [new Exception("Failed to upload missing chunks!")],
-                            };
-                        Interlocked.Add(ref payloadSize, mem.Length);
-                    }
-                    else
-                    {
-                        return new FolderSyncResult
-                        {
-                            SourceFiles = sourceFileCount,
-                            SourceBytes = sourceBytes,
-                            Errors = [new Exception(data)],
-                        };
-                    }
-                }
-                return new FolderSyncResult
-                {
-                    SourceFiles = sourceFileCount,
-                    SourceBytes = sourceBytes,
-                    Uploaded = fileCount,
-                    UploadedSourceBytes = fileSize,
-                    UploadedNetworkBytes = payloadSize,
-                    ChunkCount = chunkCount,
-                    NewChunkCount = newChunkCount,
-                    NewChunkSize = newChunkSize,
-                };
-
-            }
-            else
-            {
-                var destPrefix = String.Concat(UploadBase, res.FolderCode, '/');
-                var uncompressible = Uncompressible;
-                var exceptions = await uploadFiles.ConvertAsyncValue(async x =>
-                {
-                    //  Upload each file in paralell
-                    try
-                    {
-                        using var _ = await throttler.Lock().ConfigureAwait(false);
-                        var srcFile = files[x.FastToLower()].Item1;
-                        var destFile = destPrefix + x.Replace('\\', '/');
-
-
-
-                        var fi = new FileInfo(srcFile);
-                        bool compress = !uncompressible.Contains(new FileInfo(srcFile).Extension.FastToLower());
-                        using var s = compress ? (await CompressedFile.OpenAsync(srcFile, Comp, CompEncoderLevels.Best).ConfigureAwait(false)) : new FileStream(srcFile, FileMode.Open, FileAccess.Read, FileShare.Read);
-                        using var content = new StreamContent(s);
-                        if (compress)
-                            content.Headers.ContentEncoding.Add(Comp.HttpCode);
-                        var res = await client.PostAsync(destFile, content).ConfigureAwait(false);
-                        var data = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
-                        var ct = res.Content.Headers.ContentType.MediaType;
-                        if (ct.FastStartsWith("application/json"))
-                        {
-                            if (!data.FastEquals("true"))
-                                return new Exception("Failed to upload \"" + x + "\"");
-                            Interlocked.Increment(ref fileCount);
-                            Interlocked.Add(ref fileSize, fi.Length);
-                            Interlocked.Add(ref payloadSize, s.Position);
-                            onEvent?.Invoke(FolderSyncEvents.Comnpleted, x);
-                        }
-                        else
-                        {
-                            return new Exception(data);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        return ex;
-                    }
-                    return null;
-                }).ConfigureAwait(false);
-                var t = exceptions.Where(x => x != null).ToArray();
-                if (t.Length > 0)
-                    return new FolderSyncResult
-                    {
-                        SourceFiles = sourceFileCount,
-                        SourceBytes = sourceBytes,
-                        Errors = t
-                    };
-            }
-            return new FolderSyncResult
-            {
-                SourceFiles = sourceFileCount,
-                SourceBytes = sourceBytes,
-                Uploaded = fileCount,
-                UploadedSourceBytes = fileSize,
-                UploadedNetworkBytes = payloadSize,
-            };
-*/
         }
 
 

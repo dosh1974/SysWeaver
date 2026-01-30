@@ -91,7 +91,7 @@ namespace SysWeaver.MicroService
             to.Auth = Auth;
         }
 
-        internal SmServiceBrief(SmServiceInfo info, IReadOnlyList<FolderSyncService.PushData> data)
+        internal SmServiceBrief(SmServiceInfo info, IReadOnlyList<FolderSyncService.ManagedFolderData> data)
         {
             var s = info.Service;
             var f = info.Syncher;

@@ -15,16 +15,6 @@
             Creates a remote connection instance for a specific remote interface
             </summary>
         </member>
-        <member name="T:SysWeaver.Remote.EndPointException">
-            <summary>
-            Exception thrown when the response status of a remote call isn't 200.
-            </summary>
-        </member>
-        <member name="F:SysWeaver.Remote.EndPointException.StatusCode">
-            <summary>
-            The response code that genereated this exception
-            </summary>
-        </member>
         <member name="M:SysWeaver.Remote.EndPointOptions.#ctor(System.String,System.String,System.Int32)">
             <summary>
             Changes to this must be reflected in the 

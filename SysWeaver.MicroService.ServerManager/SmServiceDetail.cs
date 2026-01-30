@@ -55,7 +55,7 @@ namespace SysWeaver.MicroService
         {
         }
 
-        internal SmServiceDetail(SmServiceInfo info, IReadOnlyList<FolderSyncService.PushData> data, String exeName, SmFileInfo log, SmFileInfo[] configs, SmFileInfo[] masterConfigs) : base(info, data)
+        internal SmServiceDetail(SmServiceInfo info, IReadOnlyList<FolderSyncService.ManagedFolderData> data, String exeName, SmFileInfo log, SmFileInfo[] configs, SmFileInfo[] masterConfigs) : base(info, data)
         {
             var p = info.Process;
             var m = p?.Metrics;

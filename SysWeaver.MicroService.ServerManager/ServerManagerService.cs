@@ -69,7 +69,7 @@ namespace SysWeaver.MicroService
             foreach (var f in p.Folders.Nullable())
             {
                 f.Auth = f.Auth ?? p.SyncAuth;
-                s.AddPushFolder(f);
+                s.AddManagedFolder(f);
             }
 
             var destFolders = PathTemplate.Resolve(String.IsNullOrEmpty(p.ServiceFolder) ? @"$(CommonApplicationData)\SysWeaver\ManagedServices" : p.ServiceFolder).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -82,7 +82,7 @@ namespace SysWeaver.MicroService
 
             var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
             foreach (var f in p.Services.Nullable().Concat(savedServices.Nullable()))
-                InternalAddService(f);
+                InternalAddService(f).RunAsync();
 
             var tf = new Dictionary<string, InternalTextFile>(StringComparer.Ordinal);
             foreach (var f in p.TextFiles.Nullable())
@@ -135,7 +135,7 @@ namespace SysWeaver.MicroService
                 RequestCacheDuration = 4,
                 WebFolder = "ServerManager/Bak/",
             };
-            FileModule.AddFolder(bak);
+            FileModule.AddPushFolder(bak);
             BakModuleFolder = bak;
             BakFolder = bakFolder;
             BakKeysFolder = bakFolder + "Keys";
@@ -162,7 +162,7 @@ namespace SysWeaver.MicroService
             => TaskExt.WhenAll(UpdateStats(), UpdateMetrics());
         
 
-        void InternalAddService(ManagedService f)
+        async ValueTask InternalAddService(ManagedService f)
         {
             var p = P;
             var df = f.DiscFolder;
@@ -178,7 +178,7 @@ namespace SysWeaver.MicroService
             PathExt.CreateDataFolder(df);
             var pf = Path.GetDirectoryName(df);
             PathExt.SetupDataFolder(pf);
-            var v = new FolderPushFolder
+            var v = new FsManagedFolder
             {
                 Name = f.Name,
                 DiscFolder = df,
@@ -199,15 +199,15 @@ namespace SysWeaver.MicroService
                 WebFolder = "ServerManager/ServiceBak/" + f.Name,
             };
 
-            var folder = Syncer.AddPushFolder(v);
+            var folder = await Syncer.AddManagedFolder(v).ConfigureAwait(false);
             var currentRepo = new BackupFileRepo("Current_" + f.Name, folder, this);
             var masterRepo = f.MasterConfig ? new BackupFileRepo("Master_" + f.Name, Path.GetDirectoryName(folder), this) : null;
             if (!Services.TryAdd(f.Name.FastToLower(), new SmServiceInfo(f, v, p, currentRepo, masterRepo, bak)))
             {
-                Syncer.RemoveFolder(v);
+                Syncer.RemoveManagedFolder(v);
                 throw new Exception("Must have a unique name!");
             }
-            FileModule.AddFolder(bak);
+            FileModule.AddPushFolder(bak);
             FileUploader.AddRepo(currentRepo);
             FileUploader.AddRepo(masterRepo);
         }
@@ -216,7 +216,7 @@ namespace SysWeaver.MicroService
         {
             if (!Services.TryRemove(serviceName.FastToLower(), out var info))
                 return false;
-            Syncer.RemoveFolder(info.Syncher);
+            Syncer.RemoveManagedFolder(info.Syncher);
             FileUploader.RemoveRepo(info.Master);
             FileUploader.RemoveRepo(info.Current);
             FileModule.RemoveFolder(info.Bak);
@@ -239,7 +239,7 @@ namespace SysWeaver.MicroService
                     continue;
                 fu.RemoveRepo(s.Master);
                 fu.RemoveRepo(s.Current);
-                sy.RemoveFolder(s.Syncher);
+                sy.RemoveManagedFolder(s.Syncher);
                 fm.RemoveFolder(s.Bak);
             }
             fm.RemoveFolder(BakModuleFolder);
@@ -1646,7 +1646,7 @@ namespace SysWeaver.MicroService
 
         SmServiceDetail InternalGetDetail(SmServiceInfo info)
         {
-            var data = Syncer.GetPushFolderData(info.Service.Name).ToList();
+            var data = Syncer.GetManagedFolders(info.Service.Name).ToList();
             var discFolder = info.Syncher.DiscFolder;
             var exeName = FindServiceExe(discFolder);
             SmFileInfo[] configs = GetConfigs(discFolder, "*").Select(x => GetFileInfo(Path.Combine(discFolder, x))).OrderByDescending(x => x.LastModified).ToArray();
@@ -1686,7 +1686,7 @@ namespace SysWeaver.MicroService
                     continue;
                 s.Add(i);
             }
-            return s.Convert(info => new SmServiceBrief(info, Syncer.GetPushFolderData(info.Syncher.Name).ToList()));
+            return s.Convert(info => new SmServiceBrief(info, Syncer.GetManagedFolders(info.Syncher.Name).ToList()));
         }
 
         const string AuditGroup = "ServerManager";
@@ -1900,14 +1900,14 @@ namespace SysWeaver.MicroService
 
         #region Version
 
-        SmServiceInfo GetValidatedVersion(out FolderSyncService.PushData d, String versionName, HttpServerRequest context)
+        SmServiceInfo GetValidatedVersion(out FolderSyncService.ManagedFolderData d, String versionName, HttpServerRequest context)
         {
             var p = versionName.Split(',');
             var serviceName = p[0];
             var uploaded = DateTime.Parse(p[1]).ToUniversalTime();
             var versionFolderName = p[2];
             var info = Validate(serviceName, context);
-            var data = Syncer.GetPushFolderData(info.Service.Name).ToList();
+            var data = Syncer.GetManagedFolders(info.Service.Name).ToList();
             d = null;
             foreach (var x in data)
             {
@@ -1981,7 +1981,7 @@ namespace SysWeaver.MicroService
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false))
                 throw new Exception("Failed to activate \"" + version.DiscFolder + "\"");
-            Syncer.GetPushFolderData(info.Syncher.Name);
+            Syncer.GetManagedFolders(info.Syncher.Name);
             var exe = FindServiceExe(info.Syncher.DiscFolder);
             if (exe != null)
                 Interlocked.Exchange(ref info.Status, await CheckStatus(exe).ConfigureAwait(false));
@@ -2009,7 +2009,7 @@ namespace SysWeaver.MicroService
                 Folder = info.Syncher.Name,
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false);
-            Syncer.GetPushFolderData(info.Syncher.Name);
+            Syncer.GetManagedFolders(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return ret == null ? null : new SmCompFileStats(ret);
@@ -2033,7 +2033,7 @@ namespace SysWeaver.MicroService
                 Folder = info.Syncher.Name,
                 DiscFolder = version.DiscFolder,
             }, true, context).ConfigureAwait(false);
-            Syncer.GetPushFolderData(info.Syncher.Name);
+            Syncer.GetManagedFolders(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return ret == null ? null : new SmCompFileStats(ret);
@@ -2058,7 +2058,7 @@ namespace SysWeaver.MicroService
                 Folder = info.Syncher.Name,
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false);
-            Syncer.GetPushFolderData(info.Syncher.Name);
+            Syncer.GetManagedFolders(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return ret == null ? null : new SmCompFileStats(ret);
@@ -2084,7 +2084,7 @@ namespace SysWeaver.MicroService
                 Folder = info.Syncher.Name,
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false);
-            Syncer.GetPushFolderData(info.Syncher.Name);
+            Syncer.GetManagedFolders(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return ret;
@@ -2109,7 +2109,7 @@ namespace SysWeaver.MicroService
                 Folder = info.Syncher.Name,
                 DiscFolder = version.DiscFolder,
             }, context).ConfigureAwait(false);
-            Syncer.GetPushFolderData(info.Syncher.Name);
+            Syncer.GetManagedFolders(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return ret;
@@ -2148,7 +2148,7 @@ namespace SysWeaver.MicroService
             var ex = await PathExt.TryCopyFileAsync(sname, dname).ConfigureAwait(false);
             if (ex != null)
                 throw ex;
-            Syncer.GetPushFolderData(info.Syncher.Name);
+            Syncer.GetManagedFolders(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
@@ -2189,7 +2189,7 @@ namespace SysWeaver.MicroService
             var ex = await PathExt.TryMoveFileAsync(sname, dname).ConfigureAwait(false);
             if (ex != null)
                 throw ex;
-            Syncer.GetPushFolderData(info.Syncher.Name);
+            Syncer.GetManagedFolders(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
@@ -2223,7 +2223,7 @@ namespace SysWeaver.MicroService
             sname = Path.Combine(bin, sname);
             if (!(await DeleteFileWithBackup(sname, Path.Combine(masterBin, "bak")).ConfigureAwait(false)))
                 return false;
-            Syncer.GetPushFolderData(info.Syncher.Name);
+            Syncer.GetManagedFolders(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
@@ -2253,7 +2253,7 @@ namespace SysWeaver.MicroService
             var masterBin = Path.GetDirectoryName(discFolder);
             if (!(await DeleteFileWithBackup(sname, Path.Combine(masterBin, "bak")).ConfigureAwait(false)))
                 return false;
-            Syncer.GetPushFolderData(info.Syncher.Name);
+            Syncer.GetManagedFolders(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
@@ -2293,7 +2293,7 @@ namespace SysWeaver.MicroService
             if (!ServiceHost.BackupConfig(sname, Manager))
                 throw new Exception("Failed to backup exsiting file \"" + sname + "\"");
             await File.WriteAllTextAsync(sname, data.Content).ConfigureAwait(false);
-            Syncer.GetPushFolderData(info.Syncher.Name);
+            Syncer.GetManagedFolders(info.Syncher.Name);
             context.Session.InvalidateCache();
             context.Server.InvalidateCache();
             return true;
@@ -2351,51 +2351,48 @@ namespace SysWeaver.MicroService
 
         #region Service management
 
-        readonly Object ServiceLock = new object();
+        readonly AsyncLock ServiceLock = new ();
 
-    /// <summary>
-    /// Add a new managed service
-    /// </summary>
-    /// <param name="service">Service params</param>
-    /// <returns>True if sucessfully added</returns>
-    /// <exception cref="Exception"></exception>
-    [WebApi]
-    [WebApiAuth(Roles.Admin)]
-    [WebApiAudit(AuditGroup)]
-    public bool AddService(ManagedService service)
-    {
-        var name = service?.Name?.Trim();
-        if (String.IsNullOrEmpty(name))
-            throw new Exception("Invalid name! May not be empty or null!");
-        if (!PathExt.IsValidFilename(name))
-            throw new Exception("Invalid name! May only contain valid file name characters!");
-        if (!PathExt.IsValidSubPath(name))
-            throw new Exception("Invalid name! May only contain valid folder name characters!");
-        service.Name = name;
-        lock (ServiceLock)
+        /// <summary>
+        /// Add a new managed service
+        /// </summary>
+        /// <param name="service">Service params</param>
+        /// <returns>True if sucessfully added</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth(Roles.Admin)]
+        [WebApiAudit(AuditGroup)]
+        public async Task<bool> AddService(ManagedService service)
         {
-            InternalAddService(service);
+            var name = service?.Name?.Trim();
+            if (String.IsNullOrEmpty(name))
+                throw new Exception("Invalid name! May not be empty or null!");
+            if (!PathExt.IsValidFilename(name))
+                throw new Exception("Invalid name! May only contain valid file name characters!");
+            if (!PathExt.IsValidSubPath(name))
+                throw new Exception("Invalid name! May only contain valid folder name characters!");
+            service.Name = name;
+            using var l = await ServiceLock.Lock().ConfigureAwait(false);
+            await InternalAddService(service).ConfigureAwait(false);
             var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
             savedServices = savedServices.Push(service);
             KeyValueStore.AllApp.Set(ServerManagerServicesKey, savedServices);
+            return true;
         }
-        return true;
-    }
 
-    /// <summary>
-    /// Remove a service from the Service Managers control.
-    /// This will NOT stop, uninstall and remove the service from disc,
-    /// </summary>
-    /// <param name="serviceName">Name of the service</param>
-    /// <returns>True if sucessfully removed</returns>
-    /// <exception cref="Exception"></exception>
-    [WebApi]
-    [WebApiAuth(Roles.Admin)]
-    [WebApiAudit(AuditGroup)]
-    public bool RemoveService(String serviceName)
-    {
-        lock (ServiceLock)
+        /// <summary>
+        /// Remove a service from the Service Managers control.
+        /// This will NOT stop, uninstall and remove the service from disc,
+        /// </summary>
+        /// <param name="serviceName">Name of the service</param>
+        /// <returns>True if sucessfully removed</returns>
+        /// <exception cref="Exception"></exception>
+        [WebApi]
+        [WebApiAuth(Roles.Admin)]
+        [WebApiAudit(AuditGroup)]
+        public bool RemoveService(String serviceName)
         {
+            using var l = ServiceLock.LockSync();
             if (!InternalRemoveService(serviceName))
                 return false;
             var savedServices = KeyValueStore.AllApp.TryGet<ManagedService[]>(ServerManagerServicesKey);
@@ -2406,11 +2403,10 @@ namespace SysWeaver.MicroService
                 return false;
             savedServices = savedServices.RemoveAt(i);
             KeyValueStore.AllApp.Set(ServerManagerServicesKey, savedServices.Length == 0 ? null : savedServices);
+            return true;
         }
-        return true;
-    }
 
-    #endregion//Service management
+        #endregion//Service management
 
         #region Keys
 

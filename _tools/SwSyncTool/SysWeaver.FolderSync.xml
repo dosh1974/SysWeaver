@@ -4,15 +4,27 @@
         <name>SysWeaver.FolderSync</name>
     </assembly>
     <members>
-        <member name="M:SysWeaver.FolderSync.FolderSyncer.SyncFolder(System.String,System.String,System.Boolean,System.Boolean,System.Func{System.String,System.Boolean},System.Action{SysWeaver.FolderSync.FolderSyncEvents,System.String})">
+        <member name="M:SysWeaver.FolderSync.FolderSyncer.PushFolders(System.String,System.String,System.Boolean,System.Boolean,System.Func{System.String,System.Boolean},System.Action{SysWeaver.FolderSync.FolderSyncEvents,System.String})">
             <summary>
-            Synchronize a local folder with a remote folder.
+            Update a remote repository from local folders
             </summary>
             <param name="sourceFolders">The local source folder. Multiple folders can be specified separated by a ';'</param>
-            <param name="destName">The name of the remote folder</param>
+            <param name="destName">The name of the remote repository to update</param>
             <param name="switchTo">If true, the newly synched folder will be used when updated</param>
             <param name="useCdc">If true, try to use Content Dependent Chunking</param>
             <param name="ignore">An optional callback used to ignore some files</param>
+            <param name="onEvent">An optional callback used to display what's going on</param>
+            <returns>Sync results</returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
+        <member name="M:SysWeaver.FolderSync.FolderSyncer.PullFolder(System.String,System.String,System.Boolean,System.Boolean,System.Action{SysWeaver.FolderSync.FolderSyncEvents,System.String})">
+            <summary>
+            Update a local folder from a remote repository
+            </summary>
+            <param name="srcName">The name of the remote repository</param>
+            <param name="destFolder">The local destination folder to update</param>
+            <param name="switchTo">If true, the newly synched folder will be used when updated</param>
+            <param name="useCdc">If true, try to use Content Dependent Chunking</param>
             <param name="onEvent">An optional callback used to display what's going on</param>
             <returns>Sync results</returns>
             <exception cref="T:System.Exception"></exception>
@@ -52,7 +64,7 @@
             Files have been checked against remote server
             </summary>
         </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncEvents.Uploaded">
+        <member name="F:SysWeaver.FolderSync.FolderSyncEvents.Completed">
             <summary>
             Called when a file have been uploaded
             </summary>
@@ -70,36 +82,6 @@
         <member name="F:SysWeaver.FolderSync.FolderSyncFile.LastModified">
             <summary>
             Numer of milliseconds since the Unix epoch
-            </summary>
-        </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncRequest.Folder">
-            <summary>
-            The folder
-            </summary>
-        </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncRequest.Files">
-            <summary>
-            The files
-            </summary>
-        </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncRequest.UseFolder">
-            <summary>
-            If true, the newly synched folder will be activated directly
-            </summary>
-        </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncRequest.Cdc">
-            <summary>
-            Populate with CdcProps.Default.Key if Cdc is requested
-            </summary>
-        </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncRequest.Machine">
-            <summary>
-            The source machine name
-            </summary>
-        </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncRequest.Comment">
-            <summary>
-            An optional comment
             </summary>
         </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncOperation.Folder">
@@ -137,21 +119,6 @@
             An optional comment
             </summary>
         </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncResponse.FolderCode">
-            <summary>
-            The code to use when uploading files
-            </summary>
-        </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncResponse.Files">
-            <summary>
-            The files to upload
-            </summary>
-        </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncResponse.Cdc">
-            <summary>
-            If non-null and the CdcProps.Default.Key matches this string, prefer to use Cdc for upload
-            </summary>
-        </member>
         <member name="F:SysWeaver.FolderSync.FolderSyncResponseAudit.FolderCode">
             <summary>
             The code to use when uploading files
@@ -177,17 +144,17 @@
             Number of bytes in source files
             </summary>
         </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncResult.Uploaded">
+        <member name="F:SysWeaver.FolderSync.FolderSyncResult.TransferredCount">
             <summary>
             Number of files that have to be uploaded
             </summary>
         </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncResult.UploadedSourceBytes">
+        <member name="F:SysWeaver.FolderSync.FolderSyncResult.TransferredSourceBytes">
             <summary>
             Number of source bytes that have to be uploaded
             </summary>
         </member>
-        <member name="F:SysWeaver.FolderSync.FolderSyncResult.UploadedNetworkBytes">
+        <member name="F:SysWeaver.FolderSync.FolderSyncResult.TransferredNetworkSize">
             <summary>
             Number of network bytes sent (excluding headers)
             </summary>
@@ -210,6 +177,151 @@
         <member name="F:SysWeaver.FolderSync.FolderSyncResult.Errors">
             <summary>
             List of errors
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FolderSync.IFolderSyncApi.CheckManagedFolder(SysWeaver.FolderSync.ManagedFolderSyncRequest)">
+            <summary>
+            Check if there are any differences in the managed folder
+            </summary>
+            <param name="r">Folder and local files</param>
+            <returns>Changes required to sync the managed folder</returns>
+        </member>
+        <member name="M:SysWeaver.FolderSync.IFolderSyncApi.SharedFolderHasChanged(SysWeaver.FolderSync.SharedFolderSyncRequest)">
+            <summary>
+            Check if a new version of a shared folder is available
+            </summary>
+            <param name="r">Folder name and version (aka hash)</param>
+            <returns>True if a new version is available</returns>
+        </member>
+        <member name="M:SysWeaver.FolderSync.IFolderSyncApi.CheckSharedFolder(SysWeaver.FolderSync.LocalFolderInfo)">
+            <summary>
+            Check for updates against a shared folder
+            </summary>
+            <param name="r">Folder and local files</param>
+            <returns>Changes required to sync the local folder</returns>
+        </member>
+        <member name="T:SysWeaver.FolderSync.IFolderSyncEndPoints">
+            <summary>
+            End points that isn't called using a json API since it requires binary reads and/or writes (more optimal)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.FolderSync.IFolderSyncEndPoints.GetSharedFileChunks(SysWeaver.FolderSync.SharedFileChunksRequest)">
+            <summary>
+            Get the list of chunk hashes for a file
+            </summary>
+            <param name="r">Folder and file to get hash chunks for</param>
+            <returns>Hashes for the chunks that make up the file</returns>
+        </member>
+        <member name="M:SysWeaver.FolderSync.IFolderSyncEndPoints.GetChunks(System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            Get chunk content for the given hashes
+            </summary>
+            <param name="chunkHashes">Array of hashes that we want the data for</param>
+            <returns>Data for the compressed chunks</returns>
+        </member>
+        <member name="F:SysWeaver.FolderSync.LocalFolderInfo.Folder">
+            <summary>
+            The folder
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.LocalFolderInfo.Files">
+            <summary>
+            The files
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.LocalFolderInfo.Cdc">
+            <summary>
+            Populate with CdcProps.Default.Key if Cdc is requested
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.ManagedFolderDiff.FolderCode">
+            <summary>
+            The code to use when uploading files
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.ManagedFolderDiff.Files">
+            <summary>
+            The files to upload
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.ManagedFolderDiff.Cdc">
+            <summary>
+            If non-null and the CdcProps.Default.Key matches this string, prefer to use Cdc for upload
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.ManagedFolderSyncRequest.Folder">
+            <summary>
+            The folder
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.ManagedFolderSyncRequest.Files">
+            <summary>
+            The files
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.ManagedFolderSyncRequest.UseFolder">
+            <summary>
+            If true, the newly synched folder will be activated directly
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.ManagedFolderSyncRequest.Cdc">
+            <summary>
+            Populate with CdcProps.Default.Key if Cdc is requested
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.ManagedFolderSyncRequest.Machine">
+            <summary>
+            The source machine name
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.ManagedFolderSyncRequest.Comment">
+            <summary>
+            An optional comment
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.SharedFileChunksRequest.Folder">
+            <summary>
+            The folder
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.SharedFileChunksRequest.File">
+            <summary>
+            The file
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.SharedFileChunksRequest.Version">
+            <summary>
+            The folder
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.SharedFolderDiff.Download">
+            <summary>
+            The files that need to be downloaded
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.SharedFolderDiff.Keep">
+            <summary>
+            The files that need to be copied
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.SharedFolderDiff.Cdc">
+            <summary>
+            If non-null and the CdcProps.Default.Key matches this string, prefer to use Cdc for upload
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.SharedFolderDiff.Version">
+            <summary>
+            The version of the remote repository
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.SharedFolderSyncRequest.Folder">
+            <summary>
+            The folder
+            </summary>
+        </member>
+        <member name="F:SysWeaver.FolderSync.SharedFolderSyncRequest.Version">
+            <summary>
+            The version of the remote repository
             </summary>
         </member>
     </members>

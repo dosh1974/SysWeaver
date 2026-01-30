@@ -98,7 +98,7 @@ namespace SysWeaver.MicroService
                 }
                 repos[key] = Tuple.Create(repo, new UploadHandler(this, repo));
                 foreach (var folder in repo.ExposeFolders.Nullable())
-                    FileMod?.AddFolder(folder);
+                    FileMod?.AddPushFolder(folder);
             }
         }
 
@@ -193,7 +193,7 @@ namespace SysWeaver.MicroService
                     {
                         var repo = x.Item1;
                         foreach (var folder in repo.ExposeFolders.Nullable())
-                            ss.AddFolder(folder);
+                            ss.AddPushFolder(folder);
                     }
                 }
             }

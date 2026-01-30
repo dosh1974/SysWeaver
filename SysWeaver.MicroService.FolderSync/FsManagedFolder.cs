@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 namespace SysWeaver.MicroService
 {
 
-    public sealed class FolderPushFolder
+    public sealed class FsManagedFolder
     {
         /// <summary>
         /// Name of repository, used when synching
@@ -47,6 +47,16 @@ namespace SysWeaver.MicroService
         /// Activating (swapping) is slower but disc usage is reduced a lot (especially for many versions).
         /// </summary>
         public bool Compress;
+
+        /// <summary>
+        /// If true, data pushed to this folder may be pulled down
+        /// </summary>
+        public bool AllowPull;
+
+        /// <summary>
+        /// Optionally use this auth for pulling
+        /// </summary>
+        public String PullAuth;
 
         public delegate ValueTask<Exception> ActivationHandler(String name, String folderDiscPath, Func<String, ValueTask<int>> commandRunner);
 

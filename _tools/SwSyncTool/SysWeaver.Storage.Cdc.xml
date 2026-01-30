@@ -191,6 +191,16 @@
             <param name="props">The props used</param>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.ContentDependentChunking.WriteChunks(System.IO.Stream,System.ReadOnlyMemory{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Write a bunch of uncompressed chunks (original data) to a stream
+            </summary>
+            <param name="dest">Target stream</param>
+            <param name="chunkHashes">Array of binary chunk hashes </param>
+            <param name="props"></param>
+            <returns></returns>
+            <exception cref="T:System.Exception"></exception>
+        </member>
         <member name="M:SysWeaver.ContentDependentChunking.Expand(System.String,System.String,SysWeaver.CdcProps)">
             <summary>
             Expand a .swcompact file into a file or folder 
@@ -390,6 +400,16 @@
             <returns></returns>
             <exception cref="T:System.Exception"></exception>
         </member>
+        <member name="M:SysWeaver.ContentDependentChunking.Cut(System.String,SysWeaver.CdcProps,System.Boolean)">
+            <summary>
+            Cut a file into chunks, return the chunk hashes as binary data.
+            This data is cached for 5 minutes.
+            </summary>
+            <param name="filename">The file</param>
+            <param name="props">The properties, if null the default properties will be used (recommended)</param>
+            <param name="cache">If true, data is cached</param>
+            <returns></returns>
+        </member>
         <member name="M:SysWeaver.ContentDependentChunking.Cut(System.IO.Stream,System.Boolean,SysWeaver.CdcProps)">
             <summary>
             Cut a stream into chunks, return the chunk hashes as binary data
@@ -415,6 +435,14 @@
             <param name="chunks">Array of chunk hashes</param>
             <param name="props">The properties, if null the default properties will be used (recommended)</param>
             <returns>True if all the chunks was found and written to the stream, else false</returns>
+        </member>
+        <member name="M:SysWeaver.ContentDependentChunking.GetMissingChunks(System.ReadOnlyMemory{System.Byte},SysWeaver.CdcProps)">
+            <summary>
+            Get alist of all chunks that are missing
+            </summary>
+            <param name="chunks">The chunks to look for as a byte array of hashses</param>
+            <param name="props"></param>
+            <returns>A byte array of hashes with missing chunks</returns>
         </member>
         <member name="M:SysWeaver.ContentDependentChunking.OpenChunkStream(System.ReadOnlyMemory{System.Byte},SysWeaver.CdcProps)">
             <summary>

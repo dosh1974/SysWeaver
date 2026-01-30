@@ -7,7 +7,7 @@ namespace SysWeaver.MicroService
 
     public partial class FolderSyncService
     {
-        public sealed class PushData
+        public sealed class ManagedFolderData
         {
  
 
@@ -19,13 +19,13 @@ namespace SysWeaver.MicroService
             /// <summary>
             /// Folder name on disc
             /// </summary>
-            [TableDataUrl("{0}", "../FolderSync/GetSynchedFolderManifest?\"{1}/{0}\"", "Click to show the manifest file.")]
+            [TableDataUrl("{0}", "*../edit/Text.html?r=../FolderSync/" + nameof(GetManagedFolderManifest) + "?\"{1}/{0}\"", "Click to show the manifest file.")]
             public String DiscFolder;
 
             /// <summary>
             /// Name of the repo, use this when synchronizing a local folder.
             /// </summary>
-            [TableDataUrl("{0}", "*../FolderSync/Folders/{0}/explore", "Click to explore \"{3}\".")]
+            [TableDataUrl("{0}", "*../FolderSync/" + nameof(FolderSyncParams.ManagedFolders) + "/{0}/explore", "Click to explore \"{3}\".")]
             public String Name;
 
             /// <summary>
@@ -101,7 +101,7 @@ namespace SysWeaver.MicroService
             public String Auth;
 
 
-            internal PushFolder Folder;
+            internal ManagedFolder Folder;
         }
 
 
@@ -110,7 +110,7 @@ namespace SysWeaver.MicroService
             /// <summary>
             /// Name of the repo, use this when synchronizing a local folder.
             /// </summary>
-            [TableDataUrl("{0}", "*../FolderSync/PullFolders/{0}/explore", "Click to explore \"{3}\".")]
+            [TableDataUrl("{0}", "*../FolderSync/" + nameof(FolderSyncParams.SharedFolders) + "/{0}/explore", "Click to explore \"{3}\".")]
             public String Name;
 
             /// <summary>
@@ -124,7 +124,7 @@ namespace SysWeaver.MicroService
             [TableDataTags]
             public String Auth;
 
-            internal PullFolder Folder;
+            internal SharedFolder Folder;
         }
 
 

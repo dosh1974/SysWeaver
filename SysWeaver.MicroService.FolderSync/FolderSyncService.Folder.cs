@@ -1,8 +1,13 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 using SysWeaver.Auth;
+using SysWeaver.FolderSync;
 using SysWeaver.Net;
 
 namespace SysWeaver.MicroService
@@ -11,7 +16,7 @@ namespace SysWeaver.MicroService
 
     public partial class FolderSyncService
     {
-        internal sealed class PushFolder
+        internal sealed class ManagedFolder
         {
 
 
@@ -30,9 +35,9 @@ namespace SysWeaver.MicroService
             /// </summary>
             public readonly String[] OnNewFolder;
 
-            public FolderPushFolder.ActivationHandler OnActivateAsync;
-            public FolderPushFolder.ActivationHandler OnDeactivateAsync;
-            public FolderPushFolder.ActivationHandler OnNewFolderAsync;
+            public FsManagedFolder.ActivationHandler OnActivateAsync;
+            public FsManagedFolder.ActivationHandler OnDeactivateAsync;
+            public FsManagedFolder.ActivationHandler OnNewFolderAsync;
 
             public readonly String LockName;
             public readonly String Name;
@@ -47,6 +52,8 @@ namespace SysWeaver.MicroService
             /// </summary>
             public readonly bool Compress;
 
+            public readonly FolderPullFolder PullFolder;
+
             static String[] ParseCommands(String s, IReadOnlyDictionary<String, String> extra)
             {
                 if (String.IsNullOrEmpty(s))
@@ -60,8 +67,9 @@ namespace SysWeaver.MicroService
                 return r;
             }
 
-            public PushFolder(string name, string path, string auth, TimeSpan removeAfter, FolderPushFolder fs)
+            public ManagedFolder(string name, string path, string auth, TimeSpan removeAfter, FsManagedFolder fs, FolderPullFolder pullFolder)
             {
+                PullFolder = pullFolder;
                 Name = name;
                 var tp = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                 DestPath = tp + Path.DirectorySeparatorChar;
@@ -74,7 +82,7 @@ namespace SysWeaver.MicroService
                     Auth = Roles.AdminOps,
                     ClientCacheDuration = 5,
                     RequestCacheDuration = 4,
-                    WebFolder = "FolderSync/Folders/" + name,
+                    WebFolder = String.Concat("FolderSync/", nameof(FolderSyncParams.ManagedFolders), '/', name),
                     DiscFolder = tp,
                 };
                 var x = new Dictionary<String, String>(StringComparer.Ordinal)
@@ -93,12 +101,25 @@ namespace SysWeaver.MicroService
                 OnNewFolderAsync = fs.OnNewFolderAsync;
                 Compress = fs.Compress;
             }
+
         }
 
 
 
+        internal sealed class SharedFile
+        {
+            public override string ToString() => File.Name;
+            public readonly FolderSyncFile File;
+            public readonly ReadOnlyMemory<Byte> ChunkHashes;
 
-        internal sealed class PullFolder
+            public SharedFile(FolderSyncFile file, ReadOnlyMemory<byte> chunkHashes)
+            {
+                File = file;
+                ChunkHashes = chunkHashes;
+            }
+        }
+
+        internal sealed class SharedFolder
         {
             public readonly String LockName;
             public readonly String Name;
@@ -106,7 +127,7 @@ namespace SysWeaver.MicroService
             public readonly IReadOnlyList<String> Auth;
             public readonly FileHttpServerModuleFolder ModFolder;
 
-            public PullFolder(string name, string path, string auth)
+            public SharedFolder(string name, string path, string auth)
             {
                 Name = name;
                 var tp = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -119,11 +140,49 @@ namespace SysWeaver.MicroService
                     Auth = auth == null ? null : String.Join(',', auth),
                     ClientCacheDuration = 5,
                     RequestCacheDuration = 4,
-                    WebFolder = "FolderSync/PullFolders/" + name,
+                    WebFolder = String.Concat("FolderSync/", nameof(FolderSyncParams.SharedFolders), '/', name),
                     DiscFolder = tp,
                 };
-
             }
+
+            public async ValueTask<bool> UpdateFiles()
+            {
+                var files = new ConcurrentDictionary<String, SharedFile>(StringComparer.Ordinal);
+                try
+                {
+                    var dp = DestPath;
+                    var dl = dp.Length;
+                    var src = Directory.GetFiles(dp, "*", SearchOption.AllDirectories);
+                    await src.ProcessAsyncValue(async fn =>
+                    {
+                        var fi = new FileInfo(fn);
+                        var lname = fn.Substring(dl).Replace(Path.DirectorySeparatorChar, '/');
+                        var hash = await FileHash.GetHashAsync(fn).ConfigureAwait(false);
+                        var data = await ContentDependentChunking.Cut(fn, CdcProps.Default).ConfigureAwait(false);
+                        files.TryAdd(lname, new SharedFile(new FolderSyncFile
+                        {
+                            Name = lname,
+                            Hash = hash,
+                            LastModified = fi.LastWriteTimeUtc,
+                        }, data));
+                    }).ConfigureAwait(false);
+                }
+                catch
+                {
+                }
+                var t = files.Values.Select(x => x.File).OrderBy(x => x.Name).ToList();
+                var version = FolderSyncer.ComputeCombinedHash(t.Select(x => x.Name).ToList(), t.Select(x => x.Hash).ToList());
+                if (!(Files?.Item1?.FastEquals(version) ?? false))
+                {
+                    Files = Tuple.Create(version, files.Freeze());
+                    return true;
+                }
+                return false;
+            }
+
+            public volatile Tuple<String, IReadOnlyDictionary<String, SharedFile>> Files;
+
+
         }
 
     }

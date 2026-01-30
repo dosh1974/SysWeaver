@@ -4,54 +4,54 @@
         <name>SwSyncTool</name>
     </assembly>
     <members>
-        <member name="F:SwSyncTool.SwSyncToolProgram.Params.Comment">
+        <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.Comment">
             <summary>
             [Sync]
             Optional comment to use when synching to a remote repository.
             </summary>
         </member>
-        <member name="F:SwSyncTool.SwSyncToolProgram.Params.Ignore">
+        <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.Ignore">
             <summary>
             [Sync]
             One or more (separated by a ;) wild card patterns of files to ignore ("*.pdb" for instance).
             </summary>
         </member>
-        <member name="F:SwSyncTool.SwSyncToolProgram.Params.IgnoreCertErrors">
+        <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.IgnoreCertErrors">
             <summary>
             [Sync]
             If true, and server cert errors are ignored. NOT reccomended!
             </summary>
         </member>
-        <member name="F:SwSyncTool.SwSyncToolProgram.Params.MaxConcurrency">
+        <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.MaxConcurrency">
             <summary>
             [Sync]
             The maximum concurrency to use, zero or negative is based on the number of hardware threads.
             </summary>
         </member>
-        <member name="F:SwSyncTool.SwSyncToolProgram.Params.NoActivate">
+        <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.NoActivate">
             <summary>
             [Sync]
             If true, the synched folder won't be activated.
             </summary>
         </member>
-        <member name="F:SwSyncTool.SwSyncToolProgram.Params.NoCdc">
+        <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.NoCdc">
             <summary>
             [Sync]
             If true, Content Dependency Chunking optimizations won't be used.
             </summary>
         </member>
-        <member name="F:SwSyncTool.SwSyncToolProgram.Params.OutputDir">
+        <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.OutputDir">
             <summary>
             [Compact, Expand and Recover] 
             Optional output directory.
             </summary>
         </member>
-        <member name="F:SwSyncTool.SwSyncToolProgram.Params.Folders">
+        <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.Folders">
             <summary>
             (Advanced) One or more folders (separated by a semi colon ';'), that will be used for chunk storage.
             </summary>
         </member>
-        <member name="F:SwSyncTool.SwSyncToolProgram.Params.ChunkSize">
+        <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.ChunkSize">
             <summary>
             (Advanced) Optionally specify a chunk size, must be a power of two.
             </summary>

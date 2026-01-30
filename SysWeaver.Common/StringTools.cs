@@ -1114,6 +1114,34 @@ namespace SysWeaver
 
 
         /// <summary>
+        /// Split a string into two parts on the last occurance of a char.
+        /// Example:
+        /// var right = "name@example.com".SplitLast('.', out var left);
+        /// left = "name@example";
+        /// right = "com";
+        /// </summary>
+        /// <param name="value">The value to split into two parts</param>
+        /// <param name="split">The character to split</param>
+        /// <param name="left">The left part, null if the split char isn't found</param>
+        /// <returns>null if the value is null, else the right part (if the split char isn't found, the original string is returned)</returns>
+        public static String SplitLast(this String value, Char split, out String left)
+        {
+            if (String.IsNullOrEmpty(value))
+            {
+                left = null;
+                return value;
+            }
+            var p = value.LastIndexOf(split);
+            if (p < 0)
+            {
+                left = null;
+                return value;
+            }
+            left = value.Substring(0, p);
+            return value.Substring(p + 1);
+        }
+
+        /// <summary>
         /// Split a string into two parts (keeping the left part) on the first occurance of a char.
         /// Example:
         /// "name@example.com".SplitFirst('@') => "name"
@@ -1131,7 +1159,24 @@ namespace SysWeaver
             return value.Substring(0, p);
         }
 
-
+        /// <summary>
+        /// Split a string into two parts on the last occurance of a char.
+        /// Example:
+        /// var right = "name@example.com".SplitLast('.');
+        /// right = "com";
+        /// </summary>
+        /// <param name="value">The value to split into two parts</param>
+        /// <param name="split">The character to split</param>
+        /// <returns>null if the value is null, else the right part (if the split char isn't found, the original string is returned)</returns>
+        public static String SplitLast(this String value, Char split)
+        {
+            if (String.IsNullOrEmpty(value))
+                return value;
+            var p = value.LastIndexOf(split);
+            if (p < 0)
+                return value;
+            return value.Substring(p + 1);
+        }
 
         struct SecureCount
         {

@@ -43,7 +43,7 @@ namespace SysWeaver.MicroService
         {
         }
 
-        internal SmVersionDetail(SmServiceInfo info, FolderSyncService.PushData s) : base(s)
+        internal SmVersionDetail(SmServiceInfo info, FolderSyncService.ManagedFolderData s) : base(s)
         {
             ServiceName = info.Syncher.Name;
             Count = s.Count;

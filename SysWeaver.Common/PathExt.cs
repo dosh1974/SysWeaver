@@ -896,13 +896,19 @@ namespace SysWeaver
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         public static Exception TryFolderSwap(String targetFolder, String backupFolder, String newFolder, int retryCount = 10, int delayInMs = 100)
         {
-            var ex = TryMoveFolder(targetFolder, backupFolder, retryCount, delayInMs);
-            if (ex != null)
-                return ex;
+            Exception ex;
+            bool didBak = Directory.Exists(targetFolder);
+            if (didBak)
+            {
+                ex = TryMoveFolder(targetFolder, backupFolder, retryCount, delayInMs);
+                if (ex != null)
+                    return ex;
+            }
             ex = TryMoveFolder(newFolder, targetFolder, retryCount, delayInMs);
             if (ex == null)
                 return null;
-            TryMoveFolder(backupFolder, targetFolder);
+            if (didBak)
+                TryMoveFolder(backupFolder, targetFolder);
             return ex;
         }
 
@@ -916,13 +922,19 @@ namespace SysWeaver
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         public static async ValueTask<Exception> TryFolderSwapAsync(String targetFolder, String backupFolder, String newFolder, int retryCount = 10, int delayInMs = 100)
         {
-            var ex = await TryMoveFolderAsync(targetFolder, backupFolder, retryCount, delayInMs).ConfigureAwait(false);
-            if (ex != null)
-                return ex;
+            Exception ex;
+            bool didBak = Directory.Exists(targetFolder);
+            if (didBak)
+            {
+                ex = await TryMoveFolderAsync(targetFolder, backupFolder, retryCount, delayInMs).ConfigureAwait(false);
+                if (ex != null)
+                    return ex;
+            }
             ex = await TryMoveFolderAsync(newFolder, targetFolder, retryCount, delayInMs).ConfigureAwait(false);
             if (ex == null)
                 return null;
-            await TryMoveFolderAsync(backupFolder, targetFolder).ConfigureAwait(false);
+            if (didBak)
+                await TryMoveFolderAsync(backupFolder, targetFolder).ConfigureAwait(false);
             return ex;
         }
 

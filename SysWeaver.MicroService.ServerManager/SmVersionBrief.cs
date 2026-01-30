@@ -12,7 +12,7 @@ namespace SysWeaver.MicroService
         {
         }
 
-        internal SmVersionBrief(FolderSyncService.PushData s)
+        internal SmVersionBrief(FolderSyncService.ManagedFolderData s)
         {
             Name = s.DiscFolder;
             IsActive = s.IsActive;
