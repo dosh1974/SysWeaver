@@ -61,8 +61,9 @@ namespace SysWeaver.FolderSync
 
         public static String ComputeCombinedHash(IReadOnlyList<String> fileNames, IReadOnlyList<String> hashStrings)
         {
-            var h = MD5.Create();
             var count = hashStrings.Count;
+            if (count <= 0)
+                return "Empty";
             int maxL = 0;
             for (int i = 0; i < count; ++ i)
             {
@@ -77,6 +78,7 @@ namespace SysWeaver.FolderSync
             Byte[] data = new Byte[mem];
             var e = Encoding.ASCII;
             --count;
+            var h = MD5.Create();
             int l;
             for (int i = 0; i < count; ++ i)
             {

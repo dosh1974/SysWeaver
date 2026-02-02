@@ -83,22 +83,27 @@ namespace SysWeaver.AI
 
 
         #endregion//Image
-        
+
         #region Token 
 
 
         /// <summary>
         /// The path of downloaded token files, see:
         /// https://github.com/aiqinxuancai/TiktokenSharp
-        /// Can use path variables, ex:
+        /// Can use path variables, env variables, ex:
         ///             $(CommonApplicationData) = The directory that serves as a common repository for application-specific data that is used by all users.
         ///             $(LocalApplicationData) = The directory that serves as a common repository for application-specific data that is used by the current, non-roaming user.
         ///             $(ApplicationData) = The directory that serves as a common repository for application-specific data for the current roaming user (typically settings that should be shared between systems).
         ///             $(MyPictures) = The My Pictures folder.
-        ///             $(AppName) = Application name.
-        ///             $(Executable) = Full path to the executable.
-        ///             $(ExecutableDir) = ExecutableDir.
-        ///             $(ExecutableBase) = Full path to the folder where the application is.
+        ///             $(Executable) = Full path to the executable, ex: "C:\MyServices\MyService.exe"
+        ///             $(ExeAppName) = Name of the executable, ex: "MyService" (this can be different from AppName)
+        ///             $(ExecutableDir) = ExecutableDir, ex: "C:\MyServices"
+        ///             $(ExecutableBase) = Full path to the executable, excluding it's extensions, ex: "C:\MyServices\MyService"
+        ///             $(AppName) = Application name (defaults to exe app name, can be changed in config), ex: "MyService".
+        ///             $(AppGuid) = A "unique" id for this process
+        ///             $(AppDisplayName) = Friendly application name (defaults to de-camel cased exe app name, can be changed in config), ex: "My service".
+        ///             $(MachineName) = Machine name, ex: "DESKTOP-324VHA".
+        ///             $(KeyFolder) = The folder where keys are stored. ex: "C:\Keys".
         /// </summary>
         public String TokenCacheFolder = @"$(CommonApplicationData)\SysWeaver_Tiktoken\";
 
