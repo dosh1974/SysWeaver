@@ -133,19 +133,17 @@ namespace SysWeaver.Net
             { "HEAD", HttpServerMethods.HEAD },
         }.Freeze();
 
-        protected HttpServerRequest(String httpMethod, String url, String prefix, HttpServerBase server, Uri uri, HttpServerHostInfo host)
+        protected HttpServerRequest(String httpMethod, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart)
         {
             Method = httpMethod;
-            var m = ((httpMethod != null) && IntMethods.TryGetValue(httpMethod, out var hm)) ? hm : HttpServerMethods.Other;
+            var m = IntMethods.TryGetValue(httpMethod ?? "", out var hm) ? hm : HttpServerMethods.Other;
             HttpMethod = m;
             IsHead = m == HttpServerMethods.HEAD;
             Url = url;
-            Uri = uri;
             Prefix = prefix;
             var pl = prefix.Length;
-            var qs = url.IndexOf('?', pl);
-            QueryStringStart = qs + 1;
-            LocalUrl = qs < 0 ? url.Substring(pl) : url.Substring(pl, qs - pl);
+            QueryStringStart = queryStart + 1;
+            LocalUrl = queryStart < 0 ? url.Substring(pl) : url.Substring(pl, queryStart - pl);
             Server = server;
             Host = host;
         }
@@ -156,13 +154,6 @@ namespace SysWeaver.Net
         {
             Session = session;
         }
-
-
-        /// <summary>
-        /// The uri of the reuqest
-        /// </summary>
-        public readonly Uri Uri;
-
 
         /// <summary>
         /// Custom data

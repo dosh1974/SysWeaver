@@ -276,11 +276,14 @@ namespace SysWeaver.Net
             return HttpServerTools.AlreadyHandled;
         }
 
+        static readonly Char[] HostEnd = ['/', ':'];
+
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
-            var host = context.Uri.Host;
             if (context.LocalUrl.FastStartsWith(TableDataConsts.ExternalInfoPath))
                 return ExternalInfoHandler(context);
+
+            var host = context.Host.Name;
             var c = Cache;
             var cs = CaseSensitive;
             if (!c.TryGetValue(host, out var fn))

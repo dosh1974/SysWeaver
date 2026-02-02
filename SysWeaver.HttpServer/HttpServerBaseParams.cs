@@ -55,11 +55,6 @@ namespace SysWeaver.Net
         public String[] Variables;
 
         /// <summary>
-        /// True to be case sensitive
-        /// </summary>
-        public bool CaseSensitive = true;
-
-        /// <summary>
         /// Remove any added firewall rules upon exit
         /// </summary>
         public bool RemoveFirewallOnExit = true;

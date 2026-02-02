@@ -5,15 +5,16 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Diagnostics;
 using System.Collections.Specialized;
+using System.Collections.Generic;
 
 namespace SysWeaver.Net
 {
     public sealed class NetHttpServerRequest : HttpServerRequest, IDisposable
     {
-        public NetHttpServerRequest(HttpListenerContext context, String url, String prefix, HttpServerBase server, Uri uri, HttpServerHostInfo host, String newMethod = null) 
+        public NetHttpServerRequest(HttpListenerContext context, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart, String newMethod = null) 
             : base(
                     newMethod ?? context.Request.HttpMethod,
-                    url, prefix, server, uri, host)
+                    url, prefix, server, host, queryStart)
         {
             Context = context;
             var req = context.Request;
@@ -66,22 +67,21 @@ namespace SysWeaver.Net
         public override void SetResStatusCode(int statusCode) => Res.StatusCode = statusCode;
 
 
-        public override String GetReqCookie(String name)
+
+        IReadOnlyDictionary<String, String> Cookies;
+
+        IReadOnlyDictionary<String, String> ReadCookies()
         {
-            String s = ReqHeaders["Cookie"];
-            if (s == null)
-                return null;
-            name += "=";
-            var i = s.IndexOf(name, StringComparison.Ordinal);
-            if (i < 0)
-                return null;
-            i += name.Length;
-            var end = s.IndexOf(';', i);
-            if (end < 0)
-                end = s.Length;
-            return s.Substring(i, end - i);
+            var t = HttpServerTools.ParseCookieString(ReqHeaders["Cookie"]);
+            Cookies = t;
+            return t;
         }
 
+        public override String GetReqCookie(String name)
+        {
+            (Cookies ?? ReadCookies()).TryGetValue(name, out var cookie);
+            return cookie;
+        }
 
         public override void UpdateCookie(String n, String value, DateTime exp, String path = "/;HttpOnly")
         {

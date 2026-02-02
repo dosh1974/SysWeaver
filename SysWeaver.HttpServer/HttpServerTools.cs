@@ -219,6 +219,132 @@ namespace SysWeaver.Net
         }
 
 
+        /*
+        /// <summary>
+        /// Parses the cookies found in the supplied strings and add's it key values to the dictionary
+        /// </summary>
+        /// <param name="cookies"></param>
+        /// <param name="newCookieStr"></param>
+        public static void AddCookieString(Dictionary<String, String> cookies, String newCookieStr)
+        {
+            int start = 0;
+            for (; ; )
+            {
+                var e = newCookieStr.IndexOf('=', start);
+                if (e < 0)
+                    break;
+                var key = Trimmed(newCookieStr, start, e);
+                start = e + 1;
+                e = newCookieStr.IndexOf(';', start);
+                if (e < 0)
+                {
+                    var value = Trimmed(newCookieStr, start, newCookieStr.Length);
+                    cookies[key] = value;
+                    break;
+                }
+                var val = Trimmed(newCookieStr, start, e);
+                cookies[key] = val;
+                start = e + 1;
+            }
+        }
+
+        static String Trimmed(String s, int start, int end)
+        {
+            while (start < end)
+            {
+                if (!Char.IsWhiteSpace(s[start]))
+                    break;
+                ++start;
+            }
+            while (end > start)
+            {
+                --end;
+                if (!Char.IsWhiteSpace(s[end]))
+                {
+                    ++end;
+                    break;
+                }
+            }
+            return s.Substring(start, end - start);
+        }
+
+        */
+
+
+        static readonly FastMemCache<String, IReadOnlyDictionary<String, String>> CookieCache = new(TimeSpan.FromMinutes(1), StringComparer.Ordinal);
+
+
+
+        /// <summary>
+        /// Parses the cookies found in the supplied strings and created a dictionary
+        /// </summary>
+        /// <param name="newCookieStr"></param>
+        public static IReadOnlyDictionary<String, String> ParseCookieString(String newCookieStr)
+            => CookieCache.GetOrUpdate(newCookieStr ?? "", IntParseCookieString);
+
+        static unsafe IReadOnlyDictionary<String, String> IntParseCookieString(String newCookieStr)
+        {
+            var cookies = new Dictionary<String, String>(StringComparer.Ordinal);
+            var sp = newCookieStr.AsSpan();
+            fixed (Char* s = sp)
+            {
+                var start = s;
+                var end = s + sp.Length;
+                for (; ; )
+                {
+                    var e = IntIndexOf('=', start, end);
+                    if (e == null)
+                        break;
+                    var key = Trimmed(start, e);
+                    start = e + 1;
+                    e = IntIndexOf(';', start, end);
+                    if (e == null)
+                    {
+                        var value = Trimmed(start, end);
+                        cookies[key] = value;
+                        break;
+                    }
+                    var val = Trimmed(start, e);
+                    cookies[key] = val;
+                    start = e + 1;
+                }
+            }
+            return cookies.Freeze();
+        }
+
+        static unsafe Char* IntIndexOf(Char f, Char* start, Char* end)
+        {
+            while (start < end)
+            {
+                if ((*start) == f)
+                    return start;
+                ++start;
+            }
+            return null;
+        }
+
+
+        static unsafe String Trimmed(Char* start, Char* end)
+        {
+            while (start < end)
+            {
+                if (!Char.IsWhiteSpace(*start))
+                    break;
+                ++start;
+            }
+            while (end > start)
+            {
+                --end;
+                if (!Char.IsWhiteSpace(*end))
+                {
+                    ++end;
+                    break;
+                }
+            }
+            return new string(start, 0, (int)(end - start));
+        }
+
+
     }
 
 

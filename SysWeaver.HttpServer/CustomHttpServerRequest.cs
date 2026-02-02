@@ -8,8 +8,8 @@ namespace SysWeaver.Net
     public sealed class CustomHttpServerRequest : HttpServerRequest
     {
 
-        public CustomHttpServerRequest(String httpMethod = null, String url = "", String prefix = "", HttpServerBase server = null, Uri uri = null, HttpServerHostInfo host = null)
-            : base(httpMethod, url, prefix, server, uri, host)
+        public CustomHttpServerRequest(String httpMethod, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart)
+            : base(httpMethod, url, prefix, server, host, queryStart)
         { 
         }
 

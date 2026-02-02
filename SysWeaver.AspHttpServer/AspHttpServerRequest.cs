@@ -11,10 +11,10 @@ namespace SysWeaver.Net
 {
     public sealed class AspHttpServerRequest : HttpServerRequest, IDisposable
     {
-        public AspHttpServerRequest(HttpContext context, String url, String prefix, AspHttpServer server, Uri uri, HttpServerHostInfo host, String newMethod = null)
+        public AspHttpServerRequest(HttpContext context, String url, String prefix, AspHttpServer server, HttpServerHostInfo host, int queryStart, String newMethod = null)
             : base(
                     newMethod ?? context.Request.Method,
-                    url, prefix, server, uri, host)
+                    url, prefix, server, host, queryStart)
         {
             Context = context;
             Req = context.Request;
@@ -67,82 +67,20 @@ namespace SysWeaver.Net
 
         IReadOnlyDictionary<String, String> Cookies;
 
-        static readonly IReadOnlyDictionary<String, String> Empty = new Dictionary<String, String>(StringComparer.Ordinal).Freeze();
-
-
-        static String Trimmed(String s, int start, int end)
-        {
-            while (start < end)
-            {
-                if (!Char.IsWhiteSpace(s[start]))
-                    break;
-                ++start;
-            }
-            while (end > start)
-            {
-                --end;
-                if (!Char.IsWhiteSpace(s[end]))
-                {
-                    ++end;
-                    break;
-                }
-            }
-            return s.Substring(start, end - start);
-        }
-
-
         IReadOnlyDictionary<String, String> ReadCookies()
         {
-            var s = Req.Headers.Cookie;
-            var c = s.Count;
-            if (c <= 0)
-            {
-                var e = Empty;
-                Cookies = e;
-                return e;
-            }
-            var t = new Dictionary<String, String>(c, StringComparer.Ordinal);
-            foreach (var x in s)
-            {
-                int start = 0;
-                for (; ; )
-                {
-                    var e = x.IndexOf('=', start);
-                    if (e < 0)
-                        break;
-                    var key = Trimmed(x, start, e);
-                    start = e + 1;
-                    e = x.IndexOf(';', start);
-                    if (e < 0)
-                    {
-                        var value = Trimmed(x, start, x.Length);
-                        t[key] = value;
-                        break;
-                    }
-                    var val = Trimmed(x, start, e);
-                    t[key] = val;
-                    start = e + 1;
-                }
-            }
+            var t = HttpServerTools.ParseCookieString(Req.Headers.Cookie.FirstOrDefault());
             Cookies = t;
             return t;
         }
 
         public override String GetReqCookie(String name)
         {
-            var cookies = Cookies;
-            if (cookies == null)
-                cookies = ReadCookies();
-            cookies.TryGetValue(name, out var cookie);
+            (Cookies ?? ReadCookies()).TryGetValue(name, out var cookie);
             return cookie;
         }
 
         const String DefPath = "/;HttpOnly";
-
-        static readonly CookieOptions DefCock = new CookieOptions
-        {
-            Path = DefPath,
-        };
 
         public override void UpdateCookie(String n, String value, DateTime exp, String path = DefPath)
         {
@@ -153,13 +91,11 @@ namespace SysWeaver.Net
             var maxAge = (long)(exp - now).TotalSeconds;
             var str = maxAge <= 0 ? HttpServerTools.MakeCookie(n, "", 0, path) : HttpServerTools.MakeCookie(n, value, maxAge, path);
             Res.Headers.Append("Set-Cookie", str);
-            Cok[n] = str;
         }
 
 
 
-        readonly Dictionary<String, String> Cok = new (StringComparer.Ordinal);
-        readonly Dictionary<String, String> Head = new (StringComparer.Ordinal);
+        Dictionary<String, String> Head;
 
         public override void SetResBody(ReadOnlySpan<Byte> data)
         {
@@ -177,7 +113,13 @@ namespace SysWeaver.Net
         public override void SetResHeader(String header, String value)
         {
             Res.Headers[header] = value;
-            Head[header] = value;  
+            var h = Head;
+            if (h == null)
+            {
+                h = new Dictionary<string, string>(StringComparer.Ordinal);
+                Head = h;
+            }
+            h[header] = value;  
         }
 
         public override IPAddress GetIP()
@@ -234,8 +176,10 @@ namespace SysWeaver.Net
                 }
             }
             pool.Return(toDelete);
-            foreach (var h in Head)
-                toh.Append(h.Key, h.Value);
+            var hs = Head;
+            if (hs != null)
+                foreach (var h in hs)
+                    toh.Append(h.Key, h.Value); 
             to.ContentLength = Cl;
             to.ContentType = Mime;
             to.StatusCode = Status;

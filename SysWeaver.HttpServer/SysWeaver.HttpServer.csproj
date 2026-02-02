@@ -5,6 +5,7 @@
 	  <RootNamespace>SysWeaver.Net</RootNamespace>
 	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
 	  <NoWarn>1701;1702;1591</NoWarn>
+	  <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

@@ -10,9 +10,10 @@ namespace SysWeaver.Net
         public readonly String Name;
 
 //        public HttpServerHostInfo(String name, StringTree prefixes)
-        public HttpServerHostInfo(String name, FrozenStringTree prefixes)
+        public HttpServerHostInfo(String name, FrozenStringTree prefixes, String prefix)
         {
             Name = name;
+            Prefix = prefix;
             Prefixes = prefixes;
         }
         /// <summary>
@@ -20,7 +21,11 @@ namespace SysWeaver.Net
         /// </summary>
         //public readonly StringTree Prefixes;
         public readonly FrozenStringTree Prefixes;
-        
+
+        /// <summary>
+        ///  If there is a single prefix this is set
+        /// </summary>
+        public readonly String Prefix;
 
         /// <summary>
         /// Modules can assign custom data that should be associated with a host

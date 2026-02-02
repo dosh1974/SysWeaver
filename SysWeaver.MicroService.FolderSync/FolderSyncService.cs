@@ -69,7 +69,7 @@ namespace SysWeaver.MicroService
 
         public async Task<ReadOnlyMemory<byte>> GetDataAsync(HttpServerRequest context)
         {
-            if (!context.Method.FastEquals("POST"))
+            if (context.HttpMethod != HttpServerMethods.POST)
                 return FalseValue;
             var x = context.LocalUrl.Split('/');
             var len = x.Length;

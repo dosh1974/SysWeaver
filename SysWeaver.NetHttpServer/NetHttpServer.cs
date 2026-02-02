@@ -41,7 +41,6 @@ namespace SysWeaver.Net
             var listenOn = p.ListenOn;
             if ((listenOn == null) || (listenOn.Length <= 0) || (listenOn[0] == null))
                 listenOn = [HttpServerPrefix.DefaultExternalHttps];
-            var cs = p.CaseSensitive;
             HttpListener l = new HttpListener();
             var duration = TimeSpan.FromMinutes(5);
             var timeOut = l.TimeoutManager;
@@ -100,8 +99,6 @@ namespace SysWeaver.Net
                 pre = HttpServerPrefix.FixPrefix(pre);
                 if (String.IsNullOrEmpty(pre))
                     continue;
-                if (!cs)
-                    pre = pre.FastToLower();
                 if (!seen.Add(pre))
                     continue;
                 if ((cp == null) && pre.FastStartsWith("https://"))
@@ -196,11 +193,10 @@ namespace SysWeaver.Net
         protected override HttpServerRequest ReplaceUrl(HttpServerRequest s, string newUrl, String newMethod = null)
         {
             var o = s as NetHttpServerRequest;
-            var uri = new Uri(newUrl);
-            var host = GetHost(out var prefix, out var url, uri);
+            var host = GetHost(out var prefix, out var queryStart, ref newUrl);
             if (prefix == null)
                 return null;
-            var h = new NetHttpServerRequest(o.Context, url, prefix, this, uri, host, newMethod);
+            var h = new NetHttpServerRequest(o.Context, newUrl, prefix, this, host, queryStart, newMethod);
             h.Init(s.Session);
             return h;
         }
@@ -411,16 +407,16 @@ namespace SysWeaver.Net
                         await HandlePaused(req, res).ConfigureAwait(false);
                         return;
                     }
-                    var uri = req.Url ?? DummyUri;
-                    var host = GetHost(out var prefix, out url, uri);
+                    url = req.Url.AbsoluteUri;
+                    var host = GetHost(out var prefix, out var queryStart, ref url);
                     if (prefix == null)
                     {
                         await Handle404(req, res).ConfigureAwait(false);
                         return;
                     }
-                    using var data = new NetHttpServerRequest(c, url, prefix, this, uri, host);
+                    using var data = new NetHttpServerRequest(c, url, prefix, this, host, queryStart);
                     data.SetResHeader("Server", "");
-                    await Handle(data, url).ConfigureAwait(false);
+                    await Handle(data).ConfigureAwait(false);
                 }
                 catch (HttpListenerException ex)
                 {

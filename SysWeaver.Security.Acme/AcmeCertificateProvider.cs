@@ -591,9 +591,7 @@ namespace SysWeaver.Security
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             var l = context.LocalUrl;
-            //if (!l.FastStartsWith(ChallengeDir))
-                //return null;
-            if (!context.Uri.Scheme.FastEquals("http"))
+            if (!context.Url.FastStartsWith("http://"))
                 return null;
             var key = l.Substring(CdLength);
             if (!Tokens.TryGetValue(key, out var token))

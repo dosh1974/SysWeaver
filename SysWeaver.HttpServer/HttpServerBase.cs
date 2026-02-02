@@ -89,7 +89,6 @@ namespace SysWeaver.Net
             AllowAuthorizationAuth = p.AllowAuthorizationAuth;
             LogoutRedirect = p.LogoutRedirect;
             ListenerExceptionType = listenerExceptionType;
-            CaseSensitive = p.CaseSensitive;
             FirstCertRetryMinutes = Math.Max(1, p.FirstCertRetryMinutes);
             CertRetryMinutes = Math.Max(1, p.CertRetryMinutes);
 
@@ -951,7 +950,7 @@ namespace SysWeaver.Net
 #endif//DEBUG
 
 
-        protected async ValueTask Handle(HttpServerRequest data, String url)
+        protected async ValueTask Handle(HttpServerRequest data)
         {
             var rateLimiter = ServerLimits;
             if ((rateLimiter != null) && (await rateLimiter.IsOverTheLimit().ConfigureAwait(false)))
@@ -1024,6 +1023,7 @@ namespace SysWeaver.Net
             using var _ = newData as IDisposable;
             if (isHead && AllowAuthorizationAuth)
                 data.SetResHeader("Access-Control-Allow-Headers", "Authorization");
+            var url = data.Url;
             try
             {
                 //  Auth required
@@ -1568,8 +1568,6 @@ namespace SysWeaver.Net
             }
         }
 
-        public readonly bool CaseSensitive;
-
         #region Cert
 
         /// <summary>
@@ -1639,6 +1637,28 @@ namespace SysWeaver.Net
 
         protected void SetPrefixes(IEnumerable<HttpServerPrefix> prefixes, bool haveFirewall)
         {
+            var pp = prefixes.ToArray();
+            foreach (var prefix in pp)
+            {
+                var n = prefix.Prefix;
+                if (n.FastStartsWith("http://"))
+                {
+                    n = n.Replace(":80/", "");
+                    if (n.FastEndsWith(":80"))
+                        n = n.Substring(0, n.Length - 3);
+                    prefix.Prefix = n;
+                    continue;
+                }
+                if (n.FastStartsWith("https://"))
+                {
+                    n = n.Replace(":443/", "");
+                    if (n.FastEndsWith(":443"))
+                        n = n.Substring(0, n.Length - 4);
+                    prefix.Prefix = n;
+                    continue;
+                }
+            }
+            Prefixes = pp;
             var msg = Msg;
             if (haveFirewall)
             {
@@ -1653,7 +1673,7 @@ namespace SysWeaver.Net
                     using var t = msg?.Tab();
                     {
                         var remove = FirewallRules;
-                        foreach (var prefix in prefixes)
+                        foreach (var prefix in pp)
                         {
                             if (!prefix.AddToFirewall)
                                 continue;
@@ -1672,7 +1692,6 @@ namespace SysWeaver.Net
                     }
                 }
             }
-            Prefixes = prefixes.ToArray();
         }
 
         #endregion//Firewall
@@ -1885,24 +1904,25 @@ namespace SysWeaver.Net
                 }
                 var dn = DeviceIdCookieName;
                 String deviceId = req.GetReqCookie(dn);
+                var cookieOpt = CookieOptions;
                 if (deviceId == null)
                 {
-                    using var rng = SecureRng.Get();
-                    deviceId = rng.GetGuid24() + DateTime.UtcNow.Ticks.ToString("x").PadLeft(16, '0');
+                    Span<Byte> span = stackalloc Byte[16 + 8];
+                    using (var rng = SecureRng.Get())
+                        rng.GetBytes(span[..16]);
+                    BitConverter.TryWriteBytes(span[16..], DateTime.UtcNow.Ticks);
+                    deviceId = Convert.ToBase64String(span);
+                    req.UpdateCookie(dn, deviceId, DateTime.MaxValue, cookieOpt);
                 }
-                var cookieOpt = CookieOptions;
-                req.UpdateCookie(dn, deviceId, DateTime.MaxValue, cookieOpt);
 
                 var ua = req.GetReqHeader("User-Agent") ?? "";
                 var prot = req.ProtocolVersion;
                 var extLife = SessionExtendLifetime;
                 var ip = req.GetIpAddress();
-                var et = sessionToken;
                 var rateLimiterParams = SessionLimits;
                 do
                 {
-                    sessionToken = et ?? GetSessionGuid();
-                    et = null;
+                    sessionToken = GetSessionGuid();
                     session = new HttpSession(rateLimiterParams, sessionToken, now, extLife, ua, ip, prot, deviceId);
                 } while (!sessions.TryAdd(sessionToken, session));
                 session.LanguageTimeStamp = DateTime.UtcNow;
@@ -2030,10 +2050,15 @@ namespace SysWeaver.Net
             {
                 if (!hosts.TryGetValue(hostName, out var host))
                 {
-
-                    var caseInSensitive = !CaseSensitive;
-                    //host = new HttpServerHostInfo(hostName, StringTree.Build(Prefixes.Select(x => x.Prefix.Replace("*", hostName)), caseInSensitive));
-                    host = new HttpServerHostInfo(hostName, FrozenStringTree.Build(Prefixes.Select(x => x.Prefix.Replace("*", hostName)), caseInSensitive));
+                    var pr = Prefixes;
+                    if (pr.Length == 1)
+                    {
+                        host = new HttpServerHostInfo(hostName, null, pr[0].Prefix.Replace("*", hostName).TrimEnd('/') + '/');
+                    }
+                    else
+                    {
+                        host = new HttpServerHostInfo(hostName, FrozenStringTree.Build(pr.Select(x => x.Prefix.Replace("*", hostName).TrimEnd('/') + '/')), null);
+                    }
                     hosts[hostName] = host;
                 }
                 return host;
@@ -2042,7 +2067,7 @@ namespace SysWeaver.Net
 
 
         // TODO: Optimize (remove uri?)
-        protected HttpServerHostInfo GetHost(out String prefix, out String url, Uri uri)
+        /*protected HttpServerHostInfo GetHost(out String prefix, out String url, Uri uri)
         {
             var hostName = uri.Host.FastToLower();
             var rootUrl = String.Concat(uri.Scheme, "://", hostName, ':', uri.Port, uri.LocalPath);
@@ -2055,8 +2080,43 @@ namespace SysWeaver.Net
             prefix = host.Prefixes.StartsWithAny(url);
             url += uri.Query;
             return host;
-        }
+        }*/
 
+        static readonly SearchValues<Char> HostEnd = SearchValues.Create(['/', ':', '?' ]);
+
+        // TODO: Optimize (remove uri?)
+        protected HttpServerHostInfo GetHost(out String prefix, out int queryStart, ref String url)
+        {
+            var s = url.AsSpan();
+            var start = s.IndexOf("://", StringComparison.Ordinal) + 3;
+            var end = s.Slice(start).IndexOfAny(HostEnd);
+            if (end < 0)
+                end = url.Length;
+            else
+                end += start;
+            
+            var hostName = url.Substring(start, end - start).FastToLower();
+            if (!Hosts.TryGetValue(hostName, out var host))
+                host = CreateHost(hostName);
+            prefix = host.Prefix ?? host.Prefixes.StartsWithAny(url);
+            ++end;
+            queryStart = s.Slice(end).IndexOf('?');
+            if (queryStart < 0)
+            {
+                var ul = url.Length;
+                if (url[ul - 1] == '/')
+                    url += "index.html";
+            }else
+            {
+                queryStart += end;
+                if (url[queryStart - 1] == '/')
+                {
+                    url = String.Concat(url.Substring(0, queryStart), "index.html", url.Substring(queryStart));
+                    queryStart += 10;
+                }
+            }
+            return host;
+        }
 
         #region Error tracking
 

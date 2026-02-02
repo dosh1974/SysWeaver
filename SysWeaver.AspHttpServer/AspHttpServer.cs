@@ -121,7 +121,6 @@ namespace SysWeaver.Net
             var listenOn = p.ListenOn;
             if ((listenOn == null) || (listenOn.Length <= 0) || (listenOn[0] == null))
                 listenOn = [HttpServerPrefix.DefaultExternalHttps];
-            var cs = p.CaseSensitive;
             var services = new ServiceCollection();
             //ServiceList = services;
             var duration = TimeSpan.FromMinutes(5);
@@ -183,8 +182,6 @@ namespace SysWeaver.Net
                     pre = HttpServerPrefix.FixPrefix(pre);
                     if (String.IsNullOrEmpty(pre))
                         continue;
-                    if (!cs)
-                        pre = pre.FastToLower();
                     if (!seen.Add(pre))
                         continue;
                     var ex = ValidatePrefix(out var port, out var scheme, out var isLocal, out var ip, pre);
@@ -305,11 +302,10 @@ namespace SysWeaver.Net
         protected override HttpServerRequest ReplaceUrl(HttpServerRequest s, string newUrl, String newMethod = null)
         {
             var o = s as AspHttpServerRequest;
-            var uri = new Uri(newUrl);
-            var host = GetHost(out var prefix, out var url, uri);
+            var host = GetHost(out var prefix, out var queryStart, ref newUrl);
             if (prefix == null)
                 return null;
-            var h = new AspHttpServerRequest(o.Context, url, prefix, this, uri, host, newMethod);
+            var h = new AspHttpServerRequest(o.Context, newUrl, prefix, this, host, queryStart, newMethod);
             h.Init(s.Session);
             return h;
         }
@@ -524,15 +520,15 @@ namespace SysWeaver.Net
                         await HandlePause(req, res).ConfigureAwait(false);
                         return;
                     }
-                    var uri = new Uri(req.GetDisplayUrl());
-                    var host = GetHost(out var prefix, out url, uri);
+                    url = req.GetDisplayUrl();
+                    var host = GetHost(out var prefix, out var queryStart, ref url);
                     if (prefix == null)
                     {
                         await HandleInvalidPrefix(req, res).ConfigureAwait(false);
                         return;
                     }
-                    using var data = new AspHttpServerRequest(c, url, prefix, this, uri, host);
-                    await Handle(data, url).ConfigureAwait(false);
+                    using var data = new AspHttpServerRequest(c, url, prefix, this, host, queryStart);
+                    await Handle(data).ConfigureAwait(false);
                 }
                 catch (HttpListenerException ex)
                 {
