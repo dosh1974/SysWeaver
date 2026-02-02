@@ -16,12 +16,15 @@ namespace SysWeaver
     ///             $(ApplicationData) = The directory that serves as a common repository for application-specific data for the current roaming user (typically settings that should be shared between systems).
     ///             $(MyPictures) = The My Pictures folder.
     /// Env info variables:
-    ///             $(ExeAppName) = Name of the executable.
-    ///             $(Executable) = Full path to the executable.
-    ///             $(ExecutableDir) = ExecutableDir.
-    ///             $(ExecutableBase) = Full path to the folder where the application is.
-    ///             $(AppInstance) = A "unique" id for this process
-    ///             $(KeyFolder) = The folder where keys are stored.
+    ///             $(Executable) = Full path to the executable, ex: "C:\MyServices\MyService.exe"
+    ///             $(ExeAppName) = Name of the executable, ex: "MyService" (this can be different from AppName)
+    ///             $(ExecutableDir) = ExecutableDir, ex: "C:\MyServices"
+    ///             $(ExecutableBase) = Full path to the executable, excluding it's extensions, ex: "C:\MyServices\MyService"
+    ///             $(AppName) = Application name (defaults to exe app name, can be changed in config), ex: "MyService".
+    ///             $(AppGuid) = A "unique" id for this process
+    ///             $(AppDisplayName) = Friendly application name (defaults to de-camel cased exe app name, can be changed in config), ex: "My service".
+    ///             $(MachineName) = Machine name, ex: "DESKTOP-324VHA".
+    ///             $(KeyFolder) = The folder where keys are stored. ex: "C:\Keys".
     /// </summary>
     public static class PathTemplate
     {
@@ -41,13 +44,16 @@ namespace SysWeaver
         /// <param name="template">The template, variables start with "$(" and ends with ")".</param>
         /// <param name="extra">Optional extra variables. If case insesitive is specified, all keys will be lower-cased</param>
         /// <param name="caseInSensitive">If true the variable names is case in-sensitive</param>
-        /// <param name="useEnv">Variable from EnvInfo.TextVars is available:
-        ///             $(ExeAppName) = Name of the executable.
-        ///             $(Executable) = Full path to the executable.
-        ///             $(ExecutableDir) = ExecutableDir.
-        ///             $(ExecutableBase) = Full path to the folder where the application is.
-        ///             $(AppInstance) = A "unique" id for this process
-        ///             $(KeyFolder) = The folder where keys are stored.
+        /// <param name="useEnv">Variable from EnvInfo.TextVars is available, examples:
+        ///             $(Executable) = Full path to the executable, ex: "C:\MyServices\MyService.exe"
+        ///             $(ExeAppName) = Name of the executable, ex: "MyService" (this can be different from AppName)
+        ///             $(ExecutableDir) = ExecutableDir, ex: "C:\MyServices"
+        ///             $(ExecutableBase) = Full path to the executable, excluding it's extensions, ex: "C:\MyServices\MyService"
+        ///             $(AppName) = Application name (defaults to exe app name, can be changed in config), ex: "MyService".
+        ///             $(AppGuid) = A "unique" id for this process
+        ///             $(AppDisplayName) = Friendly application name (defaults to de-camel cased exe app name, can be changed in config), ex: "My service".
+        ///             $(MachineName) = Machine name, ex: "DESKTOP-324VHA".
+        ///             $(KeyFolder) = The folder where keys are stored. ex: "C:\Keys".
         /// </param>
         /// <returns>The resolved path</returns>
         public static String Resolve(String template, IReadOnlyDictionary<String, String> extra = null, bool caseInSensitive = true, bool useEnv = true)

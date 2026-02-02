@@ -296,6 +296,10 @@ namespace SysWeaver
                     { nameof(Environment.OSVersion.Platform), Environment.OSVersion.Platform.ToString() },
                     { nameof(Environment.MachineName), Environment.MachineName },
                     { (nameof(Environment.MachineName) + "Cased"), Environment.MachineName.FastToLower().MakeFirstUppercase() },
+                    { nameof(ExeAppName), ExeAppName },
+                    { nameof(Executable), Executable },
+                    { nameof(ExecutableDir), ExecutableDir },
+                    { nameof(ExecutableBase), ExecutableBase },
                     { nameof(Folders.KeyFolder), Folders.KeyFolder},
                 }.Freeze();
                 InternalTextVars = v;
@@ -342,6 +346,10 @@ namespace SysWeaver
                     { nameof(Environment.OSVersion.Platform).FastToLower(), Environment.OSVersion.Platform.ToString() },
                     { nameof(Environment.MachineName).FastToLower(), Environment.MachineName },
                     { (nameof(Environment.MachineName) + "Cased").FastToLower(), Environment.MachineName.FastToLower().MakeFirstUppercase() },
+                    { nameof(ExeAppName).FastToLower(), ExeAppName },
+                    { nameof(Executable).FastToLower(), Executable },
+                    { nameof(ExecutableDir).FastToLower(), ExecutableDir },
+                    { nameof(ExecutableBase).FastToLower(), ExecutableBase },
                     { nameof(Folders.KeyFolder).FastToLower(), Folders.KeyFolder},
 
                 }.Freeze();
