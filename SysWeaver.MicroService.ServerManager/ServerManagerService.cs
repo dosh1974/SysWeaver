@@ -8,6 +8,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using SysWeaver.Auth;
 using SysWeaver.Data;
 using SysWeaver.FolderSync;
 using SysWeaver.Net;
@@ -69,7 +70,7 @@ namespace SysWeaver.MicroService
             foreach (var f in p.Folders.Nullable())
             {
                 f.Auth = f.Auth ?? p.SyncAuth;
-                s.AddManagedFolder(f);
+                s.AddManagedFolder(f).RunAsync();
             }
 
             var destFolders = PathTemplate.Resolve(String.IsNullOrEmpty(p.ServiceFolder) ? @"$(CommonApplicationData)\SysWeaver\ManagedServices" : p.ServiceFolder).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

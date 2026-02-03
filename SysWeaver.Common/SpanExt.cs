@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 
 namespace SysWeaver
 {
@@ -16,14 +15,14 @@ namespace SysWeaver
             {
                 ulong* aa = (ulong*)a;
                 ulong* bb = (ulong*)b;
-                for (int i = 0; i < ulCount; ++ i)
+                for (int i = 0; i < ulCount; ++i)
                 {
                     if (aa[i] != bb[i])
                         return false;
                 }
-                for (int i = ulCount << 3; i < arrayLength; ++ i)
+                for (int i = ulCount << 3; i < arrayLength; ++i)
                 {
-                    if (a[i] != b[i]) 
+                    if (a[i] != b[i])
                         return false;
                 }
             }
@@ -57,7 +56,7 @@ namespace SysWeaver
                 return String.Empty;
             var h = HexChars;
             Span<Char> temp = stackalloc Char[l + l];
-            for (int i = 0, o = 0; i < l; ++ i)
+            for (int i = 0, o = 0; i < l; ++i)
             {
                 var b = data[i];
                 temp[o] = h[b >> 4];
@@ -70,5 +69,6 @@ namespace SysWeaver
 
 
     }
+
 
 }

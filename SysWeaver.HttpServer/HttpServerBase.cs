@@ -2084,7 +2084,45 @@ namespace SysWeaver.Net
 
         static readonly SearchValues<Char> HostEnd = SearchValues.Create(['/', ':', '?' ]);
 
-        // TODO: Optimize (remove uri?)
+        protected unsafe HttpServerHostInfo GetHost(out String prefix, out int queryStart, ref String url)
+        {
+            var urlSpan = url.AsSpan();
+            var urlLen = urlSpan.Length;
+            fixed (Char* urlStart = urlSpan)
+            {
+                var urlEnd = urlStart+ urlLen;
+                var pos = urlStart;
+                var start = CharPtrTools.IndexOf("://", pos, urlEnd) + 3;
+                var end = CharPtrTools.IndexOfAny(HostEnd, start, urlEnd);
+                if (end == null)
+                    end = urlEnd;
+                var hostName = CharPtrTools.ToLowerCaseString(start, (int)(end - start));
+                if (!Hosts.TryGetValue(hostName, out var host))
+                    host = CreateHost(hostName);
+                prefix = host.Prefix ?? host.Prefixes.StartsWithAny(url);
+                ++end;
+                var qs = CharPtrTools.IndexOf('?', end, urlEnd);
+                if (qs == null)
+                {
+                    queryStart = -1;
+                    if (urlStart[urlLen - 1] == '/')
+                        url += "index.html";
+                }
+                else
+                {
+                    queryStart = (int)(qs - urlStart);
+                    if (urlStart[queryStart - 1] == '/')
+                    {
+                        url = urlSpan[..queryStart].ConcatToString("index.html", urlSpan[queryStart..]);
+                        queryStart += 10;
+                    }
+                }
+                return host;
+            }
+        }
+
+
+        /*
         protected HttpServerHostInfo GetHost(out String prefix, out int queryStart, ref String url)
         {
             var s = url.AsSpan();
@@ -2117,6 +2155,7 @@ namespace SysWeaver.Net
             }
             return host;
         }
+        */
 
         #region Error tracking
 

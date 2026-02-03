@@ -292,19 +292,19 @@ namespace SysWeaver.Net
                 var end = s + sp.Length;
                 for (; ; )
                 {
-                    var e = IntIndexOf('=', start, end);
+                    var e = CharPtrTools.IndexOf('=', start, end);
                     if (e == null)
                         break;
-                    var key = Trimmed(start, e);
+                    var key = CharPtrTools.ToTrimmedString(start, e);
                     start = e + 1;
-                    e = IntIndexOf(';', start, end);
+                    e = CharPtrTools.IndexOf(';', start, end);
                     if (e == null)
                     {
-                        var value = Trimmed(start, end);
+                        var value = CharPtrTools.ToTrimmedString(start, end);
                         cookies[key] = value;
                         break;
                     }
-                    var val = Trimmed(start, e);
+                    var val = CharPtrTools.ToTrimmedString(start, e);
                     cookies[key] = val;
                     start = e + 1;
                 }
@@ -312,37 +312,8 @@ namespace SysWeaver.Net
             return cookies.Freeze();
         }
 
-        static unsafe Char* IntIndexOf(Char f, Char* start, Char* end)
-        {
-            while (start < end)
-            {
-                if ((*start) == f)
-                    return start;
-                ++start;
-            }
-            return null;
-        }
 
 
-        static unsafe String Trimmed(Char* start, Char* end)
-        {
-            while (start < end)
-            {
-                if (!Char.IsWhiteSpace(*start))
-                    break;
-                ++start;
-            }
-            while (end > start)
-            {
-                --end;
-                if (!Char.IsWhiteSpace(*end))
-                {
-                    ++end;
-                    break;
-                }
-            }
-            return new string(start, 0, (int)(end - start));
-        }
 
 
     }
