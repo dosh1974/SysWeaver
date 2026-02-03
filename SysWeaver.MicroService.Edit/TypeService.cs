@@ -12,6 +12,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Threading.Tasks;
 using SysWeaver.Translation;
+using SysWeaver.Auth;
 
 [assembly: SysWeaver.ResourceOrder(-100)]
 

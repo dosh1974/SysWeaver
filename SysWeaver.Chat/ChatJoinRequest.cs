@@ -1,4 +1,5 @@
 ﻿using System;
+using SysWeaver.Net;
 
 namespace SysWeaver.Chat
 {
@@ -80,6 +81,11 @@ namespace SysWeaver.Chat
         public bool CanClear;
 
         /// <summary>
+        /// True if this user can post messages to the chat
+        /// </summary>
+        public bool CanPost;
+
+        /// <summary>
         /// If true, the clear operation don't pop-up a confirmation
         /// </summary>
         public bool DoNotConfirmClear;
@@ -105,7 +111,15 @@ namespace SysWeaver.Chat
         /// <summary>
         /// Array of user to voice mappings
         /// </summary>
-        public ChatVoice[] Voices;
+        public ChatVoice[] Voices = 
+            [ 
+                new ChatVoice
+                {
+                    Language = "en-GB",
+                    Pitch = 1.1f,
+                    Rate = 1.15f,
+                }
+            ];
 
         /// <summary>
         /// If true, speech should be enabled by default
@@ -132,6 +146,7 @@ namespace SysWeaver.Chat
         /// </summary>
         public bool CanShowProfile;
 
+
         /// <summary>
         /// If non-empty and a IUserStorage is available, files can be uploaded
         /// </summary>
@@ -142,7 +157,32 @@ namespace SysWeaver.Chat
         /// </summary>
         public bool AllowPublicStore;
 
+        public ChatJoinResponse()
+        {
+        }
 
+        public ChatJoinResponse(ChatSessionParams r, HttpSession session, ChatMessage[] messages, IUserStorageService storage = null)
+        {
+            var a = session?.Auth;
+            var canPost = r.CanPost(a);
+            var repo = canPost ? r.UploadRepo : null;
+            UserName = ChatTools.GetUsername(session);
+            MaxTextLength = 4096;
+            MaxDataLength = 2048;
+            Lang = session.Language;
+            Messages = messages;
+            CanClear = canPost && r.CanClear(a);
+            CanRemove = r.CanRemove(a);
+            CanPost = canPost;
+            SpeechName = String.IsNullOrEmpty(r.SpeechName) ? null : [r.SpeechName];
+            EnableSpeechByDefault = r.EnableSpeechByDefault;
+            MaxDataCount = Math.Max(0, r.MaxDataCount);
+            AllowMarkDown = r.AllowUserMarkDown;
+            CanStore = r.AllowStore && canPost;
+            CanTranslate = r.CanTranslate;
+            CanShowProfile = r.CanShowProfile && (r.OnlyShowProfileIfPostIsAllowed ? canPost : true);
+            UploadRepo = (!String.IsNullOrEmpty(repo)) && (storage != null) && (a != null) && (r.MaxDataCount > 0) ? repo : null;
+        }
     }
 
 }

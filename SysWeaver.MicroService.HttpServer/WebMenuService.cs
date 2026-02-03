@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using SysWeaver.Translation;
+using SysWeaver.Auth;
 
 namespace SysWeaver.MicroService
 {

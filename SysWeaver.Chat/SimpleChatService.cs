@@ -15,42 +15,6 @@ namespace SysWeaver.Chat
 
     public sealed class SimpleChatRoom : ChatSessionParams
     {
-        /// <summary>
-        /// Name of the room
-        /// </summary>
-        public String Name;
-
-        /// <summary>
-        /// If non-null speech input will be enabled, listening to this keyword.
-        /// </summary>
-        public String SpeechName = "All";
-
-        /// <summary>
-        /// If true, enable speech by default
-        /// </summary>
-        public bool EnableSpeechByDefault;
-
-        /// <summary>
-        /// If true, the user may input markdown text (client is allowed to send the message with the MarkDown format).
-        /// </summary>
-        public bool AllowUserMarkDown = true;
-
-        /// <summary>
-        /// Allow storing files and links on the server (requires a UserStore).
-        /// </summary>
-        public bool AllowStore = true;
-
-        /// <summary>
-        /// If true, the server supports message translation (to the users language)
-        /// </summary>
-        public bool CanTranslate = true;
-
-        /// <summary>
-        /// If true, enable the menu option to show a user profile
-        /// </summary>
-        public bool CanShowProfile;
-
-
     }
 
     public sealed class SimpleChatParams
@@ -122,12 +86,19 @@ namespace SysWeaver.Chat
                 var a = Authorization.GetRequiredTokens(room.Auth);
                 Auth = a;
                 AuthString = a == null ? "everyone" : (a.Count <= 0 ? "any logged in user" : ("any user with any token of: " + String.Join(", ", a)));
+                a = Authorization.GetRequiredTokens(room.PostAuth ?? room.Auth);
+                PostAuth = a;
+                PostAuthString = a == null ? "everyone" : (a.Count <= 0 ? "any logged in user" : ("any user with any token of: " + String.Join(", ", a)));
+
             }
             public readonly SimpleChatRoom R;
 
             public readonly String AuthString;
-                
             public readonly IReadOnlyList<String> Auth;
+
+            public readonly String PostAuthString;
+            public readonly IReadOnlyList<String> PostAuth;
+
             public readonly List<ChatMessage> Messages = new List<ChatMessage>();
             public readonly Dictionary<long, ChatMessage> MessageLookup = new Dictionary<long, ChatMessage>();
             public long MsgId;
@@ -144,10 +115,15 @@ namespace SysWeaver.Chat
                 throw new ArgumentException("No chat room named " + providerChatId.ToQuoted(), nameof(providerChatId));
             var auth = request.Session?.Auth;
             if (auth == null)
+            {
                 if (room.Auth != null)
                     throw new Exception("Session is not authorized to acccess room " + providerChatId.ToQuoted());
-            if (!auth.IsValid(room.Auth))
-                throw new Exception("Session is not authorized to acccess room " + providerChatId.ToQuoted());
+            }
+            else
+            {
+                if (!auth.IsValid(room.Auth))
+                    throw new Exception("Session is not authorized to acccess room " + providerChatId.ToQuoted());
+            }
             return room;
         }
 
@@ -288,21 +264,7 @@ namespace SysWeaver.Chat
             var session = request.Session;
             var a = session.Auth;
             var msgs = InternalGetMessages(room, a?.Guid, pivotId, maxCount);
-            var r = room.R;
-            return Task.FromResult(new ChatJoinResponse
-            {
-                UserName = ChatTools.GetUsername(session),
-                Lang = session.Language,
-                Messages = msgs,
-                CanClear = r.CanClear(a),
-                CanRemove = r.CanRemove(a),
-                SpeechName = String.IsNullOrEmpty(r.SpeechName) ? null : [r.SpeechName],
-                EnableSpeechByDefault = r.EnableSpeechByDefault,
-                AllowMarkDown = r.AllowUserMarkDown,
-                CanStore = r.AllowStore,
-                CanTranslate = r.CanTranslate,
-                CanShowProfile = r.CanShowProfile,
-            });
+            return Task.FromResult(new ChatJoinResponse(room.R, session, msgs));
         }
 
         public Task<ChatMessage> GetChatMessage(String providerChatId, long messageId, HttpServerRequest request)
@@ -319,9 +281,11 @@ namespace SysWeaver.Chat
         public Task<bool> UserMessage(string providerChatId, HttpServerRequest request, ChatMessageBody message)
         {
             var room = GetAuthenticatedRoom(out var c, providerChatId, request);
+            var session = request.Session;
+            if (!room.R.CanPost(session.Auth))
+                throw new Exception("Not allowed to post messages to the chat session!");
             if ((message.Format == ChatMessageFormats.MarkDown) && (!room.R.AllowUserMarkDown))
                 throw new ArgumentException("Users may not send MarkDown messages!", nameof(message.Format));
-            var session = request.Session;
             ChatMessage m;
             lock (room)
             {

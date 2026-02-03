@@ -616,7 +616,7 @@ namespace SysWeaver.MicroService
             var userPath = parts[0 + r];
             var scopeS = parts[1 + r];
             var rngFlags = parts[2 + r];
-            var filename = parts[4 + r];
+            var filename = Uri.UnescapeDataString(parts[4 + r]);
             var fname = Path.Combine(
                 paths[shardIndex],
                 userPath,

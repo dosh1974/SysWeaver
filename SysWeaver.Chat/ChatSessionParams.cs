@@ -10,6 +10,13 @@ namespace SysWeaver.Chat
         /// </summary>
         public String Auth = "";
 
+
+        /// <summary>
+        /// Auth required to post a message, null to use Auth
+        /// </summary>
+        public String PostAuth;
+
+
         /// <summary>
         /// Auth required to clear the chat room.
         /// Use '-' to disable everyone from clearing it.
@@ -27,12 +34,75 @@ namespace SysWeaver.Chat
         /// </summary>
         public String RemoveAnyAuth = "Admin";
 
+
+        /// <summary>
+        /// Name of the room
+        /// </summary>
+        public String Name;
+
+        /// <summary>
+        /// If non-null, continous speech input will be enabled, listening to this keyword.
+        /// </summary>
+        public String SpeechName;
+
+        /// <summary>
+        /// If true, enable speech by default
+        /// </summary>
+        public bool EnableSpeechByDefault;
+
+        /// <summary>
+        /// If true, the user may input markdown text (client is allowed to send the message with the MarkDown format).
+        /// </summary>
+        public bool AllowUserMarkDown = true;
+
+        /// <summary>
+        /// Allow storing files and links on the server (requires a UserStore).
+        /// </summary>
+        public bool AllowStore = true;
+
+        /// <summary>
+        /// If true, the server supports message translation (to the users language)
+        /// </summary>
+        public bool CanTranslate = true;
+
+        /// <summary>
+        /// If true, enable the menu option to show a user profile
+        /// </summary>
+        public bool CanShowProfile;
+
+        /// <summary>
+        /// If true, only enable the show porfile option if the user may post new messages
+        /// </summary>
+        public bool OnlyShowProfileIfPostIsAllowed = true;
+
+
+        /// <summary>
+        /// If non-empty and a IUserStorage is available, files can be uploaded
+        /// </summary>
+        public String UploadRepo;
+
+        /// <summary>
+        /// The maximum number of data items
+        /// </summary>
+        public int MaxDataCount = 10;
+
+
+
+
+
         /// <summary>
         /// Check if the supplied auth (of the user making the request) can join this session
         /// </summary>
         /// <param name="auth">The auth of the user making the request</param>
         /// <returns>True if the user should be able to join</returns>
         public bool CanJoin(Authorization auth) => auth.IsValid(Auth);
+
+        /// <summary>
+        /// Check if the supplied auth (of the user making the request) can join this session
+        /// </summary>
+        /// <param name="auth">The auth of the user making the request</param>
+        /// <returns>True if the user should be able to join</returns>
+        public bool CanPost(Authorization auth) => auth.IsValid(PostAuth ?? Auth);
 
         /// <summary>
         /// Check if the supplied auth (of the user making the request) can clear this session

@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Web;
 using System.IO;
 using System.Linq;
+using SysWeaver.Auth;
 
 namespace SysWeaver.MicroService
 {
@@ -221,7 +222,7 @@ namespace SysWeaver.MicroService
             if (a != null)
             {
                 var au = context.Session?.Auth;
-                if (!(au?.IsValid(a) ?? false))
+                if (!au.IsValid(a))
                     return ArrayExt.Create(req.Files.Length, FileRepoTools.NotAuthorized);
             }
             return await repo.Item1.CanFileBeUploaded(req.Files, context).ConfigureAwait(false);

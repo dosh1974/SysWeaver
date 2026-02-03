@@ -117,6 +117,11 @@ namespace SysWeaver.Chat
                 var a = Authorization.GetRequiredTokens(room.Auth);
                 Auth = a;
                 AuthString = a == null ? "everyone" : (a.Count <= 0 ? "any logged in user" : ("any user with any token of: " + String.Join(", ", a)));
+                a = Authorization.GetRequiredTokens(room.PostAuth ?? room.Auth);
+                PostAuth = a;
+                PostAuthString = a == null ? "everyone" : (a.Count <= 0 ? "any logged in user" : ("any user with any token of: " + String.Join(", ", a)));
+
+
                 TableName = ToTableName(room.Name);
                 var l = room.ServiceLimiter;
                 ServerLimiter = l == null ? null : new HttpRateLimiter(l);
@@ -163,6 +168,9 @@ namespace SysWeaver.Chat
             public readonly MySqlChatRoom R;
             public readonly String AuthString;
             public readonly IReadOnlyList<String> Auth;
+
+            public readonly String PostAuthString;
+            public readonly IReadOnlyList<String> PostAuth;
         }
 
         async ValueTask EnsureRoom(Room r)
@@ -237,10 +245,15 @@ namespace SysWeaver.Chat
             }
             var auth = request.Session?.Auth;
             if (auth == null)
+            {
                 if (room.Auth != null)
                     throw new Exception("Session is not authorized to acccess room " + providerChatId.ToQuoted());
-            if (!auth.IsValid(room.Auth))
-                throw new Exception("Session is not authorized to acccess room " + providerChatId.ToQuoted());
+            }
+            else
+            {
+                if (!auth.IsValid(room.Auth))
+                    throw new Exception("Session is not authorized to acccess room " + providerChatId.ToQuoted());
+            }
             return room;
         }
 
@@ -412,26 +425,7 @@ namespace SysWeaver.Chat
             var session = request.Session;
             var a = session.Auth;
             var msgs = await InternalGetMessages(room, a?.Guid, pivotId, maxCount).ConfigureAwait(false);
-            var r = room.R;
-            var repo = r.UploadRepo;
-            return new ChatJoinResponse
-            {
-                UserName = ChatTools.GetUsername(session),
-                MaxTextLength = 4096,
-                MaxDataLength = 2048,
-                Lang = session.Language,
-                Messages = msgs,
-                CanClear = r.CanClear(a),
-                CanRemove = r.CanRemove(a),
-                SpeechName = String.IsNullOrEmpty(r.SpeechName) ? null : [r.SpeechName],
-                EnableSpeechByDefault = r.EnableSpeechByDefault,
-                MaxDataCount = Math.Max(0, r.MaxDataCount),
-                AllowMarkDown = r.AllowUserMarkDown,
-                CanStore = r.AllowStore,
-                CanTranslate = r.CanTranslate,
-                CanShowProfile = r.CanShowProfile,
-                UploadRepo = (!String.IsNullOrEmpty(repo)) && (Storage != null) && (a != null) && (r.MaxDataCount > 0) ? repo : null,
-            };
+            return new ChatJoinResponse(room.R, session, msgs, Storage);
         }
 
         public async Task<ChatMessage> GetChatMessage(String providerChatId, long messageId, HttpServerRequest request)
@@ -457,10 +451,12 @@ namespace SysWeaver.Chat
         public async Task<bool> UserMessage(string providerChatId, HttpServerRequest request, ChatMessageBody message)
         {
             var room = await GetAuthenticatedRoom(providerChatId, request).ConfigureAwait(false);
+            var session = request.Session;
+            if (!room.R.CanPost(session.Auth))
+                throw new Exception("Not allowed to post messages to the chat session!");
             var l = room.ServerLimiter;
             if ((l != null) && (await l.IsOverTheLimit().ConfigureAwait(false)))
                 throw new HttpResponseException(429);
-            var session = request.Session;
             l = room.SessionRateLimiter(session);
             if ((l != null) && (await l.IsOverTheLimit().ConfigureAwait(false)))
                 throw new HttpResponseException(429);

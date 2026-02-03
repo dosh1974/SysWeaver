@@ -433,15 +433,17 @@ class SpeechInput {
     static triggerOnSpeech(keyword, onActivate, onSentance, language, ignoreKeyword, noOpenMic) {
 
         const keywordMap = new Map();
-        if (Array.isArray(keyword)) {
-            keyword.forEach(x => {
-                const kv = x.split('|');
-                keywordMap.set(kv[0].toLowerCase(), kv.length > 1 ? kv[1] : "");
+        if (keyword) {
+            if (Array.isArray(keyword)) {
+                keyword.forEach(x => {
+                    const kv = x.split('|');
+                    keywordMap.set(kv[0].toLowerCase(), kv.length > 1 ? kv[1] : "");
 
-            });
-        } else {
-            const kv = keyword.split('|');
-            keywordMap.set(kv[0].toLowerCase(), kv.length > 1 ? kv[1] : "");
+                });
+            } else {
+                const kv = keyword.split('|');
+                keywordMap.set(kv[0].toLowerCase(), kv.length > 1 ? kv[1] : "");
+            }
         }
         const keywordArray = Array.from(keywordMap.keys());
         const keywords = keywordArray.join(",");
@@ -808,30 +810,16 @@ class Chat {
 
         const chatE = document.createElement("SysWeaver-ChatMain");
 
-        let initSize = localStorage.getItem(sizeKey);
-        new ResizeObserver(ev => {
-            const f = chatE.offsetHeight / chatBackground.offsetHeight;
-            localStorage.setItem(sizeKey, "" + f);
-        }).observe(chatE);
-
+        let initSize;
 
         chatBackground.appendChild(chatE);
 
-        const chatInput = document.createElement("SysWeaver-ChatInput");
-        chatBackground.appendChild(chatInput);
 
-
-
-        const write = document.createElement("textarea");
-        chatInput.appendChild(write);
-
-//        write.placeholder = _TF("Write your text here..", "A placeholder text for an input box where a user can enter a text message for a chat");
+        //  Hide show
 
         const titleVisible = _TF("Click to hide message content and future message content from {0}", "A tool tip message for a buttan that when clicked will hide the content of a specific chat message and all further messages from that user.{0} is replaced with the user name. ");
         const titleHidden = _TF("Click to show message content and future message content from {0}", "A tool tip message for a buttan that when clicked will show the hidden content of a specific chat message and all continue to show all further messages from that user.{0} is replaced with the user name. ");
-
         let showTimeStamp = localStorage.getItem(timeStampName) === "true";
-
         const hideFrom = new Map();
         const hideData = localStorage.getItem(hideName);
         if (hideData) {
@@ -839,16 +827,11 @@ class Chat {
             if (Array.isArray(ha))
                 ha.forEach(x => hideFrom.set(x, 1));
         }
-
         const hiddenClass = "Hidden";
 
         function isHidden(name) {
             return hideFrom.get(name) === 1;
         }
-
-        const inputHistory = [];
-        let inputHistoryPos = 0;
-        let inputCurrent = "";
 
         /**
          * Hide or show a message from a user
@@ -870,185 +853,7 @@ class Chat {
         }
 
 
-        let isSending = false;
-        /**
-         * Send the message
-         * @param {boolean} doFocus If true, the input box will be focused when done
-         * @returns
-         */
-        async function Send(doFocus) {
-            const t = write.value.trim();
-            const d = previewMessage.Data;
-            if ((!t) && (!d))
-                return;
-            if (isSending)
-                return;
-            isSending = true;
 
-            send.StartWorking();
-
-            inputHistory.push(t);
-            const hl = inputHistory.length;
-            if (hl > 100)
-                inputHistory.splice(0, hl - 100);
-            inputHistoryPos = 0;
-            inputCurrent = "";
-
-            const wp = write.placeholder;
-            if (d) {
-                previewMessage.Data = null;
-                previewElement.UpdateData(null);
-            }
-            write.placeholder = t;
-            write.value = "";
-            write.readOnly = true;
-            write.NextLast = write.value.length;
-            setPreviewText(null);
-            try {
-                if (await sendRequest(apiBase + "UserMessage", {
-                    ChatId: chatId,
-                    Body: {
-                        Format: useMarkDown ? 1 : 0,
-                        Data: d,
-                        Text: t,
-                        Lang: currentLang,
-                    },
-                })) {
-                    tempFiles.clear();
-                    StickForAwhile();
-                    return;
-                }
-                Fail(_TF("Failed to send message.", "An error message shown when a user tries to send a chat message but the server returns a failure"));
-                if ((!write.value) || (write.value === "")) {
-                    previewMessage.Data = d;
-                    write.value = t;
-                }
-            }
-            catch (e) {
-                Fail(_TF("Failed to send message.", "An error message shown when a user tries to send a chat message but the server returns a failure") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                if ((!write.value) || (write.value === "")) {
-                    previewMessage.Data = d;
-                    write.value = t;
-                }
-            }
-            finally {
-                isSending = false;
-                send.StopWorking();
-                sendEnable();
-                write.readOnly = false;
-                write.placeholder = wp;
-                if (doFocus !== "NoFocus")
-                    write.focus();
-            }
-        }
-
-        let isInternalUpdate = false;
-
-        /** Set the input text from a history value */
-        function SetFromHistory() {
-            isInternalUpdate = true;
-            if (inputHistoryPos === 0) {
-                write.value = inputCurrent;
-                write.NextLast = write.value.length;
-                sendEnable();
-                isInternalUpdate = false;
-                return;
-            }
-            if (inputHistoryPos === -1) {
-                write.value = "";
-                write.NextLast = write.value.length;
-                sendEnable();
-                isInternalUpdate = false;
-                return;
-            }
-            write.value = inputHistory[inputHistory.length - inputHistoryPos];
-            write.NextLast = write.value.length;
-            sendEnable();
-            isInternalUpdate = false;
-        }
-
-        write.onfocus = function () {
-            write.scrollIntoView({ behavior: "smooth" })
-        }
-
-        write.onkeydown = async e => {
-            if (!e.altKey)
-                return;
-            if (e.ctrlKey || e.metaKey || e.shiftKey)
-                return;
-            if (isSending)
-                return;
-            //  Pure alt
-            if (e.key === "Enter") {
-                await Send();
-                return;
-            }
-            if (e.key == "ArrowUp") {
-                if (inputHistoryPos >= inputHistory.length)
-                    return;
-                ++inputHistoryPos;
-                SetFromHistory();
-                return;
-            }
-            if (e.key == "ArrowDown") {
-                if (inputHistoryPos <= -1)
-                    return;
-                --inputHistoryPos;
-                SetFromHistory();
-                return;
-            }
-
-
-        };
-
-        const send = new ColorIcon("IconSend", "IconColorThemeAcc1", options.SendIconSize, options.SendIconSize, _TF("Click to send the message", "A tool tip description on a button that when clicked will send the entered chat message to the server"), Send);
-        chatInput.appendChild(send.Element);
-        let listen = null;
-        if (SpeechInput.supportSpeechRec()) {
-            listen = new ColorIcon("IconChatMicOn", "IconColorThemeAcc1", options.AudioIconSize, options.AudioIconSize, _TF("Click to listen for speech input using the selected language", "A tool tip description on a button that when clicked will start listening to speech input"), () => {
-                startListening(true, true);
-            });
-            chatInput.appendChild(listen.Element);
-        }
-
-        let previewElement = null;
-        let canSend = null;
-        /** Called to enable/disable the send button (every time the input text changes) */
-        function sendEnable() {
-            const t = write.value.trim();
-            const d = previewMessage.Data;
-            canSend = (t && (t.length > 0)) || d;
-            if (canSend) {
-                localStorage.setItem(inputSaveKey, t);
-                if (d)
-                    localStorage.setItem(dataSaveKey, d);
-                else
-                    localStorage.removeItem(dataSaveKey);
-            }
-            else {
-                localStorage.removeItem(inputSaveKey);
-                localStorage.removeItem(dataSaveKey);
-            }
-            setPreviewText(canSend ? t : null);
-            send.SetEnabled(canSend);
-        }
-
-        const start = localStorage.getItem(inputSaveKey);
-        if (start) {
-            write.value = start;
-            write.NextLast = write.value.length;
-        }
-
-        const onInputChangeFn = () => {
-            sendEnable();
-            if (!isInternalUpdate) {
-                inputHistoryPos = 0;
-                inputCurrent = write.value;
-            }
-        };
-
-
-        write.oninput = onInputChangeFn;
 
 
 
@@ -1057,9 +862,39 @@ class Chat {
             MaxCount: 10,
             FromId: 0,
         });
-        const currentImage = "../auth/UserImages/" + data.UserGuid + "/small";
 
+        const canPost = data.CanPost;
+
+        if (!canPost)
+            chatE.classList.add("NoPost");
+        const userName = data.UserName;
+        const currentImage = "../auth/UserImages/" + data.UserGuid + "/small";
         const canTranslate = data.CanTranslate;
+        const msg = data.Messages;
+        const workingAttribute = "Working";
+        const sl = localStorage.getItem(langSaveKey);
+        let currentLang = data.Lang;
+        if (sl) {
+            if (sl === data.Lang)
+                localStorage.removeItem(langSaveKey);
+            else
+                currentLang = sl;
+        }
+
+        const commandMap = new Map();
+        const tempFiles = new Map();
+
+        let useMarkDown = false;
+        let canSend = null;
+        let previewMessage;
+        let uploadFiles;
+        let markDownChanged;
+        let showPreview;
+        let previewChanged;
+        let selectLanguage;
+        let stopListening;
+        let startListening;
+        let clearCurrentMessage;
 
         //  Load dynamic dependencies
         const deps = [];
@@ -1078,33 +913,606 @@ class Chat {
         }
 
 
-
-        const sl = localStorage.getItem(langSaveKey);
-        let currentLang = data.Lang;
-        if (sl) {
-            if (sl === data.Lang)
-                localStorage.removeItem(langSaveKey);
-            else
-                currentLang = sl;
-        }
-        chatInput.style.backgroundImage = "url('../iso_data/language/" + currentLang + ".svg')";
-        write.maxLength = data.MaxTextLength;
+        //  Input
+        let doLast = () => { };
+        if (canPost) {
+            initSize = localStorage.getItem(sizeKey);
+            new ResizeObserver(ev => {
+                const f = chatE.offsetHeight / chatBackground.offsetHeight;
+                localStorage.setItem(sizeKey, "" + f);
+            }).observe(chatE);
 
 
-        /** Try to clear all messages from the chat room */
-        async function cmdClear() {
-            try {
-                if (!await sendRequest(apiBase + "ClearAllMessages", chatId))
-                    Fail(_TF("Failed to clear all chat messages.", "An error message shown when a user tries to send clear a chat room but the server returns a failure"));
+
+            const chatInput = document.createElement("SysWeaver-ChatInput");
+            const write = document.createElement("textarea");
+            chatBackground.appendChild(chatInput);
+            chatInput.appendChild(write);
+
+            const inputHistory = [];
+            let inputHistoryPos = 0;
+            let inputCurrent = "";
+
+
+            let isSending = false;
+            /**
+             * Send the message
+             * @param {boolean} doFocus If true, the input box will be focused when done
+             * @returns
+             */
+            async function Send(doFocus) {
+                const t = write.value.trim();
+                const d = previewMessage.Data;
+                if ((!t) && (!d))
+                    return;
+                if (isSending)
+                    return;
+                isSending = true;
+
+                send.StartWorking();
+
+                inputHistory.push(t);
+                const hl = inputHistory.length;
+                if (hl > 100)
+                    inputHistory.splice(0, hl - 100);
+                inputHistoryPos = 0;
+                inputCurrent = "";
+
+                const wp = write.placeholder;
+                if (d) {
+                    previewMessage.Data = null;
+                    previewElement.UpdateData(null);
+                }
+                write.placeholder = t;
+                write.value = "";
+                write.readOnly = true;
+                write.NextLast = write.value.length;
+                setPreviewText(null);
+                try {
+                    if (await sendRequest(apiBase + "UserMessage", {
+                        ChatId: chatId,
+                        Body: {
+                            Format: useMarkDown ? 1 : 0,
+                            Data: d,
+                            Text: t,
+                            Lang: currentLang,
+                        },
+                    })) {
+                        tempFiles.clear();
+                        StickForAwhile();
+                        return;
+                    }
+                    Fail(_TF("Failed to send message.", "An error message shown when a user tries to send a chat message but the server returns a failure"));
+                    if ((!write.value) || (write.value === "")) {
+                        previewMessage.Data = d;
+                        write.value = t;
+                    }
+                }
+                catch (e) {
+                    Fail(_TF("Failed to send message.", "An error message shown when a user tries to send a chat message but the server returns a failure") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
+                    if ((!write.value) || (write.value === "")) {
+                        previewMessage.Data = d;
+                        write.value = t;
+                    }
+                }
+                finally {
+                    isSending = false;
+                    send.StopWorking();
+                    sendEnable();
+                    write.readOnly = false;
+                    write.placeholder = wp;
+                    if (doFocus !== "NoFocus")
+                        write.focus();
+                }
             }
-            catch (e) {
-                Fail(_TF("Failed to clear all chat messages.", "An error message shown when a user tries to send clear a chat room but the server returns a failure") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
+
+            let isInternalUpdate = false;
+
+            /** Set the input text from a history value */
+            function SetFromHistory() {
+                isInternalUpdate = true;
+                if (inputHistoryPos === 0) {
+                    write.value = inputCurrent;
+                    write.NextLast = write.value.length;
+                    sendEnable();
+                    isInternalUpdate = false;
+                    return;
+                }
+                if (inputHistoryPos === -1) {
+                    write.value = "";
+                    write.NextLast = write.value.length;
+                    sendEnable();
+                    isInternalUpdate = false;
+                    return;
+                }
+                write.value = inputHistory[inputHistory.length - inputHistoryPos];
+                write.NextLast = write.value.length;
+                sendEnable();
+                isInternalUpdate = false;
             }
+
+            write.onfocus = function () {
+                write.scrollIntoView({ behavior: "smooth" })
+            }
+
+            write.onkeydown = async e => {
+                if (!e.altKey)
+                    return;
+                if (e.ctrlKey || e.metaKey || e.shiftKey)
+                    return;
+                if (isSending)
+                    return;
+                //  Pure alt
+                if (e.key === "Enter") {
+                    await Send();
+                    return;
+                }
+                if (e.key == "ArrowUp") {
+                    if (inputHistoryPos >= inputHistory.length)
+                        return;
+                    ++inputHistoryPos;
+                    SetFromHistory();
+                    return;
+                }
+                if (e.key == "ArrowDown") {
+                    if (inputHistoryPos <= -1)
+                        return;
+                    --inputHistoryPos;
+                    SetFromHistory();
+                    return;
+                }
+
+
+            };
+
+            const send = new ColorIcon("IconSend", "IconColorThemeAcc1", options.SendIconSize, options.SendIconSize, _TF("Click to send the message", "A tool tip description on a button that when clicked will send the entered chat message to the server"), Send);
+            chatInput.appendChild(send.Element);
+            let listen = null;
+            if (SpeechInput.supportSpeechRec()) {
+                listen = new ColorIcon("IconChatMicOn", "IconColorThemeAcc1", options.AudioIconSize, options.AudioIconSize, _TF("Click to listen for speech input using the selected language", "A tool tip description on a button that when clicked will start listening to speech input"), () => {
+                    startListening(true, true);
+                });
+                chatInput.appendChild(listen.Element);
+            }
+
+            let previewElement = null;
+            /** Called to enable/disable the send button (every time the input text changes) */
+            function sendEnable() {
+                const t = write.value.trim();
+                const d = previewMessage.Data;
+                canSend = (t && (t.length > 0)) || d;
+                if (canSend) {
+                    localStorage.setItem(inputSaveKey, t);
+                    if (d)
+                        localStorage.setItem(dataSaveKey, d);
+                    else
+                        localStorage.removeItem(dataSaveKey);
+                }
+                else {
+                    localStorage.removeItem(inputSaveKey);
+                    localStorage.removeItem(dataSaveKey);
+                }
+                setPreviewText(canSend ? t : null);
+                send.SetEnabled(canSend);
+            }
+
+            const start = localStorage.getItem(inputSaveKey);
+            if (start) {
+                write.value = start;
+                write.NextLast = write.value.length;
+            }
+
+            const onInputChangeFn = () => {
+                sendEnable();
+                if (!isInternalUpdate) {
+                    inputHistoryPos = 0;
+                    inputCurrent = write.value;
+                }
+            };
+
+
+            write.oninput = onInputChangeFn;
+
+
+            chatInput.style.backgroundImage = "url('../iso_data/language/" + currentLang + ".svg')";
+            write.maxLength = data.MaxTextLength;
+
+
+            // Mark down and preview
+
+            useMarkDown = localStorage.getItem(useMarkDownKey) === "true";
+            useMarkDown &= data.AllowMarkDown;
+
+            showPreview = localStorage.getItem(previewKey); // null means auto (on for md and off for text)
+            previewMessage = {
+                Data: localStorage.getItem(dataSaveKey) ?? null,
+                Time: null,
+                Flags: 0,
+                Format: useMarkDown ? 1 : 0,
+                From: data.UserName,
+                FromImage: "../auth/UserImages/Current/small",
+                Id: 0,
+                Lang: currentLang,
+                Text: write.value.trim(),
+
+                MenuItems: null,
+            };
+            previewElement = (await addMessage(previewMessage, true, true)).parentElement.parentElement;
+            previewElement.classList.add("Preview");
+
+
+            previewChanged = () => {
+                const pm = previewElement.Msg;
+                const sp = (!!previewMessage.Data) || ((typeof showPreview !== "boolean" ? useMarkDown : showPreview) && (!!pm.Text));
+                if (sp) {
+                    if (previewElement.classList.contains("Hide")) {
+                        previewElement.classList.remove("Hide");
+                        chatE.scrollTo({
+                            left: chatE.scrollLeft,
+                            top: chatE.scrollHeight,
+                            behavior: "smooth",
+                        });
+                    }
+                }
+                else {
+                    if (!previewElement.classList.contains("Hide")) {
+                        previewElement.classList.add("Hide");
+                    }
+                }
+                return sp;
+            };
+
+            let placeholderText = _TF("Write your text here..", "A placeholder text for an input box where a user can enter a text message for a chat");
+            let placeholderMD = _TF("Write your Mark Down text here..", "A placeholder text for an input box where a user can enter a markdown formatted text message for a chat");
+            if (!Chat.IsMobile) {
+
+                const platform = Chat.Platform;
+                const t = "                  \n" +
+                    (platform.indexOf("mac") === 0
+                        ?
+                        _TF("Press Option+Enter to send", "A placeholder instruction on a Mac machine where the user can press the Enter key while holding down the Option key to send a chat message")
+                        :
+                        _TF("Press ALT+Enter to send", "A placeholder instruction on a Windows machine where the user can press the Enter key while holding down the ALT key to send a chat message")
+                    );
+                placeholderText += t;
+                placeholderMD += t;
+            }
+
+
+            markDownChanged = async () => {
+                const pm = previewElement.Msg;
+                pm.Format = useMarkDown ? 1 : 0;
+                write.placeholder = useMarkDown ? placeholderMD : placeholderText;
+                await previewElement.UpdateBody(pm.Text, pm.Format, false);
+                previewChanged();
+            };
+
+            async function setPreviewText(newText) {
+                if (!previewElement)
+                    return;
+                const pm = previewElement.Msg;
+                if (pm.Text === newText)
+                    return;
+                pm.Text = newText;
+                await previewElement.UpdateBody(pm.Text, pm.Format, false);
+                if (previewChanged()) {
+                    chatE.scrollTo({
+                        left: chatE.scrollLeft,
+                        top: chatE.scrollHeight,
+                        behavior: "smooth",
+                    });
+                }
+            }
+
+            markDownChanged();
+
+
+            // Drag and drop on text
+            const validSchemas = new Map();
+            validSchemas.set("http", 1);
+            validSchemas.set("https", 1);
+            write.addEventListener("drop", async ev => {
+                ev.preventDefault();
+                ev.target.classList.remove("Dragging");
+                if (uploadRepo)
+                    await uploadFiles(ev.dataTransfer.files);
+                const items = ev.dataTransfer.items;
+                const il = items.length;
+                for (let i = 0; i < il; ++i) {
+                    const item = items[i];
+                    if (item.kind === "string") {
+                        let val = await new Promise(res => {
+                            item.getAsString(x => res(x));
+                        });
+                        if (useMarkDown) {
+                            const sp = val.indexOf("://");
+                            if ((sp > 0) && validSchemas.get(val.substring(0, sp))) {
+                                let temp = val;
+                                const qstart = val.indexOf('?');
+                                if (qstart > 0)
+                                    temp = temp.substring(0, qstart);
+                                const extStart = temp.lastIndexOf('.');
+                                if (extStart >= 0) {
+                                    const ext = temp.substring(extStart + 1).toLowerCase();
+                                    if (imageExtensions[ext])
+                                        val = "![](" + val + ")";
+                                }
+                            }
+                        }
+                        insertAtCursor(write, val);
+                        onInputChangeFn();
+                        return;
+                    }
+
+                }
+            });
+            write.addEventListener("dragover", ev => {
+                ev.preventDefault();
+            });
+            write.addEventListener("dragenter", ev => ev.target.classList.add("Dragging"));
+            write.addEventListener("dragleave", ev => ev.target.classList.remove("Dragging"));
+
+
+            selectLanguage = async () => {
+                const speechRec = SpeechInput.supportSpeechRec();
+                await PopUpSelection(
+                    _TF("Select the language to use", "Header text to a list of languages that can be selected"),
+                    speechRec ?
+                        _TF("Select the language you're using for the text and voice input", "Tool tip description of a header to a list of languages that can be selected")
+                        :
+                        _TF("Select the language you're using for the text input", "Tool tip description of a header to a list of languages that can be selected")
+                    ,
+                    async (search, closeFn) => {
+                        await GetLanguages();
+                        const ls = languages;
+                        const lc = ls.length;
+
+                        const items = [];
+                        search = search?.toLowerCase() ?? "";
+                        for (let ii = 0; ii < lc; ++ii) {
+                            const lang = ls[ii];
+                            if (search) {
+                                if (lang.Name.toLowerCase().indexOf(search) < 0)
+                                    if (lang.LocalName.toLowerCase().indexOf(search) < 0)
+                                        if (lang.EnName.toLowerCase().indexOf(search) < 0)
+                                            continue;
+                            }
+                            const item = document.createElement("SysWeaver-ChatLangItem");
+                            keyboardClick(item);
+                            items.push(item);
+                            const iso = lang.Iso;
+                            const name = lang.Name;
+                            const lname = lang.LocalName;
+                            const ename = lang.EnName;
+                            let text = _TF("Name", 'Tool tip prefix indicating what language this is, part of somthing like: "Name: English".') + ": " + name + "\n";
+                            if (name !== lname)
+                                text += _TF("Local name", 'Tool tip prefix indicating what language this is, part of somthing like: "Local name: Svenska".') + ": " + lname + "\n";
+                            if (name !== ename)
+                                text += _TF("English name", 'Tool tip prefix indicating what language this is, part of somthing like: "English name: German".') + ": " + ename + "\n";
+                            text +=
+                                "Iso639-1: " + iso + "\n\n" +
+                                _TF("Click to select this language", "Tool tip description on a button that when clicked will select tis language");
+                            const com = lang.Comment;
+                            if (com)
+                                text += "\n\n" + com;
+                            item.title = text;
+                            item.style.backgroundImage = "url('../iso_data/language/" + iso + ".svg')";
+                            text = name;
+                            if (text !== lname)
+                                text += " (" + lname + ")";
+                            item.innerText = text;
+                            item.onclick = ev => {
+                                if (badClick(ev))
+                                    return;
+                                currentLang = iso;
+                                if (currentLang === data.Lang)
+                                    localStorage.removeItem(langSaveKey);
+                                else
+                                    localStorage.setItem(langSaveKey, currentLang);
+                                chatInput.style.backgroundImage = "url('../iso_data/language/" + currentLang + ".svg')";
+                                previewMessage.Lang = currentLang;
+                                previewElement.UpdateLang();
+                                if (canListen()) {
+                                    if (localStorage.getItem(listenKey) === "true") {
+                                        stopListening();
+                                        startListening();
+                                        localStorage.setItem(listenKey, "true");
+                                    }
+                                }
+                                closeFn();
+                            }
+
+                        }
+                        return items;
+                    },
+                    null,
+                    true,
+                    true);
+            }
+
+            clearCurrentMessage = async () => {
+                const data = previewMessage.Data;
+                if (data) {
+                    const parts = data.split(';');
+                    const pl = parts.lengths;
+                    for (let ii = 0; ii < pl; ++ii) {
+                        const pr = parts[ii];
+                        if (tempFiles.get(pr)) {
+                            tempFiles.delete(pr);
+                            try {
+                                if (!await sendRequest(apiBase + "../Api/UserStorage/DeleteStoredFile", pr))
+                                    console.warn('Failed to delete stored file "' + pr + '".');
+                            }
+                            catch (e) {
+                                console.warn('Failed to delete stored file "' + pr + '", error: ' + e.message);
+                            }
+                        }
+                    }
+                    previewElement.UpdateData(null);
+                }
+                write.value = "";
+                write.NextLast = write.value.length;
+                previewMessage.Data = null;
+                previewMessage.Text = "";
+                previewChanged();
+                sendEnable();
+            };
+
+            const defStopListening = () => {
+                if (listen)
+                    listen.SetEnabled(true);
+                //console.log("Chat: No need to stop, wasn't listening!");
+            };
+
+            stopListening = defStopListening;
+
+            startListening = (ignoreKeyword, noOpenMic) => {
+
+                if (!noOpenMic) {
+                    if (listen)
+                        listen.SetEnabled(false);
+                }
+                const stop = SpeechInput.triggerOnSpeech(data.SpeechName,
+                    (activeUser, isWorking) => {
+                        if (activeUser) {
+                            write.classList.add("Listening");
+                        }
+                        else {
+                            write.classList.remove("Listening");
+                        }
+                        if (isWorking) {
+                            if (listen)
+                                listen.StartWorking();
+                        }
+                        else {
+                            if (listen)
+                                listen.StopWorking();
+                            if (!ignoreKeyword)
+                                localStorage.setItem(listenKey, "false");
+                            stopListening();
+                        }
+                    },
+                    async (data, isLast) => {
+                        insertAtCursor(write, data, !isLast);
+                        if (isLast) {
+                            if (listen)
+                                listen.StopWorking();
+                            if (data.length > 0) {
+                                if ((!noOpenMic) || (localStorage.getItem(autoSendKey) === "true")) {
+                                    await Send("NoFocus");
+                                    return;
+                                }
+                            }
+                        }
+                        sendEnable();
+                    },
+                    currentLang, ignoreKeyword, noOpenMic);
+                if (stop) {
+                    stopListening = () => {
+                        if (listen) {
+                            listen.StopWorking();
+                            listen.SetEnabled(true);
+                        }
+                        stop();
+                        //console.log("Chat: Stopped listening");
+                    }
+                    //console.log("Chat: Started listening");
+                } else {
+                    stopListening = defStopListening;
+                }
+            };
+
+            if (canListen()) {
+                let l = localStorage.getItem(listenKey);
+                if (l === null) {
+                    l = data.EnableListenByDefault ? "true" : "false";
+                    localStorage.setItem(listenKey, l);
+                }
+                if (l === "true") {
+
+                    startListening();
+                }
+            }
+
+            uploadFiles = async (files) => {
+                if (files.length <= 0)
+                    return;
+                let na = previewMessage.Data ?? "";
+                const count = na ? na.split(';').length : 0;
+                if ((count + files.length) > data.MaxDataCount) {
+                    Fail(data.MaxDataCount <= 1
+                        ?
+                        _TF("Only one file may be attached!", "Error message displayed when the user tries to attach more than 1 file to a chat message")
+                        :
+                        _T("Only {0} files may be attached!", data.MaxDataCount, "Error message displayed when the user tries to attach more than the allowed number of files to a chat message.{0} is replaced with the maximum allowed number of files")
+                    );
+                    return;
+                }
+                const res = await fileUploader(uploadRepo, files);
+                const e = res.Error;
+                if (e) {
+                    Fail(e)
+                    return;
+                }
+                const urls = res.Urls;
+                const status = res.Status;
+                const ul = urls.length;
+                if (ul <= 0) {
+                    Fail(_TF("Failed to upload!", "Error message shown when a file upload failed"));
+                    return;
+                }
+                for (let i = 0; i < ul; ++i) {
+                    const s = status[i];
+                    if (s < 0)
+                        Fail(fileUploaderStatusText(s));
+                    const u = urls[i];
+                    if (!u)
+                        continue;
+                    if (s !== UploadStatus.AlreadyUploaded)
+                        tempFiles.set(u, 1);
+                    const prev = na;
+                    if (na.length > 0)
+                        na += ";";
+                    na += ("../" + u);
+                    if (na.length > data.MaxDataLength) {
+                        Fail(_TF("Can't attach more data!", "Error message shown when no more files can be attached to a chat message"));
+                        na = prev;
+                        break;
+                    }
+                }
+                previewMessage.Data = na;
+                previewElement.UpdateData(na);
+                previewChanged();
+                sendEnable();
+            };
+
+            /** Try to clear all messages from the chat room */
+            async function cmdClear() {
+                try {
+                    if (!await sendRequest(apiBase + "ClearAllMessages", chatId))
+                        Fail(_TF("Failed to clear all chat messages.", "An error message shown when a user tries to send clear a chat room but the server returns a failure"));
+                }
+                catch (e) {
+                    Fail(_TF("Failed to clear all chat messages.", "An error message shown when a user tries to send clear a chat room but the server returns a failure") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
+                }
+            }
+
+
+
+            if (data.CanClear)
+                commandMap.set("chat.clear", cmdClear);
+
+            doLast = () => {
+                sendEnable();
+                write.readOnly = true;
+                write.focus();
+                write.readOnly = false;
+            };
         }
 
+        //  INputEnd
 
         // Handling of PostMessage messages (from parent window)
-        const commandMap = new Map();
         commandMap.set("chat.scrolltop", () => chatE.scrollTo({
             left: chatE.scrollLeft,
             top: 0,
@@ -1124,11 +1532,6 @@ class Chat {
             setHideNone();
         });
 
-
-
-
-        if (data.CanClear)
-            commandMap.set("chat.clear", cmdClear);
 
 
         window.addEventListener("message", ev => {
@@ -1174,14 +1577,6 @@ class Chat {
         function canSpeak() {
             return userSpeak && SpeechGen.supportSpeechGen();
         }
-
-        const msg = data.Messages;
-
-        const userName = data.UserName;
-
-
-        const workingAttribute = "Working";
-
 
         /**
          * Get a language text string from a language iso id
@@ -1248,111 +1643,6 @@ class Chat {
             htm: 1,
         });
 
-        async function selectLanguage() {
-            const speechRec = SpeechInput.supportSpeechRec();
-            await PopUpSelection(
-                _TF("Select the language to use", "Header text to a list of languages that can be selected"),
-                speechRec ?
-                    _TF("Select the language you're using for the text and voice input", "Tool tip description of a header to a list of languages that can be selected")
-                    :
-                    _TF("Select the language you're using for the text input", "Tool tip description of a header to a list of languages that can be selected")
-                ,
-                async (search, closeFn) => {
-                    await GetLanguages();
-                    const ls = languages;
-                    const lc = ls.length;
-
-                    const items = [];
-                    search = search?.toLowerCase() ?? "";
-                    for (let ii = 0; ii < lc; ++ii) {
-                        const lang = ls[ii];
-                        if (search) {
-                            if (lang.Name.toLowerCase().indexOf(search) < 0)
-                                if (lang.LocalName.toLowerCase().indexOf(search) < 0)
-                                    if (lang.EnName.toLowerCase().indexOf(search) < 0)
-                                        continue;
-                        }
-                        const item = document.createElement("SysWeaver-ChatLangItem");
-                        keyboardClick(item);
-                        items.push(item);
-                        const iso = lang.Iso;
-                        const name = lang.Name;
-                        const lname = lang.LocalName;
-                        const ename = lang.EnName;
-                        let text = _TF("Name", 'Tool tip prefix indicating what language this is, part of somthing like: "Name: English".') + ": " + name + "\n";
-                        if (name !== lname)
-                            text += _TF("Local name", 'Tool tip prefix indicating what language this is, part of somthing like: "Local name: Svenska".') + ": " + lname + "\n";
-                        if (name !== ename)
-                            text += _TF("English name", 'Tool tip prefix indicating what language this is, part of somthing like: "English name: German".') + ": " + ename + "\n";
-                        text +=
-                            "Iso639-1: " + iso + "\n\n" +
-                            _TF("Click to select this language", "Tool tip description on a button that when clicked will select tis language");
-                        const com = lang.Comment;
-                        if (com)
-                            text += "\n\n" + com;
-                        item.title = text;
-                        item.style.backgroundImage = "url('../iso_data/language/" + iso + ".svg')";
-                        text = name;
-                        if (text !== lname)
-                            text += " (" + lname + ")";
-                        item.innerText = text;
-                        item.onclick = ev => {
-                            if (badClick(ev))
-                                return;
-                            currentLang = iso;
-                            if (currentLang === data.Lang)
-                                localStorage.removeItem(langSaveKey);
-                            else
-                                localStorage.setItem(langSaveKey, currentLang);
-                            chatInput.style.backgroundImage = "url('../iso_data/language/" + currentLang + ".svg')";
-                            previewMessage.Lang = currentLang;
-                            previewElement.UpdateLang();
-                            if (canListen()) {
-                                if (localStorage.getItem(listenKey) === "true") {
-                                    stopListening();
-                                    startListening();
-                                    localStorage.setItem(listenKey, "true");
-                                }
-                            }
-                            closeFn();
-                        }
-
-                    }
-                    return items;
-                },
-                null,
-                true,
-                true);
-        }
-
-        async function clearCurrentMessage() {
-            const data = previewMessage.Data;
-            if (data) {
-                const parts = data.split(';');
-                const pl = parts.lengths;
-                for (let ii = 0; ii < pl; ++ii) {
-                    const pr = parts[ii];
-                    if (tempFiles.get(pr)) {
-                        tempFiles.delete(pr);
-                        try {
-                            if (!await sendRequest(apiBase + "../Api/UserStorage/DeleteStoredFile", pr))
-                                console.warn('Failed to delete stored file "' + pr + '".');
-                        }
-                        catch (e) {
-                            console.warn('Failed to delete stored file "' + pr + '", error: ' + e.message);
-                        }
-                    }
-                }
-                previewElement.UpdateData(null);
-            }
-            write.value = "";
-            write.NextLast = write.value.length;
-            previewMessage.Data = null;
-            previewMessage.Text = "";
-            previewChanged();
-            sendEnable();
-        }
-
         /**
          * Add a message to the chat window
          * @param {any} m The message data to add
@@ -1361,7 +1651,7 @@ class Chat {
          */
         async function addMessage(m, onTop, isPreview) {
             const msgRow = document.createElement("SysWeaver-ChatRow");
-            const f = onTop ? chatE.firstElementChild : chatE.lastElementChild;
+            const f = onTop ? chatE.firstElementChild : (canPost ? chatE.lastElementChild : null);
             if (f)
                 chatE.insertBefore(msgRow, f);
             else
@@ -2002,62 +2292,39 @@ class Chat {
                                         },
                                     }));
                                 }
-                                if (canSave) {
-                                    const storeItems = [];
-                                    storeItems.push(WebMenuItem.From({
-                                        Name: _TF("Private", "Text of menu item that indicates that this is private content, only accessable to the user"),
-                                        Flags: 0,
-                                        IconClass: "IconChatLink0",
-                                        Title: _TF("Store the file on the server for later use, only available to you", "Tool tip description of menu item that when clicked will store some content on the server"),
-                                        Data: async () => {
-                                            try {
-                                                const stored = await sendRequest(apiBase + "StoreFile", {
-                                                    Url: p,
-                                                    Scope: 0,
-                                                });
-                                                if (stored) {
-                                                    const str = GetAbsolutePath(stored);
-                                                    await ValueFormat.copyToClipboardInfo(str);
-                                                    Open(str);
-                                                } else
-                                                    Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure."));
-                                            }
-                                            catch (e) {
-                                                Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                                            }
-                                            close();
-                                        },
-                                    }));
-                                    storeItems.push(WebMenuItem.From({
-                                        Name: _TF("Protected", "Text of menu item that indicates that this is protected content, only accessable to logged in users"),
-                                        Flags: 0,
-                                        IconClass: "IconChatLink1",
-                                        Title: _TF("Store the file on the server for later use, available to any logged in users", "Tool tip description of menu item that when clicked will store some content on the server"),
-                                        Data: async () => {
-                                            try {
-                                                const stored = await sendRequest(apiBase + "StoreFile", {
-                                                    Url: p,
-                                                    Scope: 1,
-                                                });
-                                                if (stored) {
-                                                    const str = GetAbsolutePath(stored);
-                                                    await ValueFormat.copyToClipboardInfo(str);
-                                                    Open(str);
-                                                } else
-                                                    Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure."));
-                                            }
-                                            catch (e) {
-                                                Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                                            }
-                                            close();
-                                        },
-                                    }));
-                                    if (data.AllowPublicStore) {
+                                if (canPost) {
+
+                                    if (canSave) {
+                                        const storeItems = [];
                                         storeItems.push(WebMenuItem.From({
-                                            Name: _TF("Public", "Text of menu item that indicates that this is public content, accessable to everyone"),
+                                            Name: _TF("Private", "Text of menu item that indicates that this is private content, only accessable to the user"),
                                             Flags: 0,
-                                            IconClass: "IconChatLink2",
-                                            Title: _TF("Store the file on the server for later use, available to anyone", "Tool tip description of menu item that when clicked will store some content on the server"),
+                                            IconClass: "IconChatLink0",
+                                            Title: _TF("Store the file on the server for later use, only available to you", "Tool tip description of menu item that when clicked will store some content on the server"),
+                                            Data: async () => {
+                                                try {
+                                                    const stored = await sendRequest(apiBase + "StoreFile", {
+                                                        Url: p,
+                                                        Scope: 0,
+                                                    });
+                                                    if (stored) {
+                                                        const str = GetAbsolutePath(stored);
+                                                        await ValueFormat.copyToClipboardInfo(str);
+                                                        Open(str);
+                                                    } else
+                                                        Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure."));
+                                                }
+                                                catch (e) {
+                                                    Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
+                                                }
+                                                close();
+                                            },
+                                        }));
+                                        storeItems.push(WebMenuItem.From({
+                                            Name: _TF("Protected", "Text of menu item that indicates that this is protected content, only accessable to logged in users"),
+                                            Flags: 0,
+                                            IconClass: "IconChatLink1",
+                                            Title: _TF("Store the file on the server for later use, available to any logged in users", "Tool tip description of menu item that when clicked will store some content on the server"),
                                             Data: async () => {
                                                 try {
                                                     const stored = await sendRequest(apiBase + "StoreFile", {
@@ -2077,80 +2344,56 @@ class Chat {
                                                 close();
                                             },
                                         }));
+                                        if (data.AllowPublicStore) {
+                                            storeItems.push(WebMenuItem.From({
+                                                Name: _TF("Public", "Text of menu item that indicates that this is public content, accessable to everyone"),
+                                                Flags: 0,
+                                                IconClass: "IconChatLink2",
+                                                Title: _TF("Store the file on the server for later use, available to anyone", "Tool tip description of menu item that when clicked will store some content on the server"),
+                                                Data: async () => {
+                                                    try {
+                                                        const stored = await sendRequest(apiBase + "StoreFile", {
+                                                            Url: p,
+                                                            Scope: 1,
+                                                        });
+                                                        if (stored) {
+                                                            const str = GetAbsolutePath(stored);
+                                                            await ValueFormat.copyToClipboardInfo(str);
+                                                            Open(str);
+                                                        } else
+                                                            Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure."));
+                                                    }
+                                                    catch (e) {
+                                                        Fail(_TF("Failed to store the file.", "An error message shown when a user tries to store some content on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
+                                                    }
+                                                    close();
+                                                },
+                                            }));
+                                        }
+                                        if (storeItems.length > 0) {
+                                            menu.Items.push(WebMenuItem.From({
+                                                Name: _TF("Store file", "Text of a menu folder that contains items that when clicked store this file to the server"),
+                                                Flags: 0,
+                                                IconClass: "IconChatStore",
+                                                Title: _TF("Store the file on the server for later use", "Tool tip description of menu folder that contains items that when clicked store this file to the server"),
+                                                Children: storeItems
+                                            }));
+                                        }
                                     }
-                                    if (storeItems.length > 0) {
-                                        menu.Items.push(WebMenuItem.From({
-                                            Name: _TF("Store file", "Text of a menu folder that contains items that when clicked store this file to the server"),
-                                            Flags: 0,
-                                            IconClass: "IconChatStore",
-                                            Title: _TF("Store the file on the server for later use", "Tool tip description of menu folder that contains items that when clicked store this file to the server"),
-                                            Children: storeItems
-                                        }));
-                                    }
-                                }
 
-                                if (canLink) {
-                                    const linkItems = [];
+                                    if (canLink) {
+                                        const linkItems = [];
 
-                                    linkItems.push(WebMenuItem.From({
-                                        Name: _TF("Private", "Text of menu item that indicates that this is private content, only accessable to the user"),
-                                        Flags: 0,
-                                        IconClass: "IconChatLink0",
-                                        Title: _TF("Save as a link that only you can view", "Tool tip description of menu item that when clicked will store some content on the server and create a private (only accesible by this user) link to it"),
-                                        Data: async () => {
-                                            try {
-                                                const stored = await sendRequest(apiBase + "StoreLink", {
-                                                    Url: p,
-                                                    Scope: 0,
-                                                });
-                                                if (stored) {
-                                                    const str = GetAbsolutePath(stored);
-                                                    await ValueFormat.copyToClipboardInfo(str);
-                                                    Open(str);
-                                                } else
-                                                    Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure."));
-                                            }
-                                            catch (e) {
-                                                Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                                            }
-                                            close();
-                                        },
-                                    }));
-                                    linkItems.push(WebMenuItem.From({
-                                        Name: _TF("Protected", "Text of menu item that indicates that this is protected content, only accessable to logged in users"),
-                                        Flags: 0,
-                                        IconClass: "IconChatLink1",
-                                        Title: _TF("Save as a link that all logged in users can view", "Tool tip description of menu item that when clicked will store some content on the server and create a protected (only accesible to logged in users) link to it"),
-                                        Data: async () => {
-                                            try {
-                                                const stored = await sendRequest(apiBase + "StoreLink", {
-                                                    Url: p,
-                                                    Scope: 1,
-                                                });
-                                                if (stored) {
-                                                    const str = GetAbsolutePath(stored);
-                                                    await ValueFormat.copyToClipboardInfo(str);
-                                                    Open(str);
-                                                } else
-                                                    Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure."));
-                                            }
-                                            catch (e) {
-                                                Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
-                                            }
-                                            close();
-                                        },
-                                    }));
-                                    if (data.AllowPublicStore) {
                                         linkItems.push(WebMenuItem.From({
-                                            Name: _TF("Public", "Text of menu item that indicates that this is public content, accessable to everyone"),
+                                            Name: _TF("Private", "Text of menu item that indicates that this is private content, only accessable to the user"),
                                             Flags: 0,
-                                            IconClass: "IconChatLink2",
-                                            Title: _TF("Save as a link that anyone can view", "Tool tip description of menu item that when clicked will store some content on the server and create a public (accesible to anyone) link to it"),
+                                            IconClass: "IconChatLink0",
+                                            Title: _TF("Save as a link that only you can view", "Tool tip description of menu item that when clicked will store some content on the server and create a private (only accesible by this user) link to it"),
                                             Data: async () => {
                                                 try {
                                                     const stored = await sendRequest(apiBase + "StoreLink", {
                                                         Url: p,
-                                                        Scope: 2,
+                                                        Scope: 0,
                                                     });
                                                     if (stored) {
                                                         const str = GetAbsolutePath(stored);
@@ -2165,15 +2408,65 @@ class Chat {
                                                 close();
                                             },
                                         }));
-                                    }
-                                    if (linkItems.length > 0) {
-                                        menu.Items.push(WebMenuItem.From({
-                                            Name: _TF("Create link", "Text of a menu folder that contains items that when clicked will create a link to this file"),
+                                        linkItems.push(WebMenuItem.From({
+                                            Name: _TF("Protected", "Text of menu item that indicates that this is protected content, only accessable to logged in users"),
                                             Flags: 0,
-                                            IconClass: "IconChatLink",
-                                            Title: _TF("Create a link to the file for later use", "Tool tip description of menu folder that contains items that when clicked will create a link to this file"),
-                                            Children: linkItems
+                                            IconClass: "IconChatLink1",
+                                            Title: _TF("Save as a link that all logged in users can view", "Tool tip description of menu item that when clicked will store some content on the server and create a protected (only accesible to logged in users) link to it"),
+                                            Data: async () => {
+                                                try {
+                                                    const stored = await sendRequest(apiBase + "StoreLink", {
+                                                        Url: p,
+                                                        Scope: 1,
+                                                    });
+                                                    if (stored) {
+                                                        const str = GetAbsolutePath(stored);
+                                                        await ValueFormat.copyToClipboardInfo(str);
+                                                        Open(str);
+                                                    } else
+                                                        Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure."));
+                                                }
+                                                catch (e) {
+                                                    Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
+                                                }
+                                                close();
+                                            },
                                         }));
+                                        if (data.AllowPublicStore) {
+                                            linkItems.push(WebMenuItem.From({
+                                                Name: _TF("Public", "Text of menu item that indicates that this is public content, accessable to everyone"),
+                                                Flags: 0,
+                                                IconClass: "IconChatLink2",
+                                                Title: _TF("Save as a link that anyone can view", "Tool tip description of menu item that when clicked will store some content on the server and create a public (accesible to anyone) link to it"),
+                                                Data: async () => {
+                                                    try {
+                                                        const stored = await sendRequest(apiBase + "StoreLink", {
+                                                            Url: p,
+                                                            Scope: 2,
+                                                        });
+                                                        if (stored) {
+                                                            const str = GetAbsolutePath(stored);
+                                                            await ValueFormat.copyToClipboardInfo(str);
+                                                            Open(str);
+                                                        } else
+                                                            Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure."));
+                                                    }
+                                                    catch (e) {
+                                                        Fail(_TF("Failed to store the link.", "An error message shown when a user tries to store some content and create a link to it on the server but the server returns a failure.") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
+                                                    }
+                                                    close();
+                                                },
+                                            }));
+                                        }
+                                        if (linkItems.length > 0) {
+                                            menu.Items.push(WebMenuItem.From({
+                                                Name: _TF("Create link", "Text of a menu folder that contains items that when clicked will create a link to this file"),
+                                                Flags: 0,
+                                                IconClass: "IconChatLink",
+                                                Title: _TF("Create a link to the file for later use", "Tool tip description of menu folder that contains items that when clicked will create a link to this file"),
+                                                Children: linkItems
+                                            }));
+                                        }
                                     }
                                 }
                                 return menu;
@@ -2305,7 +2598,9 @@ class Chat {
                 const msgBdy = await addMessage(c);
                 if (enableSpeech) {
                     if (c.From !== userName) {
-                        const vp = userVoices.get(c.From);
+                        let vp = userVoices.get(c.From);
+                        if (!vp)
+                            vp = userVoices.get(null);
                         if (vp) {
                             const voice = SpeechGen.findVoice(vp.Language, vp.Male, vp.Voice);
                             msgBdy.Voice = voice;
@@ -2345,159 +2640,6 @@ class Chat {
         });
 
 
-        const defStopListening = () => {
-            if (listen)
-                listen.SetEnabled(true);
-            //console.log("Chat: No need to stop, wasn't listening!");
-        };
-
-        let stopListening = defStopListening;
-
-        const startListening = (ignoreKeyword, noOpenMic) => {
-
-            if (!noOpenMic) {
-                if (listen)
-                    listen.SetEnabled(false);
-            }
-            const stop = SpeechInput.triggerOnSpeech(data.SpeechName,
-                (activeUser, isWorking) => {
-                    if (activeUser) {
-                        write.classList.add("Listening");
-                    }
-                    else {
-                        write.classList.remove("Listening");
-                    }
-                    if (isWorking) {
-                        if (listen)
-                            listen.StartWorking();
-                    }
-                    else {
-                        if (listen)
-                            listen.StopWorking();
-                        if (!ignoreKeyword)
-                            localStorage.setItem(listenKey, "false");
-                        stopListening();
-                    }
-                },
-                async (data, isLast) => {
-                    insertAtCursor(write, data, !isLast);
-                    if (isLast) {
-                        if (listen)
-                            listen.StopWorking();
-                        if (data.length > 0) {
-                            if ((!noOpenMic) || (localStorage.getItem(autoSendKey) === "true")) {
-                                await Send("NoFocus");
-                                return;
-                            }
-                        }
-                    } 
-                    sendEnable();
-                }, 
-                currentLang, ignoreKeyword, noOpenMic);
-            if (stop) {
-                stopListening = () => {
-                    if (listen) {
-                        listen.StopWorking();
-                        listen.SetEnabled(true);
-                    }
-                    stop();
-                    //console.log("Chat: Stopped listening");
-                }
-                //console.log("Chat: Started listening");
-            } else {
-                stopListening = defStopListening;
-            }
-        };
-
-
-        // Mark down and preview
-
-        let useMarkDown = localStorage.getItem(useMarkDownKey) === "true";
-        useMarkDown &= data.AllowMarkDown;
-
-        let showPreview = localStorage.getItem(previewKey); // null means auto (on for md and off for text)
-        const previewMessage = {
-            Data: localStorage.getItem(dataSaveKey) ?? null,
-            Time: null,
-            Flags: 0,
-            Format: useMarkDown ? 1 : 0,
-            From: data.UserName,
-            FromImage: "../auth/UserImages/Current/small",
-            Id: 0,
-            Lang: currentLang,
-            Text: write.value.trim(),
-
-            MenuItems: null,
-        };
-        const tempFiles = new Map();
-        previewElement = (await addMessage(previewMessage, true, true)).parentElement.parentElement;
-        previewElement.classList.add("Preview");
-
-
-        function previewChanged() {
-            const pm = previewElement.Msg;
-            const sp = (!!previewMessage.Data) || ((typeof showPreview !== "boolean" ? useMarkDown : showPreview) && (!!pm.Text));
-            if (sp) {
-                if (previewElement.classList.contains("Hide")) {
-                    previewElement.classList.remove("Hide");
-                    chatE.scrollTo({
-                        left: chatE.scrollLeft,
-                        top: chatE.scrollHeight,
-                        behavior: "smooth",
-                    });
-                }
-            }
-            else {
-                if (!previewElement.classList.contains("Hide")) {
-                    previewElement.classList.add("Hide");
-                }
-            }
-            return sp;
-        }
-
-        let placeholderText = _TF("Write your text here..", "A placeholder text for an input box where a user can enter a text message for a chat");
-        let placeholderMD = _TF("Write your Mark Down text here..", "A placeholder text for an input box where a user can enter a markdown formatted text message for a chat");
-        if (!Chat.IsMobile) {
-            
-            const platform = Chat.Platform;
-            const t = "                  \n" +
-                (platform.indexOf("mac") === 0
-                    ?
-                    _TF("Press Option+Enter to send", "A placeholder instruction on a Mac machine where the user can press the Enter key while holding down the Option key to send a chat message")
-                    :
-                    _TF("Press ALT+Enter to send", "A placeholder instruction on a Windows machine where the user can press the Enter key while holding down the ALT key to send a chat message")
-                );
-            placeholderText += t;
-            placeholderMD += t;
-        }
-
-
-        async function markDownChanged() {
-            const pm = previewElement.Msg;
-            pm.Format = useMarkDown ? 1 : 0;
-            write.placeholder = useMarkDown ? placeholderMD : placeholderText;
-            await previewElement.UpdateBody(pm.Text, pm.Format, false);
-            previewChanged();
-        }
-
-        async function setPreviewText(newText) {
-            if (!previewElement)
-                return;
-            const pm = previewElement.Msg;
-            if (pm.Text === newText)
-                return;
-            pm.Text = newText;
-            await previewElement.UpdateBody(pm.Text, pm.Format, false);
-            if (previewChanged()) {
-                chatE.scrollTo({
-                    left: chatE.scrollLeft,
-                    top: chatE.scrollHeight,
-                    behavior: "smooth",
-                });
-            }
-        }
-
-        markDownChanged();
 
 
 
@@ -2627,218 +2769,226 @@ class Chat {
                 }
 
                 //  Message type
+                if (canPost) {
 
 
-                if (data.AllowMarkDown) {
-                    if (useMarkDown) {
+                    if (data.AllowMarkDown) {
+                        if (useMarkDown) {
+                            menu.Items.push(WebMenuItem.From({
+                                Name:
+                                    _TF("Use regular text", "Text of a menu item that when clicked will select regular text input"),
+                                Flags: 0,
+                                IconClass: "IconChatText",
+                                Title:
+                                    _TF("Use regular text as input instead of mark down (MD)", "Tool tip description of a menu item that when clicked will select regular text input"),
+                                Data: () => {
+                                    useMarkDown = false;
+                                    localStorage.setItem(useMarkDownKey, useMarkDown);
+                                    markDownChanged();
+                                    close();
+                                },
+                            }));
+                            menu.Items.push(WebMenuItem.From({
+                                Name:
+                                    _TF("Mark Down syntax", "Text of a menu item that when clicked will show a help page for MD (Mark Down)"),
+                                Flags: 0,
+                                IconClass: "IconChatHelp",
+                                Title:
+                                    _TF("Open mark down syntax help in a new tab", "Tool tip description of a menu item that when clicked will show a help page for MD (Mark Down)"),
+                                Data: () => {
+                                    Open("https://www.markdownguide.org/basic-syntax/", "_blank");
+                                    close();
+                                },
+                            }));
+                        } else {
+                            menu.Items.push(WebMenuItem.From({
+                                Name:
+                                    _TF("Use Mark Down text", "Text of a menu item that when clicked will select markdown text input"),
+                                Flags: 0,
+                                IconClass: "IconChatMD",
+                                Title:
+                                    _TF("Use Mark Down (MD) input instead of regular text", "Tool tip description of a menu item that when clicked will select markdown text input"),
+                                Data: () => {
+                                    useMarkDown = true;
+                                    localStorage.setItem(useMarkDownKey, useMarkDown);
+                                    markDownChanged();
+                                    close();
+                                },
+                            }));
+                        }
+                    }
+                    const sp = typeof showPreview !== "boolean" ? useMarkDown : showPreview;
+                    if (sp) {
                         menu.Items.push(WebMenuItem.From({
                             Name:
-                                _TF("Use regular text", "Text of a menu item that when clicked will select regular text input"),
+                                _TF("Hide preview", "Text of a menu item that when clicked will hide the chat message preview"),
                             Flags: 0,
-                            IconClass: "IconChatText",
+                            IconClass: "IconChatHidePreview",
                             Title:
-                                _TF("Use regular text as input instead of mark down (MD)", "Tool tip description of a menu item that when clicked will select regular text input"),
+                                _TF("Hide the preview of a new chat message", "Tool tip description of a menu item that when clicked will hide the chat message preview"),
                             Data: () => {
-                                useMarkDown = false;
-                                localStorage.setItem(useMarkDownKey, useMarkDown);
-                                markDownChanged();
-                                close();
-                            },
-                        }));
-                        menu.Items.push(WebMenuItem.From({
-                            Name:
-                                _TF("Mark Down syntax", "Text of a menu item that when clicked will show a help page for MD (Mark Down)"),
-                            Flags: 0,
-                            IconClass: "IconChatHelp",
-                            Title:
-                                _TF("Open mark down syntax help in a new tab", "Tool tip description of a menu item that when clicked will show a help page for MD (Mark Down)"),
-                            Data: () => {
-                                Open("https://www.markdownguide.org/basic-syntax/", "_blank");
+                                showPreview = useMarkDown ? false : null;
+                                localStorage.setItem(previewKey, showPreview);
+                                previewChanged();
                                 close();
                             },
                         }));
                     } else {
                         menu.Items.push(WebMenuItem.From({
                             Name:
-                                _TF("Use Mark Down text", "Text of a menu item that when clicked will select markdown text input"),
+                                _TF("Show preview", "Text of a menu item that when clicked will show a preview of new a chat message"),
                             Flags: 0,
-                            IconClass: "IconChatMD",
+                            IconClass: "IconChatShowPreview",
                             Title:
-                                _TF("Use Mark Down (MD) input instead of regular text", "Tool tip description of a menu item that when clicked will select markdown text input"),
+                                _TF("Show a preview of the message", "Tool tip description of a menu item that when clicked will show a preview of new a chat message"),
                             Data: () => {
-                                useMarkDown = true;
-                                localStorage.setItem(useMarkDownKey, useMarkDown);
-                                markDownChanged();
+                                showPreview = useMarkDown ? null : true;
+                                localStorage.setItem(previewKey, showPreview);
+                                previewChanged();
                                 close();
                             },
                         }));
                     }
-                }
-                const sp = typeof showPreview !== "boolean" ? useMarkDown : showPreview;
-                if (sp) {
+                    const speechRec = SpeechInput.supportSpeechRec();
+                    if (canTranslate || speechRec) {
+                        menu.Items.push(WebMenuItem.From({
+                            Name:
+                                _TF("Set input language", "Text of a menu item that when clicked will let the user select what language they used when writing chat messages"),
+                            Flags: 0,
+                            IconClass: "IconChatLanguage",
+                            Title:
+                                speechRec
+                                    ?
+                                    _TF("Specify what language you use for your text messages and voice input", "Tool tip description of a menu item that when clicked will let the user select what language they used when writing chat messages")
+                                    :
+                                    _TF("Specify what language you use for your text messages", "Tool tip description of a menu item that when clicked will let the user select what language they used when writing chat messages")
+                            ,
+                            Data: async () => {
+                                await selectLanguage();
+                                close();
+                            },
+                        }));
+                    }
+
                     menu.Items.push(WebMenuItem.From({
-                        Name:
-                            _TF("Hide preview", "Text of a menu item that when clicked will hide the chat message preview"),
-                        Flags: 0,
-                        IconClass: "IconChatHidePreview",
-                        Title:
-                            _TF("Hide the preview of a new chat message", "Tool tip description of a menu item that when clicked will hide the chat message preview"),
-                        Data: () => {
-                            showPreview = useMarkDown ? false : null;
-                            localStorage.setItem(previewKey, showPreview);
-                            previewChanged();
-                            close();
-                        },
-                    }));
-                } else {
-                    menu.Items.push(WebMenuItem.From({
-                        Name:
-                            _TF("Show preview", "Text of a menu item that when clicked will show a preview of new a chat message"),
-                        Flags: 0,
-                        IconClass: "IconChatShowPreview",
-                        Title:
-                            _TF("Show a preview of the message", "Tool tip description of a menu item that when clicked will show a preview of new a chat message"),
-                        Data: () => {
-                            showPreview = useMarkDown ? null : true;
-                            localStorage.setItem(previewKey, showPreview);
-                            previewChanged();
-                            close();
-                        },
-                    }));
-                }
-                const speechRec = SpeechInput.supportSpeechRec();
-                if (canTranslate || speechRec) {
-                    menu.Items.push(WebMenuItem.From({
-                        Name:
-                            _TF("Set input language", "Text of a menu item that when clicked will let the user select what language they used when writing chat messages"),
-                        Flags: 0,
-                        IconClass: "IconChatLanguage",
-                        Title:
-                            speechRec
-                                ?
-                                _TF("Specify what language you use for your text messages and voice input", "Tool tip description of a menu item that when clicked will let the user select what language they used when writing chat messages")
-                                :
-                                _TF("Specify what language you use for your text messages", "Tool tip description of a menu item that when clicked will let the user select what language they used when writing chat messages")
-                        ,
+                        Name: _TF("Clear", "Name of a menu item that when clicked will clear the current chat message"),
+                        Flags: canSend ? 0 : 1,
+                        IconClass: "IconChatClearCurrent",
+                        Title: _TF("Clear the current message text and any data", "Tool tip description of a menu item that when clicked will clear the current chat message"),
                         Data: async () => {
-                            await selectLanguage();
+                            await clearCurrentMessage();
                             close();
                         },
                     }));
-                }
-
-                menu.Items.push(WebMenuItem.From({
-                    Name: _TF("Clear", "Name of a menu item that when clicked will clear the current chat message"),
-                    Flags: canSend ? 0 : 1,
-                    IconClass: "IconChatClearCurrent",
-                    Title: _TF("Clear the current message text and any data", "Tool tip description of a menu item that when clicked will clear the current chat message"),
-                    Data: async () => {
-                        await clearCurrentMessage();
-                        close();
-                    },
-                }));
 
 
 
-                //  Upload
+                    //  Upload
 
-                if (uploadRepo) {
-                    const filesLeft = data.MaxDataCount - GetDataCount();
-                    menu.Items.push(WebMenuItem.From({
-                        Name:
-                            _TF("Attach file", "Text of a menu item that when clicked will enable the user to upload a file to the server and attach it to the current chat message"),
-                        Flags: filesLeft <= 0 ? 1 : 0,
-                        IconClass: "IconChatAttachFile",
-                        Title:
-                            _TF("Attach a file to the current message", "Tool tip description of a menu item that when clicked will enable the user to upload a file to the server and attach it to the current chat message"),
-                        Data: async () => {
-                            const files = await selectFiles(filesLeft > 1);
-                            if (files)
+                    if (uploadRepo) {
+                        const filesLeft = data.MaxDataCount - GetDataCount();
+                        menu.Items.push(WebMenuItem.From({
+                            Name:
+                                _TF("Attach file", "Text of a menu item that when clicked will enable the user to upload a file to the server and attach it to the current chat message"),
+                            Flags: filesLeft <= 0 ? 1 : 0,
+                            IconClass: "IconChatAttachFile",
+                            Title:
+                                _TF("Attach a file to the current message", "Tool tip description of a menu item that when clicked will enable the user to upload a file to the server and attach it to the current chat message"),
+                            Data: async () => {
+                                const files = await selectFiles(filesLeft > 1);
+                                if (files)
+
+                                    fileUploader
                                 await uploadFiles(files);
-                            close();
-                        },
-                    }));
-                }
-
-
-                //  Audio input
-                if (speechRec) {
-                    let l = localStorage.getItem(autoSendKey);
-                    if (l === null) {
-                        l = false;
-                        localStorage.setItem(autoSendKey, l);
-                    }
-                    if (l === "true") {
-                        menu.Items.push(WebMenuItem.From({
-                            Name:
-                                _TF("Disable auto send", "Text of a menu item that when clicked will disable the function to automatically send messages when speech input completes"),
-                            Flags: 0,
-                            IconClass: "IconChatAutoSendOff",
-                            Title:
-                                _TF("Disable automatic send of message when speech input completes", "Tool tip description of a menu item that when clicked will disable the function to automatically send messages when speech input completes"),
-                            Data: () => {
-                                localStorage.setItem(autoSendKey, "false");
-                                close();
-                            },
-                        }));
-                    } else {
-                        menu.Items.push(WebMenuItem.From({
-                            Name:
-                                _TF("Enable auto send", "Text of a menu item that when clicked will enable the function to automatically send messages when speech input completes"),
-                            Flags: 0,
-                            IconClass: "IconChatAutoSendOn",
-                            Title:
-                                _TF("Enable automatic send of message when speech input completes", "Tool tip description of a menu item that when clicked will enable the function to automatically send messages when speech input completes"),
-                            Data: () => {
-                                localStorage.setItem(autoSendKey, "true");
                                 close();
                             },
                         }));
                     }
 
 
-                }
+                    //  Audio input
+                    if (speechRec) {
+                        let l = localStorage.getItem(autoSendKey);
+                        if (l === null) {
+                            l = false;
+                            localStorage.setItem(autoSendKey, l);
+                        }
+                        if (l === "true") {
+                            menu.Items.push(WebMenuItem.From({
+                                Name:
+                                    _TF("Disable auto send", "Text of a menu item that when clicked will disable the function to automatically send messages when speech input completes"),
+                                Flags: 0,
+                                IconClass: "IconChatAutoSendOff",
+                                Title:
+                                    _TF("Disable automatic send of message when speech input completes", "Tool tip description of a menu item that when clicked will disable the function to automatically send messages when speech input completes"),
+                                Data: () => {
+                                    localStorage.setItem(autoSendKey, "false");
+                                    close();
+                                },
+                            }));
+                        } else {
+                            menu.Items.push(WebMenuItem.From({
+                                Name:
+                                    _TF("Enable auto send", "Text of a menu item that when clicked will enable the function to automatically send messages when speech input completes"),
+                                Flags: 0,
+                                IconClass: "IconChatAutoSendOn",
+                                Title:
+                                    _TF("Enable automatic send of message when speech input completes", "Tool tip description of a menu item that when clicked will enable the function to automatically send messages when speech input completes"),
+                                Data: () => {
+                                    localStorage.setItem(autoSendKey, "true");
+                                    close();
+                                },
+                            }));
+                        }
 
-
-                if (canListen()) {
-
-                    let l = localStorage.getItem(listenKey);
-                    if (l === null) {
-                        l = data.EnableListenByDefault ? "true" : "false";
-                        localStorage.setItem(listenKey, l);
-                    }
-                    if (l === "true") {
-                        menu.Items.push(WebMenuItem.From({
-                            Name:
-                                _TF("Disable speech input (open mic)", "Text of a menu item that when clicked will disable open microphone speech input"),
-                            Flags: 0,
-                            IconClass: "IconChatMicOff",
-                            Title:
-                                _TF("Disable open mic speech input", "Tool tip description of a menu item that when clicked will disable open microphone speech input"),
-                            Data: () => {
-                                localStorage.setItem(listenKey, "false");
-                                stopListening();
-                                close();
-                            },
-                        }));
-                    } else {
-                        let t = _TF("Enable speech input, listening to: ", "Tool tip description of a menu item that when clicked will enable open microphone speech input, listening to a list of keywords that are listed below this text");
-                        data.SpeechName.forEach(x => t = t + "\n" + x.split('|')[0]);
-                        menu.Items.push(WebMenuItem.From({
-                            Name:
-                                _TF("Enable speech input (open mic)", "Text of a menu item that when clicked will enable open microphone speech input"),
-                            Flags: 0,
-                            IconClass: "IconChatMicOn",
-                            Title: t,
-                            Data: () => {
-                                localStorage.setItem(listenKey, "true");
-                                stopListening();
-                                startListening();
-                                close();
-                            },
-                        }));
 
                     }
+
+
+                    if (canListen()) {
+
+                        if (data.SpeechName) {
+                            let l = localStorage.getItem(listenKey);
+                            if (l === null) {
+                                l = data.EnableListenByDefault ? "true" : "false";
+                                localStorage.setItem(listenKey, l);
+                            }
+                            if (l === "true") {
+                                menu.Items.push(WebMenuItem.From({
+                                    Name:
+                                        _TF("Disable speech input (open mic)", "Text of a menu item that when clicked will disable open microphone speech input"),
+                                    Flags: 0,
+                                    IconClass: "IconChatMicOff",
+                                    Title:
+                                        _TF("Disable open mic speech input", "Tool tip description of a menu item that when clicked will disable open microphone speech input"),
+                                    Data: () => {
+                                        localStorage.setItem(listenKey, "false");
+                                        stopListening();
+                                        close();
+                                    },
+                                }));
+                            } else {
+                                let t = _TF("Enable speech input, listening to: ", "Tool tip description of a menu item that when clicked will enable open microphone speech input, listening to a list of keywords that are listed below this text");
+                                data.SpeechName.forEach(x => t = t + "\n" + x.split('|')[0]);
+                                menu.Items.push(WebMenuItem.From({
+                                    Name:
+                                        _TF("Enable speech input (open mic)", "Text of a menu item that when clicked will enable open microphone speech input"),
+                                    Flags: 0,
+                                    IconClass: "IconChatMicOn",
+                                    Title: t,
+                                    Data: () => {
+                                        localStorage.setItem(listenKey, "true");
+                                        stopListening();
+                                        startListening();
+                                        close();
+                                    },
+                                }));
+
+                            }
+                        }
+                    }
+
+
                 }
 
                 if (canSpeak()) {
@@ -2993,116 +3143,6 @@ class Chat {
                 await addMessage(msg[i]);
         }
 
-        if (canListen()) {
-            let l = localStorage.getItem(listenKey);
-            if (l === null) {
-                l = data.EnableListenByDefault ? "true" : "false";
-                localStorage.setItem(listenKey, l);
-            }
-            if (l === "true") {
-
-                startListening();
-            }
-        }
-
-        async function uploadFiles(files) {
-            if (files.length <= 0)
-                return;
-            let na = previewMessage.Data ?? "";
-            const count = na ? na.split(';').length : 0;
-            if ((count + files.length) > data.MaxDataCount) {
-                Fail(data.MaxDataCount <= 1
-                    ?
-                    _TF("Only one file may be attached!", "Error message displayed when the user tries to attach more than 1 file to a chat message")
-                    :
-                    _T("Only {0} files may be attached!", data.MaxDataCount, "Error message displayed when the user tries to attach more than the allowed number of files to a chat message.{0} is replaced with the maximum allowed number of files")
-                );
-                return;
-            }
-            const res = await fileUploader(uploadRepo, files);
-            const e = res.Error;
-            if (e) {
-                Fail(e)
-                return;
-            }
-            const urls = res.Urls;
-            const status = res.Status;
-            const ul = urls.length;
-            if (ul <= 0) {
-                Fail(_TF("Failed to upload!", "Error message shown when a file upload failed"));
-                return;
-            }
-            for (let i = 0; i < ul; ++i) {
-                const s = status[i];
-                if (s < 0)
-                    Fail(fileUploaderStatusText(s));
-                const u = urls[i];
-                if (!u)
-                    continue;
-                if (s !== UploadStatus.AlreadyUploaded)
-                    tempFiles.set(u, 1);
-                const prev = na;
-                if (na.length > 0)
-                    na += ";";
-                na += ("../" + u);
-                if (na.length > data.MaxDataLength) {
-                    Fail(_TF("Can't attach more data!", "Error message shown when no more files can be attached to a chat message"));
-                    na = prev;
-                    break;
-                }
-            }
-            previewMessage.Data = na;
-            previewElement.UpdateData(na);
-            previewChanged();
-            sendEnable();
-        }
-
-        // Drag and drop on text
-        const validSchemas = new Map();
-        validSchemas.set("http", 1);
-        validSchemas.set("https", 1);
-        write.addEventListener("drop", async ev => {
-            ev.preventDefault();
-            ev.target.classList.remove("Dragging");
-            if (uploadRepo)
-                await uploadFiles(ev.dataTransfer.files);
-            const items = ev.dataTransfer.items;
-            const il = items.length;
-            for (let i = 0; i < il; ++i) {
-                const item = items[i];
-                if (item.kind === "string") {
-                    let val = await new Promise(res => {
-                        item.getAsString(x => res(x));
-                    });
-                    if (useMarkDown) {
-                        const sp = val.indexOf("://");
-                        if ((sp > 0) && validSchemas.get(val.substring(0, sp))) {
-                            let temp = val;
-                            const qstart = val.indexOf('?');
-                            if (qstart > 0)
-                                temp = temp.substring(0, qstart);
-                            const extStart = temp.lastIndexOf('.');
-                            if (extStart >= 0) {
-                                const ext = temp.substring(extStart + 1).toLowerCase();
-                                if (imageExtensions[ext])
-                                    val = "![](" + val + ")";
-                            }
-                        }
-                    }
-                    insertAtCursor(write, val);
-                    onInputChangeFn();
-                    return;
-                }
-
-            }
-        });
-        write.addEventListener("dragover", ev => {
-            ev.preventDefault();
-        });
-        write.addEventListener("dragenter", ev => ev.target.classList.add("Dragging"));
-        write.addEventListener("dragleave", ev => ev.target.classList.remove("Dragging"));
-
-
 
 
 
@@ -3201,13 +3241,9 @@ class Chat {
             chatE.style.height = initSize + "px";
         }
 
-        sendEnable();
 
         StickForAwhile(true);
-        write.readOnly = true;
-        write.focus();
-        write.readOnly = false;
-
+        doLast();
         return chatE;
 
     }

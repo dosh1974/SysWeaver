@@ -114,6 +114,7 @@ namespace SysWeaver.MicroService
 
         static async ValueTask WriteToFile(Stream s, String dest)
         {
+            await PathExt.EnsureCanWriteFileAsync(dest).ConfigureAwait(false);
             using var ds = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None);
             await s.CopyToAsync(ds).ConfigureAwait(false);
         }

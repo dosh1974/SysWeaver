@@ -91,58 +91,6 @@ namespace SysWeaver.Auth
             return tokens;
         }
 
-        /// <summary>
-        /// Validate that this user have ANY of the supplied tokens
-        /// </summary>
-        /// <param name="requiredTokens">A list of comma separated tokens that must exist in this users Token set</param>
-        /// <returns>True if all tokens are present</returns>
-        public bool IsValid(String requiredTokens = null)
-        {
-            if (String.IsNullOrEmpty(requiredTokens))
-                return true;
-            requiredTokens = requiredTokens.Trim();
-            if (requiredTokens == "-")
-                return false;
-            var ts = Tokens;
-            var t = requiredTokens.Split(',');
-            var tl = t.Length;
-            bool allEmpty = true;
-            for (int i = 0; i < tl; ++ i)
-            {
-                var tt = t[i].Trim().FastToLower();
-                if (tt == String.Empty)
-                    continue;
-                allEmpty = false;
-                if (ts.Contains(tt))
-                    return true;
-            }
-            return allEmpty;
-        }
-
-        /// <summary>
-        /// Validate that this user have ANY of the supplied tokens
-        /// </summary>
-        /// <param name="requiredTokens">A list of tokens that must exist in this users Token set</param>
-        /// <returns>True if all tokens are present</returns>
-        public bool IsValid(IReadOnlyList<String> requiredTokens)
-        {
-            if (requiredTokens == null)
-                return true;
-            if (requiredTokens == AuthTools.NoAuth)
-                return false;
-            var tl = requiredTokens.Count;
-            if (tl <= 0)
-                return true;
-            var ts = Tokens;
-            if (ts == null)
-                return true;
-            for (int i = 0; i < tl; ++ i)
-            {
-                if (ts.Contains(requiredTokens[i])) 
-                    return true;
-            }
-            return false;
-        }
 
 
         public Authorization(AuthorizerBase auth, string username, IReadOnlySet<string> tokens, bool weakMethod, String guid, string email = null, string nickName = null, object authContext = null, String domain = null, string language = null)
@@ -315,6 +263,70 @@ namespace SysWeaver.Auth
         /// <returns>An url to the specified image</returns>
         public String GetUserImage(String imageName = "small", String rootUrl = "../")
             => String.Concat(rootUrl, "auth/UserImages/", Guid.ToHex(), '/', imageName);
+
+    }
+
+
+    public static class AuthExt
+    {
+        /// <summary>
+        /// Validate that this user have ANY of the supplied tokens
+        /// </summary>
+        /// <param name="auth">The autorization</param>
+        /// <param name="requiredTokens">A list of comma separated tokens that must exist in this users Token set</param>
+        /// <returns>True if all tokens are present</returns>
+        public static bool IsValid(this Authorization auth, String requiredTokens = null)
+        {
+            if (requiredTokens == null)
+                return true;
+            requiredTokens = requiredTokens.Trim();
+            if (requiredTokens == "-")
+                return false;
+            if (auth == null)
+                return false;
+            var t = requiredTokens.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            var tl = t.Length;
+            if (tl <= 0)
+                return true;
+            var ts = auth.Tokens;
+            if (ts == null)
+                return false;
+            for (int i = 0; i < tl; ++i)
+            {
+                if (ts.Contains(t[i].FastToLower()))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Validate that this user have ANY of the supplied tokens
+        /// </summary>
+        /// <param name="auth">The autorization</param>
+        /// <param name="requiredTokens">A list of tokens that must exist in this users Token set, must be all lowercased</param>
+        /// <returns>True if all tokens are present</returns>
+        public static bool IsValid(this Authorization auth, IReadOnlyList<String> requiredTokens)
+        {
+            if (requiredTokens == null)
+                return true;
+            if (requiredTokens == AuthTools.NoAuth)
+                return false;
+            if (auth == null)
+                return false;
+            var tl = requiredTokens.Count;
+            if (tl <= 0)
+                return true;
+            var ts = auth.Tokens;
+            if (ts == null)
+                return false;
+            for (int i = 0; i < tl; ++i)
+            {
+                if (ts.Contains(requiredTokens[i]))
+                    return true;
+            }
+            return false;
+        }
+
 
     }
 

@@ -665,6 +665,7 @@ namespace SysWeaver.AI
                 Messages = msgs,
                 CanClear = a == null ? (ca == null) : a.IsValid(ca),
                 CanRemove = ChatRemoveMessages.None,
+                CanPost = true,
                 SpeechName = s.SpeechNames?.Select(x => String.Format(x, s.AgentSpeechName))?.ToArray(),
                 Voices = s.Voices?.Select(x => new Chat.ChatVoice
                 {
