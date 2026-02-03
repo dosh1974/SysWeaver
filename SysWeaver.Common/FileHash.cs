@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.IO.MemoryMappedFiles;
 using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -52,6 +53,58 @@ namespace SysWeaver
             return ha == hb;
         }
 
+        static unsafe String MemoryMappedGetHash(String filename, int len)
+        {
+            using var file = MemoryMappedFile.CreateFromFile(filename, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
+            using var view = file.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read);
+            byte* ptr = (byte*)0;
+            var h = view.SafeMemoryMappedViewHandle;
+            h.AcquirePointer(ref ptr);
+            try
+            {
+                ReadOnlySpan<Byte> data = new(ptr, (int)len);
+                Span<Byte> hash = stackalloc Byte[MD5.HashSizeInBytes];
+                MD5.HashData(data, hash);
+                return HashTools.GetHashString16(hash);
+            }
+            finally
+            {
+                h.ReleasePointer();
+            }
+        }
+
+
+        /// <summary>
+        /// Do never use! 
+        /// Use GetHash instead, this version don't do any caching or smart stuff
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <returns></returns>
+        public static String UncachedGetHash(String filename)
+        {
+            var len = new FileInfo(filename).Length;
+            if (len < (1L << 31))
+                return MemoryMappedGetHash(filename, (int)len);
+            Span<Byte> hash = stackalloc Byte[MD5.HashSizeInBytes];
+            using (var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read))
+                MD5.HashData(s, hash);
+            return HashTools.GetHashString16(hash);
+        }
+
+        /// <summary>
+        /// Do never use! 
+        /// Use GetHashAsync instead, this version don't do any caching or smart stuff
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <returns></returns>
+        public static async ValueTask<String> UncachedGetHashAsync(String filename)
+        {
+            var len = new FileInfo(filename).Length;
+            if (len < (1L << 31))
+                return MemoryMappedGetHash(filename, (int)len);
+            using var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return HashTools.GetHashString16(await MD5.HashDataAsync(s).ConfigureAwait(false));
+        }
 
         /// <summary>
         /// Get a hash of the contents of the supplied file
@@ -84,17 +137,15 @@ namespace SysWeaver
             catch
             {
             }
-            Span<Byte> hash = stackalloc Byte[MD5.HashSizeInBytes];
+            String text;
             try
             {
-                using (var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read))
-                    MD5.HashData(s, hash);
+                text = UncachedGetHash(filename);
             }
             catch
             {
                 return null;
             }
-            var text = HashTools.GetHashString16(hash);
             try
             {
                 File.WriteAllText(fn, text, Encoding.ASCII);
@@ -168,7 +219,7 @@ namespace SysWeaver
             catch
             {
             }
-            Byte[] hash;
+            String text;
             try
             {
                 if (isWeb)
@@ -179,20 +230,20 @@ namespace SysWeaver
                     // Ensure we got a successful response
                     if (!response.IsSuccessStatusCode)
                         return null;
+
                     using (var s = await response.Content.ReadAsStreamAsync().ConfigureAwait(false))
-                        hash = await MD5.HashDataAsync(s).ConfigureAwait(false);
+                        text = HashTools.GetHashString16(await MD5.HashDataAsync(s).ConfigureAwait(false));
+
                 }
                 else
                 {
-                    using (var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read))
-                        hash = await MD5.HashDataAsync(s).ConfigureAwait(false);
+                    text = await UncachedGetHashAsync(filename).ConfigureAwait(false);
                 }
             }
             catch
             {
                 return null;
             }
-            var text = HashTools.GetHashString16(hash);
             try
             {
                 await File.WriteAllTextAsync(fn, text, Encoding.ASCII).ConfigureAwait(false);
@@ -283,7 +334,8 @@ namespace SysWeaver
             {
                 return null;
             }
-            var keyHash = MD5.HashData(System.Runtime.InteropServices.MemoryMarshal.Cast<Char, Byte>(keyName.AsSpan()));
+            Span<Byte> keyHash = stackalloc Byte[MD5.HashSizeInBytes];
+            MD5.HashData(System.Runtime.InteropServices.MemoryMarshal.Cast<Char, Byte>(keyName.AsSpan()), keyHash);
             keyName = HashTools.GetHashString16(keyHash);
             return keyName;
         }

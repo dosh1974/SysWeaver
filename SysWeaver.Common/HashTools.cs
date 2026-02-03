@@ -27,7 +27,7 @@ namespace SysWeaver
         /// <returns>The text</returns>
         public static String GetHashString(String text)
         {
-            Span<Byte> d = stackalloc Byte[16];
+            Span<Byte> d = stackalloc Byte[MD5.HashSizeInBytes];
             MD5.HashData(MemoryMarshal.Cast<Char, Byte>(text.AsSpan()), d);
             return GetHashString16(d);
         }
