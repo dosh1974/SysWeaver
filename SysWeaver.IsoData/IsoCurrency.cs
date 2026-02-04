@@ -14,7 +14,7 @@ namespace SysWeaver.IsoData
     public sealed class IsoCurrency
     {
         /// <summary>
-        /// The ISO 4217 currency code of the currency
+        /// The two letter ISO 4217 currency code of the currency
         /// </summary>
         [TableDataIsoCurrency]
         [TableDataOrder(-3)]
