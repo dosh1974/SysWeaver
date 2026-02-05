@@ -164,6 +164,27 @@ namespace SysWeaver.IsoData
         /// <returns>Currency information or null if an invalid currency number specified</returns>
         public static IsoCurrency TryGet(int number) => NumberToInfo.TryGetValue(number, out var i) ? i : null;
 
+
+
+        /// <summary>
+        /// Validate that the input is a valid language code
+        /// </summary>
+        /// <param name="currency">The ISO 4217 language code or number of the currency</param>
+        /// <returns>The ISO 4217 language code or null for invalid</returns>
+        public static String Validate(string currency)
+        {
+            currency = currency?.Trim();
+            if (String.IsNullOrEmpty(currency))
+                return null;
+            currency = currency.FastToLower();
+            if (IsoToInfo.TryGetValue(currency, out var i))
+                return i?.Iso4217;
+            if (!int.TryParse(currency, out var num))
+                return null;
+            NumberToInfo.TryGetValue(num, out i);
+            return i?.Iso4217;
+        }
+
         /// <summary>
         /// A list of all currencies known
         /// </summary>

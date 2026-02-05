@@ -418,9 +418,9 @@ namespace SysWeaver.IsoData
         /// </summary>
         /// <param name="language">The ISO 639-1 language code of the language with an optional two letter ISO 3166-A2 country code separated by a hyphen ('-')</param>
         /// <param name="allowNames">If true a known language name is accepted</param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
-        public static String Validate(string language, bool allowNames  = false)
+        /// <returns>The ISO 639-1 language code (with option country code) or null for invalid codes</returns>
+        /// <exception cref="Exception">For malformed input</exception>
+        public static String Validate(string language, bool allowNames = false)
         {
             language = language?.Trim();
             if (String.IsNullOrEmpty(language))
