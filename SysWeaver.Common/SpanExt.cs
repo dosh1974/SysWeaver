@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 
 namespace SysWeaver
 {
@@ -42,6 +43,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="data"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToHexString(this Span<Byte> data) => ToHexString((ReadOnlySpan<Byte>)data);
 
         /// <summary>

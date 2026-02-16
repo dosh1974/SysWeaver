@@ -182,6 +182,57 @@ namespace SysWeaver
         }
 
 
+
+
+        /// <summary>
+        /// Create a dictionary from a collection, if the same key is present more than once, the last is used
+        /// </summary>
+        /// <typeparam name="K"></typeparam>
+        /// <typeparam name="V"></typeparam>
+        /// <param name="vals">Values</param>
+        /// <param name="k">Optional equality comparer</param>
+        /// <returns></returns>
+        public static ConcurrentDictionary<K, V> CreateConcurrent<K, V>(IEnumerable<KeyValuePair<K, V>> vals, IEqualityComparer<K> k = null)
+        {
+            var d = k == null ? new ConcurrentDictionary<K, V>() : new ConcurrentDictionary<K, V>(k);
+            foreach (var x in vals.Nullable())
+                d[x.Key] = x.Value;
+            return d;
+        }
+
+        /// <summary>
+        /// Create a dictionary from a collection, if the same key is present more than once, the last is used
+        /// </summary>
+        /// <typeparam name="K"></typeparam>
+        /// <typeparam name="V"></typeparam>
+        /// <param name="vals">Values</param>
+        /// <param name="k">Optional equality comparer</param>
+        /// <returns></returns>
+        public static ConcurrentDictionary<K, V> CreateConcurrent<K, V>(IEnumerable<Tuple<K, V>> vals, IEqualityComparer<K> k = null)
+        {
+            var d = k == null ? new ConcurrentDictionary<K, V>() : new ConcurrentDictionary<K, V>(k);
+            foreach (var x in vals.Nullable())
+                d[x.Item1] = x.Item2;
+            return d;
+        }
+
+        /// <summary>
+        /// Create a dictionary from a collection, if the same key is present more than once, the last is used
+        /// </summary>
+        /// <typeparam name="K"></typeparam>
+        /// <typeparam name="V"></typeparam>
+        /// <param name="vals">Values</param>
+        /// <param name="k">Optional equality comparer</param>
+        /// <returns></returns>
+        public static ConcurrentDictionary<K, V> CreateConcurrent<K, V>(IEnumerable<ValueTuple<K, V>> vals, IEqualityComparer<K> k = null)
+        {
+            var d = k == null ? new ConcurrentDictionary<K, V>() : new ConcurrentDictionary<K, V>(k);
+            foreach (var x in vals.Nullable())
+                d[x.Item1] = x.Item2;
+            return d;
+        }
+
+
         /// <summary>
         /// Try to remove an element from a dictionary
         /// </summary>

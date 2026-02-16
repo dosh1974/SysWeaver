@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace SysWeaver
@@ -25,19 +26,14 @@ namespace SysWeaver
             return value;
         }
 
-
-
         /// <summary>
         /// Add quotation chars around a string. Ex: Test => "Test"
         /// </summary>
         /// <param name="s">The string to add quotation chars around</param>
         /// <param name="quotationChar">The quotation char to use</param>
         /// <returns>A quoted string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToQuoted(this String s, Char quotationChar = '"') => s == null ? "null" : String.Join(s, quotationChar, quotationChar);
-
-
-
-
 
         /// <summary>
         /// Add quotation chars around a string. Ex: Test => "Test"
@@ -45,6 +41,7 @@ namespace SysWeaver
         /// <param name="s">The string to add quotation chars around</param>
         /// <param name="quotationChars">The quotation chars to use</param>
         /// <returns>A quoted string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToQuoted(this String s, String quotationChars) => s == null ? "null" : String.Join(s, quotationChars, quotationChars);
 
         /// <summary>
@@ -52,6 +49,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="s">The string to format as a filename</param>
         /// <returns>A filename formatted string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToFilename(this String s) => s == null ? "null" : String.Join(s, "\"file://", '"');
 
         /// <summary>
@@ -59,6 +57,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="s">The string to format as a filename</param>
         /// <returns>A filename formatted string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToMail(this String s) => s == null ? "null" : String.Join(s, "\"mailto://", '"');
 
 
@@ -67,6 +66,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="s">The string to format as a folder name</param>
         /// <returns>A folder name formatted string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToFolder(this String s) => s == null ? "null" : String.Join(Path.TrimEndingDirectorySeparator(s), "file://\"", Path.DirectorySeparatorChar + "\"");
 
 
@@ -264,6 +264,7 @@ namespace SysWeaver
         /// <param name="text">First string</param>
         /// <param name="matchWith">Second string</param>
         /// <returns>The sum of the best levenstein distance between each word pair</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int FuzzyMatch(string text, string matchWith)
             => FuzzyMatch(ExtractWords(text), ExtractWords(matchWith));
 
@@ -282,6 +283,7 @@ namespace SysWeaver
                                         (FuzzyLevensteinShiftWeight > FuzzyOrderShiftWeight ? FuzzyLevensteinShiftWeight : FuzzyOrderShiftWeight)
                                         :
                                         (FuzzyPartOfShiftWeight > FuzzyOrderShiftWeight ? FuzzyPartOfShiftWeight : FuzzyOrderShiftWeight);
+
 
         public static int FuzzyMaxErr(int searchLength, int maxError = 2) => Math.Max(1, (((searchLength + maxError - 1) * FuzzyLevensteinNumberCost) << FuzzyMaxShiftWeight) / maxError);
 
@@ -766,6 +768,7 @@ namespace SysWeaver
         /// <param name="last">The last separator</param>
         /// <param name="args">The strings to join</param>
         /// <returns>The combined string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String JoinWithSpecialLast(String first, String last, params String[] args)
             => JoinWithSpecialLast(first, last, (IReadOnlyList<String>)args);
 
@@ -776,6 +779,7 @@ namespace SysWeaver
         /// <param name="last">The last separator</param>
         /// <param name="args">The strings to join</param>
         /// <returns>The combined string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String JoinWithSpecialLast(String first, String last, IEnumerable<String> args)
             => JoinWithSpecialLast(first, last, (IReadOnlyList<String>)args?.ToList());
 
@@ -786,6 +790,7 @@ namespace SysWeaver
         /// <param name="last">The last separator</param>
         /// <param name="args">The strings to join</param>
         /// <returns>The combined string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String JoinWithSpecialLast(String first, String last, List<String> args)
             => JoinWithSpecialLast(first, last, (IReadOnlyList<String>)args?.ToList());
 
@@ -820,6 +825,7 @@ namespace SysWeaver
         /// <param name="last">The last separator</param>
         /// <param name="args">The objects to join</param>
         /// <returns>The combined string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String JoinWithSpecialLast<T>(String first, String last, params T[] args)
             => JoinWithSpecialLast(first, last, (IReadOnlyList<T>)args);
 
@@ -830,6 +836,7 @@ namespace SysWeaver
         /// <param name="last">The last separator</param>
         /// <param name="args">The objects to join</param>
         /// <returns>The combined string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String JoinWithSpecialLast<T>(String first, String last, IEnumerable<T> args)
             => JoinWithSpecialLast(first, last, (IReadOnlyList<T>)args?.ToList());
 

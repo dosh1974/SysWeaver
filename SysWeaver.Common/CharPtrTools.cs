@@ -15,7 +15,7 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Char* IndexOf(String s, Char* start, Char* end)
         {
-            fixed (Char* ss = s.AsSpan())
+            fixed (Char* ss = s)
                 return IndexOf(ss, s.Length, start, end);
         }
 
@@ -61,6 +61,31 @@ namespace SysWeaver
             }
             return null;
         }
+
+        public static Char* IndexOfAny(char c0, char c1, Char* start, Char* end)
+        {
+            while (start < end)
+            {
+                var c = *start;
+                if ((c == c0) || (c == c1))
+                    return start;
+                ++start;
+            }
+            return null;
+        }
+
+        public static Char* IndexOfAny(char c0, char c1, char c2, Char* start, Char* end)
+        {
+            while (start < end)
+            {
+                var c = *start;
+                if ((c == c0) || (c == c1) || (c == c2))
+                    return start;
+                ++start;
+            }
+            return null;
+        }
+
 
         /// <summary>
         /// Trim away whitespaces from a memory range
@@ -113,7 +138,7 @@ namespace SysWeaver
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToLowerCaseString(Char* start, int len)
-            => String.Create(len, new IntPtr(start), CreateLowerCasedString);
+            => String.Create(len, (IntPtr)start, CreateLowerCasedString);
 
 
         /// <summary>
@@ -125,10 +150,14 @@ namespace SysWeaver
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToUpperCaseString(Char* start, int len)
-            => String.Create(len, new IntPtr(start), CreateUpperCasedString);
+            => String.Create(len, (IntPtr)start, CreateUpperCasedString);
 
 
-        static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
+        public static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
+
+
+        public static readonly Func<Char, Char> ToLower = Ti.ToLower;
+        public static readonly Func<Char, Char> ToUpper = Ti.ToUpper;
 
         /// <summary>
         /// Copy some memory to a lowercased version
@@ -136,18 +165,14 @@ namespace SysWeaver
         /// <param name="dest"></param>
         /// <param name="source"></param>
         /// <param name="length"></param>
-        /// <returns></returns>
-        public static Char* CopyLowerCased(Char* dest, Char* source, int length)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void CopyLowerCased(Char* dest, Char* source, int length)
         {
-            var text = Ti;
-            var end = source + length;
-            while (source < end)
+            while (length > 0)
             {
-                *dest = text.ToLower(*source);
-                ++source;
-                ++dest;
+                --length;
+                dest[length] = Char.ToLowerInvariant(source[length]);
             }
-            return dest;
         }
 
         /// <summary>
@@ -156,35 +181,48 @@ namespace SysWeaver
         /// <param name="dest"></param>
         /// <param name="source"></param>
         /// <param name="length"></param>
-        /// <returns></returns>
-        public static Char* CopyUpperCased(Char* dest, Char* source, int length)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void CopyUpperCased(Char* dest, Char* source, int length)
         {
-            var text = Ti;
-            var end = source + length;
-            while (source < end)
+            while (length > 0)
             {
-                *dest = text.ToUpper(*source);
-                ++source;
-                ++dest;
+                --length;
+                dest[length] = Char.ToUpperInvariant(source[length]);
             }
-            return dest;
         }
 
 
         #region String creators
 
-        static readonly SpanAction<Char, IntPtr> CreateUpperCasedString= (to, src) =>
-        {
-            fixed (Char* d = to)
-                CopyUpperCased(d, (Char*)src.ToPointer(), to.Length);
-        };
-
-
         static readonly SpanAction<Char, IntPtr> CreateLowerCasedString = (to, src) =>
         {
             fixed (Char* d = to)
-                CopyLowerCased(d, (Char*)src.ToPointer(), to.Length);
+            {
+                var source = (Char*)src.ToPointer();
+                var length = to.Length;
+                while (length > 0)
+                {
+                    --length;
+                    d[length] = Char.ToLowerInvariant(source[length]);
+                }
+            }
         };
+
+
+        static readonly SpanAction<Char, IntPtr> CreateUpperCasedString= (to, src) =>
+        {
+            fixed (Char* d = to)
+            {
+                var source = (Char*)src.ToPointer();
+                var length = to.Length;
+                while (length > 0)
+                {
+                    --length;
+                    d[length] = Char.ToUpperInvariant(source[length]);
+                }
+            }
+        };
+
 
 
         #endregion//String creators

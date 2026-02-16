@@ -271,7 +271,7 @@ namespace SysWeaver.Net
         */
 
 
-        static readonly FastMemCache<String, IReadOnlyDictionary<String, String>> CookieCache = new(TimeSpan.FromMinutes(1), StringComparer.Ordinal);
+        //static readonly FastMemCache<String, IReadOnlyDictionary<String, String>> CookieCache = new(TimeSpan.FromMinutes(1), StringComparer.Ordinal);
 
 
 
@@ -279,10 +279,10 @@ namespace SysWeaver.Net
         /// Parses the cookies found in the supplied strings and created a dictionary
         /// </summary>
         /// <param name="newCookieStr"></param>
-        public static IReadOnlyDictionary<String, String> ParseCookieString(String newCookieStr)
-            => CookieCache.GetOrUpdate(newCookieStr ?? "", IntParseCookieString);
+        //public static IReadOnlyDictionary<String, String> ParseCookieString(String newCookieStr)
+            //=> CookieCache.GetOrUpdate(newCookieStr ?? "", IntParseCookieString);
 
-        static unsafe IReadOnlyDictionary<String, String> IntParseCookieString(String newCookieStr)
+        public static unsafe IReadOnlyDictionary<String, String> ParseCookieString(String newCookieStr)
         {
             var cookies = new Dictionary<String, String>(StringComparer.Ordinal);
             var sp = newCookieStr.AsSpan();

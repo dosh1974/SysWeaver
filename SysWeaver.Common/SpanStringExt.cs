@@ -17,10 +17,7 @@ namespace SysWeaver
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToLowerCaseString(this ReadOnlySpan<Char> text)
-        {
-            fixed (Char* d = text)
-                return CharPtrTools.ToLowerCaseString(d, text.Length);
-        }
+            => String.Create(text.Length, text, CreateLowerCasedString);
 
         /// <summary>
         /// Create an uppercase string from a span
@@ -29,11 +26,7 @@ namespace SysWeaver
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToUpperCaseString(this ReadOnlySpan<Char> text)
-        {
-            fixed (Char* d = text)
-                return CharPtrTools.ToUpperCaseString(d, text.Length);
-
-        }
+            => String.Create(text.Length, text, CreateUpperCasedString);
 
 
         /// <summary>
@@ -131,6 +124,32 @@ namespace SysWeaver
                 }
             }
         };
+
+
+        static readonly SpanAction<Char, ReadOnlySpan<Char>> CreateUpperCasedString = (to, src) =>
+        {
+            var t = CharPtrTools.Ti;
+            var l = to.Length;
+            while (l > 0)
+            {
+                --l;
+                to[l] = t.ToUpper(src[l]);
+            }
+        };
+
+
+        static readonly SpanAction<Char, ReadOnlySpan<Char>> CreateLowerCasedString = (to, src) =>
+        {
+            var t = CharPtrTools.Ti;
+            var l = to.Length;
+            while (l > 0)
+            {
+                --l;
+                to[l] = t.ToLower(src[l]);
+            }
+        };
+
+
 
     }
 

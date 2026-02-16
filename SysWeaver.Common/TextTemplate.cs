@@ -441,7 +441,7 @@ namespace SysWeaver
 
         static readonly IReadOnlyDictionary<String, Func<String, String>> Transforms = new Dictionary<String, Func<String, String>>(StringComparer.Ordinal)
         {
-            { "_", new Func<String, String>(x => StringExt.FastLower(x)) }, 
+            { "_", new Func<String, String>(x => StringExt.FastToLower(x)) }, 
             { "^", new Func<String, String>(x => StringExt.FastToUpper(x)) },
             { "~", new Func<String, String>(x => x.RemoveCamelCase()) },
 
@@ -454,22 +454,22 @@ namespace SysWeaver
             { "*", PathExt.SafeFilename },
 
 
-            { "_@", x => HttpUtility.HtmlAttributeEncode(StringExt.FastLower(x)) }, 
-            { "_#", x => HttpUtility.HtmlEncode(StringExt.FastLower(x)) }, 
-            { "_%", x => HttpUtility.UrlEncode(StringExt.FastLower(x)) }, 
-            { "_$", x => HttpUtility.JavaScriptStringEncode(StringExt.FastLower(x), false) },
-            { "_£", x => HttpUtility.JavaScriptStringEncode(StringExt.FastLower(x), true) },
-            { "_¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(StringExt.FastLower(x)), true) },
-            { "_*", x => PathExt.SafeFilename(StringExt.FastLower(x)) },
+            { "_@", x => HttpUtility.HtmlAttributeEncode(StringExt.FastToLower(x)) }, 
+            { "_#", x => HttpUtility.HtmlEncode(StringExt.FastToLower(x)) }, 
+            { "_%", x => HttpUtility.UrlEncode(StringExt.FastToLower(x)) }, 
+            { "_$", x => HttpUtility.JavaScriptStringEncode(StringExt.FastToLower(x), false) },
+            { "_£", x => HttpUtility.JavaScriptStringEncode(StringExt.FastToLower(x), true) },
+            { "_¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(StringExt.FastToLower(x)), true) },
+            { "_*", x => PathExt.SafeFilename(StringExt.FastToLower(x)) },
 
 
-            { "^@", x => HttpUtility.HtmlAttributeEncode(StringExt.FastUpper(x)) }, 
-            { "^#", x => HttpUtility.HtmlEncode(StringExt.FastUpper(x)) }, 
-            { "^%", x => HttpUtility.UrlEncode(StringExt.FastUpper(x)) }, 
-            { "^$", x => HttpUtility.JavaScriptStringEncode(StringExt.FastUpper(x), false) },
-            { "^£", x => HttpUtility.JavaScriptStringEncode(StringExt.FastUpper(x), true) },
-            { "^¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(StringExt.FastUpper(x)), true) },
-            { "^*", x => PathExt.SafeFilename(StringExt.FastUpper(x)) },
+            { "^@", x => HttpUtility.HtmlAttributeEncode(StringExt.FastToUpper(x)) }, 
+            { "^#", x => HttpUtility.HtmlEncode(StringExt.FastToUpper(x)) }, 
+            { "^%", x => HttpUtility.UrlEncode(StringExt.FastToUpper(x)) }, 
+            { "^$", x => HttpUtility.JavaScriptStringEncode(StringExt.FastToUpper(x), false) },
+            { "^£", x => HttpUtility.JavaScriptStringEncode(StringExt.FastToUpper(x), true) },
+            { "^¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(StringExt.FastToUpper(x)), true) },
+            { "^*", x => PathExt.SafeFilename(StringExt.FastToUpper(x)) },
 
             { "~@", x => HttpUtility.HtmlAttributeEncode(x.RemoveCamelCase()) },
             { "~#", x => HttpUtility.HtmlEncode(x.RemoveCamelCase()) },

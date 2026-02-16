@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace SysWeaver
@@ -9,29 +11,23 @@ namespace SysWeaver
     public static class StringExt
     {
 
-        /// <summary>
-        /// Make an culture invariant upper case version of a string
-        /// </summary>
-        public static readonly Func<String, String> FastLower = CultureInfo.InvariantCulture.TextInfo.ToLower;
-
-        /// <summary>
-        /// Make an culture invariant upper case version of a string
-        /// </summary>
-        public static readonly Func<String, String> FastUpper = CultureInfo.InvariantCulture.TextInfo.ToUpper;
+        static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
 
         /// <summary>
         /// Make an culture invariant lower case version of a string
         /// </summary>
         /// <param name="str">The string to transform into a culture invariant lower case</param>
         /// <returns>Culture invariant lower case string</returns>
-        public static String FastToLower(this String str) => str == null ? null : FastLower(str);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static String FastToLower(this String str) => str == null ? null : Ti.ToLower(str);
 
         /// <summary>
         /// Make an culture invariant upper case version of a string
         /// </summary>
         /// <param name="str">The string to transform into a culture invariant upper case</param>
         /// <returns>Culture invariant upper case string</returns>
-        public static String FastToUpper(this String str) => str == null ? null : FastUpper(str);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static String FastToUpper(this String str) => str == null ? null : Ti.ToUpper(str);
 
         /// <summary>
         /// A fast case sensitive, invariant culture starts with method
@@ -101,14 +97,12 @@ namespace SysWeaver
         /// <param name="str"></param>
         /// <param name="value"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastEquals(this String str, String value)
         {
             if (value == null)
                 return str == null;
             if (str == null)
-                return false;
-            var vl = value.Length;
-            if (str.Length != vl)
                 return false;
             return str.AsSpan().SequenceEqual(value.AsSpan());
         }
@@ -235,6 +229,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="str">The string</param>
         /// <returns>null if the string is null or empty</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String NullIfEmpty(this String str) => String.IsNullOrEmpty(str) ? null : str;
 
         /// <summary>
@@ -243,6 +238,7 @@ namespace SysWeaver
         /// <param name="separator"></param>
         /// <param name="texts"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String JoinNonEmpty(String separator, params String[] texts) => texts == null ? null : String.Join(separator, texts.Where(x => !String.IsNullOrEmpty(x)));
 
 
@@ -450,8 +446,6 @@ namespace SysWeaver
             }
             return o == null ? text : new String(o, 0, d);
         }
-
-
 
     }
 

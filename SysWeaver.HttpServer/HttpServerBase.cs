@@ -2,6 +2,7 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -2083,6 +2084,7 @@ namespace SysWeaver.Net
         }*/
 
         static readonly SearchValues<Char> HostEnd = SearchValues.Create(['/', ':', '?' ]);
+        static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
 
         protected unsafe HttpServerHostInfo GetHost(out String prefix, out int queryStart, ref String url)
         {
@@ -2096,7 +2098,7 @@ namespace SysWeaver.Net
                 var end = CharPtrTools.IndexOfAny(HostEnd, start, urlEnd);
                 if (end == null)
                     end = urlEnd;
-                var hostName = CharPtrTools.ToLowerCaseString(start, (int)(end - start));
+                var hostName = Ti.ToLower(url.Substring((int)(start - urlStart), (int)(end - start)));
                 if (!Hosts.TryGetValue(hostName, out var host))
                     host = CreateHost(hostName);
                 prefix = host.Prefix ?? host.Prefixes.StartsWithAny(url);
