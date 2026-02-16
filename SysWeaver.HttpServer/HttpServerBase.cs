@@ -2088,6 +2088,7 @@ namespace SysWeaver.Net
 
         protected unsafe HttpServerHostInfo GetHost(out String prefix, out int queryStart, ref String url)
         {
+            url = HttpUtility.UrlDecode(url);
             var urlSpan = url.AsSpan();
             var urlLen = urlSpan.Length;
             fixed (Char* urlStart = urlSpan)
