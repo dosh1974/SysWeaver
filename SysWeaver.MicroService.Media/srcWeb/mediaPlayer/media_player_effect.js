@@ -8,6 +8,12 @@
     Static = false;
     Transparent = false;
     AdaptiveSize = true;
+    WrapU = false;
+    WrapY = false;
+    Texture = null;
+    WebGL2 = false;
+    MipMap = false;
+    AntiAlias = false;
 }
 
 class MediaPlayerEffect {
@@ -22,8 +28,8 @@ class MediaPlayerEffect {
         params = cp;
         t.Params = params;
         const e = document.createElement("canvas");
-        const gl = e.getContext("webgl", {
-            antialias: false,
+        const gl = e.getContext(params.WebGL2 ? "webgl2" : "webgl", {
+            antialias: params.AntiAlias,
             depth: false,
             stencil: false,
             alpha: params.Transparent,
@@ -244,7 +250,11 @@ class MediaPlayerEffect {
             return false;
 
         gl.disable(gl.DEPTH_TEST);
-        gl.clearColor(0.0, 0.5, 0.0, 1.0);
+        gl.disable(gl.BLEND);
+        if (props.Transparent)
+            gl.clearColor(0.0, 0.0, 0.0, 0.0);
+        else
+            gl.clearColor(0.0, 0.5, 0.0, 1.0);
         gl.clearDepth(1.0);
 
         t.Cached = true;
@@ -295,8 +305,8 @@ class MediaPlayerEffect {
             if (pc > 1)
                 MediaPlayerEffect.AdjustDpi(t.AvgDrawTimeMs, max, min);
         t.PrintCounter = pc;
-        if ((pc & 7) === 0)
-            console.log(t.Url + " - Average draw time: " + t.AvgDrawTimeMs + " ms [" + c + " measurements");
+//        if ((pc & 7) === 0)
+//            console.log(t.Url + " - Average draw time: " + t.AvgDrawTimeMs + " ms [" + c + " measurements");
         t.MeasureCount = 0;
         t.TotalTime = 0;
     }
@@ -382,12 +392,15 @@ class MediaPlayerEffect {
                     gl.activeTexture(gl.TEXTURE0);
                     tex.Apply(tuv, ts);
                     gl.uniform1i(tu, 0);
+                    if (p.WrapU)
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                    if (p.WrapV)
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
                 }
             }
         }
 
         const draw = () => {
-            //gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
             gl.drawArrays(gl.TRIANGLES, 0, 3);
 
         };
