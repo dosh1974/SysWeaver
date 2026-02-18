@@ -109,6 +109,29 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// Try add new value
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="value">The new value</param>
+        public bool TryAdd(K key, V value)
+        {
+            var c = C;
+            Lock(key);
+            try
+            {
+                var val = ValueTuple.Create(DateTime.UtcNow + TimeOut, value, (Task<V>)null);
+                if (!c.TryAdd(key, val))
+                    return false;
+                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                return true;
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        /// <summary>
         /// Get an item if it's cached
         /// </summary>
         /// <param name="key">Tke key</param>
