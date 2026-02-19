@@ -243,6 +243,17 @@ namespace SysWeaver.Db
                 }
                 catch (Exception ex)
                 {
+                    if (!p.ReadOnly)
+                    {
+                        try
+                        {
+                            await CreateSchemaIfNotExist(p.Schema).ConfigureAwait(false);
+                            break;
+                        }
+                        catch
+                        {
+                        }
+                    }
                     if (i == 0)
                         m?.AddMessage(LogPrefix + "Connection problems, will retry in a while: " + ex.Message, MessageLevels.Warning);
                     if (i > 0)
@@ -252,8 +263,6 @@ namespace SysWeaver.Db
                     m?.AddMessage(LogPrefix + "Retrying connection", MessageLevels.Debug);
                 }
             }
-            if (!p.ReadOnly)
-                await CreateSchemaIfNotExist(p.Schema).ConfigureAwait(false);
             m?.AddMessage(LogPrefix + "Connected!", MessageLevels.Debug);
         }
 

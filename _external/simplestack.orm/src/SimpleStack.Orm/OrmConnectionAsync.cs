@@ -288,6 +288,25 @@ namespace SimpleStack.Orm
         }
 
         /// <summary>
+        /// Execute a query to update only some fields of the give object in database using the <see cref="PrimaryKeyAttribute"/> to identify the record
+        /// </summary>
+        /// <param name="model">The object to update</param>
+        /// <param name="tableName">The table</param>
+        /// <param name="onlyFields">Specify the fields that need to be updated</param>
+        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="TKey"></typeparam>
+        /// <returns></returns>
+        public Task<int> UpdateAsync<T, TKey>(T model, String tableName, Expression<Func<T, TKey>> onlyFields, CancellationToken cancellationToken = new CancellationToken())
+        {
+            var s = new TypedUpdateStatement<T>(DialectProvider);
+            s.Table(tableName);
+            s.ValuesOnly(model, onlyFields);
+            var cmd = DialectProvider.ToUpdateStatement(s.Statement, CommandFlags.None, cancellationToken);
+            return this.ExecuteScalarAsync<int>(cmd);
+        }
+
+
+        /// <summary>
         /// Execute a query to update all record matching the where expression
         /// </summary>
         /// <param name="obj">the object values to update, the Property names must match the property name of <see cref="T"/></param>
