@@ -2596,7 +2596,9 @@ function SetImageSource(img, src, fallback, flushCache, onLoaded, reloadOnMessag
     const f = fallback;
     let count = 0;
     const ims = img.style;
-    const oldOp = ims.opacity;
+    let oldOp = ims.opacity;
+    if (oldOp <= 0)
+        oldOp = 1;
     ims.opacity = 0;
     img.onerror = ev => {
         ev.preventDefault();

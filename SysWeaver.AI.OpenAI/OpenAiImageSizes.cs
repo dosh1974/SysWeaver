@@ -3,18 +3,34 @@
     public enum OpenAiImageSizes
     {
         /// <summary>
-        /// An image of size 1024x1024 (square)
+        /// Let the image model choose aspect ratio
         /// </summary>
-        _1024x1024,
+        Auto,
 
         /// <summary>
-        /// An image of size 1024x1792 (portrait)
+        /// 1:1 aspect ratio
         /// </summary>
-        _1024x1792,
+        Square,
 
         /// <summary>
-        /// An image of size 1792x1024 (landscape)
+        /// Typically 3:4 aspect ratio
         /// </summary>
-        _1792x1024,
+        Portrait,
+
+        /// <summary>
+        /// Typically 4:3 aspect ratio
+        /// </summary>
+        Landscape,
+
+        /// <summary>
+        /// Typically 9:16 aspect ratio
+        /// </summary>
+        TallPortrait,
+
+        /// <summary>
+        /// Typically 16:9 aspect ratio
+        /// </summary>
+        WideLandscape,
+
     }
 }

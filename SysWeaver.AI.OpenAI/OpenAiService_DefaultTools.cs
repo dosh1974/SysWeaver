@@ -220,8 +220,9 @@ namespace SysWeaver.AI
         }
 
         /// <summary>
-        /// Use this function to display an URL to the user.
-        /// Prefer this to displaying hyperlinks, embedding images etc in the text response.
+        /// Use this function to display data to the user.
+        /// ALWAYS use this method to display ANY url's returned by a tool.
+        /// Do not output the url or link to the url or in your text output.
         /// </summary>
         /// <param name="url">The url to display</param>
         /// <param name="request"></param>

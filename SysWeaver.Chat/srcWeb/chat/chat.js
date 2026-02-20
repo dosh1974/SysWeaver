@@ -2026,7 +2026,7 @@ class Chat {
 
             const ttt = _TF("Click to show message menu", "Tool tip description on a button that when clicked will show a menu with options for a chat message");
             if (fi) {
-                const img = createImg("img");
+                const img = document.createElement("img"); // Do not use createImg here since we're using SetImageSource.
                 msgIcon.appendChild(img);
                 SetImageSource(img, fi, null, false, isOk => {
                     if (isOk) {

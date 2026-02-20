@@ -64,14 +64,23 @@ namespace SysWeaver.AI
         public async Task<ReadOnlyMemory<Byte>> GenImage(OpenAiImagePrompt p, HttpServerRequest request)
         {
             using var _ = await (ImageGenLock?.Lock() ?? AsyncLock.NoLock).ConfigureAwait(false);
-            var client = CreateImageClient();
+            var model = p.Model ?? DefaultImageModel;
+            var client = CreateImageClient(model);
             ImageGenerationOptions options = null;
-            if (DefaultImageModel.FastEquals("gpt-image-1"))
+            if (GptImageModels.Contains(model))
             {
                 options = new ImageGenerationOptions
                 {
                     Quality = p.HighQuality ? "high" : "medium",
-                    Size = ImageSizes[(int)p.Size],
+                    Size = ImageSizes1[(int)p.Size],
+                };
+            }
+            if (model.FastEquals("dall-e-2"))
+            {
+                options = new ImageGenerationOptions
+                {
+                    Size = GeneratedImageSize.W1024xH1024,
+                    ResponseFormat = GeneratedImageFormat.Bytes,
                 };
             }
             options = options ?? new()
@@ -81,6 +90,7 @@ namespace SysWeaver.AI
                 Style = p.Vivid ? GeneratedImageStyle.Vivid : GeneratedImageStyle.Natural,
                 ResponseFormat = GeneratedImageFormat.Bytes,
             };
+            
             GeneratedImage image;
             image = await client.GenerateImageAsync(p.Prompt, options).ConfigureAwait(false);
             /*
@@ -117,11 +127,32 @@ namespace SysWeaver.AI
             return bytes.ToMemory();
         }
 
+        static readonly IReadOnlySet<String> GptImageModels = ReadOnlyData.Set(
+            "gpt-image-1",
+            "gpt-image-1.5"
+        );
+
+#pragma warning disable OPENAI001
+
         static readonly GeneratedImageSize[] ImageSizes = [
+            GeneratedImageSize.Auto,
             GeneratedImageSize.W1024xH1024,
             GeneratedImageSize.W1024xH1792,
             GeneratedImageSize.W1792xH1024,
+            GeneratedImageSize.W1024xH1792,
+            GeneratedImageSize.W1792xH1024,
             ];
+
+
+        static readonly GeneratedImageSize[] ImageSizes1 = [
+            GeneratedImageSize.Auto,
+            GeneratedImageSize.W1024xH1024,
+            GeneratedImageSize.W1024xH1536,
+            GeneratedImageSize.W1536xH1024,
+            GeneratedImageSize.W1024xH1536,
+            GeneratedImageSize.W1536xH1024,
+            ];
+#pragma warning restore OPENAI001
 
     }
 }
