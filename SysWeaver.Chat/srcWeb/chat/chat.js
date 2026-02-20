@@ -895,6 +895,7 @@ class Chat {
         let stopListening;
         let startListening;
         let clearCurrentMessage;
+        let cmdClear;
 
         //  Load dynamic dependencies
         const deps = [];
@@ -1487,7 +1488,7 @@ class Chat {
             };
 
             /** Try to clear all messages from the chat room */
-            async function cmdClear() {
+            cmdClear = async () => {
                 try {
                     if (!await sendRequest(apiBase + "ClearAllMessages", chatId))
                         Fail(_TF("Failed to clear all chat messages.", "An error message shown when a user tries to send clear a chat room but the server returns a failure"));
@@ -1495,9 +1496,7 @@ class Chat {
                 catch (e) {
                     Fail(_TF("Failed to clear all chat messages.", "An error message shown when a user tries to send clear a chat room but the server returns a failure") + "\n" + _TF("Error:", "The header to a techincal error message, typically an exception, the error text is shown on a new line after this header") + "\n" + e.message);
                 }
-            }
-
-
+            };
 
             if (data.CanClear)
                 commandMap.set("chat.clear", cmdClear);
