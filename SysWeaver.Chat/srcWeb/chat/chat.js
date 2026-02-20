@@ -896,6 +896,7 @@ class Chat {
         let startListening;
         let clearCurrentMessage;
         let cmdClear;
+        let previewElement;
 
         //  Load dynamic dependencies
         const deps = [];
@@ -1076,7 +1077,6 @@ class Chat {
                 chatInput.appendChild(listen.Element);
             }
 
-            let previewElement = null;
             /** Called to enable/disable the send button (every time the input text changes) */
             function sendEnable() {
                 const t = write.value.trim();
@@ -2627,7 +2627,8 @@ class Chat {
             }
             if (mt === msgClear) {
                 chatE.innerText = "";
-                chatE.appendChild(previewElement);
+                if (previewElement)
+                    chatE.appendChild(previewElement);
                 return;
             }
             if (mt === msgRemove) {

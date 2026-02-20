@@ -14,11 +14,39 @@
     WebGL2 = false;
     MipMap = false;
     AntiAlias = false;
+    ScrollId = null;
+    MouseId = null;
 }
 
 class MediaPlayerEffect {
 
     static DpiScale = parseFloat(localStorage.getItem("SysWeaver.Media.EffectDpiScale") ?? "1");
+
+
+    static GetElementFromId(id) {
+        const tw = top;
+        if (!id)
+            return tw.document.body;
+        try {
+            let win = window;
+            for (let j = 0; j < 10; ++j) {
+                const i = win.document.getElementById(id);
+                if (i)
+                    return i;
+                if (win == tw)
+                    break;
+                const pw = win.parent;
+                if (pw === win)
+                    break;
+                win = pw;
+                if (!win)
+                    break;
+            }
+        }
+        catch {
+        }
+        return tw.document.body;
+    }
 
     constructor(url, params, createTextureFn) {
         const t = this;
@@ -178,11 +206,18 @@ class MediaPlayerEffect {
         t.UniformDate = pd ? date => gl.uniform4f(pd, date.getFullYear(), date.getMonth() + 1, date.getDate(), date.getSeconds() + date.getMinutes() * 60 + date.getHours() * 3600) : date => { };
         //  Mouse
         const pm = gl.getUniformLocation(p, "mouse");
-        if (pm)
-            gl.uniform2f(pm, 0.5, 0.5);
         const pm2 = gl.getUniformLocation(p, "iMouse");
-        if (pm2)
-            gl.uniform4f(pm2, 0.5, 0.5, 0, 0);
+        t.UniformMouse = (x, y) => {
+            if (pm)
+                gl.uniform2f(pm, x, y);
+            if (pm2)
+                gl.uniform4f(pm2, x, y, 0, 0);
+        };
+        //  Scroll
+        const sc = gl.getUniformLocation(p, "scroll");
+        t.UniformScroll = (x, y, rx, ry) => { };
+        if (sc)
+            t.UniformScroll = (x, y, rx, ry) => gl.uniform4f(sc, x, y, rx, ry);
 
 
         const tex = t.Texture;
@@ -266,6 +301,13 @@ class MediaPlayerEffect {
         {
             t.GetRender()();
         }).observe(e);
+
+        t.ScrollElement = MediaPlayerEffect.GetElementFromId(props.ScrollId);
+        const mouseElement = MediaPlayerEffect.GetElementFromId(props.MouseId);
+        mouseElement.addEventListener("mousemove", ev => {
+            t.MouseX = ev.offsetX;
+            t.MouseY = ev.offsetY;
+        });
         return MediaPlayerTools.OnCacheComplete(this, keepHidden);
     }
 
@@ -310,6 +352,10 @@ class MediaPlayerEffect {
         t.MeasureCount = 0;
         t.TotalTime = 0;
     }
+
+    ScrollElement = null;
+    MouseX = 0.5;
+    MouseY = 0.5;
 
     static render(t, animTime) {
         if (!t.Program)
@@ -375,6 +421,23 @@ class MediaPlayerEffect {
         gl.viewport(0, 0, w, h);
         t.UniformTime(time * p.Speed);
         t.UniformResolution(w, h);
+
+
+        let scrollX = 0.0;
+        let scrollY = 0.0;
+        let scrollRX = 0.0;
+        let scrollRY = 0.0;
+        const scrollElement = t.ScrollElement;
+        if (scrollElement) {
+            const x = scrollElement.scrollLeft;
+            const y = scrollElement.scrollTop;
+            scrollX = x;
+            scrollY = y;
+            scrollRX = x / Math.abs(1.0, scrollElement.scrollWidth);
+            scrollRY = y / Math.abs(1.0, scrollElement.scrollHeight);
+        }
+        t.UniformScroll(scrollX, scrollY, scrollRX, scrollRY);
+        t.UniformMouse(t.MouseX, t.MouseY);
         //t.UniformTimeDelta
         t.UniformFrameIndex(t.FrameIndex);
         ++t.FrameIndex;
