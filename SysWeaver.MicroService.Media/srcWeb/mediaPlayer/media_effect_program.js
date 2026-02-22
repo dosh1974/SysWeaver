@@ -27,6 +27,7 @@ class EffectProgram
 }
 
 class EffectProgramData {
+	
     // Parses some shader source and extract variables
     constructor(gl, src, fileName) {
         const t = this;
@@ -351,7 +352,27 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
             program.Dispose();
             return "Aborted";
         }
-        //  Link the program and wait for finis (or abort)
+		//	Output true shader 
+		let debug = window.ShaderDebug;
+		if (typeof debug === "undefined")
+		{
+			const p = new URL(window.location.href).searchParams;
+			debug = p.has("ShaderDebug") ? (p.get("ShaderDebug") === "true") : false;
+			window.ShaderDebug = debug;
+		}
+		if (debug)
+		{
+			const compTool = gl.getExtension("WEBGL_debug_shaders");
+			if (compTool)
+			{
+				console.log("### Vertex shader ###")
+				console.log(compTool.getTranslatedShaderSource(vs));
+			
+				console.log("### Fragment shader ###")
+				console.log(compTool.getTranslatedShaderSource(fs));
+			}
+		}
+		//  Link the program and wait for finish (or abort)
         gl.linkProgram(p);
         if (!(await t.waitLinking(p, abortCheckFn))) {
             console.warn("Failed to initialize the shader program \"" + c + "\":\n" + gl.getProgramInfoLog(p));
