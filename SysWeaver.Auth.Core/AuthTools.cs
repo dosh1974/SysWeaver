@@ -178,6 +178,8 @@ namespace SysWeaver.Auth
 
         public static IReadOnlyList<String> GetList(String tokens)
         {
+            if (tokens == null)
+                return null;
             var t = new HashSet<String>(StringComparer.Ordinal);
             foreach (var x in tokens.Split(','))
                 t.Add(x.Trim().FastToLower());

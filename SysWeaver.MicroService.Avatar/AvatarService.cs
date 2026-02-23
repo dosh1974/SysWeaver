@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using SysWeaver.Auth;
 using SysWeaver.Compression;
 using SysWeaver.Media;
 using SysWeaver.Net;
@@ -19,6 +20,7 @@ namespace SysWeaver.MicroService
         public AvatarService(AvatarParams p)
         {
             p = p ?? new AvatarParams();
+            Auth = AuthTools.GetList(p.Auth);
             var folder = p.DiscFolder;
             AsyncHandler = Handle;
             Cache = new FastMemCache<int, ValueTask<IHttpRequestHandler>>(TimeSpan.FromSeconds(Math.Max(1, p.CacheSeconds)));
@@ -41,7 +43,7 @@ namespace SysWeaver.MicroService
             }
         }
         readonly String DiscFolder;
-
+        readonly IReadOnlyList<String> Auth;
 
         const int PrefixLen = 8;
 
@@ -182,7 +184,7 @@ namespace SysWeaver.MicroService
             var svgData = enc.GetBytes(svgText);
             var cmp = CompBrotliNET.Instance;
             var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
-            var svgHandler = new StaticMemoryHttpRequestHandler("icon.svg", "Generated", svgMem, MimeTypeMap.Svg, SvgCompression, 30, 15, null, cmp, Array.Empty<String>());
+            var svgHandler = new StaticMemoryHttpRequestHandler("icon.svg", "Generated", svgMem, MimeTypeMap.Svg, SvgCompression, 30, 15, null, cmp, Auth);
             return ValueTask.FromResult<IHttpRequestHandler>(svgHandler);
         }
 

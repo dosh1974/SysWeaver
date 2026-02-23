@@ -34,10 +34,20 @@ namespace SysWeaver.MicroService
         public String BackgroundColor = "#000";
 
         /// <summary>
-        /// The supported sizes in pixels (always square)
+        /// The supported sizes in pixels (always square).
+        /// If negative the PublicAuth is used, else Auth is used.
         /// </summary>
-        public int[] Sizes = [64, 512];
+        public int[] Sizes = [-64, 512];
 
+        /// <summary>
+        /// Auth required to access images
+        /// </summary>
+        public String PrivateAuth = "";
+
+        /// <summary>
+        /// Auth required to access images with a negative size 
+        /// </summary>
+        public String PublicAuth;
 
     }
 }

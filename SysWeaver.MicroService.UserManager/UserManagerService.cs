@@ -225,7 +225,7 @@ namespace SysWeaver.MicroService
             HttpServer = manager.TryGet<HttpServerBase>();
             manager.OnServiceAdded += Manager_OnServiceAdded;
 
-            SystemString = new ManagedString(p.System);
+            SystemString = new ManagedString(PathTemplate.Resolve(p.System));
             manager.AddMessage("Message system: " + SystemString.Value.ToQuoted(), MessageLevels.Debug);
 
 
@@ -345,7 +345,7 @@ namespace SysWeaver.MicroService
             var d = new Dictionary<String, String>(StringComparer.Ordinal)
             {
                 {  "[Site]", EnvInfo.AppDisplayName },
-                {  "[Root]", context?.Prefix ?? HttpServer.ExternalRootUri ?? ""},
+                {  "[Root]", context?.Prefix ?? HttpServer?.ExternalRootUri ?? ""},
                 {  "[BackgroundDark]", cols.BackgroundDark },
                 {  "[Background]", cols.Background },
                 {  "[Color]", cols.Acc1 },

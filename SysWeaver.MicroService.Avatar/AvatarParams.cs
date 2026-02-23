@@ -14,5 +14,9 @@ namespace SysWeaver.MicroService
         /// </summary>
         public int CacheSeconds = 5 * 60;
 
+        /// <summary>
+        /// Required auth
+        /// </summary>
+        public String Auth;
     }
 }

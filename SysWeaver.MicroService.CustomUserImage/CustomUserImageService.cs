@@ -23,11 +23,30 @@ namespace SysWeaver.MicroService
             var s = p.Sizes;
             if (s != null)
             {
-                s = new HashSet<int>(s.Where(x => x > 0)).OrderBy(x => x).ToArray();
+                s = new HashSet<int>(s.Where(x => x != 0)).OrderBy(x => x < 0 ? -x : x).ToArray();
                 if (s.Length <= 0)
                     s = null;
             }
-            Sizes = s ?? [64, 512];
+            s = s ?? [-64, 512];
+
+            var sl = s.Length;
+            var priv = new RequestOptions(3, 2, 100000000, null, p.PrivateAuth);
+            var pub = new RequestOptions(3, 2, 100000000, null, p.PublicAuth);
+            Dictionary<int, RequestOptions> sizeOptions = new Dictionary<int, RequestOptions>();
+            for (int i = 0; i < sl; ++ i)
+            {
+                var val = s[i];
+                var vp = priv;
+                if (val < 0)
+                {
+                    val = -val;
+                    vp = pub;
+                    s[i] = val;
+                }
+                sizeOptions.Add(val, vp);
+            }
+            SizeOptions = sizeOptions.Freeze();
+            Sizes = s;
             DataFolders = p.SystemWide ? Folders.AllSharedFolders : Folders.AllAppFolders;
             AllowTransparent = p.AllowTransparent;
 
@@ -250,10 +269,14 @@ namespace SysWeaver.MicroService
             return ex == null;
         }
 
-        static readonly RequestOptions ReqOp = new RequestOptions(3, 2, 100000000, null, "");
+        readonly IReadOnlyDictionary<int, RequestOptions> SizeOptions;
+
+        static readonly ValueTask<IHttpRequestHandler> NoImage = ValueTask.FromResult<IHttpRequestHandler>(null);
 
         public ValueTask<IHttpRequestHandler> Get(string userGuid, int size)
         {
+            if (!SizeOptions.TryGetValue(size, out var opt))
+                return NoImage;
             var name = userGuid.ToHex();
             var folders = DataFolders;
             var fl = folders.Count;
@@ -261,7 +284,9 @@ namespace SysWeaver.MicroService
             var pathPrefix = Path.Combine(folders[shard], Key, name);
             var fn = String.Concat(pathPrefix, '_', size, SaveExt);
             var fi = new FileInfo(fn);
-            return ValueTask.FromResult<IHttpRequestHandler>(fi.Exists ? new FileHttpRequestHandler(SaveMime, fi, ReqOp, true, null) : null);
+            if (!fi.Exists)
+                return NoImage;
+            return ValueTask.FromResult<IHttpRequestHandler>(new FileHttpRequestHandler(SaveMime, fi, opt, true, null));
         }
 
         #endregion//IUserImageHandler
