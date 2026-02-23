@@ -6276,6 +6276,9 @@ async function SysWeaverInit() {
         document.head.appendChild(colorSchemeMeta);
     }
 
+    if (ps.get("ignoreuserchanges") === "true")
+        SysWeaverIgnoreUserChanges();
+
     function onSizeChange() {
         const ww = window.innerWidth;
         const wh = window.innerHeight;
