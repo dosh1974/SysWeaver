@@ -6252,8 +6252,12 @@ async function SysWeaverInit() {
     if (window.HaveSysWeaverInit)
         return;
     window.HaveSysWeaverInit = true;
-    const ps = getUrlParams();
+    window.String.prototype.replaceAll || (window.String.prototype.replaceAll = function (e, t) {
+        if (e instanceof RegExp && !e.global) throw new TypeError("String.prototype.replaceAll called with a non-global RegExp argument");
+        return e instanceof RegExp ? this.replace(e, t) : this.split(e).join(t);
+    });
 
+    const ps = getUrlParams();
     let mob = ps.get("mobile");
     if (mob === null)
         mob = localStorage.getItem("SysWeaver.Mobile");

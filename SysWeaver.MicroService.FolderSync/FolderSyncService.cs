@@ -199,7 +199,7 @@ namespace SysWeaver.MicroService
             folders.TryAdd(name.FastToLower(), folder);
             var fm = FileMod;
             if (fm != null)
-                fm.AddPushFolder(folder.ModFolder);
+                fm.AddFolder(folder.ModFolder);
             if (pullF != null)
                 await AddSharedFolder(pullF).ConfigureAwait(false);
             return path;
@@ -241,7 +241,7 @@ namespace SysWeaver.MicroService
             folders.TryAdd(name.FastToLower(), folder);
             var fm = FileMod;
             if (fm != null)
-                fm.AddPushFolder(folder.ModFolder);
+                fm.AddFolder(folder.ModFolder);
             return path;
         }
 

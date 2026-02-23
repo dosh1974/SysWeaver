@@ -44,7 +44,7 @@ namespace SysWeaver.Net
             if (f != null)
             {
                 foreach (var x in f)
-                    AddPushFolder(x);
+                    AddFolder(x);
             }
             var c = p.CacheSeconds;
             if (c > 0)
@@ -65,7 +65,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="folder">The folder to add</param>
         /// <returns></returns>
-        public bool AddPushFolder(FileHttpServerModuleFolder folder)
+        public bool AddFolder(FileHttpServerModuleFolder folder)
         {
             var df = folder.DiscFolder ?? "web";
             var di = new DirectoryInfo(df);

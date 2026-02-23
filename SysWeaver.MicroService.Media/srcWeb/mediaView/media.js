@@ -1155,7 +1155,7 @@ async function mediaPreviewMain() {
             await CefSharp.BindObjectAsync();
         function GetHo() {
             try {
-                return chrome.webview.hostObjects.ScreenShotHost ?? null;
+                return chrome?.webview?.hostObjects?.ScreenShotHost ?? null;
             }
             catch
             {

@@ -56,15 +56,26 @@ class MediaPlayerEffect {
         params = cp;
         t.Params = params;
         const e = document.createElement("canvas");
-        const gl = e.getContext(params.WebGL2 ? "webgl2" : "webgl", {
+        const glp = {
             antialias: params.AntiAlias,
             depth: false,
             stencil: false,
             alpha: params.Transparent,
             preserveDrawingBuffer: false,
-        });
-        gl.getExtension("OES_standard_derivatives");
+        };
+        let glver = params.WebGL2 ? "webgl2" : "webgl";
+        let gl = e.getContext(glver, glp);
+        if (!gl) {
+            if (glp.antialias) {
+                glp.antialias = false;
+                gl = e.getContext(glver, glp);
+            }
+        }
+        if (!gl)
+            throw new Error("Can't initiate WebGL!");
         t.GL = gl;
+
+        gl.getExtension("OES_standard_derivatives");
 
         const pos = gl.createBuffer(); 
         t.Pos = pos;
