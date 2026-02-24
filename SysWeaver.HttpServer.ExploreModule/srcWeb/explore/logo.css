@@ -18,7 +18,7 @@ SysWeaver-IconItem:first-child {
 }
 
 SysWeaver-IconItem {
-    --s: calc(min(100vw, 100vh - 64px - 1em) / 2 - 3em);
+    --s: calc(min(100svw, 100svh - 64px - 1em) / 2 - 3em);
     --h: calc(var(--s) + 1.5em);
     display: inline-block;
     position: relative;
@@ -29,6 +29,7 @@ SysWeaver-IconItem {
     border-radius: var(--ThemeRad);
     cursor: pointer;
     transition: box-shadow linear 0.1s;
+    overflow: hidden;
 }
 
 

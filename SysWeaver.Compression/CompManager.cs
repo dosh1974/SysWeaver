@@ -12,7 +12,8 @@ namespace SysWeaver.Compression
     {
         static CompManager()
         {
-            CompBrotliNET.Register();
+            CompBrotliNETNew.Register();
+            //CompBrotliNET.Register();
             CompDeflateNET.Register();
             CompGZipNET.Register();
         }

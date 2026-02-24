@@ -231,6 +231,9 @@ input[type=password]::-ms-clear {
     color: var(--ThemeAcc2);
 }
 
+* {
+    scrollbar-color: var(--ThemeMain) var(--ThemeBackground);
+}
 
 body {
     background-color: var(--ThemeBackground);
@@ -245,7 +248,20 @@ body {
     user-select: none;
 }
 
-    body.Embedded {
+
+html.Embedded {
+    margin-left: 8px;
+    margin-top: 8px;
+    min-width: calc(100% - 8px);
+    min-height: calc(100% - 8px);
+}
+
+html.Embedded body {
+    background: none transparent !important;
+}
+
+
+    html.Transparent body {
         background: none transparent !important;
     }
 

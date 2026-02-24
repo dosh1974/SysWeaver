@@ -66,7 +66,7 @@ namespace SysWeaver.Compression
 
         static readonly uint[] Quality =
         [
-            2, 4, 11
+            1, 4, 11
         ];
 
         public void Compress(Stream from, Stream to, CompEncoderLevels level)

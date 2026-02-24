@@ -13,9 +13,13 @@ a {
 
 body {
     margin: 0;
+    overflow-y: hidden;
     overflow-x: scroll;
 }
 
+html {
+    scrollbar-color: var(--ThemeBackground) var(--ThemeAcc1);
+}
 
 .DataTable {
     border: 1px solid rgba(0,0,0,0.3);
@@ -712,12 +716,8 @@ datatable-footer {
     height: 32px;
     background-color: var(--ThemeAcc1);
     vertical-align: middle;
-    padding: 1px 0 4px 8px;
+    padding: 1px 0 4px 24px;
     box-sizing: border-box;
-    border-radius: var(--ThemeRad);
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-    border-bottom-left-radius: 0;
 }
 
 datatable-footer icon-26x26{

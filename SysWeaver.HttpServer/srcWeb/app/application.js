@@ -205,8 +205,8 @@ class MainMenu {
                 console.log("Iframe loaded: " + newUrl);
 
                 try {
-                    const bod = cwin.document.getElementsByTagName('body')[0];
-                    bod.classList.add("Embedded");
+                    const doc = cwin.document.documentElement;
+                    doc.classList.add("Embedded");
                 }
                 catch
                 {
@@ -1608,6 +1608,7 @@ class App {
                         return;
                 console.log("hide");
                 appMenuCapture.remove();
+                document.body.removeEventListener("mouseleave", menuCaptureLeave);
                 document.body.removeEventListener("mouseover", menuCapture);
                 bcl.add(collapsedStyle);
                 tempDisableAutoShow();
@@ -1625,12 +1626,18 @@ class App {
                 menuHide();
             }
 
+            const menuCaptureLeave = function (ev) {
+                if (ev.target === document.body)
+                    menuHide();
+            }
+
             const menuShow = function () {
                 if (!bcl.contains(collapsedStyle))
                     return;
                 console.log("Menu show");
                 document.body.appendChild(appMenuCapture);
                 document.body.addEventListener("mouseover", menuCapture, true);
+                document.body.addEventListener("mouseleave", menuCaptureLeave, true);
                 bcl.remove(collapsedStyle);
             }
 
@@ -1647,7 +1654,7 @@ class App {
                     menuHide();
             }
 
-            const noOpenWidth = 4;
+            const noOpenWidth = 8;
 
             mouseOverFn = ev => {
                 if (!bcl.contains(collapsedStyle))
