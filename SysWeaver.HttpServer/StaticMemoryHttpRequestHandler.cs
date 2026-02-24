@@ -31,28 +31,35 @@ namespace SysWeaver.Net
             RequestCacheDuration = requestCacheDuration;
             Compression = compression;
             LastModified = lastModified ?? HttpServerTools.StartedText;
+            LastModifiedDate = HttpServerTools.FromTimeStampString(LastModified);
             Decoder = preCompressedFormat;
             CackeKey = HttpServerTools.GetStaticCacheUrl();
+            CompPreference = compression?.ToString();
+            PreCompressed = preCompressedFormat?.HttpCode;
+            Size = data.Length;
             Auth = auth;
             Data = data;
         }
-        
+
         public readonly double Order;
         double IStaticHttpRequestHandler.Order => Order;
 
         public readonly String Mime;
         public readonly String LastModified;
+        public readonly DateTime LastModifiedDate;
         public readonly ReadOnlyMemory<Byte> Data;
+
 
         readonly ValueTask<String> CackeKey;
 
-        public int ClientCacheDuration { get; private set; }
-        public int RequestCacheDuration { get; private set; }
-        public HttpCompressionPriority Compression { get; private set; }
-        public ICompDecoder Decoder { get; private set; }
-        public IReadOnlyList<String> Auth { get; private set; }
+        public int ClientCacheDuration { get; init; }
+        public int RequestCacheDuration { get; init; }
+        public HttpCompressionPriority Compression { get; init; }
+        public ICompDecoder Decoder { get; init; }
+        public IReadOnlyList<String> Auth { get; init; }
         public ValueTask<String> GetCacheKey(HttpServerRequest request) => CackeKey;
         public HttpServerEndpointTypes Type => HttpServerEndpointTypes.File;
+        
         public bool UseStream => false;
 
         public ReadOnlyMemory<byte> GetData(HttpServerRequest request)
@@ -81,17 +88,18 @@ namespace SysWeaver.Net
             throw new NotImplementedException();
         }
 
-        public String Uri { get; private set; }
-        public String Location { get; private set; }
-        public long? Size => Data.Length;
+        public String Uri { get; init; }
+        public String Location { get; init; }
+        
+        public long? Size { get; init; } 
 
         public String Method => "GET";
 
-        public String CompPreference => Compression?.ToString();
+        public String CompPreference { get; init; } 
 
-        public String PreCompressed => Decoder?.HttpCode;
+        public String PreCompressed { get; init; } 
 
-        DateTime IHttpServerEndPoint.LastModified => HttpServerTools.FromTimeStampString(LastModified);
+        DateTime IHttpServerEndPoint.LastModified => LastModifiedDate;
 
         String IHttpServerEndPoint.Mime => Mime;
     }

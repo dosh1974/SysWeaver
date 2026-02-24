@@ -193,7 +193,8 @@ namespace SysWeaver.Net.IconModule
 
         void AddRes(String l, Assembly asm, ICompDecoder decoder, String data)
         {
-            Data.AddStream(l, LocEmbedded, () => asm.GetManifestResourceStream(data), "image/svg+xml" + HttpServerTools.TextMimeSuffix, ClientCacheDuration, HttpServerTools.MaxRequestCache, Comp, DisableComp, Lwt, decoder, Auth);
+            Data.AddMemory(l, LocEmbedded, asm.GetResourceData(data), "image/svg+xml" + HttpServerTools.TextMimeSuffix, ClientCacheDuration, Comp, DisableComp, Lwt, decoder, Auth);
+//            Data.AddStream(l, LocEmbedded, () => asm.GetManifestResourceStream(data), "image/svg+xml" + HttpServerTools.TextMimeSuffix, ClientCacheDuration, HttpServerTools.MaxRequestCache, Comp, DisableComp, Lwt, decoder, Auth);
         }
 
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null) => HttpServerTools.NoEndPoints;

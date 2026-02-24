@@ -95,7 +95,21 @@ namespace SysWeaver.Net
                 if (comp != null)
                 {
                     --sl;
-                    AddStream(
+                    AddMemory(
+                        HttpServerTools.CombinePaths(urlRoot, PathFix(String.Join('.', String.Join('/', s, 0, sl), s[sl], ext))),
+                        location,
+                        asm.GetResourceData(x),
+                        //() => asm.GetManifestResourceStream(x) ?? throw new NullReferenceException(),
+                        mime.Item1, 
+                        clientCacheDuration,
+                        null,
+                        true,
+                        lastModified,
+                        null,
+                        auth,
+                        replace,
+                        order);
+/*                    AddStream(
                         HttpServerTools.CombinePaths(urlRoot, PathFix(String.Join('.', String.Join('/', s, 0, sl), s[sl], ext))),
                         location,
                         () => asm.GetManifestResourceStream(x) ?? throw new NullReferenceException(),
@@ -109,11 +123,27 @@ namespace SysWeaver.Net
                         auth,
                         replace,
                         order);
+*/
                     ext = s[sl];
                     extl = ext.FastToLower();
                     mime = MimeTypeMap.GetMimeType(extl);
                 }
-                AddStream(
+                AddMemory(
+                    HttpServerTools.CombinePaths(urlRoot, PathFix(String.Join('.', String.Join('/', s, 0, sl), ext))),
+                    location,
+                    asm.GetResourceData(x),
+                    //() => asm.GetManifestResourceStream(x) ?? throw new NullReferenceException(),
+                    mime.Item1,
+                    clientCacheDuration,
+                    compression,
+                    disableCompession || (!mime.Item2),
+                    lastModified,
+                    comp,
+                    auth,
+                    replace,
+                    order);
+
+/*                AddStream(
                     HttpServerTools.CombinePaths(urlRoot, PathFix(String.Join('.', String.Join('/', s, 0, sl), ext))),
                     location,
                     () => asm.GetManifestResourceStream(x) ?? throw new NullReferenceException(),
@@ -127,6 +157,7 @@ namespace SysWeaver.Net
                     auth,
                     replace,
                     order);
+*/
             }
         }
 

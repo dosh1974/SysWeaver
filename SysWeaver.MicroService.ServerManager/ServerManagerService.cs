@@ -136,7 +136,7 @@ namespace SysWeaver.MicroService
                 RequestCacheDuration = 4,
                 WebFolder = "ServerManager/Bak/",
             };
-            FileModule.AddPushFolder(bak);
+            FileModule.AddFolder(bak);
             BakModuleFolder = bak;
             BakFolder = bakFolder;
             BakKeysFolder = bakFolder + "Keys";
@@ -208,7 +208,7 @@ namespace SysWeaver.MicroService
                 Syncer.RemoveManagedFolder(v);
                 throw new Exception("Must have a unique name!");
             }
-            FileModule.AddPushFolder(bak);
+            FileModule.AddFolder(bak);
             FileUploader.AddRepo(currentRepo);
             FileUploader.AddRepo(masterRepo);
         }
