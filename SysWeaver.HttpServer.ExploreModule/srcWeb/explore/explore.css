@@ -18,7 +18,8 @@ body {
 
 
 .ExploreNavigator {
-    margin: 2px 4px 2px 5px;
+    display: table;
+    margin: 2px auto 8px auto;
     font-size: 125%;
     font-weight: bold;
 }
@@ -43,7 +44,7 @@ SysWeaver-Link.Path::after {
     border: 1px solid rgba(0,0,0,0.3);
     border-collapse: collapse;
     border-spacing: 0;
-    margin: 4px;
+    margin: 8px auto 4px auto;
 }
 
     .Explore img {
