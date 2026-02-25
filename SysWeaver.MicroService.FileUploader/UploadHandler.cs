@@ -29,17 +29,21 @@ namespace SysWeaver.MicroService
 
         static readonly ISerializer JsonSer = SerManager.Get("json");
 
-        public async Task<ReadOnlyMemory<Byte>> GetDataAsync(HttpServerRequest request)
+        public HttpRequestData Get(HttpServerRequest request)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             var res = await Fs.Upload(request, Repo).ConfigureAwait(false);
             request.SetResMime(HttpServerTools.JsonMime);
-            return JsonSer.Serialize(res);
+            return new HttpRequestData(JsonSer.Serialize(res));
         }
 
         public int ClientCacheDuration => 0;
         public int RequestCacheDuration => 0;
 
-        public bool UseStream => false;
 
         public HttpCompressionPriority Compression => null;
 
@@ -54,14 +58,6 @@ namespace SysWeaver.MicroService
             useAsync = true;
             return null;
         }
-
-        public Stream GetStream(HttpServerRequest request) => throw new NotImplementedException();
-
-
-        public ReadOnlyMemory<Byte> GetData(HttpServerRequest request) => throw new NotImplementedException();
-
-        public Task<Stream> GetStreamAsync(HttpServerRequest request) => throw new NotImplementedException();
-
 
     }
 

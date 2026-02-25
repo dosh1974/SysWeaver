@@ -54,7 +54,8 @@ namespace SysWeaver.Net.IconModule
         /// </summary>
         public readonly string FlagPrefix;
 
-        
+        public String[] OnlyForPrefixes { get; init; }
+
         public IconHttpServerModule(StaticDataHttpServerModule dataModule, IconHttpServerModuleParams p = null)
         {
             var pp = p ?? new IconHttpServerModuleParams();
@@ -66,6 +67,9 @@ namespace SysWeaver.Net.IconModule
             ExtPrefix = HttpServerTools.CombinePathsAndAddTrailingSlash(root, pp.ExtensionFolder);
             MimePrefix = HttpServerTools.CombinePathsAndAddTrailingSlash(root, pp.MimeFolder);
             FlagPrefix = HttpServerTools.CombinePathsAndAddTrailingSlash(root, pp.FlagFolder);
+            if ((ExtPrefix.Length > 0) && (MimePrefix.Length > 0) && (FlagPrefix.Length > 0))
+                OnlyForPrefixes = [ExtPrefix, MimePrefix, FlagPrefix];
+
             var t = GetType();
             var asm = GetType().Assembly;
             DateTime lw = HttpServerTools.StartedTime;

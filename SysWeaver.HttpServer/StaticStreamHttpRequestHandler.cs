@@ -44,7 +44,7 @@ namespace SysWeaver.Net
             OpenStream = openStream;
         }
 
-        public StaticStreamHttpRequestHandler(String uri, String location, long? length, Func<Task<Stream>> openStreamAsync, String mime, HttpCompressionPriority compression, int clientCacheDuration = 5, int requestCacheDuration = 0, String lastModified = null, ICompDecoder preCompressedFormat = null, IReadOnlyList<String> auth = null, double order = 0)
+        public StaticStreamHttpRequestHandler(String uri, String location, long? length, Func<ValueTask<Stream>> openStreamAsync, String mime, HttpCompressionPriority compression, int clientCacheDuration = 5, int requestCacheDuration = 0, String lastModified = null, ICompDecoder preCompressedFormat = null, IReadOnlyList<String> auth = null, double order = 0)
         {
             Order = order;
             Uri = uri;
@@ -69,7 +69,7 @@ namespace SysWeaver.Net
         readonly String LastModified;
         readonly ValueTask<String> CackeKey;
         readonly Func<Stream> OpenStream;
-        readonly Func<Task<Stream>> OpenStreamAsync;
+        readonly Func<ValueTask<Stream>> OpenStreamAsync;
 
         public int ClientCacheDuration { get; private set; }
         public int RequestCacheDuration { get; private set; }
@@ -78,34 +78,22 @@ namespace SysWeaver.Net
         public IReadOnlyList<String> Auth { get; private set; }
         public ValueTask<String> GetCacheKey(HttpServerRequest request) => CackeKey;
         public HttpServerEndpointTypes Type => HttpServerEndpointTypes.File;
-        public bool UseStream => true;
-
-        public ReadOnlyMemory<byte> GetData(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = OpenStreamAsync != null;
             return LastModified;
         }
 
-        public Stream GetStream(HttpServerRequest request)
+        public HttpRequestData Get(HttpServerRequest request)
         {
             request.SetResMime(Mime);
-            return OpenStream();
+            return new HttpRequestData(OpenStream());
         }
 
-        public Task<Stream> GetStreamAsync(HttpServerRequest request)
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             request.SetResMime(Mime);
-            return OpenStreamAsync();
-        }
-
-        public Task<ReadOnlyMemory<byte>> GetDataAsync(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
+            return new HttpRequestData(await OpenStreamAsync().ConfigureAwait(false));
         }
 
         public String Uri { get; private set; }

@@ -1,7 +1,6 @@
 using SysWeaver.Compression;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading.Tasks;
 
 namespace SysWeaver.Net
@@ -30,11 +29,6 @@ namespace SysWeaver.Net
         /// If negative, the per session cache is used (else a global cache is used).
         /// </summary>
         int RequestCacheDuration { get; }
-
-        /// <summary>
-        /// True if the input is from a stream
-        /// </summary>
-        bool UseStream { get; }
 
         /// <summary>
         /// If true, the response is localized (language dependent)
@@ -70,7 +64,31 @@ namespace SysWeaver.Net
         /// <param name="request">The request information</param>
         /// <returns>An etag, only use [A-Z], [a-z], [0-9], '_', '-'</returns>
         String GetEtag(out bool useAsync, HttpServerRequest request);
-        
+
+
+
+
+
+        /// <summary>
+        /// Get the data for a request
+        /// </summary>
+        /// <returns></returns>
+        HttpRequestData Get(HttpServerRequest request);
+
+
+        /// <summary>
+        /// Get the data for a request
+        /// </summary>
+        /// <returns></returns>
+        ValueTask<HttpRequestData> GetAsync(HttpServerRequest request);
+
+        /*
+
+        /// <summary>
+        /// True if the input is from a stream
+        /// </summary>
+        bool UseStream { get; }
+
         /// <summary>
         /// Get the data stream, only call if UseStream is true
         /// </summary>
@@ -83,7 +101,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="request">The request information</param>
         /// <returns>A data stream</returns>
-        Task<Stream> GetStreamAsync(HttpServerRequest request);
+        ValueTask<Stream> GetStreamAsync(HttpServerRequest request);
 
         /// <summary>
         /// Get the data memory, only call if UseStream is false
@@ -97,8 +115,9 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="request">The request information</param>
         /// <returns>A data memory</returns>
-        Task<ReadOnlyMemory<Byte>> GetDataAsync(HttpServerRequest request);
+        ValueTask<ReadOnlyMemory<Byte>> GetDataAsync(HttpServerRequest request);
 
+*/
         /// <summary>
         /// True to allow template matching to be used
         /// </summary>

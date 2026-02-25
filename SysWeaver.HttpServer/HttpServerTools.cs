@@ -119,7 +119,7 @@ namespace SysWeaver.Net
         public static GenericHttpRequestHandler GetPlainTextHandler(String text, int statusCode = 200, Encoding contentEncoding = null)
         {
             contentEncoding ??= Encoding.UTF8;
-            return new GenericHttpRequestHandler(statusCode, TextMime, contentEncoding.GetBytes(text), contentEncoding);
+            return new GenericHttpRequestHandler(statusCode, TextMime, contentEncoding.GetBytes(text));
         }
 
         /// <summary>
@@ -173,16 +173,13 @@ namespace SysWeaver.Net
 
             public int ClientCacheDuration => throw new NotImplementedException();
             public int RequestCacheDuration => throw new NotImplementedException();
-            public bool UseStream => throw new NotImplementedException();
             public HttpCompressionPriority Compression => throw new NotImplementedException();
             public ICompDecoder Decoder => throw new NotImplementedException();
             public IReadOnlyList<string> Auth => throw new NotImplementedException();
             public ValueTask<string> GetCacheKey(HttpServerRequest request) => throw new NotImplementedException();
-            public ReadOnlyMemory<byte> GetData(HttpServerRequest request) => throw new NotImplementedException();
-            public Task<ReadOnlyMemory<byte>> GetDataAsync(HttpServerRequest request) => throw new NotImplementedException();
+            public HttpRequestData Get(HttpServerRequest request) => throw new NotImplementedException();
+            public ValueTask<HttpRequestData> GetAsync(HttpServerRequest request) => throw new NotImplementedException();
             public string GetEtag(out bool useAsync, HttpServerRequest request) => throw new NotImplementedException();
-            public Stream GetStream(HttpServerRequest request) => throw new NotImplementedException();
-            public Task<Stream> GetStreamAsync(HttpServerRequest request) => throw new NotImplementedException();
 
        
         }

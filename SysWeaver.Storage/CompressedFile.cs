@@ -49,8 +49,8 @@ namespace SysWeaver
         /// <param name="compType"></param>
         /// <param name="level"></param>
         /// <returns></returns>
-        public static Byte[] ReadAllBytes(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
-            => File.ReadAllBytes(GetCompFile(file, compType, level));
+        public static IUnmanagedReadOnlyMemory<Byte> ReadAllBytes(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
+            => FileReadOnlyMemory.ReadAllBytes(GetCompFile(file, compType, level));
 
         /// <summary>
         /// Read all compressed bytes from a file (with caching etc)
@@ -59,8 +59,8 @@ namespace SysWeaver
         /// <param name="compType"></param>
         /// <param name="level"></param>
         /// <returns></returns>
-        public static async ValueTask<Byte[]> ReadAllBytesAsync(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
-            => File.ReadAllBytes(await GetCompFileAsync(file, compType, level).ConfigureAwait(false));
+        public static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> ReadAllBytesAsync(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
+            => FileReadOnlyMemory.ReadAllBytes(await GetCompFileAsync(file, compType, level).ConfigureAwait(false));
 
         static String GetCompFile(String file, ICompType compType, CompEncoderLevels level)
         {

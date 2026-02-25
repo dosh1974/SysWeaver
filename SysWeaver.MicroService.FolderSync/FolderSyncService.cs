@@ -34,8 +34,6 @@ namespace SysWeaver.MicroService
 
         public int RequestCacheDuration => 0;
 
-        public bool UseStream => false;
-
         public HttpCompressionPriority Compression => null;
 
         public ICompDecoder Decoder => null;
@@ -44,12 +42,6 @@ namespace SysWeaver.MicroService
 
         public ValueTask<string> GetCacheKey(HttpServerRequest request) => HttpServerTools.NullStringValueTask;
 
-        public ReadOnlyMemory<byte> GetData(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-
-
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = true;
@@ -57,40 +49,38 @@ namespace SysWeaver.MicroService
             return null;
         }
 
-        public Stream GetStream(HttpServerRequest request)
+        public HttpRequestData Get(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
 
-        public Task<Stream> GetStreamAsync(HttpServerRequest request)
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
-            throw new NotImplementedException();
-        }
-
-        public async Task<ReadOnlyMemory<byte>> GetDataAsync(HttpServerRequest context)
-        {
-            if (context.HttpMethod != HttpServerMethods.POST)
+            if (request.HttpMethod != HttpServerMethods.POST)
+            {
+                request.SetResMime(MimeTypeMap.Json);
                 return FalseValue;
-            var x = context.LocalUrl.Split('/');
+            }
+            var x = request.LocalUrl.Split('/');
             var len = x.Length;
             if (len < 2)
             {
-                context.SetResMime(MimeTypeMap.Json);
+                request.SetResMime(MimeTypeMap.Json);
                 return FalseValue;
             }
             if (x[1].FastEquals(nameof(GetChunks)))
             {
                 if (len != 2)
                 {
-                    context.SetResMime(MimeTypeMap.Json);
+                    request.SetResMime(MimeTypeMap.Json);
                     return FalseValue;
                 }
-                context.SetResMime(MimeTypeMap.Data);
-                return await GetChunks(context).ConfigureAwait(false);
+                request.SetResMime(MimeTypeMap.Data);
+                return new HttpRequestData(await GetChunks(request).ConfigureAwait(false));
             }
             if (len < 3)
             {
-                context.SetResMime(MimeTypeMap.Json);
+                request.SetResMime(MimeTypeMap.Json);
                 return FalseValue;
             }
             var jobId = x[1];
@@ -98,24 +88,24 @@ namespace SysWeaver.MicroService
             var u = x[0];
             if (u.FastEquals("FolderSync"))
             {
-                var res = await UploadFile(jobId, filename, context).ConfigureAwait(false);
-                context.SetResMime(MimeTypeMap.Json);
+                var res = await UploadFile(jobId, filename, request).ConfigureAwait(false);
+                request.SetResMime(MimeTypeMap.Json);
                 return res ? TrueValue : FalseValue;
             }
             if (u.FastEquals("FolderSyncCdc"))
             {
-                context.SetResMime(MimeTypeMap.Data);
-                return await UploadCdcFile(jobId, filename, context).ConfigureAwait(false);
+                request.SetResMime(MimeTypeMap.Data);
+                return new HttpRequestData(await UploadCdcFile(jobId, filename, request).ConfigureAwait(false));
             }
 
-            var res2 = await UploadCdcChunks(jobId, context).ConfigureAwait(false);
-            context.SetResMime(MimeTypeMap.Json);
+            var res2 = await UploadCdcChunks(jobId, request).ConfigureAwait(false);
+            request.SetResMime(MimeTypeMap.Json);
             return res2 ? TrueValue : FalseValue;
 
         }
 
-        static readonly ReadOnlyMemory<byte> TrueValue = Encoding.UTF8.GetBytes("true");
-        static readonly ReadOnlyMemory<byte> FalseValue = Encoding.UTF8.GetBytes("false");
+        static readonly HttpRequestData TrueValue = new (Encoding.UTF8.GetBytes("true"));
+        static readonly HttpRequestData FalseValue = new (Encoding.UTF8.GetBytes("false"));
 
         #endregion//IHttpRequestHandler
 

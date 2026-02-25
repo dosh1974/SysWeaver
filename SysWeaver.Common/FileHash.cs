@@ -53,27 +53,6 @@ namespace SysWeaver
             return ha == hb;
         }
 
-        static unsafe String MemoryMappedGetHash(String filename, int len)
-        {
-            using var file = MemoryMappedFile.CreateFromFile(filename, FileMode.Open, null, 0, MemoryMappedFileAccess.Read);
-            using var view = file.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read);
-            byte* ptr = (byte*)0;
-            var h = view.SafeMemoryMappedViewHandle;
-            h.AcquirePointer(ref ptr);
-            try
-            {
-                ReadOnlySpan<Byte> data = new(ptr, (int)len);
-                Span<Byte> hash = stackalloc Byte[MD5.HashSizeInBytes];
-                MD5.HashData(data, hash);
-                return HashTools.GetHashString16(hash);
-            }
-            finally
-            {
-                h.ReleasePointer();
-            }
-        }
-
-
         /// <summary>
         /// Do never use! 
         /// Use GetHash instead, this version don't do any caching or smart stuff
@@ -82,13 +61,25 @@ namespace SysWeaver
         /// <returns></returns>
         public static String UncachedGetHash(String filename)
         {
-            var len = new FileInfo(filename).Length;
-            if (len < (1L << 31))
-                return MemoryMappedGetHash(filename, (int)len);
             Span<Byte> hash = stackalloc Byte[MD5.HashSizeInBytes];
-            using (var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read))
-                MD5.HashData(s, hash);
-            return HashTools.GetHashString16(hash);
+            var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
+            try
+            {
+                if (FileReadOnlyMemory.TryMap(out var mem, s, true))
+                {
+                    using (mem)
+                    {
+                        s = null;
+                        MD5.HashData(mem.Memory.Span, hash);
+                    }
+                }else
+                    MD5.HashData(s, hash);
+                return HashTools.GetHashString16(hash);
+            }
+            finally
+            {
+                s?.Dispose();
+            }
         }
 
         /// <summary>
@@ -99,11 +90,25 @@ namespace SysWeaver
         /// <returns></returns>
         public static async ValueTask<String> UncachedGetHashAsync(String filename)
         {
-            var len = new FileInfo(filename).Length;
-            if (len < (1L << 31))
-                return MemoryMappedGetHash(filename, (int)len);
-            using var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
-            return HashTools.GetHashString16(await MD5.HashDataAsync(s).ConfigureAwait(false));
+            var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
+            try
+            {
+                if (FileReadOnlyMemory.TryMap(out var mem, s, true))
+                {
+                    using (mem)
+                    {
+                        s = null;
+                        Span<Byte> hash = stackalloc Byte[MD5.HashSizeInBytes];
+                        MD5.HashData(mem.Memory.Span, hash);
+                        return HashTools.GetHashString16(hash);
+                    }
+                }
+                return HashTools.GetHashString16(await MD5.HashDataAsync(s).ConfigureAwait(false));
+            }
+            finally
+            {
+                s?.Dispose();
+            }
         }
 
         /// <summary>

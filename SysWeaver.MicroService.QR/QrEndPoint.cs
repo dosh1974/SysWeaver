@@ -55,8 +55,6 @@ namespace SysWeaver.MicroService
 
         public int RequestCacheDuration => 30 * 60;
 
-        public bool UseStream => false;
-
         public string CompPreference { get; init; }
 
         public string PreCompressed => null;
@@ -84,7 +82,7 @@ namespace SysWeaver.MicroService
             return HttpServerTools.StartedText;
         }
 
-        public ReadOnlyMemory<byte> GetData(HttpServerRequest request)
+        public HttpRequestData Get(HttpServerRequest request)
         {
             using var p = Perf.Track(Uri);
             var data = HttpUtility.UrlDecode(request.Url.Substring(request.QueryStringStart));
@@ -114,24 +112,14 @@ namespace SysWeaver.MicroService
                 resData = Encoding.UTF8.GetBytes(qrCodeAsSvg);
             }
             request.SetResMime(Mime);
-            return resData;
+            return new HttpRequestData(resData);
         }
 
-
-
-        public Task<ReadOnlyMemory<byte>> GetDataAsync(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-        public Stream GetStream(HttpServerRequest request)
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
 
-        public Task<Stream> GetStreamAsync(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
     }
 
 }

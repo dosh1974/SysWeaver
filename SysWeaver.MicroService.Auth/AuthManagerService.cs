@@ -462,7 +462,7 @@ This server supports the following sizes:
             if (root == null)
             {
                 foreach (var x in UserImageSizes)
-                    yield return new HttpServerEndPoint(ImageRoot + "Current/" + x.Key, "GET", 0, 0, false, null, null, null, HttpServerEndpointTypes.File, "Dynamic content", null, HttpServerTools.StartedTime, "image/*", null);
+                    yield return new HttpServerEndPoint(ImageRoot + "Current/" + x.Key, "GET", 0, 0, null, null, null, HttpServerEndpointTypes.File, "Dynamic content", null, HttpServerTools.StartedTime, "image/*", null);
             }else
             {
                 if (root.FastStartsWith(ImageRoot))
@@ -477,7 +477,7 @@ This server supports the following sizes:
                         if (rest.FastEquals("Current/"))
                         {
                             foreach (var x in UserImageSizes)
-                                yield return new HttpServerEndPoint(ImageRoot + "Current/" + x.Key, "GET", 0, 0, false, null, null, null, HttpServerEndpointTypes.File, "Dynamic content", null, HttpServerTools.StartedTime, "image/*", null);
+                                yield return new HttpServerEndPoint(ImageRoot + "Current/" + x.Key, "GET", 0, 0, null, null, null, HttpServerEndpointTypes.File, "Dynamic content", null, HttpServerTools.StartedTime, "image/*", null);
                         }
                     }
                 }

@@ -782,7 +782,11 @@ namespace SysWeaver
                 }
             }
             if (getExpandedSize)
-                expandedSize = props.Comp.GetDecompressed(File.ReadAllBytes(fi.FullName)).Length;
+            {
+                using var d = FileReadOnlyMemory.ReadAllBytes(fi.FullName);
+                if (d != null)
+                    expandedSize = props.Comp.GetDecompressed(d.Memory.Span).Length;
+            }
             return l;
         }
 
@@ -906,8 +910,8 @@ namespace SysWeaver
                     Interlocked.Add(ref compSize, size);
                     if (getUncompressedStats)
                     {
-                        var data = await File.ReadAllBytesAsync(file).ConfigureAwait(false);
-                        long uncompSize = comp.GetDecompressed(data).Length;
+                        using var mem = await FileReadOnlyMemory.ReadAllBytesAsync(file).ConfigureAwait(false);
+                        long uncompSize = comp.GetDecompressed(mem.Memory.Span).Length;
                         Interlocked.Add(ref unCompSize, uncompSize);
                     }
                 }

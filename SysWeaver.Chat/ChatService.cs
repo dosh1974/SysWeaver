@@ -641,11 +641,11 @@ namespace SysWeaver.Chat
                         {
                             if ((linkScope ?? UserStorageScopes.Public) < requestScope)
                             {
-                                var data = await us.ReadFile(context, localFile, false).ConfigureAwait(false);
+                                using var data = await us.ReadFile(context, localFile, false).ConfigureAwait(false);
                                 if (data != null)
                                 {
                                     var filename = localFile.Substring(localFile.LastIndexOf("/") + 1);
-                                    var newName = await saveFile(filename, data ?? throw new Exception()).ConfigureAwait(false);
+                                    var newName = await saveFile(filename, data.Memory).ConfigureAwait(false);
                                     files.Add(newName);
                                     node.SetAttributeValue(name, localPrefix + newName);
                                     return true;
@@ -667,7 +667,7 @@ namespace SysWeaver.Chat
                                 if (data != null)
                                 {
                                     var filename = localFile.Substring(localFile.LastIndexOf("/") + 1);
-                                    var newName = await saveFile(filename, data ?? throw new Exception()).ConfigureAwait(false);
+                                    var newName = await saveFile(filename, data ?? throw new Exception("!")).ConfigureAwait(false);
                                     files.Add(newName);
                                     node.SetAttributeValue(name, localPrefix + newName);
                                     return true;

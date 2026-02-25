@@ -80,7 +80,7 @@ namespace SysWeaver.Net
 
 
 
-        public Stream ApplyTemplate(TextTemplate template, IReadOnlyDictionary<String, String> vars, IReadOnlyDictionary<String, String> extra)
+        public ReadOnlyMemory<Byte> ApplyTemplate(TextTemplate template, IReadOnlyDictionary<String, String> vars, IReadOnlyDictionary<String, String> extra)
         {
             using (PerfMon.Track(nameof(ApplyTemplate)))
             {
@@ -100,7 +100,7 @@ namespace SysWeaver.Net
                     return fn.GetTemplateVariableValue(key.Substring(i + 1));
                 }
                 var text = template.Get(getVar);
-                return new MemoryStream(Encoding.UTF8.GetBytes(text));
+                return Encoding.UTF8.GetBytes(text);
             }
         }
 

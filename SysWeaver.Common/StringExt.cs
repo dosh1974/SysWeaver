@@ -107,7 +107,56 @@ namespace SysWeaver
             return str.AsSpan().SequenceEqual(value.AsSpan());
         }
 
-  
+
+        /// <summary>
+        /// A fast case sensitive, invariant culture equals with method
+        /// </summary>
+        /// <param name="str"></param>
+        /// <param name="strStart">Start offset into the str, equal to str.SubString(strStart, strLen).FastEquals(value)</param>
+        /// <param name="strLen">Length of the str, equal to str.SubString(strStart, strLen).FastEquals(value)</param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool FastSubEquals(this String str, int strStart, int strLen, String value)
+        {
+            if (value == null)
+                return str == null;
+            if (str == null)
+                return false;
+            var len = value.Length;
+            if (len != strLen)
+                return false;
+            var ss = str.AsSpan();
+            var ml = strStart + len;
+            if (ss.Length < ml)
+                return false;
+            return ss.Slice(strStart, len).SequenceEqual(value.AsSpan());
+        }
+
+
+        /// <summary>
+        /// A fast case sensitive, invariant culture equals with method
+        /// </summary>
+        /// <param name="str"></param>
+        /// <param name="strStart">Start offset into the str, equal to str.SubString(strStart).FastEquals(value)</param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool FastSubEquals(this String str, int strStart, String value)
+        {
+            if (value == null)
+                return str == null;
+            if (str == null)
+                return false;
+            var len = value.Length;
+            var ss = str.AsSpan();
+            var ml = strStart + len;
+            if (ss.Length != ml)
+                return false;
+            return ss.Slice(strStart, len).SequenceEqual(value.AsSpan());
+        }
+
+
         /// <summary>
         /// Extract keywords from a string (typically camelcased or filenames etc), ex:
         /// "HelloWorld42.txt" => "Hello", "World", "txt"

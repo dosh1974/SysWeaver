@@ -196,11 +196,10 @@ namespace SysWeaver.MicroService
             var uri = r.Param;
             var filterFnCols = await UserStoreTables.GetOrUpdateAsync(uri, async _uri =>
             {
-                var bs = await UserStore.ReadFile(request, uri).ConfigureAwait(false);
+                using var bs = await UserStore.ReadFile(request, uri).ConfigureAwait(false);
                 if (bs == null)
                     return null;
-                var dd = bs ?? ReadOnlyMemory<byte>.Empty;
-                var d = JsonSer.Create<BaseTableData>(dd.Span);
+                var d = JsonSer.Create<BaseTableData>(bs.Memory.Span);
                 return Tuple.Create(TableDataTools.GetStaticTableFn(d.Cols, d.Rows.Select(x => x.Values)), d.Cols, d.Title);
             }).ConfigureAwait(false);
             var cc = EnvInfo.Cc;

@@ -100,12 +100,12 @@ namespace SysWeaver
                 var d = f[fl];
                 if (d.Item2 == null)
                     continue;
-                var data = TryLoadBytes(d.Item1);
+                using var data = TryLoadBytes(d.Item1);
                 if (data == null)
                     continue;
                 try
                 {
-                    return Create<T>(data);
+                    return Create<T>(data.Memory);
                 }
                 catch
                 {
@@ -140,12 +140,12 @@ namespace SysWeaver
                 var d = f[fl];
                 if (d.Item2 == null)
                     continue;
-                var data = await TryLoadBytesAsync(d.Item1).ConfigureAwait(false);
+                using var data = await TryLoadBytesAsync(d.Item1).ConfigureAwait(false);
                 if (data == null)
                     continue;
                 try
                 {
-                    return Create<T>(data);
+                    return Create<T>(data.Memory);
                 }
                 catch
                 {
@@ -354,9 +354,13 @@ namespace SysWeaver
             {
                 var name = Path.Combine(p[i], key);
                 var fi = new FileInfo(name);
-                if (validate && fi.Exists)
-                    TryLoadBytes(name);
-                l[i] = new Tuple<string, DateTime?>(name, fi.Exists ? fi.LastWriteTimeUtc : null);
+                var valid = fi.Exists;
+                if (validate && valid)
+                {
+                    using var data = TryLoadBytes(name);
+                    valid = data != null;
+                }
+                l[i] = new Tuple<string, DateTime?>(name, valid? fi.LastWriteTimeUtc : null);
             }
             Array.Sort(l, (a, b) =>
             {
@@ -387,9 +391,13 @@ namespace SysWeaver
             {
                 var name = Path.Combine(p[i], key);
                 var fi = new FileInfo(name);
-                if (validate && fi.Exists)
-                    await TryLoadBytesAsync(name).ConfigureAwait(false);
-                l[i] = new Tuple<string, DateTime?>(name, fi.Exists ? fi.LastWriteTimeUtc : null);
+                var valid = fi.Exists;
+                if (validate && valid)
+                {
+                    using var data = await TryLoadBytesAsync(name).ConfigureAwait(false);
+                    valid = data != null;
+                }
+                l[i] = new Tuple<string, DateTime?>(name, valid ? fi.LastWriteTimeUtc : null);
             }
             Array.Sort(l, (a, b) =>
             {
@@ -403,45 +411,45 @@ namespace SysWeaver
             return l;
         }
 
-        static bool Validate(Byte[] data)
+        static bool Validate(ReadOnlyMemory<Byte> data)
         {
-            if (data == null)
-                return false;
             var dl = data.Length - 32;
             if (dl < 1)
                 return false;
-            var sp = data.AsSpan();
+            var sp = data.Span;
             Span<Byte> hash = stackalloc Byte[32];
             SHA256.HashData(sp.Slice(0, dl), hash);
             return sp.Slice(dl).SequenceEqual(hash);
 
         }
 
-        static Byte[] TryLoadBytes(String name)
+        static IUnmanagedReadOnlyMemory<Byte> TryLoadBytes(String name)
         {
-            var data = File.ReadAllBytes(name);
-            if (!Validate(data))
+            var data = FileReadOnlyMemory.ReadAllBytes(name);
+            if (!Validate(data.Memory))
             {
+                data.Dispose();
                 File.Delete(name);
                 return null;
             }
             return data;
         }
 
-        static async Task<Byte[]> TryLoadBytesAsync(String name)
+        static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> TryLoadBytesAsync(String name)
         {
-            var data = await File.ReadAllBytesAsync(name).ConfigureAwait(false);
-            if (!Validate(data))
+            var data = await FileReadOnlyMemory.ReadAllBytesAsync(name).ConfigureAwait(false);
+            if (data == null || (!Validate(data.Memory)))
             {
-                File.Delete(name);
+                data?.Dispose();
+                await PathExt.TryDeleteFileAsync(name).ConfigureAwait(false);
                 return null;
             }
             return data;
         }
 
-        T Create<T>(Byte[] data)
+        T Create<T>(ReadOnlyMemory<Byte> data)
         {
-            ReadOnlySpan<Byte> r = data.AsSpan().Slice(0, data.Length - 32);
+            ReadOnlySpan<Byte> r = data.Span.Slice(0, data.Length - 32);
             var comp = Comp;
             if (comp != null)
                 r = comp.GetDecompressed(r).Span;

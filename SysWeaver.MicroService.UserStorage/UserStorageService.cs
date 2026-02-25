@@ -531,13 +531,16 @@ namespace SysWeaver.MicroService
         /// <param name="url">Url to the file</param>
         /// <param name="markAsAccessed">If true the file is marked as accessed and expiration time is moved forward</param>
         /// <returns>The uncompressed content of the file</returns>
-        public async Task<ReadOnlyMemory<Byte>?> ReadFile(HttpServerRequest context, string url, bool markAsAccessed = true)
+        public async Task<IUnmanagedReadOnlyMemory<Byte>> ReadFile(HttpServerRequest context, string url, bool markAsAccessed = true)
         {
             if (!Validate(out var fi, out var mime, out var compType, out var isLink, out var scope, context, url, markAsAccessed))
                 return null;
-            ReadOnlyMemory<Byte> data = await File.ReadAllBytesAsync(fi.FullName).ConfigureAwait(false);
+            var data = await FileReadOnlyMemory.ReadAllBytesAsync(fi.FullName).ConfigureAwait(false);
             if (compType != null)
-                data = compType.GetDecompressed(data.Span);
+            {
+                using (var _ = data)
+                    data = UnmanagedMemory.Create(compType.GetDecompressed(data.Memory.Span));
+            }
             return data;                
         }
 
@@ -1168,10 +1171,11 @@ namespace SysWeaver.MicroService
         UserStorageLink InternalLoadLink(String filename)
         {
             using var _ = PerfMon.Track(nameof(InternalLoadLink));
-            ReadOnlyMemory<Byte> d = File.ReadAllBytes(filename);
-            if (filename.FastEndsWith(CompExt))
-                d = Comp.GetDecompressed(d.Span);
-            return Ser.Create<UserStorageLink>(d);
+            using var d = FileReadOnlyMemory.ReadAllBytes(filename);
+            if (!filename.FastEndsWith(CompExt))
+                return Ser.Create<UserStorageLink>(d.Memory);
+            var e = Comp.GetDecompressed(d.Memory.Span);
+            return Ser.Create<UserStorageLink>(e);
         }
 
     }

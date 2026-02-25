@@ -16,8 +16,9 @@ namespace SysWeaver.Compression
         /// <param name="c">The compression encoder</param>
         /// <param name="from">The memory to read uncompressed data from</param>
         /// <param name="level">The compression level to use</param>
+        /// <param name="trim">The returned memory is trimnmed, this is useful for long living object to reduce memory usage</param>
         /// <returns>The compressed data</returns>
-        public static Memory<Byte> GetCompressed(this ICompEncoder c, ReadOnlySpan<Byte> from, CompEncoderLevels level)
+        public static Memory<Byte> GetCompressed(this ICompEncoder c, ReadOnlySpan<Byte> from, CompEncoderLevels level, bool trim = false)
         {
             var pool = ArrayPool<Byte>.Shared;
             var bufSize = from.Length + 1024;
@@ -28,12 +29,12 @@ namespace SysWeaver.Compression
                 var sm = mem.AsSpan();
                 var s = c.Compress(from, sm, level);
                 long waste = bufSize - s;
-                if ((waste < 2048) || ((waste << 3) < bufSize)) // Allow approx 1/8th the buffer size of waste
+                if ((!trim) || (waste < 2048) || ((waste << 3) < bufSize)) // Allow approx 1/8th the buffer size of waste
                 {
                     pool = null;
                     return new Memory<Byte>(mem, 0, s);
                 }
-                var ret = new Byte[s];
+                var ret = GC.AllocateUninitializedArray<Byte>(s);
                 sm[..s].CopyTo(ret.AsSpan());
                 return ret;
             }
@@ -60,8 +61,9 @@ namespace SysWeaver.Compression
         /// <param name="c">The compression encoder</param>
         /// <param name="from">The stream to read the uncompressed data from</param>
         /// <param name="level">The compression level to use</param>
+        /// <param name="trim">The returned memory is trimnmed, this is useful for long living object to reduce memory usage</param>
         /// <returns>The compressed data</returns>
-        public static Memory<Byte> GetCompressed(this ICompEncoder c, Stream from, CompEncoderLevels level)
+        public static Memory<Byte> GetCompressed(this ICompEncoder c, Stream from, CompEncoderLevels level, bool trim = false)
         {
             long l = 65536;
             try
@@ -81,12 +83,12 @@ namespace SysWeaver.Compression
                             var sm = mem.AsSpan();
                             var s = c.Compress(from, sm, level);
                             long waste = bufSize - s;
-                            if ((waste < 2048) || ((waste << 3) < bufSize)) // Allow approx 1/8th the buffer size of waste
+                            if ((!trim) || (waste < 2048) || ((waste << 3) < bufSize)) // Allow approx 1/8th the buffer size of waste
                             {
                                 pool = null;
                                 return new Memory<Byte>(mem, 0, s);
                             }
-                            var ret = new Byte[s];
+                            var ret = GC.AllocateUninitializedArray<Byte>(s);
                             sm[..s].CopyTo(ret.AsSpan());
                             return ret;
                         }
@@ -113,8 +115,9 @@ namespace SysWeaver.Compression
         /// <param name="c">The compression encoder</param>
         /// <param name="from">The stream to read the uncompressed data from</param>
         /// <param name="level">The compression level to use</param>
+        /// <param name="trim">The returned memory is trimnmed, this is useful for long living object to reduce memory usage</param>
         /// <returns>The compressed data</returns>
-        public static async ValueTask<Memory<Byte>> GetCompressedAsync(this ICompEncoder c, Stream from, CompEncoderLevels level)
+        public static async ValueTask<Memory<Byte>> GetCompressedAsync(this ICompEncoder c, Stream from, CompEncoderLevels level, bool trim = false)
         {
             long l = 65536;
             try
@@ -134,12 +137,12 @@ namespace SysWeaver.Compression
                             var sm = mem.AsMemory();
                             var s = await c.CompressAsync(from, sm, level).ConfigureAwait(false);
                             long waste = bufSize - s;
-                            if ((waste < 2048) || ((waste << 3) < bufSize)) // Allow approx 1/8th the buffer size of waste
+                            if ((!trim) || (waste < 2048) || ((waste << 3) < bufSize)) // Allow approx 1/8th the buffer size of waste
                             {
                                 pool = null;
                                 return sm[..s];
                             }
-                            var ret = new Byte[s];
+                            var ret = GC.AllocateUninitializedArray<Byte>(s);
                             sm[..s].CopyTo(ret);
                             return ret;
                         }

@@ -555,28 +555,24 @@ namespace SysWeaver.Net
             var comp = h.Decoder;
             if (useAsync)
             {
-                if (h.UseStream)
-                {
-                    using var s = await h.GetStreamAsync(data).ConfigureAwait(false);
+                using var i = await h.GetAsync(data).ConfigureAwait(false);
+                var s = i.Stream;
+                if (s != null)
                     return new Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>(await (comp == null ? s.ReadAllMemoryAsync() : comp.GetDecompressedAsync(s)).ConfigureAwait(false), etag, h, data);
-                }
-                else
-                {
-                    var mem = await h.GetDataAsync(data).ConfigureAwait(false);
-                    return new Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>(comp == null ? mem : comp.GetDecompressed(mem.Span), etag, h, data);
-                }
+                var mem = i.Mem;
+                if (i.IsMapped)
+                    mem = CloneMemory(mem);
+                return new Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>(comp == null ? mem : comp.GetDecompressed(mem.Span), etag, h, data);
             }else
             {
-                if (h.UseStream)
-                {
-                    using var s = h.GetStream(data);
+                using var i = h.Get(data);
+                var s = i.Stream;
+                if (s != null)
                     return new Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>(await (comp == null ? s.ReadAllMemoryAsync() : comp.GetDecompressedAsync(s)).ConfigureAwait(false), etag, h, data);
-                }
-                else
-                {
-                    var mem = h.GetData(data);
-                    return new Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>(comp == null ? mem : comp.GetDecompressed(mem.Span), etag, h, data);
-                }
+                var mem = i.Mem;
+                if (i.IsMapped)
+                    mem = CloneMemory(mem);
+                return new Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>(comp == null ? mem : comp.GetDecompressed(mem.Span), etag, h, data);
             }
 
         }
@@ -1032,7 +1028,7 @@ namespace SysWeaver.Net
                 if (auth != null)
                     if (await HandleAuth(auth, data, session, localUrl, url, isHead).ConfigureAwait(false))
                         return;
-                using var __ = PerfMon.Track(nameof(Handle) + "." + t.Name);
+                using var __ = PerfMon.Track((nameof(Handle) + ".") + t.Name);
                 var etag = t.GetEtag(out bool useAsync, data);
                 var ee = data.Etag;
                 if (ee != null)
@@ -1077,8 +1073,7 @@ namespace SysWeaver.Net
                             var qs = data.QueryStringStart;
                             if (qs > 0)
                             {
-                                var qss = data.Url.Substring(qs);
-                                if (qss.FastEquals("raw"))
+                                if (data.Url.FastSubEquals(qs, "raw"))
                                 {
                                     if (session.IsValid(AuthTools.DevAuth))
                                     {
@@ -1140,7 +1135,8 @@ namespace SysWeaver.Net
                 var output = data.OutputStream;
                 var ccd = data.ClientCacheDuration ?? t.ClientCacheDuration;
                 var dec = t.Decoder;
-                var useStream = t.UseStream;
+
+
                 //  Handle cached templates
                 bool haveTemplate = cachedTemplate != null;
                 IReadOnlyDictionary<String, String> vars = null;
@@ -1154,42 +1150,43 @@ namespace SysWeaver.Net
                     else
                         langVars = await langTemplate.LangVars.GetOrUpdateValueAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false);
                 }
-                if (haveTemplate)
-                {
-                    useAsync = false;
-                    useStream = true;
-                    dec = null;
-                }
-                //  Get data (stream or memory)
-                using (var i =
-                    useStream
-                    ?
-                    new Input(
-                        useAsync
+                using var i = useAsync ? await t.GetAsync(data).ConfigureAwait(false) : t.Get(data);
+                { 
+                    if (haveTemplate)
+                    {
+                        dec = null;
+                        i.ChangeMem(ApplyTemplate(cachedTemplate, vars ?? GetVars(isDynamicTemplate || isLanguageTemplate, data), langVars));
+                    }
+
+                    //  Get data (stream or memory)
+                    /*using (var i =
+                        useStream
                         ?
-                        (await t.GetStreamAsync(data).ConfigureAwait(false))
+                        new Input(
+                            useAsync
+                            ?
+                            (await t.GetStreamAsync(data).ConfigureAwait(false))
+                            :
+                            (haveTemplate 
+                            ? ApplyTemplate(cachedTemplate, vars ?? GetVars(isDynamicTemplate || isLanguageTemplate, data), langVars) : t.GetStream(data))
+                            )
                         :
-                        (haveTemplate 
-                        ? ApplyTemplate(cachedTemplate, vars ?? GetVars(isDynamicTemplate || isLanguageTemplate, data), langVars) : t.GetStream(data))
+                        new Input(
+                            useAsync
+                            ?
+                            (await t.GetDataAsync(data).ConfigureAwait(false))
+                            :
+                            t.GetData(data)
+                            )
                         )
-                    :
-                    new Input(
-                        useAsync
-                        ?
-                        (await t.GetDataAsync(data).ConfigureAwait(false))
-                        :
-                        t.GetData(data)
-                        )
-                    )
-                {
+                    {*/
                     //  Create (and apply text template)
                     if (createTemplate)
                     {
                         if (textTemplate != null)
                         {
-                            var fileData = i.Data ?? null;
-                            if (i.Stream != null)
-                                fileData = await i.Stream.ReadAllMemoryAsync(true).ConfigureAwait(false);
+                            var ds = i.Stream;
+                            var fileData = ds != null ? await ds.ReadAllMemoryAsync(true).ConfigureAwait(false) : i.Mem;
                             var preDecData = fileData;
                             if (dec != null)
                                 fileData = dec.GetDecompressed(fileData.Span);
@@ -1207,12 +1204,11 @@ namespace SysWeaver.Net
                                 langVars = langVars ?? (langTemplate == null ? null : await langTemplate.LangVars.GetOrUpdateValueAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false));
                                 dec = null;
                                 textTemplate.Set(cachedTemplate, isDynamicTemplate, etag, langTemplate, lang);
-                                i.ChangeStream(ApplyTemplate(cachedTemplate, vars, langVars));
+                                i.ChangeMem(ApplyTemplate(cachedTemplate, vars, langVars));
                             }else
                             {
                                 textTemplate.Set(null, false, etag, null, null);
-                                i.ChangeStream(null);
-                                i.Data = preDecData;
+                                i.ChangeMem(preDecData);
                             }
                         }
                     }else
@@ -1225,7 +1221,7 @@ namespace SysWeaver.Net
                                 langVars = langVars ?? (langTemplate == null ? null : await langTemplate.LangVars.GetOrUpdateValueAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false));
                                 dec = null;
                                 textTemplate.SetLangLm(etag, lang);
-                                i.ChangeStream(ApplyTemplate(cachedTemplate, vars, langVars));
+                                i.ChangeMem(ApplyTemplate(cachedTemplate, vars, langVars));
                             }
                             else
                             {
@@ -1400,7 +1396,7 @@ namespace SysWeaver.Net
                     }
                     else
                     {
-                        length = i.Data.Value.Length;
+                        length = i.Mem.Length;
                     }
 
                     //  Write range headers
@@ -1506,7 +1502,7 @@ namespace SysWeaver.Net
                     else
                     {
                         //  Memory to stream
-                        var b = i.Data ?? throw new NullReferenceException();
+                        var b = i.Mem;
                         var len = b.Length;
                         if (skip > 0)
                         {
@@ -1975,13 +1971,13 @@ namespace SysWeaver.Net
             {
                 var ext = url.Substring(extP + 1);
                 var mime = MimeTypeMap.GetMimeType(ext);
-                return new HttpServerEndPoint(url, "POST", 0, 0, false, HttpCompressionPriority.DefaultMethods, null, null, HttpServerEndpointTypes.Unknown, "Handled by " + typeof(HttpServerBase).FullName, null, HttpServerTools.StartedTime, HttpServerTools.JsonMime, null);
+                return new HttpServerEndPoint(url, "POST", 0, 0, HttpCompressionPriority.DefaultMethods, null, null, HttpServerEndpointTypes.Unknown, "Handled by " + typeof(HttpServerBase).FullName, null, HttpServerTools.StartedTime, HttpServerTools.JsonMime, null);
             }
             else
             {
                 var ext = url.Substring(extP + 1);
                 var mime = MimeTypeMap.GetMimeType(ext);
-                return new HttpServerEndPoint(url, "GET", 25, 30, false, mime.Item2 ? HttpCompressionPriority.DefaultMethods : null, mime.Item2 ? "br" : null, url.IndexOf("_debug") < 0 ? null : DebugAuth, HttpServerEndpointTypes.File, "Generated by " + typeof(HttpServerBase).FullName, null, HttpServerTools.StartedTime, mime.Item1, null);
+                return new HttpServerEndPoint(url, "GET", 25, 30, mime.Item2 ? HttpCompressionPriority.DefaultMethods : null, mime.Item2 ? "br" : null, url.IndexOf("_debug") < 0 ? null : DebugAuth, HttpServerEndpointTypes.File, "Generated by " + typeof(HttpServerBase).FullName, null, HttpServerTools.StartedTime, mime.Item1, null);
             }
         }
 
@@ -2204,40 +2200,36 @@ namespace SysWeaver.Net
         #region Compression
 
 
-        static bool GZipToDeflate(Input i)
+        static bool GZipToDeflate(HttpRequestData i)
         {
             var s = i.Stream;
             if (s != null)
             {
                 if (!s.CanSeek)
                     return false;
-                i.Stream = new TransformGZipToDeflateStream(s);
+                i.ChangeStream(new TransformGZipToDeflateStream(s, true));
                 return true;
             }
-            var b = i.Data ?? throw new NullReferenceException();
-            i.Data = TransformGZipToDeflateStream.GetDeflateData(b);
+            i.ChangeMem(TransformGZipToDeflateStream.GetDeflateData(i.Mem));
             return true;
         }
 
-        async ValueTask<String> Compress(ICompEncoder encoder, CompEncoderLevels level, Input i)
+        async ValueTask<String> Compress(ICompEncoder encoder, CompEncoderLevels level, HttpRequestData i)
         {
             using (PerfMon.Track(nameof(Compress)))
             {
                 var s = i.Stream;
                 if (s != null)
                 {
-                    using var ms = new MemoryStream();
-                    await encoder.CompressAsync(s, ms, level).ConfigureAwait(false);
-                    i.ChangeStream(null);
-                    i.Data = new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
+                    i.ChangeMem(await encoder.GetCompressedAsync(s, level, true).ConfigureAwait(false));
                     return encoder.HttpCode;
                 }
-                var b = i.Data ?? throw new NullReferenceException();
-                var compData = GC.AllocateUninitializedArray<Byte>(b.Length + 4096);
-                var size = encoder.Compress(b.Span, compData, level);
+                var b = i.Mem;
+                var compData = encoder.GetCompressed(b.Span, level, true);
+                var size = compData.Length;
                 if ((size > 0) && (size < b.Length))
                 {
-                    i.Data = new Memory<Byte>(compData, 0, size);
+                    i.ChangeMem(compData);
                     return encoder.HttpCode;
                 }
                 return null;
@@ -2245,42 +2237,26 @@ namespace SysWeaver.Net
         }
 
 
-        ValueTask Compress(ICompEncoder encoder, CompEncoderLevels level, Input i, Stream output)
+        ValueTask Compress(ICompEncoder encoder, CompEncoderLevels level, HttpRequestData i, Stream output)
         {
             var s = i.Stream;
-            if (s != null)
-                return encoder.CompressAsync(s, output, level);
-            var b = i.Data ?? throw new NullReferenceException();
-            return encoder.CompressAsync(b, output, level);
+            return s == null ? encoder.CompressAsync(i.Mem, output, level) : encoder.CompressAsync(s, output, level);
         }
 
 
-        async ValueTask Decompress(ICompDecoder decoder, Input i)
+        async ValueTask Decompress(ICompDecoder decoder, HttpRequestData i)
         {
             using (PerfMon.Track(nameof(Decompress)))
             {
-                using var ms = new MemoryStream();
                 var s = i.Stream;
-                if (s != null)
-                {
-                    await decoder.DecompressAsync(s, ms).ConfigureAwait(false);
-                    i.ChangeStream(null);
-                    i.Data = new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
-                    return;
-                }
-                var b = i.Data ?? throw new NullReferenceException();
-                await decoder.DecompressAsync(b, ms).ConfigureAwait(false);
-                i.Data = new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
+                i.ChangeMem(s == null ? decoder.GetDecompressed(i.Mem.Span) : await decoder.GetDecompressedAsync(s).ConfigureAwait(false));
             }
         }
 
-        ValueTask Decompress(ICompDecoder decoder, Input i, Stream output)
+        ValueTask Decompress(ICompDecoder decoder, HttpRequestData i, Stream output)
         {
             var s = i.Stream;
-            if (s != null)
-                return decoder.DecompressAsync(s, output);
-            var b = i.Data ?? throw new NullReferenceException();
-            return decoder.DecompressAsync(b, output);
+            return s == null ? decoder.DecompressAsync(i.Mem, output) : decoder.DecompressAsync(s, output);
         }
 
         #endregion//Compression
@@ -2293,7 +2269,14 @@ namespace SysWeaver.Net
         /// </summary>
         readonly ConcurrentDictionary<String, HttpCacheEntry> Cache = new(StringComparer.Ordinal);
 
-        async ValueTask SaveToCache(ConcurrentDictionary<String, HttpCacheEntry> cache, String cacheKey, DateTime expires, long nowT, Input i, HttpServerRequest req, String localUrl)
+        static ReadOnlyMemory<Byte> CloneMemory(ReadOnlyMemory<Byte> mem)
+        {
+            var t = GC.AllocateUninitializedArray<Byte>(mem.Length);
+            mem.Span.CopyTo(t);
+            return t;
+        }
+
+        async ValueTask SaveToCache(ConcurrentDictionary<String, HttpCacheEntry> cache, String cacheKey, DateTime expires, long nowT, HttpRequestData i, HttpServerRequest req, String localUrl)
         {
             using (PerfMon.Track(nameof(SaveToCache)))
             {
@@ -2301,16 +2284,21 @@ namespace SysWeaver.Net
                 var s = i.Stream;
                 if (s != null)
                 {
-                    using var ms = new MemoryStream();
-                    await s.CopyToAsync(ms).ConfigureAwait(false);
-                    i.ChangeStream(null);
-                    var nd = new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
-                    i.Data = nd;
+                    var nd = await s.ReadAllMemoryAsync().ConfigureAwait(false);
+                    i.ChangeMem(nd);
                     cache[cacheKey] = new HttpCacheEntry(nowT, exp, req, nd, localUrl);
                     return;
                 }
-                var b = i.Data ?? throw new NullReferenceException();
-                cache[cacheKey] = new HttpCacheEntry(nowT, exp, req, b, localUrl);
+                var mem = i.Mem;
+                if (!i.IsMapped)
+                {
+                    cache[cacheKey] = new HttpCacheEntry(nowT, exp, req, i.Mem, localUrl);
+                    return;
+                }
+                //  Really save?
+                //var t = CloneMemory(mem);
+                //i.ChangeMem(t);
+                //cache[cacheKey] = new HttpCacheEntry(nowT, exp, req, t, localUrl);
             }
         }
 

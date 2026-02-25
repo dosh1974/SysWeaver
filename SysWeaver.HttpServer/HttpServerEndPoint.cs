@@ -30,7 +30,6 @@ namespace SysWeaver.Net
         /// <param name="method"></param>
         /// <param name="clientCacheDuration"></param>
         /// <param name="requestCacheDuration"></param>
-        /// <param name="useStream"></param>
         /// <param name="compression"></param>
         /// <param name="decoder"></param>
         /// <param name="auth"></param>
@@ -40,14 +39,13 @@ namespace SysWeaver.Net
         /// <param name="lastModified"></param>
         /// <param name="mime"></param>
         /// <param name="props">A custom hash set of properties (use only lowercase)</param>
-        public HttpServerEndPoint(string uri, string method, int clientCacheDuration, int requestCacheDuration, bool useStream, string compression, string decoder, IReadOnlyList<String> auth, HttpServerEndpointTypes type, String location, long? size, DateTime lastModified, String mime, IReadOnlySet<String> props)
+        public HttpServerEndPoint(string uri, string method, int clientCacheDuration, int requestCacheDuration, string compression, string decoder, IReadOnlyList<String> auth, HttpServerEndpointTypes type, String location, long? size, DateTime lastModified, String mime, IReadOnlySet<String> props)
         {
             Uri = uri;
             Type = type;
             Method = method;
             ClientCacheDuration = clientCacheDuration;
             RequestCacheDuration = requestCacheDuration;
-            UseStream = useStream;
             Compression = compression;
             Decoder = decoder;
             Auth = auth;
@@ -84,8 +82,6 @@ namespace SysWeaver.Net
         HttpServerEndpointTypes IHttpServerEndPoint.Type => Type;
 
         string IHttpServerEndPoint.Method => Method;
-
-        bool IHttpServerEndPoint.UseStream => UseStream;
 
         int IHttpServerEndPoint.ClientCacheDuration => ClientCacheDuration;
 

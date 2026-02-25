@@ -80,6 +80,21 @@ namespace SysWeaver
             return ms.ToArray();
         }
 
+        public static Memory<Byte> ReadAllMemory(this Stream stream, bool leaveOpen = false)
+        {
+            using var x = leaveOpen ? null : stream;
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            return new Memory<Byte>(ms.GetBuffer(), 0, (int)ms.Position);
+        }
+
+        public static Byte[] ReadAllBytes(this Stream stream, bool leaveOpen = false)
+        {
+            using var x = leaveOpen ? null : stream;
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            return ms.ToArray();
+        }
 
 
     }

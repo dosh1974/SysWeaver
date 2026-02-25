@@ -1141,6 +1141,9 @@ namespace SysWeaver.Net
         #endregion//Return raw value
 
 
+
+
+
         #region No return
 
         sealed class ContextGetAsyncTaskA1<T> : IInvokeApi

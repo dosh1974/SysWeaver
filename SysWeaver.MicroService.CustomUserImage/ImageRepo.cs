@@ -31,8 +31,8 @@ namespace SysWeaver.MicroService
 
         protected override async Task<FileUploadStatus> OnUploaded(FileInfo file, long replacedSize, FileUploadInfo info, HttpServerRequest r, object context)
         {
-            var data = await File.ReadAllBytesAsync(file.FullName).ConfigureAwait(false);
-            var imgInfo = new MagickImageInfo(data);
+            using var data = await FileReadOnlyMemory.ReadAllBytesAsync(file.FullName).ConfigureAwait(false);
+            var imgInfo = new MagickImageInfo(data.Memory.Span);
             switch (imgInfo.Format)
             {
                 case MagickFormat.Png:
@@ -50,7 +50,7 @@ namespace SysWeaver.MicroService
             ReadOnlyMemory<Byte>[] imgs = new ReadOnlyMemory<byte>[ss];
             String[] names = new string[ss];
 
-            using var img = new MagickImage(data);
+            using var img = new MagickImage(data.Memory.Span);
             for (int i = 0; i < ss; ++i)
             {
                 var size = sizes[i];

@@ -21,17 +21,15 @@ namespace SysWeaver.MicroService
         {
             Compression = s.ResponseComp;
             Auth = s.ResponseAuth;
-            Data = Encoding.UTF8.GetBytes(svg);
+            Data = new HttpRequestData(Encoding.UTF8.GetBytes(svg));
         }
 
-        readonly Byte[] Data;
+        readonly HttpRequestData Data;
 
 
         public int ClientCacheDuration => WebApiTools.CacheClientStatic;
 
         public int RequestCacheDuration => 30 * 60;
-
-        public bool UseStream => false;
 
 
         public HttpCompressionPriority Compression { get; init; }
@@ -49,26 +47,19 @@ namespace SysWeaver.MicroService
             return HttpServerTools.StartedText;
         }
 
-        public ReadOnlyMemory<byte> GetData(HttpServerRequest request)
+        public HttpRequestData Get(HttpServerRequest request)
         {
             request.SetResMime("image/svg+xml; charset=UTF-8");
             return Data;
         }
 
-        public Task<ReadOnlyMemory<byte>> GetDataAsync(HttpServerRequest request)
+        public ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
 
-        public Stream GetStream(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
 
-        public Task<Stream> GetStreamAsync(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
+
     }
 
 

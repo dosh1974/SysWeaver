@@ -25,25 +25,20 @@ namespace SysWeaver.Net
         /// <param name="statusCode">The status code to return</param>
         /// <param name="mime">The mime type to use</param>
         /// <param name="data">The data to respond with</param>
-        /// <param name="contentEncoding">The content encoding that was used for the data (if it's text)</param>
-        public GenericHttpRequestHandler(int statusCode, String mime, ReadOnlyMemory<Byte> data, Encoding contentEncoding = null)
+        public GenericHttpRequestHandler(int statusCode, String mime, ReadOnlyMemory<Byte> data)
         {
             StatusCode = statusCode;
             Mime = mime;
             Data = data;
-            ContentEncoding = contentEncoding;
         }
 
         readonly int StatusCode;
-        readonly Encoding ContentEncoding;
         readonly String Mime;
         readonly ReadOnlyMemory<Byte> Data;
 
         public int ClientCacheDuration { get; set; } = 5;
 
         public int RequestCacheDuration { get; set; } = 0;
-
-        public bool UseStream => false;
 
         public HttpCompressionPriority Compression => null;
 
@@ -60,27 +55,18 @@ namespace SysWeaver.Net
             return null;
         }
 
-        public virtual ReadOnlyMemory<byte> GetData(HttpServerRequest request)
+        public HttpRequestData Get(HttpServerRequest request)
         {
             request.SetResMime(Mime);
             request.SetResStatusCode(StatusCode);
-            return Data;
+            return new HttpRequestData(Data, true);
         }
 
-        public Task<ReadOnlyMemory<byte>> GetDataAsync(HttpServerRequest request)
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
 
-        public Stream GetStream(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<Stream> GetStreamAsync(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
     }
 
 

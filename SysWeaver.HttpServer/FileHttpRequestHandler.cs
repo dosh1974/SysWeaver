@@ -65,9 +65,6 @@ namespace SysWeaver.Net
 
         public bool IsLocalized { get; init; }
 
-        public bool UseStream => true;
-
-
         public HttpCompressionPriority Compression { get; init; }
 
         public ICompDecoder Decoder { get; init; }
@@ -76,18 +73,15 @@ namespace SysWeaver.Net
 
         public ValueTask<String> GetCacheKey(HttpServerRequest request) => HttpServerTools.NullStringValueTask;
 
-        public ReadOnlyMemory<byte> GetData(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = false;
             return HttpServerTools.ToEtag(Fi.LastWriteTimeUtc);
         }
 
-        public Stream GetStream(HttpServerRequest request)
+
+
+        public HttpRequestData Get(HttpServerRequest request)
         {
             request.SetResMime(Mime);
             var fi = Fi;
@@ -101,14 +95,13 @@ namespace SysWeaver.Net
                 {
                 }
             }
-            return fi.OpenRead();
+            var fs = fi.OpenRead();
+            if (FileReadOnlyMemory.TryMap(out var mem, fs, true, 1 << 20))
+                return new HttpRequestData(mem);
+            return new HttpRequestData(fs);
         }
 
-        public Task<Stream> GetStreamAsync(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-        public Task<ReadOnlyMemory<byte>> GetDataAsync(HttpServerRequest request)
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
@@ -126,7 +119,7 @@ namespace SysWeaver.Net
         public HttpServerRequest Redirected { get; set; }
 
 
-        public DynamicDataHttpRequestHandler(Tuple<String, bool> mime, Func<HttpServerRequest, Task<ReadOnlyMemory<Byte>>> getBody, RequestOptions options)
+        public DynamicDataHttpRequestHandler(Tuple<String, bool> mime, Func<HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> getBody, RequestOptions options)
         {
             RequestCacheDuration = options.RequestCacheDuration;
             ClientCacheDuration = options.ClientCacheDuration;
@@ -137,7 +130,7 @@ namespace SysWeaver.Net
             IsLocalized = options.IsLocalized;
         }
 
-        readonly Func<HttpServerRequest, Task<ReadOnlyMemory<Byte>>> GetBody;
+        readonly Func<HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> GetBody;
 
 
         readonly String Mime;
@@ -147,8 +140,6 @@ namespace SysWeaver.Net
 
         public bool IsLocalized { get; init; }
 
-        public bool UseStream => false;
-
         public HttpCompressionPriority Compression { get; init; }
 
         public ICompDecoder Decoder { get; init; }
@@ -157,29 +148,21 @@ namespace SysWeaver.Net
 
         public ValueTask<String> GetCacheKey(HttpServerRequest request) => HttpServerTools.NullStringValueTask;
 
-        public ReadOnlyMemory<byte> GetData(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = true;
             return null;
         }
-        public Stream GetStream(HttpServerRequest request)
+
+        public HttpRequestData Get(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
 
-        public Task<Stream> GetStreamAsync(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-        public Task<ReadOnlyMemory<byte>> GetDataAsync(HttpServerRequest request)
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             request.SetResMime(Mime);
-            return GetBody(request);
+            return new HttpRequestData(await GetBody(request).ConfigureAwait(false));
 
         }
 

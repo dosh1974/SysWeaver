@@ -6,6 +6,8 @@ namespace SysWeaver.Net
 {
     public abstract partial class HttpServerBase
     {
+
+        /*
         sealed class Input : IDisposable
         {
             public Stream Stream;
@@ -51,7 +53,7 @@ namespace SysWeaver.Net
 
         }
 
-
+        */
 
     }
 

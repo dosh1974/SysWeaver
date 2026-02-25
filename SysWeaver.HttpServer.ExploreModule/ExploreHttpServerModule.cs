@@ -72,7 +72,7 @@ namespace SysWeaver.Net.ExploreModule
         {
             var l = context.LocalUrl;
             var key = Name;
-            if (!l.EndsWith(key, StringComparison.Ordinal))
+            if (!l.FastEndsWith(key))
                 return null;
             var kl = key.Length;
             var ll = l.Length - kl - 1;
@@ -86,11 +86,9 @@ namespace SysWeaver.Net.ExploreModule
 
         #region IHttpRequestHandler
 
-
-
-        public ReadOnlyMemory<byte> GetData(HttpServerRequest request)
+        public HttpRequestData Get(HttpServerRequest request)
         {
-            using (PerfMon.Track(nameof(GetData)))
+            using (PerfMon.Track(nameof(GetAsync)))
             {
                 var l = request.LocalUrl;
                 l = l.Substring(0, l.Length - Name.Length);
@@ -151,22 +149,25 @@ namespace SysWeaver.Net.ExploreModule
                 { "DATA", s },
             };
                 var txt = Main.Get(vars);
-                return Encoding.UTF8.GetBytes(txt);
+                return new HttpRequestData(Encoding.UTF8.GetBytes(txt));
             }
+        }
+
+
+        public ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
+        {
+            throw new NotImplementedException();
         }
 
         public int ClientCacheDuration { get; private set; } = 1;
 
         public int RequestCacheDuration { get; private set; } = 15;
 
-        public bool UseStream => false;
-
         public HttpCompressionPriority Compression { get; private set; }
 
         public ICompDecoder Decoder => null;
 
         public IReadOnlyList<string> Auth { get; private set; }
-
 
         public ValueTask<String> GetCacheKey(HttpServerRequest request) => HttpServerTools.NullStringValueTask;
 
@@ -176,20 +177,6 @@ namespace SysWeaver.Net.ExploreModule
             return null;
         }
 
-        public Stream GetStream(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<Stream> GetStreamAsync(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<ReadOnlyMemory<byte>> GetDataAsync(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
 
         #endregion//IHttpRequestHandler
 

@@ -58,11 +58,6 @@ namespace SysWeaver.Net
         int RequestCacheDuration { get; }
 
         /// <summary>
-        /// True if the input is from a stream
-        /// </summary>
-        bool UseStream { get; }
-
-        /// <summary>
         /// The compression method to use (in order of preferens) or null if no compression should be applied
         /// </summary>
         String CompPreference { get; }

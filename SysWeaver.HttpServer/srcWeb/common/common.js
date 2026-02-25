@@ -6343,7 +6343,7 @@ async function SysWeaverInit() {
             b.classList.add("SwDesktop");
         onSizeChange();
         if (ps.get("transparent"))
-            document.documentElement.add("Transparent");
+            document.documentElement.classList.add("Transparent");
     });
 
     const didReload = (

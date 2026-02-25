@@ -69,7 +69,7 @@ namespace SysWeaver.Net
         /// <param name="url">Url to the file</param>
         /// <param name="markAsAccessed">If true the file is marked as accessed and expiration time is moved forward</param>
         /// <returns>The uncompressed content of the file</returns>
-        Task<ReadOnlyMemory<Byte>?> ReadFile(HttpServerRequest context, string url, bool markAsAccessed = true);
+        Task<IUnmanagedReadOnlyMemory<Byte>> ReadFile(HttpServerRequest context, string url, bool markAsAccessed = true);
 
         /// <summary>
         /// Get the scope of a link or a file

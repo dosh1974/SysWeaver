@@ -19,7 +19,6 @@ namespace SysWeaver.Net
 
         public bool AllowTemplates { get; init; }
 
-
         public StaticMemoryHttpRequestHandler(String uri, String location, ReadOnlyMemory<Byte> data, String mime, HttpCompressionPriority compression, int clientCacheDuration = 5, int requestCacheDuration = 0, String lastModified = null, ICompDecoder preCompressedFormat = null, IReadOnlyList<String> auth = null, double order = 0)
         {
             Order = order;
@@ -59,33 +58,22 @@ namespace SysWeaver.Net
         public IReadOnlyList<String> Auth { get; init; }
         public ValueTask<String> GetCacheKey(HttpServerRequest request) => CackeKey;
         public HttpServerEndpointTypes Type => HttpServerEndpointTypes.File;
-        
-        public bool UseStream => false;
 
-        public ReadOnlyMemory<byte> GetData(HttpServerRequest request)
+        public HttpRequestData Get(HttpServerRequest request)
         {
             request.SetResMime(Mime);
-            return Data;
+            return new HttpRequestData(Data, true);
+        }
+
+        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
+        {
+            throw new NotImplementedException();
         }
 
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = false;
             return LastModified;
-        }
-
-        public Stream GetStream(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<Stream> GetStreamAsync(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-        public Task<ReadOnlyMemory<byte>> GetDataAsync(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
         }
 
         public String Uri { get; init; }

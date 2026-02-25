@@ -956,11 +956,10 @@ namespace SysWeaver.AI
                     if (!exts.TryGetValue(ext.FastToLower(), out var mime))
                         continue;
                     BinaryData bd;
-                    var t = await us.ReadFile(request, x, false).ConfigureAwait(false);
-                    if (!t.HasValue)
+                    using var t = await us.ReadFile(request, x, false).ConfigureAwait(false);
+                    if (t == null)
                         continue;
-                    using (var ms = t.Value.AsStream())
-                        bd = BinaryData.FromStream(ms, mime);
+                    bd = BinaryData.FromBytes(t.Memory);
                     images.Add(ChatMessageContentPart.CreateImagePart(bd, mime, ChatImageDetailLevel.High));
                 }
                 catch

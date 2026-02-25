@@ -718,8 +718,6 @@ namespace SysWeaver.Net
 
         public int RequestCacheDuration { get; init; }
 
-        public bool UseStream => false;
-
         public HttpCompressionPriority Compression { get; init; }
 
         public ICompDecoder Decoder => null;
@@ -765,32 +763,24 @@ namespace SysWeaver.Net
             return null;
         }
 
-        public ReadOnlyMemory<byte> GetData(HttpServerRequest request)
+
+        public HttpRequestData Get(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
 
-        public async Task<ReadOnlyMemory<byte>> GetDataAsync(HttpServerRequest request)
+        async ValueTask<HttpRequestData> IHttpRequestHandler.GetAsync(HttpServerRequest request)
         {
             request.SetResMime(Mime);
             if (request.HttpMethod == HttpServerMethods.GET)
             {
                 using (Mon?.Track(GetKey))
-                    return await GetAsync.Run(this, request).ConfigureAwait(false);
+                    return new HttpRequestData(await GetAsync.Run(this, request).ConfigureAwait(false));
             }
             using (Mon?.Track(PostKey))
-                return await PostAsync.Run(this, request).ConfigureAwait(false);
+                return new HttpRequestData(await PostAsync.Run(this, request).ConfigureAwait(false));
         }
 
-        public Stream GetStream(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<Stream> GetStreamAsync(HttpServerRequest request)
-        {
-            throw new NotImplementedException();
-        }
 
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null)
         {
