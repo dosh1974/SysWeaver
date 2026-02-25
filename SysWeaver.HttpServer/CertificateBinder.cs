@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using SysWeaver.Security;
 
@@ -36,7 +37,7 @@ namespace SysWeaver.Net
                     : 
                         ("hostnameport=" + uri.Host + ":" + uri.Port + " certstorename=MY");
                 var pid = Environment.OSVersion.Platform;
-                void onChange()
+                void onChange(X509Certificate2 cert)
                 {
                     provider.OnChanged -= onChange;
                     onCertChanged?.Invoke(provider, listenerPrefix);

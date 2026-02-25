@@ -262,7 +262,7 @@ namespace SysWeaver.Net
                     haveFirewall |= prefix.AddToFirewall;
                     if (cert != null)
                     {
-                        void onChange()
+                        void onChange(X509Certificate2 cert)
                         {
                             cp.OnChanged -= onChange;
                             OnCertChanged(cp, pre);

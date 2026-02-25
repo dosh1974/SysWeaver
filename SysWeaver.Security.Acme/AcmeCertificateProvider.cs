@@ -496,7 +496,7 @@ namespace SysWeaver.Security
         void InvokeExpireSoon()
         {
             Interlocked.Exchange(ref C, null)?.Dispose();
-            OnChanged?.Invoke();
+            OnChanged?.Invoke(null);
         }
 
         public async Task<X509Certificate2> GetCert()
@@ -604,7 +604,7 @@ namespace SysWeaver.Security
 
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null) => HttpServerTools.NoEndPoints;
 
-        public event Action OnChanged;
+        public event Action<X509Certificate2> OnChanged;
 
     }
 }

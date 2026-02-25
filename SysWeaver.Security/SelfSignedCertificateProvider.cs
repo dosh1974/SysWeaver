@@ -105,14 +105,14 @@ namespace SysWeaver.Security
         void InvokeExpireSoon()
         {
             Interlocked.Exchange(ref C, null)?.Dispose();
-            OnChanged?.Invoke();
+            OnChanged?.Invoke(null);
         }
 
         /// <summary>
         /// An event that is fired if the certificate is about to expire.
         /// An application should restart (or re-init) to get the updated cert (calling GetCert again will return an updated cert).
         /// </summary>
-        public event Action OnChanged;
+        public event Action<X509Certificate2> OnChanged;
 
         public void Dispose()
         {

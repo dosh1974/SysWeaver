@@ -68,8 +68,22 @@ namespace SysWeaver.Security
         /// Certificate email (E), can use EnvInfo variables.
         /// </summary>
         public String Email;
+
+
+
+        public void CopyFrom(CertificateBaseParams p)
+        {
+
+            Filename = p.Filename;
+            Password = p.Password;
+            Country = p.Country;
+            Locality = p.Locality;
+            Organization = p.Organization;
+            Unit = p.Unit;
+            State = p.State;
+            Email = p.Email;
+        }
+    
     }
-
-
 
 }

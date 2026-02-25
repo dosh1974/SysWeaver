@@ -217,7 +217,7 @@ namespace SysWeaver.Security
         void InvokeExpireSoon()
         {
             Interlocked.Exchange(ref C, null)?.Dispose();
-            OnChanged?.Invoke();
+            OnChanged?.Invoke(null);
         }
 
         async Task InvokeRootChanged(String name)
@@ -241,7 +241,7 @@ namespace SysWeaver.Security
             if (ok)
             {
                 Interlocked.Exchange(ref C, null)?.Dispose();
-                OnChanged?.Invoke();
+                OnChanged?.Invoke(null);
             }
         }
 
@@ -250,7 +250,7 @@ namespace SysWeaver.Security
         /// An event that is fired whenever the certificate file have changed or if the certificate is about to expire.
         /// An application should restart (or re-init) to get the updated cert (calling GetCert again will return an updated cert).
         /// </summary>
-        public event Action OnChanged;
+        public event Action<X509Certificate2> OnChanged;
 
         IDisposable Fw;
 

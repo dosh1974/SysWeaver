@@ -20,7 +20,7 @@ namespace SysWeaver.Security
         /// An event that is fired whenever the certificate have changed.
         /// An application should restart (or re-init) to get the updated cert (calling GetCert again will return an updated cert).
         /// </summary>
-        event Action OnChanged;
+        event Action<X509Certificate2> OnChanged;
     }
 
 

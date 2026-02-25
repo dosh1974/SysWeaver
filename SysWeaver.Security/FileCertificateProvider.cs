@@ -82,7 +82,7 @@ namespace SysWeaver.Security
             if (ok)
             {
                 Interlocked.Exchange(ref C, null)?.Dispose();
-                OnChanged?.Invoke();
+                OnChanged?.Invoke(null);
             }
         }
 
@@ -91,7 +91,7 @@ namespace SysWeaver.Security
         /// <summary>
         /// An event that is fired whenever the certificate file have changed
         /// </summary>
-        public event Action OnChanged;
+        public event Action<X509Certificate2> OnChanged;
 
 
         public void Dispose()

@@ -11,13 +11,13 @@ namespace SysWeaver
         public DiscManagedFile(ManagedFile manager, String filename, ManagedFileParams p, Func<ManagedFileData, Exception, Task> onChange, Func<Byte[], Byte[]> computeHash)
         {
             Fn = filename;
-            ConputeHash = computeHash;
+            ComputeHash = computeHash;
             A = onChange;
             F = new OnFileChangeAsync(filename, OnChange, p.LocalGraceTime);
             Manager = manager;
         }
         readonly ManagedFile Manager;
-        readonly Func<Byte[], Byte[]> ConputeHash;
+        readonly Func<Byte[], Byte[]> ComputeHash;
 
         public async Task<Tuple<ManagedFileData, Exception>> TryGetNow()
         {
@@ -28,7 +28,7 @@ namespace SysWeaver
             {
                 var fi = new FileInfo(f).LastWriteTimeUtc;
                 var b = await File.ReadAllBytesAsync(f).ConfigureAwait(false);
-                data = new ManagedFileData(f, b, fi, ConputeHash(b), Manager);
+                data = new ManagedFileData(f, b, fi, ComputeHash(b), Manager);
             }
             catch (Exception e)
             {
