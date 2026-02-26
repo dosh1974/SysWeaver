@@ -447,6 +447,7 @@ namespace SysWeaver
                 return path;
             if (path.IndexOf("://") >= 0)
                 return path;
+            path = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
             if (Path.IsPathRooted(path))
                 return path;
             return Path.Combine(useCurrentDir ? Environment.CurrentDirectory : ExecutableDir, path);
