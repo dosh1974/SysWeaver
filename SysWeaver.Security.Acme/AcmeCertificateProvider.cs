@@ -526,7 +526,7 @@ namespace SysWeaver.Security
                         {
                             Interlocked.Exchange(ref C, c)?.Dispose();
                             var renewAtX = expiresX.AddHours(RenewBeforeExpirationHours);
-                            ExpireAction = Scheduler.Add(renewAtX, InvokeExpireSoon, true);
+                            ExpireAction = Scheduler.Add(renewAtX, InvokeExpireSoon);
 //                            if (TestCount == 1)
 //                                ExpireAction = TaskScheduler.Add(DateTime.UtcNow.AddSeconds(30), InvokeExpireSoon, true); C = null; PathExt.TryDeleteFile(f); // HACK: Used to test renewal
                             msg?.AddMessage(Prefix + "Loaded certificate, expires at " + expiresX.ToString("o") + ", renewal is scheduled at " + renewAtX.ToString("o"));
@@ -572,7 +572,7 @@ namespace SysWeaver.Security
                 Interlocked.Exchange(ref C, c)?.Dispose();
                 var expires = c.GetExpiration();
                 var renewAt = expires.AddHours(RenewBeforeExpirationHours);
-                ExpireAction = Scheduler.Add(renewAt, InvokeExpireSoon, true);
+                ExpireAction = Scheduler.Add(renewAt, InvokeExpireSoon);
                 msg?.AddMessage(Prefix + "Created certificate, expires at " + expires.ToString("o") + ", renewal is scheduled at " + renewAt.ToString("o"));
                 return c;
             }

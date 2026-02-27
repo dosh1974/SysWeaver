@@ -173,14 +173,18 @@ namespace SysWeaver.Net
                     foreach (var x in certs)
                     {
                         var port = x.Item1;
-                        var cert = x.Item2;
+                        var provider = x.Item2;
                         var pre = x.Item3.Prefix;
-
-                        if (!TaskExt.RunAsync(CertificateBinder.BindHttps(pre, cert, OnCertChanged, msg, Prefix)))
+                        provider.OnChanged += newCert => OnCertChanged(provider, pre);
+                        var cert = provider.GetCert().RunAsync();
+                        if (cert == null || (!CertificateBinder.BindHttps(pre, cert, msg, Prefix).RunAsync()))
                         {
                             var retry = DateTime.UtcNow.AddMinutes(FirstCertRetryMinutes);
                             msg?.AddMessage(Prefix + "Will try to get new certificate at " + retry.ToString("o"));
-                            Scheduler.Add(retry, () => SwitchCert(cert, pre));
+                            Scheduler.AddTask(retry, () => SwitchCert(provider, pre));
+                        }else
+                        {
+                            CurrentCertThumbPrint = cert.Thumbprint;
                         }
                     }
                 }
@@ -211,18 +215,30 @@ namespace SysWeaver.Net
         readonly HttpListener Listener;
         SemaphoreSlim IsListening;
 
+        public bool IsStopped
+        {
+            get
+            {
+                lock (Listener)
+                    return IsListening == null;
+            }
+        }
 
-        protected override Task<bool> OnNewCert(ICertificateProvider cert, String pre)
+        protected override Task<bool> OnNewCert(ICertificateProvider certProvider, String pre)
         {
             lock (Listener)
             {
-                bool isPaused = IsPaused;
-                if (!isPaused)
-                    Pause();
-                var ok = TaskExt.RunAsync(CertificateBinder.BindHttps(pre, cert, OnCertChanged, Msg, Prefix));
-                if (!isPaused)
+                var cert = certProvider.GetCert().RunAsync();
+                if (cert == null)
+                    return TaskExt.FalseTask;
+                var res = CertificateBinder.BindHttps(pre, cert, Msg, Prefix).RunAsync();
+                CurrentCertThumbPrint = cert.Thumbprint;
+                if (res && (!IsPaused))
+                {
+                    Stop();
                     Start();
-                return Task.FromResult(ok);
+                }
+                return TaskExt.TrueTask;
             }
         }
 

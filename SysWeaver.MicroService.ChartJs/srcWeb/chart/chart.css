@@ -2,10 +2,16 @@
 body {
     padding: 0;
     margin: 0;
-    width: 100svw !important;
+    width: 100% !important;
     height: 100svh !important;
     display: block;
 }
+
+html.Embedded body {
+    height: calc(100svh - 8px) !important;
+}
+
+
 
 SysWeaver-Chart {
     box-sizing: border-box;

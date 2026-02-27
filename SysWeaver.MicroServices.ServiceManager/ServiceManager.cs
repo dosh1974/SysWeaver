@@ -1408,6 +1408,8 @@ namespace SysWeaver.MicroService
                 yield return x;
             foreach (var x in PlatformTools.Current.GetStats())
                 yield return x;
+            foreach (var x in Scheduler.TaskExceptions.GetStats(sys, "SchedulerEx."))
+                yield return x;
         }
 
         /// <summary>
@@ -1451,6 +1453,18 @@ namespace SysWeaver.MicroService
         [WebMenuTable(null, "Debug/{0}", "Statistics", null, "IconTableStats")]
         public Task<TableData> StatsTable(TableDataRequest r, HttpServerRequest context) => TableDataTools.Get(context, r, 1000, GetStats());
 
+        /// <summary>
+        /// A list of all scheduled (upcoming) tasks
+        /// </summary>
+        /// <param name="r">Paramaters</param>
+        /// <returns>Table data</returns>
+        [WebApi("debug/{0}")]
+        [WebApiAuth(Roles.Ops)]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
+        [WebMenuTable(null, "Debug/{0}", "Scheduled tasks", null, "../icons/clock.svg")]
+        public TableData SchedulerTable(TableDataRequest r) => TableDataTools.Get(r, 2000, Scheduler.AllScheduled, "Scheduled tasks");
 
         /// <summary>
         /// Get performance information

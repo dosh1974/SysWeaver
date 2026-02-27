@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -1579,6 +1580,9 @@ namespace SysWeaver.Net
         readonly int CertRetryMinutes;
         protected readonly int FirstCertRetryMinutes;
 
+
+        protected String CurrentCertThumbPrint;
+
         /// <summary>
         /// Call to initiate a certificate switch
         /// </summary>
@@ -1590,14 +1594,18 @@ namespace SysWeaver.Net
             var msg = Msg;
             try
             {
-                await cert.GetCert().ConfigureAwait(false);
+                var newCert = await cert.GetCert().ConfigureAwait(false);
+                var newThumb = newCert.Thumbprint;
+                if (CurrentCertThumbPrint.FastEquals(newThumb))
+                    return;
+                //CurrentCertThumbPrint = newThumb;
             }
             catch (Exception ex)
             {
                 msg?.AddMessage(Prefix + "Failed to get certificate for " + pre.ToQuoted() + ", continue to use current", ex, MessageLevels.Warning);
                 var retry = DateTime.UtcNow.AddMinutes(CertRetryMinutes);
                 msg?.AddMessage(Prefix + "Will try to get new certificate at " + retry.ToString("o"));
-                Scheduler.Add(retry, () => SwitchCert(cert, pre));
+                Scheduler.AddTask(retry, () => SwitchCert(cert, pre));
                 return;
             }
 

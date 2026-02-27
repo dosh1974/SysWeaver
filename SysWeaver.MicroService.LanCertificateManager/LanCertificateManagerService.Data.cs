@@ -22,7 +22,7 @@ namespace SysWeaver.MicroService
                     Expiration = cert.GetExpiration();
                     From = cert.NotBefore;
                     To = cert.NotAfter;
-                    Serial = cert.SerialNumber;
+                    Thumbprint = cert.Thumbprint;
                 }
                 var e = d.CertErrors;
                 ExCount = e.Count;
@@ -63,9 +63,9 @@ namespace SysWeaver.MicroService
             public DateTime Expiration;
 
             /// <summary>
-            /// The serial number of the certificate
+            /// The thumb print of the certificate
             /// </summary>
-            public String Serial;
+            public String Thumbprint;
 
             //  Actions
             [TableDataActions("Update", "Click to manually perform an update check", "../Api/Lcm/" + nameof(UpdateCert) + "?\"{0}\"", "../icons/reload.svg")]

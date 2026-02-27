@@ -177,7 +177,7 @@ namespace SysWeaver.Security
                                     if (root.Subject == c.Issuer)
                                     {
                                         Interlocked.Exchange(ref C, c)?.Dispose();
-                                        ExpireAction = Scheduler.Add(expires.AddHours(RenewBeforeExpirationHours), InvokeExpireSoon, true);
+                                        ExpireAction = Scheduler.Add(expires.AddHours(RenewBeforeExpirationHours), InvokeExpireSoon);
                                         return c;
                                     }
                                 }
@@ -205,7 +205,7 @@ namespace SysWeaver.Security
                     await File.WriteAllTextAsync(Path.ChangeExtension(f, "crt"), c.ExportCertificatePem()).ConfigureAwait(false);
                 }
                 Interlocked.Exchange(ref C, c)?.Dispose();
-                ExpireAction = Scheduler.Add(c.GetExpiration().AddHours(RenewBeforeExpirationHours), InvokeExpireSoon, true);
+                ExpireAction = Scheduler.Add(c.GetExpiration().AddHours(RenewBeforeExpirationHours), InvokeExpireSoon);
                 return c;
             }
             finally

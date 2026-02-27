@@ -415,6 +415,7 @@ SysWeaver-PopupMenuBack {
     font-size: 100%;
     text-align: left;
     overflow-y: auto;
+    scrollbar-color: var(--ThemeBackground) var(--ThemeAcc2);
 }
 
     SysWeaver-PopupMenuBack.DefaultMenu {

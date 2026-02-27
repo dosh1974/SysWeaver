@@ -49,7 +49,7 @@ namespace SysWeaver.ExchangeRate
                     nextUpdate = new DateTime(nextPeriod * updateTicks, DateTimeKind.Utc);
                 }
                 Interlocked.Exchange(ref NextUpdate, nextUpdate.Ticks);
-                Interlocked.Exchange(ref UpdateTask, Scheduler.Add(nextUpdate, async () =>
+                Interlocked.Exchange(ref UpdateTask, Scheduler.AddValueTask(nextUpdate, async () =>
                 {
                     var ok = await UpdateRates().ConfigureAwait(false);
                     StartUpdating(min, !ok);

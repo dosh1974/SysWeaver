@@ -41,55 +41,25 @@ namespace SysWeaver.Security
             p = p ?? new LanCertificateProviderParams();
             Filename = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.Filename));
             Password = EnvInfo.ResolveText(p.Password);
-            String domainName = EnvInfo.ResolveText(p.DomainName);
-            bool fail = false;
-            try
+            DomainName = p.DomainName ?? "$(KeyFolder)/LanCertificateProvider_DomainName.txt";
+            ServerCreds = p.ServerCreds ?? new CredentialParams
             {
-                var tname = PathTemplate.Resolve(p.DomainName);
-                if (tname.IndexOfAny(":/\\".ToCharArray()) > 0)
-                {
-                    fail = true;
-                    tname = EnvInfo.MakeAbsoulte(tname);
-                    if (File.Exists(tname))
-                    {
-                        var d = GetFirstLine(tname);
-                        if (d == null)
-                            throw new Exception("Couldn't read a domain name from \"" + tname + "\"");
-                        domainName = d;
-                    }else
-                    {
-                        throw new Exception("Domain name file \"" + tname + "\" does not exist!");
-                    }
-                }
-            }
-            catch
-            {
-                if (fail)
-                    throw;
-            }
-            StringValidate.DnsName(domainName);
-            DomainName = domainName;
+                CredFile = "$(KeyFolder)/LanCertificateProvider_SwLanCertManager.txt",
+            };
+            ServerConfigFile = p.ServerConfigFile ?? "$(KeyFolder)/LanCertificateProvider_Server.txt"; 
             Msg = msg;
-            var serverFilename = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.ServerConfigFile));
-            String server = GetFirstLine(serverFilename);
-            server = server.TrimEnd('/') + '/';
-            LanMan = new RemoteConnection
-            {
-                BaseUrl = server,
-                User = p.ServerCreds.User,
-                Password = p.ServerCreds.Password,
-                CredFile = p.ServerCreds.CredFile,
-                AuthMethod = RemoteAuthMethod.SysWeaverLogin,
-            }.Create<ILanCertificateManager>();
             P = new SignedCertificateCreator(p);
             MinValidHours = Math.Max(p.MinValidHours, 2);
             RenewBeforeExpirationHours = -Math.Max(p.RenewBeforeExpirationHours, (MinValidHours + 1) >> 1);
         }
 
+        readonly String DomainName;
+        readonly CredentialParams ServerCreds;
+        readonly String ServerConfigFile;
+
+
         readonly IMessageHost Msg;
 
-        readonly ILanCertificateManager LanMan;
-        readonly String DomainName;
         long Cc;
 
         readonly string Filename;
@@ -106,43 +76,69 @@ namespace SysWeaver.Security
 
         IDisposable ExpireAction;
 
-        public async Task<X509Certificate2> GetCert()
+
+        Byte[] LastCert;
+
+        async ValueTask<ValueTuple<X509Certificate2, int>> InternalGetCert(IMessageHost msg = null)
         {
-            var c = C;
-            if (c != null)
-                return c;
-            using var _ = await Lock.Lock().ConfigureAwait(false);
-            c = C;
-            if (c != null)
-                return c;
-            Interlocked.Exchange(ref ExpireAction, null)?.Dispose();
+            X509Certificate2 c;
             var f = Filename;
             var pw = Password;
             try
             {
-                var res = await LanMan.GetCert(new GetLanCertRequest
+                var serverFilename = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(ServerConfigFile));
+                String server = GetFirstLine(serverFilename);
+                server = server.TrimEnd('/') + '/';
+                var cr = ServerCreds;
+                using var remoteManager = new RemoteConnection
                 {
-                    DomainName = DomainName,
+                    BaseUrl = server,
+                    User = cr.User,
+                    Password = cr.Password,
+                    CredFile = cr.CredFile,
+                    AuthMethod = RemoteAuthMethod.SysWeaverLogin,
+                }.Create<ILanCertificateManager>();
+
+
+                String domainName = EnvInfo.ResolveText(DomainName);
+                var tname = PathTemplate.Resolve(DomainName);
+                if (tname.IndexOfAny(":/\\".ToCharArray()) > 0)
+                {
+                    tname = EnvInfo.MakeAbsoulte(tname);
+                    if (File.Exists(tname))
+                    {
+                        var d = GetFirstLine(tname);
+                        if (d == null)
+                            throw new Exception("Couldn't read a domain name from \"" + tname + "\"");
+                        domainName = d;
+                    }
+                    else
+                    {
+                        throw new Exception("Domain name file \"" + tname + "\" does not exist!");
+                    }
+                }
+                StringValidate.DnsName(domainName);
+                var res = await remoteManager.GetCert(new GetLanCertRequest
+                {
+                    DomainName = domainName,
                     Password = pw,
                     Cc = Cc,
                 }).ConfigureAwait(false);
                 if (res != null)
                 {
                     Cc = res.Cc;
-                    var cert = res.CertPfx;
-                    if (cert != null)
-                    {
-                        c = await CertificateTools.Create(cert, pw, false).ConfigureAwait(false);
-                        Interlocked.Exchange(ref C, c)?.Dispose();
-                        CertificateTools.IsSoonExpired(c, out var expires, MinValidHours);
-                        ExpireAction = Scheduler.Add(expires.AddHours(RenewBeforeExpirationHours), InvokeExpireSoon, true);
-                        return c;
-                    }
+                    LastCert = res.CertPfx;
+                }
+                var cert = LastCert;
+                if (cert != null)
+                {
+                    c = await CertificateTools.Create(cert, pw, false).ConfigureAwait(false);
+                    return ValueTuple.Create(c, 10);
                 }
             }
             catch (Exception ex)
             {
-                Msg.AddMessage("Failed to get Lan cert, reverting to self signed cert", ex, MessageLevels.Warning);
+                msg?.AddMessage("Failed to get Lan cert, reverting to self signed cert", ex, MessageLevels.Warning);
             }
             var p = P;
             var haveFile = !String.IsNullOrEmpty(f);
@@ -155,11 +151,7 @@ namespace SysWeaver.Security
                     if (!CertificateTools.IsSoonExpired(c, out var expires, MinValidHours))
                     {
                         if (p.IsSame(c))
-                        {
-                            Interlocked.Exchange(ref C, c)?.Dispose();
-                            ExpireAction = Scheduler.Add(DateTime.UtcNow.AddMinutes(5), InvokeExpireSoon, true);
-                            return c;
-                        }
+                            return ValueTuple.Create(c, 3);
                     }
                     c.Dispose();
                 }
@@ -178,15 +170,57 @@ namespace SysWeaver.Security
                 //await File.WriteAllBytesAsync(Path.ChangeExtension(f, "crt"), c.Export(X509ContentType.Cert, (String)null)).ConfigureAwait(false);
                 await File.WriteAllTextAsync(Path.ChangeExtension(f, "crt"), c.ExportCertificatePem()).ConfigureAwait(false);
             }
+            return ValueTuple.Create(c, 3);
+        }
+
+        public async Task<X509Certificate2> GetCert()
+        {
+            var c = C;
+            if (c != null)
+                return c;
+            using var _ = await Lock.Lock().ConfigureAwait(false);
+            c = C;
+            if (c != null)
+                return c;
+            Interlocked.Exchange(ref ExpireAction, null)?.Dispose();
+            var nn = await InternalGetCert(Msg).ConfigureAwait(false);
+            c = nn.Item1;
+            ExpireAction = Scheduler.AddValueTask(DateTime.UtcNow.AddMinutes(nn.Item2), InvokeExpireSoon);
             Interlocked.Exchange(ref C, c)?.Dispose();
-            ExpireAction = Scheduler.Add(DateTime.UtcNow.AddMinutes(5), InvokeExpireSoon, true);
             return c;
         }
 
-        void InvokeExpireSoon()
+        async ValueTask InvokeExpireSoon()
         {
-            Interlocked.Exchange(ref C, null)?.Dispose();
-            OnChanged?.Invoke(null);
+            using var _ = await Lock.Lock().ConfigureAwait(false);
+            var nn = await InternalGetCert().ConfigureAwait(false);
+            var newCert = nn.Item1;
+            var oldCert = C;
+            if (oldCert.Thumbprint.FastEquals(newCert.Thumbprint))
+            {
+                ExpireAction = Scheduler.AddValueTask(DateTime.UtcNow.AddMinutes(nn.Item2), InvokeExpireSoon);
+                try
+                {
+                    newCert.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Msg?.AddMessage("Failed to Dispose new certificate " + newCert.Thumbprint, ex, MessageLevels.Warning);
+                }
+                return;
+            }
+            Interlocked.Exchange(ref ExpireAction, null)?.Dispose();
+            oldCert = Interlocked.Exchange(ref C, newCert);
+            OnChanged?.Invoke(newCert);
+            ExpireAction = Scheduler.AddValueTask(DateTime.UtcNow.AddMinutes(nn.Item2), InvokeExpireSoon);
+            try
+            {
+                oldCert?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Msg?.AddMessage("Failed to Dispose old certificate " + oldCert.Thumbprint, ex, MessageLevels.Warning);
+            }
         }
 
         /// <summary>
@@ -200,7 +234,6 @@ namespace SysWeaver.Security
             using var _ = Lock.LockSync();
             Interlocked.Exchange(ref ExpireAction, null)?.Dispose();
             Interlocked.Exchange(ref C, null)?.Dispose();
-            LanMan.Dispose();
         }
 
     }

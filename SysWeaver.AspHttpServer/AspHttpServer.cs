@@ -230,6 +230,7 @@ namespace SysWeaver.Net
                         if (cert != null)
                         {
                             opt.Protocols = HttpProtocols.Http1AndHttp2;
+                            CurrentCertThumbPrint = cert.Thumbprint;
                             if (p.EnableHttp3)
                             {
                                 opt.Protocols = HttpProtocols.Http1AndHttp2AndHttp3;
@@ -470,9 +471,6 @@ namespace SysWeaver.Net
                 RunAfterContinue();
             }
         }
-
-        static readonly Uri DummyUri = new Uri("http://localhost");
-
 
         public static readonly IReadOnlyList<IHttpServerEndPoint> NoEndPoints = new List<IHttpServerEndPoint>();
 

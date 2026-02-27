@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using SysWeaver.Data;
 
 namespace SysWeaver
 {
@@ -14,7 +16,7 @@ namespace SysWeaver
     public static class Scheduler
     {
         /// <summary>
-        /// Roughly the nuumber of millie seconds between each check
+        /// Roughly the number of milli seconds between each check
         /// </summary>
         public const int CheckFrequencyMs = 1000;
 
@@ -26,9 +28,8 @@ namespace SysWeaver
         /// Two tasks that are scheduled at the same time will be executed in the order of being added.
         /// </param>
         /// <param name="task">The task to execute</param>
-        /// <param name="noThrow">If true, return null instead of throwing exception</param>
         /// <returns>An object that can be disposed to prevent execution of the task in the future</returns>
-        public static IDisposable Add(DateTime when, Action task, bool noThrow = false)
+        public static IDisposable Add(DateTime when, Action task)
         {
             if (when.Kind != DateTimeKind.Utc)
                 when = when.ToUniversalTime();
@@ -51,9 +52,8 @@ namespace SysWeaver
         /// Two tasks that are scheduled at the same time will be executed in the order of being added.
         /// </param>
         /// <param name="task">The task to execute</param>
-        /// <param name="noThrow">If true, return null instead of throwing exception</param>
         /// <returns>An object that can be disposed to prevent execution of the task in the future</returns>
-        public static IDisposable Add(DateTime when, Func<Task> task, bool noThrow = false)
+        public static IDisposable AddTask(DateTime when, Func<Task> task)
         {
             if (when.Kind != DateTimeKind.Utc)
                 when = when.ToUniversalTime();
@@ -68,9 +68,50 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Schedule a task to be performed at a specified time, precision is fairly low so the task can be executed a few seconds later than scheduled.
+        /// Two tasks that are scheduled at the same time will be executed in the order of being added.
+        /// </summary>
+        /// <param name="when">The UTC time to execute the task at, precision is fairly low so the task can be executed a few seconds later than scheduled.
+        /// Two tasks that are scheduled at the same time will be executed in the order of being added.
+        /// </param>
+        /// <param name="task">The task to execute</param>
+        /// <returns>An object that can be disposed to prevent execution of the task in the future</returns>
+        public static IDisposable AddValueTask(DateTime when, Func<ValueTask> task)
+        {
+            if (when.Kind != DateTimeKind.Utc)
+                when = when.ToUniversalTime();
+            var e = Entries;
+            lock (e)
+            {
+                var ee = new Entry(when.Ticks, Interlocked.Increment(ref Id), task);
+                e.Add(ee, 0);
+                if (CheckTask == null)
+                    CheckTask = new PeriodicTask(Check, CheckFrequencyMs);
+                return ee;
+            }
+        }
 
         static long Id;
         static readonly SortedDictionary<Entry, int> Entries = new SortedDictionary<Entry, int>();
+
+        /// <summary>
+        /// Exception information
+        /// </summary>
+        public static readonly ExceptionTracker TaskExceptions = new();
+        
+        /// <summary>
+        /// Scheduled entries
+        /// </summary>
+        public static List<Entry> AllScheduled
+        {
+            get
+            {
+                var ee = Entries;
+                lock (ee)
+                    return [.. ee.Keys];
+            }
+        }
 
         static async ValueTask<bool> Check()
         {
@@ -93,14 +134,29 @@ namespace SysWeaver
             //  Execute the task
                 try
                 {
-                    var a = ee.TA;
-                    if (a != null)
-                        await a().ConfigureAwait(false);
-                    else
-                        ee.A();
+                    for (; ; )
+                    {
+                        var ta = ee.TA;
+                        if (ta != null)
+                        {
+                            await ta().ConfigureAwait(false);
+                            break;
+                        }
+                        var vta = ee.VTA;
+                        if (vta != null)
+                        {
+                            await vta().ConfigureAwait(false);
+                            break;
+                        }
+                        var a = ee.A;
+                        if (a != null)
+                            a();
+                        break;
+                    }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    TaskExceptions.OnException(new Exception(ee.ToString() + " failed with an exception", ex));
                 }
             //  Remove the task
                 lock (e)
@@ -131,33 +187,119 @@ namespace SysWeaver
         }
 
 
-        sealed class Entry : IDisposable, IComparable<Entry>, IEquatable<Entry>
+        public sealed class Entry : IDisposable, IComparable<Entry>, IEquatable<Entry>
         {
-            public Entry(long time, long id, Action task)
+#if DEBUG
+            public override string ToString() 
+                => String.Concat(Type, " #", TaskId, " @ ", Scheduled, ": ", Scheduler);
+#else//DEBUG
+            public override string ToString() 
+                => String.Concat(Type, " #", TaskId);
+#endif//DEBUG
+
+            internal Entry(long time, long id, Action task)
             {
                 Time = time;
                 Id = id;
                 HashCode = (int)id;
                 A = task;
+#if DEBUG
+                var s = new StackTrace(2, true);
+                var frame = s.GetFrame(0);
+                Scheduled = DateTime.UtcNow;
+                Scheduler = frame.ToString().Trim();
+#endif//DEBUG
             }
 
-            public Entry(long time, long id, Func<Task> task)
+            internal Entry(long time, long id, Func<Task> task)
             {
                 Time = time;
                 Id = id;
                 HashCode = (int)id;
                 TA = task;
+#if DEBUG
+                var s = new StackTrace(2, true);
+                var frame = s.GetFrame(0);
+                Scheduled = DateTime.UtcNow;
+                Scheduler = frame.ToString().Trim();
+#endif//DEBUG
             }
 
-            public int Guard;
+            internal Entry(long time, long id, Func<ValueTask> task)
+            {
+                Time = time;
+                Id = id;
+                HashCode = (int)id;
+                VTA = task;
+#if DEBUG
+                var s = new StackTrace(2, true);
+                var frame = s.GetFrame(0);
+                Scheduled = DateTime.UtcNow;
+                Scheduler = frame.ToString().Trim();
+#endif//DEBUG
+            }
 
-            public readonly long Time;
+            [TableDataIgnore]
+            internal int Guard;
+
+            [TableDataIgnore]
+            internal readonly long Time;
+
+            [TableDataIgnore]
             public readonly long Id;
-            public readonly Action A;
-            public readonly Func<Task> TA;
 
+            [TableDataIgnore]
+            internal readonly Action A;
+
+            [TableDataIgnore]
+            internal readonly Func<Task> TA;
+
+            [TableDataIgnore]
+            internal readonly Func<ValueTask> VTA;
 
             readonly int HashCode;
+
+            /// <summary>
+            /// When the task will be executed
+            /// </summary>
+            public DateTime RunAt => new DateTime(Time, DateTimeKind.Utc);
+
+            /// <summary>
+            /// The internal unique Id of this task
+            /// </summary>
+            public long TaskId => Id;
+
+            /// <summary>
+            /// True if it's an async job
+            /// </summary>
+            public String Type
+            {
+                get
+                {
+                    if (A != null)
+                        return "Sync";
+                    if (TA != null)
+                        return "Task";
+                    if (VTA != null)
+                        return "ValueTask";
+                    return "-";
+                }
+            }
+#if DEBUG
+            /// <summary>
+            /// When this task was scheduled
+            /// </summary>
+            public DateTime Scheduled { get; init; }
+
+            /// <summary>
+            /// The scheduler
+            /// </summary>
+            public String Scheduler { get; init; }
+
+#endif//DEBUG
+
+
+
 
 
             public int CompareTo(Entry other)
