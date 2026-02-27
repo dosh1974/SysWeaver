@@ -360,6 +360,45 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// Create a 16 character long GUID (96 bits, 12 bytes of randomness)
+        /// </summary>
+        /// <returns>A GUID as a string</returns>
+        public static String GetHashGuid16()
+        {
+            using var r = Get();
+            Span<Byte> span = stackalloc Byte[12];
+            r.GetBytes(span);
+            return Convert.ToBase64String(span);
+        }
+
+
+        /// <summary>
+        /// Create a 24 character long GUID (144 bits, 18 bytes of randomness)
+        /// </summary>
+        /// <returns>A GUID as a string</returns>
+        public static String GetHashGuid24()
+        {
+            using var r = Get();
+            Span<Byte> span = stackalloc Byte[1];
+            r.GetBytes(span);
+            return Convert.ToBase64String(span);
+        }
+
+
+        /// <summary>
+        /// Create a 48 character long GUID (288 bits, 36 bytes of randomness)
+        /// </summary>
+        /// <returns>A GUID as a string</returns>
+        public static String GetHashGuid48()
+        {
+            using var r = Get();
+            Span<Byte> span = stackalloc Byte[36];
+            r.GetBytes(span);
+            return Convert.ToBase64String(span);
+        }
+
+
+        /// <summary>
         /// Create a 24 character long GUID (144 bits, 18 bytes of hash value)
         /// </summary>
         /// <param name="data">Some data (that will get hashed)</param>
@@ -370,6 +409,8 @@ namespace SysWeaver
             SHA512.HashData(data, span);
             return Convert.ToBase64String(span.Slice(0, 18));
         }
+
+
 
         /// <summary>
         /// Create a 48 character long GUID (288 bits, 36 bytes of hash value)

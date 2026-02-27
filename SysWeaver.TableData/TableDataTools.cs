@@ -660,6 +660,18 @@ namespace SysWeaver.Data
         public static TableDataRow[] ExtractGet<T>(out long count, IEnumerable<T> data, long limit = long.MaxValue, long lookAhead = 0) => TableDataType<T>.ExtractGet(out count, data, limit, lookAhead);
 
 
+        /// <summary>
+        /// Extract data from enumerable (should already be filtered, ordered, offsetted etc)
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="count">Count (inluding lookahead)</param>
+        /// <param name="data">Enumerable data</param>
+        /// <param name="limit">Maximum number of rows to take</param>
+        /// <param name="lookAhead">Number of rows to look ahead</param>
+        /// <returns>Data rows</returns>
+        public static T[] ExtractGetTyped<T>(out long count, IEnumerable<T> data, long limit = long.MaxValue, long lookAhead = 0) => TableDataType<T>.ExtractTypedGet(out count, data, limit, lookAhead);
+
+
         internal static readonly ConstantExpression CommaArrayCharExp = Expression.Constant(new Char[] { ',' });
         internal static readonly ConstantExpression StringSplitOptionsExp = Expression.Constant(StringSplitOptions.TrimEntries);
 

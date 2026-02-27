@@ -797,7 +797,7 @@ namespace SysWeaver.Data
         {
             count = 0;
             if (data == null)
-                return Array.Empty<TableDataRow>();
+                return Empty;
             if (limit <= 0)
                 limit = long.MaxValue;
             List<TableDataRow> rows = (limit <= (1L << 16)) ? new((int)limit) : new();
@@ -825,7 +825,36 @@ namespace SysWeaver.Data
         }
 
 
-        static readonly TableDataRow[] Empty = [];
+
+        public static T[] ExtractTypedGet(out long count, IEnumerable<T> data, long limit = long.MaxValue, long lookAhead = 0)
+        {
+            count = 0;
+            if (data == null)
+                return EmptyT;
+            if (limit <= 0)
+                limit = long.MaxValue;
+            List<T> rows = (limit <= (1L << 16)) ? new((int)limit) : new();
+            var it = data.GetEnumerator();
+            while ((limit > 0) && it.MoveNext())
+            {
+                rows.Add(it.Current);
+                --limit;
+            }
+            var rc = rows.Count;
+            count += rc;
+            if ((limit == 0) && (lookAhead > 0))
+            {
+                while ((lookAhead > 0) && it.MoveNext())
+                {
+                    ++count;
+                    --lookAhead;
+                }
+            }
+            return rc > 0 ? rows.ToArray() : EmptyT;
+        }
+
+        static readonly TableDataRow[] Empty = Array.Empty<TableDataRow>();
+        static readonly T[] EmptyT = Array.Empty<T>();
 
         public static TableData GetAll(IEnumerable<T> data)
         {

@@ -4,12 +4,9 @@ using SysWeaver.AI;
 
 namespace SysWeaver.Data
 {
-    public class BaseTableData
-    {
-#if DEBUG
-        public override string ToString() => String.Concat( Cols?.Length ?? Rows?.FirstOrDefault()?.Values?.Length ?? 0, 'x', Rows?.Length ?? 0);
-#endif//DEBUG
 
+    public abstract class CommonTableData
+    {
         /// <summary>
         /// Rows in the data, this is the first row + number of returned rows + look ahead rows (that are avasilable).
         /// Example (page with 20 items, stepping max 3 pages forward at a time):
@@ -34,22 +31,35 @@ namespace SysWeaver.Data
         public TableDataColumn[] Cols;
 
         /// <summary>
-        /// Data rows
-        /// </summary>
-        public TableDataRow[] Rows;
-
-        /// <summary>
         /// Title of the table.
         /// </summary>
         [OpenAiOptional]
         public String Title;
 
-        public void CopyFrom(BaseTableData s)
+        public void CopyFrom(CommonTableData s)
         {
             RowCount = s.RowCount;
             Cols = s.Cols;
-            Rows = s.Rows;
             Title = s.Title;
+        }
+
+    }
+
+    public class BaseTableData : CommonTableData
+    {
+#if DEBUG
+        public override string ToString() => String.Concat( Cols?.Length ?? Rows?.FirstOrDefault()?.Values?.Length ?? 0, 'x', Rows?.Length ?? 0);
+#endif//DEBUG
+
+        /// <summary>
+        /// Data rows
+        /// </summary>
+        public TableDataRow[] Rows;
+
+        public void CopyFrom(BaseTableData s)
+        {
+            base.CopyFrom(s);
+            Rows = s.Rows;
         }
 
         public BaseTableData Clone()

@@ -12,34 +12,80 @@ using System.Reflection;
 using System.Threading.Tasks;
 using SysWeaver.Data;
 using System.Text;
+using SysWeaver.AI;
 
 namespace SysWeaver.Db
 {
 
+    public sealed class TypedTableData<T> : CommonTableData
+    {
+
+        /// <summary>
+        /// A change counter for the column information, if the request Cc is equal to this, no column information is sent
+        /// </summary>
+        public long Cc;
+
+        /// <summary>
+        /// Number of ms to wait before a new refresh
+        /// </summary>
+        [EditMin(0)]
+        public long RefreshRate;
+
+        /// <summary>
+        /// Data rows
+        /// </summary>
+        public T[] Rows;
+    }
+
+
     public static class DbData
     {
-        public static async Task<TableData> GetAsTableData<T>(this DbSimpleStack db, TableDataRequest request, long refreshRate = 30000, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null)
+        public static async Task<TableData> GetAsTableData<T>(this DbSimpleStack db, TableDataRequest request, long refreshRate = 30000, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null, TableData result = null)
         {
             using var con = await db.GetAsync().ConfigureAwait(false);
-            return await GetAsTableData<T>(con, request, refreshRate, tableName, maxAllowedRows, extraFn).ConfigureAwait(false);
+            return await GetAsTableData<T>(con, request, refreshRate, tableName, maxAllowedRows, extraFn, result).ConfigureAwait(false);
         }
 
-        public static async Task<TableData> GetAsTableData<T>(this OrmConnection con, TableDataRequest request, long refreshRate = 30000, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null)
+        public static async Task<TableData> GetAsTableData<T>(this OrmConnection con, TableDataRequest request, long refreshRate = 30000, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null, TableData result = null)
         {
             var cols = DbDataType<T>.Cols;
             var res = await GetFiltered<T>(con, out var skip, out var limit, out var lookAhead, request, tableName, maxAllowedRows, extraFn).ConfigureAwait(false);
             var rows = TableDataTools.ExtractGet<T>(out var count, res, limit, lookAhead);
             count += skip;
             var cc = EnvInfo.Cc;
-            return new TableData
-            {
-                Rows = rows,
-                Cols = (request.Cc == cc) ? null : cols,
-                RowCount = count,
-                RefreshRate = refreshRate,
-                Cc = cc,
-            };
+            result = result ?? new();
+            result.Rows = rows;
+            result.Cols = (request.Cc == cc) ? null : cols;
+            result.RowCount = count;
+            result.RefreshRate = refreshRate;
+            result.Cc = cc;
+            return result;
         }
+
+        public static async Task<TypedTableData<T>> GetAsTypedTableData<T>(this DbSimpleStack db, TableDataRequest request, long refreshRate = 30000, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null, TypedTableData<T> result = null)
+        {
+            using var con = await db.GetAsync().ConfigureAwait(false);
+            return await GetAsTypedTableData<T>(con, request, refreshRate, tableName, maxAllowedRows, extraFn, result).ConfigureAwait(false);
+        }
+
+
+        public static async Task<TypedTableData<T>> GetAsTypedTableData<T>(this OrmConnection con, TableDataRequest request, long refreshRate = 30000, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null, TypedTableData<T> result = null)
+        {
+            var cols = DbDataType<T>.Cols;
+            var res = await GetFiltered<T>(con, out var skip, out var limit, out var lookAhead, request, tableName, maxAllowedRows, extraFn).ConfigureAwait(false);
+            var rows = TableDataTools.ExtractGetTyped<T>(out var count, res, limit, lookAhead);
+            count += skip;
+            var cc = EnvInfo.Cc;
+            result = result ?? new ();
+            result.Rows = rows;
+            result.Cols = (request.Cc == cc) ? null : cols;
+            result.RowCount = count;
+            result.RefreshRate = refreshRate;
+            result.Cc = cc;
+            return result;
+        }
+
+
         const int DefaultRows = 1000;
 
         public static Task<IEnumerable<T>> GetFiltered<T>(this OrmConnection con, TableDataRequest request, String tableName = null, long maxAllowedRows = 100000, Action<TypedSelectStatement<T>> extraFn = null)
