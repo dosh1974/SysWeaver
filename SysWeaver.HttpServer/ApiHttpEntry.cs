@@ -588,6 +588,8 @@ namespace SysWeaver.Net
 
 
             var location = String.Concat(locationPrefix, "using mapped to method \"", method.Name, "\" in type \"", method.DeclaringType?.Name, '"');
+
+
             var e = new ApiHttpEntry(ioParams, perfMonitor, o, method, get ?? getAsync, post ?? postAsync, rawMime, rawIsTranslated, url, 
                 location, auth, pi, ri, serType, retSerType, clientCacheDuration, requestCacheDuration, compression, 
                 onStart, onEnd, onException, auditGroup, fixAuditParams, fixAuditReturn,
@@ -653,6 +655,8 @@ namespace SysWeaver.Net
             IsLocalized = nt || isTranslatedRaw;
             if (nt)
                 TransExceptions = new ExceptionTracker();
+            var lwt = mi.DeclaringType.Assembly.GetLastWriteTimerUtc();
+            LastModified = lwt;
         }
 
         public HttpRateLimiter ServiceRateLimiter { get; init; }
@@ -739,7 +743,9 @@ namespace SysWeaver.Net
 
         public long? Size => -1;
 
-        public DateTime LastModified => HttpServerTools.StartedTime;
+        public DateTime LastModified { get; init; }
+
+        public string ETag => null;
 
         public string Mime { get; init; }
 

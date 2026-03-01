@@ -19,7 +19,7 @@ namespace SysWeaver.Net
 
         public bool AllowTemplates { get; init; }
 
-        public StaticMemoryHttpRequestHandler(String uri, String location, ReadOnlyMemory<Byte> data, String mime, HttpCompressionPriority compression, int clientCacheDuration = 5, int requestCacheDuration = 0, String lastModified = null, ICompDecoder preCompressedFormat = null, IReadOnlyList<String> auth = null, double order = 0)
+        public StaticMemoryHttpRequestHandler(String uri, String location, ReadOnlyMemory<Byte> data, String mime, HttpCompressionPriority compression, int clientCacheDuration = 5, int requestCacheDuration = 0, DateTime? lastModified = null, String etag = null, ICompDecoder preCompressedFormat = null, IReadOnlyList<String> auth = null, double order = 0, bool isDynamic = false)
         {
             Order = order;
             Uri = uri;
@@ -29,8 +29,9 @@ namespace SysWeaver.Net
             ClientCacheDuration = clientCacheDuration;
             RequestCacheDuration = requestCacheDuration;
             Compression = compression;
-            LastModified = lastModified ?? HttpServerTools.StartedText;
-            LastModifiedDate = HttpServerTools.FromTimeStampString(LastModified);
+            var lm = lastModified ?? HttpServerTools.StartedTime;
+            LastModified = lm;
+            ETag = etag ?? HttpServerTools.ToEtag(lm);
             Decoder = preCompressedFormat;
             CackeKey = HttpServerTools.GetStaticCacheUrl();
             CompPreference = compression?.ToString();
@@ -38,15 +39,19 @@ namespace SysWeaver.Net
             Size = data.Length;
             Auth = auth;
             Data = data;
+            IsDynamic = isDynamic;
         }
 
         public readonly double Order;
         double IStaticHttpRequestHandler.Order => Order;
 
         public readonly String Mime;
-        public readonly String LastModified;
-        public readonly DateTime LastModifiedDate;
+        public readonly String ETag;
         public readonly ReadOnlyMemory<Byte> Data;
+
+
+
+        public bool IsDynamic { get; init; }
 
 
         readonly ValueTask<String> CackeKey;
@@ -73,7 +78,7 @@ namespace SysWeaver.Net
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = false;
-            return LastModified;
+            return ETag;
         }
 
         public String Uri { get; init; }
@@ -85,10 +90,12 @@ namespace SysWeaver.Net
 
         public String CompPreference { get; init; } 
 
-        public String PreCompressed { get; init; } 
+        public String PreCompressed { get; init; }
 
-        DateTime IHttpServerEndPoint.LastModified => LastModifiedDate;
+        public DateTime LastModified { get; init; }
 
         String IHttpServerEndPoint.Mime => Mime;
+
+        string IHttpServerEndPoint.ETag => ETag;
     }
 }

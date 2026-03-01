@@ -48,7 +48,7 @@ namespace SysWeaver.MicroService
                 return;
             if (asm.GetManifestResourceNames().Length <= 0)
                 return;
-            Mod.AddEmbeddedResources(asm, null, null, null, null, false, null, null, Filter);
+            Mod.AddEmbeddedResources(asm, null, null, null, null, false, null, null, null, Filter);
         }
 
 

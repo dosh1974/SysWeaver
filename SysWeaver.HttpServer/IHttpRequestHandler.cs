@@ -65,9 +65,10 @@ namespace SysWeaver.Net
         /// <returns>An etag, only use [A-Z], [a-z], [0-9], '_', '-'</returns>
         String GetEtag(out bool useAsync, HttpServerRequest request);
 
-
-
-
+        /// <summary>
+        /// Set to true if the data is dynamic, else it might be compressed, processed and stored.
+        /// </summary>
+        bool IsDynamic => true;
 
         /// <summary>
         /// Get the data for a request

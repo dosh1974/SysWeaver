@@ -44,7 +44,7 @@ namespace SysWeaver.MicroService
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = false;
-            return HttpServerTools.StartedText;
+            return HttpServerTools.StartedETag;
         }
 
         public HttpRequestData Get(HttpServerRequest request)

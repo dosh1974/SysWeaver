@@ -36,6 +36,8 @@ namespace SysWeaver.MicroService
             WebQrBright = QrCodeTools.GetWebColor(QrBright);
             Perf = perf;
         }
+
+
         readonly PerfMonitor Perf;
         readonly bool IsPng;
         readonly bool DrawQuite;
@@ -65,7 +67,12 @@ namespace SysWeaver.MicroService
 
         public long? Size => null;
 
-        public DateTime LastModified => HttpServerTools.StartedTime;
+        public DateTime LastModified => AsmTime;
+
+        public String ETag => AsmETag;
+
+        static readonly DateTime AsmTime = typeof(QRCodeGenerator).Assembly.GetLastWriteTimerUtc();
+        static readonly String AsmETag = HttpServerTools.ToEtag(AsmTime);
 
         public string Mime { get; init; }
 
@@ -79,7 +86,7 @@ namespace SysWeaver.MicroService
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = false;
-            return HttpServerTools.StartedText;
+            return AsmETag;
         }
 
         public HttpRequestData Get(HttpServerRequest request)

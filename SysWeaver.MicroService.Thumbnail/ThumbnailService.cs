@@ -112,7 +112,7 @@ namespace SysWeaver.MicroService
                     var options = Options;
                     var data = IconModule.GetFromMime(mimeCode);
                     var cmp = Comp.GetCompressed(Encoding.UTF8.GetBytes(data), CompEncoderLevels.Best);
-                    f = new StaticMemoryHttpRequestHandler(null, null, cmp, SvgMime.Item1, options.Compression, 30, 5, null, Comp, options.Auth);
+                    f = new StaticMemoryHttpRequestHandler(null, null, cmp, SvgMime.Item1, options.Compression, 30, 5, null, null, Comp, options.Auth);
                     cache.TryAdd(mimeCode, f);
                     return f;
                 }

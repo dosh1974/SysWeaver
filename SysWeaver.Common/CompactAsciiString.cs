@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Security;
 using System.Text;
 using System.Xml.Linq;
@@ -128,6 +129,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The value to encode</param>
         /// <returns>The compact string that represents it</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public String Encode(Int64 value)
             => Encode((UInt64)value);
 
@@ -158,6 +160,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Int64 DecodeInt64(String compactString)
             => (Int64)DecodeUInt64(compactString);
 
@@ -166,6 +169,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Int32 DecodeInt32(String compactString)
             => (Int32)DecodeUInt32(compactString);
 

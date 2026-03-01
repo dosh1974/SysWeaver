@@ -308,6 +308,8 @@ namespace SysWeaver.Net
             {
                 root = HttpServerTools.FixEnumRoot(root);
                 HashSet<String> folders = new HashSet<string>();
+                var lwt = HttpServerTools.StartedTime;
+                var etag = HttpServerTools.StartedETag;
                 var ul = root.Length;
                 foreach (var x in Entries)
                 {
@@ -322,7 +324,7 @@ namespace SysWeaver.Net
                         var folderName = url.Substring(ul, f - ul);
                         if (!folders.Add(folderName))
                             continue;
-                        yield return new HttpServerEndPoint(root + folderName, "[Implicit Folder] from " + LocationPrefix, HttpServerTools.StartedTime);
+                        yield return new HttpServerEndPoint(root + folderName, "[Implicit Folder] from " + LocationPrefix, lwt, etag);
                     }
                 }
             }

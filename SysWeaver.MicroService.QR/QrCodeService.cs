@@ -68,7 +68,7 @@ namespace SysWeaver.MicroService
                             havePath = f.FirstOrDefault(x => x.GetType() == typeof(HttpServerEndPoint)) != null;
                         if (havePath)
                             continue;
-                        f.Add(new HttpServerEndPoint(nextKey, "[Implicit Folder] from " + nameof(QrCodeService), HttpServerTools.StartedTime));
+                        f.Add(new HttpServerEndPoint(nextKey, "[Implicit Folder] from " + nameof(QrCodeService), HttpServerTools.StartedTime, HttpServerTools.StartedETag));
                     }
                 }
             }

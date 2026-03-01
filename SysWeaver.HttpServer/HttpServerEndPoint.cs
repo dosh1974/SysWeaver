@@ -39,7 +39,7 @@ namespace SysWeaver.Net
         /// <param name="lastModified"></param>
         /// <param name="mime"></param>
         /// <param name="props">A custom hash set of properties (use only lowercase)</param>
-        public HttpServerEndPoint(string uri, string method, int clientCacheDuration, int requestCacheDuration, string compression, string decoder, IReadOnlyList<String> auth, HttpServerEndpointTypes type, String location, long? size, DateTime lastModified, String mime, IReadOnlySet<String> props)
+        public HttpServerEndPoint(string uri, string method, int clientCacheDuration, int requestCacheDuration, string compression, string decoder, IReadOnlyList<String> auth, HttpServerEndpointTypes type, String location, long? size, DateTime? lastModified, String etag, String mime, IReadOnlySet<String> props)
         {
             Uri = uri;
             Type = type;
@@ -51,7 +51,8 @@ namespace SysWeaver.Net
             Auth = auth;
             Location = location;
             Size = size;
-            LastModified = lastModified;
+            LastModified = lastModified ?? HttpServerTools.StartedTime;
+            ETag = etag;
             Mime = mime;
             Props = props.Freeze();
         }
@@ -62,18 +63,21 @@ namespace SysWeaver.Net
         /// <param name="uri"></param>
         /// <param name="location"></param>
         /// <param name="lastModified"></param>
+        /// <param name="etag"></param>
         /// <param name="type"></param>
         /// <param name="method"></param>
-        public HttpServerEndPoint(string uri, String location, DateTime lastModified, HttpServerEndpointTypes type = HttpServerEndpointTypes.Folder, String method = null)
+        public HttpServerEndPoint(string uri, String location, DateTime? lastModified, String etag, HttpServerEndpointTypes type = HttpServerEndpointTypes.Folder, String method = null)
         {
             Uri = uri;
             Location = location;
-            LastModified = lastModified;
+            LastModified = lastModified ?? HttpServerTools.StartedTime;
+            ETag = etag;
             Type = type;
             Method = method;
         }
 
 
+        public readonly String ETag;
         public override string ToString() => String.Concat('"', Uri, "\" @ ", Location);
 
 
@@ -95,6 +99,7 @@ namespace SysWeaver.Net
         long? IHttpServerEndPoint.Size => Size;
 
         DateTime IHttpServerEndPoint.LastModified => LastModified;
+        String IHttpServerEndPoint.ETag => ETag;
 
         string IHttpServerEndPoint.Mime => Mime;
 

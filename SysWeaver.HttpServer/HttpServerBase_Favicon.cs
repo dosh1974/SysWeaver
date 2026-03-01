@@ -88,13 +88,13 @@ namespace SysWeaver.Net
                 }
                 var icoData = GC.AllocateUninitializedArray<Byte>(size);
                 WriteIcon(icoData, sizes, images);
-                IHttpRequestHandler icoHandler = new StaticMemoryHttpRequestHandler(data.LocalUrl, "Generated", icoData, IcoMime, null, 30, 25, HttpServerTools.StartedText, null);
+                IHttpRequestHandler icoHandler = new StaticMemoryHttpRequestHandler(data.LocalUrl, "Generated", icoData, IcoMime, null, 30, 25, HttpServerTools.StartedTime, HttpServerTools.StartedETag, null);
                 ico = Tuple.Create(icoHandler, bm);
             }
             else
             {
                 var image = bm.ToPng(sizeAndKey, height <= 0 ? sizeAndKey : height);
-                IHttpRequestHandler icoHandler = new StaticMemoryHttpRequestHandler(data.LocalUrl, "Generated", image, PngMime, null, 30, 25, HttpServerTools.StartedText, null);
+                IHttpRequestHandler icoHandler = new StaticMemoryHttpRequestHandler(data.LocalUrl, "Generated", image, PngMime, null, 30, 25, HttpServerTools.StartedTime, HttpServerTools.StartedETag, null);
                 ico = Tuple.Create(icoHandler, bm);
             }
             cache[sizeAndKey] = ico;
@@ -116,6 +116,9 @@ namespace SysWeaver.Net
 
         #region Auto gen
 
+
+        static readonly ICompType Comp = CompManager.GetFromHttp("br");
+
         ValueTask<IHttpRequestHandler> HandleFaviconSvg(HttpServerRequest data, HttpSession session)
         {
             var svg = CachedFaviconSvg;
@@ -131,9 +134,9 @@ namespace SysWeaver.Net
                 var svgText = svgS.ToSvg();
                 var enc = Encoding.UTF8;
                 var svgData = enc.GetBytes(svgText);
-                var cmp = CompBrotliNET.Instance;
+                var cmp = Comp;
                 var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
-                svg = new StaticMemoryHttpRequestHandler("icon.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedText, cmp);
+                svg = new StaticMemoryHttpRequestHandler("icon.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedTime, HttpServerTools.StartedETag, cmp);
                 Interlocked.Exchange(ref CachedFaviconSvg, svg);
                 return ValueTask.FromResult(svg);
             }
@@ -153,9 +156,9 @@ namespace SysWeaver.Net
             svgS.AddFavIcon(EnvInfo.AppName, null, new HashColors(EnvInfo.AppName, seed));
             var svgText = svgS.ToSvg();
             var svgData = enc.GetBytes(svgText);
-            var cmp = CompBrotliNET.Instance;
+            var cmp = Comp;
             var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
-            var svgHandler = new StaticMemoryHttpRequestHandler("icon_debug.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedText, cmp);
+            var svgHandler = new StaticMemoryHttpRequestHandler("icon_debug.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedTime, HttpServerTools.StartedETag, cmp);
             return ValueTask.FromResult((IHttpRequestHandler)svgHandler);
         }
 
@@ -259,9 +262,9 @@ namespace SysWeaver.Net
                 svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, HashColors.AppColors);
                 var svgText = svgS.ToSvg();
                 var svgData = enc.GetBytes(svgText);
-                var cmp = CompBrotliNET.Instance;
+                var cmp = Comp;
                 var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
-                svg = new StaticMemoryHttpRequestHandler("logo.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedText, cmp);
+                svg = new StaticMemoryHttpRequestHandler("logo.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedTime, HttpServerTools.StartedETag, cmp);
                 Interlocked.Exchange(ref CachedLogoSvg, svg);
                 return ValueTask.FromResult(svg);
             }
@@ -281,9 +284,9 @@ namespace SysWeaver.Net
             svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, new HashColors(EnvInfo.AppName, seed));
             var svgText = svgS.ToSvg();
             var svgData = enc.GetBytes(svgText);
-            var cmp = CompBrotliNET.Instance;
+            var cmp = Comp;
             var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
-            var svgHandler = new StaticMemoryHttpRequestHandler("logo_debug.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedText, cmp);
+            var svgHandler = new StaticMemoryHttpRequestHandler("logo_debug.svg", "Generated", svgMem, SvgMime, SvgCompression, 30, 25, HttpServerTools.StartedTime, HttpServerTools.StartedETag, cmp);
             return ValueTask.FromResult((IHttpRequestHandler)svgHandler);
         }
 

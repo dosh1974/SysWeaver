@@ -26,7 +26,7 @@ namespace SysWeaver.Net
 
         public bool AllowTemplates { get; init; }
 
-        public StaticStreamHttpRequestHandler(String uri, String location, long? length, Func<Stream> openStream, String mime, HttpCompressionPriority compression, int clientCacheDuration = 5, int requestCacheDuration = 0, String lastModified = null, ICompDecoder preCompressedFormat = null, IReadOnlyList<String> auth = null, double order = 0)
+        public StaticStreamHttpRequestHandler(String uri, String location, long? length, Func<Stream> openStream, String mime, HttpCompressionPriority compression, int clientCacheDuration = 5, int requestCacheDuration = 0, DateTime? lastModified = null, String etag = null, ICompDecoder preCompressedFormat = null, IReadOnlyList<String> auth = null, double order = 0)
         {
             Order = order;
             Uri = uri;
@@ -37,14 +37,16 @@ namespace SysWeaver.Net
             ClientCacheDuration = clientCacheDuration;
             RequestCacheDuration = requestCacheDuration;
             Compression = compression;
-            LastModified = lastModified ?? HttpServerTools.StartedText;
+            var lm = lastModified ?? HttpServerTools.StartedTime;
+            LastModified = lm;
+            ETag = etag ?? HttpServerTools.ToEtag(lm);
             Decoder = preCompressedFormat;
             CackeKey = HttpServerTools.GetStaticCacheUrl();
             Auth = auth;
             OpenStream = openStream;
         }
 
-        public StaticStreamHttpRequestHandler(String uri, String location, long? length, Func<ValueTask<Stream>> openStreamAsync, String mime, HttpCompressionPriority compression, int clientCacheDuration = 5, int requestCacheDuration = 0, String lastModified = null, ICompDecoder preCompressedFormat = null, IReadOnlyList<String> auth = null, double order = 0)
+        public StaticStreamHttpRequestHandler(String uri, String location, long? length, Func<ValueTask<Stream>> openStreamAsync, String mime, HttpCompressionPriority compression, int clientCacheDuration = 5, int requestCacheDuration = 0, DateTime? lastModified = null, String etag = null, ICompDecoder preCompressedFormat = null, IReadOnlyList<String> auth = null, double order = 0)
         {
             Order = order;
             Uri = uri;
@@ -55,7 +57,9 @@ namespace SysWeaver.Net
             ClientCacheDuration = clientCacheDuration;
             RequestCacheDuration = requestCacheDuration;
             Compression = compression;
-            LastModified = lastModified ?? HttpServerTools.StartedText;
+            var lm = lastModified ?? HttpServerTools.StartedTime;
+            LastModified = lm;
+            ETag = etag ?? HttpServerTools.ToEtag(lm);
             Decoder = preCompressedFormat;
             CackeKey = HttpServerTools.GetStaticCacheUrl();
             Auth = auth;
@@ -66,7 +70,7 @@ namespace SysWeaver.Net
         double IStaticHttpRequestHandler.Order => Order;
 
         readonly String Mime;
-        readonly String LastModified;
+        readonly String ETag;
         readonly ValueTask<String> CackeKey;
         readonly Func<Stream> OpenStream;
         readonly Func<ValueTask<Stream>> OpenStreamAsync;
@@ -81,7 +85,7 @@ namespace SysWeaver.Net
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = OpenStreamAsync != null;
-            return LastModified;
+            return ETag;
         }
 
         public HttpRequestData Get(HttpServerRequest request)
@@ -106,9 +110,11 @@ namespace SysWeaver.Net
 
         public String PreCompressed => Decoder?.HttpCode;
 
-        DateTime IHttpServerEndPoint.LastModified => HttpServerTools.FromTimeStampString(LastModified);
+        public DateTime LastModified { get; init; }
 
         String IHttpServerEndPoint.Mime => Mime;
+
+        String IHttpServerEndPoint.ETag => ETag;
 
     }
 }

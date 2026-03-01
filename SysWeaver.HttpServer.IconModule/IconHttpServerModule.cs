@@ -71,19 +71,7 @@ namespace SysWeaver.Net.IconModule
                 OnlyForPrefixes = [ExtPrefix, MimePrefix, FlagPrefix];
 
             var t = GetType();
-            var asm = GetType().Assembly;
-            DateTime lw = HttpServerTools.StartedTime;
-            try
-            {
-                var qfn = asm.ManifestModule.FullyQualifiedName;
-                var fi = new FileInfo(qfn);
-                if (fi.Exists)
-                    lw = fi.LastWriteTimeUtc;
-            }
-            catch
-            {
-            }
-            Lwt = HttpServerTools.ToEtag(lw);
+            var asm = t.Assembly;
             var n = (t.Namespace ?? String.Empty).Length + 6;
             var isDynamic = IsDynamic;
             var dynKeys = DynKeys;
@@ -192,14 +180,18 @@ namespace SysWeaver.Net.IconModule
 
         void Add(String l, String data)
         {
-            Data.AddText(l, LocGen, data, "image/svg+xml" + HttpServerTools.TextMimeSuffix, Encoding.UTF8, ClientCacheDuration, Comp, DisableComp, Lwt, Auth);
+            Data.AddText(l, LocGen, data, "image/svg+xml" + HttpServerTools.TextMimeSuffix, Encoding.UTF8, ClientCacheDuration, Comp, DisableComp, AsmTime, AsmETag, Auth);
         }
 
         void AddRes(String l, Assembly asm, ICompDecoder decoder, String data)
         {
-            Data.AddMemory(l, LocEmbedded, asm.GetResourceData(data), "image/svg+xml" + HttpServerTools.TextMimeSuffix, ClientCacheDuration, Comp, DisableComp, Lwt, decoder, Auth);
+            Data.AddMemory(l, LocEmbedded, asm.GetResourceData(data), "image/svg+xml" + HttpServerTools.TextMimeSuffix, ClientCacheDuration, Comp, DisableComp, AsmTime, AsmETag, decoder, Auth);
 //            Data.AddStream(l, LocEmbedded, () => asm.GetManifestResourceStream(data), "image/svg+xml" + HttpServerTools.TextMimeSuffix, ClientCacheDuration, HttpServerTools.MaxRequestCache, Comp, DisableComp, Lwt, decoder, Auth);
         }
+
+        static readonly DateTime AsmTime = typeof(IconHttpServerModule).Assembly.GetLastWriteTimerUtc();
+        static readonly String AsmETag = HttpServerTools.ToEtag(AsmTime);
+
 
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null) => HttpServerTools.NoEndPoints;
 

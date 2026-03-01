@@ -60,6 +60,10 @@ namespace SysWeaver.MicroService
             return true;
         }
 
+
+        public readonly DateTime ConfigLastWriteTimeUtc;
+
+
         public ServiceManager(bool registerFromManifestFile = true, Action<ServiceManager> runBeforeRegister = null, Action<ServiceManager> restartFn = null) : base()
         {
             using var perfMon = PerfMon.Track("Constructor");
@@ -94,8 +98,13 @@ namespace SysWeaver.MicroService
                 var fn = GetManifestFileName();
                 if (fn != null)
                 {
-                    ManifestFileName = fn;
-                    RegisterManifestFile(fn);
+                    var fi = new FileInfo(fn);
+                    if (fi.Exists)
+                    {
+                        ConfigLastWriteTimeUtc = fi.LastWriteTimeUtc;
+                        ManifestFileName = fn;
+                        RegisterManifestFile(fn);
+                    }
                 }
             }
             //AddMessage("Platform: " + PlatformTools.Current.Name, MessageLevels.Debug);

@@ -64,6 +64,7 @@ namespace SysWeaver.Net
         public int RequestCacheDuration { get; init; }
 
         public bool IsLocalized { get; init; }
+        public bool IsDynamic => false;
 
         public HttpCompressionPriority Compression { get; init; }
 

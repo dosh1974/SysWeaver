@@ -20,7 +20,7 @@ namespace SysWeaver.Compression
 
         const String CompHttpCode = "br";
 
-        const int CompPrio = 0;
+        const int CompPrio = -1;
 
         static readonly IReadOnlySet<String> CompExtensions = new HashSet<string>(StringComparer.Ordinal)
         {

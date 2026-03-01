@@ -14,17 +14,26 @@ namespace SysWeaver.Net.IsoDataModule
 {
     public sealed class IsoDataHttpServerModule : IHttpServerModule
     {
+        static readonly DateTime AsmTime = typeof(IsoLanguage).Assembly.GetLastWriteTimerUtc();
+        static readonly String AsmETag = HttpServerTools.ToEtag(AsmTime);
+
+
         public IsoDataHttpServerModule(StaticDataHttpServerModule data)
         {
             if (data == null)
                 return;
+            var lwt = AsmTime;
+            var etag = AsmETag;
             data.AddText("iso_data/languages.js",
                 "[IsoData]",
                 GetLanguageCode(),
                 "text/javascript; charset=UTF-8",
                 null,
                 30,
-                HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced"));
+                HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced"), 
+                false, 
+                lwt, 
+                etag);
 
             data.AddText("iso_data/countries.js",
                 "[IsoData]",
@@ -32,7 +41,10 @@ namespace SysWeaver.Net.IsoDataModule
                 "text/javascript; charset=UTF-8",
                 null,
                 30,
-                HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced"));
+                HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced"),
+                false,
+                lwt,
+                etag);
 
             data.AddText("iso_data/currencies.js",
                 "[IsoData]",
@@ -40,17 +52,20 @@ namespace SysWeaver.Net.IsoDataModule
                 "text/javascript; charset=UTF-8",
                 null,
                 30,
-                HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced"));
-
+                HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced"),
+                false,
+                lwt,
+                etag);
             data.AddText("iso_data/phone_prefixes.js",
                 "[IsoData]",
                 GetPhonePrefixCodes(),
                 "text/javascript; charset=UTF-8",
                 null,
                 30,
-                HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced"));
-
-
+                HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced"),
+                false,
+                lwt,
+                etag);
 
             IntUnknown = data.TryGetHandler("iso_data/icons/unknown.svg");
             Data = data;
@@ -391,6 +406,7 @@ namespace SysWeaver.Net.IsoDataModule
                         t.Type,
                         String.Concat("[Internal redirect] => ", t.Uri, " @ ", t.Location), t.Size,
                         t.LastModified,
+                        t.ETag,
                         t.Mime,
                         null
                         );
@@ -469,6 +485,7 @@ namespace SysWeaver.Net.IsoDataModule
                         t.Type,
                         String.Concat("[Internal redirect] => ", t.Uri, " @ ", t.Location), t.Size,
                         t.LastModified,
+                        t.ETag,
                         t.Mime,
                         null
                         );
@@ -512,6 +529,7 @@ namespace SysWeaver.Net.IsoDataModule
                         t.Type,
                         String.Concat("[Internal redirect] => ", t.Uri, " @ ", t.Location), t.Size,
                         t.LastModified,
+                        t.ETag,
                         t.Mime,
                         null
                         );
@@ -569,6 +587,7 @@ namespace SysWeaver.Net.IsoDataModule
                             t.Type,
                             String.Concat("[Internal redirect] => ", t.Uri, " @ ", t.Location), t.Size,
                             t.LastModified,
+                            t.ETag,
                             t.Mime,
                             null
                             );
@@ -583,6 +602,7 @@ namespace SysWeaver.Net.IsoDataModule
                             t.Type,
                             String.Concat("[Internal redirect] => ", t.Uri, " @ ", t.Location), t.Size,
                             t.LastModified,
+                            t.ETag,
                             t.Mime,
                             null
                             );
@@ -612,6 +632,7 @@ namespace SysWeaver.Net.IsoDataModule
                                 t.Type,
                                 String.Concat("[Internal redirect] => ", t.Uri, " @ ", t.Location), t.Size,
                                 t.LastModified,
+                                t.ETag,
                                 t.Mime,
                                 null
                                 );
@@ -626,6 +647,7 @@ namespace SysWeaver.Net.IsoDataModule
                                 t.Type,
                                 String.Concat("[Internal redirect] => ", t.Uri, " @ ", t.Location), t.Size,
                                 t.LastModified,
+                                t.ETag,
                                 t.Mime,
                                 null
                                 );
@@ -655,9 +677,13 @@ namespace SysWeaver.Net.IsoDataModule
 
         static readonly String ImpLocation = "[Implicit Folder] from " + typeof(IsoDataHttpServerModule).Name;
 
-        static readonly IHttpServerEndPoint CountryFolder = new HttpServerEndPoint("iso_data/country", ImpLocation, HttpServerTools.StartedTime);
-        static readonly IHttpServerEndPoint LanguageFolder = new HttpServerEndPoint("iso_data/language", ImpLocation, HttpServerTools.StartedTime);
-        static readonly IHttpServerEndPoint PhonePrefixFolder = new HttpServerEndPoint("iso_data/phone_prefix", ImpLocation, HttpServerTools.StartedTime);
+
+
+
+        //static readonly IHttpServerEndPoint BaseFolder = new HttpServerEndPoint("iso_data", ImpLocation, Lwt);
+        static readonly IHttpServerEndPoint CountryFolder = new HttpServerEndPoint("iso_data/country", ImpLocation, AsmTime, AsmETag);
+        static readonly IHttpServerEndPoint LanguageFolder = new HttpServerEndPoint("iso_data/language", ImpLocation, AsmTime, AsmETag);
+        static readonly IHttpServerEndPoint PhonePrefixFolder = new HttpServerEndPoint("iso_data/phone_prefix", ImpLocation, AsmTime, AsmETag);
 
 
 

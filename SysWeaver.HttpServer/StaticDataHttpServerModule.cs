@@ -63,8 +63,11 @@ namespace SysWeaver.Net
         /// <param name="auth">Required authorization tokens, null = no auth required, "" = auth required but no specific tokens, or comma separated list of required security tokens</param>
         /// <param name="doAdd">Optional function to determine if a resource should be included or not</param>
         /// <exception cref="NullReferenceException"></exception>
-        public void AddEmbeddedResources(Assembly asm, String rootNamespace = null, String urlRoot = null, int? clientCacheDuration = null, HttpCompressionPriority compression = null, bool disableCompession = false, String lastModified = null, String auth = null, AddCondition doAdd = null)
+        public void AddEmbeddedResources(Assembly asm, String rootNamespace = null, String urlRoot = null, int? clientCacheDuration = null, HttpCompressionPriority compression = null, bool disableCompession = false, DateTime? lastModified = null, String etag = null,String auth = null, AddCondition doAdd = null)
         {
+            var lwt = lastModified ?? asm.GetLastWriteTimerUtc();
+            etag = etag ?? HttpServerTools.ToEtag(lwt);
+
             var order = asm.GetCustomAttribute<ResourceOrderAttribute>()?.Order ?? 0;
             var names = asm.GetManifestResourceNames();
             var replace = asm.GetCustomAttribute<ReplaceEmbeddedFilesAttribute>()?.Replace ?? false;
@@ -99,31 +102,16 @@ namespace SysWeaver.Net
                         HttpServerTools.CombinePaths(urlRoot, PathFix(String.Join('.', String.Join('/', s, 0, sl), s[sl], ext))),
                         location,
                         asm.GetResourceData(x),
-                        //() => asm.GetManifestResourceStream(x) ?? throw new NullReferenceException(),
                         mime.Item1, 
                         clientCacheDuration,
                         null,
                         true,
-                        lastModified,
+                        lwt,
+                        etag,
                         null,
                         auth,
                         replace,
                         order);
-/*                    AddStream(
-                        HttpServerTools.CombinePaths(urlRoot, PathFix(String.Join('.', String.Join('/', s, 0, sl), s[sl], ext))),
-                        location,
-                        () => asm.GetManifestResourceStream(x) ?? throw new NullReferenceException(),
-                        mime.Item1, 
-                        clientCacheDuration,
-                        0,
-                        null,
-                        true,
-                        lastModified,
-                        null,
-                        auth,
-                        replace,
-                        order);
-*/
                     ext = s[sl];
                     extl = ext.FastToLower();
                     mime = MimeTypeMap.GetMimeType(extl);
@@ -132,32 +120,16 @@ namespace SysWeaver.Net
                     HttpServerTools.CombinePaths(urlRoot, PathFix(String.Join('.', String.Join('/', s, 0, sl), ext))),
                     location,
                     asm.GetResourceData(x),
-                    //() => asm.GetManifestResourceStream(x) ?? throw new NullReferenceException(),
                     mime.Item1,
                     clientCacheDuration,
                     compression,
                     disableCompession || (!mime.Item2),
-                    lastModified,
+                    lwt,
+                    etag,
                     comp,
                     auth,
                     replace,
                     order);
-
-/*                AddStream(
-                    HttpServerTools.CombinePaths(urlRoot, PathFix(String.Join('.', String.Join('/', s, 0, sl), ext))),
-                    location,
-                    () => asm.GetManifestResourceStream(x) ?? throw new NullReferenceException(),
-                    mime.Item1,
-                    clientCacheDuration,
-                    HttpServerTools.MaxRequestCache,
-                    compression,
-                    disableCompession || (!mime.Item2),
-                    lastModified,
-                    comp,
-                    auth,
-                    replace,
-                    order);
-*/
             }
         }
 
@@ -219,13 +191,14 @@ namespace SysWeaver.Net
         /// <param name="requestCacheDuration">The server side cache duration</param>
         /// <param name="compression">The runtime compression to apply (null to use the module default)</param>
         /// <param name="disableCompession">True to disable any compression</param>
-        /// <param name="lastModified">The last modified string (null to use the default = application start)</param>
+        /// <param name="lastModified">When the resource was last modified (null to use the default = application start)</param>
+        /// <param name="etag">The etag to use, defasult to using the lastModified time</param>
         /// <param name="preCompressedFormat">The last modified string (null to use the default = application start)</param>
         /// <param name="auth">Required authorization tokens, null = no auth required, "" = auth required but no specific tokens, or comma separated list of required security tokens</param>
         /// <param name="replace">If true, any existing resource will be replaced if it's of the same order</param>
         /// <param name="order">An optional order, if the same resource is added more than once, the one with the highest order (or if equal the last replaced) is used</param>
         /// <returns>True if successful</returns>
-        public bool AddStream(String url, String location, Func<Stream> openStream, String mime, int? clientCacheDuration = null, int requestCacheDuration = HttpServerTools.MaxRequestCache, HttpCompressionPriority compression = null, bool disableCompession = false, String lastModified = null, ICompDecoder preCompressedFormat = null, String auth = null, bool replace = false, double order = 0)
+        public bool AddStream(String url, String location, Func<Stream> openStream, String mime, int? clientCacheDuration = null, int requestCacheDuration = HttpServerTools.MaxRequestCache, HttpCompressionPriority compression = null, bool disableCompession = false, DateTime? lastModified = null, String etag = null, ICompDecoder preCompressedFormat = null, String auth = null, bool replace = false, double order = 0)
         {
             compression = disableCompession ? null : (compression ?? Compression);
             var dur = clientCacheDuration ?? ClientCacheDuration;
@@ -243,7 +216,7 @@ namespace SysWeaver.Net
             }
             if (location == null)
                 location = GetLocation("Stream");
-            var d = new StaticStreamHttpRequestHandler(url, LocationPrefix + location, len, openStream, mime, compression, dur, requestCacheDuration, lastModified, preCompressedFormat, authTokens, order);
+            var d = new StaticStreamHttpRequestHandler(url, LocationPrefix + location, len, openStream, mime, compression, dur, requestCacheDuration, lastModified, etag, preCompressedFormat, authTokens, order);
             url = HttpServerTools.CombinePaths(RootUri, url.Trim('/'));
             return AddHandler(url, d, replace);
         }
@@ -258,20 +231,21 @@ namespace SysWeaver.Net
         /// <param name="clientCacheDuration">The client side cache duration (null to use the modules default)</param>
         /// <param name="compression">The runtime compression to apply (null to use the module default)</param>
         /// <param name="disableCompession">True to disable any compression</param>
-        /// <param name="lastModified">The last modified string (null to use the default = application start)</param>
+        /// <param name="lastModified">When the resource was last modified (null to use the default = application start)</param>
+        /// <param name="etag">The etag to use, defasult to using the lastModified time</param>
         /// <param name="preCompressedFormat">The last modified string (null to use the default = application start)</param>
         /// <param name="auth">Required authorization tokens, null = no auth required, "" = auth required but no specific tokens, or comma separated list of required security tokens</param>
         /// <param name="replace">If true, any existing resource will be replaced</param>
         /// <param name="order">An optional order, if the same resource is added more than once, the one with the highest order (or if equal the last replaced) is used</param>
         /// <returns>True if successful</returns>
-        public bool AddMemory(String url, String location, ReadOnlyMemory<Byte> data, String mime, int? clientCacheDuration = null, HttpCompressionPriority compression = null, bool disableCompession = false, String lastModified = null, ICompDecoder preCompressedFormat = null, String auth = null, bool replace = false, double order = 0)
+        public bool AddMemory(String url, String location, ReadOnlyMemory<Byte> data, String mime, int? clientCacheDuration = null, HttpCompressionPriority compression = null, bool disableCompession = false, DateTime? lastModified = null, String etag = null, ICompDecoder preCompressedFormat = null, String auth = null, bool replace = false, double order = 0)
         {
             compression = disableCompession ? null : (compression ?? Compression);
             var dur = clientCacheDuration ?? ClientCacheDuration;
             var authTokens = auth == null ? null : Authorization.GetRequiredTokens(auth);
             if (location == null)
                 location = GetLocation("Memory");
-            var d = new StaticMemoryHttpRequestHandler(url, LocationPrefix + location, data, mime, compression, dur, HttpServerTools.MaxRequestCache, lastModified, preCompressedFormat, authTokens, order);
+            var d = new StaticMemoryHttpRequestHandler(url, LocationPrefix + location, data, mime, compression, dur, HttpServerTools.MaxRequestCache, lastModified, etag, preCompressedFormat, authTokens, order);
             url = HttpServerTools.CombinePaths(RootUri, url.Trim('/'));
             return AddHandler(url, d, replace);
         }
@@ -287,13 +261,14 @@ namespace SysWeaver.Net
         /// <param name="clientCacheDuration">The client side cache duration (null to use the modules default)</param>
         /// <param name="compression">The runtime compression to apply (null to use the module default)</param>
         /// <param name="disableCompession">True to disable any compression</param>
-        /// <param name="lastModified">The last modified string (null to use the default = application start)</param>
+        /// <param name="lastModified">When the resource was last modified (null to use the default = application start)</param>
+        /// <param name="etag">The etag to use, defasult to using the lastModified time</param>
         /// <param name="auth">Required authorization tokens, null = no auth required, "" = auth required but no specific tokens, or comma separated list of required security tokens</param>
         /// <param name="replace">If true, any existing resource will be replaced</param>
         /// <param name="order">An optional order, if the same resource is added more than once, the one with the highest order (or if equal the last replaced) is used</param>
         /// <param name="storeCompressed">If true, the data is stored compressed</param>
         /// <returns>True if successful</returns>
-        public bool AddText(String url, String location, String text, String mime = MimeTypeMap.PlainText, Encoding encoding = null, int ? clientCacheDuration = null, HttpCompressionPriority compression = null, bool disableCompession = false, String lastModified = null, String auth = null, bool replace = false, double order = 0, bool storeCompressed = true)
+        public bool AddText(String url, String location, String text, String mime = MimeTypeMap.PlainText, Encoding encoding = null, int ? clientCacheDuration = null, HttpCompressionPriority compression = null, bool disableCompession = false, DateTime? lastModified = null, String etag = null, String auth = null, bool replace = false, double order = 0, bool storeCompressed = true)
         {
             compression = disableCompession ? null : (compression ?? Compression);
             var dur = clientCacheDuration ?? ClientCacheDuration;
@@ -308,7 +283,7 @@ namespace SysWeaver.Net
                 comp = Comp;
                 data = comp.GetCompressed(data.Span, CompEncoderLevels.Best);
             }
-            var d = new StaticMemoryHttpRequestHandler(url, LocationPrefix + location, data, mime, compression, dur, HttpServerTools.MaxRequestCache, lastModified, comp, authTokens, order);
+            var d = new StaticMemoryHttpRequestHandler(url, LocationPrefix + location, data, mime, compression, dur, HttpServerTools.MaxRequestCache, lastModified, etag, comp, authTokens, order);
             url = HttpServerTools.CombinePaths(RootUri, url.Trim('/'));
             return AddHandler(url, d, replace);
         }
@@ -346,6 +321,8 @@ namespace SysWeaver.Net
             {
                 root = HttpServerTools.FixEnumRoot(root);
                 HashSet<String> folders = new HashSet<string>();
+                var lwt = HttpServerTools.StartedTime;
+                var etag = HttpServerTools.StartedETag;
                 var ul = root.Length;
                 foreach (var x in Handlers)
                 {
@@ -360,7 +337,7 @@ namespace SysWeaver.Net
                         var folderName = url.Substring(ul, f - ul);
                         if (!folders.Add(folderName))
                             continue;
-                        yield return new HttpServerEndPoint(root + folderName, "[Implicit Folder] from " + LocationPrefix, HttpServerTools.StartedTime);
+                        yield return new HttpServerEndPoint(root + folderName, "[Implicit Folder] from " + LocationPrefix, lwt, etag);
                     }
                 }
             }

@@ -129,9 +129,14 @@ namespace SysWeaver.Net
             if (slength != null)
                 if (long.TryParse(slength, out var xx))
                     len = xx;
+            DateTime? lwt = null;
             String etag = null;
             if (rh.TryGetValues("ETag", out var xxx))
+            {
                 etag = xxx?.FirstOrDefault();
+                lwt = HttpServerTools.TryGetDateTimeFromETag(etag);
+            }
+
             var mime = rh?.ContentType?.MediaType;
             var doComp = MimeTypeMap.GetMimeType(mime ?? "").Item2;
             var compression = rh.ContentEncoding?.FirstOrDefault();
@@ -150,6 +155,7 @@ namespace SysWeaver.Net
                 doComp ? Comp : null, 
                 ClientCache, 
                 ServerCache,
+                lwt,
                 etag,
                 cmp, 
                 Auth);
@@ -157,6 +163,7 @@ namespace SysWeaver.Net
 
 
     }
+
 
 
 

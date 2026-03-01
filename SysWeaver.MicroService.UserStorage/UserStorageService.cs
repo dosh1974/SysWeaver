@@ -679,7 +679,8 @@ namespace SysWeaver.MicroService
                 var newUrl = baseUrl + linkInfo.Url;
                 var res = EmbeddTemplate.Get(x => x.FastEquals("BaseUrl") ? baseUrl : newUrl);
                 var mem = Encoding.UTF8.GetBytes(res);
-                return new StaticMemoryHttpRequestHandler(l, "Embedded", mem, HttpServerTools.HtmlMime, EmbedComp, 30, 60, HttpServerTools.ToEtag(fi.LastAccessTimeUtc));
+                var t = fi.LastAccessTimeUtc;
+                return new StaticMemoryHttpRequestHandler(l, "Embedded", mem, HttpServerTools.HtmlMime, EmbedComp, 30, 60, t, HttpServerTools.ToEtag(t));
                 //context.SetResStatusCode(302);
                 //context.SetResHeader("Location", newUrl);
                 //return HttpServerTools.AlreadyHandled;

@@ -122,7 +122,8 @@ namespace SysWeaver.Chat
                 var m = mem ?? ReadOnlyMemory<Byte>.Empty;
                 mem = comp.GetCompressed(m.Span, m.Length > 8192 ? CompEncoderLevels.Balanced : CompEncoderLevels.Best);
             }
-            var rh = new StaticMemoryHttpRequestHandler("chat/" + name, filename, mem ?? ReadOnlyMemory<Byte>.Empty, mime, Comp, 30, 15, HttpServerTools.ToEtag(DateTime.UtcNow), comp, auth);
+            var now = DateTime.UtcNow;
+            var rh = new StaticMemoryHttpRequestHandler("chat/" + name, filename, mem ?? ReadOnlyMemory<Byte>.Empty, mime, Comp, 30, 15, now, null, comp, auth, 0, false);
             Files.TryAdd(f, rh);
             return name;
         }

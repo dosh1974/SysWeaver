@@ -182,11 +182,17 @@ namespace SysWeaver.MicroService
             svgText = canvas.ToSvgString();
             var enc = Encoding.UTF8;
             var svgData = enc.GetBytes(svgText);
-            var cmp = CompBrotliNET.Instance;
+            var cmp = Comp;
             var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
-            var svgHandler = new StaticMemoryHttpRequestHandler("icon.svg", "Generated", svgMem, MimeTypeMap.Svg, SvgCompression, 30, 15, null, cmp, Auth);
+            var svgHandler = new StaticMemoryHttpRequestHandler("icon.svg", "Generated", svgMem, MimeTypeMap.Svg, SvgCompression, 30, 15, Lwt, ETag, cmp, Auth);
             return ValueTask.FromResult<IHttpRequestHandler>(svgHandler);
         }
+
+        static readonly DateTime Lwt = typeof(AvatarService).Assembly.GetLastWriteTimerUtc();
+        static readonly String ETag = HttpServerTools.ToEtag(Lwt);
+
+        static readonly ICompType Comp = CompManager.GetFromHttp("br");
+
 
 
         readonly FastMemCache<int, ValueTask<IHttpRequestHandler>> Cache;

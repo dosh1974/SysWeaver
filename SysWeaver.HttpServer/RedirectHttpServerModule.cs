@@ -217,22 +217,23 @@ namespace SysWeaver.Net
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null)
         {
             var t = This;
-            var s = EnvInfo.AppStart;
+            var lwt = HttpServerTools.StartedTime;
+            var etag = HttpServerTools.StartedETag;
             var p = TableDataConsts.ExternalInfoPath;
             if (root == null)
             {
                 foreach (var x in ExternalInfos.Keys)
-                    yield return new HttpServerEndPoint(p + x, t, s);
+                    yield return new HttpServerEndPoint(p + x, t, lwt, etag);
             }else
             {
                 if (root == "")
                 {
-                    yield return new HttpServerEndPoint(p.Substring(0, p.Length - 1), t, s);
+                    yield return new HttpServerEndPoint(p.Substring(0, p.Length - 1), t, lwt, etag);
                 }
                 if (root == p)
                 {
                     foreach (var x in ExternalInfos.Keys)
-                        yield return new HttpServerEndPoint(p + x, t, s);
+                        yield return new HttpServerEndPoint(p + x, t, lwt, etag);
                 }
             }
         }

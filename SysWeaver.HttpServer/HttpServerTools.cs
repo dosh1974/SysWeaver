@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,14 +14,32 @@ namespace SysWeaver.Net
 {
     public static class HttpServerTools
     {
+
+
         /// <summary>
-        /// Create a time stamp string from a DateTime
+        /// Get the etag for an assembly (based last write time)
+        /// </summary>
+        /// <param name="asm"></param>
+        /// <returns>The etag or null if it can't be found</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static String GetAssemblyEtag(Assembly asm)
+            => ToEtag(asm.GetLastWriteTimerUtc());
+
+        /// <summary>
+        /// Create an etag from a DateTime
         /// </summary>
         /// <param name="t"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToEtag(DateTime t) => CompactAsciiString.Secure.Encode((t.Kind == DateTimeKind.Utc ? t : t.ToUniversalTime()).Ticks);
-        //        public static String ToTimeStampString(DateTime t) => (t.Kind == DateTimeKind.Utc ? t : t.ToUniversalTime()).ToString("r");
 
+        /// <summary>
+        /// Create an etag from a long
+        /// </summary>
+        /// <param name="l"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static String ToEtag(long l) => CompactAsciiString.Secure.Encode(l);
 
 
         /// <summary>
@@ -27,20 +47,36 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="lm"></param>
         /// <returns></returns>
-        public static DateTime FromTimeStampString(String lm)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static DateTime? TryGetDateTimeFromETag(String lm)
         {
-            var l = CompactAsciiString.Secure.DecodeInt64(lm.SplitFirst(' '));
-            return new DateTime(l, DateTimeKind.Utc);
+            try
+            {
+                var l = CompactAsciiString.Secure.DecodeInt64(lm.SplitFirst(' '));
+                var dt = new DateTime(l, DateTimeKind.Utc);
+                var y = dt.Year;
+                if (y < 1900)
+                    return null;
+                if (y > 2500)
+                    return null;
+                return dt;
+            }
+            catch
+            {
+                return null;
+            }
         }
-            
+
+
+        /// <summary>
+        /// The default last write time to use for endpoints
+        /// </summary>
+        public static readonly DateTime StartedTime = EnvInfo.AppStart;
+
         /// <summary>
         /// The text to write to the last modfied response header for static responses
         /// </summary>
-        public static readonly String StartedText = ToEtag(EnvInfo.AppStart);
-
-
-        public static readonly DateTime StartedTime = EnvInfo.AppStart;
-
+        public static readonly String StartedETag = ToEtag(StartedTime);
 
         /// <summary>
         /// Merges url paths, ignoring empty parts

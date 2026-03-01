@@ -63,6 +63,10 @@ This server supports the following sizes:
             manager.OnServiceAdded += Manager_OnServiceAdded;
             manager.OnServiceRemoved += Manager_OnServiceRemoved;
 
+            var lwt1 = manager.ConfigLastWriteTimeUtc;
+            var lwt2 = typeof(AuthManagerService).Assembly.GetLastWriteTimerUtc();
+            ETag = HttpServerTools.ToEtag(lwt1.Ticks + lwt2.Ticks);
+            Lwt = lwt1 > lwt2 ? lwt1 : lwt2;
 
 
             SetUserImageHandler(manager.TryGet<IUserImageHandler>());
@@ -74,6 +78,9 @@ This server supports the following sizes:
 
             AddReadMe(manager.TryGet<StaticDataHttpServerModule>());
         }
+
+        readonly DateTime Lwt;
+        readonly String ETag;
 
         void SetUserImageHandler(IUserImageHandler ui)
         {
@@ -104,6 +111,9 @@ This server supports the following sizes:
 
         StaticDataHttpServerModule StaticMod;
 
+
+
+
         void AddReadMe(StaticDataHttpServerModule sm)
         {
             if (sm == null)
@@ -123,7 +133,7 @@ This server supports the following sizes:
                     :
                     String.Concat("- ", n, " ", ImageRoot, "[Guid]/", n, " (", s, 'x', s, ")\n");
             }
-            sm.AddText(ImageRoot + "ReadMe.txt", "Embedded in " + GetType().Assembly, t);
+            sm.AddText(ImageRoot + "ReadMe.txt", "Embedded in " + GetType().Assembly, t, null, null, null, null, false, Lwt, ETag);
         }
 
         void RemoveReadMe()
@@ -462,7 +472,7 @@ This server supports the following sizes:
             if (root == null)
             {
                 foreach (var x in UserImageSizes)
-                    yield return new HttpServerEndPoint(ImageRoot + "Current/" + x.Key, "GET", 0, 0, null, null, null, HttpServerEndpointTypes.File, "Dynamic content", null, HttpServerTools.StartedTime, "image/*", null);
+                    yield return new HttpServerEndPoint(ImageRoot + "Current/" + x.Key, "GET", 0, 0, null, null, null, HttpServerEndpointTypes.File, "Dynamic content", null, HttpServerTools.StartedTime, HttpServerTools.StartedETag, "image/*", null);
             }else
             {
                 if (root.FastStartsWith(ImageRoot))
@@ -470,14 +480,14 @@ This server supports the following sizes:
                     var rest = root.Substring(ImageRootLen);
                     if (rest.Length == 0)
                     {
-                        yield return new HttpServerEndPoint(ImageRoot + "Current", "Implicit folder", HttpServerTools.StartedTime);
+                        yield return new HttpServerEndPoint(ImageRoot + "Current", "Implicit folder", HttpServerTools.StartedTime, HttpServerTools.StartedETag);
                     }
                     else
                     {
                         if (rest.FastEquals("Current/"))
                         {
                             foreach (var x in UserImageSizes)
-                                yield return new HttpServerEndPoint(ImageRoot + "Current/" + x.Key, "GET", 0, 0, null, null, null, HttpServerEndpointTypes.File, "Dynamic content", null, HttpServerTools.StartedTime, "image/*", null);
+                                yield return new HttpServerEndPoint(ImageRoot + "Current/" + x.Key, "GET", 0, 0, null, null, null, HttpServerEndpointTypes.File, "Dynamic content", null, HttpServerTools.StartedTime, HttpServerTools.StartedETag, "image/*", null);
                         }
                     }
                 }
@@ -488,8 +498,10 @@ This server supports the following sizes:
 
         static readonly HttpCompressionPriority SvgCompression = HttpCompressionPriority.GetSupportedEncoders();
 
-        
-        public static StaticMemoryHttpRequestHandler GenSvgImage(String name, String guid)
+
+        static readonly ICompType Comp = CompManager.GetFromHttp("br");
+
+        public StaticMemoryHttpRequestHandler GenSvgImage(String name, String guid)
         {
             var svgS = new SvgScene(256, 256);
             var hash = (int)QuickHash.Hash(name + guid);
@@ -497,12 +509,12 @@ This server supports the following sizes:
             var svgText = svgS.ToSvg();
             var enc = Encoding.UTF8;
             var svgData = enc.GetBytes(svgText);
-            var cmp = CompBrotliNET.Instance;
+            var cmp = Comp;
             var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
-            var svgHandler = new StaticMemoryHttpRequestHandler("icon.svg", "Generated", svgMem, MimeTypeMap.Svg, SvgCompression, 30, 15, null, cmp);
+            var svgHandler = new StaticMemoryHttpRequestHandler("icon.svg", "Generated", svgMem, MimeTypeMap.Svg, SvgCompression, 30, 15, Lwt, ETag, cmp);
             return svgHandler;
         }
-            
+
         async Task<StaticMemoryHttpRequestHandler> GetDefaultImage(String userGuid)
         {
             var ui = await Auth.FindUserFromGuid(userGuid).ConfigureAwait(false);

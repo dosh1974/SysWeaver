@@ -261,7 +261,7 @@ namespace SysWeaver.MicroService
         {
             if (root == null)
             {
-                yield return new HttpServerEndPoint(UploadUrl, LocationPrefix + " used to upload files", EnvInfo.AppStart, HttpServerEndpointTypes.FileUpload, "POST");
+                yield return new HttpServerEndPoint(UploadUrl, LocationPrefix + " used to upload files", HttpServerTools.StartedTime, HttpServerTools.StartedETag, HttpServerEndpointTypes.FileUpload, "POST");
             }
             else
             {
@@ -279,11 +279,11 @@ namespace SysWeaver.MicroService
                     {
                         if ((i + 1) >= sl)
                         {
-                            yield return new HttpServerEndPoint(UploadUrl, LocationPrefix + " used to upload files", EnvInfo.AppStart, HttpServerEndpointTypes.FileUpload, "POST");
+                            yield return new HttpServerEndPoint(UploadUrl, LocationPrefix + " used to upload files", HttpServerTools.StartedTime, HttpServerTools.StartedETag, HttpServerEndpointTypes.FileUpload, "POST");
                         }
                         else
                         {
-                            yield return new HttpServerEndPoint(String.Join('/', s, 0, i + 1), "[Implicit Folder] from " + LocationPrefix, EnvInfo.AppStart);
+                            yield return new HttpServerEndPoint(String.Join('/', s, 0, i + 1), "[Implicit Folder] from " + LocationPrefix, HttpServerTools.StartedTime, HttpServerTools.StartedETag);
                         }
                     }
                 }

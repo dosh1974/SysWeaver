@@ -86,7 +86,12 @@ namespace SysWeaver.Net
         /// Last modified time stamp
         /// </summary>
         DateTime LastModified { get;  }
-        
+
+        /// <summary>
+        /// The etag to use, may be null for dynamic end points
+        /// </summary>
+        String ETag { get; }
+
         /// <summary>
         /// The mime of the end point
         /// </summary>

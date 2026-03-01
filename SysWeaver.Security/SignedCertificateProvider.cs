@@ -63,7 +63,7 @@ namespace SysWeaver.Security
                     var b = root.Length > 0 ? (root + '/') : root;
                     eps[b] =
                     [
-                        new HttpServerEndPoint(b + name, "[Implicit Folder] from [SignedCertificateProvider]", HttpServerTools.StartedTime),
+                        new HttpServerEndPoint(b + name, "[Implicit Folder] from [SignedCertificateProvider]", HttpServerTools.StartedTime, HttpServerTools.StartedETag),
                     ];
                 }
             }
@@ -87,7 +87,8 @@ namespace SysWeaver.Security
                     Msg?.AddMessage(Prefix + "Can't get public certificate from " + RootFilename.ToFilename() + " since the file doesn't exist!", MessageLevels.Warning);
                     return false;
                 }
-                var lw = HttpServerTools.ToEtag(fi.LastAccessTimeUtc);
+                var lwt = fi.LastAccessTimeUtc;
+                var etag = HttpServerTools.ToEtag(lwt);
                 var c = await CertificateTools.Load(RootFilename, RootPassword).ConfigureAwait(false);
                 var pem = Encoding.UTF8.GetBytes(c.ExportCertificatePem());
                 var fileTemp = FileTemplate;
@@ -103,7 +104,7 @@ namespace SysWeaver.Security
                 {
                     extra["ext"] = exts[i];
                     var name = EnvInfo.ResolveText(fileTemp, true, extra);
-                    var ep = new StaticMemoryHttpRequestHandler(name, Prefix + "Extracted public certificate", pem, MimeTypeMap.PlainText, null, 5, 5, lw);
+                    var ep = new StaticMemoryHttpRequestHandler(name, Prefix + "Extracted public certificate", pem, MimeTypeMap.PlainText, null, 5, 5, lwt, etag);
                     files[name] = ep;
                     eps[i] = ep;
                 }

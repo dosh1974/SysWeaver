@@ -483,6 +483,7 @@ namespace SysWeaver.Net
                         loc,
                         len,
                         lwt,
+                        HttpServerTools.ToEtag(lwt),
                         mime.Item1,
                         null
                     );
@@ -506,6 +507,7 @@ namespace SysWeaver.Net
                         loc,
                         len,
                         lwt,
+                        HttpServerTools.ToEtag(lwt),
                         mime.Item1,
                         null
                     );
@@ -542,6 +544,7 @@ namespace SysWeaver.Net
                         loc,
                         len,
                         lwt,
+                        HttpServerTools.ToEtag(lwt),
                         mime.Item1,
                         null
                     );
@@ -569,6 +572,8 @@ namespace SysWeaver.Net
                 else
                 {
                     //  Find what web folders to get files from
+                    var lwt = HttpServerTools.StartedTime;
+                    var etag = HttpServerTools.StartedETag;
                     List<KeyValuePair<String, WebFolder>> folders = new List<KeyValuePair<string, WebFolder>>();
                     var rootParts = root.Length <= 0 ? emptyArray : root.TrimEnd('/').Split('/');
                     var rl = rootParts.Length;
@@ -590,7 +595,7 @@ namespace SysWeaver.Net
                             {
                                 if (ul > rl)
                                 {
-                                    yield return new HttpServerEndPoint(String.Join('/', urlPaths, 0, rl + 1), "[Virtual Folder] from [File System]", HttpServerTools.StartedTime);
+                                    yield return new HttpServerEndPoint(String.Join('/', urlPaths, 0, rl + 1), "[Virtual Folder] from [File System]", lwt, etag);
                                 }
                                 else
                                 {
@@ -656,7 +661,8 @@ namespace SysWeaver.Net
                                         continue;
                                     var di = new DirectoryInfo(f);
                                     var loc = String.Join(di.FullName, "[Folder] \"", '"');
-                                    eps = new HttpServerEndPoint(url, loc, di.LastWriteTimeUtc);
+                                    var lwt = di.LastWriteTimeUtc;
+                                    eps = new HttpServerEndPoint(url, loc, lwt, HttpServerTools.ToEtag(lwt));
                                 }
                                 catch
                                 {
