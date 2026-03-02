@@ -132,7 +132,7 @@ namespace SysWeaver.MicroService
             {
                 try
                 {
-                    var hash = await File.ReadAllTextAsync(hashFile).ConfigureAwait(false);
+                    var hash = await FileExt.ReadTextAsync(hashFile).ConfigureAwait(false);
                     if (hash.FastEquals(fi.Hash))
                     {
                         foreach (var x in Sizes)
@@ -162,7 +162,8 @@ namespace SysWeaver.MicroService
             if (!SystemLock.TryGet("SysWeaver.CustomUserImages." + name, out var ldisp))
                 return FileRepoTools.OperationInProgress;
             using var x = ldisp;
-            var data = await s.ReadAllMemoryAsync().ConfigureAwait(false);
+            using var dataU = await s.ReadAllUnmanagedMemoryAsync().ConfigureAwait(false);
+            var data = dataU.Memory;
             var info = new MagickImageInfo(data.Span);
             switch (info.Format)
             {

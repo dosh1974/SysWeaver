@@ -46,7 +46,7 @@ namespace SysWeaver.MicroService
         {
             try
             {
-                return await File.ReadAllBytesAsync(H.Filename).ConfigureAwait(false);
+                return await FileExt.ReadBytesAsync(H.Filename).ConfigureAwait(false);
             }
             catch (FileNotFoundException)
             {
@@ -123,7 +123,7 @@ namespace SysWeaver.MicroService
         public ValueTask<ReadOnlyMemory<Byte>> TryReadTextFile(String name)
         {
             var h = H;
-            return name.FastEquals(h.DownloadName) ? FileExt.TryReadBytesAsync(h.Filename) : TaskExt.ReadonlyMemoryValueTask;
+            return name.FastEquals(h.DownloadName) ? FileExt.TryReadMemoryAsync(h.Filename) : TaskExt.ReadonlyMemoryValueTask;
         }
 
         

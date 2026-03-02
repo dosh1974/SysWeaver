@@ -164,7 +164,8 @@ namespace SysWeaver.MicroService
         async ValueTask<ReadOnlyMemory<Byte>> GetChunks(HttpServerRequest context)
         {
             using var _ = PerfMon.Track(nameof(GetChunks));
-            var data = await context.InputStream.ReadAllMemoryAsync(false).ConfigureAwait(false);
+            var dataMem = await context.InputStream.ReadAllUnmanagedMemoryAsync(false).ConfigureAwait(false);
+            var data = dataMem.Memory;
             var props = CdcProps.Default;
             async ValueTask<ReadOnlyMemory<Byte>> Read(String x = null)
             {

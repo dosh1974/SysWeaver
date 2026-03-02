@@ -131,7 +131,8 @@ namespace SysWeaver.Db
         /// <returns></returns>
         public T FromBlob<T>(ReadOnlySpan<Byte> data)
         {
-            var t = BlobComp.GetDecompressed(data);
+            using var tMem = BlobComp.GetUnmanagedDecompressed(data);
+            var t = tMem.Memory;
 #if DEBUG
             if (BlobSer.Encoding != null)
             {

@@ -129,7 +129,7 @@ namespace SysWeaver.Security
                 if (File.Exists(password))
                 {
                     pfile = password;
-                    password = EnvInfo.ResolveText((await File.ReadAllTextAsync(password).ConfigureAwait(false)).Trim());
+                    password = EnvInfo.ResolveText((await FileExt.ReadTextAsync(password).ConfigureAwait(false)).Trim());
                     if (password.Length <= 0)
                         password = null;
                 }
@@ -152,7 +152,7 @@ namespace SysWeaver.Security
         /// <param name="password">Password or password file</param>
         /// <param name="passwordCanBeFile">True if password may be a file</param>
         /// <returns></returns>
-        public static async Task<X509Certificate2> Create(Byte[] data, String password = null, bool passwordCanBeFile = true)
+        public static async Task<X509Certificate2> Create(ReadOnlyMemory<Byte> data, String password = null, bool passwordCanBeFile = true)
         {
             string pfile = null;
             if (passwordCanBeFile && !string.IsNullOrEmpty(password))
@@ -160,14 +160,14 @@ namespace SysWeaver.Security
                 if (File.Exists(password))
                 {
                     pfile = password;
-                    password = EnvInfo.ResolveText((await File.ReadAllTextAsync(password).ConfigureAwait(false)).Trim());
+                    password = EnvInfo.ResolveText((await FileExt.ReadTextAsync(password).ConfigureAwait(false)).Trim());
                     if (password.Length <= 0)
                         password = null;
                 }
             }
             try
             {
-                return X509CertificateLoader.LoadPkcs12(data, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                return X509CertificateLoader.LoadPkcs12(data.Span, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
                 //return new X509Certificate2(data, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
             }
             catch (Exception ex)

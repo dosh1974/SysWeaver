@@ -64,7 +64,7 @@ namespace SysWeaver.Security
                         msg?.AddMessage(Prefix + "Can't import certificate " + f.ToQuoted() + " since it doesn't exist!", MessageLevels.Warning);
                         continue;
                     }
-                    var pem = await File.ReadAllTextAsync(f).ConfigureAwait(false);
+                    var pem = await FileExt.ReadTextAsync(f).ConfigureAwait(false);
                     Byte[] certBytes;
                     try
                     {
@@ -382,7 +382,7 @@ namespace SysWeaver.Security
                 //  Load exisitng key
                 try
                 {
-                    accountKey = KeyFactory.FromPem(await File.ReadAllTextAsync(accountFile).ConfigureAwait(false));
+                    accountKey = KeyFactory.FromPem(await FileExt.ReadTextAsync(accountFile).ConfigureAwait(false));
                 }
                 catch (Exception ex)
                 {

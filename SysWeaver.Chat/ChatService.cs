@@ -622,6 +622,7 @@ namespace SysWeaver.Chat
                         needFile = (linkScope ?? UserStorageScopes.Public) < requestScope;
                 }
             }
+            IUnmanagedReadOnlyMemory<Byte> sharedMem = null;
             //  TODO: Add referenced chat content
             if (data.Item4.GetResMime().FastStartsWith("text/html"))
             {
@@ -692,21 +693,23 @@ namespace SysWeaver.Chat
                     changed |= await Change(node, "href").ConfigureAwait(false);
                     changed |= await Change(node, "src").ConfigureAwait(false);
                 }
-                using (var ms = new MemoryStream())
+                using (var ms = new ArrayPoolStream())
                 {
                     html.Save(ms);
-                    mem = ms.ToArray();
+                    sharedMem = ms.GetMemory();
+                    mem = sharedMem.Memory;
                 }
             }
-
-
-            if (needFile)
+            using (sharedMem)
             {
-                url = await saveFile(filename, mem).ConfigureAwait(false);
-                files.Add(url);
+                if (needFile)
+                {
+                    url = await saveFile(filename, mem).ConfigureAwait(false);
+                    files.Add(url);
+                }
+                url = await saveLink(url).ConfigureAwait(false);
+                return localPrefix + url;
             }
-            url = await saveLink(url).ConfigureAwait(false);
-            return localPrefix + url;
         }
 
 

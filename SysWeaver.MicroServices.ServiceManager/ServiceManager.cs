@@ -113,8 +113,8 @@ namespace SysWeaver.MicroService
 
         public ConfigEntry[] ReadManifest(String file = null)
         {
-            var text = File.ReadAllText(file ?? ManifestFileName);
-            ServiceManifest[] mf = JsonSerializer.Deserialize<ServiceManifest[]>(text, DeSerOpt);
+            using var text = FileReadOnlyMemory.Read(file ?? ManifestFileName);
+            ServiceManifest[] mf = JsonSerializer.Deserialize<ServiceManifest[]>(text.Memory.Span, DeSerOpt);
             var l = mf.Length;
             var config = new ConfigEntry[l];
             var optType = typeof(ConfigEntryOP<>);
@@ -667,7 +667,7 @@ namespace SysWeaver.MicroService
                 String text;
                 try
                 {
-                    text = File.ReadAllText(file);
+                    text = FileExt.ReadText(file);
                 }
                 catch (Exception ex)
                 {

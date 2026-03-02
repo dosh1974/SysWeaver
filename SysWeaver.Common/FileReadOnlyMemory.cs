@@ -28,8 +28,70 @@ namespace SysWeaver
         /// <param name="filename">The name of the file to map</param>
         /// <returns>The content of the file</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueTask<IUnmanagedReadOnlyMemory<Byte>> ReadAllBytesAsync(string filename)
+        public static ValueTask<Byte[]> ReadAllBytesAsync(string filename)
             => ReadAllBytesAsync(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
+
+
+        /// <summary>
+        /// Get the content of a file as memory, the file is not read, just mapped into the process.
+        /// If memory mapped IO doesn't work the file is read to memory.
+        /// This is the safest method to use.
+        /// </summary>
+        /// <param name="filename">The name of the file to map</param>
+        /// <returns>The content of the file</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Byte[] ReadAllBytes(string filename)
+            => ReadAllBytes(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
+
+
+        /// <summary>
+        /// Get the content of a file using memory mapped io if possible
+        /// If memory mapped IO doesn't work the file is read to memory in a traditional fashion
+        /// This is the safest method to use.
+        /// </summary>
+        /// <param name="fileStream">The file stream, must be open for reading</param>
+        /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
+        /// <returns>The content of the file</returns>
+        public static async ValueTask<Byte[]> ReadAllBytesAsync(FileStream fileStream, bool leaveOpen = false)
+        {
+            using var p = await ReadAsync(fileStream, leaveOpen).ConfigureAwait(false);
+            var s = p.Memory.Span;
+            var len = s.Length;
+            var dest = GC.AllocateUninitializedArray<Byte>(len);
+            s.CopyTo(dest);
+            return dest;
+        }
+
+
+        /// <summary>
+        /// Get the content of a file using memory mapped io if possible
+        /// If memory mapped IO doesn't work the file is read to memory in a traditional fashion
+        /// This is the safest method to use.
+        /// </summary>
+        /// <param name="fileStream">The file stream, must be open for reading</param>
+        /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
+        /// <returns>The content of the file</returns>
+        public static Byte[] ReadAllBytes(FileStream fileStream, bool leaveOpen = false)
+        {
+            using var p = Read(fileStream, leaveOpen);
+            var s = p.Memory.Span;
+            var len = s.Length;
+            var dest = GC.AllocateUninitializedArray<Byte>(len);
+            s.CopyTo(dest);
+            return dest;
+        }
+
+
+        /// <summary>
+        /// Get the content of a file as memory, the file is not read, just mapped into the process.
+        /// If memory mapped IO doesn't work the file is read to memory.
+        /// This is the safest method to use.
+        /// </summary>
+        /// <param name="filename">The name of the file to map</param>
+        /// <returns>The content of the file</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueTask<IUnmanagedReadOnlyMemory<Byte>> ReadAsync(string filename)
+            => ReadAsync(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
 
 
         /// <summary>
@@ -40,11 +102,11 @@ namespace SysWeaver
         /// <param name="fileStream">The file stream, must be open for reading</param>
         /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
         /// <returns>The content of the file</returns>
-        public static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> ReadAllBytesAsync(FileStream fileStream, bool leaveOpen = false)
+        public static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> ReadAsync(FileStream fileStream, bool leaveOpen = false)
         {
             try
             {
-                if (TryMap<Byte>(out var mem, fileStream))
+                if (TryMap<Byte>(out var mem, fileStream, leaveOpen))
                 {
                     fileStream = null;
                     return mem;
@@ -58,7 +120,10 @@ namespace SysWeaver
                 if (!leaveOpen)
                     fileStream?.Dispose();
             }
-            return UnmanagedMemory.Create(await fileStream.ReadAllMemoryAsync().ConfigureAwait(false));
+            using var x = leaveOpen ? null : fileStream;
+            using var ms = new ArrayPoolStream();
+            await fileStream.CopyToAsync(ms).ConfigureAwait(false);
+            return ms.GetMemory();
         }
 
 
@@ -71,8 +136,8 @@ namespace SysWeaver
         /// <param name="filename">The name of the file to map</param>
         /// <returns>The content of the file</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static IUnmanagedReadOnlyMemory<Byte> ReadAllBytes(string filename)
-            => ReadAllBytes(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
+        public static IUnmanagedReadOnlyMemory<Byte> Read(string filename)
+            => Read(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
 
 
         /// <summary>
@@ -83,11 +148,11 @@ namespace SysWeaver
         /// <param name="fileStream">The file stream, must be open for reading</param>
         /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
         /// <returns>The content of the file</returns>
-        public static IUnmanagedReadOnlyMemory<Byte> ReadAllBytes(FileStream fileStream, bool leaveOpen = false)
+        public static IUnmanagedReadOnlyMemory<Byte> Read(FileStream fileStream, bool leaveOpen = false)
         {
             try
             {
-                if (TryMap<Byte>(out var mem, fileStream))
+                if (TryMap<Byte>(out var mem, fileStream, leaveOpen))
                 {
                     fileStream = null;
                     return mem;
@@ -101,8 +166,15 @@ namespace SysWeaver
                 if (!leaveOpen)
                     fileStream?.Dispose();
             }
-            return UnmanagedMemory.Create(fileStream.ReadAllMemory());
+            using var x = leaveOpen ? null : fileStream;
+            using var ms = new ArrayPoolStream();
+            fileStream.CopyTo(ms);
+            return ms.GetMemory();
         }
+
+
+
+
 
 
         /// <summary>
@@ -152,33 +224,37 @@ namespace SysWeaver
         /// The length of the file may not be larger than int.MaxValue (2GB), in that case an exception is thrown.
         /// </summary>
         /// <param name="fileStream">The file stream, must be open for reading</param>
+        /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
         /// <returns>The content of the file</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static IUnmanagedReadOnlyMemory<Byte> Map(FileStream fileStream)
-            => Map<Byte>(fileStream);
+        public static IUnmanagedReadOnlyMemory<Byte> Map(FileStream fileStream, bool leaveOpen = false)
+            => Map<Byte>(fileStream, leaveOpen);
 
         /// <summary>
         /// Get the content of a file as memory, the file is not read, just mapped into the process.
         /// The length of the file may not be larger than int.MaxValue (2GB), in that case an exception is thrown.
         /// </summary>
         /// <param name="fileStream">The file stream, must be open for reading</param>
+        /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
         /// <returns>The content of the file</returns>
-        public static IUnmanagedReadOnlyMemory<T> Map<T>(FileStream fileStream) where T : unmanaged
+        public static IUnmanagedReadOnlyMemory<T> Map<T>(FileStream fileStream, bool leaveOpen = false) where T : unmanaged
         {
             try
             {
-                var l = fileStream.Length;
+                var pos = fileStream.Position;
+                var l = fileStream.Length - pos;
                 if (l > int.MaxValue)
                     throw new Exception("File to large for mapping!");
                 if (l <= 0)
                     return UnmanagedMemory<T>.EmptyReadOnlyMemory;
-                var ret = new MappedFileMemoryHandler<T>(fileStream, (int)l);
+                var ret = new MappedFileMemoryHandler<T>(fileStream, (int)l, pos, leaveOpen);
                 fileStream = null;
                 return ret;
             }
             finally
             {
-                fileStream?.Dispose();
+                if (!leaveOpen)
+                    fileStream?.Dispose();
             }
         }
 
@@ -206,7 +282,8 @@ namespace SysWeaver
         {
             try
             {
-                var l = fileStream.Length;
+                var pos = fileStream.Position;
+                var l = fileStream.Length - pos;
                 if (l > maxLength)
                 {
                     mem = null;
@@ -217,7 +294,7 @@ namespace SysWeaver
                     mem = UnmanagedMemory<T>.EmptyReadOnlyMemory;
                     return true;
                 }
-                mem = new MappedFileMemoryHandler<T>(fileStream, (int)l);
+                mem = new MappedFileMemoryHandler<T>(fileStream, (int)l, pos);
                 fileStream = null;
                 return true;
             }
@@ -249,12 +326,12 @@ namespace SysWeaver
             /// Create a new UnmanagedMemoryManager instance at the given pointer and size
             /// </summary>
             /// <remarks>It is assumed that the span provided is already unmanaged or externally pinned</remarks>
-            public MappedFileMemoryHandler(FileStream fs, int l)
+            public MappedFileMemoryHandler(FileStream fs, int byteSize, long pos = 0, bool leaveOpen = false)
             {
-                var file = MemoryMappedFile.CreateFromFile(fs, null, 0, MemoryMappedFileAccess.Read, HandleInheritability.None, false);
+                var file = MemoryMappedFile.CreateFromFile(fs, null, 0, MemoryMappedFileAccess.Read, HandleInheritability.None, leaveOpen);
                 try
                 {
-                    var view = file.CreateViewAccessor(0, 0, MemoryMappedFileAccess.Read);
+                    var view = file.CreateViewAccessor(pos, byteSize, MemoryMappedFileAccess.Read);
                     try
                     {
                         byte* ptr = (byte*)0;
@@ -264,8 +341,10 @@ namespace SysWeaver
                         V = view;
                         H = h;
                         _pointer = (T*)ptr;
-                        _length = (int)l / Marshal.SizeOf<T>();
+                        _length = (int)byteSize / Marshal.SizeOf<T>();
                         ReadOnlyMemory = Memory;
+                        if (leaveOpen)
+                            fs.Position = pos + byteSize;
                     }
                     catch
                     {

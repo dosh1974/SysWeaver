@@ -535,11 +535,11 @@ namespace SysWeaver.MicroService
         {
             if (!Validate(out var fi, out var mime, out var compType, out var isLink, out var scope, context, url, markAsAccessed))
                 return null;
-            var data = await FileReadOnlyMemory.ReadAllBytesAsync(fi.FullName).ConfigureAwait(false);
+            var data = await FileReadOnlyMemory.ReadAsync(fi.FullName).ConfigureAwait(false);
             if (compType != null)
             {
                 using (var _ = data)
-                    data = UnmanagedMemory.Create(compType.GetDecompressed(data.Memory.Span));
+                    data = compType.GetUnmanagedDecompressed(data.Memory.Span);
             }
             return data;                
         }
@@ -1172,11 +1172,11 @@ namespace SysWeaver.MicroService
         UserStorageLink InternalLoadLink(String filename)
         {
             using var _ = PerfMon.Track(nameof(InternalLoadLink));
-            using var d = FileReadOnlyMemory.ReadAllBytes(filename);
+            using var d = FileReadOnlyMemory.Read(filename);
             if (!filename.FastEndsWith(CompExt))
                 return Ser.Create<UserStorageLink>(d.Memory);
-            var e = Comp.GetDecompressed(d.Memory.Span);
-            return Ser.Create<UserStorageLink>(e);
+            using var e = Comp.GetUnmanagedDecompressed(d.Memory.Span);
+            return Ser.Create<UserStorageLink>(e.Memory);
         }
 
     }

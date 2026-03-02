@@ -104,7 +104,8 @@ namespace SysWeaver.MicroService
                 }
                 try
                 {
-                    var data = await s.ReadAllMemoryAsync().ConfigureAwait(false);
+                    using var dataMem = await s.ReadAllUnmanagedMemoryAsync().ConfigureAwait(false);
+                    var data = dataMem.Memory;
                     if (decoder != null)
                         data = decoder.GetDecompressed(data.Span);
                     var text = Encoding.UTF8.GetString(data.Span);

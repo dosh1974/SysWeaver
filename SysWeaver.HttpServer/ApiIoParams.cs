@@ -256,9 +256,12 @@ namespace SysWeaver.Net
             var data = FromText(text, i);
             var comp = z.Item1;
             if (comp != null)
-                data = comp.GetDecompressed(data.Span);
-            var vd = ser.Create<T>(data);
-            return vd;
+            {
+                using var dd = comp.GetUnmanagedDecompressed(data.Span);
+                return ser.Create<T>(dd.Memory);
+
+            }
+            return ser.Create<T>(data);
         }
 
         T GetText<T>(String text, IDeserializer ser)

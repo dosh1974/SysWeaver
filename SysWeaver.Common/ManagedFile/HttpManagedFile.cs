@@ -13,7 +13,7 @@ namespace SysWeaver
     sealed class HttpManagedFile : IManagedFileSource
     {
 
-        public HttpManagedFile(ManagedFile manager, String url, ManagedFileParams p, Func<ManagedFileData, Exception, Task> onChange, Func<Byte[], Byte[]> computeHash)
+        public HttpManagedFile(ManagedFile manager, String url, ManagedFileParams p, Func<ManagedFileData, Exception, Task> onChange, Func<ReadOnlyMemory<Byte>, Byte[]> computeHash)
         {
             Manager = manager;
             P = p;
@@ -32,7 +32,7 @@ namespace SysWeaver
         readonly ManagedFileParams P;
         readonly String FileUrl;
 
-        readonly Func<Byte[], Byte[]> ConputeHash;
+        readonly Func<ReadOnlyMemory<Byte>, Byte[]> ConputeHash;
 
         HttpClient C;
 

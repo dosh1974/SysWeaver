@@ -19,9 +19,9 @@ namespace SysWeaver.Security
 
         static String GetFirstLine(String filename)
         {
-            foreach (var l in File.ReadAllLines(filename))
+            foreach (var l in FileExt.ReadLines(filename, null, true, true))
             {
-                var t = l.Trim();
+                var t = l;
                 var i = t.IndexOf('#');
                 if (i >= 0)
                     t = t.Substring(0, i).TrimEnd();

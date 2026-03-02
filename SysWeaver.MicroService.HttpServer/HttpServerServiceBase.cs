@@ -101,7 +101,7 @@ namespace SysWeaver.MicroService
             var fn = GetConfigFilename(config);
             if (fn == null)
                 return null;
-            return await File.ReadAllBytesAsync(fn).ConfigureAwait(false);
+            return await FileExt.ReadBytesAsync(fn).ConfigureAwait(false);
         }
 
         /// <summary>

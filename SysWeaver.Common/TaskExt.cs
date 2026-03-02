@@ -183,6 +183,10 @@ namespace SysWeaver
         /// </summary>
         public static readonly ValueTask<ReadOnlyMemory<Byte>> ReadonlyMemoryValueTask = ValueTask.FromResult(ReadOnlyMemory<Byte>.Empty);
 
+        /// <summary>
+        /// A complete task for an empty read only memory buffer
+        /// </summary>
+        public static readonly ValueTask<Memory<Byte>> MemoryValueTask = ValueTask.FromResult(Memory<Byte>.Empty);
 
         /// <summary>
         /// Task that delays a small random amount

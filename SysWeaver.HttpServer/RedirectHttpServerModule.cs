@@ -150,15 +150,15 @@ namespace SysWeaver.Net
                     return;
                 }
                 var valid = ValidCodes;
-                var lines = File.ReadAllLines(filename);
+                var lines = FileExt.ReadLines(filename, null, true, true);
                 int rowNumber = 0;
                 foreach (var line in lines)
                 {
                     ++rowNumber;
-                    var row = line?.Trim();
-                    var ci = row.IndexOf('#');
+                    var ci = line.IndexOf('#');
                     if (ci == 0)
                         continue;
+                    var row = line;
                     if (ci > 0)
                         row = row.Substring(0, ci).TrimEnd();
                     var rl = row.Length;

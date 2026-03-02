@@ -13,14 +13,14 @@ namespace SysWeaver
         /// Read UTF8 data from a buffer and remove any preamble
         /// </summary>
         /// <param name="data"></param>
-        /// <param name="offset"></param>
-        /// <param name="length"></param>
         /// <returns></returns>
-        public static String GetUtf8StringWithoutPreamble(ReadOnlySpan<Byte> data, int offset, int length)
+        public static String GetUtf8StringWithoutPreamble(ReadOnlySpan<Byte> data)
         {
             var encoding = Encoding.UTF8;
             var preamble = encoding.GetPreamble();
             var plen = preamble?.Length ?? 0;
+            int offset = 0;
+            int length = data.Length;
             if ((plen > 0) && (length >= plen) && data.Slice(offset, plen).SequenceEqual(preamble.AsSpan()))
             {
                 offset += plen;
@@ -43,8 +43,8 @@ namespace SysWeaver
         /// <returns>The string</returns>
         public static String GetString(String s, Type embeddedResourceType = null, Action onFileChange = null)
             => InternalGet<String>(s,
-                d => File.ReadAllText(d),
-                d => GetUtf8StringWithoutPreamble(d.GetBuffer(), 0, (int)d.Position),
+                d => FileExt.ReadText(d),
+                d => GetUtf8StringWithoutPreamble(d.Span),
                 d => d,
                 embeddedResourceType,
                 onFileChange);
@@ -63,7 +63,7 @@ namespace SysWeaver
         /// <returns>The string</returns>
         public static Byte[] GetByteArray(String s, Type embeddedResourceType = null, Action onFileChange = null)
             => InternalGet<Byte[]>(s,
-                d => File.ReadAllBytes(d),
+                d => FileExt.ReadBytes(d),
                 d => d.ToArray(),
                 TryReadBase64,
                 embeddedResourceType,
@@ -84,9 +84,9 @@ namespace SysWeaver
         /// <returns>The string</returns>
         public static String[] GetLines(String s, Type embeddedResourceType = null, Action onFileChange = null)
             => InternalGet<String[]>(s,
-                d => File.ReadAllLines(d),
-                d => GetLines(GetUtf8StringWithoutPreamble(d.GetBuffer(), 0, (int)d.Position)),
-                GetLines,
+                d => FileExt.ReadLines(d),
+                d => GetLines(GetUtf8StringWithoutPreamble(d.Span)),
+                d => d.GetLines(),
                 embeddedResourceType,
                 onFileChange);
 
@@ -104,21 +104,12 @@ namespace SysWeaver
             }
         }
 
-        static String[] GetLines(String s)
-        {
-            if (String.IsNullOrEmpty(s))
-                return Array.Empty<String>();
-            var lines = s.Split('\n');
-            var lc = lines.Length;
-            for (int i = 0; i < lc; ++i)
-                lines[i] = lines[i].Trim('\r');
-            return lines;
-        }
+
 
         public static TextTemplate GetTemplate(String s, IReadOnlySet<String> vars, Type embeddedResourceType = null, Action onFileChange = null) => new TextTemplate(GetString(s, embeddedResourceType, onFileChange) ?? "", vars, true);
 
 
-        public static T InternalGet<T>(String s, Func<String, T> getFromFile, Func<MemoryStream, T> getFromMemory, Func<String, T> getFromString, Type embeddedResourceType, Action onFileChange) where T : class
+        public static T InternalGet<T>(String s, Func<String, T> getFromFile, Func<ReadOnlyMemory<Byte>, T> getFromMemory, Func<String, T> getFromString, Type embeddedResourceType, Action onFileChange) where T : class
         {
             if (String.IsNullOrEmpty(s))
                 return default;
@@ -132,14 +123,7 @@ namespace SysWeaver
                 {
                     isFile = File.Exists(fn);
                     if (isFile)
-                    {
                         res = getFromFile(fn);
-                        if (res is String)
-                        {
-                            var bb = Encoding.UTF8.GetBytes(res as String);
-                            var t = bb;
-                        }
-                    }
                     if (onFileChange != null)
                     {
                         new ManagedFile(new ManagedFileParams
@@ -179,24 +163,8 @@ namespace SysWeaver
                                 continue;
                             if (String.Equals(t, en, StringComparison.OrdinalIgnoreCase))
                             {
-                                using var ms = new MemoryStream();
-                                using (var stream = asm.GetManifestResourceStream(t))
-                                    stream.CopyTo(ms);
-                                res = getFromMemory(ms);
-                                isEmbedded = true;
-                                break;
-                            }
-                            var exi = t.LastIndexOf('.');
-                            if (exi < 0)
-                                continue;
-                            var comp = CompManager.GetFromExt(t.Substring(exi + 1));
-                            if (comp == null)
-                                continue;
-                            {
-                                using var ms = new MemoryStream();
-                                using (var stream = asm.GetManifestResourceStream(t))
-                                    comp.Decompress(stream, ms);
-                                res = getFromMemory(ms);
+                                var mem = asm.GetUncompressedResourceData(t);
+                                res = getFromMemory(mem);
                                 isEmbedded = true;
                                 break;
                             }
@@ -210,24 +178,8 @@ namespace SysWeaver
                                     continue;
                                 if (String.Equals(t, en, StringComparison.OrdinalIgnoreCase))
                                 {
-                                    using var ms = new MemoryStream();
-                                    using (var stream = asm.GetManifestResourceStream(t))
-                                        stream.CopyTo(ms);
-                                    res = getFromMemory(ms);
-                                    isEmbedded = true;
-                                    break;
-                                }
-                                var exi = t.LastIndexOf('.');
-                                if (exi < 0)
-                                    continue;
-                                var comp = CompManager.GetFromExt(t.Substring(exi + 1));
-                                if (comp == null)
-                                    continue;
-                                {
-                                    using var ms = new MemoryStream();
-                                    using (var stream = asm.GetManifestResourceStream(t))
-                                        comp.Decompress(stream, ms);
-                                    res = getFromMemory(ms);
+                                    var mem = asm.GetUncompressedResourceData(t);
+                                    res = getFromMemory(mem);
                                     isEmbedded = true;
                                     break;
                                 }

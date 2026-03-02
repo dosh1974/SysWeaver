@@ -2,6 +2,7 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using AutoMapper;
+using SysWeaver;
 
 namespace FastText.NetWrapper;
 
@@ -336,7 +337,7 @@ internal class DebugArgs
     internal static DebugArgs Load(string path)
     {
         var result = new DebugArgs();
-        var lines = File.ReadAllLines(path);
+        var lines = FileExt.ReadLines(path);
         int idx = -1;
             
         if (lines[++idx] != "= eargs")

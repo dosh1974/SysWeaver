@@ -3,7 +3,9 @@ using System.Buffers;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace SysWeaver
 {
@@ -17,7 +19,22 @@ namespace SysWeaver
         /// </summary>
         /// <param name="bytes">The data</param>
         /// <returns>A hexadecimal string</returns>
-        public static String ToHex(this ReadOnlyMemory<Byte> bytes) => String.Create(bytes.Length * 2, bytes, WriteHexAction);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static String ToHex(this ReadOnlyMemory<Byte> bytes) 
+            => String.Create(bytes.Length * 2, bytes, WriteHexAction);
+
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="bytes">The data</param>
+        /// <param name="encoding">The text encoding, defaults to UTF8</param>
+        /// <param name="trim">True to trim whitespaces from every line</param>
+        /// <param name="removeEmpty">True to remove empty lines</param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static String[] ToStringArray(this ReadOnlySpan<Byte> bytes, Encoding encoding = null, bool trim = false, bool removeEmpty = false)
+            => (encoding ?? Encoding.UTF8).GetString(bytes).GetLines(trim, removeEmpty);
 
 
         static readonly Char[] ToHexDigits = "0123456789abcdef".ToCharArray();
@@ -73,6 +90,7 @@ namespace SysWeaver
                 return 0;
             }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool Equals(ReadOnlyMemory<T> x, ReadOnlyMemory<T> y)
                 => x.Span.SequenceEqual(y.Span);
 
@@ -88,8 +106,11 @@ namespace SysWeaver
 
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IComparer<ReadOnlyMemory<T>> GetComparer<T>() => Cmp<T>.Instance;
-        
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEqualityComparer<ReadOnlyMemory<T>> GetEqualityComparer<T>() => Cmp<T>.Instance;
 
     }
@@ -121,6 +142,7 @@ namespace SysWeaver
                 return 0;
             }
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool Equals(Memory<T> x, Memory<T> y)
                 => x.Span.SequenceEqual(y.Span);
 
@@ -136,8 +158,11 @@ namespace SysWeaver
 
 
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IComparer<Memory<T>> GetComparer<T>() => Cmp<T>.Instance;
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEqualityComparer<Memory<T>> GetEqualityComparer<T>() => Cmp<T>.Instance;
 
     }

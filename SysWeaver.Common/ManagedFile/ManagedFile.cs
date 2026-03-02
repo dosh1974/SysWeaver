@@ -127,14 +127,14 @@ namespace SysWeaver
             InternalData = null;
         }
 
-        public static bool TryAddSchema(String schema, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Exception, Task>, Func<Byte[], Byte[]>, IManagedFileSource> sourceCreator)
+        public static bool TryAddSchema(String schema, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Exception, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource> sourceCreator)
         {
             var s = SourceSchemaCreator;
             lock (s)
                 return s.TryAdd(schema, sourceCreator);
         }
 
-        public static bool TryRemoveSchema(String schema, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Exception, Task>, Func<Byte[], Byte[]>, IManagedFileSource> sourceCreator)
+        public static bool TryRemoveSchema(String schema, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Exception, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource> sourceCreator)
         {
             var s = SourceSchemaCreator;
             lock (s)
@@ -149,14 +149,14 @@ namespace SysWeaver
 
         static ManagedFile()
         {
-            var s = new ConcurrentDictionary<string, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Exception, Task>, Func<byte[], byte[]>, IManagedFileSource>>(StringComparer.Ordinal);
+            var s = new ConcurrentDictionary<string, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Exception, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource>>(StringComparer.Ordinal);
             SourceSchemaCreator = s;
             s.TryAdd("file", (m, l, p, t, h) => new DiscManagedFile(m, l, p, t, h));
             s.TryAdd("http", (m, l, p, t, h) => new HttpManagedFile(m, l, p, t, h));
             s.TryAdd("https", (m, l, p, t, h) => new HttpManagedFile(m, l, p, t, h));
         }
 
-        static readonly ConcurrentDictionary<String, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Exception, Task>, Func<Byte[], Byte[]>, IManagedFileSource>> SourceSchemaCreator; 
+        static readonly ConcurrentDictionary<String, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Exception, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource>> SourceSchemaCreator; 
 
         IManagedFileSource GetSource(ManagedFileParams p)
         {
@@ -171,8 +171,8 @@ namespace SysWeaver
             throw new Exception("Unsupported schema " + schema.ToQuoted());
         }
 
-        static readonly Func<Byte[], Byte[]> Hash = MD5.HashData;
-        static readonly Func<Byte[], Byte[]> NoHash = x => null;
+        static readonly Func<ReadOnlyMemory<Byte>, Byte[]> Hash = m => MD5.HashData(m.Span);
+        static readonly Func<ReadOnlyMemory<Byte>, Byte[]> NoHash = x => null;
 
         readonly bool HashCheck;
         readonly Func<ManagedFileData, Task> A;

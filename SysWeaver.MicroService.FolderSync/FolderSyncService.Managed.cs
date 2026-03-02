@@ -962,11 +962,11 @@ namespace SysWeaver.MicroService
                     }
                     if (File.Exists(mn))
                     {
-                        var t = File.ReadAllLines(mn);
+                        var t = FileExt.ReadLines(mn, null, true, true);
                         int lineIndex = 0;
                         foreach (var x in t)
                         {
-                            var line = x.Trim();
+                            var line = x;
                             var key = line.SplitFirst(':', out var value).TrimEnd().FastToLower();
                             if (mp.TryGetValue(key, out var fnx))
                             {
@@ -1044,7 +1044,7 @@ namespace SysWeaver.MicroService
             if (!ff.StartsWith(fname))
                 throw new Exception("Invalid folder version name");
             var name = Path.Combine(parent, ff, ManifestName);
-            return await File.ReadAllBytesAsync(name).ConfigureAwait(false);
+            return await FileExt.ReadBytesAsync(name).ConfigureAwait(false);
         }
 
         #endregion// Push folder

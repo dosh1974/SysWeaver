@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using SysWeaver;
 
 namespace FastText.NetWrapper;
 
@@ -185,7 +186,7 @@ public class TestResult
         var result = new TestResult {GlobalMetrics = new Metrics(), LabelMetrics = new Dictionary<string, Metrics>()};
         var curve = new List<(double, double)>();
             
-        var lines = File.ReadAllLines(path);
+        var lines = FileExt.ReadLines(path);
         for (int i = 0; i < lines.Length; i++)
         {
             string line = lines[i];

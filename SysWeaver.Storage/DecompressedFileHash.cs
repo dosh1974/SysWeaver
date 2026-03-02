@@ -34,7 +34,7 @@ namespace SysWeaver
                 var ci = new FileInfo(fn);
                 if (ci.Exists)
                 {
-                    var s = File.ReadAllText(fn, Encoding.ASCII);
+                    var s = FileExt.ReadText(fn, Encoding.ASCII);
                     if (s.Length == 26)
                     {
                         ci.LastAccessTimeUtc = DateTime.UtcNow;
@@ -98,7 +98,7 @@ namespace SysWeaver
                 var ci = new FileInfo(fn);
                 if (ci.Exists)
                 {
-                    var s = await File.ReadAllTextAsync(fn, Encoding.ASCII).ConfigureAwait(false);
+                    var s = await FileExt.ReadTextAsync(fn, Encoding.ASCII).ConfigureAwait(false);
                     if (s.Length == 26)
                     {
                         ci.LastAccessTimeUtc = DateTime.UtcNow;

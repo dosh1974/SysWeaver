@@ -65,8 +65,8 @@ namespace SysWeaver.MicroService
 
         public static String FromBlob(Byte[] data)
         {
-            var d = BlobComp.GetDecompressed(data);
-            var s = Enc.GetString(d.Span);
+            using var d = BlobComp.GetUnmanagedDecompressed(data);
+            var s = Enc.GetString(d.Memory.Span);
             return s;
         }
 

@@ -623,7 +623,8 @@ namespace SysWeaver
         
         static String[] DecodeFileArray(ReadOnlySpan<Byte> data)
         {
-            var d = HeaderComp.GetDecompressed(data);
+            using var dMem = HeaderComp.GetUnmanagedDecompressed(data);
+            var d = dMem.Memory;
             var str = Encoding.UTF8.GetString(d.Span);
             var files = str.Split('\t');
             var l = files.Length;
@@ -783,9 +784,12 @@ namespace SysWeaver
             }
             if (getExpandedSize)
             {
-                using var d = FileReadOnlyMemory.ReadAllBytes(fi.FullName);
+                using var d = FileReadOnlyMemory.Read(fi.FullName);
                 if (d != null)
-                    expandedSize = props.Comp.GetDecompressed(d.Memory.Span).Length;
+                {
+                    using var dMem = props.Comp.GetUnmanagedDecompressed(d.Memory.Span);
+                    expandedSize = dMem.Memory.Length;
+                }
             }
             return l;
         }
@@ -910,8 +914,9 @@ namespace SysWeaver
                     Interlocked.Add(ref compSize, size);
                     if (getUncompressedStats)
                     {
-                        using var mem = await FileReadOnlyMemory.ReadAllBytesAsync(file).ConfigureAwait(false);
-                        long uncompSize = comp.GetDecompressed(mem.Memory.Span).Length;
+                        using var mem = await FileReadOnlyMemory.ReadAsync(file).ConfigureAwait(false);
+                        using var dMem = comp.GetUnmanagedDecompressed(mem.Memory.Span);
+                        long uncompSize = dMem.Memory.Length;
                         Interlocked.Add(ref unCompSize, uncompSize);
                     }
                 }

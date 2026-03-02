@@ -33,7 +33,8 @@ namespace SysWeaver
         /// <param name="quotationChar">The quotation char to use</param>
         /// <returns>A quoted string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String ToQuoted(this String s, Char quotationChar = '"') => s == null ? "null" : String.Join(s, quotationChar, quotationChar);
+        public static String ToQuoted(this String s, Char quotationChar = '"') 
+            => s == null ? "null" : String.Join(s, quotationChar, quotationChar);
 
         /// <summary>
         /// Add quotation chars around a string. Ex: Test => "Test"
@@ -42,7 +43,8 @@ namespace SysWeaver
         /// <param name="quotationChars">The quotation chars to use</param>
         /// <returns>A quoted string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String ToQuoted(this String s, String quotationChars) => s == null ? "null" : String.Join(s, quotationChars, quotationChars);
+        public static String ToQuoted(this String s, String quotationChars) 
+            => s == null ? "null" : String.Join(s, quotationChars, quotationChars);
 
         /// <summary>
         /// Format a string as a filename, typically add quotes
@@ -1053,6 +1055,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The string to filter</param>
         /// <returns>The filtered string</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String FilterUInt(this String value)
             => Filter(value, '0', '9');
 
@@ -1332,6 +1335,59 @@ namespace SysWeaver
             };
             return String.Create(keep + prefix.Length, sa, SecureStartWithStr);
         }
+
+        /// <summary>
+        /// Split a string into lines
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="trim">True to trim whitespaces from every line</param>
+        /// <param name="removeEmpty">True to remove empty lines</param>
+        /// <param name="encoding">optional string encoding to use</param>
+        /// <returns></returns>
+        public static String[] GetLines(ReadOnlySpan<Byte> data, bool trim = false, bool removeEmpty = false, Encoding encoding = null)
+        {
+            if (data.Length <= 0)
+                return Array.Empty<String>();
+            var s = (encoding ?? Encoding.UTF8).GetString(data);
+            var opt = StringSplitOptions.None;
+            if (trim)
+                opt |= StringSplitOptions.TrimEntries;
+            if (removeEmpty)
+                opt |= StringSplitOptions.RemoveEmptyEntries;
+            var lines = s.Split('\n', opt);
+            if (trim)
+                return lines;
+            var lc = lines.Length;
+            for (int i = 0; i < lc; ++i)
+                lines[i] = lines[i].Trim('\r');
+            return lines;
+        }
+
+        /// <summary>
+        /// Split a string into lines
+        /// </summary>
+        /// <param name="s"></param>
+        /// <param name="trim">True to trim whitespaces from every line</param>
+        /// <param name="removeEmpty">True to remove empty lines</param>
+        /// <returns></returns>
+        public static String[] GetLines(this String s, bool trim = false, bool removeEmpty = false)
+        {
+            if (String.IsNullOrEmpty(s))
+                return Array.Empty<String>();
+            var opt = StringSplitOptions.None;
+            if (trim)
+                opt |= StringSplitOptions.TrimEntries;
+            if (removeEmpty)
+                opt |= StringSplitOptions.RemoveEmptyEntries;
+            var lines = s.Split('\n', opt);
+            if (trim)
+                return lines;
+            var lc = lines.Length;
+            for (int i = 0; i < lc; ++i)
+                lines[i] = lines[i].Trim('\r');
+            return lines;
+        }
+
 
     }
 

@@ -412,6 +412,7 @@ namespace SysWeaver.Net
 
         readonly ConcurrentDictionary<String, Tuple<DateTime, TextTemplate, bool>> Templates = new ();
 
+        /*
         TextTemplate GetTextTemplate(out bool isDynamic, FileInfo fi, ICompDecoder decoder, HttpServerRequest context)
         {
             var ts = Templates;
@@ -424,7 +425,7 @@ namespace SysWeaver.Net
                 {
                     String text;
                     if (decoder == null)
-                        text = File.ReadAllText(fn);
+                        text = FileExt.ReadText(fn);
                     else
                     {
                         Memory<Byte> b;
@@ -441,6 +442,7 @@ namespace SysWeaver.Net
             isDynamic = t.Item3;
             return t.Item2;
         }
+        */
 
         /// <summary>
         /// Get the enpoint for a given file (and a virtual enpoint if applicable)

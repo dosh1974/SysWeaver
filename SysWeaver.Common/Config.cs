@@ -282,7 +282,7 @@ namespace SysWeaver
                     }
                     return;
                 }
-                var data = File.ReadAllText(name);
+                var data = FileExt.ReadText(name);
                 var options = new JsonDocumentOptions
                 {
                     AllowTrailingCommas = true,

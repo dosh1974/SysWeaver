@@ -25,15 +25,12 @@ namespace SysWeaver
                 {
                     try
                     {
-                        var lines = File.ReadAllLines(x);
+                        var lines = FileExt.ReadLines(x, null, true, true);
                         foreach (var line in lines)
                         {
-                            var tl = line.Trim();
-                            if (tl.Length <= 0)
+                            if (line[0] == '#')
                                 continue;
-                            if (tl[0] == '#')
-                                continue;
-                            tl = tl.SplitFirst('#');
+                            var tl = line.SplitFirst('#');
                             tl = tl.SplitFirst('=', out var value);
                             if (value == null)
                                 continue;

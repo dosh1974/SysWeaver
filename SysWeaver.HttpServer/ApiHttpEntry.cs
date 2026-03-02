@@ -710,7 +710,7 @@ namespace SysWeaver.Net
 
         public ValueTask<ReadOnlyMemory<Byte>> InvokeAsync(HttpServerRequest request, ReadOnlyMemory<Byte> data)
         {
-            request.Custom = data;
+            request.Custom = UnmanagedMemory.Create(data);
             return PostAsync.Run(this, request);
         }
 
@@ -754,8 +754,9 @@ namespace SysWeaver.Net
             var accept = request.GetReqHeader("Accept");
             if ((request.HttpMethod != HttpServerMethods.POST) || (!HaveArgs))
                 return String.Join('\r', request.Url, accept);
-            var mem = await Input_POST_Read(this, request).ConfigureAwait(false);
-            request.Custom = mem;
+            using var memP = await Input_POST_Read(this, request).ConfigureAwait(false);
+            var mem = memP.Memory;
+            request.Custom = memP;
             if (mem.Length > 4096)
                 return HttpServerTools.PreventCacheKey;
             var ce = request.GetReqHeader("Content-Encoding");
@@ -828,59 +829,68 @@ namespace SysWeaver.Net
         }
 
 
-        static async ValueTask<ReadOnlyMemory<Byte>> Input_POST_Read(ApiHttpEntry api, HttpServerRequest request)
+        static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> Input_POST_Read(ApiHttpEntry api, HttpServerRequest request)
         {
-            using var ms = new MemoryStream((int)request.ReqContentLength + 1024);
+            using var ms = new ArrayPoolStream((int)request.ReqContentLength + 1024);
             await request.InputStream.CopyToAsync(ms).ConfigureAwait(false);
-            return new ReadOnlyMemory<Byte>(ms.GetBuffer(), 0, (int)ms.Length);
+            return ms.GetMemory();
         }
 
 
         static async ValueTask<T> Input_POST<T>(ApiHttpEntry api, HttpServerRequest request)
         {
-            ReadOnlyMemory<Byte> data = null;
+            IUnmanagedReadOnlyMemory<Byte> dataMem = null;
             var c = request.Custom;
             if (c != null)
             {
-                data = (ReadOnlyMemory<Byte>)c;
+                dataMem = (IUnmanagedReadOnlyMemory<Byte>)c;
             }else
             {
-                using var ms = new MemoryStream((int)request.ReqContentLength + 1024);
+                using var ms = new ArrayPoolStream((int)request.ReqContentLength + 1024);
                 await request.InputStream.CopyToAsync(ms).ConfigureAwait(false);
-                data = new ReadOnlyMemory<Byte>(ms.GetBuffer(), 0, (int)ms.Length);
+                dataMem = ms.GetMemory();
             }
-            if (data.Length <= 0)
-                return default(T);
-            //  Decompress data
-            var ce = request.GetReqHeader("Content-Encoding");
-            if (!String.IsNullOrEmpty(ce))
+            using (dataMem)
             {
-                var comp = CompManager.GetFromHttp(ce);
-                if (comp == null)
-                    throw new Exception("Don't know how to decompress \"" + ce + "\"!");
-                data = comp.GetDecompressed(data.Span);
+                var data = dataMem.Memory;
+                if (data.Length <= 0)
+                    return default;
+                //  Decompress data
+                var ce = request.GetReqHeader("Content-Encoding");
+                IUnmanagedReadOnlyMemory<Byte> compMem = null;
+                if (!String.IsNullOrEmpty(ce))
+                {
+                    var comp = CompManager.GetFromHttp(ce);
+                    if (comp == null)
+                        throw new Exception("Don't know how to decompress \"" + ce + "\"!");
+                    compMem = comp.GetUnmanagedDecompressed(data.Span);
+                    data = compMem.Memory;
+                }
+                using (compMem)
+                {
+                    //  Find serializer
+                    var iop = api.IoParams;
+                    var ct = request.GetReqHeader("Content-Type");
+                    var deser = iop.DefaultInput;
+                    if (!String.IsNullOrEmpty(ct))
+                    {
+                        ct = ct.Trim().FastToLower();
+                        if (!iop.InputSerializers.TryGetValue(ct, out deser))
+                            throw new Exception(String.Concat("Don't know how to deserialize using \"", ct, '"'));
+                    }
+                    var encoding = deser.Encoding;
+                    if (encoding != null)
+                    {
+                        // TODO: Validate that text encoding matches?
+                        /*                var renc = request.ReqTextEncoding;
+                                        if (renc.WebName != encoding.WebName)
+                                            throw new Exception("Invalid data encoding \"" + renc.WebName + "\", expected \"" + encoding.WebName + "\"");
+                        */
+                    }
+                    var v = deser.Create<T>(data);
+                    return v;
+                }
             }
-            //  Find serializer
-            var iop = api.IoParams;
-            var ct = request.GetReqHeader("Content-Type");
-            var deser = iop.DefaultInput;
-            if (!String.IsNullOrEmpty(ct))
-            {
-                ct = ct.Trim().FastToLower();
-                if (!iop.InputSerializers.TryGetValue(ct, out deser))
-                    throw new Exception(String.Concat("Don't know how to deserialize using \"", ct, '"'));
-            }
-            var encoding = deser.Encoding;
-            if (encoding != null)
-            {
-                // TODO: Validate that text encoding matches?
-                /*                var renc = request.ReqTextEncoding;
-                                if (renc.WebName != encoding.WebName)
-                                    throw new Exception("Invalid data encoding \"" + renc.WebName + "\", expected \"" + encoding.WebName + "\"");
-                */
-            }
-            var v = deser.Create<T>(data);
-            return v;
         }
         /*
         static async ValueTask<ReadOnlyMemory<Byte>> Input_POST(ApiHttpEntry api, HttpServerRequest request, ISerializerType ser)

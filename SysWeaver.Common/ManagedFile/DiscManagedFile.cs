@@ -8,7 +8,7 @@ namespace SysWeaver
     sealed class DiscManagedFile : IManagedFileSource
     {
 
-        public DiscManagedFile(ManagedFile manager, String filename, ManagedFileParams p, Func<ManagedFileData, Exception, Task> onChange, Func<Byte[], Byte[]> computeHash)
+        public DiscManagedFile(ManagedFile manager, String filename, ManagedFileParams p, Func<ManagedFileData, Exception, Task> onChange, Func<ReadOnlyMemory<Byte>, Byte[]> computeHash)
         {
             Fn = filename;
             ComputeHash = computeHash;
@@ -17,7 +17,7 @@ namespace SysWeaver
             Manager = manager;
         }
         readonly ManagedFile Manager;
-        readonly Func<Byte[], Byte[]> ComputeHash;
+        readonly Func<ReadOnlyMemory<Byte>, Byte[]> ComputeHash;
 
         public async Task<Tuple<ManagedFileData, Exception>> TryGetNow()
         {
@@ -27,7 +27,7 @@ namespace SysWeaver
             try
             {
                 var fi = new FileInfo(f).LastWriteTimeUtc;
-                var b = await File.ReadAllBytesAsync(f).ConfigureAwait(false);
+                var b = await FileExt.ReadBytesAsync(f).ConfigureAwait(false);
                 data = new ManagedFileData(f, b, fi, ComputeHash(b), Manager);
             }
             catch (Exception e)

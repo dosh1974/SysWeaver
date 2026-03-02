@@ -223,7 +223,7 @@ namespace SysWeaver
             {
                 try
                 {
-                    OnData(File.ReadAllLines(filename), invokeFirst);
+                    OnData(FileExt.ReadLines(filename), invokeFirst);
                 }
                 catch (Exception ex)
                 {
@@ -268,7 +268,7 @@ namespace SysWeaver
         {
             try
             {
-                OnData(await File.ReadAllLinesAsync(Name).ConfigureAwait(false));
+                OnData(await FileExt.ReadLinesAsync(Name).ConfigureAwait(false));
             }
             catch (Exception ex)
             {

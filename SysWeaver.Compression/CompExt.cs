@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 namespace SysWeaver.Compression
@@ -9,6 +10,9 @@ namespace SysWeaver.Compression
     {
 
         #region Compression
+
+        const int MaxCompressOverHead = 32;
+        const int InititalGuess = 1024;
 
         /// <summary>
         /// Get compressed data
@@ -20,39 +24,10 @@ namespace SysWeaver.Compression
         /// <returns>The compressed data</returns>
         public static Memory<Byte> GetCompressed(this ICompEncoder c, ReadOnlySpan<Byte> from, CompEncoderLevels level, bool trim = false)
         {
-            var pool = ArrayPool<Byte>.Shared;
-            var bufSize = from.Length + 1024;
-            var mem = pool.Rent(bufSize);
-            try
-            {
-                bufSize = mem.Length;
-                var sm = mem.AsSpan();
-                var s = c.Compress(from, sm, level);
-                long waste = bufSize - s;
-                if ((!trim) || (waste < 2048) || ((waste << 3) < bufSize)) // Allow approx 1/8th the buffer size of waste
-                {
-                    pool = null;
-                    return new Memory<Byte>(mem, 0, s);
-                }
-                var ret = GC.AllocateUninitializedArray<Byte>(s);
-                sm[..s].CopyTo(ret.AsSpan());
-                return ret;
-            }
-            finally
-            {
-                pool?.Return(mem);
-            }
+            var mem = ArrayPoolStream.Pool.Rent(from.Length + MaxCompressOverHead);
+            var s = c.Compress(from, mem, level);
+            return GetMem(mem, s, trim);
 
-            //var temp = new Byte[from.Length + 1024];
-            //var s = c.Compress(from, temp.AsSpan(), level);
-            //return temp.AsMemory()[..s];
-
-
-/*            using (var ms = new MemoryStream(from.Length + 1024))
-            {
-                c.Compress(from, ms, level);
-                return new Memory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
-            }*/
         }
 
         /// <summary>
@@ -65,48 +40,23 @@ namespace SysWeaver.Compression
         /// <returns>The compressed data</returns>
         public static Memory<Byte> GetCompressed(this ICompEncoder c, Stream from, CompEncoderLevels level, bool trim = false)
         {
-            long l = 65536;
+            Byte[] mem = null;
             try
             {
                 if (from.CanSeek)
-                {
-                    var ll = from.Length;
-                    if (ll > 0)
-                    {
-                        l = ll;
-                        var pool = ArrayPool<Byte>.Shared;
-                        var bufSize = l + 1024;
-                        var mem = pool.Rent((int)bufSize);
-                        try
-                        {
-                            bufSize = mem.Length;
-                            var sm = mem.AsSpan();
-                            var s = c.Compress(from, sm, level);
-                            long waste = bufSize - s;
-                            if ((!trim) || (waste < 2048) || ((waste << 3) < bufSize)) // Allow approx 1/8th the buffer size of waste
-                            {
-                                pool = null;
-                                return new Memory<Byte>(mem, 0, s);
-                            }
-                            var ret = GC.AllocateUninitializedArray<Byte>(s);
-                            sm[..s].CopyTo(ret.AsSpan());
-                            return ret;
-                        }
-                        finally
-                        {
-                            pool?.Return(mem);
-                        }
-                    }
-                }
+                    mem = ArrayPoolStream.Pool.Rent((int)from.Length + MaxCompressOverHead);
             }
             catch
             {
             }
-            using (var ms = new MemoryStream((int)l + 1024))
+            if (mem != null)
             {
-                c.Compress(from, ms, level);
-                return new Memory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
+                var s = c.Compress(from, mem, level);
+                return GetMem(mem, s, trim);
             }
+            using var ms = new ArrayPoolStream(InititalGuess);
+            c.Compress(from, ms, level);
+            return GetMem(ms, trim);
         }
 
         /// <summary>
@@ -119,57 +69,42 @@ namespace SysWeaver.Compression
         /// <returns>The compressed data</returns>
         public static async ValueTask<Memory<Byte>> GetCompressedAsync(this ICompEncoder c, Stream from, CompEncoderLevels level, bool trim = false)
         {
-            long l = 65536;
+            Byte[] mem = null;
             try
             {
                 if (from.CanSeek)
-                {
-                    var ll = from.Length;
-                    if (ll > 0)
-                    {
-                        l = ll;
-                        var pool = ArrayPool<Byte>.Shared;
-                        var bufSize = l + 1024;
-                        var mem = pool.Rent((int)bufSize);
-                        try
-                        {
-                            bufSize = mem.Length;
-                            var sm = mem.AsMemory();
-                            var s = await c.CompressAsync(from, sm, level).ConfigureAwait(false);
-                            long waste = bufSize - s;
-                            if ((!trim) || (waste < 2048) || ((waste << 3) < bufSize)) // Allow approx 1/8th the buffer size of waste
-                            {
-                                pool = null;
-                                return sm[..s];
-                            }
-                            var ret = GC.AllocateUninitializedArray<Byte>(s);
-                            sm[..s].CopyTo(ret);
-                            return ret;
-                        }
-                        finally
-                        {
-                            pool?.Return(mem);
-                        }
-                    }
-                }
+                    mem = ArrayPoolStream.Pool.Rent((int)from.Length + MaxCompressOverHead);
             }
             catch
             {
             }
-
-            using (var ms = new MemoryStream((int)l + 1024))
+            if (mem != null)
+            {
+                var s = await c.CompressAsync(from, mem, level).ConfigureAwait(false);
+                return GetMem(mem, s, trim);
+            }
+            using (var ms = new ArrayPoolStream(InititalGuess))
             {
                 await c.CompressAsync(from, ms, level).ConfigureAwait(false);
-                return new Memory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
+                return GetMem(ms, trim);
             }
         }
 
         #endregion//Compression
 
 
-
-
         #region Decompression
+
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static int GetDecompressedSizeEstimate(int len)
+        {
+            len <<= 3;
+            return len < 65536 ? 65536 : len;
+        }
+
+
 
         /// <summary>
         /// Get compressed data
@@ -179,11 +114,9 @@ namespace SysWeaver.Compression
         /// <returns>The decompressed data</returns>
         public static Memory<Byte> GetDecompressed(this ICompDecoder c, ReadOnlySpan<Byte> from)
         {
-            using (var ms = new MemoryStream((from.Length << 1) + 1024))
-            {
-                c.Decompress(from, ms);
-                return new Memory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
-            }
+            using var ms = new ArrayPoolStream(GetDecompressedSizeEstimate(from.Length));
+            c.Decompress(from, ms);
+            return ms.ToArray();
         }
 
         /// <summary>
@@ -202,11 +135,9 @@ namespace SysWeaver.Compression
             catch
             {
             }
-            using (var ms = new MemoryStream((int)(l << 1) + 1024))
-            {
-                c.Decompress(from, ms);
-                return new Memory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
-            }
+            using var ms = new ArrayPoolStream(GetDecompressedSizeEstimate((int)l));
+            c.Decompress(from, ms);
+            return ms.ToArray();
         }
 
         /// <summary>
@@ -225,15 +156,101 @@ namespace SysWeaver.Compression
             catch
             {
             }
-            using (var ms = new MemoryStream((int)(l << 1) + 1024))
-            {
-                await c.DecompressAsync(from, ms).ConfigureAwait(false);
-                return new Memory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
-            }
+            using var ms = new ArrayPoolStream(GetDecompressedSizeEstimate((int)l));
+            await c.DecompressAsync(from, ms).ConfigureAwait(false);
+            return ms.ToArray();
         }
 
         #endregion//Compression
 
+
+        #region Unmanaged memory decompression
+
+        /// <summary>
+        /// Get compressed data
+        /// </summary>
+        /// <param name="c">The compression decoder</param>
+        /// <param name="from">The memory to read compressed data from</param>
+        /// <returns>The decompressed data</returns>
+        public static IUnmanagedReadOnlyMemory<Byte> GetUnmanagedDecompressed(this ICompDecoder c, ReadOnlySpan<Byte> from)
+        {
+            using (var ms = new ArrayPoolStream((from.Length << 1) + 1024))
+            {
+                c.Decompress(from, ms);
+                return ms.GetMemory();
+            }
+        }
+
+        /// <summary>
+        /// Get compressed data
+        /// </summary>
+        /// <param name="c">The compression decoder</param>
+        /// <param name="from">The stream to read the compressed data from</param>
+        /// <returns>The decompressed data</returns>
+        public static IUnmanagedReadOnlyMemory<Byte> GetUnmanagedDecompressed(this ICompDecoder c, Stream from)
+        {
+            long l = 0;
+            try
+            {
+                l = from.CanSeek ? from.Length : 0;
+            }
+            catch
+            {
+            }
+            using (var ms = new ArrayPoolStream((int)(l << 1) + 1024))
+            {
+                c.Decompress(from, ms);
+                return ms.GetMemory();
+            }
+        }
+
+        /// <summary>
+        /// Get compressed data
+        /// </summary>
+        /// <param name="c">The compression decoder</param>
+        /// <param name="from">The stream to read the compressed data from</param>
+        /// <returns>The decompressed data</returns>
+        public static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> GetUnmanagedDecompressedAsync(this ICompDecoder c, Stream from)
+        {
+            long l = 0;
+            try
+            {
+                l = from.CanSeek ? from.Length : 0;
+            }
+            catch
+            {
+            }
+            using (var ms = new ArrayPoolStream((int)(l << 1) + 1024))
+            {
+                await c.DecompressAsync(from, ms).ConfigureAwait(false);
+                return ms.GetMemory();
+            }
+        }
+
+        #endregion//Unmanaged memory decompression
+
+
+        /*
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                static Memory<Byte> GetMem(ArrayPoolStream ms, bool trim)
+                    => ms.ToArray();
+        */
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static Memory<Byte> GetMem(ArrayPoolStream ms, bool trim)
+            => GetMem(ms.Data, (int)ms.Length, trim);
+
+        static Memory<Byte> GetMem(Byte[] mem, int s, bool trim)
+        {
+            var bufSize = mem.Length;
+            long waste = bufSize - s;
+            if ((!trim) || (waste < 1024) || ((waste << 3) < bufSize)) // Allow approx 1/8th the buffer size of waste to avoid a memory copy
+                return new Memory<Byte>(mem, 0, s);
+            var ret = GC.AllocateUninitializedArray<Byte>(s);
+            mem.AsSpan()[..s].CopyTo(ret.AsSpan());
+            ArrayPoolStream.Pool.Return(mem);
+            return ret;
+        }
 
 
     }

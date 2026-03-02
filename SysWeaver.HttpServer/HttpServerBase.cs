@@ -1187,29 +1187,38 @@ namespace SysWeaver.Net
                         if (textTemplate != null)
                         {
                             var ds = i.Stream;
-                            var fileData = ds != null ? await ds.ReadAllMemoryAsync(true).ConfigureAwait(false) : i.Mem;
+                            using var dsMem = ds != null ? await ds.ReadAllUnmanagedMemoryAsync(true).ConfigureAwait(false) : null;
+                            var fileData = dsMem?.Memory ?? i.Mem;
                             var preDecData = fileData;
+                            IUnmanagedReadOnlyMemory<Byte> compMem = null;
                             if (dec != null)
-                                fileData = dec.GetDecompressed(fileData.Span);
-                            var text = Encoding.UTF8.GetString(fileData.Span);
-                            if (isLanguageTemplate)
                             {
-                                langTemplate = langTemplateBuilder(text, haveTranslator, false); // TODO: Build 2 templates ans use different depending on allowing browser translation
-                                text = langTemplate.Text;
+                                compMem = dec.GetUnmanagedDecompressed(fileData.Span);
+                                fileData = compMem.Memory;
                             }
-                            cachedTemplate = new TextTemplate(text, "${", "}");
-                            if (cachedTemplate.HaveVars)
+                            using (compMem)
                             {
-                                isDynamicTemplate = IsDynamic(cachedTemplate);
-                                vars = vars ?? GetVars(isDynamicTemplate || isLanguageTemplate, data);
-                                langVars = langVars ?? (langTemplate == null ? null : await langTemplate.LangVars.GetOrUpdateValueAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false));
-                                dec = null;
-                                textTemplate.Set(cachedTemplate, isDynamicTemplate, etag, langTemplate, lang);
-                                i.ChangeMem(ApplyTemplate(cachedTemplate, vars, langVars));
-                            }else
-                            {
-                                textTemplate.Set(null, false, etag, null, null);
-                                i.ChangeMem(preDecData);
+                                var text = Encoding.UTF8.GetString(fileData.Span);
+                                if (isLanguageTemplate)
+                                {
+                                    langTemplate = langTemplateBuilder(text, haveTranslator, false); // TODO: Build 2 templates ans use different depending on allowing browser translation
+                                    text = langTemplate.Text;
+                                }
+                                cachedTemplate = new TextTemplate(text, "${", "}");
+                                if (cachedTemplate.HaveVars)
+                                {
+                                    isDynamicTemplate = IsDynamic(cachedTemplate);
+                                    vars = vars ?? GetVars(isDynamicTemplate || isLanguageTemplate, data);
+                                    langVars = langVars ?? (langTemplate == null ? null : await langTemplate.LangVars.GetOrUpdateValueAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false));
+                                    dec = null;
+                                    textTemplate.Set(cachedTemplate, isDynamicTemplate, etag, langTemplate, lang);
+                                    i.ChangeMem(ApplyTemplate(cachedTemplate, vars, langVars));
+                                }
+                                else
+                                {
+                                    textTemplate.Set(null, false, etag, null, null);
+                                    i.ChangeMem(preDecData);
+                                }
                             }
                         }
                     }else
@@ -2224,24 +2233,21 @@ namespace SysWeaver.Net
 
         async ValueTask<String> Compress(ICompEncoder encoder, CompEncoderLevels level, HttpRequestData i)
         {
-            using (PerfMon.Track(nameof(Compress)))
+            var s = i.Stream;
+            if (s != null)
             {
-                var s = i.Stream;
-                if (s != null)
-                {
-                    i.ChangeMem(await encoder.GetCompressedAsync(s, level, true).ConfigureAwait(false));
-                    return encoder.HttpCode;
-                }
-                var b = i.Mem;
-                var compData = encoder.GetCompressed(b.Span, level, true);
-                var size = compData.Length;
-                if ((size > 0) && (size < b.Length))
-                {
-                    i.ChangeMem(compData);
-                    return encoder.HttpCode;
-                }
-                return null;
+                i.ChangeMem(await encoder.GetCompressedAsync(s, level, true).ConfigureAwait(false));
+                return encoder.HttpCode;
             }
+            var b = i.Mem;
+            var compData = encoder.GetCompressed(b.Span, level, true);
+            var size = compData.Length;
+            if ((size > 0) && (size < b.Length))
+            {
+                i.ChangeMem(compData);
+                return encoder.HttpCode;
+            }
+            return null;
         }
 
 
@@ -2254,11 +2260,8 @@ namespace SysWeaver.Net
 
         async ValueTask Decompress(ICompDecoder decoder, HttpRequestData i)
         {
-            using (PerfMon.Track(nameof(Decompress)))
-            {
-                var s = i.Stream;
-                i.ChangeMem(s == null ? decoder.GetDecompressed(i.Mem.Span) : await decoder.GetDecompressedAsync(s).ConfigureAwait(false));
-            }
+            var s = i.Stream;
+            i.ChangeMem(s == null ? decoder.GetDecompressed(i.Mem.Span) : await decoder.GetDecompressedAsync(s).ConfigureAwait(false));
         }
 
         ValueTask Decompress(ICompDecoder decoder, HttpRequestData i, Stream output)

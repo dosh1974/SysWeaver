@@ -1,5 +1,7 @@
 ﻿using System;
 using System.IO;
+using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading.Tasks;
 using SysWeaver.Memory;
 
@@ -35,6 +37,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="memory">The memory to save</param>
         /// <param name="filename">The file to write to (overwites existing)</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void WriteToFile(this ReadOnlyMemory<Byte> memory, String filename)
             => WriteMemory(filename, memory);
 
@@ -66,6 +69,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="memory">The memory to save</param>
         /// <param name="filename">The file to write to (overwites existing)</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask WriteToFileAsync(this ReadOnlyMemory<Byte> memory, String filename)
             => WriteMemoryAsync(filename, memory);
 
@@ -74,6 +78,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="memory">The memory to save</param>
         /// <param name="filename">The file to write to (overwites existing)</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask WriteToFileAsync(this Memory<Byte> memory, String filename)
             => WriteMemoryAsync(filename, memory);
 
@@ -82,6 +87,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="filename">The file to write to (overwites existing)</param>
         /// <param name="span">The span to save</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void WriteSpan(String filename, ReadOnlySpan<Byte> span)
         {
             using var s = new FileStream(filename, FileMode.Create, FileAccess.Write);
@@ -93,6 +99,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="span">The span to save</param>
         /// <param name="filename">The file to write to (overwites existing)</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void WriteToFile(this ReadOnlySpan<Byte> span, String filename)
             => WriteSpan(filename, span);
 
@@ -102,19 +109,68 @@ namespace SysWeaver
         /// </summary>
         /// <param name="filename">Name of the file to read</param>
         /// <returns>Empty on error</returns>
-        public static async ValueTask<ReadOnlyMemory<Byte>> ReadBytesAsync(String filename)
-        {
-            var fi = new FileInfo(filename);
-            if (!fi.Exists)
-                return null;
-            var len = fi.Length + 8192;
-            if (len > (1L << 31))
-                len = (1L << 31);
-            using var ms = new MemoryStream((int)len);
-            using (var fs = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                await fs.CopyToAsync(ms).ConfigureAwait(false);
-            return ms.GetBuffer().AsMemory(0, (int)ms.Position);
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueTask<Byte[]> ReadBytesAsync(String filename)
+            => FileReadOnlyMemory.ReadAllBytesAsync(filename);
+
+        /// <summary>
+        /// Read byte content of a file, allowing shared read/write
+        /// </summary>
+        /// <param name="filename">Name of the file to read</param>
+        /// <returns>Empty on error</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Byte[] ReadBytes(String filename)
+            => FileReadOnlyMemory.ReadAllBytes(filename);
+
+        /// <summary>
+        /// Read all text from a file
+        /// </summary>
+        /// <param name="filename">Name of the file to read</param>
+        /// <param name="encoding">The text encoding to use, default (null) is UTF8</param>
+        /// <returns>Empty on error</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueTask<String> ReadTextAsync(String filename, Encoding encoding = null)
+            => new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite).ReadAllTextAsync(encoding);
+
+        /// <summary>
+        /// Read all text from a file
+        /// </summary>
+        /// <param name="filename">Name of the file to read</param>
+        /// <param name="encoding">The text encoding to use, default (null) is UTF8</param>
+        /// <returns>Empty on error</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static String ReadText(String filename, Encoding encoding = null)
+            => new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite).ReadAllText(encoding);
+
+
+
+        /// <summary>
+        /// Read all text from a file
+        /// </summary>
+        /// <param name="filename">Name of the file to read</param>
+        /// <param name="encoding">The text encoding to use, default (null) is UTF8</param>
+        /// <param name="trim">True to trim whitespaces from every line</param>
+        /// <param name="removeEmpty">True to remove empty lines</param>
+        /// <returns>Empty on error</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ValueTask<String[]> ReadLinesAsync(String filename, Encoding encoding = null, bool trim = false, bool removeEmpty = false)
+            => new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite).ReadAllLinesAsync(encoding, false, trim, removeEmpty);
+
+        /// <summary>
+        /// Read all text from a file
+        /// </summary>
+        /// <param name="filename">Name of the file to read</param>
+        /// <param name="encoding">The text encoding to use, default (null) is UTF8</param>
+        /// <param name="trim">True to trim whitespaces from every line</param>
+        /// <param name="removeEmpty">True to remove empty lines</param>
+        /// <returns>Empty on error</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static String[] ReadLines(String filename, Encoding encoding = null, bool trim = false, bool removeEmpty = false)
+            => new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite).ReadAllLines(encoding, false, trim, removeEmpty);
+
+
+
+
 
         /// <summary>
         /// Read byte content of a file, allowing shared read/write with retying
@@ -124,15 +180,14 @@ namespace SysWeaver
         /// <param name="delayInMs">Number of milli seconds to wait between any retries (on error)</param>
         /// <param name="delayInMsNoExisting">Number of milli seconds to wait between any retries (when file deosn't exit)</param>
         /// <returns>Empty on error</returns>
-        public static async ValueTask<ReadOnlyMemory<Byte>> TryReadBytesAsync(String filename, int retryCount = 10, int delayInMs = 100, int delayInMsNoExisting = 1)
+        public static async ValueTask<Memory<Byte>> TryReadBytesAsync(String filename, int retryCount = 10, int delayInMs = 100, int delayInMsNoExisting = 1)
         {
             for (; ; )
             {
                 try
                 {
-                    var d = await ReadBytesAsync(filename).ConfigureAwait(false);
-                    if (!d.IsEmpty)
-                        return d;
+                    if (File.Exists(filename))
+                        return await ReadBytesAsync(filename).ConfigureAwait(false);
                     --retryCount;
                     if (retryCount <= 0)
                         return null;
@@ -149,6 +204,38 @@ namespace SysWeaver
 
         }
 
+
+        /// <summary>
+        /// Read byte content of a file, allowing shared read/write with retying
+        /// </summary>
+        /// <param name="filename">Name of the file to read</param>
+        /// <param name="retryCount">Number of times to retry the operation</param>
+        /// <param name="delayInMs">Number of milli seconds to wait between any retries (on error)</param>
+        /// <param name="delayInMsNoExisting">Number of milli seconds to wait between any retries (when file deosn't exit)</param>
+        /// <returns>Empty on error</returns>
+        public static async ValueTask<ReadOnlyMemory<Byte>> TryReadMemoryAsync(String filename, int retryCount = 10, int delayInMs = 100, int delayInMsNoExisting = 1)
+        {
+            for (; ; )
+            {
+                try
+                {
+                    if (File.Exists(filename))
+                        return await ReadBytesAsync(filename).ConfigureAwait(false);
+                    --retryCount;
+                    if (retryCount <= 0)
+                        return null;
+                    await Task.Delay(delayInMsNoExisting).ConfigureAwait(false);
+                }
+                catch
+                {
+                    --retryCount;
+                    if (retryCount <= 0)
+                        return null;
+                    await Task.Delay(delayInMs).ConfigureAwait(false);
+                }
+            }
+
+        }
 
     }
 

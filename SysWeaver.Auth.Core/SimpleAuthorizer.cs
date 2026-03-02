@@ -98,7 +98,7 @@ namespace SysWeaver.Auth
                 UpdateUsers();
                 return;
             }
-            var f = new MemoryStream(d.Data).ReadAllLines(false).ToArray();
+            var f = StringTools.GetLines(d.Data.Span);
             FileLines = f;
             UpdateUsers();
         }

@@ -58,8 +58,8 @@ namespace SysWeaver.ExchangeRate
             {
                 try
                 {
-                    var data = File.ReadAllBytes(name);
-                    return Ser.Create<Rates>(data.AsSpan());
+                    using var mem = FileReadOnlyMemory.Read(name);
+                    return Ser.Create<Rates>(mem.Memory);
                 }
                 catch (Exception ex)
                 {
@@ -71,8 +71,8 @@ namespace SysWeaver.ExchangeRate
             {
                 try
                 {
-                    var data = File.ReadAllBytes(name);
-                    return Ser.Create<Rates>(data.AsSpan());
+                    using var mem = FileReadOnlyMemory.Read(name);
+                    return Ser.Create<Rates>(mem.Memory);
                 }
                 catch (Exception ex)
                 {

@@ -425,7 +425,7 @@ namespace SysWeaver
 
         static IUnmanagedReadOnlyMemory<Byte> TryLoadBytes(String name)
         {
-            var data = FileReadOnlyMemory.ReadAllBytes(name);
+            var data = FileReadOnlyMemory.Read(name);
             if (!Validate(data.Memory))
             {
                 data.Dispose();
@@ -437,7 +437,7 @@ namespace SysWeaver
 
         static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> TryLoadBytesAsync(String name)
         {
-            var data = await FileReadOnlyMemory.ReadAllBytesAsync(name).ConfigureAwait(false);
+            var data = await FileReadOnlyMemory.ReadAsync(name).ConfigureAwait(false);
             if (data == null || (!Validate(data.Memory)))
             {
                 data?.Dispose();
@@ -452,7 +452,10 @@ namespace SysWeaver
             ReadOnlySpan<Byte> r = data.Span.Slice(0, data.Length - 32);
             var comp = Comp;
             if (comp != null)
-                r = comp.GetDecompressed(r).Span;
+            {
+                using var t = comp.GetUnmanagedDecompressed(r);
+                return Ser.Create<T>(t.Memory);
+            }
             return Ser.Create<T>(r);
         }
 

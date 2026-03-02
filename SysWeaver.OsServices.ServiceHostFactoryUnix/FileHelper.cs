@@ -69,7 +69,7 @@ namespace SysWeaver.OsServices
                 {
                     try
                     {
-                        return File.ReadAllText(name);
+                        return FileExt.ReadText(name);
                     }
                     catch
                     {

@@ -3,8 +3,9 @@ using System.Buffers;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using SysWeaver.Compression;
 
-namespace SysWeaver.Compression
+namespace SysWeaver
 {
     public static class AsmResExt
     {
