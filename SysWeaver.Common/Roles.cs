@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace SysWeaver
 {
@@ -34,11 +35,6 @@ namespace SysWeaver
         public const String Service = "Service," + Debug + "," + Dev;
 
         /// <summary>
-        /// This will disable anyone from accessing the API
-        /// </summary>
-        public const String Disabled = "-";
-
-        /// <summary>
         /// Combined Admin and Ops
         /// </summary>
         public const String AdminOps = Admin + ",Ops";
@@ -58,6 +54,20 @@ namespace SysWeaver
         /// </summary>
         public const String DevAdminOps = "Dev," + AdminOps;
 
+        /// <summary>
+        /// This will disable anyone from accessing the API
+        /// </summary>
+        public const String Disabled = "-";
+
+
+        public static readonly IReadOnlyList<String> DebugTokens = Debug.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        public static readonly IReadOnlyList<String> AdminTokens = Admin.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        public static readonly IReadOnlyList<String> DevTokens = Dev.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        public static readonly IReadOnlyList<String> OpsTokens = Ops.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        public static readonly IReadOnlyList<String> AdminOpsTokens = AdminOps.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        public static readonly IReadOnlyList<String> OpsDevTokens = OpsDev.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        public static readonly IReadOnlyList<String> DevAdminTokens = DevAdmin.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        public static readonly IReadOnlyList<String> DevAdminOpsTokens = DevAdminOps.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     }
 

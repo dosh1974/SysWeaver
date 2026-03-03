@@ -42,9 +42,9 @@ namespace SysWeaver.Excel
         public bool RequireUser => false;
 
 
-        public Task<MemoryFile> Export(BaseTableData tableData, Object context, TabelDataExportOptions options = null)
+        public Task<MemoryFile> Export(BaseTableData tableData, Object context, TableDataExportOptions options = null)
         {
-            options = options ?? new TabelDataExportOptions();
+            options = options ?? new TableDataExportOptions();
             var name = String.IsNullOrEmpty(options.Filename) ? (String.IsNullOrEmpty(tableData.Title) ? "Table" : tableData.Title) : options.Filename;
             var isPdf = IsPdf;
 

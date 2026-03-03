@@ -46,12 +46,12 @@ namespace SysWeaver.MicroService
 
         public bool RequireUser => true;
 
-        public async Task<MemoryFile> Export(BaseTableData tableData, Object context, TabelDataExportOptions options = null)
+        public async Task<MemoryFile> Export(BaseTableData tableData, Object context, TableDataExportOptions options = null)
         {
             HttpServerRequest c = context as HttpServerRequest;
             if (c == null)
                 return null;
-            options = options ?? new TabelDataExportOptions();
+            options = options ?? new TableDataExportOptions();
             var name = (String.IsNullOrEmpty(options.Filename) ? "Table" : options.Filename) + ".json";
             var scope = ScopeIndex;
             var us = UserStore;

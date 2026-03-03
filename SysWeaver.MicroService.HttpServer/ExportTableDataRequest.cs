@@ -21,7 +21,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Options
         /// </summary>
-        public TabelDataExportOptions Options;
+        public TableDataExportOptions Options;
 
     }
 

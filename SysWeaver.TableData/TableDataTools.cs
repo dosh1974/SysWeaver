@@ -110,6 +110,25 @@ namespace SysWeaver.Data
 
 
 
+        /// <summary>
+        /// Convert an object into a values array
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        public static Object[] GetValues<T>(T data)
+            => TableDataType<T>.Extract(data);
+
+        /// <summary>
+        /// Convert an object into a table row
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        public static TableDataRow GetRow<T>(T data)
+            => new TableDataRow { Values = TableDataType<T>.Extract(data) };
+
+
         static readonly TableDataRequest DefRequest = new ()
         {
             MaxRowCount = 20

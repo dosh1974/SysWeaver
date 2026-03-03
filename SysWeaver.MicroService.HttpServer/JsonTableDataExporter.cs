@@ -41,9 +41,9 @@ namespace SysWeaver.MicroService
 
         public bool RequireUser => false;
 
-        public Task<MemoryFile> Export(BaseTableData tableData, Object context, TabelDataExportOptions options = null)
+        public Task<MemoryFile> Export(BaseTableData tableData, Object context, TableDataExportOptions options = null)
         {
-            options = options ?? new TabelDataExportOptions();
+            options = options ?? new TableDataExportOptions();
             var sdata = new BaseTableData();
             sdata.CopyFrom(tableData);
             if (options.NoHeaders)

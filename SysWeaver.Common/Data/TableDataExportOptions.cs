@@ -2,7 +2,7 @@
 
 namespace SysWeaver.Data
 {
-    public sealed class TabelDataExportOptions
+    public sealed class TableDataExportOptions
     {
         /// <summary>
         /// Suggested filename (no extension or path)

@@ -82,9 +82,9 @@ namespace SysWeaver.Data
         }.Freeze(); 
 
 
-        public Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TabelDataExportOptions options = null)
+        public Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
         {
-            options = options ?? new TabelDataExportOptions();
+            options = options ?? new TableDataExportOptions();
             StringBuilder sb = new StringBuilder();
             var sep = Sep;
             var rep = Rep;

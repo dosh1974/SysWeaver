@@ -42,7 +42,7 @@ namespace SysWeaver.Data
         /// <param name="context">The HttpServerRequest context (wrapped in an object for exporters that don't need the dependency)</param>
         /// <param name="options">Export options</param>
         /// <returns>A file or linq in memory</returns>
-        Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TabelDataExportOptions options = null);
+        Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TableDataExportOptions options = null);
     }
 
 

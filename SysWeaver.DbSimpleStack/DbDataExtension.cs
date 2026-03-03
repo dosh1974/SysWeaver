@@ -35,6 +35,33 @@ namespace SysWeaver.Db
         /// Data rows
         /// </summary>
         public T[] Rows;
+
+
+
+        public TypedTableData<N> Retype<N>(Func<T, N> convert)
+            => new TypedTableData<N>
+            {
+                Cc = Cc,
+                RefreshRate = RefreshRate,
+                Rows = Rows.Convert(convert),
+                Cols = Cols,
+                RowCount = RowCount,
+                Title = Title,
+            };
+
+
+
+        public TableData ToTableData()
+            => new TableData
+            {
+                Cc = Cc,
+                RefreshRate = RefreshRate,
+                Rows = Rows.Convert(TableDataTools.GetRow),
+                Cols = Cols,
+                RowCount = RowCount,
+                Title = Title,
+            };
+
     }
 
 
