@@ -12,6 +12,7 @@ async function textMain() {
         const update = p.get("u");
         const download = (p.get("download") !== "false");
         const scrollToEnd = (p.get("scrolltoend") === "true");
+        const autoBeautify = p.get("b") === "true";
 
         let type = p.get("t");
 
@@ -81,6 +82,23 @@ async function textMain() {
         const beautify = bmap.get(type);
 
 
+        async function DoBeautify(text) {
+
+            if (!beautify)
+                return text;
+            if (!autoBeautify)
+                return text;
+            try {
+                return await beautify(text);
+            }
+            catch (e) {
+                console.warn("Failed to beatify: " + e.message);
+            }
+            return text;
+        }
+
+
+
 
         const br = Button.CreateRow();
         target.appendChild(br);
@@ -97,7 +115,7 @@ async function textMain() {
                 const newText = await getRequest(url, false, false, null, r => r.text());
                 if (newText != null) {
                     if (newText !== text) {
-                        text = newText;
+                        text = await DoBeautify(newText);
                         editor.session.setValue(text);
                         if (scrollToEnd) {
                             const lastLine = 10000000;
@@ -115,8 +133,6 @@ async function textMain() {
             reloadButton.StopWorking();
         });
         br.appendChild(reloadButton.Element);
-
-
         if (beautify) {
             beautifyButton = new Button("", _TF("Beautify", "Text on a button that when clicked will beatify some source code text"),
                 _TF("Click to beautify the text", "Tool tip description on a button that when clicked will beatify some source code text"), "../icons/organize.svg", true, async () => {
@@ -212,8 +228,6 @@ async function textMain() {
             br.appendChild(deleteButton.Element);
         }
 
-
-
         let text = await getRequest(url, false, false, null, r => r.text());
         try {
             //text = JSON.stringify(JSON.parse(text), null, "\t");
@@ -222,8 +236,6 @@ async function textMain() {
         catch
         {
         }
-        edit.textContent = text;
-
         const options = {   
             readOnly: readOnly,
             animatedScroll: true,
@@ -239,11 +251,13 @@ async function textMain() {
             useSvgGutterIcons: true,
             useWorker: !readOnly,
         };
-
         const editor = ace.edit(edit, options);
         edit.classList.add("ace-sysweaver");
         editor.session.setMode("ace/mode/" + type);
         editor.renderer.setScrollMargin(2, 2);
+        text = await DoBeautify(text);
+        editor.session.setValue(text);
+
         if (scrollToEnd) {
             const lastLine = 10000000;
             editor.resize(true);

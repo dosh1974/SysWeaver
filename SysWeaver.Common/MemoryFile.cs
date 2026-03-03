@@ -2,12 +2,42 @@
 
 namespace SysWeaver
 {
+
+    public sealed class MemoryFileAudit
+    {
+        public override string ToString() => String.Concat(Name.ToQuoted(), " [", Length, "] as ", Mime);
+
+        /// <summary>
+        /// Recomended filename
+        /// </summary>
+        public String Name;
+
+        /// <summary>
+        /// Mime type
+        /// </summary>
+        public String Mime;
+
+        /// <summary>
+        /// File length
+        /// </summary>
+        public long Length;
+
+    }
+
     /// <summary>
     /// Use to represent a "file".
     /// If mime = null and data = null, Name is a link to the "file".
     /// </summary>
     public sealed class MemoryFile
     {
+        public MemoryFileAudit GetAudit()
+            => new MemoryFileAudit
+            {
+                Name = Name,
+                Mime = Mime,
+                Length = Data.Length,
+            };
+
         public override string ToString() => String.Concat(Name.ToQuoted(), " [", Data.Length, "] as ", Mime);
 
         /// <summary>
