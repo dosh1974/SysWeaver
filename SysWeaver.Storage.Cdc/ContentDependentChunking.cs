@@ -1198,7 +1198,7 @@ namespace SysWeaver
             var hashSize = props.HashSize;
             //  Read initial data and setup buffer "pointers"
             var bufSize = maxSize << 3; // Typically 1MB
-            var data = ArrayPool<Byte>.Shared.Rent(bufSize);
+            var data = ArrayPoolStream.Rent(bufSize);
             try
             {
                 bufSize = data.Length;
@@ -1257,7 +1257,7 @@ namespace SysWeaver
             }
             finally
             {
-                ArrayPool<Byte>.Shared.Return(data);
+                ArrayPoolStream.Return(data);
             }
         }
 

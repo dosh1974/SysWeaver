@@ -57,7 +57,7 @@ namespace SysWeaver.Serialization
         {
             var size = Utf8Parser.UTF8.GetMaxByteCount(text.Length);
             Byte[] rented = null;
-            var data = size <= 4096 ? stackalloc Byte[size] : (rented = ArrayPool<Byte>.Shared.Rent(size)).AsSpan();
+            var data = size <= 4096 ? stackalloc Byte[size] : (rented = ArrayPoolStream.Rent(size)).AsSpan();
             try
             {
                 var l = Utf8Parser.UTF8.GetBytes(text, data);
@@ -66,7 +66,7 @@ namespace SysWeaver.Serialization
             finally
             {
                 if (rented != null)
-                    ArrayPool<Byte>.Shared.Return(rented);
+                    ArrayPoolStream.Return(rented);
             }
         }
 

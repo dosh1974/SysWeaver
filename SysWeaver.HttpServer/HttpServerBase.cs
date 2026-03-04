@@ -1485,7 +1485,7 @@ namespace SysWeaver.Net
                         if (limit >= 0)
                         {
                             const int bufferSize = 81920;
-                            byte[] buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
+                            byte[] buffer = ArrayPoolStream.Rent(bufferSize);
                             try
                             {
                                 long read = 0;
@@ -1501,7 +1501,7 @@ namespace SysWeaver.Net
                             }
                             finally
                             {
-                                ArrayPool<byte>.Shared.Return(buffer);
+                                ArrayPoolStream.Return(buffer);
                             }
                         }
                         else

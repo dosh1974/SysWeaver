@@ -17,7 +17,7 @@ namespace SysWeaver.Serialization.SwJson.Writer
 
         public BufferWriter(Byte[] initData, int startOffset = 0)
         {
-            var d = initData ?? GC.AllocateUninitializedArray<Byte>(4096);//  (Rented = ArrayPool<Byte>.Shared.Rent(4096));
+            var d = initData ?? GC.AllocateUninitializedArray<Byte>(4096);//  (Rented =ArrayPoolStream.Rent(4096));
             Data = d;
             PinHandle = GCHandle.Alloc(d, GCHandleType.Pinned);
             DataPtr = (Byte*)PinHandle.AddrOfPinnedObject().ToPointer();
@@ -66,9 +66,14 @@ namespace SysWeaver.Serialization.SwJson.Writer
         {
             PinHandle.Free();
             Data = null;
-            ArrayPool<Char>.Shared.Return(TempBuf);
+
+#if DEBUG
+            ArrayPool<Char>.Shared.Return(TempBuf, true);
+#else//DEBUG
+                ArrayPool<Char>.Shared.Return(TempBuf);
+#endif//DEBUG
             //if (Rented != null)
-                //ArrayPool<Byte>.Shared.Return(Rented);
+                //ArrayPoolStream.Return(Rented);
             GC.SuppressFinalize(this);
         }
 
@@ -107,7 +112,7 @@ namespace SysWeaver.Serialization.SwJson.Writer
         {
             end += (4096 + 4095);
             end &= ~4095;
-            //var b = ArrayPool<Byte>.Shared.Rent(end);
+            //var b = ArrayPoolStream.Rent(end);
             var b = GC.AllocateUninitializedArray<Byte>(end);
             var o = Offset;
             if (o > 0)
@@ -117,7 +122,7 @@ namespace SysWeaver.Serialization.SwJson.Writer
             PinHandle = GCHandle.Alloc(b, GCHandleType.Pinned);
             DataPtr = (Byte*)PinHandle.AddrOfPinnedObject().ToPointer();
             //if (Rented != null)
-                //ArrayPool<Byte>.Shared.Return(Rented);
+                //ArrayPoolStream.Return(Rented);
             //Rented = b;
             S = end;
         }

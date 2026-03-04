@@ -25,8 +25,16 @@ namespace SysWeaver.Net
     }
 
 
-    public abstract class HttpServerRequest : ITranslationContext
+    public abstract class HttpServerRequest : ITranslationContext, IDisposable
     {
+
+        public virtual void Dispose()
+        {
+            var c = Custom as IDisposable;
+            if (c != null)
+                c.Dispose();
+        }
+
         public override string ToString() => Url;
 
         /// <summary>
@@ -261,7 +269,6 @@ namespace SysWeaver.Net
             return ip;
         }
 
-        static readonly ArrayPool<Byte> Pool = ArrayPool<Byte>.Shared;  
 
         public void SetResText(String text, String mime = "text/plain; charset=UTF-8")
         {
@@ -277,8 +284,7 @@ namespace SysWeaver.Net
                     return;
                 }
             }
-            var pool = Pool;
-            var buf = pool.Rent(al);
+            var buf = ArrayPoolStream.Rent(al);
             try
             {
                 var t = buf.AsSpan();
@@ -290,7 +296,7 @@ namespace SysWeaver.Net
             }
             finally
             {
-                pool.Return(buf);
+                ArrayPoolStream.Return(buf);
             }
         }
 

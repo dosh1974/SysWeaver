@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 namespace SysWeaver.Net
 {
-    public sealed class NetHttpServerRequest : HttpServerRequest, IDisposable
+    public sealed class NetHttpServerRequest : HttpServerRequest
     {
         public NetHttpServerRequest(HttpListenerContext context, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart, String newMethod = null) 
             : base(
@@ -150,9 +150,10 @@ namespace SysWeaver.Net
         }
 
 
-        public void Dispose()
+        public override void Dispose()
         {
             OnDispose();
+            base.Dispose();
         }
 
     }

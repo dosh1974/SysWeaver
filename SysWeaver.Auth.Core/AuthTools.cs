@@ -21,8 +21,7 @@ namespace SysWeaver.Auth
         {
             Byte[] rented = null;
             var l = text.Length << 2;
-            var a = ArrayPool<Byte>.Shared;
-            Span<Byte> dest = l <= 4096 ? stackalloc Byte[l] : (rented = a.Rent(l));
+            Span<Byte> dest = l <= 4096 ? stackalloc Byte[l] : (rented = ArrayPoolStream.Rent(l));
             try
             {
                 if (!Encoding.UTF8.TryGetBytes(text.AsSpan(), dest, out var size))
@@ -32,7 +31,7 @@ namespace SysWeaver.Auth
             finally
             {
                 if (rented != null)
-                    a.Return(rented);
+                    ArrayPoolStream.Return(rented);
             }
         }
 
@@ -46,8 +45,7 @@ namespace SysWeaver.Auth
         {
             Byte[] rented = null;
             var l = text.Length << 2;
-            var a = ArrayPool<Byte>.Shared;
-            Span<Byte> dest = l <= 4096 ? stackalloc Byte[l] : (rented = a.Rent(l));
+            Span<Byte> dest = l <= 4096 ? stackalloc Byte[l] : (rented = ArrayPoolStream.Rent(l));
             try
             {
                 if (!Encoding.UTF8.TryGetBytes(text.AsSpan(), dest, out var size))
@@ -60,7 +58,7 @@ namespace SysWeaver.Auth
             finally
             {
                 if (rented != null)
-                    a.Return(rented);
+                    ArrayPoolStream.Return(rented);
 
             }
         }

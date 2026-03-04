@@ -24,7 +24,7 @@ namespace SysWeaver.Compression
         /// <returns>The compressed data</returns>
         public static Memory<Byte> GetCompressed(this ICompEncoder c, ReadOnlySpan<Byte> from, CompEncoderLevels level, bool trim = false)
         {
-            var mem = ArrayPoolStream.Pool.Rent(from.Length + MaxCompressOverHead);
+            var mem = ArrayPoolStream.Rent(from.Length + MaxCompressOverHead);
             var s = c.Compress(from, mem, level);
             return GetMem(mem, s, trim);
 
@@ -44,7 +44,7 @@ namespace SysWeaver.Compression
             try
             {
                 if (from.CanSeek)
-                    mem = ArrayPoolStream.Pool.Rent((int)from.Length + MaxCompressOverHead);
+                    mem = ArrayPoolStream.Rent((int)from.Length + MaxCompressOverHead);
             }
             catch
             {
@@ -73,7 +73,7 @@ namespace SysWeaver.Compression
             try
             {
                 if (from.CanSeek)
-                    mem = ArrayPoolStream.Pool.Rent((int)from.Length + MaxCompressOverHead);
+                    mem = ArrayPoolStream.Rent((int)from.Length + MaxCompressOverHead);
             }
             catch
             {
@@ -248,7 +248,7 @@ namespace SysWeaver.Compression
                 return new Memory<Byte>(mem, 0, s);
             var ret = GC.AllocateUninitializedArray<Byte>(s);
             mem.AsSpan()[..s].CopyTo(ret.AsSpan());
-            ArrayPoolStream.Pool.Return(mem);
+            ArrayPoolStream.Return(mem);
             return ret;
         }
 

@@ -754,7 +754,7 @@ namespace SysWeaver.Net
             var accept = request.GetReqHeader("Accept");
             if ((request.HttpMethod != HttpServerMethods.POST) || (!HaveArgs))
                 return String.Join('\r', request.Url, accept);
-            using var memP = await Input_POST_Read(this, request).ConfigureAwait(false);
+            var memP = await Input_POST_Read(this, request).ConfigureAwait(false);
             var mem = memP.Memory;
             request.Custom = memP;
             if (mem.Length > 4096)
@@ -844,7 +844,9 @@ namespace SysWeaver.Net
             if (c != null)
             {
                 dataMem = (IUnmanagedReadOnlyMemory<Byte>)c;
-            }else
+                request.Custom = null;
+            }
+            else
             {
                 using var ms = new ArrayPoolStream((int)request.ReqContentLength + 1024);
                 await request.InputStream.CopyToAsync(ms).ConfigureAwait(false);

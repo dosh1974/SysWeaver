@@ -87,13 +87,12 @@ namespace SysWeaver.Compression
 
                     if (len < MaxBuffered)
                     {
-                        var pool = ArrayPool<Byte>.Shared;
-                        var src = pool.Rent((int)len);
+                        var src = ArrayPoolStream.Rent((int)len);
                         try
                         {
                             len = from.Read(src, 0, (int)len);
                             var sm = src.AsSpan()[..(int)len];
-                            var buf = pool.Rent((int)len + MaxOverhead);
+                            var buf = ArrayPoolStream.Rent((int)len + MaxOverhead);
                             try
                             {
 
@@ -104,12 +103,12 @@ namespace SysWeaver.Compression
                             }
                             finally
                             {
-                                pool.Return(buf);
+                                ArrayPoolStream.Return(buf);
                             }
                         }
                         finally
                         {
-                            pool.Return(src);
+                            ArrayPoolStream.Return(src);
                         }
                     }
                 }
@@ -138,8 +137,7 @@ namespace SysWeaver.Compression
 
                     if (len < MaxBuffered)
                     {
-                        var pool = ArrayPool<Byte>.Shared;
-                        var src = pool.Rent((int)len);
+                        var src = ArrayPoolStream.Rent((int)len);
                         try
                         {
                             len = from.Read(src, 0, (int)len);
@@ -149,7 +147,7 @@ namespace SysWeaver.Compression
                         }
                         finally
                         {
-                            pool.Return(src);
+                            ArrayPoolStream.Return(src);
                         }
                     }
                 }
@@ -205,8 +203,7 @@ namespace SysWeaver.Compression
 
             if (len < MaxBuffered)
             {
-                var pool = ArrayPool<Byte>.Shared;
-                var buf = pool.Rent(len + MaxOverhead);
+                var buf = ArrayPoolStream.Rent(len + MaxOverhead);
                 try
                 {
                     var bs = buf.AsSpan();
@@ -216,7 +213,7 @@ namespace SysWeaver.Compression
                 }
                 finally
                 {
-                    pool.Return(buf);
+                    ArrayPoolStream.Return(buf);
                 }
             }
             using var cs = new CompStream(to, CompHelpers.StreamLevels[(int)level], true);
@@ -232,13 +229,12 @@ namespace SysWeaver.Compression
                     var len = from.Length;
                     if (len < MaxBuffered)
                     {
-                        var pool = ArrayPool<Byte>.Shared;
-                        var src = pool.Rent((int)len);
+                        var src = ArrayPoolStream.Rent((int)len);
                         try
                         {
                             len = await from.ReadAsync(src, 0, (int)len).ConfigureAwait(false);
                             var sm = src.AsSpan()[..(int)len];
-                            var buf = pool.Rent((int)len + MaxOverhead);
+                            var buf = ArrayPoolStream.Rent((int)len + MaxOverhead);
                             try
                             {
 
@@ -249,12 +245,12 @@ namespace SysWeaver.Compression
                             }
                             finally
                             {
-                                pool.Return(buf);
+                                ArrayPoolStream.Return(buf);
                             }
                         }
                         finally
                         {
-                            pool.Return(src);
+                            ArrayPoolStream.Return(src);
                         }
                     }
                 }
@@ -276,8 +272,7 @@ namespace SysWeaver.Compression
                     var len = from.Length;
                     if (len < MaxBuffered)
                     {
-                        var pool = ArrayPool<Byte>.Shared;
-                        var src = pool.Rent((int)len);
+                        var src = ArrayPoolStream.Rent((int)len);
                         try
                         {
                             len = await from.ReadAsync(src, 0, (int)len).ConfigureAwait(false);
@@ -287,7 +282,7 @@ namespace SysWeaver.Compression
                         }
                         finally
                         {
-                            pool.Return(src);
+                            ArrayPoolStream.Return(src);
                         }
                     }
                 }
@@ -305,8 +300,7 @@ namespace SysWeaver.Compression
             var len = from.Length;
             if (len < MaxBuffered)
             {
-                var pool = ArrayPool<Byte>.Shared;
-                var buf = pool.Rent(len + MaxOverhead);
+                var buf = ArrayPoolStream.Rent(len + MaxOverhead);
                 try
                 {
                     var bs = buf.AsSpan();
@@ -316,7 +310,7 @@ namespace SysWeaver.Compression
                 }
                 finally
                 {
-                    pool.Return(buf);
+                    ArrayPoolStream.Return(buf);
                 }
             }
             using var ms = from.AsStream();

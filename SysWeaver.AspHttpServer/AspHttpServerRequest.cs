@@ -9,7 +9,7 @@ using System.Buffers;
 
 namespace SysWeaver.Net
 {
-    public sealed class AspHttpServerRequest : HttpServerRequest, IDisposable
+    public sealed class AspHttpServerRequest : HttpServerRequest
     {
         public AspHttpServerRequest(HttpContext context, String url, String prefix, AspHttpServer server, HttpServerHostInfo host, int queryStart, String newMethod = null)
             : base(
@@ -175,7 +175,11 @@ namespace SysWeaver.Net
                     toh.Remove(toDelete[delCount]);
                 }
             }
+#if DEBUG
+            pool.Return(toDelete, true);
+#else//DEBUG
             pool.Return(toDelete);
+#endif//DEBUG
             var hs = Head;
             if (hs != null)
                 foreach (var h in hs)
@@ -186,9 +190,10 @@ namespace SysWeaver.Net
         }
 
 
-        public void Dispose()
+        public override void Dispose()
         {
             OnDispose();
+            base.Dispose();
         }
 
     }

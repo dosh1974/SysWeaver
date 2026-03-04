@@ -101,9 +101,8 @@ namespace SysWeaver.Serialization.SwJson
         public static Memory<Byte> ToJsonBytes<T>(T value, Byte[] dest = null, bool typeIsOptional = true)
         {
             Byte[] temp = null;
-            var s = ArrayPool<Byte>.Shared;
             if (dest == null)
-                temp = dest = s.Rent(4096);
+                temp = dest = ArrayPoolStream.Rent(4096);
             using var w = new BufferWriter(dest)
             {
                 TypeIsOptional = typeIsOptional,
@@ -111,7 +110,7 @@ namespace SysWeaver.Serialization.SwJson
             InternalMaybeBoxed(w, value);
             var d = w.Data;
             if (d != temp)
-                s.Return(temp);
+                ArrayPoolStream.Return(temp);
             return new Memory<byte>(d, 0, w.Offset);
         }
 
@@ -124,8 +123,7 @@ namespace SysWeaver.Serialization.SwJson
         /// <returns>The object as a json string</returns>
         public static String ToJsonString<T>(T value, bool typeIsOptional = true)
         {
-            var a = ArrayPool<Byte>.Shared;
-            var temp = a.Rent(4096);
+            var temp = ArrayPoolStream.Rent(4096);
             try
             {
                 using var w = new BufferWriter(temp);
@@ -135,7 +133,7 @@ namespace SysWeaver.Serialization.SwJson
             }
             finally
             {
-                a.Return(temp);
+                ArrayPoolStream.Return(temp);
             }
         }
 
@@ -245,9 +243,13 @@ namespace SysWeaver.Serialization.SwJson
             }
             finally
             {
+#if DEBUG
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented, true);
+#else//DEBUG
                 if (rented != null)
                     ArrayPool<Char>.Shared.Return(rented);
-
+#endif//DEBUG
             }
         }
 

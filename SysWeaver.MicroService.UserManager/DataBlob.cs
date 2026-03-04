@@ -42,7 +42,7 @@ namespace SysWeaver.Auth
             var ml = mem.Length;
             Byte[] rented = null;
             var l = ml + (ml >> 3) + 1024;
-            Span<Byte> b = l <= 4096 ? stackalloc Byte[l] : (rented = ArrayPool<Byte>.Shared.Rent(l));
+            Span<Byte> b = l <= 4096 ? stackalloc Byte[l] : (rented = ArrayPoolStream.Rent(l));
             try
             {
                 var size = Comp.Compress(mem.Span, b, Level);
@@ -53,7 +53,7 @@ namespace SysWeaver.Auth
             finally
             {
                 if (rented != null)
-                    ArrayPool<Byte>.Shared.Return(rented);
+                    ArrayPoolStream.Return(rented);
             }
         }
 

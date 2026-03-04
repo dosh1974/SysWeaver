@@ -49,7 +49,7 @@ namespace SysWeaver.Serialization.SwJson
             var utf8 = Utf8Parser.UTF8;
             var size = utf8.GetMaxByteCount(s.Length);
             Byte[] d = null;
-            var data = size <= 4096 ? stackalloc Byte[size] : (d = ArrayPool<Byte>.Shared.Rent(size)).AsSpan();
+            var data = size <= 4096 ? stackalloc Byte[size] : (d = ArrayPoolStream.Rent(size)).AsSpan();
             var l = utf8.GetBytes(s, data);
             fixed (Byte* ptr = data)
             {
@@ -65,7 +65,7 @@ namespace SysWeaver.Serialization.SwJson
                 finally
                 {
                     if (d != null)
-                        ArrayPool<Byte>.Shared.Return(d);
+                        ArrayPoolStream.Return(d);
                 }
             }
         }
@@ -105,7 +105,7 @@ namespace SysWeaver.Serialization.SwJson
             var utf8 = Utf8Parser.UTF8;
             var size = utf8.GetMaxByteCount(s.Length);
             Byte[] d = null;
-            var data = size <= 4096 ? stackalloc Byte[size] : (d = ArrayPool<Byte>.Shared.Rent(size)).AsSpan();
+            var data = size <= 4096 ? stackalloc Byte[size] : (d = ArrayPoolStream.Rent(size)).AsSpan();
             var l = utf8.GetBytes(s, data);
             fixed (Byte* ptr = data)
             {
@@ -121,7 +121,7 @@ namespace SysWeaver.Serialization.SwJson
                 finally
                 {
                     if (d != null)
-                        ArrayPool<Byte>.Shared.Return(d);
+                        ArrayPoolStream.Return(d);
                 }
             }
 
@@ -567,8 +567,13 @@ namespace SysWeaver.Serialization.SwJson
             }
             finally
             {
+#if DEBUG
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented, true);
+#else//DEBUG
                 if (rented != null)
                     ArrayPool<Char>.Shared.Return(rented);
+#endif//DEBUG
             }
         }
 

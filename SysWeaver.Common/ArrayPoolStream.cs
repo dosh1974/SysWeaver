@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace SysWeaver
 {
@@ -10,15 +11,38 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ArrayPoolStream(int minInitialSize = 4096)
         {
-            Data = Pool.Rent(minInitialSize <= 0 ? 1 : minInitialSize);
+            Data = Rent(minInitialSize <= 0 ? 1 : minInitialSize);
             Owned = true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void ReturnBuffer(Byte[] b)
-            => Pool.Return(b);
+        public static Byte[] Rent(int size)
+        { 
+            var buf = Pool.Rent(size);
+            Interlocked.Increment(ref RentCount);
+            Interlocked.Add(ref RentBytes, buf.Length);
+            return buf;
+        }
 
-        public static readonly ArrayPool<Byte> Pool = ArrayPool<Byte>.Shared;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Return(Byte[] buf)
+        {
+            Interlocked.Increment(ref ReturnCount);
+            Interlocked.Add(ref ReturnBytes, buf.Length);
+#if DEBUG
+            Pool.Return(buf, true);
+#else//DEBUG
+            Pool.Return(buf);
+#endif//DEBUG
+        }
+
+        static long RentCount;
+        static long ReturnCount;
+
+        static long RentBytes;
+        static long ReturnBytes;
+
+        static readonly ArrayPool<Byte> Pool = ArrayPool<Byte>.Shared;
 
         bool Owned;
         /// <summary>
@@ -97,14 +121,13 @@ namespace SysWeaver
 
         Byte[] Resize(int end)
         {
-            var pool = Pool;
-            var next = pool.Rent(end);
+            var next = Rent(end);
             var len = Len;
             var data = Data;
             if (len > 0)
                 data.AsSpan().Slice(0, len).CopyTo(next.AsSpan());
             if (Owned)
-                pool.Return(data);
+                Return(data);
             Owned = true;
             Data = next;
             return next;
@@ -177,13 +200,15 @@ namespace SysWeaver
                 Buffer = buffer;
                 Memory = new ReadOnlyMemory<byte>(buffer, 0, size);
             }
-            readonly Byte[] Buffer;
+            Byte[] Buffer;
             public ReadOnlyMemory<Byte> Memory { get; init; }
 
 
             public void Dispose()
             {
-                ArrayPoolStream.ReturnBuffer(Buffer);
+                var b = Interlocked.Exchange(ref Buffer, null);
+                if (b != null)
+                    ArrayPoolStream.Return(b);
             }
         }
 
@@ -217,7 +242,7 @@ namespace SysWeaver
         {
             base.Dispose(disposing);
             if (Owned)
-                Pool.Return(Data);
+                Return(Data);
         }
         
     }
