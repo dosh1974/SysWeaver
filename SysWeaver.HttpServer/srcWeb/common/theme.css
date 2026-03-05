@@ -232,8 +232,24 @@ input[type=password]::-ms-clear {
 }
 
 * {
-    scrollbar-color: var(--ThemeMain) var(--ThemeBackground);
+    scrollbar-color: var(--ThemeMain50) var(--ThemeBackground);
 }
+
+html {
+    --Margin: 24px;
+    margin: var(--Margin);
+    min-width: calc(100% - var(--Margin) * 2);
+    min-height: calc(100% - var(--Margin) * 2);
+}
+
+    html.SwNarrow {
+        margin-left: 0;
+        margin-right: 0;
+        margin-bottom: 0;
+        min-width: 100%;
+        min-height: calc(100% - var(--Margin));
+    }
+
 
 body {
     background-color: var(--ThemeBackground);
@@ -249,17 +265,15 @@ body {
 }
 
 
-html.Embedded {
-    margin-left: 8px;
-    margin-top: 8px;
-    min-width: calc(100% - 8px);
-    min-height: calc(100% - 8px);
+html.FillScreen {
+    margin: 0;
+    min-width: 100%;
+    min-height: 100%;
 }
 
-html.Embedded body {
-    background: none transparent !important;
-}
-
+    html.Embedded body {
+        background: none transparent !important;
+    }
 
     html.Transparent body {
         background: none transparent !important;

@@ -5522,7 +5522,7 @@ function BlockTab(element) {
     if (typeof tabBlockers === "undefined") {
         tabBlockers = [];
         window.TabBlockers = tabBlockers;
-        console.log("Creating tab block hook");
+        //console.log("Creating tab block hook");
         let prevFocus = null;
         const tabBlockFn = ev => {
 
@@ -5543,7 +5543,7 @@ function BlockTab(element) {
                 return;
             }
             if (e.tagName === "SYSWEAVER-TABBLOCK") {
-                console.log("Preventing tab (block)");
+                //console.log("Preventing tab (block)");
                 if (prevFocus)
                     prevFocus.focus();
                 return;
@@ -5555,7 +5555,7 @@ function BlockTab(element) {
                 }
                 e = e.parentElement;
             }
-            console.log("Preventing tab");
+            //console.log("Preventing tab");
             if (prevFocus)
                 prevFocus.focus();
             else
@@ -5564,7 +5564,7 @@ function BlockTab(element) {
         document.body.addEventListener("focus", tabBlockFn, true);
         window.TabBlockFn = tabBlockFn;
     }
-    console.log("Adding tab block");
+    //console.log("Adding tab block");
     tabBlockers.push([element, document.activeElement]);
 }
 
@@ -5573,7 +5573,7 @@ function BlockTab(element) {
  * @param {HTMLElement} element The element to keep focused
  */
 function UnblockTab(element) {
-    console.log("Removing tab block");
+    //console.log("Removing tab block");
     const tabBlockers = window.TabBlockers;
     if (typeof tabBlockers === "undefined")
         return;
@@ -5585,7 +5585,7 @@ function UnblockTab(element) {
         if (tb[0] === element) {
             tabBlockers.splice(i, 1);
             if (l === 1) {
-                console.log("Deleting tab block hook");
+                //console.log("Deleting tab block hook");
                 document.body.removeEventListener("focus", window.TabBlockFn, true);
                 delete window.TabBlockFn;
                 delete window.TabBlockers;
@@ -5594,7 +5594,7 @@ function UnblockTab(element) {
                 const cFocus = tb[1];
                 if (cFocus) {
                     if (IsAttached(cFocus)) {
-                        console.log("Restoring foucus");
+                        //console.log("Restoring foucus");
                         cFocus.focus();
                     }
                 }
@@ -6291,16 +6291,21 @@ async function SysWeaverInit() {
         window.Narrow = wn;
         if (b) {
             const l = b.classList;
+            const l2 = b.parentNode.classList;
             if (wp) {
                 if (!l.contains("SwPortrait")) {
                     l.add("SwPortrait");
                     l.remove("SwLandscape");
+                    l2.add("SwPortrait");
+                    l2.remove("SwLandscape");
                 }
             }
             else {
                 if (!l.contains("SwLandscape")) {
                     l.add("SwLandscape");
                     l.remove("SwPortrait");
+                    l2.add("SwLandscape");
+                    l2.remove("SwPortrait");
                 }
             }
 
@@ -6308,12 +6313,16 @@ async function SysWeaverInit() {
                 if (!l.contains("SwNarrow")) {
                     l.add("SwNarrow");
                     l.remove("SwWide");
+                    l2.add("SwNarrow");
+                    l2.remove("SwWide");
                 }
             }
             else {
                 if (!l.contains("SwWide")) {
                     l.add("SwWide");
                     l.remove("SwNarrow");
+                    l2.add("SwWide");
+                    l2.remove("SwNarrow");
                 }
             }
 
@@ -6336,14 +6345,25 @@ async function SysWeaverInit() {
 
 
     window.addEventListener("load", () => {
-        const b = document.body;
-        if (mob)
-            b.classList.add("SwMobile");
-        else
-            b.classList.add("SwDesktop");
+        const h = document.documentElement.classList;
+        const b = document.body.classList;
+        if (mob) {
+            h.add("SwMobile");
+            b.add("SwMobile");
+        }
+        else {
+            h.add("SwDesktop");
+            b.add("SwDesktop");
+        }
         onSizeChange();
-        if (ps.get("transparent"))
-            document.documentElement.classList.add("Transparent");
+        if (ps.get("transparent")) {
+            h.add("Transparent");
+            b.add("Transparent");
+        }
+        if (ps.get("fillscreen")) {
+            h.add("FillScreen");
+            b.add("FillScreen");
+        }
     });
 
     const didReload = (

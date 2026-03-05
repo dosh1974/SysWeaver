@@ -70,6 +70,9 @@ class MainMenuStyle {
 
     IconColorClass = "IconColorThemeBackground";
     IconSelColorClass = "IconColorThemeAcc1";
+    SubIconColorClass = "IconColorThemeBackground";
+    SubIconSelColorClass = "IconColorThemeAcc1";
+
     IconExpander = "IconCollapse,IconExpand";
     MenuStyle = "DefaultMenu";
     Content = null;
@@ -127,8 +130,11 @@ class MainMenu {
         const e = document.createElement("table");
         e.setAttribute("cellspacing", "0");
         e.setAttribute("cellpadding", "0");
+        let haveExpand = false;
         for (let i = 0; i < cl; ++i)
-            this.Add(e, c[i], 0, style);
+            haveExpand |= this.Add(e, c[i], 0, style);
+        if (!haveExpand)
+            e.classList.add("MenuNoExpand");
         this.Element = e;
         if (toElement) {
             toElement.classList.add(style.MenuStyle);
@@ -320,9 +326,14 @@ class MainMenu {
         hrow.title = title;
 
         const spacing = hrow.insertCell();
-        const spaceWidth = (depth * style.ExpandTab + 6) + "px";
-        spacing.style.width = spaceWidth;
-        spacing.style.minWidth = spaceWidth;
+        if (depth > 0) {
+            const spaceWidth = (depth * style.ExpandTab + 6) + "px";
+            spacing.style.width = spaceWidth;
+            spacing.style.minWidth = spaceWidth;
+            const lines = "calc(var(--ThemeIconSize) * 10px + " + ((depth - 1) * style.ExpandTab + 8) + "px)";
+            toElement.style.backgroundPositionX = lines;
+            toElement.firstElementChild.style.backgroundPositionX = lines;
+        }
 
         const exp = hrow.insertCell();
         const name = hrow.insertCell();
@@ -510,21 +521,21 @@ class MainMenu {
             hrow.classList.add("MenuClick");
 
         let iconH = null;
-        const iconWidth = "calc(var(--ThemeIconSize)*" + style.IconWidth + "px)";
+        //const iconWidth = "calc(var(--ThemeIconSize)*" + style.IconWidth + "px)";
         if (iconClass) {
-            iconH = new ColorIcon(null, style.IconColorClass, style.IconWidth, style.IconHeight, title, onclick);
+            iconH = new ColorIcon(null, canExpand ? style.SubIconColorClass : style.IconColorClass, style.IconWidth, style.IconHeight, title, onclick);
             MainMenu.SetIcon(iconH, iconClass)
             icon.appendChild(iconH.Element);
-            icon.style.width = iconWidth;
-            icon.style.minWidth = iconWidth;
+            //icon.style.width = iconWidth;
+            //icon.style.minWidth = iconWidth;
             icon["MenuIcon"] = iconH;
             hrow["MenuIcon"] = iconH;
         } 
 
-        exp.style.width = (style.IconWidth / 2) + "px";
+        //exp.style.width = (style.IconWidth / 2) + "px";
 
         if (!canExpand)
-            return;
+            return false;
 
 
         const isExpanded = localStorage.getItem(expKey) !== "1";
@@ -533,17 +544,17 @@ class MainMenu {
             irow.classList.add("MenuHide");
         }
         MainMenu.SetExpIcon(iconH, isExpanded, iconClass)
-        const iconE = new ColorIcon("", style.IconColorClass, style.ExpandIconWidth, style.ExpandIconHeight, null, expandFn);
+        const iconE = new ColorIcon("", style.SubIconColorClass, style.ExpandIconWidth, style.ExpandIconHeight, null, expandFn);
         MainMenu.SetExpIcon(iconE, isExpanded, expIconClass);
         const expIconWidth = style.ExpandIconWidth + "px";
-        exp.style.width = expIconWidth;
-        exp.style.minWidth = expIconWidth;
+        //exp.style.width = expIconWidth;
+        //exp.style.minWidth = expIconWidth;
         exp["MenuIcon"] = iconE;
         exp.appendChild(iconE.Element);
 //        irow.insertCell();
         const items = irow.insertCell();
         items.setAttribute("colspan", "4");
-        items.classList.add("MenuNested");
+        irow.classList.add("MenuNested");
 
         const nt = document.createElement("table");
         nt.setAttribute("cellspacing", "0");
@@ -552,6 +563,7 @@ class MainMenu {
         const nextDepth = depth + 1;
         for (let i = 0; i < cl; ++i)
             this.Add(nt, c[i], nextDepth, style);
+        return true;
     }
 
 
@@ -1417,6 +1429,14 @@ class App {
         t.Page = page;
         const collapsedStyle = "SwCollapsed";
         const pinnedStyle = "SwPinned";
+        const headerIconColor = "IconColorThemeAcc1";
+        const menuStyle = new MainMenuStyle();
+        menuStyle.IconColorClass = "IconColorThemeAcc1";
+        menuStyle.IconSelColorClass = "IconColorThemeAcc1";
+        menuStyle.SubIconColorClass = "IconColorThemeMain";
+        menuStyle.SubIconSelColorClass = "IconColorThemeMain";
+
+
         //  Header
         const appHeader = document.createElement("app-header");
         t.AppHeader = appHeader;
@@ -1433,7 +1453,7 @@ class App {
             const themeItems = params.SettingMenus === "" ? [] : WebMenu.From(await sendRequest("Api/application/GetMenu", settingMenus)).Items;
             const til = themeItems.length;
 
-            const expandEmbeddedIcon = new ColorIcon("IconSettings", "IconColorThemeBackground", 48, 48,
+            const expandEmbeddedIcon = new ColorIcon("IconSettings", headerIconColor, 48, 48,
                 _TF("Click to show settings", "The tool tip description on a button that when clicked will show some settings"),
                 ev => {
                 PopUpMenu(appSettingsButton, close => {
@@ -1504,7 +1524,7 @@ class App {
             t.AppBackButton = appBackButton;
             appHeader.appendChild(appBackButton);
 
-            const backIcon = new ColorIcon("IconNavBack", "IconColorThemeBackground", 48, 48,
+            const backIcon = new ColorIcon("IconNavBack", headerIconColor, 48, 48,
                 _TF("Click to navigate back", "The tool tip description on a button that when clicked will navigate to the previous page in the history"),
                 ev => {
                     history.back();
@@ -1523,7 +1543,7 @@ class App {
             t.PinButton = pinButton;
             appHeader.appendChild(pinButton);
 
-            const backIcon = new ColorIcon("IconLock", "IconColorThemeBackground", 48, 48,
+            const backIcon = new ColorIcon("IconLock", headerIconColor, 48, 48,
                 _TF("Click to lock the menu in the extapnded state", "The tool tip description on a button that when clicked will always show the menu"),
                 ev => {
                     setPinned(true);
@@ -1606,7 +1626,6 @@ class App {
                 if (pinned)
                     if (!window.Narrow)
                         return;
-                console.log("hide");
                 appMenuCapture.remove();
                 document.body.removeEventListener("mouseleave", menuCaptureLeave);
                 document.body.removeEventListener("mouseover", menuCapture);
@@ -1634,7 +1653,6 @@ class App {
             const menuShow = function () {
                 if (!bcl.contains(collapsedStyle))
                     return;
-                console.log("Menu show");
                 document.body.appendChild(appMenuCapture);
                 document.body.addEventListener("mouseover", menuCapture, true);
                 document.body.addEventListener("mouseleave", menuCaptureLeave, true);
@@ -1665,7 +1683,8 @@ class App {
                     menuShow();
             };
 
-            const menuIcon = new ColorIcon("IconMenu", "IconColorThemeBackground", 48, 48,
+
+            const menuIcon = new ColorIcon("IconMainMenu", headerIconColor, 48, 48,
                 _TF("Click to show the main menu", "The tool tip description of a button that when clicked will show the main application menu"),
                 menuToggle
                 );
@@ -1675,9 +1694,9 @@ class App {
             appMenuButton.appendChild(menuIcon.Element);
 
             const menuDef = params.MainMenus === "" ? [] : WebMenu.From(await sendRequest("Api/application/GetMenu", params.MainMenus ?? "Default"));
-            const menuStyle = new MainMenuStyle();
             menuStyle.Content = t.Content;
             menuStyle.HideFn = menuHide;
+
             menuStyle.SelectFn = data => {
 
             };

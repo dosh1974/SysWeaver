@@ -12,8 +12,8 @@ app-header {
     --m56: calc(var(--ThemeIconSize) * 56px);
     --mh: calc(var(--ThemeIconSize) * 64px);
     /*background-color: var(--ThemeAcc1);*/
-    background-image: linear-gradient(to bottom, color-mix(in srgb, var(--ThemeBackground) 25%, var(--ThemeAcc1) 75%), var(--ThemeAcc1));
-    color: var(--ThemeBackground);
+    background-image: linear-gradient(to bottom, var(--ThemeBackground), color-mix(in srgb, var(--ThemeBackground) 95%, var(--ThemeAcc1) 5%));
+    color: var(--ThemeAcc1);
     position: absolute;
     left: 0;
     top: 0;
@@ -21,7 +21,9 @@ app-header {
     height: var(--mh);
     max-height: var(--mh);
     box-sizing: border-box;
-    box-shadow: 0px 8px 8px rgba(0, 0, 0, 0.4);
+    box-shadow: 
+        0px 4px 12px rgba(0,0,0,0.3),
+        0px 1px 3px var(--ThemeAcc150);
     z-index: 2;
 }
 
@@ -119,8 +121,8 @@ body.SwMobile {
         }
 
 app-menu {
-    background-image: linear-gradient(to left, color-mix(in srgb, var(--ThemeBackground) 15%, var(--ThemeAcc1) 85%), var(--ThemeAcc1));
-    color: var(--ThemeBackground);
+    background-image: linear-gradient(to right, var(--ThemeBackground), color-mix(in srgb, var(--ThemeBackground) 95%, var(--ThemeAcc1) 5%));
+    color: var(--ThemeAcc1);
     position: absolute;
     z-index: 1;
     left: 0;
@@ -128,7 +130,9 @@ app-menu {
     width: 400px;
     bottom: 0;
     transition: transform 0.1s;
-    box-shadow: 8px 0px 8px rgba(0, 0, 0, 0.4);
+    box-shadow: 
+        4px 0 12px rgba(0,0,0,0.3),
+        1px 0 3px var(--ThemeAcc150);
     user-select: none;
     padding: 16px 4px 4px 4px;
     box-sizing: border-box;
@@ -139,7 +143,8 @@ app-menu {
     font-style: normal;
     font-size: 100%;
     text-align: left;
-    scrollbar-color: var(--ThemeBackground) var(--ThemeAcc1);
+    scrollbar-color: var(--ThemeAcc150) var(--ThemeBackground);
+    scrollbar-gutter: stable;
 }
 
     app-menu:before {
@@ -155,7 +160,7 @@ app-menu {
         background-position: 40px bottom;
         background-repeat: no-repeat;
         pointer-events: none;
-        opacity: 0.1;
+        opacity: 0.05;
     }
 
 
@@ -167,8 +172,41 @@ app-menu {
 
 body.SwCollapsed {
     app-menu {
-        transform: translateX(-360px);
+        transform: translateX(calc(-400px + 52px * var(--ThemeIconSize)));
     }
+
+        app-menu.DefaultMenu td {
+            border-style: none !important;
+            background: none !important;
+        }
+
+            app-menu.DefaultMenu td:last-child {
+                border-radius: var(--ThemeRadInp);
+                border-style: solid !important;
+            }
+
+        app-menu.DefaultMenu tr:hover > td:last-child {
+            background-color: rgba(var(--ThemeAcc1RGB), 0.1) !important;
+        }
+
+        app-menu.DefaultMenu tr.SubMenu:hover > td:last-child {
+            background-color: rgba(var(--ThemeMainRGB), 0.1) !important;
+        }
+
+
+        app-menu.DefaultMenu tr.MenuSel > td:last-child {
+            background-color: rgba(var(--ThemeAcc1RGB), 0.2) !important;
+        }
+
+
+        app-menu.DefaultMenu tr.MenuNested:hover > td:last-child {
+            background: none !important;
+        }
+
+        app-menu.DefaultMenu tr.MenuNested > td {
+            padding: 0;
+            border: none !important;
+        }
 }
 
 body.SwNarrow app-menu {
@@ -176,11 +214,12 @@ body.SwNarrow app-menu {
     box-shadow: 0px 8px 8px rgba(0, 0, 0, 0.4);
 }
 
-body.SwNarrow.SwCollapsed
-{
-    app-menu{
+body.SwNarrow.SwCollapsed {
+    app-menu {
         transform: translate(0, -110%);
     }
+
+
 }
 
 app-capture {
@@ -205,7 +244,7 @@ app-content {
     bottom: 0;
     overflow: hidden;
     padding-top: 0px;
-    padding-left: 40px;
+    padding-left: calc(52px * var(--ThemeIconSize));
     color: var(--ThemeMain);
     transition: padding-left linear var(--ThemeFadeDuration);
 }
@@ -234,122 +273,232 @@ body.SwNarrow app-content {
 
 /****** Default menu ******/
 
-.DefaultMenu {
-    --MenuSubBack: var(--ThemeMain);
-    --MenuBg: var(--ThemeAcc1);
-    --MenuFg: var(--ThemeBackground);
+    .DefaultMenu table {
+        border: none;
+        border-collapse: separate;
+        border-spacing: 0 0.5em;
+        padding: 0;
+        margin: 0;
+        width: 100%;
+        max-width: 100%;
+        transition: margin linear 0.15s;
+        box-sizing: border-box;
+
+        /*table-layout: fixed;*/
+    }
+
+    .DefaultMenu table tr {
+        margin: 0.25em 0;
+    }
+
+        .DefaultMenu table.MenuNoExpand td:first-child {
+            padding: 0;
+            width: 10px;
+            min-width: 10px;
+            max-width: 10px;
+        }
+
+        .DefaultMenu table.MenuNoExpand td:nth-child(2) {
+            padding: 0;
+            width: 0;
+            min-width: 0;
+            max-width: 0;
+        }
+
+
+
+
+SysWeaver-PopupMenuBack.DefaultMenu tr.SubMenu {
+    color: inherit;
 }
 
-.DefaultMenu table {
-    border: none;
-    border-collapse: collapse;
-    border-spacing: 0;
-    padding: 0;
-    margin: 0;
-    width: 100%;
-    max-width: 100%;
-    /*table-layout: fixed;*/
+SysWeaver-PopupMenuBack.DefaultMenu tr.SubMenuHide td:last-child{
+    box-shadow: inset -2px 0 0 var(--ThemeBackground25);
 }
 
-SysWeaver-PopupMenu.DefaultMenu table table {
-    width: 100%;
-    max-width: 100%;
-    table-layout: fixed;
+SysWeaver-PopupMenuBack.DefaultMenu tr.MenuNested > td > table {
+    background-image: linear-gradient(to bottom,var(--ThemeBackground25) 2px 2px);
 }
+
+    SysWeaver-PopupMenuBack.DefaultMenu tr.MenuNested > td > table > tbody {
+        background-image: linear-gradient(to right,var(--ThemeBackground25) 2px 2px);
+    }
+
+SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData.SubMenu:hover td {
+    background-color: rgba(var(--ThemeBackgroundRGB), 0.1);
+    border: 1px solid var(--ThemeBackground50);
+}
+
+SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
+    background-color: rgba(var(--ThemeBackgroundRGB), 0.1);
+    border: 1px solid var(--ThemeBackground50);
+}
+
 
 
 
 .DefaultMenu tr {
-    transition: opacity linear 0.15s, background-color linear 0.15s, color linear 0.15s;
+    transition: opacity linear 0.15s, box-shadow linear 0.15s;
 }
+
+    .DefaultMenu tr.SubMenuHide td:last-child{
+        box-shadow: inset -2px 0 0 var(--ThemeMain25);
+    }
 
 .DefaultMenu td {
+    transition: border linear 0.15s, background-color linear 0.15s;
     padding: 1px 0;
+    border: solid 1px transparent;
+    border-style: solid none solid none !important;
+    vertical-align: middle;
+    overflow: hidden;
 }
 
-.DefaultMenu td:first-child {
-    border-radius: var(--ThemeRadInp);
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
+.DefaultMenu td Icon-32x32.IconDisabled{
+    opacity: 1;
 }
 
-.DefaultMenu td:last-child {
-    border-radius: var(--ThemeRadInp);
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-    overflow: visible;
-    min-height: calc(var(--ThemeIconSize) * 32px + 2px);
-}
+
+
+    .DefaultMenu td:first-child {
+        width: 0px;
+        min-width: 6px;
+        border-style: none !important;
+        background: none !important;
+    }
+
+    .DefaultMenu td:nth-child(2) {
+        border-style: none !important;
+        padding: 2px 4px 2px 4px;
+        background: none !important;
+        width: calc(var(--ThemeIconSize) * 20px);
+        min-width: calc(var(--ThemeIconSize) * 20px);
+        min-height: calc(var(--ThemeIconSize) * 32px + 4px);
+    }
+
+    .DefaultMenu td:nth-child(3) {
+        border-radius: var(--ThemeRadInp);
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+        border-left-style: solid !important;
+        padding-left: 0.5em;
+    }
+
+    .DefaultMenu td:last-child {
+        border-radius: var(--ThemeRadInp);
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        padding: 2px 4px 2px 4px;
+        width: calc(var(--ThemeIconSize) * 32px);
+        min-width: calc(var(--ThemeIconSize) * 32px);
+        border-right-style: solid !important;
+    }
 
 
 .DefaultMenu td:last-child > * {
     position: relative;
-    left: -3px;
     top: 3px;
 }
 
-.DefaultMenu td.MenuNested:last-child > * {
-    position: relative;
-    left: 0;
-    top: 0;
+.DefaultMenu tr.MenuNested > td {
+    padding: 0;
+    border: none !important;
 }
 
-    .DefaultMenu tr.MenuHide {
-        display: none;
+        .DefaultMenu tr.MenuNested > td > table {
+            background-image: linear-gradient(to bottom,var(--ThemeMain25) 2px 2px);
+            background-size: 2px 100%;
+            background-repeat: no-repeat;
+            background-position-y: bottom calc(1em + 13px);
+            margin-bottom: -0.5em;
+            margin-top: -0.5em;
+        }
+
+            .DefaultMenu tr.MenuNested > td > table > tbody {
+                background-image: linear-gradient(to right,var(--ThemeMain25) 2px 2px);
+                background-size: 10px 2px;
+                background-repeat: no-repeat;
+                background-position-y: bottom calc(1em + 5px);
+            }
+
+
+
+
+
+
+
+        .DefaultMenu tr.MenuNested > td:last-child > * {
+            position: relative;
+            left: 0;
+            top: 0;
+        }
+
+
+.DefaultMenu tr.MenuHide {
+       display: none;
+}
+/*
+    .DefaultMenu tr.MenuHide{
+        padding: 0;
     }
 
-.DefaultMenu tr.MenuData.SubMenu {
-    box-shadow: 3px 0.25px 0px var(--ThemeBackground75);
-    transition: opacity linear 0.1s;
+    .DefaultMenu tr.MenuHide table{
+        margin-top: -300svh !important;
+        margin-bottom: 0.5em;
+    }*/
+
+.DefaultMenu tr.SubMenu {
+    color: var(--ThemeMain);
 }
 
-.DefaultMenu tr.MenuData.SubMenuHide > td:last-child{
-    opacity: 0.4;
+.DefaultMenu tr.MenuData.SubMenu:hover td {
+    background-color: rgba(var(--ThemeMainRGB), 0.1);
+    border: 1px solid var(--ThemeMain50);
 }
 
-/*.DefaultMenu tr.MenuData.SubMenu:hover {
-    background-color: color-mix(in srgb, var(--MenuSubBack) 85%, var(--ThemeBackground) 15%);
-}*/
-
-
-
-.DefaultMenu tr.MenuData:hover 
-{
-    background-color: rgba(var(--ThemeBackgroundRGB), 0.15);
+.DefaultMenu tr.MenuData:hover td {
+    background-color: rgba(var(--ThemeAcc1RGB), 0.1);
+    border: 1px solid var(--ThemeAcc150);
 }
 
-    .DefaultMenu tr.MenuSel {
-        background-color: var(--ThemeBackground);
-        color: var(--ThemeAcc1);
-    }
 
-        .DefaultMenu tr.MenuSel.MenuClick {
-            opacity: 1;
-            cursor: default;
-        }
+.DefaultMenu tr.MenuData.MenuSel td {
+    background-color: rgba(var(--ThemeAcc1RGB), 0.2);
+    border: 1px solid var(--ThemeAcc175);
+}
 
-        .DefaultMenu tr.MenuSel.MenuData:hover {
-            background-color: var(--ThemeBackground);
-            color: var(--ThemeAcc1);
-        }
 
-        .DefaultMenu tr.MenuSel.MenuData.MenuDisabled:hover {
-            background: none;
-            color: var(--ThemeAcc1);
-        }
+.DefaultMenu tr.MenuData.MenuSel.MenuClick {
+    opacity: 1;
+    cursor: default;
+}
 
-.DefaultMenu tr.MenuData.MenuDisabled:hover {
+.DefaultMenu tr.MenuData.MenuSel:hover td {
+    background-color: rgba(var(--ThemeAcc1RGB), 0.1);
+    border: 1px solid var(--ThemeAcc150);
+}
+
+.DefaultMenu tr.MenuData.MenuSel.MenuDisabled:hover td {
+    background: none;
+    color: var(--ThemeBackground);
+}
+
+.DefaultMenu tr.MenuData.MenuDisabled:hover td {
     background: none;
 }
 
 .DefaultMenu tr.MenuDisabled {
-    background: none;
     opacity: 0.4;
 }
 
+.DefaultMenu tr.MenuChecked td {
+    overflow: visible;
+}
 
 .DefaultMenu tr.MenuChecked td:nth-child(2)::after {
     content: '✓';
+    position: relative;
+    left: -16px;
 }
 
 
@@ -365,21 +514,12 @@ SysWeaver-PopupMenu.DefaultMenu table table {
 
     
  .DefaultMenu td {
-    overflow: hidden;
     white-space: nowrap;
 }
 
-    .DefaultMenu td:first-child {
-        width: 0px;
-        min-width: 6px;
-    }
 
-    .DefaultMenu td:nth-child(2)
-    {
-        padding: 2px 12px 2px 4px;
-    }
 
-    .DefaultMenu td.MenuNested:nth-child(2) {
+    .DefaultMenu tr.MenuNested > td:nth-child(2) {
         padding: 0;
     }
 
@@ -389,11 +529,6 @@ SysWeaver-PopupMenu {
     display: block;
     overflow: visible;
 }
-
-    SysWeaver-PopupMenu tr.MenuData td:nth-child(4) {
-        padding-left: 16px;
-        padding-right: 16px;
-    }
 
     SysWeaver-PopupMenu.Bottom SysWeaver-PopupMenuBack {
         bottom: 0;
@@ -408,19 +543,25 @@ SysWeaver-PopupMenuBack {
     margin: 1px 8px 8px 0;
     max-width: 75vw;
     max-height: 85vh;
-    padding: 5px;
+    padding: 5px 12px;
     cursor: default !important;
     font-family: var(--ThemeFont);
     font-style: normal;
     font-size: 100%;
     text-align: left;
     overflow-y: auto;
-    scrollbar-color: var(--ThemeBackground) var(--ThemeAcc2);
+    scrollbar-color: var(--ThemeBackground50) var(--ThemeAcc2);
+    scrollbar-gutter: stable;
+    animation: SysWeaver-PopupMenuBack-Scroll forwards;
+    animation-timeline: scroll(y self);
 }
 
-    SysWeaver-PopupMenuBack.DefaultMenu {
-        --MenuSubBack: var(--ThemeMain);
+@keyframes SysWeaver-PopupMenuBack-Scroll {
+    0%,to {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
     }
+}
 
     SysWeaver-PopupMenuBack.Rel {
         position: relative;
@@ -717,6 +858,40 @@ SysWeaver-PopUpWorkingText {
     display: block;
     text-align: center;
 }
+
+
+/*** Main menu icon ***/
+
+body.SwCollapsed.SwNarrow {
+    
+    .IconMainMenu {
+        mask-image: url("../icons/down.svg");
+    }
+
+}
+
+
+body.SwCollapsed {
+
+    .IconMainMenu {
+        mask-image: url("../icons/right.svg");
+    }
+
+}
+
+
+body.SwNarrow {
+
+    .IconMainMenu {
+        mask-image: url("../icons/up.svg");
+    }
+}
+
+
+.IconMainMenu {
+    mask-image: url("../icons/left.svg");
+}
+
 
 /****** ICONS ******/
 .IconMenu {

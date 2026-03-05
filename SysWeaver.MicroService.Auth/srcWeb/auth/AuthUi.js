@@ -278,7 +278,7 @@ async function AuthPage(icon, build, iconIsFile) {
                 img.src = icon;
                 box.appendChild(img);
             } else {
-                img = new ColorIcon(icon, "IconColorThemeMain", 300, 300);
+                img = new ColorIcon(icon, "IconColorThemeMain", 128, 128);
                 box.appendChild(img.Element);
             }
         }

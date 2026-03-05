@@ -358,10 +358,7 @@ class Table {
 
                 cell.title = ValueFormat.joinNonEmpty("\n\n", col.Desc, _TF("Click to show options", "A tool tip description on a button that if clicked will show some options"));
 
-
                 const contextMenu = async ev => {
-                    if (badClick(ev))
-                        return true;
                     const checked = 2;
                     const readonly = 1;
                     const checkedReadonly = checked | readonly;
@@ -385,7 +382,7 @@ class Table {
 
 
                             menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Sort asceneding", "The text of a menu item on a table column header that if clicked will sort the table in asceneding order based of that column"),
+                                Name: _TF("Sort ascending", "The text of a menu item on a table column header that if clicked will sort the table in ascending order based of that column"),
                                 IconClass: "IconAscending",
                                 Title: isSelAsc
                                     ?
@@ -537,11 +534,20 @@ class Table {
                         }
                         return menu;
                     });
+                };
+                cell.onclick = async ev => {
+                    if (badClick(ev))
+                        return true;
+                    await contextMenu(ev);
+                };
+                cell.oncontextmenu = async ev => {
+                    if (badClick(ev, true))
+                        return true;
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    await contextMenu(ev);
                     return false;
                 };
-
-                cell.onclick = contextMenu;
-                cell.oncontextmenu = contextMenu;
 
 
 
@@ -633,8 +639,6 @@ class Table {
                     const icon = new ColorIcon("IconReset", "IconColorThemeAcc1", iconSize, iconSize,
                         _TF("Click to reset all filter values and parameters to their default (no filtering).", "A tool tip description on a button that if clicked will reset all paramaters to default")
                         , ev => {
-                        if (!isPureClick(ev))
-                            return;
                         let changed = false;
                         let fchanged = false;
                         const rowFirst = getFirstRowIndex(trow);
@@ -678,8 +682,6 @@ class Table {
                     const icon = new ColorIcon("IconClose", "IconColorThemeAcc1", iconSize, iconSize,
                         _TF("Click to remove this filter set.", "A tool tip description on a button that if clicked will remove a set of filters")
                         , ev => {
-                        if (!isPureClick(ev))
-                            return;
                         const rowFirst = getFirstRowIndex(trow);
                         if (deleteFilters(rowFirst)) {
                             requestParams.Row = 0;
@@ -769,8 +771,6 @@ class Table {
                 const icon = new ColorIcon("IconClear", "IconColorThemeAcc2", iconSize, iconSize,
                     _TF("Click to clear all filter values.", "A tool tip description on a button that if clicked will remove all filter values")
                     , ev => {
-                    if (!isPureClick(ev))
-                        return;
                     let changed = false;
                     for (ci = 0; ci < columnCount; ++ci) {
                         const filter = filters[ci];
@@ -838,8 +838,6 @@ class Table {
                 const icon = new ColorIcon("IconPlus", "IconColorThemeMain", iconSize, iconSize,
                     _TF("Click to add a new set of filters.", "A tool tip description on a button that if clicked will add a new set of filter options")
                     , ev => {
-                    if (!isPureClick(ev))
-                        return;
                     if (state.FilterRows >= 3)
                         return;
                     const rowFirst = getFirstRowIndex(trow);
@@ -863,9 +861,14 @@ class Table {
                 keyboardClick(caseSens);
                 cell.appendChild(invert)
                 cell.appendChild(caseSens);
+                //const checkPrefix = "☑ ";
+                //const unCheckPrefix = "☐ ";
+
+                const checkPrefix = "";
+                const unCheckPrefix = "";
                 const setInvert = function () {
                     const e = filter.Invert;
-                    invert.innerText = e ? "☑ !" : "☐ !";
+                    invert.innerText = (e ? checkPrefix : unCheckPrefix) + "!";
                     invert.title = e
                         ?
                         _TF("Showing data that doesn't pass filter function.\nUncheck to show data that pass the filter function.", "A tool tip description on a toggle button that is checked, indicating that data that is NOT passing the filter is kept")
@@ -879,7 +882,7 @@ class Table {
                 };
                 const setCaseSens = function () {
                     const e = filter.CaseSensitive;
-                    caseSens.innerText = e ? "☑ A ≠ a" : "☐ A ≠ a";
+                    caseSens.innerText = (e ? checkPrefix : unCheckPrefix) + "A ≠ a";
                     caseSens.title = e
                         ?
                         _TF("Case sensitive matching is enabled.\nUncheck to perform a case insensitive match instead.", "A tool tip description on a toggle button that is checked, indicating that data that case sensitive text filtering should be applied")
@@ -898,7 +901,7 @@ class Table {
                 if ((props & TableDataProps.AnyFilters) !== 0) {
                     invert.tabIndex = "0";
                     invert.onclick = ev => {
-                        if (!isPureClick(ev))
+                        if (badClick(ev))
                             return;
                         filter.Invert = !filter.Invert;
                         setInvert();
@@ -916,7 +919,7 @@ class Table {
                 if ((props & TableDataProps.TextFilter) !== 0) {
                     caseSens.tabIndex = "0";
                     caseSens.onclick = ev => {
-                        if (!isPureClick(ev))
+                        if (badClick(ev))
                             return;
                         filter.CaseSensitive = !filter.CaseSensitive;
                         setCaseSens();
@@ -955,8 +958,6 @@ class Table {
                 {
                     const cell = insertTH(trow);
                     const icon = new ColorIcon("IconPlus", "IconColorThemeMain", 23, 23, null, ev => {
-                        if (!isPureClick(ev))
-                            return;
                         state.Expanded = (state.Expanded + 1) % 3;
                         Table.tableUpdateFilterIcon(table, state);
                         saveFn();
@@ -973,7 +974,7 @@ class Table {
                         const cell = insertTH(trow);
                         const d = document.createElement("div");
                         const s = document.createElement("span");
-                        const icon = new ColorIcon("", "IconColorThemeBackground", 16, 16);
+                        const icon = new ColorIcon("", "IconColorThemeAcc1", 20, 20);
                         cell.Icon = icon;
                         cell.Text = s;
                         d.appendChild(icon.Element);
@@ -1012,8 +1013,7 @@ class Table {
             ++cellIndex;
             if (cell["Value"] !== dataRow) {
                 cell["Value"] = dataRow;
-                if (ValueFormat.updateText(cell, dataRow))
-                    cell.classList.add("Right");
+                ValueFormat.updateText(cell, dataRow);
             }
             const dvalues = drow.Values;
             trow["DataRow"] = dataRow;
@@ -1091,8 +1091,8 @@ class Table {
         const useTitleAsName = !tableName;
 
         if (useTitleAsName) {
-            const tt = url.split('/');
-            tableName = tt[tt.length - 1];
+            const tt = url.split('?')[0].split('/');
+            tableName = ValueFormat.removeCamelCase(tt[tt.length - 1]);
         }
 
         const tableInfo =
@@ -1203,7 +1203,7 @@ class Table {
                 for (let i = startRow; i < rowC; ++i)
                     dataHeight += rows[i].offsetHeight;
                 const rowHeight = Math.ceil(dataHeight / (rowC - startRow));
-                let windowHeight = footer.offsetTop - table.offsetTop - 16;
+                let windowHeight = footer.offsetTop - table.offsetTop - 16 - 24;
                 if (windowHeight < 128)
                     windowHeight = 128;
                 const tableHeight = table.offsetHeight;
@@ -1240,7 +1240,7 @@ class Table {
         const footer = document.createElement("datatable-footer");
         toElement.appendChild(footer);
         const navSize = 26;
-        const navColor = "IconColorThemeBackground";
+        const navColor = "IconColorThemeAcc1";
         //  Home
         const homeIcon = new ColorIcon("IconHome", navColor, navSize, navSize,
             _TF("Go to the first page", "A tool tip description on a button that if clicked will navigate to the first page"),
@@ -1463,11 +1463,12 @@ class Table {
                         data = await sendRequest(url, requestParams, didChange);
                     }
                     if (useTitleAsName) {
-                        if (data.Title) {
-                            tableName = data.Title;
-                            tableInfo.Name = tableName;
-                        }
+                        const o = data.Title;
+                        if (o)
+                            tableName = o;
                     }
+                    tableInfo.Name = tableName;
+                    data.Title = tableName;
                 }
                 latestData = data;
                 first = false;
