@@ -74,6 +74,7 @@ class MainMenuStyle {
     SubIconSelColorClass = "IconColorThemeAcc1";
 
     IconExpander = "IconCollapse,IconExpand";
+    IconExpanderMain = "IconCollapseMain,IconExpandMain";
     MenuStyle = "DefaultMenu";
     Content = null;
     SelectFn = null;
@@ -103,11 +104,6 @@ class MainMenu {
             return;
         }
         icon.ChangeImage(x[isExpanded ? 0 : 1].trim());
-        icon.SetTitle(isExpanded ?
-            _TF("Click to collapse", "The tool tip description of a button on a menu row that when pressed will hide the sub menu (child) items")
-            :
-            _TF("Click to expand", "The tool tip description of a button on a menu row that when pressed will show the sub menu (child) items")
-        );
     }
 
 
@@ -320,11 +316,11 @@ class MainMenu {
 
         const rowData = data;
         const hrow = toElement.insertRow();
-        let title = data.Title;
+        let title = data.Title ?? "";
         hrow.classList.add("MenuData");
         hrow["MenuItem"] = rowData;
         hrow.title = title;
-
+        const expTitle = title ? (title + "\n\n") : "";
         const spacing = hrow.insertCell();
         if (depth > 0) {
             const spaceWidth = (depth * style.ExpandTab + 6) + "px";
@@ -480,7 +476,7 @@ class MainMenu {
         let iconClass = data.IconClass;
         const useExpIcon = (!iconClass) && (!onclick) && (canExpand);
         if (useExpIcon)
-            iconClass = expIconClass;
+            iconClass = style.IconExpanderMain;
 
         const expandFn = canExpand ? function (ev)
         {
@@ -498,6 +494,11 @@ class MainMenu {
                 localStorage.setItem(expKey, "1");
             }
             const eic = icon["MenuIcon"];
+            hrow.title = expTitle + (isExpanded ?
+                _TF("Click to collapse", "The tool tip description of a button on a menu row that when pressed will hide the sub menu (child) items")
+                :
+                _TF("Click to expand", "The tool tip description of a button on a menu row that when pressed will show the sub menu (child) items")
+            );
             if (eic)
                 MainMenu.SetExpIcon(eic, isExpanded, iconClass);
             const eic2 = exp["MenuIcon"];
@@ -523,7 +524,7 @@ class MainMenu {
         let iconH = null;
         //const iconWidth = "calc(var(--ThemeIconSize)*" + style.IconWidth + "px)";
         if (iconClass) {
-            iconH = new ColorIcon(null, canExpand ? style.SubIconColorClass : style.IconColorClass, style.IconWidth, style.IconHeight, title, onclick);
+            iconH = new ColorIcon(null, canExpand ? style.SubIconColorClass : style.IconColorClass, style.IconWidth, style.IconHeight, null, onclick);
             MainMenu.SetIcon(iconH, iconClass)
             icon.appendChild(iconH.Element);
             //icon.style.width = iconWidth;
@@ -537,12 +538,18 @@ class MainMenu {
         if (!canExpand)
             return false;
 
+ 
 
         const isExpanded = localStorage.getItem(expKey) !== "1";
         if (!isExpanded) {
             hrow.classList.add("SubMenuHide");
             irow.classList.add("MenuHide");
         }
+        hrow.title = expTitle + (isExpanded ?
+            _TF("Click to collapse", "The tool tip description of a button on a menu row that when pressed will hide the sub menu (child) items")
+            :
+            _TF("Click to expand", "The tool tip description of a button on a menu row that when pressed will show the sub menu (child) items")
+        );
         MainMenu.SetExpIcon(iconH, isExpanded, iconClass)
         const iconE = new ColorIcon("", style.SubIconColorClass, style.ExpandIconWidth, style.ExpandIconHeight, null, expandFn);
         MainMenu.SetExpIcon(iconE, isExpanded, expIconClass);

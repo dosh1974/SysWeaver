@@ -383,7 +383,7 @@ namespace SysWeaver.Net
         [WebApiClientCache(30)]
         [WebApiRequestCache(30, WebApiCaches.Globally)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/{0}", "Data table", null, "IconTableTables")]
+        [WebMenuTable(null, "Debug/{0}", "Data tables", "All registered data tables end points", "IconTableTables")]
         public Task<TableData> ApiTableTable(TableDataRequest r, HttpServerRequest context) 
             => TableDataTools.Get(context, r, 30000, Tables.Keys.Select(x => new DataT(x)).ToList());
 

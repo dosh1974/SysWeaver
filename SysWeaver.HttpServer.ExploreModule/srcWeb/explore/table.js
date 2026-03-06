@@ -346,12 +346,17 @@ class Table {
                     }
                     icon.ChangeImage(rev ? "IconDescending" : "IconAscending");
                     i.classList.add("IconButton");
+                    i.style.maxWidth = null;
+
                 } else {
                     cell.classList.remove("CurrentSort");
                     cell.classList.remove("Sort");
                     cell.classList.add("NoSort");
+
+                    i.style.maxWidth = "0";
                     i.classList.remove("IconButton");
-                    icon.ChangeImage(0);
+                    icon.ChangeImage(null);
+
                 }
                 title = ValueFormat.joinNonEmpty("\n\n", col.Desc, title);
                 ValueFormat.updateText(s, col.Title, null, null);

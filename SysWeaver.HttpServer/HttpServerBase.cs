@@ -28,6 +28,7 @@ namespace SysWeaver.Net
     [WebMenuEmbedded(null, "Welcome", "Welcome", "app/Welcome.html", "Show the welcome page", "IconHome", -100, null, true)]
     [WebMenuEmbedded(null, "Home", "Home", "app/Home.html", "Show the home page", "IconHome", -100, "")]
     [WebMenuPath("Theme", "Theme", "Theme", "Color themes", "IconTheme")]
+    [WebMenuPath(null, "Debug/Http Server", "Http Server", "Debug data from the http server", "../icons/server.svg")]
     [WebMenuJs("Theme", "Theme/Auto", "(Automatic)", "if(resetTheme());false", "Automatically select (from browser / OS settings)", "IconThemeAuto", 0)]
     [WebMenuJs("Theme", "Theme/Light", "Light", "if(setTheme('light'));false", "Use the bright mode color scheme", "IconThemeLight", 1)]
     [WebMenuJs("Theme", "Theme/Dark", "Dark", "if(setTheme('dark'));false", "Use the dark mode color scheme", "IconThemeDark", 2)]

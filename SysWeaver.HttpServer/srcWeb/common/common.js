@@ -2688,40 +2688,43 @@ class ColorIcon {
 
 
     static SetImageClass(element, imageClass) {
+        const st = element.style;
         if (!imageClass) {
-            element.style.maskImage = null;
-            element.style.backgroundImage = null;
-            element.style.backgroundColor = null;
+            st.maskImage = null;
+            st.backgroundImage = null;
+            st.backgroundColor = null;
+            st.visibility = "hidden"; 
             return;
         }
-
+        st.visibility = null;
         const isLink = imageClass.includes('.');
         if (isLink)
         {
             const isColor = imageClass.charAt(imageClass.length - 1) === '*';
             if (isColor) {
                 imageClass = imageClass.substring(0, imageClass.length - 1);
-                element.style.maskImage = null;
-                element.style.backgroundImage = "url('" + imageClass + "')";
-                element.style.backgroundColor = "transparent";
+                st.maskImage = null;
+                st.backgroundImage = "url('" + imageClass + "')";
+                st.backgroundColor = "transparent";
 
             } else {
-                element.style.maskImage = "url('" + imageClass + "')";
-                element.style.backgroundImage = null;
-                element.style.backgroundColor = null;
+                st.maskImage = "url('" + imageClass + "')";
+                st.backgroundImage = null;
+                st.backgroundColor = null;
             }
         } else {
             element.classList.add(imageClass);
-            element.style.maskImage = null;
-            element.style.backgroundImage = null;
-            element.style.backgroundColor = null;
+            st.maskImage = null;
+            st.backgroundImage = null;
+            st.backgroundColor = null;
         }
     }
 
     static RemoveImageClass(element, imageClass) {
-        element.style.maskImage = null;
-        element.style.backgroundImage = null;
-        element.style.backgroundColor = null;
+        const st = element.style;
+        st.maskImage = null;
+        st.backgroundImage = null;
+        st.backgroundColor = null;
         if (!imageClass)
             return;
         if (isLetter(imageClass.charAt(0)))
@@ -2833,10 +2836,10 @@ class ColorIcon {
 
     setTitleAttr(tit) {
         const e = this.Element;
-        if (typeof tit === "undefined")
-            e.removeAttribute("title");
-        else
+        if (tit)
             e.title = tit;
+        else
+            e.removeAttribute("title");
     }
 
     /** The element of this icon */
@@ -2917,7 +2920,7 @@ class ColorIcon {
      */
     ChangeImage(imageClass) {
         const c = this.ImageClass;
-        if (c == imageClass)
+        if (c === imageClass)
             return this;
         const te = this.ImageElement;
         ColorIcon.RemoveImageClass(te, c);

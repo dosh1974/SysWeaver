@@ -347,7 +347,6 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
 
 .DefaultMenu td {
     transition: border linear 0.15s, background-color linear 0.15s;
-    padding: 1px 0;
     border: solid 1px transparent;
     border-style: solid none solid none !important;
     vertical-align: middle;
@@ -369,7 +368,7 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
 
     .DefaultMenu td:nth-child(2) {
         border-style: none !important;
-        padding: 2px 4px 2px 4px;
+        padding: 0 4px 0 4px;
         background: none !important;
         width: calc(var(--ThemeIconSize) * 20px);
         min-width: calc(var(--ThemeIconSize) * 20px);
@@ -381,7 +380,7 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
         border-top-right-radius: 0;
         border-bottom-right-radius: 0;
         border-left-style: solid !important;
-        padding-left: 0.5em;
+        padding: 0 0.5em;
     }
 
     .DefaultMenu td:last-child {
@@ -898,13 +897,24 @@ body.SwNarrow {
     mask-image: url("../icons/more.svg");
 }
 
+
 .IconExpand {
-    mask-image: url("../icons/plus.svg");
+    mask-image: url("../icons/expand.svg");
 }
 
 .IconCollapse {
+    mask-image: url("../icons/collapse.svg");
+}
+
+
+.IconExpandMain {
+    mask-image: url("../icons/plus.svg");
+}
+
+.IconCollapseMain {
     mask-image: url("../icons/minus.svg");
 }
+
 
 .IconClearInput {
     mask-image: url("../icons/clear_input.svg");
@@ -1035,6 +1045,12 @@ body.SwNarrow {
 .IconTable {
     mask-image: url("../icons/table.svg");
 }
+
+.IconDbTable {
+    mask-image: url("../icons/db.svg");
+}
+
+
 
 .IconChart {
     mask-image: url("../icons/chart.svg");

@@ -16,6 +16,7 @@ namespace SysWeaver.MicroService
 {
 
     [WebApiUrl("Audit")]
+    [WebMenuPath(null, "Debug/Audit", "Audit", "Audit information", "../icons/fingerprint.svg")]
     public sealed class MySqlApiAuditService : IApiAuditService, IDisposable
     {
         public MySqlApiAuditService(ServiceManager manager, MySqlApiAuditParams p = null)
