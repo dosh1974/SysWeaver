@@ -69,15 +69,18 @@ td.EditDraggable
         cursor: grabbing;
     }
 
-
-tr.Hide
+td > .EditFloatRight
 {
+    float: right !important;
+}
+
+tr.Hide {
     display: none;
 }
 
 /*############# Icons ###################*/
 .SysWeaverEditIconMenu {
-    mask-image: url("../icons/more.svg");
+    mask-image: url("../icons/menu.svg");
 }
 
 .SysWeaverEditIconDefault {

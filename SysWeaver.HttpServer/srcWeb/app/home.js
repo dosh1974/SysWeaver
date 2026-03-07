@@ -32,6 +32,7 @@ async function homeMain() {
                     switch (res0) {
                         case UploadStatus.AlreadyUploaded:
                             Info(_T("User image \"{0}\" was already uploaded", files[0].name, "Text displayed when the user image that was uploaded to a server is the same as the current user image.{0} is replaced with the name of the user image file"));
+                            InterOp.Post("UserImageChanged");
                             break;
                         case UploadStatus.None:
                             Info(_T("Uploaded user image \"{0}\"", files[0].name, "Text displayed when a user image file was succesfully uploaded to a server.{0} is replaced with the name of the user image file"));
@@ -40,6 +41,7 @@ async function homeMain() {
                                 el.src = cs.substring(0, cs.length - 5) + "large";
                             else
                                 SetImageSource(el, cs, null, true);
+                            InterOp.Post("UserImageChanged");
                             break;
                         default:
                             Fail(_T("{0}, when uploading user image \"{1}\"", fileUploaderStatusText(res0), files[0].name, "Text displayed when uploading of a user image file to a server failed.{0} is replaced with a message as to why the file failed.{1} is replaced with the name of the user image file"));

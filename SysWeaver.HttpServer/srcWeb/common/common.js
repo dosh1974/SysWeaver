@@ -2338,13 +2338,32 @@ class AbortHandler {
     }
 }
 
-// Delay some time
+
+/**
+ * Delay execution until the next animation frame
+ * @returns
+ */
+function delayOneFrame() {
+    return new Promise(resolve => requestAnimationFrame(resolve));
+}
+
+
+/**
+ * Delay execution some duration
+ * @param {number} msToWait Number of milliseconds to wait
+ * @returns
+ */
 function delay(msToWait)
 {
     return new Promise(resolve => setTimeout(resolve, msToWait));
 }
 
-// Delay some time, with custom abort
+/**
+ * Delay execution some duration, with the option to abort
+ * @param {number} msToWait Number of milliseconds to wait
+ * @param {AbortHandler} abortHandler The abort handler that can abort
+ * @returns
+ */
 function delayWithAbort(msToWait, abortHandler)
 {
     return new Promise(resolve =>
@@ -2772,7 +2791,7 @@ class ColorIcon {
 //            ss.insertRule("icon-" + key + "{width:" + width + "px;height:" + height + "px;display:inline-block;overflow:hidden;}", ss.cssRules.length);
 //            ss.insertRule("icon-" + key + ">icon-main{overflow:visible;background-position:-100% 0;background-repeat:no-repeat;background-size:" + width + "px " + height + "px;margin-left:-" + width + "px;display:block;width:" + (width + 0) + "px;height:" + height + "px;}", ss.cssRules.length);
 
-            ss.insertRule("icon-" + key + "{width:calc(var(--ThemeIconSize)*" + width + "px);height:calc(var(--ThemeIconSize)*" + height + "px);display:inline-block;mask-size:calc(var(--ThemeIconSize)*" + width + "px) calc(var(--ThemeIconSize)*" + height + "px);mask-position:center;mask-repeat:no-repeat;background-position:center;background-repeat:no-repeat;}", ss.cssRules.length);
+            ss.insertRule("icon-" + key + "{--w:calc(var(--ThemeIconSize)*" + width + "px);--h:calc(var(--ThemeIconSize)*" + height + "px);width:var(--w);height:var(--h);display:inline-block;mask-size:var(--w) var(--h);mask-position:center;mask-repeat:no-repeat;background-size:contain;background-position:center;background-repeat:no-repeat;}", ss.cssRules.length);
             ss.insertRule("icon-" + key + ".IconButton{cursor:pointer;opacity:0.8;transition:opacity 0.15s transform 0.15s;}", ss.cssRules.length);
             ss.insertRule("icon-" + key + ".IconButton:hover{opacity:1;transform:translateY(-" + upDist + "px);}", ss.cssRules.length);
             ss.insertRule("icon-" + key + ".IconButton:focus{outline:none;opacity:1;transform:translateY(-" + upDist + "px);}", ss.cssRules.length);
@@ -6232,15 +6251,26 @@ function SysWeaverIgnoreUserChanges() {
  *      body class "SwMobile" or "SwDesktop" will be set.
  *      Can be forced using url params: mobile=true or mobile=false.
  *      Can be forced using local storage: "SysWeaver.Mobile"
+ *      Value is propagated from the top level SysWeaver window (if this is an iframe).
  * - Size handling (will change on resize):
- *      window.Portrait = true if aspect ratio is less or equal to 1.
- *      window.Narrow = true if width is less or equal than threshold (600 atm).
- *      body class "SwPortrait" or "SwLandscape" will be set.
- *      body class "SwNarrow" or "SwWide" will be set.
- *      "SwOrientation" event will be posted on the body (on change).
- *      "SwPortrait" or "SwLandscape" event will be posted on the body (on change).
- *      "SwLayout" event will be posted on the body (on change).
- *      "SwNarrow" or "SwWide" event will be posted on the body (on change).
+ *      Values that are propagated from the top level SysWeaver window (if this is an iframe):
+ *          window.Portrait = true if aspect ratio is less or equal to 1.
+ *          window.Narrow = true if width is less or equal than threshold (600 atm).
+ *          body class "SwPortrait" or "SwLandscape" will be set.
+ *          body class "SwNarrow" or "SwWide" will be set.
+ *          "SwOrientation" event will be posted on the body (on change).
+ *          "SwPortrait" or "SwLandscape" event will be posted on the body (on change).
+ *          "SwLayout" event will be posted on the body (on change).
+ *          "SwNarrow" or "SwWide" event will be posted on the body (on change).
+ *      Values that are based on the current iframe or top level:
+ *          window.SelfPortrait = true if aspect ratio is less or equal to 1.
+ *          window.SelfNarrow = true if width is less or equal than threshold (600 atm).
+ *          body class "SwSelfPortrait" or "SwSelfLandscape" will be set.
+ *          body class "SwSelfNarrow" or "SwSelfWide" will be set.
+ *          "SwSelfOrientation" event will be posted on the body (on change).
+ *          "SwSelfPortrait" or "SwSelfLandscape" event will be posted on the body (on change).
+ *          "SwSelfLayout" event will be posted on the body (on change).
+ *          "SwSelfNarrow" or "SwSelfWide" event will be posted on the body (on change).
  * - Theming
  *      html "data-theme" attribute will be set.
  *      Can be forced using url params: useTheme (ex ?useTheme=Dark).
@@ -6259,17 +6289,32 @@ async function SysWeaverInit() {
         if (e instanceof RegExp && !e.global) throw new TypeError("String.prototype.replaceAll called with a non-global RegExp argument");
         return e instanceof RegExp ? this.replace(e, t) : this.split(e).join(t);
     });
+//
+    let isChild = false;
+    let parentMobile;
+    try {
+        const p = window.parent;
+        if (p !== window) {
+            parentMobile = p.Mobile;
+            isChild = typeof parentMobile === "boolean";
+        }
+    }
+    catch
+    {
+    }
 
+
+//  Handle mobile detection (and enforced override via url or local storage and parent window)
     const ps = getUrlParams();
     let mob = ps.get("mobile");
     if (mob === null)
         mob = localStorage.getItem("SysWeaver.Mobile");
-    if (mob != null)
+    if (mob !== null)
         mob = JSON.parse(mob);
-    else
-        mob = isMobile();
+    else 
+        mob = isChild ? parentMobile : isMobile();
     window.Mobile = mob;
-
+//  Forced color scheme
     const colorScheme = ps.get("colorscheme");
     let colorSchemeMeta = null;
     if (colorScheme) {
@@ -6285,13 +6330,24 @@ async function SysWeaverInit() {
     function onSizeChange() {
         const ww = window.innerWidth;
         const wh = window.innerHeight;
-        let wp = ww <= wh;
-        let wn = ww <= 600;
+        const swp = ww <= wh;
+        const swn = ww <= 600;
+        const wp = isChild ? window.parent.Portrait : swp;
+        const wn = isChild ? window.parent.Narrow : swn;
         const b = document.body;
+
         const nwp = window.Portrait !== wp;
         const nwn = window.Narrow !== wn;
         window.Portrait = wp;
         window.Narrow = wn;
+
+
+        const snwp = window.SelfPortrait !== swp;
+        const snwn = window.SelfNarrow !== swn;
+        window.SelfPortrait = swp;
+        window.SelfNarrow = swn;
+
+
         if (b) {
             const l = b.classList;
             const l2 = b.parentNode.classList;
@@ -6329,6 +6385,42 @@ async function SysWeaverInit() {
                 }
             }
 
+
+            if (swp) {
+                if (!l.contains("SwSelfPortrait")) {
+                    l.add("SwSelfPortrait");
+                    l.remove("SwSelfLandscape");
+                    l2.add("SwSelfPortrait");
+                    l2.remove("SwSelfLandscape");
+                }
+            }
+            else {
+                if (!l.contains("SwSelfLandscape")) {
+                    l.add("SwSelfLandscape");
+                    l.remove("SwSelfPortrait");
+                    l2.add("SwSelfLandscape");
+                    l2.remove("SwSelfPortrait");
+                }
+            }
+
+            if (swn) {
+                if (!l.contains("SwSelfNarrow")) {
+                    l.add("SwSelfNarrow");
+                    l.remove("SwSelfWide");
+                    l2.add("SwSelfNarrow");
+                    l2.remove("SwSelfWide");
+                }
+            }
+            else {
+                if (!l.contains("SwSelfWide")) {
+                    l.add("SwSelfWide");
+                    l.remove("SwSelfNarrow");
+                    l2.add("SwSelfWide");
+                    l2.remove("SwSelfNarrow");
+                }
+            }
+
+
             if (nwp) {
                 const o = { detail: wp };
                 b.dispatchEvent(new CustomEvent("SwOrientation", o));
@@ -6339,6 +6431,18 @@ async function SysWeaverInit() {
                 const o = { detail: wn };
                 b.dispatchEvent(new CustomEvent("SwLayout", o));
                 b.dispatchEvent(new CustomEvent(wn ? "SwNarrow" : "SwWide", o));
+            }
+
+            if (snwp) {
+                const o = { detail: swp };
+                b.dispatchEvent(new CustomEvent("SwSelfOrientation", o));
+                b.dispatchEvent(new CustomEvent(wp ? "SwSelfPortrait" : "SwSelfLandscape", o));
+            }
+
+            if (snwn) {
+                const o = { detail: swn };
+                b.dispatchEvent(new CustomEvent("SwSelfLayout", o));
+                b.dispatchEvent(new CustomEvent(wn ? "SwSelfNarrow" : "SwSelfWide", o));
             }
         }
     }
@@ -6662,9 +6766,9 @@ async function SysWeaverInit() {
         const type = msg.Type;
         if (!type)
             return;
+        // console.log("Got \"" + type + "\":\n" + JSON.stringify(msg, null, "\t"));
         const fn = allMap.get(type) ?? map.get(type);
         if (fn) {
-            //console.log(childLogPrefix + "Got \"" + type + "\":\n" + JSON.stringify(msg, null, "\t"));
             await fn(msg);
         }
     });

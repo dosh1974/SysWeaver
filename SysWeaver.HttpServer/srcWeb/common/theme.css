@@ -441,11 +441,12 @@ SysWeaver-Link {
 
 SysWeaver-Page {
     position: absolute;
+    top: 0;
     left: 50%;
     transform: translate(-50%, 0);
     box-sizing: border-box;
     margin: 0 auto 0 auto;
-    padding: 1em 0.25em 1em 0.25em;
+    padding: var(--Margin) 0.25em 1em 0.25em;
     width: 100%;
     max-width: 52em;
     min-height: 100%;
@@ -795,6 +796,18 @@ SysWeaver-Loading {
     background-color: transparent !important;
     background-image: url("../icon.svg");
 }
+
+.IconCurrentUser {
+    background-color: transparent !important;
+    background-image: url("../auth/UserImages/Current/small");
+}
+
+.IconCurrentUserFill {
+    background-color: transparent !important;
+    background-image: url("../auth/UserImages/Current/small");
+    background-size: cover;
+}
+
 
 SysWeaver-Code {
     display: block;

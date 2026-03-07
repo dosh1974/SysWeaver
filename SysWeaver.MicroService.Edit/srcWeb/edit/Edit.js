@@ -190,7 +190,7 @@ class Edit {
         if (!options)
             options = new EditOptions();
         //  Style
-        const isMob = isMobile();
+        const isMob = window.Mobile;
         const width = window.innerWidth;
         const height = window.innerHeight;
         const isPortrait = width < height;
@@ -1252,6 +1252,128 @@ class Edit {
         let name = options.KeyName;
         if (!name)
             name = type.DisplayName;
+        const edit = this;
+        const e = edit.Element;
+        const th = edit.TypeHandler;
+        const menuPop = async () => await PopUpElementMenu(menuIcon.Element, async (popupMenuBackElement, close) => {
+
+            const menu = new WebMenu();
+            menu.Name = "EditProp";
+            menu.Items.push(WebMenuItem.From({
+                Name: _TF("Set default", "Text for a menu item that if selected resets a property to the default value"),
+                Flags: isReadOnly ? 1 : 0,
+                IconClass: "SysWeaverEditIconDefault",
+                Title: isReadOnly ?
+                    _TF("Value is read only", "Tool tip description on a property value that can't be edited")
+                    :
+                    _TF("Reset the value to the default", "Tool tip description for a menu item that if selected resets a property to the default value.")
+                ,
+                Data: async () => {
+                    const old = edit.GetObject();
+                    await edit.Invoke(
+                        async xedit => {
+                            await xedit.SetObject();
+                            xedit.NotifyChange();
+                        },
+                        async xedit => {
+                            await xedit.SetObject(old);
+                            xedit.NotifyChange();
+                        },
+                        _TF("Set default", "Text for a menu item that if selected resets a property to the default value"));
+                    close();
+                },
+            }));
+            const clip = navigator.clipboard;
+            if (clip) {
+                const val = edit.GetCopyObject();
+                menu.Items.push(WebMenuItem.From({
+                    Name: _TF("Copy", "Text for a menu item that if selected copies the value of a property to the clip board"),
+                    IconClass: "SysWeaverEditIconCopy",
+                    Title: _T("Copy \"{0}\" to the clipboard.", val, "Text for a menu item that if selected copies the value of a property to the clip board.{0} is replaced with the value of the property."),
+                    Data: async () => {
+                        await ValueFormat.copyToClipboard(val);
+                        close();
+                    },
+                }));
+                let enabled = false;
+                title = "";
+                let newVal = null;
+                let newValueText = "";
+                if (isReadOnly) {
+                    title = _TF("Value is read only", "Tool tip description on a property value that can't be edited");
+                } else {
+                    try {
+                        const clipText = await ValueFormat.readFromClipboard();
+                        if (clipText) {
+                            const typeName = edit.Type.TypeName;
+                            const wasJson = typeName !== "System.String";
+                            let obj = clipText;
+                            if (wasJson)
+                                obj = JSON.parse(obj);
+                            const okType = (wasJson && (obj !== null) && (obj["$type"] === typeName)) ||
+                                ((obj === null) && ((edit.Type.Flags & TypeMemberFlags.AcceptNull) !== 0));
+                            if (okType || th.IsOfType(obj, edit.Type)) {
+                                newVal = th.Condition(obj, edit.Type);
+                                enabled = true;
+                                if (wasJson) {
+                                    title = _T("Set the value to the clipboard object: {0}", clipText, "Tool tip description on a menu item that when clicked will set the property value to the complex object value on the clip board.{0} is replaced with a textual representation of the complex object value on the clip board.");
+                                    newValueText = clipText;
+                                }
+                                else {
+                                    title = _T("Set the value to the clipboard text: \"{0}\"", clipText, "Tool tip description on a menu item that when clicked will set the property value to the value on the clip board.{0} is replaced with a textual representation of the value on the clip board.");
+                                    newValueText = "\"" + clipText + "\"";
+                                }
+                            } else {
+                                title = _TF("Not a valid object on the clipboard", "Tool tip description on a menu item that when clicked will set the property value to the value on the clip board, displayed when there is no valid value on the clipboard.");
+                            }
+                        } else {
+                            title = _TF("No known data on clipboard", "Tool tip description on a menu item that when clicked will set the property value to the value on the clip board, displayed when there is no known data found on the clipboard.");
+                        }
+                    }
+                    catch (e) {
+                        title = _TF("Failed to read from clipboard: {0}", e, "Tool tip description on a menu item that when clicked will set the property value to the value on the clip board, displayed when the clip board data couldn't be read.{0} is replaced with the error message.");
+                    }
+                }
+                menu.Items.push(WebMenuItem.From({
+                    Name: _TF("Paste", "Text of a menu item that when clicked will set the property value to the value on the clip board"),
+                    Flags: enabled ? 0 : 1,
+                    IconClass: "SysWeaverEditIconPaste",
+                    Title: title,
+                    Data: async () => {
+                        const old = edit.GetObject();
+                        await edit.Invoke(
+                            async xedit => {
+                                await xedit.SetObject(newVal);
+                                xedit.NotifyChange();
+                            },
+                            async xedit => {
+                                await xedit.SetObject(old);
+                                xedit.NotifyChange();
+                            },
+                            _T("Paste: {0}", newValueText, "Command text stored in a log when a property value was replaced with the value on the clip board.{0} is replaced with the value on the clip board.")
+                        );
+                        close();
+                    },
+                }));
+            }
+            const add = edit.AddMenuItems;
+            if (add)
+                add(menu.Items, close);
+
+            const menuStyle = new MainMenuStyle();
+            menuStyle.HideFn = close;
+            const popupMenu = new MainMenu(menu, menuStyle, popupMenuBackElement);
+        });
+
+        c.oncontextmenu = async ev => {
+            if (badClick(ev, true)) 
+                return false;
+            ev.preventDefault();
+            ev.stopPropagation();
+            await menuPop();
+            return true;
+        };
+
         const isReadOnly = options.ReadOnly || (Edit.IsPrimitive(type) && ((type.Members[0].Flags & 16) != 0));
         if (options.CanExpand && (!Edit.IsPrimitive(type))) {
             let isExpanded = options.IsExpanded;
@@ -1303,133 +1425,20 @@ class Edit {
 
         const menuElement = document.createElement("SysWeaver-PopupMenuIcon");
 
-        const edit = this;
-        const e = this.Element;
-
         const menuIcon = new ColorIcon("SysWeaverEditIconMenu", "IconColorThemeAcc2", 24, 24,
             _TF("Click to show options.", "Tool tip description for a button that when pressed will pop-up a menu")
             , async ev => {
-            if (badClick(ev))
-                return;
-            await PopUpElementMenu(menuIcon.Element, async (popupMenuBackElement, close) => {
-
-                const menu = new WebMenu();
-                menu.Name = "EditProp";
-                menu.Items.push(WebMenuItem.From({
-                    Name: _TF("Set default", "Text for a menu item that if selected resets a property to the default value"),
-                    Flags: isReadOnly ? 1 : 0,
-                    IconClass: "SysWeaverEditIconDefault",
-                    Title: isReadOnly ?
-                        _TF("Value is read only", "Tool tip description on a property value that can't be edited")
-                        :
-                        _TF("Reset the value to the default", "Tool tip description for a menu item that if selected resets a property to the default value.")
-                    ,
-                    Data: async () => {
-                        const old = edit.GetObject();
-                        await edit.Invoke(
-                            async xedit => {
-                                await xedit.SetObject();
-                                xedit.NotifyChange();
-                            },
-                            async xedit => {
-                                await xedit.SetObject(old);
-                                xedit.NotifyChange();
-                            },
-                            _TF("Set default", "Text for a menu item that if selected resets a property to the default value"));
-                        close();
-                    },
-                }));
-                const clip = navigator.clipboard;
-                if (clip) {
-                    const val = edit.GetCopyObject();
-                    menu.Items.push(WebMenuItem.From({
-                        Name: _TF("Copy", "Text for a menu item that if selected copies the value of a property to the clip board"),
-                        IconClass: "SysWeaverEditIconCopy",
-                        Title: _T("Copy \"{0}\" to the clipboard.", val, "Text for a menu item that if selected copies the value of a property to the clip board.{0} is replaced with the value of the property."),
-                        Data: async () => {
-                            await ValueFormat.copyToClipboard(val);
-                            close();
-                        },
-                    }));
-                    let enabled = false;
-                    title = "";
-                    let newVal = null;
-                    let newValueText = "";
-                    if (isReadOnly) {
-                        title = _TF("Value is read only", "Tool tip description on a property value that can't be edited");
-                    } else {
-                        try {
-                            const clipText = await ValueFormat.readFromClipboard();
-                            if (clipText) {
-                                const typeName = edit.Type.TypeName;
-                                const wasJson = typeName !== "System.String";
-                                let obj = clipText;
-                                if (wasJson)
-                                    obj = JSON.parse(obj);
-                                const th = edit.TypeHandler;
-
-                                const okType = (wasJson && (obj !== null) && (obj["$type"] === typeName)) ||
-                                    ((obj === null) && ((edit.Type.Flags & TypeMemberFlags.AcceptNull) !== 0));
-                                if (okType || th.IsOfType(obj, edit.Type)) {
-                                    newVal = th.Condition(obj, edit.Type);
-                                    enabled = true;
-                                    if (wasJson) {
-                                        title = _T("Set the value to the clipboard object: {0}", clipText, "Tool tip description on a menu item that when clicked will set the property value to the complex object value on the clip board.{0} is replaced with a textual representation of the complex object value on the clip board.");
-                                        newValueText = clipText;
-                                    }
-                                    else {
-                                        title = _T("Set the value to the clipboard text: \"{0}\"", clipText, "Tool tip description on a menu item that when clicked will set the property value to the value on the clip board.{0} is replaced with a textual representation of the value on the clip board.");
-                                        newValueText = "\"" + clipText + "\"";
-                                    }
-                                } else {
-                                    title = _TF("Not a valid object on the clipboard", "Tool tip description on a menu item that when clicked will set the property value to the value on the clip board, displayed when there is no valid value on the clipboard.");
-                                }
-                            } else {
-                                title = _TF("No known data on clipboard", "Tool tip description on a menu item that when clicked will set the property value to the value on the clip board, displayed when there is no known data found on the clipboard.");
-                            }
-                        }
-                        catch (e) {
-                            title = _TF("Failed to read from clipboard: {0}", e, "Tool tip description on a menu item that when clicked will set the property value to the value on the clip board, displayed when the clip board data couldn't be read.{0} is replaced with the error message.");
-                        }
-                    }
-                    menu.Items.push(WebMenuItem.From({
-                        Name: _TF("Paste", "Text of a menu item that when clicked will set the property value to the value on the clip board"),
-                        Flags: enabled ? 0 : 1,
-                        IconClass: "SysWeaverEditIconPaste",
-                        Title: title,
-                        Data: async () => {
-                            const old = edit.GetObject();
-                            await edit.Invoke(
-                                async xedit => {
-                                    await xedit.SetObject(newVal);
-                                    xedit.NotifyChange();
-                                },
-                                async xedit => {
-                                    await xedit.SetObject(old);
-                                    xedit.NotifyChange();
-                                },
-                                _T("Paste: {0}", newValueText, "Command text stored in a log when a property value was replaced with the value on the clip board.{0} is replaced with the value on the clip board.")
-                                );
-                            close();
-                        },
-                    }));
-                }
-
-                const add = edit.AddMenuItems;
-                if (add)
-                    add(menu.Items, close);
-
-                const menuStyle = new MainMenuStyle();
-                menuStyle.HideFn = close;
-                const popupMenu = new MainMenu(menu, menuStyle, popupMenuBackElement);
-
-            });
-
-        }, null, null, true);
+                if (badClick(ev))
+                    return;
+                await menuPop();
+            }, null, null, true);
         menuElement.appendChild(menuIcon.Element);
         c.appendChild(menuElement);
-        c.appendChild(text);
+        const gops = options.AddToHeader;
+        if (gops)
+            gops(c);
 
+        c.appendChild(text);
         c.draggable = true;
         c.classList.add("EditDraggable");
         c.addEventListener("dragstart", ev =>
@@ -1448,7 +1457,6 @@ class Edit {
             };
             c.ondrop = async ev => {
                 ev.preventDefault();
-                const th = edit.TypeHandler;
                 const json = ev.dataTransfer.getData("application/json");
                 if (json) {
                     try {

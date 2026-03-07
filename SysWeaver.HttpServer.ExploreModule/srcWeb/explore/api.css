@@ -6,17 +6,21 @@ SysWeaver-ApiSection {
     width: 100%;
     padding: 4px;
     margin-bottom: 1.5em;
+    background-color: var(--ThemeBackground);
     border: 1px solid rgba(var(--ThemeMainRGB), 0.1);
     border-radius: var(--ThemeRad);
     vertical-align: middle;
     overflow-x: auto;
 }
 
-    SysWeaver-ApiSection:first-child
-    {
-        display: flex;
-        align-items: center;
-    }
+SysWeaver-TabContent {
+    background-color: var(--ThemeBackground);
+}
+
+SysWeaver-ApiSection:first-child {
+    display: flex;
+    align-items: center;
+}
 
     SysWeaver-ApiSection:first-child icon-24x24{
         margin-left: 1em;

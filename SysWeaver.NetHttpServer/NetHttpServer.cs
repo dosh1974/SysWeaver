@@ -321,6 +321,16 @@ namespace SysWeaver.Net
         long ReqCounter;
 
 
+        readonly ExceptionTracker DispatchErrors = new ExceptionTracker();
+
+        public override IEnumerable<Stats> GetStats()
+        {
+            foreach (var x in base.GetStats())
+                yield return x;
+            foreach (var x in DispatchErrors.GetStats(nameof(NetHttpServer), "DispatchEx."))
+                yield return x;
+        }
+
         /// <summary>
         /// Listens for incoming request, tries to dispatch the request to a separate thread as quickly as possible.
         /// This is a long running task, maybe it should be moved to a separate thread.
@@ -330,12 +340,10 @@ namespace SysWeaver.Net
         {
             Msg?.AddMessage(Prefix + "Started", MessageLevels.Debug);
             var l = Listener;
-            for (; ; )
+            while (l.IsListening)
             {
                 if (IsPaused)
                 {
-                    if (!l.IsListening)
-                        break;
                     await Task.Delay(10).ConfigureAwait(false);
                     continue;
                 }
@@ -348,11 +356,9 @@ namespace SysWeaver.Net
                 }
                 catch (Exception ex)
                 {
-                    if (!l.IsListening)
-                        break;
-                    Msg?.AddMessage(Prefix + "GetContextAsync failed", ex, MessageLevels.Debug);
+                    DispatchErrors.OnException(ex);
                 }
-                await Task.Delay(10).ConfigureAwait(false);
+                Thread.Sleep(0);
             }
             //  Wait for all pending requests handlers to complete
             var now = DateTime.UtcNow;
@@ -372,10 +378,6 @@ namespace SysWeaver.Net
             }
             IsListening?.Release();
         }
-
-        static readonly Uri DummyUri = new Uri("http://localhost");
-
-
 
         async ValueTask WriteResponseString(HttpListenerResponse res, String text, String mime = HttpServerTools.TextMime)
         {

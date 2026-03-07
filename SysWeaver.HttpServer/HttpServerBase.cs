@@ -2179,7 +2179,7 @@ namespace SysWeaver.Net
 
 
 
-        public IEnumerable<Stats> GetStats()
+        public virtual IEnumerable<Stats> GetStats()
         {
             const String sys = "HttpServer";
             foreach (var e in ListenerExceptions.GetStats(sys, "Listener."))

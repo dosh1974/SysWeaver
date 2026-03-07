@@ -3,14 +3,19 @@ body {
     margin: 0;
     width: 100%;
     height: 100%;
+    --h: calc(var(--ThemeIconSize) * 44px);
+    --imh: 5px;
+    --mh: calc(var(--h) + var(--imh) * 2);
 }
 
 /****** APP ******/
 
 app-header {
-    --h: calc(var(--ThemeIconSize) * 48px);
-    --m56: calc(var(--ThemeIconSize) * 56px);
-    --mh: calc(var(--ThemeIconSize) * 64px);
+    --mw: 4px;
+    --me: 8px;
+    --s0: var(--mw);
+    --s1: calc(var(--s0) + var(--h) + var(--me));
+    --s2: calc(var(--s1) + var(--h) + var(--me));
     /*background-color: var(--ThemeAcc1);*/
     background-image: linear-gradient(to bottom, var(--ThemeBackground), color-mix(in srgb, var(--ThemeBackground) 95%, var(--ThemeAcc1) 5%));
     color: var(--ThemeAcc1);
@@ -21,9 +26,7 @@ app-header {
     height: var(--mh);
     max-height: var(--mh);
     box-sizing: border-box;
-    box-shadow: 
-        0px 4px 12px rgba(0,0,0,0.3),
-        0px 1px 3px var(--ThemeAcc150);
+    box-shadow: 0px 4px 12px rgba(0,0,0,0.3), 0px 1px 3px var(--ThemeAcc150);
     z-index: 2;
 }
 
@@ -31,16 +34,16 @@ app-header {
         position: absolute;
         width: var(--h);
         height: var(--h);
-        left: 8px;
-        top: 8px;
+        left: var(--s0);
+        top: var(--imh);
     }
 
     app-header app-BackButton {
         position: absolute;
         width: var(--h);
         height: var(--h);
-        left: var(--m56);
-        top: 8px;
+        left: var(--s1);
+        top: var(--imh);
     }
 
 
@@ -48,8 +51,8 @@ app-header {
         position: absolute;
         width: var(--h);
         height: var(--h);
-        left: var(--m56);
-        top: 8px;
+        left: var(--s1);
+        top: var(--imh);
         transition: opacity linear var(--ThemeFadeDuration);
     }
 
@@ -85,39 +88,59 @@ body.SwMobile {
 }
 
 
-    app-header app-ContentTitle {
-        position: absolute;
-        top: 8px;
-        height: var(--h);
-        left: calc(var(--m56) * 2 - 8px);
-        right: var(--m56);
-        line-height: calc(var(--ThemeIconSize) * 48px);
-        text-align: center;
-        vertical-align: middle;
-        overflow: hidden;
-        white-space: nowrap;
-        text-transform: uppercase;
-        font-weight: bold;
-        font-size: 125%;
-        transition: opacity linear 0.05s;
-    }
+app-header app-ContentTitle {
+    position: absolute;
+    top: var(--imh);
+    height: var(--h);
+    left: var(--s2);
+    right: var(--s2);
+    line-height: var(--h);
+    text-align: center;
+    vertical-align: middle;
+    overflow: hidden;
+    white-space: nowrap;
+    text-transform: uppercase;
+    font-weight: bold;
+    font-size: 125%;
+    transition: opacity linear 0.05s;
+    user-select: text;
+}
 
         app-header app-ContentTitle.Hidden {
             opacity: 0;
         }
 
-    app-header app-SettingsButton {
-        position: absolute;
-        width: var(--h);
-        height: var(--h);
-        right: 8px;
-        top: 8px;
+app-header app-SettingsButton {
+    position: absolute;
+    width: var(--h);
+    height: var(--h);
+    right: var(--s0);
+    top: var(--imh);
+}
+
+app-header app-UserButton {
+    position: absolute;
+    width: var(--h);
+    height: var(--h);
+    right: var(--s1);
+    top: var(--imh);
+}
+
+    app-header app-UserButton .WithUser {
+        border-radius: calc(var(--h) * 0.5);
+        transition: linear outline var(--ThemeFadeDuration);
+        outline: 2px solid var(--ThemeAcc1) !important;
+        overflow: hidden;
+        opacity: 1;
     }
 
-        app-header app-SettingsButton icon-48x48 {
-            left: 0;
-            top: 0;
-            position: absolute;
+        app-header app-UserButton .WithUser:hover {
+            outline: 3px solid var(--ThemeAcc1) !important;
+        }
+
+
+        app-header app-UserButton .WithUser:focus {
+            outline: 3px solid var(--ThemeAcc2) !important;
         }
 
 app-menu {
@@ -126,13 +149,11 @@ app-menu {
     position: absolute;
     z-index: 1;
     left: 0;
-    top: calc(var(--ThemeIconSize) * 64px);
+    top: var(--mh);
     width: 400px;
     bottom: 0;
     transition: transform 0.1s;
-    box-shadow: 
-        4px 0 12px rgba(0,0,0,0.3),
-        1px 0 3px var(--ThemeAcc150);
+    box-shadow: 4px 0 12px rgba(0,0,0,0.3), 1px 0 3px var(--ThemeAcc150);
     user-select: none;
     padding: 16px 4px 4px 4px;
     box-sizing: border-box;
@@ -239,7 +260,7 @@ app-content {
     position: absolute;
     z-index: 0;
     left: 0;
-    top: calc(var(--ThemeIconSize) * 64px);
+    top: var(--mh);
     right: 0;
     bottom: 0;
     overflow: hidden;

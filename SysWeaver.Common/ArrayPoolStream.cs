@@ -17,19 +17,22 @@ namespace SysWeaver
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Byte[] Rent(int size)
-        { 
+        {
             var buf = Pool.Rent(size);
+#if DEBUG
             Interlocked.Increment(ref RentCount);
             Interlocked.Add(ref RentBytes, buf.Length);
+#endif//DEBUG
             return buf;
+            //return GC.AllocateUninitializedArray<Byte>(size);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Return(Byte[] buf)
         {
+#if DEBUG
             Interlocked.Increment(ref ReturnCount);
             Interlocked.Add(ref ReturnBytes, buf.Length);
-#if DEBUG
             Pool.Return(buf, true);
 #else//DEBUG
             Pool.Return(buf);

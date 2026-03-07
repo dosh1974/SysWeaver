@@ -269,6 +269,7 @@
             arrayEntry.appendChild(arrayEntryHeader);
             arrayEntry.appendChild(arrayEntryValue);
             const keyName = container.getKeyName(key);
+            const newOpt = new EditOptions();
             newOpt.KeyName = keyName;
             newOpt.Name = mn;
             if (isPrimitive) {
@@ -300,6 +301,101 @@
             }
 
 
+            async function Remove() {
+                const currentKey = itemEdit.Key;
+                const currentKeyName = itemEdit.KeyName;
+                const oldVal = container.getVal(vals, currentKey);
+                const parent = arrayEntry.parentNode;
+                const rel = Array.prototype.indexOf.call(parent.children, arrayEntry);
+                let doReorder;
+                await editor.Invoke(async () => {
+                    doReorder = container.removeVal(values, currentKey);
+                    if (isExpanded) {
+                        remove(currentKey);
+                        if (doReorder)
+                            await reOrder(values);
+                    } else
+                        await toggleExpand();
+                    colChanged();
+                    Edit.SetCollectionCount(countText, vals, container);
+                }, async () => {
+                    const newKey = container.insertAt(values, oldVal, currentKey);
+                    if (isExpanded) {
+                        await addItemEditor(values, newKey, parent.children[rel], "beforebegin");
+                        if (doReorder)
+                            await reOrder(values);
+                    }
+                    else
+                        await toggleExpand();
+                    focus(newKey);
+                    colChanged();
+                    Edit.SetCollectionCount(countText, vals, container);
+                },
+                    _T("Remove item: {0}", currentKeyName, "Command text stored in a log when an item in a collection is removed.{0} is replaced with the name of the key of item.")
+                    , mn);
+            }
+
+            async function InsertAfter() {
+                const currentKey = itemEdit.Key;
+                const currentKeyName = itemEdit.KeyName;
+                const defNew = await CreateNewDefault();
+                let newKey;
+                await itemEdit.Invoke(
+                    async edit => {
+                        newKey = container.insertAfter(values, defNew, currentKey);
+                        if (isExpanded)
+                            await addItemEditor(values, newKey, keyMap.get("" + currentKey).ArrayEntry, "afterend");
+                        else
+                            await toggleExpand();
+                        await reOrder(values);
+                        focus(newKey);
+                        colChanged();
+                        Edit.SetCollectionCount(countText, vals, container);
+                    },
+                    async edit => {
+
+                        const doReorder = container.removeVal(values, newKey);
+                        if (isExpanded)
+                            remove(newKey);
+                        else
+                            await toggleExpand();
+                        if (doReorder)
+                            await reOrder(values);
+                        focus(currentKey);
+                        colChanged();
+                        Edit.SetCollectionCount(countText, vals, container);
+                    },
+                    _TF("Insert item after", "Command text stored in a log when an item is inserted after the selected item"),
+                    mn);
+            }
+
+            newOpt.AddToHeader = toElement => {
+                if (!(isFixed || isReadOnly)) {
+                    let ri;
+
+                    ri = new ColorIcon("../icons/clear.svg", "IconColorThemeAcc2", 24, 24,
+                        _TF("Remove the item from the collection", "Tool tip description for a menu item that when clicked will remove an item from a collection"),
+                        Remove);
+                    ri.Element.classList.add("EditFloatRight");
+                    toElement.appendChild(ri.Element);
+                    if (isIndexed) {
+                        ri = new ColorIcon("../icons/plus.svg", "IconColorThemeAcc2", 24, 24,
+                            _TF("Insert a new item after this item", "Tool tip description on a menu item that when clicked will insert a new item after the selected item"),
+                            InsertAfter);
+                        toElement.appendChild(ri.Element);
+                       
+
+                    } else {
+
+                    }
+
+
+                    
+
+                }
+            };
+
+
             const itemEdit = new Edit(elementType, editor.Style, newOpt, editor, member.ElementInst, evListener);
             await itemEdit.SetObject(values[key]);
             keyMap.set("" + key, itemEdit);
@@ -307,6 +403,7 @@
             itemEdit.KeyName = keyName;
             itemEdit.ArrayEntry = arrayEntry;
             arrayEntry.Edit = itemEdit;
+
             itemEdit.AddMenuItems = (menuItems, close) => {
                 const currentKey = itemEdit.Key;
                 const currentKeyName = itemEdit.KeyName;
@@ -323,35 +420,7 @@
                         _TF("Remove the item from the collection", "Tool tip description for a menu item that when clicked will remove an item from a collection")
                     ,
                     Data: async () => {
-                        const oldVal = container.getVal(vals, currentKey);
-                        const parent = arrayEntry.parentNode;
-                        const rel = Array.prototype.indexOf.call(parent.children, arrayEntry);
-                        let doReorder;
-                        await editor.Invoke(async () => {
-                            doReorder = container.removeVal(values, currentKey);
-                            if (isExpanded) {
-                                remove(currentKey);
-                                if (doReorder)
-                                    await reOrder(values);
-                            }else
-                                await toggleExpand();
-                            colChanged();
-                            Edit.SetCollectionCount(countText, vals, container);
-                        }, async () => {
-                            const newKey = container.insertAt(values, oldVal, currentKey);
-                            if (isExpanded) {
-                                await addItemEditor(values, newKey, parent.children[rel], "beforebegin");
-                                if (doReorder)
-                                    await reOrder(values);
-                            }
-                            else
-                                await toggleExpand();
-                            focus(newKey);
-                            colChanged();
-                            Edit.SetCollectionCount(countText, vals, container);
-                        },
-                            _T("Remove item: {0}", currentKeyName, "Command text stored in a log when an item in a collection is removed.{0} is replaced with the name of the key of item.")
-                            , mn);
+                        await Remove();
                         close();
                     },
                     Flags: isFixed ? 1 : 0,
@@ -464,36 +533,7 @@
                                 _TF("Insert a new item after this item", "Tool tip description on a menu item that when clicked will insert a new item after the selected item")
                             ),
                         Data: async () => {
-                            const defNew = await CreateNewDefault();
-                            let newKey; 
-
-                            await itemEdit.Invoke(
-                                async edit => {
-                                    newKey = container.insertAfter(values, defNew, currentKey);
-                                    if (isExpanded)
-                                        await addItemEditor(values, newKey, keyMap.get("" + currentKey).ArrayEntry, "afterend");
-                                    else
-                                        await toggleExpand();
-                                    await reOrder(values);
-                                    focus(newKey);
-                                    colChanged();
-                                    Edit.SetCollectionCount(countText, vals, container);
-                                },
-                                async edit => {
-
-                                    const doReorder = container.removeVal(values, newKey);
-                                    if (isExpanded)
-                                        remove(newKey);
-                                    else
-                                        await toggleExpand();
-                                    if (doReorder)
-                                        await reOrder(values);
-                                    focus(currentKey);
-                                    colChanged();
-                                    Edit.SetCollectionCount(countText, vals, container);
-                                },
-                                _TF("Insert item after", "Command text stored in a log when an item is inserted after the selected item"),
-                                mn);
+                            await InsertAfter();
                             close();
                         },
                         Flags: (isFixed || isMax) ? 1 : 0,

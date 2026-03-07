@@ -725,6 +725,7 @@ function PopUpMenu(element, build, rightAlign, bottomAlign) {
             } else {
                 appHeaderMiddle.classList.remove("Hidden");
                 appHeaderMiddle.innerText = title;
+                appHeaderMiddle.title = title;
                 document.title = window.SysWeaverAppTitle + " - " + title;
             }
             contentUrl = url;
@@ -1398,6 +1399,7 @@ class AppParams {
 
     Content = true;
     Navigation = null;
+    UserButton = true;
     SettingsButton = true;
     SettingMenus = null;
     SettingsFs = true;
@@ -1445,84 +1447,10 @@ class App {
 
 
         //  Header
+        const buttonSize = 44;
         const appHeader = document.createElement("app-header");
         t.AppHeader = appHeader;
         page.appendChild(appHeader);
-        const appHeaderMiddle = document.createElement("app-ContentTitle")
-        t.Title = appHeaderMiddle;
-        appHeader.appendChild(appHeaderMiddle);
-        //  Settings
-        if (params.SettingsButton) {
-            const appSettingsButton = document.createElement("app-SettingsButton")
-            appHeader.appendChild(appSettingsButton);
-
-            const settingMenus = params.SettingMenus ?? "User,Theme";
-            const themeItems = params.SettingMenus === "" ? [] : WebMenu.From(await sendRequest("Api/application/GetMenu", settingMenus)).Items;
-            const til = themeItems.length;
-
-            const expandEmbeddedIcon = new ColorIcon("IconSettings", headerIconColor, 48, 48,
-                _TF("Click to show settings", "The tool tip description on a button that when clicked will show some settings"),
-                ev => {
-                PopUpMenu(appSettingsButton, close => {
-
-                    const menu = new WebMenu();
-                    menu.Name = "AppSettings";
-                    if (params.SettingsFs) {
-                        if (FullScreen.IsFull()) {
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Exit full screen", "The text of a menu option that when clicked will exit from full screen mode"),
-                                Flags: 0,
-                                IconClass: "IconFullScreenExit",
-                                Title: _TF("Exit full screen mode", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
-                                Data: async () => {
-
-                                    await FullScreen.Exit();
-                                    close();
-                                },
-                            }));
-                        } else {
-                            menu.Items.push(WebMenuItem.From({
-                                Name: _TF("Enter full screen", "The text of a menu option that when clicked will enter full screen mode"),
-                                Flags: 0,
-                                IconClass: "IconFullScreenEnter",
-                                Title: _TF("Enter full screen mode", "The tool tip description of a menu option that when clicked will enter full screen mode"),
-                                Data: async () => {
-
-                                    await FullScreen.Enter();
-                                    close();
-                                },
-                            }));
-                        }
-                    }
-
-                    for (let i = 0; i < til; ++i)
-                        menu.Items.push(themeItems[i]);
-
-                    if (params.SettingsNewTab && params.Content) {
-                        menu.Items.push(WebMenuItem.From({
-                            Name: _TF("Open in new tab", "The text of a menu option that when clicked will open the current content in a new browser tab"),
-                            Flags: 0,
-                            IconClass: "IconNewTab",
-                            Title: _TF("Open the current content in a new tab", "The tool tip description of a menu option that when clicked will open the current content in a new browser tab"),
-                            Data: async () => {
-                                const contentUrl = MainMenu.GetEmbeddedUrl(t.Content);
-                                if (contentUrl)
-                                    Open(contentUrl);
-                                close();
-                            },
-                        }));
-                    }
-                    if (params.OnSettingsMenuOpenFn)
-                        params.OnSettingsMenuOpenFn(menu, close);
-                    return menu;
-                }, true);
-
-            }, null, null, true);
-
-            appSettingsButton.appendChild(expandEmbeddedIcon.Element);
-
-
-        }
 
         //  Back button
         const n = params.Navigation;
@@ -1531,7 +1459,7 @@ class App {
             t.AppBackButton = appBackButton;
             appHeader.appendChild(appBackButton);
 
-            const backIcon = new ColorIcon("IconNavBack", headerIconColor, 48, 48,
+            const backIcon = new ColorIcon("IconNavBack", headerIconColor, buttonSize, buttonSize,
                 _TF("Click to navigate back", "The tool tip description on a button that when clicked will navigate to the previous page in the history"),
                 ev => {
                     history.back();
@@ -1541,7 +1469,6 @@ class App {
 
             if (!params.MainMenu)
                 appBackButton.style.left = "8px";
-
         }
 
         //  Pin
@@ -1550,7 +1477,7 @@ class App {
             t.PinButton = pinButton;
             appHeader.appendChild(pinButton);
 
-            const backIcon = new ColorIcon("IconLock", headerIconColor, 48, 48,
+            const backIcon = new ColorIcon("IconLock", headerIconColor, buttonSize, buttonSize,
                 _TF("Click to lock the menu in the extapnded state", "The tool tip description on a button that when clicked will always show the menu"),
                 ev => {
                     setPinned(true);
@@ -1559,6 +1486,144 @@ class App {
             backIcon.Element.classList.add("IconButton");
             pinButton.appendChild(backIcon.Element);
         }
+
+
+        //  Main title
+        const appHeaderMiddle = document.createElement("app-ContentTitle")
+        t.Title = appHeaderMiddle;
+        appHeaderMiddle.onclick = ev => {
+            if (badClick(ev))
+                return;
+            ValueFormat.copyToClipboardInfo(appHeaderMiddle.title);
+        };
+
+        appHeader.appendChild(appHeaderMiddle);
+
+        //  User button
+        if (params.UserButton) {
+            const appSettingsButton = document.createElement("app-UserButton")
+            appHeader.appendChild(appSettingsButton);
+
+            const settingMenus = "User";
+            let themeItems = params.SettingMenus === "" ? [] : WebMenu.From(await sendRequest("Api/application/GetMenu", settingMenus)).Items;
+            const user = await getRequest("Api/auth/GetUser");
+            const haveUser = user && user.Succeeded;
+
+            let til = themeItems.length;
+            if (til === 1) {
+                themeItems = themeItems[0].Children;
+                til = themeItems.length;
+            }
+
+
+
+            const expandEmbeddedIcon = new ColorIcon(haveUser ? "IconCurrentUserFill" : "../icons/user.svg", headerIconColor, buttonSize, buttonSize,
+                (haveUser
+                    ?
+                    (_T("Logged in as {0},", user.NickName, "A tool tip description descriping what user is logged into the page.{0} is replaced with the name of the user.") + "\n\n")
+                    :
+                    "")
+                +
+                _TF("Click to show user options", "The tool tip description on a button that when clicked will show some user options"),
+                ev => {
+                    PopUpMenu(appSettingsButton, close => {
+                        const menu = new WebMenu();
+                        for (let i = 0; i < til; ++i)
+                            menu.Items.push(themeItems[i]);
+                        return menu;
+                    }, true);
+
+                }, null, null, true);
+            const el = expandEmbeddedIcon.Element;
+            if (haveUser) {
+                let count = 0;
+                el.classList.add("WithUser");
+                InterOp.AddListener(async ev => {
+                    const msg = InterOp.GetMessage(ev);
+                    const type = msg.Type;
+                    if (type !== "UserImageChanged")
+                        return;
+                    el.style.backgroundImage = 'url("../auth/UserImages/Current/small?' + count + '")';
+                    ++count;
+                });
+
+            }
+            appSettingsButton.appendChild(el);
+        }
+
+        //  Settings
+        if (params.SettingsButton) {
+            const appSettingsButton = document.createElement("app-SettingsButton")
+            appHeader.appendChild(appSettingsButton);
+
+            const settingMenus = params.SettingMenus ?? (params.UserButton ? "Theme" : "User,Theme");
+            const themeItems = params.SettingMenus === "" ? [] : WebMenu.From(await sendRequest("Api/application/GetMenu", settingMenus)).Items;
+            const til = themeItems.length;
+
+            const expandEmbeddedIcon = new ColorIcon("IconSettings", headerIconColor, buttonSize, buttonSize,
+                _TF("Click to show settings", "The tool tip description on a button that when clicked will show some settings"),
+                ev => {
+                    PopUpMenu(appSettingsButton, close => {
+
+                        const menu = new WebMenu();
+                        menu.Name = "AppSettings";
+                        if (params.SettingsFs) {
+                            if (FullScreen.IsFull()) {
+                                menu.Items.push(WebMenuItem.From({
+                                    Name: _TF("Exit full screen", "The text of a menu option that when clicked will exit from full screen mode"),
+                                    Flags: 0,
+                                    IconClass: "IconFullScreenExit",
+                                    Title: _TF("Exit full screen mode", "The tool tip description of a menu option that when clicked will exit from full screen mode"),
+                                    Data: async () => {
+
+                                        await FullScreen.Exit();
+                                        close();
+                                    },
+                                }));
+                            } else {
+                                menu.Items.push(WebMenuItem.From({
+                                    Name: _TF("Enter full screen", "The text of a menu option that when clicked will enter full screen mode"),
+                                    Flags: 0,
+                                    IconClass: "IconFullScreenEnter",
+                                    Title: _TF("Enter full screen mode", "The tool tip description of a menu option that when clicked will enter full screen mode"),
+                                    Data: async () => {
+
+                                        await FullScreen.Enter();
+                                        close();
+                                    },
+                                }));
+                            }
+                        }
+
+                        for (let i = 0; i < til; ++i)
+                            menu.Items.push(themeItems[i]);
+
+                        if (params.SettingsNewTab && params.Content) {
+                            menu.Items.push(WebMenuItem.From({
+                                Name: _TF("Open in new tab", "The text of a menu option that when clicked will open the current content in a new browser tab"),
+                                Flags: 0,
+                                IconClass: "IconNewTab",
+                                Title: _TF("Open the current content in a new tab", "The tool tip description of a menu option that when clicked will open the current content in a new browser tab"),
+                                Data: async () => {
+                                    const contentUrl = MainMenu.GetEmbeddedUrl(t.Content);
+                                    if (contentUrl)
+                                        Open(contentUrl);
+                                    close();
+                                },
+                            }));
+                        }
+                        if (params.OnSettingsMenuOpenFn)
+                            params.OnSettingsMenuOpenFn(menu, close);
+                        return menu;
+                    }, true);
+
+                }, null, null, true);
+
+            appSettingsButton.appendChild(expandEmbeddedIcon.Element);
+
+
+        }
+
 
 
         //  Content
@@ -1615,7 +1680,7 @@ class App {
 
             const appMenuButton = document.createElement("app-MenuButton")
             t.AppMenuButton = appMenuButton;
-            appHeader.appendChild(appMenuButton);
+            appHeader.insertBefore(appMenuButton, appHeader.firstElementChild);
 
             const appMenuCapture = document.createElement("app-capture");
 
@@ -1691,7 +1756,7 @@ class App {
             };
 
 
-            const menuIcon = new ColorIcon("IconMainMenu", headerIconColor, 48, 48,
+            const menuIcon = new ColorIcon("IconMainMenu", headerIconColor, buttonSize, buttonSize,
                 _TF("Click to show the main menu", "The tool tip description of a button that when clicked will show the main application menu"),
                 menuToggle
                 );
@@ -1713,6 +1778,7 @@ class App {
                 } else {
                     appHeaderMiddle.classList.remove("Hidden");
                     appHeaderMiddle.innerText = title;
+                    appHeaderMiddle.title = title;
                     document.title = docTitle + " - " + title;
                 }
             };
@@ -1772,6 +1838,10 @@ class App {
             }
 
         }
+
+
+
+
         return () => { };
     }
 

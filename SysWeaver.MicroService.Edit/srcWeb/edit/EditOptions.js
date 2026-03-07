@@ -11,6 +11,7 @@
     MenuIcon = false;
     MenuIconClass = "SysWeaverEditIconMenu";
     MenuColorClass = "IconColorThemeAcc2";
+    AddToHeader = null;
 
     Clone() {
         const e = new EditOptions();
@@ -25,6 +26,7 @@
         e.MenuIcon = this.MenuIcon;
         e.MenuIconClass = this.MenuIconClass;
         e.MenuColorClass = this.MenuColorClass;
+        e.AddToHeader = this.AddToHeader;
         return e;
     }
 

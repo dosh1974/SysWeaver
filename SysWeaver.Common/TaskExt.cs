@@ -19,12 +19,14 @@ namespace SysWeaver
         /// Start a new async task (new thread / new chain)
         /// </summary>
         /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StartNewAsyncChain(Func<ConfiguredTaskAwaitable> task) => Task.Run(task).ConfigureAwait(false);
 
         /// <summary>
         /// Start a new async task (new thread / new chain)
         /// </summary>
         /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StartNewAsyncChain(Func<Task> task) => Task.Run(() => task().ConfigureAwait(false)).ConfigureAwait(false);
 
 
@@ -32,12 +34,14 @@ namespace SysWeaver
         /// Start a new async task (new thread / new chain)
         /// </summary>
         /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StartNewAsyncChain(Func<ConfiguredValueTaskAwaitable> task) => Task.Run(task).ConfigureAwait(false);
 
         /// <summary>
         /// Start a new async task (new thread / new chain)
         /// </summary>
         /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StartNewAsyncChain(Func<ValueTask> task) => Task.Run(() => task().ConfigureAwait(false)).ConfigureAwait(false);
 
 
@@ -465,6 +469,7 @@ namespace SysWeaver
         /// <exception cref="ArgumentException">
         /// The <paramref name="tasks"/> array contained a null task.
         /// </exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask<T[]> WhenAll<T>(IEnumerable<ValueTask<T>> tasks)
             => WhenAll(tasks?.ToList());
 
@@ -495,6 +500,7 @@ namespace SysWeaver
         /// <exception cref="ArgumentException">
         /// The <paramref name="tasks"/> array contained a null task.
         /// </exception>        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask<T[]> WhenAll<T>(params ValueTask<T>[] tasks)
             => WhenAll(tasks as IReadOnlyList<ValueTask<T>>);
 
@@ -582,6 +588,7 @@ namespace SysWeaver
         /// <exception cref="ArgumentException">
         /// The <paramref name="tasks"/> array contained a null task.
         /// </exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask WhenAll(IEnumerable<ValueTask> tasks)
             => WhenAll(tasks?.ToList());
 
@@ -612,6 +619,7 @@ namespace SysWeaver
         /// <exception cref="ArgumentException">
         /// The <paramref name="tasks"/> array contained a null task.
         /// </exception>        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask WhenAll(params ValueTask[] tasks)
             => WhenAll(tasks as IReadOnlyList<ValueTask>);
 
