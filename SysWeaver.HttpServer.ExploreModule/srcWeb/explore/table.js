@@ -1006,6 +1006,14 @@ class Table {
         const colCount = cols.length;
         let dataRow = requestParams.Row + 1;
         const drows = data.Rows;
+
+        const isGeneric = drows.length <= 0 || Array.isArray(drows[0].Values);
+        const getRowData = isGeneric 
+            ?
+            (rowData, colIndex, colName) => rowData.Values[colIndex]
+            :
+            (rowData, colIndex, colName) => rowData[colName]
+            ;
         const timeMode = state.TimeMode;
         drows.forEach(drow => {
             const trow = trowCount <= rowIndex ? table.insertRow() : trows[rowIndex];
@@ -1020,13 +1028,12 @@ class Table {
                 cell["Value"] = dataRow;
                 ValueFormat.updateText(cell, dataRow);
             }
-            const dvalues = drow.Values;
             trow["DataRow"] = dataRow;
             for (let i = 0; i < colCount; ++i) {
                 const col = cols[i];
                 if ((col.Props & TableDataProps.Hide) !== 0)
                     continue;
-                const value = dvalues[i];
+                const value = getRowData(drow, i, col.Name);
                 const type = col.Type;
                 let fmt = col.Format;
                 if ((type === "System.DateTime") && (fmt === null))
@@ -1040,7 +1047,7 @@ class Table {
                         continue;
                     }
                 }
-                const next = (i + 1) < colCount ? dvalues[i + 1] : undefined;
+                const next = (i + 1) < colCount ? getRowData(drow, i + 1, cols[i + 1].Name) : undefined;
                 cell["Value"] = cValue;
                 ValueFormat.update(cell, type, value, flash, fmt, next, onChangeFn);
                 ++cellIndex;
@@ -1483,7 +1490,8 @@ class Table {
                     const currentRow = requestParams.Row;
                     homeIcon.SetEnabled(currentRow > 0);
                     prevIcon.SetEnabled(currentRow > 0);
-                    nextIcon.SetEnabled(data.RowCount > requestParams.MaxRowCount);
+                    const gotCount = requestParams.Row + data.Rows.length;
+                    nextIcon.SetEnabled(data.RowCount > gotCount);
                     Table.tableRedraw(table, data, state, onChangeFn, saveFn, didChange);
                     if (state.AutoRowCount && (requestParams.Row == 0))
                         setTimeout(onResizeFn, 0);
