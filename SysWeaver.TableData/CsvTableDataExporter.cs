@@ -57,28 +57,30 @@ namespace SysWeaver.Data
         {
             if (data == null)
                 return "";
-            return ((Single)data).ToString(CultureInfo.InvariantCulture);
+
+            return Convert.ToSingle(data).ToString(CultureInfo.InvariantCulture);
         };
 
         public static readonly Func<Object, String> DoubleToString = data =>
         {
             if (data == null)
                 return "";
-            return ((Double)data).ToString(CultureInfo.InvariantCulture);
+            return Convert.ToDouble(data).ToString(CultureInfo.InvariantCulture);
         };
 
         public static readonly Func<Object, String> DecimalToString = data =>
         {
             if (data == null)
                 return "";
-            return ((Decimal)data).ToString(CultureInfo.InvariantCulture);
+            return Convert.ToDecimal(data).ToString(CultureInfo.InvariantCulture);
         };
+
 
         public static readonly IReadOnlyDictionary<String, Func<Object, String>> DefToStrings = new Dictionary<String, Func<Object, String>>(StringComparer.Ordinal)
         {
-            { typeof(Single).Name, SingleToString },
-            { typeof(Double).Name, DoubleToString },
-            { typeof(Decimal).Name, DecimalToString },
+            { typeof(Single).FullName, SingleToString },
+            { typeof(Double).FullName, DoubleToString },
+            { typeof(Decimal).FullName, DecimalToString },
         }.Freeze(); 
 
 
@@ -153,9 +155,6 @@ namespace SysWeaver.Data
             return Task.FromResult(new MemoryFile(name + ".csv", Mimes.Utf8PlainText, Encoding.UTF8.GetBytes(sb.ToString())));
         }
     }
-
-
-
 
 
 }

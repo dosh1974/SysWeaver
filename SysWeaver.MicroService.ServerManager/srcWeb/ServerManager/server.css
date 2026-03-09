@@ -7,6 +7,10 @@
     box-sizing: border-box;
 }
 
+html
+{
+    --Margin: 0;
+}
 
 body {
     --pad: 8px;
@@ -73,7 +77,6 @@ body.Dual server-charts{
     --h: calc(min(var(--mmh), var(--mw)));
     --h2: calc((var(--mh) - var(--h)) / 2);
     display: block;
-    overflow: hidden;
 }
 
 
@@ -83,7 +86,7 @@ body.Dual server-charts{
         height: var(--h);
     }
 
-
+     
         body.Dual server-item:first-child iframe {
             width: var(--mw);
             height: var(--h);

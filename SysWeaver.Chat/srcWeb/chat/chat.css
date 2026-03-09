@@ -5,6 +5,11 @@ html.Embedded {
     }
 }
 
+html
+{
+    --Margin: 0;
+}
+
 
 body.ChatMain{
     display: block;

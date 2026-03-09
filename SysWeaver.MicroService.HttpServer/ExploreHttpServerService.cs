@@ -35,6 +35,7 @@ namespace SysWeaver.MicroService
                 CsvTableDataExporter.Comma,
                 CsvTableDataExporter.Tab,
                 CsvTableDataExporter.SemiColon,
+                HtmlTableDataExporter.Simple,
             };
             var ser = SerManager.Get("json");
             if (ser != null)

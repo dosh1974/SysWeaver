@@ -1,0 +1,55 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta charset="utf-8" />
+        <title>${#Title}</title>
+        <style>
+            table, td, th {
+                border: 1px solid rgba(0,0,0,0.25);
+                border-collapse: collapse;
+                white-space: nowrap
+            }
+
+            th {
+                padding: 3px 0.5em;
+                font-weight: bold;
+                text-align: left;
+            }
+
+            td {
+                padding: 3px 0.5em;
+            }
+
+            .r {
+                text-align: right;
+            }
+
+            .m {
+                font-family: monospace, monospace;
+            }
+
+            .b
+            {
+                color: #600;
+            }
+
+            .n {
+                color: #060;
+            }
+
+            .t {
+                color: #00a;
+            }
+
+
+            tr:nth-child(2n) {
+                background-color: rgba(0,0,128,0.05);
+            }
+        </style>
+    </head>
+    <body>
+        <table>
+${Rows}
+        </table>
+    </body>
+</html>

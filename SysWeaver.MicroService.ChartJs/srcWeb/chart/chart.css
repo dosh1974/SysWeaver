@@ -11,6 +11,10 @@ body {
         height: 100svh !important;
     }
 
+html {
+    --Margin: 0;
+}
+
 html.Embedded body {
     height: calc(100svh - 16px) !important;
 }

@@ -1,16 +1,28 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
-		<RootNamespace>SysWeaver.Serialization</RootNamespace>
+		<RootNamespace>SysWeaver.Data</RootNamespace>
 		<GenerateDocumentationFile>True</GenerateDocumentationFile>
 		<NoWarn>1701;1702;1591</NoWarn>
 	</PropertyGroup>
 
 	<ItemGroup>
 	  <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+	  <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
 	  <ProjectReference Include="..\SysWeaver.Docs\SysWeaver.Docs.csproj" />
 	  <ProjectReference Include="..\SysWeaver.ExpressionEvaluator\SysWeaver.ExpressionEvaluator.csproj" />
 	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="srcData\" />
+	</ItemGroup>
+
+  <Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+    <Exec Command="..\_tools\compress\Compress.exe -Methods br -OptimizeWebFiles false .\srcData\*+ .\data" />
+    <ItemGroup>
+      <EmbeddedResource Include="data\**\*.br" Visible="false" />
+    </ItemGroup>
+  </Target>
 
 </Project>

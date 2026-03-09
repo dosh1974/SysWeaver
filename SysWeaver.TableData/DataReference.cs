@@ -15,7 +15,7 @@ namespace SysWeaver.Data
         public DataReference()
         {
         }
-
+        
 
         protected DataReference(DataReference cloneForResponse)
         {

@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using SysWeaver.Compression;
@@ -23,13 +24,39 @@ namespace SysWeaver
             {
                 if (!t.StartsWith(uncompressedName, StringComparison.Ordinal))
                     continue;
-                if (t == uncompressedName)
+                if (t.FastEquals(uncompressedName))
                     return null;
                 var comp = CompManager.GetFromExt(t.Substring(uncompressedName.Length + 1));
                 if (comp == null)
                     continue;
                 uncompressedName = t;
                 return comp;
+            }
+            String prefix = null;
+            foreach (var t in allRes)
+            {
+                var k = t.IndexOf(".data.");
+                if (k >= 0)
+                {
+                    prefix = t.Substring(0, k + 6);
+                    break;
+                }
+            }
+            if (prefix != null)
+            {
+                uncompressedName = prefix + uncompressedName;
+                foreach (var t in allRes)
+                {
+                    if (!t.StartsWith(uncompressedName, StringComparison.Ordinal))
+                        continue;
+                    if (t.FastEquals(uncompressedName))
+                        return null;
+                    var comp = CompManager.GetFromExt(t.Substring(uncompressedName.Length + 1));
+                    if (comp == null)
+                        continue;
+                    uncompressedName = t;
+                    return comp;
+                }
             }
             uncompressedName = null;
             return null;

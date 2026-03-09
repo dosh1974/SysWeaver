@@ -7,6 +7,9 @@ namespace SysWeaver
         public const string Utf8Suffix = "; charset=UTF-8";
         public const string Utf8PlainText = "text/plain" + Utf8Suffix;
 
+
+        public const string HtmlText = "text/html" + Utf8Suffix;
+
     }
 
 
