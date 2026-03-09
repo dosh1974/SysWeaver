@@ -18,4 +18,8 @@
 	  <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
 	  <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
 	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="srcWeb\mediaView\imageEffects\" />
+	</ItemGroup>
 </Project>

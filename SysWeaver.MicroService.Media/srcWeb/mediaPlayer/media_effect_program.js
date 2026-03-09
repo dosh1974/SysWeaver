@@ -77,6 +77,11 @@ class EffectProgramData {
         let havePrecision = false;
         let haveDerExt = false;
         let haveDer = false;
+
+        let haveLodExt = false;
+        let haveLod = false;
+
+
         function isSpace(line, pos, falseOutSize) {
             if ((pos < 0) || (pos >= lc))
                 return !falseOutSize;
@@ -142,6 +147,11 @@ class EffectProgramData {
                         haveDer |= haveIdentifier(line, "dFdx");
                         haveDer |= haveIdentifier(line, "dFdy");
                         haveDer |= haveIdentifier(line, "fwidth");
+                    }
+                    if (!haveLodExt)
+                        haveLodExt |= haveSpaceIdentifier(line, "GL_EXT_shader_texture_lod");
+                    if (!haveLod) {
+                        haveLod |= haveIdentifier(line, "texture2DLod");
                     }
                 }
                 continue;
@@ -275,6 +285,11 @@ class EffectProgramData {
         if (haveDer && (!haveDerExt)) {
             t.Prefix +=
                 `#extension GL_OES_standard_derivatives : enable
+`;
+        }
+        if (haveLod && (!haveLodExt)) {
+            t.Prefix +=
+                `#extension GL_EXT_shader_texture_lod : enable
 `;
         }
         if (!havePrecision) {

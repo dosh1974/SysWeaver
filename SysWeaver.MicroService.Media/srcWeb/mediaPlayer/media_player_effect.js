@@ -76,6 +76,8 @@ class MediaPlayerEffect {
         t.GL = gl;
 
         gl.getExtension("OES_standard_derivatives");
+        gl.getExtension("EXT_shader_texture_lod");
+        
 
         const pos = gl.createBuffer(); 
         t.Pos = pos;
