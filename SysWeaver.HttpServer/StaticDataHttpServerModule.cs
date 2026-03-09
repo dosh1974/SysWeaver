@@ -62,6 +62,7 @@ namespace SysWeaver.Net
         /// <param name="lastModified">The last modified string (null to use the default = application start)</param>
         /// <param name="auth">Required authorization tokens, null = no auth required, "" = auth required but no specific tokens, or comma separated list of required security tokens</param>
         /// <param name="doAdd">Optional function to determine if a resource should be included or not</param>
+        /// <param name="etag"></param>
         /// <exception cref="NullReferenceException"></exception>
         public void AddEmbeddedResources(Assembly asm, String rootNamespace = null, String urlRoot = null, int? clientCacheDuration = null, HttpCompressionPriority compression = null, bool disableCompession = false, DateTime? lastModified = null, String etag = null,String auth = null, AddCondition doAdd = null)
         {

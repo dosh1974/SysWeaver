@@ -38,6 +38,7 @@ namespace SysWeaver.Net
         /// <param name="size"></param>
         /// <param name="lastModified"></param>
         /// <param name="mime"></param>
+        /// <param name="etag"></param>
         /// <param name="props">A custom hash set of properties (use only lowercase)</param>
         public HttpServerEndPoint(string uri, string method, int clientCacheDuration, int requestCacheDuration, string compression, string decoder, IReadOnlyList<String> auth, HttpServerEndpointTypes type, String location, long? size, DateTime? lastModified, String etag, String mime, IReadOnlySet<String> props)
         {
