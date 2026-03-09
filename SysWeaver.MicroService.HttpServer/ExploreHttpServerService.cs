@@ -203,13 +203,9 @@ namespace SysWeaver.MicroService
                 var d = JsonSer.Create<BaseTableData>(bs.Memory.Span);
                 return Tuple.Create(TableDataTools.GetStaticTableFn(d.Cols, d.Rows.Select(x => x.Values)), d.Cols, d.Title);
             }).ConfigureAwait(false);
-            var cc = EnvInfo.Cc;
             var data = filterFnCols.Item1(r);
             data.RefreshRate = 5 * 60 * 1000;
-            data.Cc = cc;
-            var isNew = r.Cc != cc;
-            data.Cols = isNew ? filterFnCols.Item2 : null;
-            data.Title= isNew ? filterFnCols.Item3 : null;
+            data.HandleCc(r.Cc, filterFnCols.Item2, filterFnCols.Item3);
             return data;
         }
 

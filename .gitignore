@@ -453,3 +453,4 @@ FodyWeavers.xsd
 /SysWeaver.MicroService.UserStorage/data
 /SysWeaver.MicroServices.Log/web
 web
+/SysWeaver.TableData/data

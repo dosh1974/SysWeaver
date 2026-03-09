@@ -1007,21 +1007,15 @@ namespace SysWeaver.Data
                 dc.Title = String.IsNullOrEmpty(def.Title) ? gen.Title : def.Title;
                 dc.Props = gen.Props | (def.Props & (TableDataColumnProps.Hide | TableDataColumnProps.AnyKey | TableDataColumnProps.CanChart));
             }
-            var cc = EnvInfo.Cc;
             return r =>
             {
                 var t = Get(r, d);
-                var isNew = r.Cc != cc;
-                var ret = new TableData
+                return new TableData
                 {
-                    Cc = cc,
-                    Cols = isNew ? destCols : null,
-                    Title = isNew ? title : null,
                     RowCount = t.RowCount,
                     RefreshRate = t.RefreshRate,
                     Rows = t.Rows,
-                };
-                return ret;
+                }.HandleCc(r.Cc, destCols, title);
             };
         }
 
@@ -1399,6 +1393,55 @@ namespace SysWeaver.Data
         public static Task<TypedTableData<T>> Translate<T>(this TypedTableData<T> data, ITranslationContext translationContext)
             => Translate<T>(data, translationContext?.Translator, translationContext?.Language);
 
+
+
+        public static TableData HandleCc(this TableData data, long requestCc, TableDataColumn[] cols, String title = null)
+        {
+            if (requestCc == -1)
+            {
+                data.Cc = requestCc;
+                data.Cols = null;
+                data.Title = null;
+                return data;
+            }
+            var cc = EnvInfo.Cc;
+            if (cc == requestCc)
+            {
+                data.Cc = cc;
+                data.Cols = null;
+                data.Title = null;
+                return data;
+            }
+            data.Cc = cc;
+            data.Cols = cols;
+            if (title != null)
+                data.Title = title;
+            return data;
+        }
+
+        public static TypedTableData<T> HandleCc<T>(this TypedTableData<T> data, long requestCc, TableDataColumn[] cols, String title = null)
+        {
+            if (requestCc == -1)
+            {
+                data.Cc = requestCc;
+                data.Cols = null;
+                data.Title = null;
+                return data;
+            }
+            var cc = EnvInfo.Cc;
+            if (cc == requestCc)
+            {
+                data.Cc = cc;
+                data.Cols = null;
+                data.Title = null;
+                return data;
+            }
+            data.Cc = cc;
+            data.Cols = cols;
+            if (title != null)
+                data.Title = title;
+            return data;
+        }
 
     }
 

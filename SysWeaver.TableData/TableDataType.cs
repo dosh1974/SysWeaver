@@ -963,16 +963,11 @@ namespace SysWeaver.Data
             catch
             {
             }
-            var cc = EnvInfo.Cc;
-            bool isNew = request.Cc != cc;
             return new TableData
             {
                 Rows = rows,
-                Cols = isNew ? Cols : null,
-                Title = isNew ? title : null,
                 RowCount = count,
-                Cc = cc,
-            };
+            }.HandleCc(request.Cc, Cols, title);
         }
 
         public static TypedTableData<T> GetTyped(TableDataRequest request, IEnumerable<T> data, String title)
@@ -999,16 +994,12 @@ namespace SysWeaver.Data
             catch
             {
             }
-            var cc = EnvInfo.Cc;
-            bool isNew = request.Cc != cc;
             return new TypedTableData<T>
             {
                 Rows = rows,
-                Cols = isNew ? TypedCols : null,
-                Title = isNew ? title : null,
                 RowCount = count,
-                Cc = cc,
-            };
+            }.HandleCc(request.Cc, TypedCols, title);
+
         }
 
 

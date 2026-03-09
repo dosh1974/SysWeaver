@@ -269,18 +269,12 @@ namespace SysWeaver.Net.ExploreModule
                 throw new Exception("Unknown data table reference (expired?)");
             var data = td.Get();
             data = data.Filter(request);
-            var cc = EnvInfo.Cc;
-            var isNew = request.Cc != cc;
-            var ret = new TableData
+            return new TableData
             {
-                Cols = isNew ? data.Cols : null,
-                Title = isNew ? data.Title : null,
                 Rows = data.Rows,
                 RowCount = data.Rows.LongLength + Math.Max(0, request.Row),
                 RefreshRate = td.TimeToLive * 900,
-                Cc = cc,
-            };
-            return ret;
+            }.HandleCc(request.Cc, data.Cols, data.Title);
         }
 
         /// <summary>

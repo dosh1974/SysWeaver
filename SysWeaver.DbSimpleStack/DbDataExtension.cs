@@ -32,13 +32,11 @@ namespace SysWeaver.Db
             var res = await GetFiltered<T>(con, out var skip, out var limit, out var lookAhead, request, tableName, maxAllowedRows, extraFn).ConfigureAwait(false);
             var rows = TableDataTools.ExtractGet<T>(out var count, res, limit, lookAhead);
             count += skip;
-            var cc = EnvInfo.Cc;
             result = result ?? new();
+            result.HandleCc(request.Cc, cols, tableName);
             result.Rows = rows;
-            result.Cols = (request.Cc == cc) ? null : cols;
             result.RowCount = count;
             result.RefreshRate = refreshRate;
-            result.Cc = cc;
             return result;
         }
 
@@ -55,13 +53,11 @@ namespace SysWeaver.Db
             var res = await GetFiltered<T>(con, out var skip, out var limit, out var lookAhead, request, tableName, maxAllowedRows, extraFn).ConfigureAwait(false);
             var rows = TableDataTools.ExtractGetTyped<T>(out var count, res, limit, lookAhead);
             count += skip;
-            var cc = EnvInfo.Cc;
             result = result ?? new ();
+            result.HandleCc(request.Cc, cols, tableName);
             result.Rows = rows;
-            result.Cols = (request.Cc == cc) ? null : cols;
             result.RowCount = count;
             result.RefreshRate = refreshRate;
-            result.Cc = cc;
             return result;
         }
 
