@@ -89,6 +89,10 @@ namespace SysWeaver.Data
         /// </summary>
         IsComputed = 2048,
 
+        /// <summary>
+        /// Is a read only value
+        /// </summary>
+        IsReadOnly = 4096,
 
         //  Computed
         AnyFilters = Filter | TextFilter | OrderFilter,

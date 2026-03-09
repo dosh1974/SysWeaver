@@ -276,7 +276,7 @@ namespace SysWeaver.Net.ExploreModule
                 Cols = isNew ? data.Cols : null,
                 Title = isNew ? data.Title : null,
                 Rows = data.Rows,
-                RowCount = data.Rows.LongLength,
+                RowCount = data.Rows.LongLength + Math.Max(0, request.Row),
                 RefreshRate = td.TimeToLive * 900,
                 Cc = cc,
             };

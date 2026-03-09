@@ -6,6 +6,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Docs;
@@ -20,12 +21,42 @@ namespace SysWeaver.Data
     {
 
         /// <summary>
+        /// Convert from typed table data to generic table data
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="table"></param>
+        /// <returns></returns>
+        public static TableData ToTableData<T>(this TypedTableData<T> table)
+            => new TableData
+            {
+                Cc = table.Cc,
+                RefreshRate = table.RefreshRate,
+                Rows = table.Rows.Convert(TableDataTools.GetRow),
+                Cols = table.Cols == null ? null : TableDataType<T>.Cols,
+                RowCount = table.RowCount,
+                Title = table.Title,
+            };
+
+
+        /// <summary>
+        /// Filter some data using TableDataFilter's
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="order">The order to sort by</param>
+        /// <param name="data">Source data</param>
+        /// <returns>The resulting data</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static IEnumerable<T> Sort<T>(String[] order, IEnumerable<T> data)
+            => TableDataType<T>.Sort(order, data);
+
+        /// <summary>
         /// Filter some data using TableDataFilter's
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="filters">The filters to apply</param>
         /// <param name="data">Source data</param>
         /// <returns>The resulting data</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEnumerable<T> Filter<T>(TableDataFilter[] filters, IEnumerable<T> data)
             => TableDataType<T>.Filter(filters, data);
 
@@ -37,20 +68,38 @@ namespace SysWeaver.Data
         /// <param name="request">What part of the data, sorting etc</param>
         /// <param name="data">Source data</param>
         /// <returns>The resulting data</returns>
-        public static IEnumerable<T> SortAndFilter<T>(TableDataRequest request, IEnumerable<T> data)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static IEnumerable<T> SortAndFilter<T>(TableDataOrderRequest request, IEnumerable<T> data)
             => TableDataType<T>.SortAndFilter(request ?? DefRequest, data);
 
         /// <summary>
-        /// Sort, filter and limitsome data using a table data request 
+        /// Sort, filter and limit some data using a table data request 
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="request">What part of the data, sorting etc</param>
         /// <param name="data">Source data</param>
         /// <param name="maxAllowedRows">Maximum allowed rows (minimum of this and the request is used)</param>
         /// <returns>The resulting data</returns>
-        public static IEnumerable<T> SortAndFilterAndLimit<T>(TableDataRequest request, IEnumerable<T> data, long maxAllowedRows = 100000)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static IEnumerable<T> SortAndFilterAndLimit<T>(TableDataOrderRequest request, IEnumerable<T> data, long maxAllowedRows = 100000)
                 => TableDataType<T>.SortAndFilterAndLimit(request ?? DefRequest, data, maxAllowedRows);
 
+
+        /// <summary>
+        /// Sort and limit some data using a table data request 
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="request">What part of the data, sorting etc</param>
+        /// <param name="data">Source data</param>
+        /// <param name="maxAllowedRows">Maximum allowed rows (minimum of this and the request is used)</param>
+        /// <returns>The resulting data</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static IEnumerable<T> SortAndLimit<T>(TableDataOrderRequest request, IEnumerable<T> data, long maxAllowedRows = 100000)
+                => TableDataType<T>.SortAndLimit(request ?? DefRequest, data, maxAllowedRows);
+
+
+
+        #region Boxed versions
 
         /// <summary>
         /// Get table data from an enumerable sequence
@@ -60,6 +109,7 @@ namespace SysWeaver.Data
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
         /// <returns>Some table data</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TableData Get<T>(TableDataRequest request, IEnumerable<T> data, String title = null) 
             => TableDataType<T>.Get(request ?? DefRequest, data, title);
 
@@ -70,6 +120,7 @@ namespace SysWeaver.Data
         /// <typeparam name="T"></typeparam>
         /// <param name="data">Source data</param>
         /// <returns>Some table data</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TableData GetAll<T>(IEnumerable<T> data)
             => TableDataType<T>.GetAll(data);
 
@@ -109,6 +160,72 @@ namespace SysWeaver.Data
         }
 
 
+        #endregion// Boxed versions
+
+
+        #region Typed versions
+
+        /// <summary>
+        /// Get table data from an enumerable sequence
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="request">What part of the data, sorting etc</param>
+        /// <param name="data">Source data</param>
+        /// <param name="title">Optional title of the table</param>
+        /// <returns>Some table data</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static TypedTableData<T> GetTyped<T>(TableDataRequest request, IEnumerable<T> data, String title = null)
+            => TableDataType<T>.GetTyped(request ?? DefRequest, data, title);
+
+
+        /// <summary>
+        /// Get table data from an enumerable sequence without any filtering, sorting or limiting
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="data">Source data</param>
+        /// <returns>Some table data</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static TypedTableData<T> GetAllTyped<T>(IEnumerable<T> data)
+            => TableDataType<T>.GetAllTyped(data);
+
+        /// <summary>
+        /// Get table data from an enumerable sequence
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="request">What part of the data, sorting etc</param>
+        /// <param name="refreshRate">Number of ms to wait befor a new refresh</param>
+        /// <param name="data">Source data</param>
+        /// <param name="title">Optional title of the table</param>
+        /// <returns>Some table data</returns>
+        public static TypedTableData<T> GetTyped<T>(TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null)
+        {
+            var r = TableDataType<T>.GetTyped(request ?? DefRequest, data, title);
+            if (r != null)
+                r.RefreshRate = refreshRate;
+            return r;
+        }
+
+        /// <summary>
+        /// Get table data from an enumerable sequence with any translations applied
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="translationContext">The translator and target language to use</param>
+        /// <param name="request">What part of the data, sorting etc</param>
+        /// <param name="refreshRate">Number of ms to wait befor a new refresh</param>
+        /// <param name="data">Source data</param>
+        /// <param name="title">Optional title of the table</param>
+        /// <returns>Some table data</returns>
+        public static Task<TypedTableData<T>> GetTyped<T>(ITranslationContext translationContext, TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null)
+        {
+            var r = TableDataType<T>.GetTyped(request ?? DefRequest, data, title);
+            if (r != null)
+                r.RefreshRate = refreshRate;
+            return r.Translate<T>(translationContext);
+        }
+
+
+        #endregion// Typed versions
+
 
         /// <summary>
         /// Convert an object into a values array
@@ -116,6 +233,7 @@ namespace SysWeaver.Data
         /// <typeparam name="T"></typeparam>
         /// <param name="data"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Object[] GetValues<T>(T data)
             => TableDataType<T>.Extract(data);
 
@@ -125,6 +243,7 @@ namespace SysWeaver.Data
         /// <typeparam name="T"></typeparam>
         /// <param name="data"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TableDataRow GetRow<T>(T data)
             => new TableDataRow { Values = TableDataType<T>.Extract(data) };
 
@@ -146,7 +265,7 @@ namespace SysWeaver.Data
         /// <param name="cols">The columns data to modify</param>
         /// <param name="addColumns">Add columns</param>
         /// <returns>True if column information exists, else false</returns>
-        public static bool ModifyColumns(this TableData data, out TableDataColumn[] cols, int addColumns = 0)
+        public static bool ModifyColumns<T>(this T data, out TableDataColumn[] cols, int addColumns = 0) where T : CommonTableData
         {
             var src = data.Cols;
             if (src == null)
@@ -173,7 +292,7 @@ namespace SysWeaver.Data
         /// <param name="data"></param>
         /// <param name="columnIndex">The columns data to modify</param>
         /// <returns>True if column information exists, else false</returns>
-        public static TableData RemoveColumnIndex(this TableData data, int columnIndex)
+        public static T RemoveColumnIndex<T>(this T data, int columnIndex) where T : BaseTableData
         {
             var src = data.Cols;
             if (src != null)
@@ -187,12 +306,37 @@ namespace SysWeaver.Data
 
 
         /// <summary>
+        /// Remove a column, based on index
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="columnIndex">The columns data to modify</param>
+        /// <returns>True if column information exists, else false</returns>
+        public static TypedTableData<T> RemoveColumnIndex<T>(this TypedTableData<T> data, int columnIndex)
+        {
+            var src = data.Cols;
+            if (src != null)
+                data.Cols = data.Cols.RemoveAt(columnIndex);
+            return data;
+        }
+
+
+        /// <summary>
+        /// Remove a column, based on name 
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="name">The columns data to modify</param>
+        /// <returns>True if column information exists, else false</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static TypedTableData<T> RemoveColumn<T>(this TypedTableData<T> data, String name)
+            => RemoveColumnIndex(data, TableDataType<T>.NameToColumnIndex[name]);
+
+        /// <summary>
         /// Hide a column in some table data
         /// </summary>
         /// <param name="data">The table data to manipulate</param>
         /// <param name="name">The name of the column (memeber name)</param>
         /// <returns>The source table data</returns>
-        public static TableData HideColumn(this TableData data, String name)
+        public static T HideColumn<T>(this T data, String name) where T : CommonTableData
         {
             var c = data.Cols;
             if (c == null)
@@ -212,7 +356,7 @@ namespace SysWeaver.Data
         /// <param name="name">The name of the column (member name)</param>
         /// <param name="title">The new title</param>
         /// <returns>The source table data</returns>
-        public static TableData SetColumnTitle(this TableData data, String name, String title)
+        public static T SetColumnTitle<T>(this T data, String name, String title) where T : CommonTableData
         {
             var c = data.Cols;
             if (c == null)
@@ -232,7 +376,7 @@ namespace SysWeaver.Data
         /// <param name="name">The name of the column (member name)</param>
         /// <param name="getTitle">A function that gets a new title</param>
         /// <returns>The source table data</returns>
-        public static TableData SetColumnTitle(this TableData data, String name, Func<TableDataColumn, String> getTitle)
+        public static T SetColumnTitle<T>(this T data, String name, Func<TableDataColumn, String> getTitle) where T : CommonTableData
         {
             var c = data.Cols;
             if (c == null)
@@ -253,7 +397,7 @@ namespace SysWeaver.Data
         /// <param name="name">The name of the column (member name)</param>
         /// <param name="desc">The new description</param>
         /// <returns>The source table data</returns>
-        public static TableData SetColumnDesc(this TableData data, String name, String desc)
+        public static T SetColumnDesc<T>(this T data, String name, String desc) where T : CommonTableData
         {
             var c = data.Cols;
             if (c == null)
@@ -273,7 +417,7 @@ namespace SysWeaver.Data
         /// <param name="name">The name of the column (member name)</param>
         /// <param name="getDesc">A function that gets a new description</param>
         /// <returns>The source table data</returns>
-        public static TableData SetColumnDesc(this TableData data, String name, Func<TableDataColumn, String> getDesc)
+        public static T SetColumnDesc<T>(this T data, String name, Func<TableDataColumn, String> getDesc) where T : CommonTableData
         {
             var c = data.Cols;
             if (c == null)
@@ -635,6 +779,7 @@ namespace SysWeaver.Data
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TableDataColumn[] GetCols<T>() => TableDataType<T>.Cols;
 
         /// <summary>
@@ -642,7 +787,18 @@ namespace SysWeaver.Data
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Type[] GetColTypes<T>() => TableDataType<T>.ColTypes;
+
+
+        /// <summary>
+        /// Get column information for a type
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static TableDataColumn[] GetTypedCols<T>() => TableDataType<T>.TypedCols;
 
 
         /// <summary>
@@ -653,6 +809,18 @@ namespace SysWeaver.Data
         public static TableDataColumn[] GetCols(Type t)
         {
             var gt = (TableDataColumn[])typeof(TableDataType<>).MakeGenericType(t).GetField(nameof(TableDataType<int>.Cols), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null);
+            return gt;
+        }
+
+
+        /// <summary>
+        /// Get column information for a type
+        /// </summary>
+        /// <param name="t"></param>
+        /// <returns></returns>
+        public static TableDataColumn[] GetTypedCols(Type t)
+        {
+            var gt = (TableDataColumn[])typeof(TableDataType<>).MakeGenericType(t).GetField(nameof(TableDataType<int>.TypedCols), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null);
             return gt;
         }
 
@@ -1179,6 +1347,37 @@ namespace SysWeaver.Data
             return data;
         }
 
+
+        /// <summary>
+        /// Translate the data in a table data.
+        /// </summary>
+        /// <typeparam name="T">The type must match the type used when creating the table</typeparam>
+        /// <param name="data">The data to translate</param>
+        /// <param name="translator">The translator to use</param>
+        /// <param name="to">The target language</param>
+        /// <param name="effort">The effort (cost / time) to put into the translation</param>
+        /// <param name="retention">How long to cache the translation</param>
+        /// <returns>A task to await for translation completion</returns>
+        public static async Task<TypedTableData<T>> Translate<T>(this TypedTableData<T> data, ITranslator translator, String to, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
+        {
+            if ((translator == null) || (data == null))
+                return data;
+            var tr = TypeTranslatorT<T>.Translate;
+            if (tr == null)
+                return data;
+            var rows = data.Rows;
+            if (rows == null)
+                return data;
+            var l = rows.Length;
+            if (l <= 0)
+                return data;
+            var tasks = new Task[l];
+            for (int i = 0; i < l; ++i)
+                tasks[i] = tr(translator, to, rows[i], effort, retention);
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+            return data;
+        }
+
         /// <summary>
         /// Translate the data in a table data.
         /// </summary>
@@ -1188,6 +1387,18 @@ namespace SysWeaver.Data
         /// <returns>A task to await for translation completion</returns>
         public static Task<TableData> Translate<T>(this TableData data, ITranslationContext translationContext)
             => Translate<T>(data, translationContext?.Translator, translationContext?.Language);
+
+
+        /// <summary>
+        /// Translate the data in a table data.
+        /// </summary>
+        /// <typeparam name="T">The type must match the type used when creating the table</typeparam>
+        /// <param name="data">The data to translate</param>
+        /// <param name="translationContext">The translator and target language to use</param>
+        /// <returns>A task to await for translation completion</returns>
+        public static Task<TypedTableData<T>> Translate<T>(this TypedTableData<T> data, ITranslationContext translationContext)
+            => Translate<T>(data, translationContext?.Translator, translationContext?.Language);
+
 
     }
 

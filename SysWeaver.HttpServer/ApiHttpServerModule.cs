@@ -274,8 +274,15 @@ namespace SysWeaver.Net
                     return;
                 var e = ApiHttpEntry.Create(IoParams, o, method, url, PerfMon, Auth, CachedCompression, Compression, LocationPrefix, AuditBegin, AuditEnd, AuditException);
                 entries[url] = e;
-                if ((e.RetType == typeof(TableData)) && (e.ArgType == typeof(TableDataRequest)))
-                    Tables[e] = Interlocked.Increment(ref TableId);
+                var at = e.ArgType;
+                if (at == typeof(TableDataRequest))
+                {
+                    var rt = e.RetType;
+                    if (rt == typeof(TableData))
+                        Tables[e] = Interlocked.Increment(ref TableId);
+                    if (rt.IsGenericType && (rt.GetGenericTypeDefinition() == typeof(TypedTableData<>)))
+                        Tables[e] = Interlocked.Increment(ref TableId);
+                }
                 OnApiAdded?.Invoke(e);
             }
         }
@@ -431,6 +438,11 @@ namespace SysWeaver.Net
                 var a = e.Auth;
                 Auth = a == null ? null : String.Join(", ", a);
                 Desc = e.Mi.XmlDoc().ToTitle();
+                var r = e.RetType;
+                if (r.IsGenericType && (r.GetGenericTypeDefinition() == typeof(TypedTableData<>)))
+                {
+                    Type = r.GetGenericArguments()[0];
+                }
             }
 
             /// <summary>
@@ -446,11 +458,18 @@ namespace SysWeaver.Net
             public String Auth;
 
             /// <summary>
+            /// The type of the data (if typed)
+            /// </summary>
+            public Type Type;
+
+            /// <summary>
             /// API description (code comments)
             /// </summary>
             [AutoTranslate(false)]
             [AutoTranslateContext("This is the description an API endpoints that returns a data table")]
+            [TableDataText]
             public String Desc;
+
 
         }
 

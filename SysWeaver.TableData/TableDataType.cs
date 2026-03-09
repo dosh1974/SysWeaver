@@ -120,7 +120,11 @@ namespace SysWeaver.Data
 
             ColTypes = colTypes.ToArray();
             Cols = cols.ToArray();
-            Sort = sort.ToArray();
+            TypedCols = cols.Where(x => (x.Props & (TableDataColumnProps.IsComputed | TableDataColumnProps.IsReadOnly)) == 0).ToArray();
+            List<TableDataColumn> typedCols = new();
+
+
+            SortFn = sort.ToArray();
             SortDesc = sortDesc.ToArray();
 
             ThenBy = thenBy.ToArray();
@@ -329,7 +333,7 @@ namespace SysWeaver.Data
             bool isOk = isField | isProperty;
             if (!isOk)
                 return false;
-
+            bool isReadOnly = false;
             var name = (x.GetCustomAttribute<TableDataNameAttribute>()?.Name ?? x.Name);
             var title = x.GetCustomAttribute<TableDataTitleAttribute>()?.Value ?? StringTools.RemoveCamelCase(name);
             if (titlePrefix.Length > 0)
@@ -347,6 +351,7 @@ namespace SysWeaver.Data
                 mt = m.FieldType;
                 ee = Expression.Field(currentObj, m);
                 desc = m.XmlDoc().ToTitle();
+                isReadOnly = m.IsInitOnly;
             }
             else
             {
@@ -354,6 +359,7 @@ namespace SysWeaver.Data
                 mt = m.PropertyType;
                 ee = Expression.Property(currentObj, m);
                 desc = m.XmlDoc().ToTitle();
+                isReadOnly = !m.CanWrite;
             }
             Func<String, Object> textToObj = null;
             Func<Expression, Expression> convert = null;
@@ -432,6 +438,7 @@ namespace SysWeaver.Data
                     | TableDataColumnProps.CanSort
                     | (sortRev ? TableDataColumnProps.SortedDesc : 0)
                     | (hide ? TableDataColumnProps.Hide : 0)
+                    | (isReadOnly ? TableDataColumnProps.IsReadOnly : 0)
                     | TableDataColumnProps.Filter
                     | TableDataColumnProps.TextFilter
                     | TableDataColumnProps.OrderFilter
@@ -657,12 +664,13 @@ namespace SysWeaver.Data
             // TODO: Add the four new methods!
         }
 
+        internal static readonly TableDataColumn[] TypedCols;
         internal static readonly TableDataColumn[] Cols;
         internal static readonly Type[] ColTypes;
 
         internal static readonly Func<T, Object[]> Extract;
 
-        static readonly Func<IEnumerable<T>, IEnumerable<T>>[] Sort;
+        static readonly Func<IEnumerable<T>, IEnumerable<T>>[] SortFn;
         static readonly Func<IEnumerable<T>, IEnumerable<T>>[] SortDesc;
         static readonly Func<IEnumerable<T>, IEnumerable<T>>[] ThenBy;
         static readonly Func<IEnumerable<T>, IEnumerable<T>>[] ThenByDesc;
@@ -703,7 +711,37 @@ namespace SysWeaver.Data
             return data;
         }
 
-        public static IEnumerable<T> SortAndFilter(TableDataRequest request, IEnumerable<T> data)
+        public static IEnumerable<T> Sort(String[] o, IEnumerable<T> data)
+        {
+            if (data == null)
+                return null;
+            //  Sorting
+            if (o == null)
+                return data;
+            bool first = true;
+            var nameToCol = NameToColumnIndex;
+            foreach (var x in o)
+            {
+                var t = x?.Trim();
+                if (String.IsNullOrEmpty(t))
+                    continue;
+                var desc = t[0] == '-';
+                if (desc)
+                    t = t.Substring(1);
+                if (!nameToCol.TryGetValue(t ?? "", out var colIndex))
+                    continue;
+                var ss = first ? (desc ? SortDesc : SortFn) : (desc ? ThenByDesc : ThenBy);
+                var s = ss[colIndex];
+                if (s != null)
+                {
+                    data = s(data);
+                    first = false;
+                }
+            }
+            return data;
+        }
+
+        public static IEnumerable<T> SortAndFilter(TableDataOrderRequest request, IEnumerable<T> data)
         {
             if (data == null)
                 return null;
@@ -749,7 +787,7 @@ namespace SysWeaver.Data
                         t = t.Substring(1);
                     if (!nameToCol.TryGetValue(t ?? "", out var colIndex))
                         continue;
-                    var ss = first ? (desc ? SortDesc : Sort) : (desc ? ThenByDesc : ThenBy);
+                    var ss = first ? (desc ? SortDesc : SortFn) : (desc ? ThenByDesc : ThenBy);
                     var s = ss[colIndex];
                     if (s != null)
                     {
@@ -758,21 +796,47 @@ namespace SysWeaver.Data
                     }
                 }
             }
-/*            if (o >= 0)
-            {
-                var sorter = request.SortReverse ? SortDesc : Sort;
-                var s = sorter[o];
-                if (s != null)
-                    data = s(data);
-            }
-*/            return data;
+            /*            if (o >= 0)
+                        {
+                            var sorter = request.SortReverse ? SortDesc : Sort;
+                            var s = sorter[o];
+                            if (s != null)
+                                data = s(data);
+                        }
+            */
+            return data;
         }
 
-        public static IEnumerable<T> SortAndFilterAndLimit(TableDataRequest request, IEnumerable<T> data, long maxAllowedRows= 10000)
+        public static IEnumerable<T> SortAndFilterAndLimit(TableDataOrderRequest request, IEnumerable<T> data, long maxAllowedRows= 10000)
         {
             if (data == null)
                 return null;
             data = SortAndFilter(request, data);
+            //  Skip
+            var skip = request.Row;
+            while (skip > 0)
+            {
+                var s = skip;
+                if (s > 0x7ffffff)
+                    s = 0x7ffffff;
+                skip -= s;
+                data = data.Skip((int)s);
+            }
+            //  Limit
+            var limit = request.MaxRowCount;
+            if (limit <= 0)
+                return data;
+            if (limit > maxAllowedRows)
+                limit = maxAllowedRows;
+            data = data.Take((int)limit + 1);
+            return data;
+        }
+
+        public static IEnumerable<T> SortAndLimit(TableDataOrderRequest request, IEnumerable<T> data, long maxAllowedRows = 10000)
+        {
+            if (data == null)
+                return null;
+            data = Sort(request.Order, data);
             //  Skip
             var skip = request.Row;
             while (skip > 0)
@@ -865,6 +929,15 @@ namespace SysWeaver.Data
                 Cols = Cols,
             };
         }
+        public static TypedTableData<T> GetAllTyped(IEnumerable<T> data)
+        {
+            var rows = ExtractTypedGet(out var _, data);
+            return new TypedTableData<T>
+            {
+                Rows = rows,
+                Cols = TypedCols,
+            };
+        }
 
         public static TableData Get(TableDataRequest request, IEnumerable<T> data, String title)
         {
@@ -885,7 +958,7 @@ namespace SysWeaver.Data
                     data = data.Skip((int)s);
                 }
                 rows = ExtractGet(out count, data, request.MaxRowCount, request.LookAheadCount);
-                count += skip;
+                count += Math.Max(0, request.Row);
             }
             catch
             {
@@ -901,6 +974,47 @@ namespace SysWeaver.Data
                 Cc = cc,
             };
         }
+
+        public static TypedTableData<T> GetTyped(TableDataRequest request, IEnumerable<T> data, String title)
+        {
+            long count = 0;
+            T[] rows = EmptyT;
+            try
+            {
+                //  Filter and sort
+                data = SortAndFilter(request, data);
+                //  Skip
+                var skip = request.Row;
+                while (skip > 0)
+                {
+                    var s = skip;
+                    if (s > 0x7ffffff)
+                        s = 0x7ffffff;
+                    skip -= s;
+                    data = data.Skip((int)s);
+                }
+                rows = ExtractTypedGet(out count, data, request.MaxRowCount, request.LookAheadCount);
+                count += Math.Max(0, request.Row);
+            }
+            catch
+            {
+            }
+            var cc = EnvInfo.Cc;
+            bool isNew = request.Cc != cc;
+            return new TypedTableData<T>
+            {
+                Rows = rows,
+                Cols = isNew ? TypedCols : null,
+                Title = isNew ? title : null,
+                RowCount = count,
+                Cc = cc,
+            };
+        }
+
+
+
+
+
     }
 
 

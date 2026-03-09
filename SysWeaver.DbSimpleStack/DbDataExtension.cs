@@ -17,53 +17,6 @@ using SysWeaver.AI;
 namespace SysWeaver.Db
 {
 
-    public sealed class TypedTableData<T> : CommonTableData
-    {
-
-        /// <summary>
-        /// A change counter for the column information, if the request Cc is equal to this, no column information is sent
-        /// </summary>
-        public long Cc;
-
-        /// <summary>
-        /// Number of ms to wait before a new refresh
-        /// </summary>
-        [EditMin(0)]
-        public long RefreshRate;
-
-        /// <summary>
-        /// Data rows
-        /// </summary>
-        public T[] Rows;
-
-
-
-        public TypedTableData<N> Retype<N>(Func<T, N> convert)
-            => new TypedTableData<N>
-            {
-                Cc = Cc,
-                RefreshRate = RefreshRate,
-                Rows = Rows.Convert(convert),
-                Cols = Cols,
-                RowCount = RowCount,
-                Title = Title,
-            };
-
-
-
-        public TableData ToTableData()
-            => new TableData
-            {
-                Cc = Cc,
-                RefreshRate = RefreshRate,
-                Rows = Rows.Convert(TableDataTools.GetRow),
-                Cols = Cols,
-                RowCount = RowCount,
-                Title = Title,
-            };
-
-    }
-
 
     public static class DbData
     {

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Threading.Tasks;
 using SysWeaver.AI;
 
 namespace SysWeaver.Data
@@ -70,6 +71,54 @@ namespace SysWeaver.Data
         }
 
     }
+
+    public sealed class TypedTableData<T> : CommonTableData
+    {
+
+        /// <summary>
+        /// A change counter for the column information, if the request Cc is equal to this, no column information is sent
+        /// </summary>
+        public long Cc;
+
+        /// <summary>
+        /// Number of ms to wait before a new refresh
+        /// </summary>
+        [EditMin(0)]
+        public long RefreshRate;
+
+        /// <summary>
+        /// Data rows
+        /// </summary>
+        public T[] Rows;
+
+        public TypedTableData()
+        {
+        }
+
+        public TypedTableData<N> Retype<N>(Func<T, N> convert)
+            => new TypedTableData<N>
+            {
+                Cc = Cc,
+                RefreshRate = RefreshRate,
+                Rows = Rows.Convert(convert),
+                Cols = Cols,
+                RowCount = RowCount,
+                Title = Title,
+            };
+
+        public async ValueTask<TypedTableData<N>> RetypeAsync<N>(Func<T, ValueTask<N>> convert)
+            => new TypedTableData<N>
+            {
+                Cc = Cc,
+                RefreshRate = RefreshRate,
+                Rows = await Rows.ConvertAsyncValue(convert).ConfigureAwait(false),
+                Cols = Cols,
+                RowCount = RowCount,
+                Title = Title,
+            };
+
+    }
+
 
 
 
