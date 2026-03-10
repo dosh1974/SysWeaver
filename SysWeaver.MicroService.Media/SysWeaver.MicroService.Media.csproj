@@ -16,10 +16,15 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+	  <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
 	  <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
 	  <Folder Include="srcWeb\mediaView\imageEffects\" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="Magick.NET-Q16-x64" Version="14.10.3" />
 	</ItemGroup>
 </Project>

@@ -56,9 +56,9 @@ namespace SysWeaver.Net
             IsLocalized = options.IsLocalized;
         }
 
-        readonly Encoding E;
-        readonly String Mime;
-        readonly FileInfo Fi;
+        public readonly Encoding E;
+        public readonly String Mime;
+        public readonly FileInfo Fi;
 
         public int ClientCacheDuration { get; init; }
         public int RequestCacheDuration { get; init; }

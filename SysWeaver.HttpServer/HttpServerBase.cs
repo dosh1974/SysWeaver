@@ -1051,6 +1051,7 @@ namespace SysWeaver.Net
                 bool isDynamicTemplate = false;
                 bool createTemplate = false;
                 bool createTranslation = false;
+                var qs = data.QueryStringStart;
                 if (etag != null) 
                 {
                     var prevLm = etag;
@@ -1072,7 +1073,6 @@ namespace SysWeaver.Net
                                     rcd = 0;
                                 }
                             }
-                            var qs = data.QueryStringStart;
                             if (qs > 0)
                             {
                                 if (data.Url.FastSubEquals(qs, "raw"))
@@ -1152,6 +1152,51 @@ namespace SysWeaver.Net
                     else
                         langVars = await langTemplate.LangVars.GetOrUpdateValueAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false);
                 }
+                //  Set mime unless it's already set
+                var mime = data.GetResMime();
+                var orgMime = mime;
+                if (mime == null)
+                    if (ext.Length > 0)
+                        mime = MimeTypeMap.GetMimeType(ext).Item1;
+                //  Handle mime transformers
+                if (!t.IsDynamic)
+                {
+                    if ((mime != null) && (etag != null))
+                    {
+                        if (Transformers.TryGetValue(mime, out var chain))
+                        {
+
+                            if (!data.Url.FastSubEquals(qs, "raw"))
+                            {
+                                var transformers = chain.Transformers;
+                                var transformerLen = transformers.Length;
+                                HttpRequestTransformerState state = null;
+                                for (int transformerIndex = 0; transformerIndex < transformerLen; ++transformerIndex)
+                                {
+                                    try
+                                    {
+                                        state = state ?? new HttpRequestTransformerState(data, etag, mime, t, useAsync);
+                                        if (await transformers[transformerIndex](state).ConfigureAwait(false))
+                                        {
+                                            mime = state.Mime;
+                                            t = state.Handler;
+                                            useAsync = state.UseAsync;
+                                            dec = t.Decoder;
+                                            state = null;
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        TransformExceptions.OnException(ex);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if ((mime != null) && (!mime.FastEquals(orgMime)))
+                    data.SetResMime(mime);
+
                 using var i = useAsync ? await t.GetAsync(data).ConfigureAwait(false) : t.Get(data);
                 { 
                     if (haveTemplate)
@@ -1248,15 +1293,7 @@ namespace SysWeaver.Net
                         if (ccd > 1)
                             ccd = 1;
                     data.SetResHeader("Cache-Control", ccd > 0 ? ("max-age=" + ccd) : "no-cache"/*"must-revalidate"*/);
-                    //  Set mime unless it's already set
-                    if (data.GetResMime() == null)
-                    {
-                        if (ext.Length > 0)
-                        {
-                            var mime = MimeTypeMap.GetMimeType(ext);
-                            data.SetResMime(mime.Item1);
-                        }
-                    }
+ 
                     //  Determine compression
                     var acc = data.AcceptEncoding;
                     var acceptedEncoders = data.AcceptedEncoders;
@@ -2193,6 +2230,8 @@ namespace SysWeaver.Net
             foreach (var e in LoginErrors.GetStats(sys, "OnLogin."))
                 yield return e;
             foreach (var e in LogoutErrors.GetStats(sys, "OnLogout."))
+                yield return e;
+            foreach (var e in TransformExceptions.GetStats(sys, "Transform."))
                 yield return e;
             var total = Interlocked.Read(ref CacheTotal);
             var hit = Interlocked.Read(ref CacheHit);

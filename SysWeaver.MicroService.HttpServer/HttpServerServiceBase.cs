@@ -165,6 +165,14 @@ namespace SysWeaver.MicroService
         {
             var m = Manager;
             var s = Server;
+            var transformService = instance as IHttpTransformerService;
+            if (transformService != null)
+            {
+                if (s.UnregisterTransformerService(transformService))
+                    m.AddMessage(MsgPrefix + "Unregistered transformer service \"" + transformService.GetType() + "\" (" + transformService + ")", MessageLevels.Debug);
+                else
+                    m.AddMessage(MsgPrefix + "Failed to unregister transformer service! Already unregistered? Type \"" + transformService.GetType() + "\" (" + transformService + ")", MessageLevels.Warning);
+            }
             var module = instance as IHttpServerModule;
             if (module != null)
             {
@@ -223,6 +231,11 @@ namespace SysWeaver.MicroService
                 {
                     m.AddMessage(MsgPrefix + "Failed to add module! Already added? Type \"" + module.GetType() + "\" (" + module + ")", MessageLevels.Warning);
                 }
+            }
+            var transformService = instance as IHttpTransformerService;
+            if (transformService != null) {
+                s.RegisterTransformerService(transformService);
+                m.AddMessage(MsgPrefix + "Registered transformer service \"" + transformService.GetType() + "\" (" + transformService + ")", MessageLevels.Debug);
             }
         }
 
