@@ -17,7 +17,8 @@ namespace SysWeaver.Data
         public TableDataOp[] Ops;
 
         /// <summary>
-        /// Set to true unless you already know the exact format of the table being returned.
+        /// True to get column meta data, only do this on your first "request".
+        /// Columns will not mutate unless you do it (and then you still know the meta data).
         /// </summary>
         [OpenAiOptional]
         public bool RequireColumns;
@@ -29,19 +30,22 @@ namespace SysWeaver.Data
     public sealed class GetTableDataRequest
     {
         /// <summary>
-        /// The reference to the table data to get
+        /// The reference to the table data to get.
+        /// Make sure that you use the correct reference, typically the last from an edit or query operation.
         /// </summary>
         [EditMin(1)]
         public String TableDataRef;
 
         /// <summary>
-        /// Set to true unless you already know the exact format of the table being returned.
+        /// True to get column meta data, only do this on your first "request".
+        /// Columns will not mutate unless you do it (and then you still know the meta data).
+        /// It's very rare that this is required.
         /// </summary>
         [OpenAiOptional]
         public bool RequireColumns;
 
     }
-
+    
 
 
 

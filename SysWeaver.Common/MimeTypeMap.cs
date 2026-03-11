@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using SysWeaver.Data;
 
 namespace SysWeaver
 {
@@ -79,16 +80,22 @@ namespace SysWeaver
             /// <summary>
             /// The file extension
             /// </summary>
+            [TableDataFileExtension]
             public String Extension;
+
+            [TableDataFileExtensionImage]
+            public String I;
 
             /// <summary>
             /// The mime associated with the file extension
             /// </summary>
+            [TableDataMime]
             public String Mime;
 
             /// <summary>
             /// The mime including char set associated with the file extension
             /// </summary>
+            [TableDataMime]
             public String MimeCharSet;
 
             /// <summary>
@@ -102,11 +109,13 @@ namespace SysWeaver
             /// <summary>
             /// The mime 
             /// </summary>
+            [TableDataMime]
             public String Mime;
 
             /// <summary>
             /// The mime including char set
             /// </summary>
+            [TableDataMime]
             public String MimeCharSet;
 
             /// <summary>
@@ -913,11 +922,12 @@ namespace SysWeaver
             AllExtensionEntries = Map.Where(x => x.Key[0] == '.').OrderBy(x => x.Key).Select(x => new ExtensionEntry
             {
                 Extension = x.Key,
+                I = x.Key,
                 Mime = x.Value.Item1,
                 Compressed = x.Value.Item2,
                 MimeCharSet = s[x.Key].Item1
             }).ToArray();
-            AllMimeEntries = MimeExtensions.OrderBy(x => x.Key).Select(x => new MimeEntry
+            AllMimeEntries = MimeExtensions.Where(x => !x.Key.Contains(';')).OrderBy(x => x.Key).Select(x => new MimeEntry
             {
                 Mime = x.Key,
                 Extensions = String.Join(", ", x.Value),

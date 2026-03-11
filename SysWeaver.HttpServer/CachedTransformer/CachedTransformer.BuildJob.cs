@@ -1,23 +1,25 @@
 ﻿using System;
+using SysWeaver.Compression;
 using SysWeaver.Net;
 
-namespace SysWeaver.MicroService
+namespace SysWeaver.HttpTransformer
 {
 
-    public sealed partial class MediaTransformerService
+    public sealed partial class CachedTransformer
     {
         sealed class BuildJob
         {
             public readonly String CacheKey;
-            public readonly IMediaTransformHandler Handler;
-            public readonly MediaTransformCacheEntry Entry;
+            public readonly ICachedTransformer Handler;
+            public readonly CachedTransformerEntry Entry;
             public readonly ReadOnlyMemory<Byte> Data;
             public readonly String Mime;
             public readonly String BaseName;
             public readonly String Ext;
             public readonly bool IsSupported;
+            public readonly ICompDecoder Decoder;
 
-            public BuildJob(IMediaTransformHandler handler, String cacheKey, MediaTransformCacheEntry entry, ReadOnlyMemory<byte> data, string baseName, HttpRequestTransformerState state)
+            public BuildJob(ICachedTransformer handler, String cacheKey, CachedTransformerEntry entry, ReadOnlyMemory<byte> data, string baseName, HttpRequestTransformerState state)
             {
                 CacheKey = cacheKey;
                 Handler = handler;
@@ -26,7 +28,8 @@ namespace SysWeaver.MicroService
                 Mime = state.Mime;
                 BaseName = baseName;
                 Ext = state.Ext;
-                IsSupported = handler.BuildStrategy != MediaTransformerBuilds.AlwaysDirect;
+                Decoder = state.Handler.Decoder;
+                IsSupported = handler.BuildStrategy != CachedTransformerBuildStrategies.AlwaysDirect;
             }
         }
 

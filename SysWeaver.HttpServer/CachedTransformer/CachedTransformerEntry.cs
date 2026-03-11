@@ -1,9 +1,9 @@
 ﻿using SysWeaver.Net;
 
-namespace SysWeaver.MicroService
+namespace SysWeaver.HttpTransformer
 {
 
-    sealed class MediaTransformCacheEntry
+    public sealed class CachedTransformerEntry
     {
         public volatile bool Completed;
         public FileHttpRequestHandler[] Files;
