@@ -64,7 +64,7 @@ namespace SysWeaver
         /// <summary>
         /// Gets the type of the MIME from the provided string.
         /// </summary>
-        /// <param name="str">The filename or extension.</param>
+        /// <param name="str">The file extension.</param>
         /// <param name="withCharset">Adds a charset=UTF-8 to text documents</param>
         /// <returns>The MIME type and if the type is compressible</returns>
         public static Tuple<string, bool> GetMimeType(string str, bool withCharset = true)
@@ -72,6 +72,59 @@ namespace SysWeaver
             (withCharset ? MapWithCharSet : Map).TryGetValue(str, out var result);
             return result ?? DefaultMimeType;
         }
+
+
+        public sealed class ExtensionEntry
+        {
+            /// <summary>
+            /// The file extension
+            /// </summary>
+            public String Extension;
+
+            /// <summary>
+            /// The mime associated with the file extension
+            /// </summary>
+            public String Mime;
+
+            /// <summary>
+            /// The mime including char set associated with the file extension
+            /// </summary>
+            public String MimeCharSet;
+
+            /// <summary>
+            /// If true the web server will compress files of this type on the fly
+            /// </summary>
+            public bool Compressed;
+        }
+
+        public sealed class MimeEntry
+        {
+            /// <summary>
+            /// The mime 
+            /// </summary>
+            public String Mime;
+
+            /// <summary>
+            /// The mime including char set
+            /// </summary>
+            public String MimeCharSet;
+
+            /// <summary>
+            /// If true the web server will compress files of this type on the fly
+            /// </summary>
+            public bool Compressed;
+            
+            /// <summary>
+            /// The file extensions associated with the mime
+            /// </summary>
+            public String Extensions;
+
+        }
+
+
+        public static readonly ExtensionEntry[] AllExtensionEntries;
+        public static readonly MimeEntry[] AllMimeEntries;
+        
 
 
         static readonly Tuple<string, bool> DefaultMimeType = Tuple.Create("application/octet-stream", false);
@@ -855,10 +908,26 @@ namespace SysWeaver
                 mimeExtsF[x.Key] = x.Value.OrderBy(x => x).ToArray();
             MimeExtensions = mimeExtsF.Freeze();
             Map = mimes.Freeze();
-            MapWithCharSet = mimesWithCharSet.Freeze();
+            var s = mimesWithCharSet.Freeze();
+            MapWithCharSet = s;
+            AllExtensionEntries = Map.Where(x => x.Key[0] == '.').OrderBy(x => x.Key).Select(x => new ExtensionEntry
+            {
+                Extension = x.Key,
+                Mime = x.Value.Item1,
+                Compressed = x.Value.Item2,
+                MimeCharSet = s[x.Key].Item1
+            }).ToArray();
+            AllMimeEntries = MimeExtensions.OrderBy(x => x.Key).Select(x => new MimeEntry
+            {
+                Mime = x.Key,
+                Extensions = String.Join(", ", x.Value),
+                Compressed = s[x.Key].Item2,
+                MimeCharSet = s[x.Key].Item1
+            }).ToArray();
+
         }
 
 
-        
+
     }
 }

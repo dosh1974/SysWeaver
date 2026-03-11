@@ -27,7 +27,7 @@ namespace SysWeaver.MicroService
                 OnlyCompress = true;
             }
 
-            public ImageFormat(MagickFormat format, string extension, uint quality = 80, IWriteDefines def = null, bool haveAlpha = true, bool forceCompress = false)
+            public ImageFormat(MagickFormat format, string extension, uint quality = 90, IWriteDefines def = null, bool haveAlpha = true, bool forceCompress = false)
             {
                 extension = '.' + extension.TrimStart('.');
                 Extension = extension;

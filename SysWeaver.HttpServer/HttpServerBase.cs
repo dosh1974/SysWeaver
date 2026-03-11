@@ -29,6 +29,7 @@ namespace SysWeaver.Net
     [WebMenuEmbedded(null, "Home", "Home", "app/Home.html", "Show the home page", "IconHome", -100, "")]
     [WebMenuPath("Theme", "Theme", "Theme", "Color themes", "IconTheme")]
     [WebMenuPath(null, "Debug/Http Server", "Http Server", "Debug data from the http server", "../icons/server.svg")]
+    [WebMenuPath(null, "Debug/Data", "Data", "Misc static data", "../icons/book.svg", 100)]
     [WebMenuJs("Theme", "Theme/Auto", "(Automatic)", "if(resetTheme());false", "Automatically select (from browser / OS settings)", "IconThemeAuto", 0)]
     [WebMenuJs("Theme", "Theme/Light", "Light", "if(setTheme('light'));false", "Use the bright mode color scheme", "IconThemeLight", 1)]
     [WebMenuJs("Theme", "Theme/Dark", "Dark", "if(setTheme('dark'));false", "Use the dark mode color scheme", "IconThemeDark", 2)]
@@ -1163,9 +1164,9 @@ namespace SysWeaver.Net
                 {
                     if ((mime != null) && (etag != null))
                     {
-                        if (Transformers.TryGetValue(mime, out var chain))
+                        var trans = Transformers;
+                        if (trans.TryGetValue(mime, out var chain) || trans.TryGetValue(ext, out chain))
                         {
-
                             if (!data.Url.FastSubEquals(qs, "raw"))
                             {
                                 var transformers = chain.Transformers;
@@ -1175,7 +1176,7 @@ namespace SysWeaver.Net
                                 {
                                     try
                                     {
-                                        state = state ?? new HttpRequestTransformerState(data, etag, mime, t, useAsync);
+                                        state = state ?? new HttpRequestTransformerState(data, etag, mime, t, useAsync, ext);
                                         if (await transformers[transformerIndex](state).ConfigureAwait(false))
                                         {
                                             mime = state.Mime;
@@ -2785,6 +2786,36 @@ namespace SysWeaver.Net
             var n = DateTime.UtcNow;
             return TableDataTools.Get(r, 5000, context.Session.Cache.Nullable().Select(x => new CacheData(x, n)));
         }
+
+
+        /// <summary>
+        /// The mime mappings (extension to mime type) used by the web server
+        /// </summary>
+        /// <param name="r">Paramaters</param>
+        /// <returns></returns>
+        [WebApi("debug/data/{0}")]
+        [WebApiAuth(Roles.DevAdminOps)]
+        [WebApiClientCacheStatic]
+        [WebApiRequestCacheStatic]
+        [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
+        [WebMenuTable(null, "Debug/Data/{0}", "Mime mapping", null, "../icons/file_types.svg", -2)]
+        public TypedTableData<MimeTypeMap.ExtensionEntry> MimeMappingTable(TableDataRequest r)
+            => TableDataTools.GetTyped(r, 30000, MimeTypeMap.AllExtensionEntries);
+
+        /// <summary>
+        /// All mime types that the web server recognizes
+        /// </summary>
+        /// <param name="r">Paramaters</param>
+        /// <returns></returns>
+        [WebApi("debug/data/{0}")]
+        [WebApiAuth(Roles.DevAdminOps)]
+        [WebApiClientCacheStatic]
+        [WebApiRequestCacheStatic]
+        [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
+        [WebMenuTable(null, "Debug/Data/{0}", "Mime types", null, "../icons/world.svg", -1)]
+        public TypedTableData<MimeTypeMap.MimeEntry> MimeTypesTable(TableDataRequest r)
+            => TableDataTools.GetTyped(r, 30000, MimeTypeMap.AllMimeEntries);
+
 
         #endregion //Debug
 

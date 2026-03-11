@@ -10,15 +10,41 @@ namespace SysWeaver.MicroService
 
     public sealed partial class MediaTransformerService
     {
-        sealed class ImageHandler : IHandler
+        sealed class ImageHandler : IMediaTransformHandler
         {
+            public MediaTransformerBuilds BuildStrategy { get; init; }
 
-            public ImageHandler(params ImageFormat[] formats)
+            public ImageHandler(MediaTransformerBuilds buildStrategy, params ImageFormat[] formats)
             {
+                BuildStrategy = buildStrategy;
                 Formats = formats;
             }
 
+
             readonly ImageFormat[] Formats;
+
+
+            async ValueTask<FileHttpRequestHandler> WriteData(String name, Tuple<String,bool> mime, ReadOnlyMemory<Byte> data)
+            {
+                var fi = new FileInfo(name);
+                if (fi.Exists)
+                    return fi.Length == 0 ? null : new FileHttpRequestHandler(mime, fi, Options, true);
+
+                var tempName = name + ".tmp";
+                try
+                {
+                    await data.WriteToFileAsync(name).ConfigureAwait(false);
+                    await PathExt.TryMoveFileAsync(tempName, name).ConfigureAwait(false);
+                    fi = new FileInfo(name);
+                    if (fi.Exists && (fi.Length > 0))
+                        return new FileHttpRequestHandler(mime, fi, Options, true);
+                    return null;
+                }
+                finally
+                {
+                    await PathExt.TryDeleteFileAsync(tempName).ConfigureAwait(false);
+                }
+            }
 
             async ValueTask<FileHttpRequestHandler> WriteCompressed(MediaTransformerService service, String baseName, ReadOnlyMemory<Byte> imageData, ImageFormat format)
             {
@@ -98,6 +124,7 @@ namespace SysWeaver.MicroService
                             await image.WriteAsync(tempName, format.Format).ConfigureAwait(false);
                         }
                     }
+                    fi = new FileInfo(tempName);
                     await PathExt.TryMoveFileAsync(tempName, name).ConfigureAwait(false);
                     fi = new FileInfo(name);
                     if (fi.Exists && (fi.Length > 0))
@@ -111,12 +138,14 @@ namespace SysWeaver.MicroService
             }
 
 
-            public async ValueTask<FileHttpRequestHandler[]> Build(MediaTransformerService service, string baseName, string inputMime, ReadOnlyMemory<byte> inputData)
+            public async ValueTask<FileHttpRequestHandler[]> Build(MediaTransformerService service, string baseName, string inputMime, ReadOnlyMemory<byte> inputData, String inputExt, bool isSupported)
             {
                 await PathExt.EnsureCanWriteFileAsync(baseName).ConfigureAwait(false);
                 var formats = Formats;
                 var fl = formats.Length;
-                FileHttpRequestHandler[] files = new FileHttpRequestHandler[fl];
+                FileHttpRequestHandler[] files = new FileHttpRequestHandler[fl + (isSupported ? 1 : 0)];
+                if (isSupported)
+                    files[fl] = await WriteData(String.Concat(baseName, '.', inputExt), Tuple.Create(inputMime, false), inputData).ConfigureAwait(false);
                 using (var image = new MagickImage(inputData.Span))
                 {
                     for (int i = 0; i < fl; ++i)
@@ -132,7 +161,7 @@ namespace SysWeaver.MicroService
             }
 
 
-            public CacheEntry Validate(MediaTransformerService service, string baseName)
+            public MediaTransformCacheEntry Validate(MediaTransformerService service, string baseName)
             {
                 var formats = Formats;
                 var fl = formats.Length;
@@ -164,7 +193,7 @@ namespace SysWeaver.MicroService
                         continue;
                     files[i] = new FileHttpRequestHandler(format.Mime, fi, Options, true, mime.Item2 ? compType : null);
                 }
-                return new CacheEntry
+                return new MediaTransformCacheEntry
                 {
                     Files = GetValidSorted(files),
                 };

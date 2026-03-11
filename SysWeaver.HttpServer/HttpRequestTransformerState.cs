@@ -10,14 +10,16 @@ namespace SysWeaver.Net
         public String Mime;        
         public IHttpRequestHandler Handler;
         public bool UseAsync;
+        public String Ext;
 
-        public HttpRequestTransformerState(HttpServerRequest request, string eTag, string mime, IHttpRequestHandler handler, bool useAsync)
+        public HttpRequestTransformerState(HttpServerRequest request, string eTag, string mime, IHttpRequestHandler handler, bool useAsync, String ext)
         {
             Request = request;
             ETag = eTag;
             Mime = mime;
             Handler = handler;
             UseAsync = useAsync;
+            Ext = ext;
         }
 
 

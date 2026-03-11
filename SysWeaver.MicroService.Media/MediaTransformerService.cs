@@ -27,9 +27,35 @@ namespace SysWeaver.MicroService
         /// Optionally specify where to store transformed media
         /// </summary>
         public String[] Folders;
+
+        /// <summary>
+        /// If true, optimization is performed on legacy files (bmp, tif, jpg, png)
+        /// </summary>
+        public bool Optimize = true;
+
+        /// <summary>
+        /// If true, new formats avif, webp are getting fallback to legacy
+        /// </summary>
+        public bool SupportNew = true;
+
+        /// <summary>
+        /// File extensions to support
+        /// </summary>
+        public String[] Support =
+            [
+                "psd",
+                "tga",
+                "dds",
+                "exr",
+                "jfif",
+                "jp2",
+                "jxl",
+                "pcx",
+                "pict",
+            ];
     }
 
-    public sealed partial class MediaTransformerService : IHttpTransformerService, IDisposable
+    public sealed partial class MediaTransformerService : IHttpTransformerService, IDisposable, IPerfMonitored, IHaveStats
     {
 
         public MediaTransformerService(MediaTransformerParams p = null)
@@ -53,43 +79,70 @@ namespace SysWeaver.MicroService
             CompExt = '.' + compMethod.FileExtensions.FirstOrDefault().TrimStart('.');
 
 
-            var t = new Dictionary<string, IHandler>()
+            var t = new Dictionary<string, IMediaTransformHandler>();
+            if (p.Optimize)
             {
-                { "image/png", new ImageHandler([
+                t.Add("image/png",
+                        new ImageHandler(
+                            MediaTransformerBuilds.AlwaysDefer,
+                            [
+                                new ImageFormat(MagickFormat.Avif, ".avif"),
+                            new ImageFormat(MagickFormat.WebP, ".webp", 95),
+                            new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
+                            ]));
+                t.Add("image/bmp", new ImageHandler(MediaTransformerBuilds.AlwaysDefer, [
                     new ImageFormat(MagickFormat.Avif, ".avif"),
-                    new ImageFormat(MagickFormat.WebP, ".webp"),
-                    new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
-                    ] ) },
-                { "image/webp", new ImageHandler([
-                    new ImageFormat(MagickFormat.Avif, ".avif"),
-                    new ImageFormat(MagickFormat.Png, ".png"),
-                    new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
-                    ] ) },
-                { "image/avif", new ImageHandler([
-                    new ImageFormat(MagickFormat.WebP, ".webp"),
-                    new ImageFormat(MagickFormat.Png, ".png"),
-                    new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
-                    ] ) },
-                { "image/jpeg", new ImageHandler([
-                    new ImageFormat(".jpg"),
-                    new ImageFormat(MagickFormat.Avif, ".avif", 95),
                     new ImageFormat(MagickFormat.WebP, ".webp", 95),
                     new ImageFormat(MagickFormat.Png, ".png"),
-                    ] ) },
-                { ".psd", new ImageHandler([
+                    new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
+                    ]));
+                t.Add("image/tiff", new ImageHandler(MediaTransformerBuilds.AlwaysDefer, [
                     new ImageFormat(MagickFormat.Avif, ".avif"),
-                    new ImageFormat(MagickFormat.WebP, ".webp"),
+                    new ImageFormat(MagickFormat.WebP, ".webp", 95),
                     new ImageFormat(MagickFormat.Png, ".png"),
                     new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
-                    ] ) },
-
-            };
+                    ]));
+                t.Add("image/jpeg", new ImageHandler(MediaTransformerBuilds.AlwaysDefer, [
+                    new ImageFormat(".jpg"),
+                    new ImageFormat(MagickFormat.Avif, ".avif", 95),
+                    new ImageFormat(MagickFormat.WebP, ".webp", 100),
+                    new ImageFormat(MagickFormat.Png, ".png"),
+                    ]));
+            }
+            if (p.SupportNew)
+            {
+                t.Add("image/webp", new ImageHandler(MediaTransformerBuilds.CheckAccept, [
+                    new ImageFormat(MagickFormat.Avif, ".avif"),
+                        new ImageFormat(MagickFormat.Png, ".png"),
+                        new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
+                        ]));
+                t.Add("image/avif", new ImageHandler(MediaTransformerBuilds.CheckAccept, [
+                    new ImageFormat(MagickFormat.WebP, ".webp", 95),
+                        new ImageFormat(MagickFormat.Png, ".png"),
+                        new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
+                        ]));
+            }
+            var s = p.Support;
+            if (s != null)
+            {
+                foreach (var x in s)
+                {
+                    t.Add(x, new ImageHandler(
+                        MediaTransformerBuilds.AlwaysDirect, [
+                            new ImageFormat(MagickFormat.Avif, ".avif"),
+                            new ImageFormat(MagickFormat.WebP, ".webp", 95),
+                            new ImageFormat(MagickFormat.Png, ".png"),
+                            new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
+                        ]));
+                }
+            }
             MimeHandlers = t.Freeze();
             DataFolders = p.Folders ?? Folders.AllAppFolders;
-
-
+            BuildLock = new AsyncLock(threadCount);
             BuildTasks = Enumerable.Range(0, threadCount).Select(x => new PeriodicTask(Build, 100)).ToArray();
         }
+
+        readonly AsyncLock BuildLock;
 
         readonly PeriodicTask[] BuildTasks;
 
@@ -104,14 +157,38 @@ namespace SysWeaver.MicroService
             }
         }
 
+        readonly ExceptionTracker BuildErrors = new ();
+        
+
+        async ValueTask BuildOne(BuildJob job)
+        {
+            using var ___ = PerfMon.Track("BuildQueued");
+            using var _ = await BuildLock.Lock().ConfigureAwait(false);
+            using var __ = PerfMon.Track("Build");
+            var e = job.Entry;
+            try
+            {
+                FileHttpRequestHandler[] files;
+                using (var ____ = PerfMon.Track("Build." + job.Mime))
+                    files = await job.Handler.Build(this, job.BaseName, job.Mime, job.Data, job.Ext, job.IsSupported).ConfigureAwait(false);
+                if (files != null)
+                    e.Files = files;
+                e.Completed = true;
+            }
+            catch (Exception ex)
+            {
+                BuildErrors.OnException(ex);
+                e.Completed = true;
+            }
+            ScheduledJobs.TryRemove(job.CacheKey, out var _);
+}
+
         async ValueTask<bool> Build()
         {
             var b = BuildJobs;
             while (b.TryDequeue(out var job))
             {
-                var files = await job.Handler.Build(this, job.BaseName, job.Mime, job.Data).ConfigureAwait(false);
-                if (files != null)
-                    job.Entry.Files = files;
+                await BuildOne(job).ConfigureAwait(false);
                 await Task.Delay(1).ConfigureAwait(false);
             }
             return true;
@@ -119,7 +196,7 @@ namespace SysWeaver.MicroService
 
         readonly IReadOnlyList<String> DataFolders;
 
-        readonly IReadOnlyDictionary<String, IHandler> MimeHandlers;
+        readonly IReadOnlyDictionary<String, IMediaTransformHandler> MimeHandlers;
 
 
         public IEnumerable<KeyValuePair<string, Func<HttpRequestTransformerState, ValueTask<bool>>>> GetTransformers()
@@ -167,18 +244,60 @@ namespace SysWeaver.MicroService
             );
 
 
-        async ValueTask<CacheEntry> GetFromCache(String key, HttpRequestTransformerState state)
+
+        readonly ConcurrentDictionary<String, MediaTransformCacheEntry> ScheduledJobs = new (StringComparer.Ordinal);
+
+
+        bool TryStartBuild(String key, out MediaTransformCacheEntry e)
+        {
+            var n = new MediaTransformCacheEntry();
+            var sj = ScheduledJobs;
+            while (!sj.TryAdd(key, n))
+            {
+                if (sj.TryGetValue(key, out e))
+                    return false;
+            }
+            e = n;
+            return true;
+        }
+
+        async ValueTask<MediaTransformCacheEntry> GetFromCache(String key, HttpRequestTransformerState state)
         {
             var name = HashTools.GetHashString(key);
             var baseName = Path.Combine(Folders.SelectFolder(DataFolders, name), "TransformedCache", "Media", name);
             var mime = state.Mime;
-            var mimeHandler = MimeHandlers[mime];
+            var ext = state.Ext;
+            var mh = MimeHandlers;
+            if (!(mh.TryGetValue(mime, out var mimeHandler) || mh.TryGetValue(ext, out mimeHandler)))
+                throw new Exception("Internal error!");
             var e = mimeHandler.Validate(this, baseName);
             if (e != null)
                 return e;
-            e = new CacheEntry();
+            var st = mimeHandler.BuildStrategy;
+            bool defer = st != MediaTransformerBuilds.AlwaysDirect;
+            if (st == MediaTransformerBuilds.CheckAccept)
+            {
+                var req = state.Request;
+                var acc = req.GetReqHeader("Accept") ?? "";
+                defer = acc.IndexOf(state.Mime, StringComparison.Ordinal) >= 0;
+            }
+            if (!TryStartBuild(key, out e))
+            {
+                if (!defer)
+                {
+                    while (!e.Completed)
+                        await Task.Delay(100).ConfigureAwait(false);
+                }
+                return e;
+            }
             var data = await state.ReadAllData().ConfigureAwait(false);
-            BuildJobs.Enqueue(new BuildJob(mimeHandler, e, data, mime, baseName));
+            var job = new BuildJob(mimeHandler, key, e, data, baseName, state);
+            if (defer)
+            {
+                BuildJobs.Enqueue(job);
+                return e;
+            }
+            await BuildOne(job).ConfigureAwait(false);
             return e;
         }
 
@@ -193,15 +312,21 @@ namespace SysWeaver.MicroService
         static FileHttpRequestHandler[] GetValidSorted(FileHttpRequestHandler[] files)
             => files.Where(x => x != null).OrderBy(x => x.Fi.Length).ToArray();
 
+        public IEnumerable<Stats> GetStats()
+        {
+            foreach (var x in BuildErrors.GetStats(nameof(MediaTransformerService), "BuildEx."))
+                yield return x;
+            foreach (var x in Cache.GetStats(nameof(MediaTransformerService), "Cache."))
+                yield return x;
+        }
 
         static readonly RequestOptions Options = new RequestOptions(0, 0, 0, null, null);
 
         readonly ConcurrentQueue<BuildJob> BuildJobs = new ConcurrentQueue<BuildJob>();
 
-        readonly FastMemCache<String, CacheEntry> Cache = new (TimeSpan.FromHours(1), StringComparer.Ordinal);
+        readonly FastMemCache<String, MediaTransformCacheEntry> Cache = new (TimeSpan.FromHours(1), StringComparer.Ordinal);
 
-
-
+        public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(MediaTransformerService));
     }
 
 }

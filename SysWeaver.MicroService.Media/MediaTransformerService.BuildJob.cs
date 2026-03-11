@@ -1,4 +1,5 @@
 ﻿using System;
+using SysWeaver.Net;
 
 namespace SysWeaver.MicroService
 {
@@ -7,19 +8,25 @@ namespace SysWeaver.MicroService
     {
         sealed class BuildJob
         {
-            public readonly IHandler Handler;
-            public readonly CacheEntry Entry;
+            public readonly String CacheKey;
+            public readonly IMediaTransformHandler Handler;
+            public readonly MediaTransformCacheEntry Entry;
             public readonly ReadOnlyMemory<Byte> Data;
             public readonly String Mime;
             public readonly String BaseName;
+            public readonly String Ext;
+            public readonly bool IsSupported;
 
-            public BuildJob(IHandler handler, CacheEntry entry, ReadOnlyMemory<byte> data, string mime, string baseName)
+            public BuildJob(IMediaTransformHandler handler, String cacheKey, MediaTransformCacheEntry entry, ReadOnlyMemory<byte> data, string baseName, HttpRequestTransformerState state)
             {
+                CacheKey = cacheKey;
                 Handler = handler;
                 Entry = entry;
                 Data = data;
-                Mime = mime;
+                Mime = state.Mime;
                 BaseName = baseName;
+                Ext = state.Ext;
+                IsSupported = handler.BuildStrategy != MediaTransformerBuilds.AlwaysDirect;
             }
         }
 

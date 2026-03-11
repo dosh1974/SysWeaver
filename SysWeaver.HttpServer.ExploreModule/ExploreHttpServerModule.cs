@@ -20,7 +20,6 @@ namespace SysWeaver.Net.ExploreModule
 
 
     [WebMenuPath(null, "Debug", "Debug", "Debug functionality, not available to most users", "../icons/brain.svg", 100)]
-    [WebMenuPath(null, "Debug/Data", "Data", "Misc static data", "../icons/book.svg", 100)]
     [WebMenuEmbedded(null, "Debug/Explore", "Explore", "explore", "Explore the HTTP server end-points", "IconExplore", -10, "Debug,Dev,Ops")]
     [WebMenuEmbedded(null, "Debug/LogoDesign", "Logo design", "explore/logo.html", "Open logo seed visualizer, the seed can be copied into an AppInfo to change the generated logo", "IconLogo", -3, "Debug")]
     [WebMenuEmbedded(null, "Debug/Icons", "Icons", "explore/icons.html", "Shows all available icons ('icons/*.svg' files)", "IconImage", -2, "Debug,Dev")]
