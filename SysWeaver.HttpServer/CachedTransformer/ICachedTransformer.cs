@@ -9,18 +9,25 @@ namespace SysWeaver.HttpTransformer
 
     public interface ICachedTransformer
     {
+        /// <summary>
+        /// Information string
+        /// </summary>
+        String Info { get; }
 
+        /// <summary>
+        /// Build strategy
+        /// </summary>
         CachedTransformerBuildStrategies BuildStrategy { get; }
-
 
         /// <summary>
         /// Check if all resources are available
         /// </summary>
         /// <param name="service"></param>
         /// <param name="baseName">Filename base (no extension)</param>
+        /// <param name="inputMime">Mime of input</param>
         /// <param name="isSupported">True if build strategy isn't AlwaysDirect</param>
         /// <returns></returns>
-        CachedTransformerEntry Validate(CachedTransformer service, String baseName, bool isSupported);
+        CachedTransformerEntry Validate(CachedTransformer service, String baseName, string inputMime, bool isSupported);
 
 
         /// <summary>

@@ -66,7 +66,6 @@ namespace SysWeaver.Net
 
         public HttpRequestData Get(HttpServerRequest request)
         {
-            request.SetResMime(Mime);
             return new HttpRequestData(Data, true);
         }
 
@@ -77,6 +76,7 @@ namespace SysWeaver.Net
 
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
+            request.SetResMime(Mime);
             useAsync = false;
             return ETag;
         }

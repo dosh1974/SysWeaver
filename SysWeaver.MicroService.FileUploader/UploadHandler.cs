@@ -37,7 +37,6 @@ namespace SysWeaver.MicroService
         public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             var res = await Fs.Upload(request, Repo).ConfigureAwait(false);
-            request.SetResMime(HttpServerTools.JsonMime);
             return new HttpRequestData(JsonSer.Serialize(res));
         }
 
@@ -55,6 +54,7 @@ namespace SysWeaver.MicroService
 
         public String GetEtag(out bool useAsync, HttpServerRequest request)
         {
+            request.SetResMime(HttpServerTools.JsonMime);
             useAsync = true;
             return null;
         }

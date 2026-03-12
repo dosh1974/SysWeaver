@@ -1165,7 +1165,8 @@ namespace SysWeaver.Net
                     if ((mime != null) && (etag != null))
                     {
                         var trans = Transformers;
-                        if (trans.TryGetValue(mime, out var chain) || trans.TryGetValue(ext, out chain))
+                        var mimeFirst = mime.SplitFirst(';').Trim();
+                        if (trans.TryGetValue(mimeFirst, out var chain) || trans.TryGetValue(ext, out chain))
                         {
                             if (!data.Url.FastSubEquals(qs, "raw"))
                             {

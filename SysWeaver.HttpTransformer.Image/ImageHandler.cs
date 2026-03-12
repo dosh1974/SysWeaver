@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using SysWeaver.Compression;
 using SysWeaver.Net;
@@ -11,35 +12,22 @@ namespace SysWeaver.HttpTransformer
 
     sealed class ImageHandler : ICachedTransformer
     {
+
+        public String Info { get; init; }
+
+        public override string ToString() => Info;
+
         public CachedTransformerBuildStrategies BuildStrategy { get; init; }
 
         public ImageHandler(CachedTransformerBuildStrategies buildStrategy, params ImageFormat[] formats)
         {
             BuildStrategy = buildStrategy;
             Formats = formats;
+            Info = String.Join(", ", formats.Select(x => x.Info));
         }
 
 
         readonly ImageFormat[] Formats;
-
-
-        async ValueTask<FileHttpRequestHandler> WriteData(String name, long len)
-        {
-            var fi = new FileInfo(name);
-            if (fi.Exists && (fi.Length > 0))
-                return null;
-            var tempName = name + CachedTransformer.TempExt;
-            try
-            {
-                await File.WriteAllTextAsync(tempName, len.ToString()).ConfigureAwait(false);
-                await PathExt.TryMoveFileAsync(tempName, name).ConfigureAwait(false);
-                return null;
-            }
-            finally
-            {
-                await PathExt.TryDeleteFileAsync(tempName).ConfigureAwait(false);
-            }
-        }
 
         async ValueTask<FileHttpRequestHandler> WriteCompressed(CachedTransformer service, String baseName, ReadOnlyMemory<Byte> imageData, ImageFormat format)
         {
@@ -135,7 +123,6 @@ namespace SysWeaver.HttpTransformer
 
         public async ValueTask<FileHttpRequestHandler[]> Build(CachedTransformer service, string baseName, string inputMime, ReadOnlyMemory<byte> inputData, String inputExt, bool isSupported, ICompDecoder decoder)
         {
-            await PathExt.EnsureCanWriteFileAsync(baseName).ConfigureAwait(false);
             var formats = Formats;
             var fl = formats.Length;
             List<FileHttpRequestHandler> files = new(fl + 1);
@@ -158,16 +145,14 @@ namespace SysWeaver.HttpTransformer
             }
             if (isSupported)
             {
-                await WriteData(String.Concat(baseName, ".org"), orgLen).ConfigureAwait(false);
+                await CachedTransformer.SaveOrg(baseName, orgLen).ConfigureAwait(false);
                 files.Add(null);
             }
-
-
             return CachedTransformer.GetValidSorted(files, orgLen);
         }
 
 
-        public CachedTransformerEntry Validate(CachedTransformer service, string baseName, bool isSupported)
+        public CachedTransformerEntry Validate(CachedTransformer service, string baseName, String inputMime, bool isSupported)
         {
             var formats = Formats;
             var fl = formats.Length;
@@ -202,18 +187,15 @@ namespace SysWeaver.HttpTransformer
             long orgSize = 0;
             if (isSupported)
             {
-                var orgName = baseName + ".org";
-                if (!File.Exists(orgName))
-                    return null;
-                var t = File.ReadAllText(orgName);
-                if (!long.TryParse(t.Trim(), out orgSize))
-                    return null;
-                if (orgSize <= 0)
+                orgSize = CachedTransformer.ReadOrg(baseName);
+                if (orgSize < 0)
                     return null;
                 files.Add(null);
             }
             return new CachedTransformerEntry
             {
+                Completed = true,
+                OrgSize = orgSize,
                 Files = CachedTransformer.GetValidSorted(files, orgSize),
             };
         }

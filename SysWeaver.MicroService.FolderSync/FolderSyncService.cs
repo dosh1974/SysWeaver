@@ -57,39 +57,26 @@ namespace SysWeaver.MicroService
         public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             if (request.HttpMethod != HttpServerMethods.POST)
-            {
-                request.SetResMime(MimeTypeMap.Json);
                 return FalseValue;
-            }
             var x = request.LocalUrl.Split('/');
             var len = x.Length;
             if (len < 2)
-            {
-                request.SetResMime(MimeTypeMap.Json);
                 return FalseValue;
-            }
             if (x[1].FastEquals(nameof(GetChunks)))
             {
                 if (len != 2)
-                {
-                    request.SetResMime(MimeTypeMap.Json);
                     return FalseValue;
-                }
                 request.SetResMime(MimeTypeMap.Data);
                 return new HttpRequestData(await GetChunks(request).ConfigureAwait(false));
             }
             if (len < 3)
-            {
-                request.SetResMime(MimeTypeMap.Json);
                 return FalseValue;
-            }
             var jobId = x[1];
             var filename = String.Join('/', x, 2, len - 2);
             var u = x[0];
             if (u.FastEquals("FolderSync"))
             {
                 var res = await UploadFile(jobId, filename, request).ConfigureAwait(false);
-                request.SetResMime(MimeTypeMap.Json);
                 return res ? TrueValue : FalseValue;
             }
             if (u.FastEquals("FolderSyncCdc"))
@@ -99,7 +86,6 @@ namespace SysWeaver.MicroService
             }
 
             var res2 = await UploadCdcChunks(jobId, request).ConfigureAwait(false);
-            request.SetResMime(MimeTypeMap.Json);
             return res2 ? TrueValue : FalseValue;
 
         }

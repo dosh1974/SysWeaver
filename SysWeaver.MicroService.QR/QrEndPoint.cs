@@ -86,6 +86,7 @@ namespace SysWeaver.MicroService
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = false;
+            request.SetResMime(Mime);
             return AsmETag;
         }
 
@@ -118,7 +119,6 @@ namespace SysWeaver.MicroService
                 //var qrCodeAsSvg = qrCode.GetGraphic(1, QrDark, QrBright, drawQuite, SvgQRCode.SizingMode.ViewBoxAttribute);
                 resData = Encoding.UTF8.GetBytes(qrCodeAsSvg);
             }
-            request.SetResMime(Mime);
             return new HttpRequestData(resData);
         }
 

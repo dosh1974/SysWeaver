@@ -766,6 +766,7 @@ namespace SysWeaver.Net
 
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
+            request.SetResMime(Mime);
             useAsync = true;
             return null;
         }
@@ -778,7 +779,6 @@ namespace SysWeaver.Net
 
         async ValueTask<HttpRequestData> IHttpRequestHandler.GetAsync(HttpServerRequest request)
         {
-            request.SetResMime(Mime);
             if (request.HttpMethod == HttpServerMethods.GET)
             {
                 using (Mon?.Track(GetKey))

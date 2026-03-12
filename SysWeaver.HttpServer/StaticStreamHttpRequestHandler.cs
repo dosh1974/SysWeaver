@@ -84,19 +84,18 @@ namespace SysWeaver.Net
         public HttpServerEndpointTypes Type => HttpServerEndpointTypes.File;
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
+            request.SetResMime(Mime);
             useAsync = OpenStreamAsync != null;
             return ETag;
         }
 
         public HttpRequestData Get(HttpServerRequest request)
         {
-            request.SetResMime(Mime);
             return new HttpRequestData(OpenStream());
         }
 
         public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
-            request.SetResMime(Mime);
             return new HttpRequestData(await OpenStreamAsync().ConfigureAwait(false));
         }
 

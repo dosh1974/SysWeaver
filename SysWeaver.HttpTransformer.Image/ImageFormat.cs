@@ -23,9 +23,10 @@ namespace SysWeaver.HttpTransformer
             Extension = extension;
             Mime = MimeTypeMap.GetMimeType(extension);
             OnlyCompress = true;
+            Info = String.Concat("Original ", extension, " [compressed]");
         }
 
-        public ImageFormat(MagickFormat format, string extension, uint quality = 90, IWriteDefines def = null, bool haveAlpha = true, bool forceCompress = false)
+        public ImageFormat(MagickFormat format, string extension, uint quality = 100, IWriteDefines def = null, bool haveAlpha = true, bool forceCompress = false)
         {
             extension = '.' + extension.TrimStart('.');
             Extension = extension;
@@ -35,7 +36,13 @@ namespace SysWeaver.HttpTransformer
             Def = def;
             HaveAlpha = haveAlpha;
             ForceCompress = forceCompress;
+            Info = String.Concat(extension, " @ ", quality, forceCompress ? "% [compressed]" : "%");
         }
+
+        public String Info { get; init; }
+
+        public override string ToString() => Info;
+
 
     }
 

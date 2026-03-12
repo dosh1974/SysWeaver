@@ -43,21 +43,8 @@ namespace SysWeaver.Net
 
         public override String GetResMime() => Res.ContentType;
 
-
-        int C;
-        StackTrace Ctr;
-
         public override void SetResMime(String mime)
         {
-            switch (Interlocked.Increment(ref C))
-            {
-                case 1:
-                    Ctr = new StackTrace();
-                    break;
-                default:
-                    var x = new StackTrace();
-                    break;
-            }
             Res.ContentType = mime;
         }
 

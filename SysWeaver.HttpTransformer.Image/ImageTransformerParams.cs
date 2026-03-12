@@ -24,7 +24,6 @@ namespace SysWeaver.HttpTransformer
                 "tga",
                 "dds",
                 "exr",
-                "jfif",
                 "jp2",
                 "jxl",
                 "pcx",

@@ -77,6 +77,7 @@ namespace SysWeaver.Net
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = false;
+            request.SetResMime(Mime);
             return HttpServerTools.ToEtag(Fi.LastWriteTimeUtc);
         }
 
@@ -84,7 +85,6 @@ namespace SysWeaver.Net
 
         public HttpRequestData Get(HttpServerRequest request)
         {
-            request.SetResMime(Mime);
             var fi = Fi;
             if (UpdateAccessTime)
             {
@@ -151,6 +151,7 @@ namespace SysWeaver.Net
 
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
+            request.SetResMime(Mime);
             useAsync = true;
             return null;
         }
@@ -162,7 +163,6 @@ namespace SysWeaver.Net
 
         public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
         {
-            request.SetResMime(Mime);
             return new HttpRequestData(await GetBody(request).ConfigureAwait(false));
 
         }

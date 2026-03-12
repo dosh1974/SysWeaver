@@ -43,13 +43,13 @@ namespace SysWeaver.MicroService
 
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
+            request.SetResMime("image/svg+xml; charset=UTF-8");
             useAsync = false;
             return HttpServerTools.StartedETag;
         }
 
         public HttpRequestData Get(HttpServerRequest request)
         {
-            request.SetResMime("image/svg+xml; charset=UTF-8");
             return Data;
         }
 

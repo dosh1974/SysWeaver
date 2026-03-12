@@ -51,14 +51,14 @@ namespace SysWeaver.Net
 
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
+            request.SetResMime(Mime);
+            request.SetResStatusCode(StatusCode);
             useAsync = false;
             return null;
         }
 
         public HttpRequestData Get(HttpServerRequest request)
         {
-            request.SetResMime(Mime);
-            request.SetResStatusCode(StatusCode);
             return new HttpRequestData(Data, true);
         }
 

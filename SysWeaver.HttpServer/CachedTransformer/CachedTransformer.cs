@@ -6,7 +6,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Compression;
+using SysWeaver.Data;
 using SysWeaver.Net;
+using SysWeaver.MicroService;
+using System.Globalization;
 
 namespace SysWeaver.HttpTransformer
 {
@@ -87,8 +90,11 @@ namespace SysWeaver.HttpTransformer
             try
             {
                 FileHttpRequestHandler[] files;
-                using (var ____ = PerfMon.Track("Build." + job.Mime))
-                    files = await job.Handler.Build(this, job.BaseName, job.Mime, job.Data, job.Ext, job.IsSupported, job.Decoder).ConfigureAwait(false);
+                var baseName = job.BaseName;
+                var mime = job.Mime;
+                await PathExt.EnsureCanWriteFileAsync(baseName).ConfigureAwait(false);
+                using (var ____ = PerfMon.Track("Build." + mime))
+                    files = await job.Handler.Build(this, baseName, mime, job.Data, job.Ext, job.IsSupported, job.Decoder).ConfigureAwait(false);
                 if (files != null)
                     e.Files = files;
                 e.Completed = true;
@@ -192,9 +198,9 @@ namespace SysWeaver.HttpTransformer
             var mime = state.Mime;
             var ext = state.Ext;
             var mh = MimeHandlers;
-            if (!(mh.TryGetValue(mime, out var mimeHandler) || mh.TryGetValue(ext, out mimeHandler)))
+            if (!(mh.TryGetValue(mime.SplitFirst(';'), out var mimeHandler) || mh.TryGetValue(ext, out mimeHandler)))
                 throw new Exception("Internal error!");
-            var e = mimeHandler.Validate(this, baseName, mimeHandler.BuildStrategy != CachedTransformerBuildStrategies.AlwaysDirect);
+            var e = mimeHandler.Validate(this, baseName, mime, mimeHandler.BuildStrategy != CachedTransformerBuildStrategies.AlwaysDirect);
             if (e != null)
                 return e;
             var st = mimeHandler.BuildStrategy;
@@ -215,6 +221,7 @@ namespace SysWeaver.HttpTransformer
                 return e;
             }
             var data = await state.ReadAllData().ConfigureAwait(false);
+            e.OrgSize = data.Length;
             var job = new BuildJob(mimeHandler, key, e, data, baseName, state);
             if (defer)
             {
@@ -315,6 +322,222 @@ namespace SysWeaver.HttpTransformer
             }
             return true;
         }
+
+
+        public static async ValueTask SaveOrg(String baseName, long orgLength)
+        {
+            var name = baseName + ".org";
+            var fi = new FileInfo(name);
+            if (fi.Exists && (fi.Length > 0))
+                return;
+            var tempName = name + TempExt;
+            try
+            {
+                await File.WriteAllTextAsync(tempName, orgLength.ToString()).ConfigureAwait(false);
+                await PathExt.TryMoveFileAsync(tempName, name).ConfigureAwait(false);
+                return;
+            }
+            finally
+            {
+                await PathExt.TryDeleteFileAsync(tempName).ConfigureAwait(false);
+            }
+        }
+
+
+        public static long ReadOrg(String baseName)
+        {
+            var orgName = baseName + ".org";
+            if (!File.Exists(orgName))
+                return -1;
+            var t = File.ReadAllText(orgName);
+            if (!long.TryParse(t.Trim(), out var orgSize))
+                return -1;
+            if (orgSize <= 0)
+                return -1;
+            return orgSize;
+        }
+
+        #region DEBUG
+
+
+
+        /// <summary>
+        /// All active cached data transformers
+        /// </summary>
+        /// <param name="r">Paramaters</param>
+        /// <returns></returns>
+        [WebApi("debug/{0}")]
+        [WebApiAuth(Roles.DevAdminOps)]
+        [WebApiClientCache(30)]
+        [WebApiRequestCache(29)]
+        [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
+        [WebMenuTable(null, "Debug/Http Server/{0}", "Cached transformers", null, "../icons/world.svg")]
+        public TableData CachedTransformersTable(TableDataRequest r)
+            => TableDataTools.Get(r, 30000, MimeHandlers.Select(x => new MimeHandler(x)));
+
+        sealed class MimeHandler
+        {
+            public MimeHandler(KeyValuePair<String, ICachedTransformer> d)
+            {
+                var mime = d.Key;
+                if (mime.IndexOf('/') < 0)
+                {
+                    Ext = mime;
+                    EI = mime;
+                }else
+                {
+                    Mime = mime;
+                }
+                var t = d.Value;
+                Strategy = t.BuildStrategy.ToString().RemoveCamelCase();
+                Type = t.GetType().Name.RemoveCamelCase();
+                Info = t.Info;
+            }
+
+            /// <summary>
+            /// The mime that this transformer will be applied to.
+            /// If null the file extension is used instead.
+            /// </summary>
+            [TableDataMime]
+            public String Mime;
+
+            /// <summary>
+            /// The file extension that this transformer will be applied to.
+            /// If null the mime is used instead.
+            /// </summary>
+            [TableDataFileExtension]
+            public String Ext;
+
+            [TableDataFileExtensionImage]
+            public String EI;
+
+            /// <summary>
+            /// The strategy as to how build resources
+            /// </summary>
+            public String Strategy;
+
+            /// <summary>
+            /// The type of transformer
+            /// </summary>
+            public String Type;
+
+            /// <summary>
+            /// Transformer specific information
+            /// </summary>
+            [TableDataTags]
+            public String Info;
+        }
+
+
+        /// <summary>
+        /// All cached transformed files that have been accessed
+        /// </summary>
+        /// <param name="r">Paramaters</param>
+        /// <returns></returns>
+        [WebApi("debug/{0}")]
+        [WebApiAuth(Roles.DevAdminOps)]
+        [WebApiClientCache(2)]
+        [WebApiRequestCache(1)]
+        [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
+        [WebMenuTable(null, "Debug/Http Server/{0}", "Cached recent files", null, "../icons/world.svg")]
+        public TableData CachedRecentFilesTable(TableDataRequest r)
+            => TableDataTools.Get(r, 2000, Cache.Select(x => new CachedFile(x)));
+
+
+        sealed class CachedFile
+        {
+            public CachedFile(ValueTuple<DateTime, String, CachedTransformerEntry> d)
+            {
+                var time = d.Item1;
+                var x = d.Item2.Split('\n');
+                var url = x[0];
+                var etag = x[1];
+                var e = d.Item3;
+                Etag = etag;
+                Url = url;
+                Ext = url.Substring(url.LastIndexOf('.') + 1);
+                Expires = time;
+                Completed = e.Completed;
+                var orgSize = e.OrgSize;
+                OrgSize = e.OrgSize;
+                var files = e.Files;
+                if (files != null)
+                {
+                    var l = files.Length;
+                    if (l > 0)
+                    {
+                        List<String> tags = new List<string>(l);
+                        String location = null;
+                        for (int i = 0; i < l; ++ i)
+                        {
+                            var f = files[i];
+                            if (f == null)
+                                continue;
+                            var fi = f.Fi;
+                            var len = fi.Length;
+                            var name = fi.Name;
+                            var es = name.IndexOf('.');
+                            var size = (100M * len) / Math.Max(1M, orgSize);
+                            tags.Add(String.Concat(name.Substring(es), " @ ", size.ToString("0.00", CultureInfo.InvariantCulture), '%'));
+                            if (location == null)
+                                location = Path.Combine(fi.DirectoryName, name.Substring(0, es));
+                        }
+                        BaseName = location;
+                        Order = String.Join(',', tags);
+                    }
+                }
+            }
+
+            /// <summary>
+            /// The etag for the original file (version)
+            /// </summary>
+            [TableDataUrl("{0}", "../{1}?raw", "Click to open the original file:\n\"{3}\"")]
+            public String Etag;
+
+            /// <summary>
+            /// The url to the file
+            /// </summary>
+            [TableDataUrl("{0}", "../{0}")]
+            public String Url;
+
+            /// <summary>
+            /// File extension
+            /// </summary>
+            [TableDataFileExtensionImage]
+            public String Ext;
+
+            /// <summary>
+            /// When this entry is removed from the memory cache (not disc)
+            /// </summary>
+            public DateTime Expires;
+
+            /// <summary>
+            /// The size of tthe original file
+            /// </summary>
+            [TableDataByteSize]
+            public long OrgSize;
+
+            /// <summary>
+            /// If true, the cache build have been completed
+            /// </summary>
+            public bool Completed;
+
+            /// <summary>
+            /// Order of optimized versions
+            /// </summary>
+            [TableDataTags]
+            public String Order;
+
+            /// <summary>
+            /// The base name of the cached assets (directory and base file name)
+            /// </summary>
+            [TableDataText(64)]
+            public String BaseName;
+
+        }
+
+
+        #endregion//DEBUG
 
 
     }

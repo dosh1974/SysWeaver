@@ -26,7 +26,7 @@ namespace SysWeaver.HttpTransformer
                         new ImageHandler(
                             CachedTransformerBuildStrategies.AlwaysDefer,
                             [
-                                new ImageFormat(MagickFormat.Avif, ".avif"),
+                                new ImageFormat(MagickFormat.Avif, ".avif", 90),
                                 new ImageFormat(MagickFormat.WebP, ".webp", 95),
                                 new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
                             ]));
@@ -34,7 +34,7 @@ namespace SysWeaver.HttpTransformer
                         new ImageHandler(
                                 CachedTransformerBuildStrategies.AlwaysDefer, 
                                 [
-                                    new ImageFormat(MagickFormat.Avif, ".avif"),
+                                    new ImageFormat(MagickFormat.Avif, ".avif", 90),
                                     new ImageFormat(MagickFormat.WebP, ".webp", 95),
                                     new ImageFormat(MagickFormat.Png, ".png"),
                                     new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
@@ -43,7 +43,7 @@ namespace SysWeaver.HttpTransformer
                     new ImageHandler(
                         CachedTransformerBuildStrategies.AlwaysDefer, 
                         [
-                            new ImageFormat(MagickFormat.Avif, ".avif"),
+                            new ImageFormat(MagickFormat.Avif, ".avif", 90),
                             new ImageFormat(MagickFormat.WebP, ".webp", 95),
                             new ImageFormat(MagickFormat.Png, ".png"),
                             new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
@@ -55,7 +55,14 @@ namespace SysWeaver.HttpTransformer
                             new ImageFormat(".jpg"),
                             new ImageFormat(MagickFormat.Avif, ".avif", 95),
                             new ImageFormat(MagickFormat.WebP, ".webp", 100),
-                            new ImageFormat(MagickFormat.Png, ".png"),
+                        ]));
+                t.Add("image/pjpeg",
+                    new ImageHandler(
+                        CachedTransformerBuildStrategies.AlwaysDefer,
+                        [
+                            new ImageFormat(".jfif"),
+                            new ImageFormat(MagickFormat.Avif, ".avif", 95),
+                            new ImageFormat(MagickFormat.WebP, ".webp", 100),
                         ]));
             }
             if (p.SupportNew)
@@ -64,7 +71,7 @@ namespace SysWeaver.HttpTransformer
                     new ImageHandler(
                         CachedTransformerBuildStrategies.CheckAccept, 
                         [
-                            new ImageFormat(MagickFormat.Avif, ".avif"),
+                            new ImageFormat(MagickFormat.Avif, ".avif", 90),
                             new ImageFormat(MagickFormat.Png, ".png"),
                             new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
                         ]));
@@ -85,7 +92,7 @@ namespace SysWeaver.HttpTransformer
                     t.Add(x, new ImageHandler(
                         CachedTransformerBuildStrategies.AlwaysDirect, 
                         [
-                            new ImageFormat(MagickFormat.Avif, ".avif"),
+                            new ImageFormat(MagickFormat.Avif, ".avif", 90),
                             new ImageFormat(MagickFormat.WebP, ".webp", 95),
                             new ImageFormat(MagickFormat.Png, ".png"),
                             new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
