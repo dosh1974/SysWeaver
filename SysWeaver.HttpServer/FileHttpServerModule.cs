@@ -492,7 +492,7 @@ namespace SysWeaver.Net
                     return;
                 }else
                 {
-                    var ci = GetSmallestPreComp(out var decompC, out var acc, absPath, CompManager.HttpCodeHandlers.KeysAsReadOnlySet(), fi.LastWriteTimeUtc) ?? fi;
+                    var ci = GetSmallestPreComp(out var decompC, out var acc, absPath, ReadOnlyData.Set(CompManager.HttpCodes), fi.LastWriteTimeUtc) ?? fi;
                     var loc = String.Join(ci.FullName, "[File] \"", '"');
                     var len = fi.Length;
                     var lwt = fi.LastWriteTimeUtc;
@@ -525,7 +525,7 @@ namespace SysWeaver.Net
                 if (File.Exists(orgDisc))
                     return;
                 {
-                    fi = GetSmallestPreComp(out var decompC, out var acc, orgDisc, CompManager.HttpCodeHandlers.KeysAsReadOnlySet()) ?? fi;
+                    fi = GetSmallestPreComp(out var decompC, out var acc, orgDisc, ReadOnlyData.Set(CompManager.HttpCodes)) ?? fi;
                     if (decompC != null)
                         decomp = decompC.HttpCode;
                     var loc = String.Join(fi.FullName, "[Virtual File] \"", '"');

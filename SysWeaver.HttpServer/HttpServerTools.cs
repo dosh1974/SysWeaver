@@ -228,6 +228,8 @@ namespace SysWeaver.Net
         /// <returns></returns>
         public static IReadOnlyDictionary<String, String> GetQueryParamsLowerKey(NameValueCollection q)
         {
+            if (q.Count <= 0)
+                return ReadOnlyData.EmptyDictionary<String, String>();
             var d = new Dictionary<String, String>(StringComparer.Ordinal);
             foreach (String x in q)
             {

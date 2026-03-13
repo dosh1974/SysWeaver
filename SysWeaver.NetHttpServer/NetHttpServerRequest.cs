@@ -41,10 +41,13 @@ namespace SysWeaver.Net
         public override String GetReqHeader(String name) => ReqHeaders[name];
         public override String GetResHeader(String name) => ResHeaders[name];
 
-        public override String GetResMime() => Res.ContentType;
+        public override String GetResMime() => ResContentType;
+
+        String ResContentType;
 
         public override void SetResMime(String mime)
         {
+            ResContentType = mime;
             Res.ContentType = mime;
         }
 
@@ -57,16 +60,16 @@ namespace SysWeaver.Net
 
         IReadOnlyDictionary<String, String> Cookies;
 
-        IReadOnlyDictionary<String, String> ReadCookies()
+        IReadOnlyDictionary<String, String> ReadCookies(String cookieString)
         {
-            var t = HttpServerTools.ParseCookieString(ReqHeaders["Cookie"]);
+            var t = HttpServerTools.ParseCookieString(cookieString ?? ReqHeaders["Cookie"]);
             Cookies = t;
             return t;
         }
 
-        public override String GetReqCookie(String name)
+        public override String GetReqCookie(String name, String cookieString = null)
         {
-            (Cookies ?? ReadCookies()).TryGetValue(name, out var cookie);
+            (Cookies ?? ReadCookies(cookieString)).TryGetValue(name, out var cookie);
             return cookie;
         }
 

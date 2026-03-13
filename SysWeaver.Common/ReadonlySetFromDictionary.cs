@@ -7,6 +7,7 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 
 namespace SysWeaver
@@ -257,6 +258,7 @@ namespace SysWeaver
         /// <typeparam name="V"></typeparam>
         /// <param name="d"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IReadOnlyDictionary<K, V> Freeze<K, V>(this Dictionary<K, V> d)
             => Freeze<K, V>(d, d?.Comparer);
 
@@ -268,6 +270,7 @@ namespace SysWeaver
         /// <typeparam name="V"></typeparam>
         /// <param name="d"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IReadOnlyDictionary<K, V> Freeze<K, V>(this IReadOnlyDictionary<K, V> d)
             => Freeze<K, V>(d, d?.GetComparer());
 
@@ -287,11 +290,7 @@ namespace SysWeaver
                 throw new Exception("Must specify a comparer!");
             var l = d.Count;
             if (l <= 0)
-            {
-                if ((d as EmptyReadonlyDictionary<K, V>)?.Comp == comparer)
-                    return d;
-                return new EmptyReadonlyDictionary<K, V>(comparer);
-            }
+                return EmptyReadonlyDictionary<K, V>.Default;
             if (l == 1)
             {
                 if ((d as SingleReadonlyDictionary<K, V>)?.Comp == comparer)
@@ -311,6 +310,7 @@ namespace SysWeaver
         /// <typeparam name="K"></typeparam>
         /// <param name="d"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IReadOnlySet<K> Freeze<K>(this HashSet<K> d)
             => Freeze<K>(d, d.Comparer);
 
@@ -320,6 +320,7 @@ namespace SysWeaver
         /// <typeparam name="K"></typeparam>
         /// <param name="d"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IReadOnlySet<K> Freeze<K>(this IReadOnlySet<K> d)
             => Freeze<K>(d, d.GetComparer());
 
@@ -338,11 +339,7 @@ namespace SysWeaver
                 throw new Exception("Must specify a comparer!");
             var l = d.Count;
             if (l <= 0)
-            {
-                if ((d as EmptyReadonlySet<K>)?.Comp == comparer)
-                    return d;
-                return new EmptyReadonlySet<K>(comparer);
-            }
+                return EmptyReadonlySet<K>.Default;
             if (l == 1)
             {
                 if ((d as SingleReadonlySet<K>)?.Comp == comparer)
@@ -392,19 +389,19 @@ namespace SysWeaver
 
     public static class ReadOnlySet<T>
     {
-        public static readonly IReadOnlySet<T> Empty = new EmptyReadonlySet<T>(EqualityComparer<T>.Default);
+        public static readonly IReadOnlySet<T> Empty = EmptyReadonlySet<T>.Default;
     }
 
     public static class ReadOnlyDictionary<K, V>
     {
-        public static readonly IReadOnlyDictionary<K, V> Empty = new EmptyReadonlyDictionary<K, V>(EqualityComparer<K>.Default);
+        public static readonly IReadOnlyDictionary<K, V> Empty = EmptyReadonlyDictionary<K, V>.Default;
     }
 
     public static class ReadOnlyData
     {
 
-        public static IReadOnlySet<T> EmptySet<T>() => ReadOnlySet<T>.Empty;
-        public static IReadOnlyDictionary<K, V> EmptyDictionary<K, V>() => ReadOnlyDictionary<K, V>.Empty;
+        public static IReadOnlySet<T> EmptySet<T>() => EmptyReadonlySet<T>.Default;
+        public static IReadOnlyDictionary<K, V> EmptyDictionary<K, V>() => EmptyReadonlyDictionary<K, V>.Default;
 
         public static IReadOnlySet<T> Set<T>(IEqualityComparer<T> comparer, IEnumerable<T> data)
         {
@@ -466,7 +463,13 @@ namespace SysWeaver
 
     sealed class EmptyReadonlyDictionary<K, V> : IReadOnlyDictionary<K, V>, IHaveComparere<K>
     {
-        public EmptyReadonlyDictionary(IEqualityComparer<K> comparer)
+
+        public static readonly EmptyReadonlyDictionary<K, V> Default = new (EqualityComparer<K>.Default);
+        static readonly IEnumerable<K> EmptyK = Enumerable.Empty<K>();
+        static readonly IEnumerable<V> EmptyV = Enumerable.Empty<V>();
+        static readonly IEnumerable<KeyValuePair<K, V>> EmptyKV = Enumerable.Empty<KeyValuePair<K, V>>();
+
+        EmptyReadonlyDictionary(IEqualityComparer<K> comparer)
         {
             Comp = comparer;
         }
@@ -475,22 +478,26 @@ namespace SysWeaver
 
         public V this[K key] => throw new KeyNotFoundException();
 
-        public IEnumerable<K> Keys => Enumerable.Empty<K>();
+        public IEnumerable<K> Keys => EmptyK;
 
-        public IEnumerable<V> Values => Enumerable.Empty<V>();
+        public IEnumerable<V> Values => EmptyV;
 
         public int Count => 0;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ContainsKey(K key) => false;
 
-        public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => Enumerable.Empty<KeyValuePair<K, V>>().GetEnumerator();
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => EmptyKV.GetEnumerator();
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(K key, [MaybeNullWhen(false)] out V value)
         {
             value = default;
             return false;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
@@ -532,9 +539,11 @@ namespace SysWeaver
 
         public int Count => 1;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ContainsKey(K key)
             => Comp.Equals(key, Key);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => KVe.GetEnumerator();
 
         public bool TryGetValue(K key, [MaybeNullWhen(false)] out V value)
@@ -544,24 +553,32 @@ namespace SysWeaver
             return e;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
 
     sealed class EmptyReadonlySet<K> : IReadOnlySet<K>, IHaveComparere<K>
     {
-        public EmptyReadonlySet(IEqualityComparer<K> comparer)
+
+        public static readonly EmptyReadonlySet<K> Default = new(EqualityComparer<K>.Default);
+
+        EmptyReadonlySet(IEqualityComparer<K> comparer)
         {
             Comp = comparer;
         }
+
+        static readonly IEnumerable<K> EmptyK = Enumerable.Empty<K>();
 
         public IEqualityComparer<K> Comp { get; init; }
 
         public int Count => 0;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Contains(K key) => false;
 
-        public IEnumerator<K> GetEnumerator() => Enumerable.Empty<K>().GetEnumerator();
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public IEnumerator<K> GetEnumerator() => EmptyK.GetEnumerator();
 
         public bool IsProperSubsetOf(IEnumerable<K> other)
         {
@@ -593,6 +610,7 @@ namespace SysWeaver
             return !other.GetEnumerator().MoveNext();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 

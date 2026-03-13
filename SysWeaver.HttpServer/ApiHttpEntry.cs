@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 
@@ -819,23 +820,30 @@ namespace SysWeaver.Net
 
         #region Helpers
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static T Input_GET<T>(ApiHttpEntry api, HttpServerRequest request)
         {
             //  Decode get request
             var qs = request.QueryStringStart;
-            if (qs <= 0)
-                return default;
-            return api.IoParams.Get<T>(request.Url.Substring(qs));
+            return qs <= 0 ? default : api.IoParams.Get<T>(request.Url.AsSpan().Slice(qs));
         }
 
+        static ICompType ThrowDecompress(String ce)
+            => throw new Exception(String.Concat("Don't know how to decompress \"", ce, '"'));
+
+        static void ThrowSerializer(String ct)
+            => throw new Exception(String.Concat("Don't know how to deserialize using \"", ct, '"'));
 
         static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> Input_POST_Read(ApiHttpEntry api, HttpServerRequest request)
         {
-            using var ms = new ArrayPoolStream((int)request.ReqContentLength + 1024);
+            var s = (int)request.ReqContentLength;
+            if (s < 32)
+                s = 32;
+            using var ms = new ArrayPoolStream(s);
             await request.InputStream.CopyToAsync(ms).ConfigureAwait(false);
             return ms.GetMemory();
         }
-
 
         static async ValueTask<T> Input_POST<T>(ApiHttpEntry api, HttpServerRequest request)
         {
@@ -848,7 +856,10 @@ namespace SysWeaver.Net
             }
             else
             {
-                using var ms = new ArrayPoolStream((int)request.ReqContentLength + 1024);
+                var s = (int)request.ReqContentLength;
+                if (s < 32)
+                    s = 32;
+                using var ms = new ArrayPoolStream(s);
                 await request.InputStream.CopyToAsync(ms).ConfigureAwait(false);
                 dataMem = ms.GetMemory();
             }
@@ -862,9 +873,7 @@ namespace SysWeaver.Net
                 IUnmanagedReadOnlyMemory<Byte> compMem = null;
                 if (!String.IsNullOrEmpty(ce))
                 {
-                    var comp = CompManager.GetFromHttp(ce);
-                    if (comp == null)
-                        throw new Exception("Don't know how to decompress \"" + ce + "\"!");
+                    var comp = CompManager.GetFromHttp(ce) ?? ThrowDecompress(ce);
                     compMem = comp.GetUnmanagedDecompressed(data.Span);
                     data = compMem.Memory;
                 }
@@ -878,17 +887,18 @@ namespace SysWeaver.Net
                     {
                         ct = ct.Trim().FastToLower();
                         if (!iop.InputSerializers.TryGetValue(ct, out deser))
-                            throw new Exception(String.Concat("Don't know how to deserialize using \"", ct, '"'));
+                            ThrowSerializer(ct);
                     }
+                    /*
                     var encoding = deser.Encoding;
                     if (encoding != null)
                     {
                         // TODO: Validate that text encoding matches?
-                        /*                var renc = request.ReqTextEncoding;
+                                        var renc = request.ReqTextEncoding;
                                         if (renc.WebName != encoding.WebName)
                                             throw new Exception("Invalid data encoding \"" + renc.WebName + "\", expected \"" + encoding.WebName + "\"");
-                        */
-                    }
+                        
+                    }*/
                     var v = deser.Create<T>(data);
                     return v;
                 }

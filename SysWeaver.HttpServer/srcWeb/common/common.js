@@ -5315,7 +5315,7 @@ async function getRequest(url, reload, returnBlob, setupRequestFn, returnFn, max
             if (res.status == 500)
                 text = await res.text();
             if (text.length > 0)
-                text = "\n" + text;
+                text = ": " + text;
             const s = res.statusText;
             if ((!s) || (s.length <= 0))
                 throw new Error('' + res.status + text);
@@ -6462,8 +6462,8 @@ async function SysWeaverInit() {
             h.add("SwDesktop");
             b.add("SwDesktop");
         }
-        onSizeChange();
-        if (ps.get("transparent")) {
+        const tr = ps.get("transparent");
+        if (tr === "true" || (isChild && (tr !== "false"))) {
             h.add("Transparent");
             b.add("Transparent");
         }
@@ -6471,6 +6471,7 @@ async function SysWeaverInit() {
             h.add("FillScreen");
             b.add("FillScreen");
         }
+        onSizeChange();
     });
 
     const didReload = (

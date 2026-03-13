@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Auth;
@@ -8,6 +10,7 @@ using SysWeaver.Data;
 
 namespace SysWeaver.Net
 {
+
 
 
     // Do NOT dispose! only uses the dispose pattern to decrement counter
@@ -226,8 +229,8 @@ namespace SysWeaver.Net
         // Do NOT dispose! only uses the dispose pattern to decrement counter
         public void Dispose()
         {
-            Interlocked.Decrement(ref InProgress);
             Interlocked.Exchange(ref Exp, DateTime.UtcNow.Ticks + KeepAliveDurationTicks);
+            Interlocked.Decrement(ref InProgress);
         }
 
 

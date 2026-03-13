@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace SysWeaver.Serialization
 {
@@ -45,24 +46,24 @@ namespace SysWeaver.Serialization
         /// <summary>
         /// Get all supported "file extensions"
         /// </summary>
-        public static IReadOnlyCollection<String> Extensions => FromExts.Keys;
+        public static IEnumerable<String> Extensions => FromExts.Keys;
 
         /// <summary>
         /// Get all supported "file extensions" that serialize to text
         /// </summary>
-        public static IReadOnlyCollection<String> TextExtensions => FromTextExts.Keys;
+        public static IEnumerable<String> TextExtensions => FromTextExts.Keys;
 
 
         /// <summary>
-        /// Get a dictionary with all handlers for all suported "file extensions"
+        /// Get all handlers for all suported "file extensions"
         /// </summary>
-        public static IReadOnlyDictionary<String, ISerializerType> ExtensionHandlers => FromExts;
+        public static IEnumerable<KeyValuePair<String, ISerializerType>> ExtensionHandlers => FromExts;
 
 
         /// <summary>
-        /// Get a dictionary with all handlers for all suported "file extensions" that serialize to text
+        /// Get all suported "file extensions" that serialize to text
         /// </summary>
-        public static IReadOnlyDictionary<String, ITextSerializerType> TextExtensionHandlers => FromTextExts;
+        public static IEnumerable<KeyValuePair<String, ITextSerializerType>> TextExtensionHandlers => FromTextExts;
 
 
         /// <summary>
@@ -70,6 +71,7 @@ namespace SysWeaver.Serialization
         /// </summary>
         /// <param name="ext">The file extension, all lowercase (can include a . prefix, like ".json")</param>
         /// <returns>A serializer for the given file extension or null if non exist</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ISerializerType Get(String ext)
         {
             FromExts.TryGetValue(ext, out var type);
@@ -83,6 +85,7 @@ namespace SysWeaver.Serialization
         /// </summary>
         /// <param name="ext">The file extension, all lowercase (can include a . prefix, like ".json")</param>
         /// <returns>A text based serializer for the given file extension or null if non exist</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ITextSerializerType GetText(String ext)
         {
             FromTextExts.TryGetValue(ext, out var type);
@@ -91,8 +94,8 @@ namespace SysWeaver.Serialization
 
         static readonly HashSet<ISerializerType> Unique = new();
         static readonly List<ISerializerType> SerTypes = new();
-        static readonly Dictionary<String, ISerializerType> FromExts = new(StringComparer.Ordinal);
-        static readonly Dictionary<String, ITextSerializerType> FromTextExts = new(StringComparer.Ordinal);
+        static readonly SemiFrozenDictionary<String, ISerializerType> FromExts = new(StringComparer.Ordinal);
+        static readonly SemiFrozenDictionary<String, ITextSerializerType> FromTextExts = new(StringComparer.Ordinal);
 
 
     }

@@ -18,7 +18,7 @@ namespace SysWeaver.Net
             var io = api.IoParams;
             if (request == null) 
                 return io.DefaultOutput.Serialize(value);
-            var ser = api.IoParams.GetSerializer(request.GetReqHeader("Accept"));
+            var ser = io.GetSerializer(request.GetReqHeader("Accept"));
             if (!api.NeedTranslation)
                 return ser.Serialize(value);
             var t = request.Translator;

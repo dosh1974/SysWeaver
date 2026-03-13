@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace SysWeaver.Compression
 {
@@ -55,29 +56,29 @@ namespace SysWeaver.Compression
         /// <summary>
         /// Get all supported http codes
         /// </summary>
-        public static IReadOnlyCollection<String> HttpCodes => FromHttpCode.Keys;
-
+        public static IEnumerable<String> HttpCodes => FromHttpCode.Keys;
 
         /// <summary>
         /// Get all supported file extensions
         /// </summary>
-        public static IReadOnlyCollection<String> Extensions => FromExts.Keys;
+        public static IEnumerable<String> Extensions => FromExts.Keys;
 
         /// <summary>
-        /// Get a dictionary with all handlers for all suported http codes
+        /// Get all handlers for all suported http codes
         /// </summary>
-        public static IReadOnlyDictionary<String, ICompType> HttpCodeHandlers => FromHttpCode;
+        public static IEnumerable<KeyValuePair<String, ICompType>> HttpCodeHandlers => FromHttpCode;
 
         /// <summary>
-        /// Get a dictionary with all handlers for all suported file extensions
+        /// Get all handlers for all suported file extensions
         /// </summary>
-        public static IReadOnlyDictionary<String, ICompType> ExtensionHandlers => FromExts;
+        public static IEnumerable<KeyValuePair<String, ICompType>> ExtensionHandlers => FromExts;
 
         /// <summary>
         /// Get the implementation for a given http code (uses the ones with highest prio if multiple compressors are available)
         /// </summary>
         /// <param name="httpCode">The http code, all lowercase</param>
         /// <returns>A compressor for the given http code or null if non exist</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ICompType GetFromHttp(String httpCode)
         {
             FromHttpCode.TryGetValue(httpCode, out var type);
@@ -89,6 +90,7 @@ namespace SysWeaver.Compression
         /// </summary>
         /// <param name="ext">The file extension, all lowercase (can include a . prefix, like ".gzip")</param>
         /// <returns>A compressor for the given file extension or null if non exist</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ICompType GetFromExt(String ext)
         {
             FromExts.TryGetValue(ext, out var type);
@@ -97,8 +99,8 @@ namespace SysWeaver.Compression
 
         static readonly HashSet<ICompType> Unique = new ();
         static readonly List<ICompType> CompTypes = new ();
-        static readonly Dictionary<String, ICompType> FromHttpCode = new (StringComparer.Ordinal);
-        static readonly Dictionary<String, ICompType> FromExts = new (StringComparer.Ordinal);
+        static readonly SemiFrozenDictionary<String, ICompType> FromHttpCode = new (StringComparer.Ordinal);
+        static readonly SemiFrozenDictionary<String, ICompType> FromExts = new (StringComparer.Ordinal);
     }
 
 

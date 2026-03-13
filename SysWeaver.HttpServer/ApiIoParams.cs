@@ -275,12 +275,12 @@ namespace SysWeaver.Net
             return v;
         }
 
-        public T Get<T>(String text)
+        public T Get<T>(ReadOnlySpan<Char> textInput)
         {
-            var tl = text.Length;
+            var tl = textInput.Length;
             if (tl <= 0)
                 return default(T);
-            text = Uri.UnescapeDataString(text);
+            var text = Uri.UnescapeDataString(textInput);
             var c = text[0];
             if (c == '_')
                 return GetBinary<T>(text);

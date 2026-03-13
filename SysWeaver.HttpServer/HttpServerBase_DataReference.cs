@@ -65,7 +65,7 @@ namespace SysWeaver.Net
                     {
                         if (session.IsValid(DebugAuth))
                         {
-                            if (Sessions.TryGetValue(ss[1], out var os))
+                            if (Sessions.TryGetValue(ReadOnlyMemoryKey.Create(ss[1]), out var os))
                                 return os.DataRefs;
                         }
                     }
@@ -156,7 +156,7 @@ namespace SysWeaver.Net
                     yield return Tuple.Create(x, none);
                 foreach (var y in Sessions)
                     foreach (var x in y.Value.DataRefs.AllReferences)
-                        yield return Tuple.Create(x, y);
+                        yield return Tuple.Create(x, new KeyValuePair<String, HttpSession>(y.Key.ToString(), y.Value));
             }
         }
 

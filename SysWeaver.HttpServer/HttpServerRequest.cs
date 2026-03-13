@@ -220,7 +220,7 @@ namespace SysWeaver.Net
 
         public abstract bool IsDead();
 
-        public abstract String GetReqCookie(String name);
+        public abstract String GetReqCookie(String name, String cookieString = null);
 
         public abstract void UpdateCookie(String name, String value, DateTime exp, String path = "/;HttpOnly");
 

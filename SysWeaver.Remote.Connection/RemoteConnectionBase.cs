@@ -574,7 +574,7 @@ namespace SysWeaver.Remote
                                 }
                                 var text = e.GetString(data.Span);
                                 if (text.Length > 0)
-                                    fromText = new HttpResponseException(icode, text, false);
+                                    fromText = new HttpResponseException(icode, text);
                             }
                         }
                     }
@@ -641,7 +641,7 @@ namespace SysWeaver.Remote
                                 }
                                 var text = e.GetString(data.Span);
                                 if (text.Length > 0)
-                                    fromText = new HttpResponseException(icode, text, false);
+                                    fromText = new HttpResponseException(icode, text);
                             }
                         }
                     }

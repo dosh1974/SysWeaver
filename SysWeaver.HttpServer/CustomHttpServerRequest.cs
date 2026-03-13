@@ -35,7 +35,7 @@ namespace SysWeaver.Net
             throw new NotImplementedException();
         }
 
-        public override string GetReqCookie(string name)
+        public override string GetReqCookie(string name, String cookieString = null)
         {
             throw new NotImplementedException();
         }

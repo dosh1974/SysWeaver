@@ -67,16 +67,16 @@ namespace SysWeaver.Net
 
         IReadOnlyDictionary<String, String> Cookies;
 
-        IReadOnlyDictionary<String, String> ReadCookies()
+        IReadOnlyDictionary<String, String> ReadCookies(String cookieString)
         {
-            var t = HttpServerTools.ParseCookieString(Req.Headers.Cookie.FirstOrDefault());
+            var t = HttpServerTools.ParseCookieString(cookieString ?? Req.Headers.Cookie.FirstOrDefault());
             Cookies = t;
             return t;
         }
 
-        public override String GetReqCookie(String name)
+        public override String GetReqCookie(String name, String cookieString = null)
         {
-            (Cookies ?? ReadCookies()).TryGetValue(name, out var cookie);
+            (Cookies ?? ReadCookies(cookieString)).TryGetValue(name, out var cookie);
             return cookie;
         }
 

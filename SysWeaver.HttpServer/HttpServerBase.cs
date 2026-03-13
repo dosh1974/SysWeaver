@@ -294,6 +294,7 @@ namespace SysWeaver.Net
 
         internal bool RunOnSessionRemove(HttpSession session, String reason = null)
         {
+            var sessions = Sessions;
             try
             {
                 session.InvokeOnClose();
@@ -427,7 +428,7 @@ namespace SysWeaver.Net
                 {
                     if (x.Value.CanExpire(now))
                     {
-                        remove.Add(x.Key);
+                        remove.Add(x.Key.ToString());
                         if (remove.Count >= maxWork)
                             break;
                     }else
@@ -440,7 +441,8 @@ namespace SysWeaver.Net
                 var rs = ExpiredSessions;
                 foreach (var x in remove)
                 {
-                    if (!sessions.TryRemove(x, out var data))
+                    var xx = ReadOnlyMemoryKey.Create(x);
+                    if (!sessions.TryRemove(xx, out var data))
                         continue;
                     if (data.CanExpire(now))
                     {
@@ -453,7 +455,7 @@ namespace SysWeaver.Net
                         }
                         continue;
                     }
-                    sessions.TryAdd(x, data);
+                    sessions.TryAdd(xx, data);
                 }
                 now -= (TimeSpan.TicksPerMinute * 1);
                 while (rs.TryPeek(out var data))
@@ -829,7 +831,7 @@ namespace SysWeaver.Net
 
         protected async ValueTask<String> Get404Text(String language)
         {
-            return "404: " + await Translator.TranslateSafe("Not Found - The server cannot find the requested resource.", language, "en", "This is the message to display when trying to access a non-existing end point in a web server").ConfigureAwait(false);
+            return await Translator.TranslateSafe("Not Found - The server cannot find the requested resource.", language, "en", "This is the message to display when trying to access a non-existing end point in a web server").ConfigureAwait(false);
 
         }
 
@@ -844,7 +846,7 @@ namespace SysWeaver.Net
         {
             data.SetResStatusCode(429);
             if (!data.IsHead)
-                data.SetResText("429: " + await Translator.TranslateSafe("Too Many Requests - The client has sent too many requests in a given amount of time.", data.Language, "en", "This is the message to display when trying to access an end point more frequent than allowed in a web server").ConfigureAwait(false));
+                data.SetResText(await Translator.TranslateSafe("Too Many Requests - The client has sent too many requests in a given amount of time.", data.Language, "en", "This is the message to display when trying to access an end point more frequent than allowed in a web server").ConfigureAwait(false));
         }
 
         /// <summary>
@@ -870,7 +872,7 @@ namespace SysWeaver.Net
                     //  We don't have an auth manager so we must fail, no point retrying with user/password
                     data.SetResStatusCode(401);
                     if (!isHead)
-                        data.SetResText("401: " + await Translator.TranslateSafe("Unauthorized - No auth manager found! Endpoints requiring auth is not accessible!", session.Language, "en", "This is the message to display when trying to access a protected end point in a web server that doesn't have any wau to authenticate a user").ConfigureAwait(false));
+                        data.SetResText(await Translator.TranslateSafe("Unauthorized - No auth manager found! Endpoints requiring auth is not accessible!", session.Language, "en", "This is the message to display when trying to access a protected end point in a web server that doesn't have any wau to authenticate a user").ConfigureAwait(false));
                     return true;
                 }
                 //  Get request auth
@@ -901,7 +903,7 @@ namespace SysWeaver.Net
                     {
                         data.SetResStatusCode(401);
                         if (!isHead)
-                            data.SetResText("401: " + await Translator.TranslateSafe("Unauthorized - Authorization header is not allowed, can't authorize!", session.Language, "en", "This is the message to display when trying to access a protected end point using an Authorization request header in a web server that doesn't allow using the Authorization header").ConfigureAwait(false));
+                            data.SetResText(await Translator.TranslateSafe("Unauthorized - Authorization header is not allowed, can't authorize!", session.Language, "en", "This is the message to display when trying to access a protected end point using an Authorization request header in a web server that doesn't allow using the Authorization header").ConfigureAwait(false));
                     }
                     return true;
                 }
@@ -932,7 +934,7 @@ namespace SysWeaver.Net
                 {
                     data.SetResStatusCode(401);
                     if (!isHead)
-                        data.SetResText("401: " + await Translator.TranslateSafe("Unauthorized - Authorization header is not allowed, can't authorize!", session.Language, "en", "This is the message to display when trying to access a protected end point using an Authorization request header in a web server that doesn't allow using the Authorization header").ConfigureAwait(false));
+                        data.SetResText(await Translator.TranslateSafe("Unauthorized - Authorization header is not allowed, can't authorize!", session.Language, "en", "This is the message to display when trying to access a protected end point using an Authorization request header in a web server that doesn't allow using the Authorization header").ConfigureAwait(false));
                     return true;
                 }
             }
@@ -948,7 +950,6 @@ namespace SysWeaver.Net
 #if DEBUG
         readonly AsyncLock DebugLock = new AsyncLock();
 #endif//DEBUG
-
 
         protected async ValueTask Handle(HttpServerRequest data)
         {
@@ -967,15 +968,14 @@ namespace SysWeaver.Net
                 await Set429(data).ConfigureAwait(false);
                 return;
             }
-            data.SetResStatusCode(200);
-            bool isHead = data.IsHead;
-            var localUrl = data.LocalUrl;
             if ((ExternalRootUri == null) || (!ExternalRootUriFromRequest))
             {
                 ExternalRootUriFromRequest = true;
                 ExternalRootUri = data.Prefix;
             }
             //  Handle forced end points (internal end points that can't be overridden)
+            data.SetResStatusCode(200);
+            var localUrl = data.LocalUrl;
             if (ForcedEndPoints.TryGetValue(localUrl, out var fep))
             {
                 await fep(data, session).ConfigureAwait(false);
@@ -983,9 +983,6 @@ namespace SysWeaver.Net
             }
             //  Get module handler
             var t = await GetHandler(data).ConfigureAwait(false);
-            var lang = session.Language ?? "";
-            var translator = Translator;
-            var haveTranslator = translator != null;
             if (t == null)
             {
                 //  Optional end points (internal end points that can be overridden)
@@ -1001,6 +998,7 @@ namespace SysWeaver.Net
             if (t == HttpServerTools.AlreadyHandled)
                 return;
             var newData = t.Redirected;
+            using var _ = newData as IDisposable;
             data = newData ?? data;
             //  Rate limiting
             rateLimiter = t.ServiceRateLimiter;
@@ -1019,11 +1017,13 @@ namespace SysWeaver.Net
             //using var ___ = await DebugLock.Lock().ConfigureAwait(false); // Enabled this line to handle one request at a time
 #endif//DEBUG
 
-
-            using var _ = newData as IDisposable;
+            bool isHead = data.IsHead;
             if (isHead && AllowAuthorizationAuth)
                 data.SetResHeader("Access-Control-Allow-Headers", "Authorization");
             var url = data.Url;
+            var lang = session.Language ?? "";
+            var translator = Translator;
+            var haveTranslator = translator != null;
             try
             {
                 //  Auth required
@@ -1595,10 +1595,7 @@ namespace SysWeaver.Net
                             var tr = re.Translate;
                             if ((translator != null) && (tr != null))
                                 text = await translator.TranslateSafe(text, session.Language, tr, "This is an exception message thrown by a web server", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false);
-                            if (re.CodePrefix)
-                                data.SetResText(String.Concat(re.ResponseCode, ": ", text));
-                            else
-                                data.SetResText(text);
+                            data.SetResText(text);
                         }
                     }
                     else
@@ -1609,7 +1606,7 @@ namespace SysWeaver.Net
 #endif//DEBUG
                         data.SetResStatusCode(500);
                         if (!isHead)
-                            data.SetResText("500: " + await translator.TranslateSafe(ex.Message, session.Language, "en", "This is an exception message thrown by a web server", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false));
+                            data.SetResText(await translator.TranslateSafe(ex.Message, session.Language, "en", "This is an exception message thrown by a web server", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false));
                     }
                 }
             }
@@ -1878,8 +1875,6 @@ namespace SysWeaver.Net
 
         long TotalSessionCount;
         long CurrentSessionCount;
-        readonly ConcurrentDictionary<String, HttpSession> Sessions = new ConcurrentDictionary<string, HttpSession>(StringComparer.Ordinal);
-        //readonly SemiFrozenDictionary<String, HttpSession> Sessions = new SemiFrozenDictionary<string, HttpSession>(StringComparer.Ordinal);
 
         long ExpiredCount;
         readonly ConcurrentQueue<HttpSession> ExpiredSessions = new ConcurrentQueue<HttpSession>();
@@ -1937,6 +1932,37 @@ namespace SysWeaver.Net
         protected ValueTask<String> GetAcceptLanguage(String acceptLanguageValue)
             => AcceptLangCache.GetOrUpdateValueAsync(String.IsNullOrEmpty(acceptLanguageValue) ? "en" : acceptLanguageValue, GetAcceptLang);
 
+
+        unsafe ReadOnlyMemory<Char> ExtractSessionCookie(String cookieString)
+        {
+            if (cookieString == null)
+                return null;
+            var sn = SessionCookieName;
+            var sp = cookieString.AsSpan();
+            fixed (Char* s = sp)
+            {
+                var start = s;
+                var end = s + sp.Length;
+                start = CharPtrTools.IndexOf(sn, start, end);
+                if (start == null)
+                    return null;
+                start = CharPtrTools.IndexOf('=', start, end);
+                if (start == null)
+                    return null;
+                ++start;
+                var e = CharPtrTools.IndexOf(';', start, end);
+                if (e == null)
+                    e = end;
+                CharPtrTools.Trim(ref start, ref e);
+                return cookieString.AsMemory().Slice((int)(start - s), (int)(end - start));
+            }
+        }
+
+        //readonly ConcurrentDictionary<String, HttpSession> Sessions = new (StringComparer.Ordinal);
+
+        readonly ConcurrentDictionary<IReadOnlyMemoryKey<Char>, HttpSession> Sessions = new(ReadOnlyMemoryKey.HashStringEqualityComparer);
+
+
         async ValueTask<HttpSession> GetSession(HttpServerRequest req)
         {
             using (PerfMon.Track(nameof(GetSession)))
@@ -1946,18 +1972,23 @@ namespace SysWeaver.Net
                     return null;
                 var now = DateTime.UtcNow.Ticks;
                 var sessions = Sessions;
-                String sessionToken = req.GetReqCookie(sn);
+                var cookieString = req.GetReqHeader("Cookie");
                 HttpSession session;
-                if (sessionToken != null)
+                var sessionTokenMemory = ExtractSessionCookie(cookieString);// req.GetReqCookie(sn, cookieString);
+                String sessionToken = null;
+                if (!sessionTokenMemory.IsEmpty)
                 {
-                    if (sessions.TryGetValue(sessionToken, out session))
+                    if (sessions.TryGetValue(ReadOnlyMemoryKey.Create(sessionTokenMemory), out session))
                     {
                         session.Touch(now, req);
                         return session;
                     }
+                    sessionToken = sessionTokenMemory.ToString();
                 }
+
+                var ip = req.GetIpAddress();
                 var dn = DeviceIdCookieName;
-                String deviceId = req.GetReqCookie(dn);
+                String deviceId = req.GetReqCookie(dn, cookieString);
                 var cookieOpt = CookieOptions;
                 if (deviceId == null)
                 {
@@ -1972,16 +2003,15 @@ namespace SysWeaver.Net
                 var ua = req.GetReqHeader("User-Agent") ?? "";
                 var prot = req.ProtocolVersion;
                 var extLife = SessionExtendLifetime;
-                var ip = req.GetIpAddress();
                 var rateLimiterParams = SessionLimits;
                 do
                 {
                     sessionToken = GetSessionGuid();
                     session = new HttpSession(rateLimiterParams, sessionToken, now, extLife, ua, ip, prot, deviceId);
-                } while (!sessions.TryAdd(sessionToken, session));
-                session.LanguageTimeStamp = DateTime.UtcNow;
-                session.Language = await GetAcceptLanguage(req.GetReqHeader("Accept-Language")).ConfigureAwait(false);
-                session.OnAuthLogout += RunOnLogout;
+                    session.LanguageTimeStamp = DateTime.UtcNow;
+                    session.Language = await GetAcceptLanguage(req.GetReqHeader("Accept-Language")).ConfigureAwait(false);
+                    session.OnAuthLogout += RunOnLogout;
+                } while (!sessions.TryAdd(ReadOnlyMemoryKey.Create(sessionToken), session));
                 var exp = new DateTime(now + SessionCookieLifetime, DateTimeKind.Utc);
                 req.UpdateCookie(sn, sessionToken, exp, cookieOpt);
                 try
@@ -2002,7 +2032,8 @@ namespace SysWeaver.Net
         {
             if (session == null)
                 return false;
-            if (!Sessions.TryRemove(session.Token, out session))
+            var sessions = Sessions;
+            if (!sessions.TryRemove(ReadOnlyMemoryKey.Create(session.Token), out session))
                 return false;
             RunOnSessionRemove(session);
             ExpiredSessions.Enqueue(session);
@@ -2717,7 +2748,8 @@ namespace SysWeaver.Net
         public TableData ActiveSessions(TableDataRequest r)
         {
             var n = DateTime.UtcNow;
-            var data = TableDataTools.Get(r, 5000, Sessions.Values.Select(x => new SessionDebugData(x, n)).Concat(ExpiredSessions.Select(x => new SessionDebugData(x, n))));
+            HashSet<String> seen = new HashSet<string>(StringComparer.Ordinal);
+            var data = TableDataTools.Get(r, 5000, Sessions.Values.Where(x => seen.Add(x.Token)).Select(x => new SessionDebugData(x, n)).Concat(ExpiredSessions.Select(x => new SessionDebugData(x, n))));
             var rows = data.Rows;
             if (rows != null)
             {
