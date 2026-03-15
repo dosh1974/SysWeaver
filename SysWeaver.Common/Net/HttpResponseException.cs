@@ -7,14 +7,17 @@ namespace SysWeaver.Net
 
         static String DefMsg(int code)
         {
+            String text = "Http request error [";
             switch (code)
             {
                 case 404:
-                    return "Not Found - The server cannot find the requested resource.";
+                    text = "Not Found - The server cannot find the requested resource [";
+                    break;
                 case 429:
-                    return "Too Many Requests - The client has sent too many requests in a given amount of time.";
+                    text = "Too Many Requests - The client has sent too many requests in a given amount of time [";
+                    break;
             }
-            return "Http request error";
+            return String.Concat(text, code, ']');
         }
 
 

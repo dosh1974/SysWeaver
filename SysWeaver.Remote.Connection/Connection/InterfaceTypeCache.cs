@@ -231,7 +231,7 @@ namespace SysWeaver.Remote.Connection
                     {
                         var optName = "_O" + index;
                         var ft = typeof(EndPointOptions);
-                        var ftCon = ft.GetConstructor([typeof(string), typeof(string), typeof(int), typeof(String)]);
+                        var ftCon = ft.GetConstructor([typeof(string), typeof(string), typeof(int)]);
                         optField = typeBuilder.DefineField(sf, ft, FieldAttributes.Static | FieldAttributes.InitOnly | FieldAttributes.Private);
                         if (string.IsNullOrEmpty(ser))
                             staticIl.Emit(OpCodes.Ldnull);

@@ -1267,7 +1267,7 @@ namespace SysWeaver.MicroService
         public void PostMessage(String key, Object data) => TaskExt.StartNewAsyncChain(() => PostMessageAsync(key, data).ConfigureAwait(false));
 
         /// <summary>
-        /// Post a message to all listeners an return a task that can be awaitable (all message will be delivered before it completes)
+        /// Post a message to all listeners and return a task that can be awaitable (all message will be delivered before it completes)
         /// </summary>
         /// <param name="key">Message key</param>
         /// <param name="data">Message data</param>
@@ -1472,7 +1472,7 @@ namespace SysWeaver.MicroService
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
         [WebApiCompression("br:Balanced, deflate:Balanced, gzip:Balanced")]
-        [WebMenuTable(null, "Debug/{0}", "Scheduled tasks", null, "../icons/clock.svg")]
+        [WebMenuTable(null, "Debug/{0}", "Scheduled tasks", null, "icons/clock.svg")]
         public TableData SchedulerTable(TableDataRequest r) => TableDataTools.Get(r, 2000, Scheduler.AllScheduled, "Scheduled tasks");
 
         /// <summary>

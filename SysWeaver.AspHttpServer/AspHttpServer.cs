@@ -300,16 +300,6 @@ namespace SysWeaver.Net
         IServer Server;
         IServiceProvider Prov;
 
-        protected override HttpServerRequest ReplaceUrl(HttpServerRequest s, string newUrl, String newMethod = null)
-        {
-            var o = s as AspHttpServerRequest;
-            var host = GetHost(out var prefix, out var queryStart, ref newUrl);
-            if (prefix == null)
-                return null;
-            var h = new AspHttpServerRequest(o.Context, newUrl, prefix, this, host, queryStart, newMethod);
-            h.Init(s.Session);
-            return h;
-        }
 
         sealed class MyMeter : IMeterFactory
         {

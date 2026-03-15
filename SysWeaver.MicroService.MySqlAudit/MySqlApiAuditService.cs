@@ -16,7 +16,7 @@ namespace SysWeaver.MicroService
 {
 
     [WebApiUrl("Audit")]
-    [WebMenuPath(null, "Debug/Audit", "Audit", "Audit information", "../icons/fingerprint.svg")]
+    [WebMenuPath(null, "Debug/Audit", "Audit", "Audit information", "icons/fingerprint.svg")]
     public sealed class MySqlApiAuditService : IApiAuditService, IDisposable
     {
         public MySqlApiAuditService(ServiceManager manager, MySqlApiAuditParams p = null)
@@ -278,7 +278,7 @@ namespace SysWeaver.MicroService
         /// <returns>Auditable API calls made</returns>
         [WebApi]
         [WebApiAuth(AuditAuth)]
-        [WebMenuTable(null, "Debug/Audit/Api calls", "Api calls", null, "../icons/network.svg", 0, AuditAuth)]
+        [WebMenuTable(null, "Debug/Audit/Api calls", "Api calls", null, "icons/network.svg", 0, AuditAuth)]
         [WebApiRequestCache(1)]
         public async Task<TableData> ApiCallTable(TableDataRequest r)
         {
@@ -308,7 +308,7 @@ namespace SysWeaver.MicroService
         /// <returns>Clients</returns>
         [WebApi]
         [WebApiAuth(AuditAuth)]
-        [WebMenuTable(null, "Debug/Audit/Clients", "Clients", null, "../icons/computer.svg", 0, AuditAuth)]
+        [WebMenuTable(null, "Debug/Audit/Clients", "Clients", null, "icons/computer.svg", 0, AuditAuth)]
         [WebApiRequestCache(1)]
         public async Task<TableData> ClientTable(TableDataRequest r)
         {

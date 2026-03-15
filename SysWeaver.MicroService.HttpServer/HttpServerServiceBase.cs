@@ -173,6 +173,19 @@ namespace SysWeaver.MicroService
                 else
                     m.AddMessage(MsgPrefix + "Failed to unregister transformer service! Already unregistered? Type \"" + transformService.GetType() + "\" (" + transformService + ")", MessageLevels.Warning);
             }
+
+            var rawModule = instance as IHttpServerRawModule;
+            if (rawModule != null)
+            {
+                if (s.RemoveRawModule(rawModule))
+                {
+                    m.AddMessage(MsgPrefix + "Removed raw module of type \"" + rawModule.GetType() + "\" (" + rawModule + ")", MessageLevels.Debug);
+                }
+                else
+                {
+                    m.AddMessage(MsgPrefix + "Failed to remove raw module! Already removed? Type \"" + rawModule.GetType() + "\" (" + rawModule + ")", MessageLevels.Warning);
+                }
+            }
             var module = instance as IHttpServerModule;
             if (module != null)
             {
@@ -230,6 +243,19 @@ namespace SysWeaver.MicroService
                 else
                 {
                     m.AddMessage(MsgPrefix + "Failed to add module! Already added? Type \"" + module.GetType() + "\" (" + module + ")", MessageLevels.Warning);
+                }
+            }
+
+            var rawModule = instance as IHttpServerRawModule;
+            if (rawModule != null)
+            {
+                if (s.AddRawModule(rawModule))
+                {
+                    m.AddMessage(MsgPrefix + "Added raw module of type \"" + rawModule.GetType() + "\" (" + rawModule + ")", MessageLevels.Debug);
+                }
+                else
+                {
+                    m.AddMessage(MsgPrefix + "Failed to add raw module! Already added? Type \"" + rawModule.GetType() + "\" (" + rawModule + ")", MessageLevels.Warning);
                 }
             }
             var transformService = instance as IHttpTransformerService;

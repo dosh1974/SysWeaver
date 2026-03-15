@@ -31,6 +31,17 @@ namespace SysWeaver.Net
         readonly NameValueCollection ReqHeaders;
         readonly NameValueCollection ResHeaders;
 
+
+        public override IEnumerable<KeyValuePair<String, String>> AllReqHeaders
+        {
+            get
+            {
+                var h = ReqHeaders;
+                foreach (var key in h.AllKeys)
+                    yield return new KeyValuePair<String, String>(key, h.Get(key));
+            }
+        }
+
         public override String IfNoneMatch => ReqHeaders["If-None-Match"]?.Trim();
         public override string AcceptEncoding => ReqHeaders["Accept-Encoding"];
 
@@ -146,6 +157,12 @@ namespace SysWeaver.Net
             base.Dispose();
         }
 
+        public override HttpServerRequest ReplaceUrl(string newUrl, HttpServerHostInfo host, String prefix, int queryStart, HttpServerBase server, String newMethod = null)
+        {
+            var h = new NetHttpServerRequest(Context, newUrl, prefix, server, host, queryStart, newMethod);
+            h.Init(Session);
+            return h;
+        }
     }
 
 

@@ -5,7 +5,8 @@ using System.Threading.Tasks;
 namespace SysWeaver.Net
 {
 
-    public interface IHttpServerModule
+
+    public interface IHttpServerBaseModule
     {
         /// <summary>
         /// The name of this module
@@ -13,10 +14,26 @@ namespace SysWeaver.Net
         String Name { get => GetType().Name; }
 
         /// <summary>
-        /// Optionally supply a list of prefixes.
+        /// Optionally supply a list of prefixes (required for raw modules)
         /// The AsyncHandler or Handler methods are only called if the local url starts with any of these prefixes
         /// </summary>
-        String[] OnlyForPrefixes { get => null;  }
+        String[] OnlyForPrefixes { get => null; }
+    }
+
+
+    public interface IHttpServerRawModule : IHttpServerBaseModule
+    {
+        /// <summary>
+        /// Handle the request
+        /// </summary>
+        /// <param name="r"></param>
+        /// <returns>Returns true if the request was handled</returns>
+        ValueTask<bool> Handle(HttpServerRequest r);
+    }
+
+    public interface IHttpServerModule : IHttpServerBaseModule
+    {
+
 
 
         /// <summary>

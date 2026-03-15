@@ -60,7 +60,7 @@ namespace SysWeaver.MicroService
         [WebApiAuth(Roles.OpsDev)]
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
-        [WebMenuTable(null, "Domains", "Domains", null, "../icons/network.svg")]
+        [WebMenuTable(null, "Domains", "Domains", null, "icons/network.svg")]
         public TableData DomainTable(TableDataRequest r)
             => TableDataTools.Get(r, 1000, Domains.Values.Select(x => new Data(x)));
 

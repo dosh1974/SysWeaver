@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,10 +13,8 @@ using SysWeaver.Auth;
 using SysWeaver.Compression;
 using SysWeaver.Data;
 using SysWeaver.IsoData;
-using SysWeaver.Media;
 using SysWeaver.MicroService;
 using SysWeaver.Security;
-using SysWeaver.Serialization;
 using SysWeaver.Translation;
 
 [assembly: SysWeaver.ResourceOrder(-100)]
@@ -28,8 +25,8 @@ namespace SysWeaver.Net
     [WebMenuEmbedded(null, "Welcome", "Welcome", "app/Welcome.html", "Show the welcome page", "IconHome", -100, null, true)]
     [WebMenuEmbedded(null, "Home", "Home", "app/Home.html", "Show the home page", "IconHome", -100, "")]
     [WebMenuPath("Theme", "Theme", "Theme", "Color themes", "IconTheme")]
-    [WebMenuPath(null, "Debug/Http Server", "Http Server", "Debug data from the http server", "../icons/server.svg")]
-    [WebMenuPath(null, "Debug/Data", "Data", "Misc static data", "../icons/book.svg", 100)]
+    [WebMenuPath(null, "Debug/Http Server", "Http Server", "Debug data from the http server", "icons/server.svg")]
+    [WebMenuPath(null, "Debug/Data", "Data", "Misc static data", "icons/book.svg", 100)]
     [WebMenuJs("Theme", "Theme/Auto", "(Automatic)", "if(resetTheme());false", "Automatically select (from browser / OS settings)", "IconThemeAuto", 0)]
     [WebMenuJs("Theme", "Theme/Light", "Light", "if(setTheme('light'));false", "Use the bright mode color scheme", "IconThemeLight", 1)]
     [WebMenuJs("Theme", "Theme/Dark", "Dark", "if(setTheme('dark'));false", "Use the dark mode color scheme", "IconThemeDark", 2)]
@@ -507,8 +504,13 @@ namespace SysWeaver.Net
         }
 
 
-
-        protected abstract HttpServerRequest ReplaceUrl(HttpServerRequest s, String newUrl, String newMethod = null);
+        HttpServerRequest ReplaceUrl(HttpServerRequest s, String newUrl, String newMethod = null)
+        {
+            var host = GetHost(out var prefix, out var queryStart, ref newUrl);
+            if (prefix == null)
+                return null;
+            return s.ReplaceUrl(newUrl, host, prefix, queryStart, this, newMethod);
+        }
 
 
         /// <summary>
@@ -605,6 +607,60 @@ namespace SysWeaver.Net
             (n as IDisposable)?.Dispose();
             return null;
 
+        }
+
+
+
+        async ValueTask<bool> HandleRaw(HttpServerRequest data)
+        {
+            var pm = PerfMon;
+            using var _ = pm.Track(nameof(HandleRaw));
+            var n = nameof(HandleRaw) + ".";
+            var prefixes = PrefixRawMods;
+            if (prefixes != null)
+            {
+                var local = data.LocalUrl;
+                var prefixModules = prefixes.PrefixesOf(local);
+                var prefixModuleLen = prefixModules.Count;
+                for (int pmi = 0; pmi < prefixModuleLen; ++pmi)
+                {
+                    var modules = prefixModules[pmi];
+                    var moduleLen = modules.Count;
+                    for (int mi = 0; mi < moduleLen; ++mi)
+                    {
+                        var module = modules[mi];
+                        using var __ = pm.Track(n + module.Name);
+                        try
+                        {
+                            if (await module.Handle(data).ConfigureAwait(false))
+                                return true;
+                        }
+                        catch (Exception ex)
+                        {
+                            await OnException(ex, data).ConfigureAwait(false);
+                            return true;
+                        }
+                    }
+                }
+            }
+            var orderedMods = OrderedRawMods;
+            var oml = orderedMods.Length;
+            for (int mi = 0; mi < oml; ++mi)
+            {
+                var module = orderedMods[mi];
+                using var __ = pm.Track(n + module.Name);
+                try
+                {
+                    if (await module.Handle(data).ConfigureAwait(false))
+                        return true;
+                }
+                catch (Exception ex)
+                {
+                    await OnException(ex, data).ConfigureAwait(false);
+                    return true;
+                }
+            }
+            return false;
         }
 
 
@@ -951,7 +1007,9 @@ namespace SysWeaver.Net
         readonly AsyncLock DebugLock = new AsyncLock();
 #endif//DEBUG
 
-        protected async ValueTask Handle(HttpServerRequest data)
+
+
+        public async ValueTask Handle(HttpServerRequest data)
         {
             var rateLimiter = ServerLimits;
             if ((rateLimiter != null) && (await rateLimiter.IsOverTheLimit().ConfigureAwait(false)))
@@ -959,6 +1017,8 @@ namespace SysWeaver.Net
                 await Set429(data).ConfigureAwait(false);
                 return;
             }
+            if (HaveRawModules && await HandleRaw(data).ConfigureAwait(false))
+                return;
             using var session = await GetSession(data).ConfigureAwait(false);
             session.IncRequestCounter();
             data.Init(session);
@@ -1115,6 +1175,7 @@ namespace SysWeaver.Net
                     var key = (await t.GetCacheKey(data).ConfigureAwait(false)) ?? url;
                     if (key.Length > 0)
                     {
+                        key = String.Concat(key, '\n', data.GetType().Name);
                         Interlocked.Increment(ref CacheTotal);
                         cacheKey = 
                             useLanguageCache && haveTranslator
@@ -1578,38 +1639,47 @@ namespace SysWeaver.Net
             }
             catch (Exception ex)
             {
-                var le = ListenerExceptionType;
-                if ((le != null) && (le.IsAssignableFrom(ex.GetType())))
+                await OnException(ex, data).ConfigureAwait(false);
+            }
+        }
+
+        async ValueTask OnException(Exception ex, HttpServerRequest data)
+        {
+            var le = ListenerExceptionType;
+            if ((le != null) && (le.IsAssignableFrom(ex.GetType())))
+            {
+                ListenerExceptions.OnException(ex);
+            }
+            else
+            {
+                bool isHead = data.IsHead;
+                var session = data.Session;
+                var translator = session == null ? null : data.Translator;
+                var re = ex as HttpResponseException;
+                if (re != null)
                 {
-                    ListenerExceptions.OnException(ex);
+                    data.SetResStatusCode(re.ResponseCode);
+                    if (!isHead)
+                    {
+                        var text = re.Message;
+                        var tr = re.Translate;
+                        if ((translator != null) && (tr != null))
+                            text = await translator.TranslateSafe(text, session.Language, tr, "This is an exception message thrown by a web server, the value at the end in the enclosing [ ] are the error code, keep as is", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false);
+                        data.SetResText(text);
+                    }
                 }
                 else
                 {
-                    var re = ex as HttpResponseException;
-                    if (re != null)
-                    {
-                        data.SetResStatusCode(re.ResponseCode);
-                        if (!isHead)
-                        {
-                            var text = re.Message;
-                            var tr = re.Translate;
-                            if ((translator != null) && (tr != null))
-                                text = await translator.TranslateSafe(text, session.Language, tr, "This is an exception message thrown by a web server", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false);
-                            data.SetResText(text);
-                        }
-                    }
-                    else
-                    {
-                        HandlerExceptions.OnException(ex);
+                    HandlerExceptions.OnException(ex);
 #if DEBUG
-                        Msg?.AddMessage(Prefix + "Handler for \"" + url + "\" failed!", ex, MessageLevels.Debug);
+                    Msg?.AddMessage(Prefix + "Handler for \"" + data.Url + "\" failed!", ex, MessageLevels.Debug);
 #endif//DEBUG
-                        data.SetResStatusCode(500);
-                        if (!isHead)
-                            data.SetResText(await translator.TranslateSafe(ex.Message, session.Language, "en", "This is an exception message thrown by a web server", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false));
-                    }
+                    data.SetResStatusCode(500);
+                    if (!isHead)
+                        data.SetResText(await translator.TranslateSafe(ex.Message + " [500]", session.Language, "en", "This is an exception message thrown by a web server", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false));
                 }
             }
+
         }
 
         #region Cert
@@ -1853,6 +1923,98 @@ namespace SysWeaver.Net
         FrozenStringTreeList<IHttpServerModule> PrefixMods;
 
         #endregion //Modules
+
+
+        #region RawModules
+
+        int RawModuleOrder;
+
+        void OnRawModuleChange()
+        {
+            var m = RawModules;
+            lock (m)
+            {
+                var c = m.Count;
+                List<IHttpServerRawModule> RawMods = new(c);
+                IHttpServerRawModule[] allRawMods = new IHttpServerRawModule[c];
+                List<Tuple<String, IHttpServerRawModule>> prefixes = new(c + c);
+                int i = -1;
+                foreach (var x in m.OrderBy(x => x.Value))
+                {
+                    ++i;
+                    var RawMod = x.Key;
+                    allRawMods[i] = RawMod;
+                    var pres = RawMod.OnlyForPrefixes;
+                    if (pres != null)
+                    {
+                        var pl = pres.Length;
+                        if (pl > 0)
+                        {
+                            StringTree seen = null;
+                            if (pl > 1)
+                                Array.Sort(pres, (a, b) => (a?.Length ?? -1) - (b?.Length ?? -1));
+                            if (!String.IsNullOrEmpty(pres[0]))
+                            {
+                                for (int pi = 0; pi < pl; ++pi)
+                                {
+                                    var pre = pres[pi];
+                                    if (pre == null)
+                                        continue;
+                                    if (seen?.StartsWithAny(pre) != null)
+                                        continue;
+                                    seen = StringTree.Add(pre, false, seen);
+                                    prefixes.Add(Tuple.Create(pre, RawMod));
+                                }
+                                continue;
+                            }
+                        }
+                    }
+                    RawMods.Add(RawMod);
+                }
+                OrderedRawMods = RawMods.ToArray();
+                AllRawMods = allRawMods;
+                HaveRawModules = allRawMods.Length > 0;
+                PrefixRawMods = prefixes.Count > 0 ? FrozenStringTreeList.Build(prefixes) : null;
+            }
+        }
+
+        public bool AddRawModule(IHttpServerRawModule RawModule)
+        {
+            var m = RawModules;
+            if (!m.TryAdd(RawModule, Interlocked.Increment(ref RawModuleOrder)))
+                return false;
+            OnRawModuleChange();
+            return true;
+        }
+
+        public bool RemoveRawModule(IHttpServerRawModule RawModule)
+        {
+            var m = RawModules;
+            if (!m.TryRemove(RawModule, out var x))
+                return false;
+            OnRawModuleChange();
+            return true;
+        }
+
+        readonly ConcurrentDictionary<IHttpServerRawModule, int> RawModules = new ConcurrentDictionary<IHttpServerRawModule, int>();
+        /// <summary>
+        /// All RawMods in order that doesn't respond to certain prefixes only
+        /// </summary>
+        IHttpServerRawModule[] OrderedRawMods;
+        /// <summary>
+        /// All RawMods in order
+        /// </summary>
+        IHttpServerRawModule[] AllRawMods;
+        /// <summary>
+        /// A tree with RawModules that respond to certain prefixes only
+        
+        /// </summary>
+        FrozenStringTreeList<IHttpServerRawModule> PrefixRawMods;
+
+        bool HaveRawModules;
+
+        #endregion //RawModules
+
 
         #region Session
 
@@ -2170,7 +2332,7 @@ namespace SysWeaver.Net
         static readonly SearchValues<Char> HostEnd = SearchValues.Create(['/', ':', '?' ]);
         static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
 
-        protected unsafe HttpServerHostInfo GetHost(out String prefix, out int queryStart, ref String url)
+        public unsafe HttpServerHostInfo GetHost(out String prefix, out int queryStart, ref String url)
         {
             url = HttpUtility.UrlDecode(url);
             var urlSpan = url.AsSpan();
@@ -2831,7 +2993,7 @@ namespace SysWeaver.Net
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Data/{0}", "Mime mapping", null, "../icons/file_types.svg", -2)]
+        [WebMenuTable(null, "Debug/Data/{0}", "Mime mapping", null, "icons/file_types.svg", -2)]
         public TypedTableData<MimeTypeMap.ExtensionEntry> MimeMappingTable(TableDataRequest r)
             => TableDataTools.GetTyped(r, 30000, MimeTypeMap.AllExtensionEntries);
 
@@ -2845,7 +3007,7 @@ namespace SysWeaver.Net
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Data/{0}", "Mime types", null, "../icons/world.svg", -1)]
+        [WebMenuTable(null, "Debug/Data/{0}", "Mime types", null, "icons/world.svg", -1)]
         public TypedTableData<MimeTypeMap.MimeEntry> MimeTypesTable(TableDataRequest r)
             => TableDataTools.GetTyped(r, 30000, MimeTypeMap.AllMimeEntries);
 

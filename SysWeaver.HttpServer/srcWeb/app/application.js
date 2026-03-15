@@ -1517,7 +1517,7 @@ class App {
 
 
 
-            const expandEmbeddedIcon = new ColorIcon(haveUser ? "IconCurrentUserFill" : "../icons/user.svg", headerIconColor, buttonSize, buttonSize,
+            const expandEmbeddedIcon = new ColorIcon(haveUser ? "IconCurrentUserFill" : "icons/user.svg", headerIconColor, buttonSize, buttonSize,
                 (haveUser
                     ?
                     (_T("Logged in as {0},", user.NickName, "A tool tip description descriping what user is logged into the page.{0} is replaced with the name of the user.") + "\n\n")

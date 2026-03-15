@@ -39,11 +39,13 @@ namespace SysWeaver
 #endif//DEBUG
         }
 
+#if DEBUG
         static long RentCount;
         static long ReturnCount;
 
         static long RentBytes;
         static long ReturnBytes;
+#endif//DEBUG
 
         static readonly ArrayPool<Byte> Pool = ArrayPool<Byte>.Shared;
 
@@ -245,7 +247,10 @@ namespace SysWeaver
         {
             base.Dispose(disposing);
             if (Owned)
+            {
                 Return(Data);
+                Data = null;
+            }
         }
         
     }

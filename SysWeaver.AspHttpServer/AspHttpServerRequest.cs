@@ -25,6 +25,8 @@ namespace SysWeaver.Net
         internal readonly HttpRequest Req;
         internal readonly HttpResponse Res;
 
+        public override IEnumerable<KeyValuePair<String, String>> AllReqHeaders => Req.Headers.Select(x => new KeyValuePair<String, String>(x.Key, x.Value.FirstOrDefault()?.Trim()));
+
         public override String IfNoneMatch => Req.Headers["If-None-Match"].FirstOrDefault()?.Trim();
         public override string AcceptEncoding => Req.Headers["Accept-Encoding"];
 
@@ -189,6 +191,12 @@ namespace SysWeaver.Net
             to.StatusCode = Status;
         }
 
+        public override HttpServerRequest ReplaceUrl(string newUrl, HttpServerHostInfo host, String prefix, int queryStart, HttpServerBase server, String newMethod = null)
+        {
+            var h = new AspHttpServerRequest(Context, newUrl, prefix, server as AspHttpServer, host, queryStart, newMethod);
+            h.Init(Session);
+            return h;
+        }
 
         public override void Dispose()
         {

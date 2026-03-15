@@ -19,9 +19,9 @@ namespace SysWeaver.MicroService
 
     [RequiredDep<FolderSyncService>()]
     [WebApiUrl("../ServerManager")]
-    [WebMenuEmbedded(null, "Server", "Server", "ServerManager/server.html", "View server stats", "../icons/computer.svg", -9, "")]
-    [WebMenuEmbedded(null, "Services", "Managed services", "ServerManager/services.html", "View all managed services", "../icons/settings.svg", -7, "")]
-    [WebMenuEmbedded(null, "Keys", "Key files", "ServerManager/keys.html", "Managed key files located in the key file folder", "../icons/key.svg", -6, Roles.Admin)]
+    [WebMenuEmbedded(null, "Server", "Server", "ServerManager/server.html", "View server stats", "icons/computer.svg", -9, "")]
+    [WebMenuEmbedded(null, "Services", "Managed services", "ServerManager/services.html", "View all managed services", "icons/settings.svg", -7, "")]
+    [WebMenuEmbedded(null, "Keys", "Key files", "ServerManager/keys.html", "Managed key files located in the key file folder", "icons/key.svg", -6, Roles.Admin)]
     public sealed partial class ServerManagerService : IDisposable, IHttpServerModule, IHaveStats, IPerfMonitored, IHaveTextFiles
     {
 
@@ -894,7 +894,7 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, "ProcessInfo", "Process information", "Information about running processes", "../icons/table_services.svg", -5)]
+        [WebMenuTable(null, "ProcessInfo", "Process information", "Information about running processes", "icons/table_services.svg", -5)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public TableData ProcessInfoTable(TableDataRequest r)
@@ -1266,7 +1266,7 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, "DriveInfo", "Drive information", "Information of the server drives", "../icons/ssd.svg", -4)]
+        [WebMenuTable(null, "DriveInfo", "Drive information", "Information of the server drives", "icons/ssd.svg", -4)]
         [WebApiClientCache(9)]
         [WebApiRequestCache(4)]
         public TableData DriveInfoTable(TableDataRequest r)
@@ -1891,7 +1891,7 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.Debug)]
-        [WebMenuTable(null, "ChunkStorage", "Chunk storage", "Analysis of the chunk storage", "../icons/brick.svg", -3)]
+        [WebMenuTable(null, "ChunkStorage", "Chunk storage", "Analysis of the chunk storage", "icons/brick.svg", -3)]
         [WebApiClientCache(14)]
         [WebApiRequestCache(10)]
         public async Task<TableData> StorageStatsTable(TableDataRequest r)
@@ -2530,7 +2530,7 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth]
-        [WebMenuTable(null, "Files", "Files", "Information about files on the system", "../icons/organize.svg", -1)]
+        [WebMenuTable(null, "Files", "Files", "Information about files on the system", "icons/organize.svg", -1)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public TableData TextFilesTable(TableDataRequest r, HttpServerRequest context)

@@ -194,17 +194,6 @@ namespace SysWeaver.Net
             SecondsToWait = Math.Max(1, p.SecondsToWait);
         }
 
-        protected override HttpServerRequest ReplaceUrl(HttpServerRequest s, string newUrl, String newMethod = null)
-        {
-            var o = s as NetHttpServerRequest;
-            var host = GetHost(out var prefix, out var queryStart, ref newUrl);
-            if (prefix == null)
-                return null;
-            var h = new NetHttpServerRequest(o.Context, newUrl, prefix, this, host, queryStart, newMethod);
-            h.Init(s.Session);
-            return h;
-        }
-
 
         public readonly int SecondsToWait;
 

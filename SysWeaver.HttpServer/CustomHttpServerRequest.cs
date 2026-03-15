@@ -2,6 +2,7 @@
 using System.Net;
 using System.IO;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace SysWeaver.Net
 {
@@ -12,6 +13,9 @@ namespace SysWeaver.Net
             : base(httpMethod, url, prefix, server, host, queryStart)
         { 
         }
+
+        public override IEnumerable<KeyValuePair<String, String>> AllReqHeaders => throw new NotImplementedException();
+
 
         public override String IfNoneMatch => null;
         public override string AcceptEncoding => null;
@@ -94,6 +98,12 @@ namespace SysWeaver.Net
         {
             throw new NotImplementedException();
         }
+
+        public override HttpServerRequest ReplaceUrl(string newUrl, HttpServerHostInfo host, String prefix, int queryStart, HttpServerBase server, String newMethod = null)
+        {
+            throw new NotImplementedException();
+        }
+
     }
 
 

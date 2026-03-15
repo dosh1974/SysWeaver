@@ -157,6 +157,12 @@ namespace SysWeaver.Net
         }
        
 
+        /// <summary>
+        /// Get all request headers
+        /// </summary>
+        public abstract IEnumerable<KeyValuePair<String, String>> AllReqHeaders { get; }
+
+
 
         public void Init(HttpSession session)
         {
@@ -484,6 +490,13 @@ namespace SysWeaver.Net
         /// If negative, the per session cache is used (else a global cache is used).
         /// </summary>
         public int? RequestCacheDuration;
+
+
+        /// <summary>
+        /// Replace the url (used internally)
+        /// </summary>
+        /// <returns></returns>
+        public abstract HttpServerRequest ReplaceUrl(string newUrl, HttpServerHostInfo host, String prefix, int queryStart, HttpServerBase server, String newMethod = null);
 
     }
 
