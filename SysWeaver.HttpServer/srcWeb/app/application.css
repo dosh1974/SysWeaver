@@ -26,7 +26,7 @@ app-header {
     height: var(--mh);
     max-height: var(--mh);
     box-sizing: border-box;
-    box-shadow: 0px 4px 12px rgba(0,0,0,0.3), 0px 1px 3px var(--ThemeAcc150);
+    box-shadow: 0px 4px 12px rgba(0,0,0,0.5), 0px 1px 3px var(--ThemeAcc175);
     z-index: 2;
 }
 

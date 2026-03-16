@@ -9,9 +9,10 @@ namespace SysWeaver.ReverseProxy
     {
         sealed class Data
         {
-            public Data(KeyValuePair<String, Client> d)
+            public Data(KeyValuePair<String, Client> d, String baseUrl)
             {
                 var c = d.Value;
+                BaseUrl = baseUrl;
                 Client = d.Key;
                 Ip = c.Ip;
                 LastConnected = new DateTime(Interlocked.Read(ref c.LastConnection), DateTimeKind.Utc);
@@ -24,7 +25,12 @@ namespace SysWeaver.ReverseProxy
             /// <summary>
             /// Name of the client (typically machine name)
             /// </summary>
+            [TableDataUrl("{0}", "../{1}{0}/")]
             public String Client;
+
+            [TableDataHide]
+            public String BaseUrl;
+
 
             /// <summary>
             /// IP of the client (of last the connection made)

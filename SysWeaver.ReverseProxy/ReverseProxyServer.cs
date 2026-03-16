@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -12,11 +13,11 @@ namespace SysWeaver.ReverseProxy
 {
     public sealed class ReverseProxyServerParams
     {
-        public String BaseUrl = "ReverseProxyFile";
+        public String BaseUrl = "ReverseProxyFiles";
     }
 
     [WebApiUrl("../ReverseProxy")]
-    public sealed partial class ReverseProxyServer : IHttpServerRawModule
+    public sealed partial class ReverseProxyServer : IHttpServerRawModule, IHaveStats
     {
 
         public async ValueTask<bool> Handle(HttpServerRequest r)
@@ -88,8 +89,11 @@ namespace SysWeaver.ReverseProxy
 
         [WebApi]
         [WebApiAuth(Roles.Service)]
-        public async Task<ReverseProxyRequest> GetReverseProxyRequest(string clientId, HttpServerRequest r)
+        public async Task<ReverseProxyRequest> GetReverseProxyRequest(ReverseProxyResponse response, HttpServerRequest r)
         {
+            var clientId = response.ClientId;
+            if (response.RequestId != null)
+                ReverseProxyResponse(response);
             var clients = Clients;
             if (!clients.TryGetValue(clientId, out var client))
             {
@@ -127,19 +131,25 @@ namespace SysWeaver.ReverseProxy
             }
         }
 
-        [WebApi]
-        [WebApiAuth(Roles.Service)]
-        public Task ReverseProxyResponse(ReverseProxyResponse response)
+        long UnknownClientResponses;
+        long UnknownRequestResponses;
+
+        void ReverseProxyResponse(ReverseProxyResponse response)
         {
             var clients = Clients;
             if (!clients.TryGetValue(response.ClientId, out var client))
-                return Task.CompletedTask;
+            {
+                Interlocked.Increment(ref UnknownClientResponses);
+                return;
+            }
             if (!client.Responses.TryAdd(response.RequestId, response))
-                return Task.CompletedTask;
+            {
+                Interlocked.Increment(ref UnknownRequestResponses);
+                return;
+            }
             Interlocked.Increment(ref client.TotalCompleted);
             Interlocked.Decrement(ref client.InProgress);
             client.ResponseWaiter.Change();
-            return Task.CompletedTask;
         }
 
 
@@ -167,7 +177,7 @@ namespace SysWeaver.ReverseProxy
         }
 
         /// <summary>
-        /// All mime types that the web server recognizes
+        /// All reverse proxy clients that are currently connected to the server
         /// </summary>
         /// <param name="r">Paramaters</param>
         /// <returns></returns>
@@ -176,12 +186,23 @@ namespace SysWeaver.ReverseProxy
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Http Server/{0}", "Reverse connections", null, "icons/world.svg")]
-        public TableData ReverseConnectionsTable(TableDataRequest r)
-            => TableDataTools.Get(r, 2000, Clients.Select(x => new Data(x)));
+        [WebMenuTable(null, "Debug/Http Server/{0}", "Reverse proxy connections", null, "icons/world.svg")]
+        public TableData ReverseProxyConnectionsTable(TableDataRequest r)
+        {
+            var b = BaseUrl;
+            return TableDataTools.Get(r, 2000, Clients.Select(x => new Data(x, b)));
+        }
 
-
-
+        public IEnumerable<Stats> GetStats()
+        {
+            const String sys = nameof(ReverseProxyServer);
+            var t = Interlocked.Read(ref UnknownClientResponses);
+            if (t > 0)
+                yield return new Stats(sys, "UnknownClientResponses", t, "Number of repsonse messages (sent from a client) that contained an unknown client id");
+            t = Interlocked.Read(ref UnknownRequestResponses);
+            if (t > 0)
+                yield return new Stats(sys, "UnknownRequestResponses", t, "Number of repsonse messages (sent from a client) that contained an unknown response id");
+        }
     }
 
 }

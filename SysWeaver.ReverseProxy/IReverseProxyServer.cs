@@ -8,9 +8,8 @@ namespace SysWeaver.ReverseProxy
     public interface IReverseProxyServer : IDisposable
     {
         [RemoteTimeout(5 * 60 * 1000)]
-        Task<ReverseProxyRequest> GetReverseProxyRequest(String proxyId);
+        Task<ReverseProxyRequest> GetReverseProxyRequest(ReverseProxyResponse response);
 
-        Task ReverseProxyResponse(ReverseProxyResponse response);
     }
 
 }

@@ -885,7 +885,7 @@ namespace SysWeaver.Net
         readonly IReadOnlyDictionary<String, Func<HttpServerRequest, HttpSession, ValueTask<IHttpRequestHandler>>> OptionalEndPoints;
 
 
-        protected async ValueTask<String> Get404Text(String language)
+        public async ValueTask<String> Get404Text(String language)
         {
             return await Translator.TranslateSafe("Not Found - The server cannot find the requested resource.", language, "en", "This is the message to display when trying to access a non-existing end point in a web server").ConfigureAwait(false);
 

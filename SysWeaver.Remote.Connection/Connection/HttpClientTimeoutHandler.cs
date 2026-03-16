@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace SysWeaver.Remote.Connection
 {
-    sealed class HttpClientTimeoutHandler : DelegatingHandler
+    public sealed class HttpClientTimeoutHandler : DelegatingHandler
     {
         public TimeSpan DefaultTimeout { get; set; } = TimeSpan.FromSeconds(100);
 
