@@ -73,7 +73,11 @@ namespace SysWeaver.ReverseProxy
             foreach (var kv in ResHeaders)
             {
                 if (!kv.Key.FastEquals("Set-Cookie"))
+                {
+                    if (!ReverseProxyTools.AllowMultipleHeaders.Contains(kv.Key.FastToLower()))
+                        t.ResHeaders.Remove(kv.Key);
                     t.ResHeaders.Add(kv.Key, kv.Value);
+                }
             }
             t._ResStatusCode = _ResStatusCode;
         }
@@ -84,13 +88,24 @@ namespace SysWeaver.ReverseProxy
             => ReqCookies.TryGetValue(name, out var v) ? v : null;
 
         public override string GetReqHeader(string name)
-            => ReqHeaders[name];
+        {
+            var val = ReqHeaders[name];
+            //if (ReverseProxyTools.QuotedHeaders.Contains(name.FastToLower()))
+                //val = val.RemoveQuotes();
+            return val;
+
+        }
 
         public override string GetResHeader(string name)
-            => ResHeaders[name];
+        { 
+            var val = ResHeaders[name];
+            //if (ReverseProxyTools.QuotedHeaders.Contains(name.FastToLower()))
+                //val = val.RemoveQuotes();
+            return val;
+        }
 
         public override string GetResMime()
-            => ResHeaders["Content-Type"];
+            => GetResHeader("Content-Type");
 
         public override bool IsDead()
             => false;
@@ -104,20 +119,23 @@ namespace SysWeaver.ReverseProxy
         public override void SetResContentLength(long length)
         {
             ResHeaders.Remove("Content-Length");
-            ResHeaders.Add("Content-Length", length.ToString());
+            ResHeaders.TryAddWithoutValidation("Content-Length", length.ToString());
         }
 
         public override void SetResHeader(string header, string value)
         {
             ResHeaders.Remove(header);
-            if (!String.IsNullOrEmpty(value))
-                ResHeaders.Add(header, value);
+            if (String.IsNullOrEmpty(value))
+                return;
+            //if (ReverseProxyTools.QuotedHeaders.Contains(header.FastToLower()))
+                //value = value.EnsureQuoted();
+            ResHeaders.TryAddWithoutValidation(header, value);
         }
 
         public override void SetResMime(string mime)
         {
             ResHeaders.Remove("Content-Type");
-            ResHeaders.Add("Content-Type", mime);
+            ResHeaders.TryAddWithoutValidation("Content-Type", mime);
         }
 
         public override void SetResStatusCode(int statusCode)
@@ -127,7 +145,7 @@ namespace SysWeaver.ReverseProxy
 
         public override void UpdateCookie(string str)
         {
-            ResHeaders.Add("Set-Cookie", str);
+            ResHeaders.TryAddWithoutValidation("Set-Cookie", str);
         }
 
 

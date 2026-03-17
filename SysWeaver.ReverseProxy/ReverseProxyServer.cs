@@ -35,6 +35,17 @@ namespace SysWeaver.ReverseProxy
             Byte[] data = null;
             if (m == HttpServerMethods.POST)
                 data = await r.InputStream.ReadAllBytesAsync().ConfigureAwait(false);
+            var headers = ReverseProxyTools.EncodeHeaders(r.AllReqHeaders);
+            var hl = headers.Length;
+            for (int i = 0; i < hl; ++ i)
+            {
+                var h = headers[i];
+                if (h.StartsWith("Referer:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var t = h.Substring(9 + BaseUrlLen + r.Host.Prefix.Length + clientId.Length);
+                    headers[i] = "Referer:" + t;
+                }
+            }
             var req = new ReverseProxyRequest
             {
                 ClientId = clientId,
@@ -42,8 +53,9 @@ namespace SysWeaver.ReverseProxy
                 Url = url,
                 Method = m,
                 Data = data,
-                Headers = ReverseProxyTools.EncodeHeaders(r.AllReqHeaders),
+                Headers = headers,
             };
+
             var res = await client.MakeRequest(req).ConfigureAwait(false);
             if (res == null)
                 throw new HttpResponseException(503);

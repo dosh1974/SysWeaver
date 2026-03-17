@@ -7,16 +7,23 @@ namespace SysWeaver.ReverseProxy
     static class ReverseProxyTools
     {
 
+        public static readonly IReadOnlySet<String> ContentHeaders = ReadOnlyData.Set(StringComparer.Ordinal,
+            "content-length",
+            "content-type",
+            "content-encoding"
+        );
+
+
         public static readonly IReadOnlySet<String> IgnoreHeaders = ReadOnlyData.Set(StringComparer.Ordinal,
             "host",
-            "sec-ch-ua",
+/*            "sec-ch-ua",
             "sec-ch-ua-mobile",
             "sec-ch-ua-platform",
             "sec-fetch-site",
             "sec-fetch-dest",
             "sec-fetch-mode",
             "sec-fetch-user",
-            "upgrade-insecure-requests",
+*/            "upgrade-insecure-requests",
             "transfer-encoding"
         );
 
@@ -41,7 +48,6 @@ namespace SysWeaver.ReverseProxy
             var l = headers.Length;
             var ih = IgnoreHeaders;
             var am = AllowMultipleHeaders;
-            var qh = QuotedHeaders;
             for (int i = 0; i < l; ++ i)
             {
                 var hlist = headers[i];
@@ -53,26 +59,13 @@ namespace SysWeaver.ReverseProxy
                     var kl = key.FastToLower();
                     if (ih.Contains(kl))
                         continue;
-                    if (qh.Contains(kl))
+                    if (am.Contains(kl))
                     {
-                        if (am.Contains(kl))
-                        {
-                            foreach (var v in kv.Value)
-                                h.Add(String.Concat(key, ':', v.EnsureQuoted()));
-                            continue;
-                        }
-                        h.Add(String.Concat(key, ':', String.Join(',', kv.Value.Select(x => x.EnsureQuoted()))));
+                        foreach (var v in kv.Value)
+                            h.Add(String.Concat(key, ':', v));
+                        continue;
                     }
-                    else
-                    {
-                        if (am.Contains(kl))
-                        {
-                            foreach (var v in kv.Value)
-                                h.Add(String.Concat(key, ':', v));
-                            continue;
-                        }
-                        h.Add(String.Concat(key, ':', String.Join(',', kv.Value)));
-                    }
+                    h.Add(String.Concat(key, ':', String.Join(',', kv.Value)));
                 }
             }
             return h.ToArray();

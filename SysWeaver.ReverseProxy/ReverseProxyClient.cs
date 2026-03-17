@@ -188,13 +188,26 @@ namespace SysWeaver.ReverseProxy
                     //  Find end point
                     LocalEndPoint endPoint = SingleEndPoint;
                     if (ept != null)
-                        endPoint = ept.StartsWithAny(url).FirstOrDefault();
+                        endPoint = ept.StartsWithAny(url)?.FirstOrDefault();
                     if (endPoint == null)
                     {
                         SetErrorResponse(response, res.RequestId, "Not Found - The server cannot find the requested resource.", 404);
                         continue;
                     }
                     url = endPoint.BaseUrl + url.Substring(endPoint.NameLen);
+                    var headers = res.Headers;
+                    var hl = headers.Length;
+                    for (int i = 0; i < hl; ++ i)
+                    {
+                        var h = headers[i];
+                        if (h.StartsWith("Referer:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var t = endPoint.BaseUrl + h.Substring(8 + endPoint.NameLen);
+                            headers[i] = "Referer:" + t;
+                        }
+
+                    }
+
                     if (endPoint.IsInternal)
                     {
                         //  Local (in process)
@@ -209,7 +222,12 @@ namespace SysWeaver.ReverseProxy
                         }
                         var h = new ManualHttpServerRequest.Headers();
                         foreach (var x in res.Headers.Nullable())
-                            h.Add(x.SplitFirst(':', out var rest), rest);
+                        {
+                            var key = x.SplitFirst(':', out var value);
+//                            if (ReverseProxyTools.QuotedHeaders.Contains(key.FastToLower()))
+//                                value = value.EnsureQuoted();
+                            h.TryAddWithoutValidation(key, value);
+                        }
                         t.ReqHeaders = h;
                         t._AcceptEncoding = t.GetReqHeader("Accept-Encoding");
                         t._IfNoneMatch = t.GetReqHeader("If-None-Match");
@@ -232,19 +250,6 @@ namespace SysWeaver.ReverseProxy
                         var c = Client;
                         var method = new HttpMethod(res.Method.ToString());
                         using var localRequest = new HttpRequestMessage(method, url);
-                        var h = localRequest.Headers;
-                        // TODO: Set: X-Forwarded-For:
-                        foreach (var x in res.Headers.Nullable())
-                        {
-                            var key = x.SplitFirst(':', out var value);
-                            //key = Uri.EscapeDataString(key);
-                            //value = Uri.EscapeDataString(value);
-                            if (!key.IsAsciiOnly())
-                                throw new Exception("Invalid!");
-                            if (!value.IsAsciiOnly())
-                                throw new Exception("Invalid!");
-                            h.Add(key, value);
-                        }
                         HttpContent content = null;
                         try
                         {
@@ -256,6 +261,17 @@ namespace SysWeaver.ReverseProxy
                                     content = new ReadOnlyMemoryContent(postData);
                                     localRequest.Content = content;
                                 }
+                            }
+                            var h = localRequest.Headers;
+                            var ch = ReverseProxyTools.ContentHeaders;
+                            // TODO: Set: X-Forwarded-For:
+                            foreach (var x in res.Headers.Nullable())
+                            {
+                                var key = x.SplitFirst(':', out var value);
+                                if (ch.Contains(key.FastToLower()))
+                                    content?.Headers?.TryAddWithoutValidation(key, value);
+                                else
+                                    h.TryAddWithoutValidation(key, value);
                             }
                             using var localResponse = await c.SendAsync(localRequest).ConfigureAwait(false);
                             var resData = await localResponse.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
