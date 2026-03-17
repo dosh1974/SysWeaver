@@ -26,6 +26,27 @@ namespace SysWeaver
             return value;
         }
 
+
+        /// <summary>
+        /// Make sure that a string is quoted
+        /// </summary>
+        /// <param name="s"></param>
+        /// <param name="quotationChar"></param>
+        /// <returns></returns>
+        public static String EnsureQuoted(this String s, Char quotationChar = '"')
+        {
+            if (s == null)
+                return "null";
+            var l = s.Length;
+            if (l > 1)
+            {
+                if ((s[0] == quotationChar) && (s[l - 1] == quotationChar))
+                    return s;
+            }
+            return ToQuoted(s, quotationChar);
+        }
+
+
         /// <summary>
         /// Add quotation chars around a string. Ex: Test => "Test"
         /// </summary>

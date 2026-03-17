@@ -35,7 +35,7 @@ namespace SysWeaver
 
 
 
-        static readonly Char[] HexChars = "0123456789abcdef".ToCharArray();
+        public static readonly Char[] HexChars = "0123456789abcdef".ToCharArray();
 
 
         /// <summary>

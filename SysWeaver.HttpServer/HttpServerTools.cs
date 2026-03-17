@@ -14,6 +14,55 @@ namespace SysWeaver.Net
 {
     public static class HttpServerTools
     {
+        public const String DefPath = "/;HttpOnly";
+
+        public static String MakeCookie(String name, String value, DateTime exp, String path = DefPath)
+        {
+            var now = DateTime.UtcNow;
+            var maxDate = now.AddYears(1);
+            if (exp > maxDate)
+                exp = maxDate;
+            var maxAge = (long)(exp - now).TotalSeconds;
+            var str = maxAge <= 0 ? MakeCookie(name, "", 0, path) : MakeCookie(name, value, maxAge, path);
+            return str;
+        }
+
+
+
+        /// <summary>
+        /// Escape non-ascii using \uXXXX
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static string EncodeNonAsciiCharacters(this string value)
+        {
+            var len = value.Length;
+            StringBuilder sb = new StringBuilder((len << 1) + 128);
+            var h = SpanExt.HexChars;
+            for (int i = 0; i < len; ++ i)
+            {
+                var c = value[i];
+                if (c < 0x80)
+                {
+                    sb.Append(c);
+                    if (c == '\\')
+                        sb.Append(c);
+                    continue;
+                }
+                sb.Append("\\u");
+                uint val = (uint)c;
+                sb.Append(h[val >> 12]);
+                sb.Append(h[(val >> 8) & 0xf]);
+                sb.Append(h[(val >> 4) & 0xf]);
+                sb.Append(h[val & 0xf]);
+            }
+            var res = sb.Length == len ? value : sb.ToString();
+#if DEBUG
+            if (!res.IsAsciiOnly())
+                throw new Exception();
+#endif//DEBUG
+            return res;
+        }
 
 
         /// <summary>
@@ -241,6 +290,7 @@ namespace SysWeaver.Net
             return d.Freeze();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String MakeCookie(String name, String value, long maxAge, String path)
         {
             return String.Concat(

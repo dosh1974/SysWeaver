@@ -71,14 +71,18 @@ namespace SysWeaver.ReverseProxy
                 InnerHandler = new HttpClientHandler
                 {
                     MaxConnectionsPerServer = threadCount,
+                    ClientCertificateOptions = certValid == null ? ClientCertificateOption.Automatic : ClientCertificateOption.Manual,
                     ServerCertificateCustomValidationCallback = certValid,
-                },
+                    AutomaticDecompression = System.Net.DecompressionMethods.None,
+                }
             };
+            ClientHandler = handler;
             Client = new HttpClient(handler);
             ConnectionTasks = Enumerable.Range(0, threadCount).Select(x => new PeriodicTask(Connection, 1)).ToArray();
         }
 
         HttpClient Client;
+        DelegatingHandler ClientHandler;
         readonly String ServerBaseUrl;
         readonly LocalEndPoint SingleEndPoint;
         readonly IReadOnlyDictionary<String, LocalEndPoint> EndPoints;
@@ -203,14 +207,14 @@ namespace SysWeaver.ReverseProxy
                             t._ReqContentLength = data.Length;
                             t._InputStream = new MemoryStream(data);
                         }
-                        var h = new Dictionary<String, String>(StringComparer.Ordinal);
+                        var h = new ManualHttpServerRequest.Headers();
                         foreach (var x in res.Headers.Nullable())
-                            h[x.SplitFirst(':', out var rest)] = rest;
-                        var rh = h.Freeze();
-                        t.ReqHeaders = rh;
-                        rh.TryGetValue("Accept-Encoding", out t._AcceptEncoding);
-                        rh.TryGetValue("If-None-Match", out t._IfNoneMatch);
-                        if (rh.TryGetValue("Cookie", out var cookies))
+                            h.Add(x.SplitFirst(':', out var rest), rest);
+                        t.ReqHeaders = h;
+                        t._AcceptEncoding = t.GetReqHeader("Accept-Encoding");
+                        t._IfNoneMatch = t.GetReqHeader("If-None-Match");
+                        var cookies = t.GetReqHeader("Cookie");
+                        if (cookies != null)
                             t.ReqCookies = HttpServerTools.ParseCookieString(cookies);
                         else
                             t.ReqCookies = ReadOnlyData.EmptyDictionary<String, String>();
@@ -218,10 +222,10 @@ namespace SysWeaver.ReverseProxy
                         t._OutputStream = dest;
                         await local.Handle(t).ConfigureAwait(false);
                         var resData = dest.ToArray();
-                        t.ResHeaders["Content-Length"] = resData.Length.ToString();
+                        t.SetResContentLength(resData.Length);
                         response.Data = resData;
                         response.RequestId = res.RequestId;
-                        response.Headers = t.ResHeaders.Select(x => String.Concat(x.Key, ':', x.Value)).ToArray();
+                        response.Headers = ReverseProxyTools.EncodeHeaders(t.ResHeaders);
                         response.StatusCode = t._ResStatusCode;
                     }else
                     {
@@ -231,7 +235,16 @@ namespace SysWeaver.ReverseProxy
                         var h = localRequest.Headers;
                         // TODO: Set: X-Forwarded-For:
                         foreach (var x in res.Headers.Nullable())
-                            h.Add(x.SplitFirst(':', out var rest), EncodeNonAsciiCharacters(rest));
+                        {
+                            var key = x.SplitFirst(':', out var value);
+                            //key = Uri.EscapeDataString(key);
+                            //value = Uri.EscapeDataString(value);
+                            if (!key.IsAsciiOnly())
+                                throw new Exception("Invalid!");
+                            if (!value.IsAsciiOnly())
+                                throw new Exception("Invalid!");
+                            h.Add(key, value);
+                        }
                         HttpContent content = null;
                         try
                         {
@@ -248,7 +261,7 @@ namespace SysWeaver.ReverseProxy
                             var resData = await localResponse.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
                             response.Data = resData;
                             response.RequestId = res.RequestId;
-                            response.Headers = localResponse.Headers.Select(x => String.Concat(x.Key, ':', x.Value)).ToArray();
+                            response.Headers = ReverseProxyTools.EncodeHeaders(localResponse.Headers, localResponse.Content?.Headers);
                             response.StatusCode = (int)localResponse.StatusCode;
                         }
                         finally
@@ -266,24 +279,6 @@ namespace SysWeaver.ReverseProxy
             }
         }
 
-        static string EncodeNonAsciiCharacters(string value)
-        {
-            StringBuilder sb = new StringBuilder((value.Length << 1) + 128);
-            foreach (char c in value)
-            {
-                if (c > 127)
-                {
-                    // This character is too big for ASCII  
-                    string encodedValue = "\\u" + ((int)c).ToString("x4");
-                    sb.Append(encodedValue);
-                }
-                else
-                {
-                    sb.Append(c);
-                }
-            }
-            return sb.ToString();
-        }
 
         volatile IReverseProxyServer Server;
 
@@ -320,7 +315,7 @@ namespace SysWeaver.ReverseProxy
                 Interlocked.Exchange(ref t[ti], null)?.Dispose();
             }
             Interlocked.Exchange(ref Client, null)?.Dispose();
-
+            Interlocked.Exchange(ref ClientHandler, null)?.Dispose();
         }
 
         /// <summary>

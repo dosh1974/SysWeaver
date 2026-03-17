@@ -25,7 +25,7 @@ namespace SysWeaver.Net
         internal readonly HttpRequest Req;
         internal readonly HttpResponse Res;
 
-        public override IEnumerable<KeyValuePair<String, String>> AllReqHeaders => Req.Headers.Select(x => new KeyValuePair<String, String>(x.Key, x.Value.FirstOrDefault()?.Trim()));
+        public override IEnumerable<KeyValuePair<String, IEnumerable<String>>> AllReqHeaders => Req.Headers.Select(x => new KeyValuePair<String, IEnumerable<String>>(x.Key, x.Value));
 
         public override String IfNoneMatch => Req.Headers["If-None-Match"].FirstOrDefault()?.Trim();
         public override string AcceptEncoding => Req.Headers["Accept-Encoding"];
@@ -82,16 +82,9 @@ namespace SysWeaver.Net
             return cookie;
         }
 
-        const String DefPath = "/;HttpOnly";
 
-        public override void UpdateCookie(String n, String value, DateTime exp, String path = DefPath)
+        public override void UpdateCookie(String str)
         {
-            var now = DateTime.UtcNow;
-            var maxDate = now.AddYears(1);
-            if (exp > maxDate)
-                exp = maxDate;
-            var maxAge = (long)(exp - now).TotalSeconds;
-            var str = maxAge <= 0 ? HttpServerTools.MakeCookie(n, "", 0, path) : HttpServerTools.MakeCookie(n, value, maxAge, path);
             Res.Headers.Append("Set-Cookie", str);
         }
 

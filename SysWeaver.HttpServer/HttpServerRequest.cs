@@ -160,7 +160,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Get all request headers
         /// </summary>
-        public abstract IEnumerable<KeyValuePair<String, String>> AllReqHeaders { get; }
+        public abstract IEnumerable<KeyValuePair<String, IEnumerable<String>>> AllReqHeaders { get; }
 
 
 
@@ -228,7 +228,7 @@ namespace SysWeaver.Net
 
         public abstract String GetReqCookie(String name, String cookieString = null);
 
-        public abstract void UpdateCookie(String name, String value, DateTime exp, String path = "/;HttpOnly");
+        public abstract void UpdateCookie(String str);
 
         /// <summary>
         ///  Get the IP of the current client connection (closest to the server)

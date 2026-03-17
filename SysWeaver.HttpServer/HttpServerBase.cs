@@ -72,7 +72,7 @@ namespace SysWeaver.Net
                 envVars[String.Join(k.Key, '[', ']')] = k.Value;
             Audit = audit;
             var s = p.SessionCookieName;
-            SessionCookieName = s == null ? null : TextTemplate.SearchAndReplace(String.IsNullOrEmpty(s) ? "SysWeaver.Session.[AppName]" : s, envVars, true, true);
+            SessionCookieName = (s == null ? null : TextTemplate.SearchAndReplace(String.IsNullOrEmpty(s) ? "SysWeaver.Session.[AppName]" : s, envVars, true, true)).EncodeNonAsciiCharacters();
             SessionCookieNameEquals = SessionCookieName + "=";
 
             s = p.DeviceIdCookieName;
@@ -2116,7 +2116,7 @@ namespace SysWeaver.Net
                 if (e == null)
                     e = end;
                 CharPtrTools.Trim(ref start, ref e);
-                return cookieString.AsMemory().Slice((int)(start - s), (int)(end - start));
+                return cookieString.AsMemory().Slice((int)(start - s), (int)(e - start));
             }
         }
 
@@ -2159,7 +2159,7 @@ namespace SysWeaver.Net
                         rng.GetBytes(span[..16]);
                     BitConverter.TryWriteBytes(span[16..], DateTime.UtcNow.Ticks);
                     deviceId = Convert.ToBase64String(span);
-                    req.UpdateCookie(dn, deviceId, DateTime.MaxValue, cookieOpt);
+                    req.UpdateCookie(HttpServerTools.MakeCookie(dn, deviceId, DateTime.MaxValue, cookieOpt));
                 }
 
                 var ua = req.GetReqHeader("User-Agent") ?? "";
@@ -2175,7 +2175,7 @@ namespace SysWeaver.Net
                     session.OnAuthLogout += RunOnLogout;
                 } while (!sessions.TryAdd(ReadOnlyMemoryKey.Create(sessionToken), session));
                 var exp = new DateTime(now + SessionCookieLifetime, DateTimeKind.Utc);
-                req.UpdateCookie(sn, sessionToken, exp, cookieOpt);
+                req.UpdateCookie(HttpServerTools.MakeCookie(sn, sessionToken, exp, cookieOpt));
                 try
                 {
                     OnSessionStart?.Invoke(session);

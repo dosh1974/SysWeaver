@@ -11,10 +11,6 @@ using SysWeaver.Net;
 
 namespace SysWeaver.ReverseProxy
 {
-    public sealed class ReverseProxyServerParams
-    {
-        public String BaseUrl = "ReverseProxyFiles";
-    }
 
     [WebApiUrl("../ReverseProxy")]
     public sealed partial class ReverseProxyServer : IHttpServerRawModule, IHaveStats
@@ -26,6 +22,9 @@ namespace SysWeaver.ReverseProxy
             if (m == HttpServerMethods.Other)
                 throw new HttpResponseException(404);
             var url = r.LocalUrl.Substring(BaseUrlLen);
+            var qs = r.QueryStringStart;
+            if (qs > 0)
+                url += r.Url.Substring(qs - 1);
             var clientId = url.SplitFirst('/', out url);
             if (String.IsNullOrEmpty(clientId))
                 throw new HttpResponseException(404);
@@ -43,16 +42,17 @@ namespace SysWeaver.ReverseProxy
                 Url = url,
                 Method = m,
                 Data = data,
-                Headers = r.AllReqHeaders.Select(x => String.Join(':', x.Key, x.Value)).ToArray(),
+                Headers = ReverseProxyTools.EncodeHeaders(r.AllReqHeaders),
             };
             var res = await client.MakeRequest(req).ConfigureAwait(false);
             if (res == null)
                 throw new HttpResponseException(503);
+            var sh = SpecialHeaders;
             foreach (var h in res.Headers.Nullable())
             {
                 var key = h.SplitFirst(':', out var value);
-                if (key.FastEquals("Content-Type"))
-                    r.SetResMime(value);
+                if (sh.TryGetValue(key, out var fn))
+                    fn(r, value);
                 else
                     r.SetResHeader(key, value);
             }
@@ -62,7 +62,15 @@ namespace SysWeaver.ReverseProxy
                 await r.SetResBodyAsync(data).ConfigureAwait(false);
             return true;
         }
+
+        static readonly IReadOnlyDictionary<String, Action<HttpServerRequest, String>> SpecialHeaders = new Dictionary<String, Action<HttpServerRequest, String>>(StringComparer.Ordinal)
+            {
+                { "Content-Type", (req, value) => req.SetResMime(value) },
+                { "Content-Length", (req, value) => req.SetResContentLength(long.Parse(value)) },
+                { "Set-Cookie", (req, value) => req.UpdateCookie(value) },
+            }.Freeze();
         
+
         public String[] OnlyForPrefixes { get; init; }
 
         public override string ToString() => BaseUrl;

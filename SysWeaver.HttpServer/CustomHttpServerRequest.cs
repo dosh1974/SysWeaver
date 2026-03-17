@@ -14,7 +14,7 @@ namespace SysWeaver.Net
         { 
         }
 
-        public override IEnumerable<KeyValuePair<String, String>> AllReqHeaders => throw new NotImplementedException();
+        public override IEnumerable<KeyValuePair<String, IEnumerable<String>>> AllReqHeaders => throw new NotImplementedException();
 
 
         public override String IfNoneMatch => null;
@@ -94,7 +94,7 @@ namespace SysWeaver.Net
             throw new NotImplementedException();
         }
 
-        public override void UpdateCookie(string name, string value, DateTime exp, string path = "/;HttpOnly")
+        public override void UpdateCookie(string str)
         {
             throw new NotImplementedException();
         }

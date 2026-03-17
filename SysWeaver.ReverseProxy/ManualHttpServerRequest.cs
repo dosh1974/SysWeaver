@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Net;
@@ -32,14 +34,22 @@ namespace SysWeaver.ReverseProxy
 
         public IPAddress _IP = IPAddress.Loopback;
         public IReadOnlyDictionary<String, String> ReqCookies;
-        public IReadOnlyDictionary<String, String> ReqHeaders;
+        public Headers ReqHeaders;
 
+
+        public sealed class Headers : HttpHeaders
+        {
+            public String this[String key] 
+            {
+                get => TryGetValues(key, out var vals) ? String.Join(';', vals) : null;
+            }
+        }
 
         public Stream _OutputStream;
         public int _ResStatusCode;
-        public readonly Dictionary<String, String> ResHeaders = new(StringComparer.Ordinal);
+        public readonly Headers ResHeaders = new Headers();
 
-        public override IEnumerable<KeyValuePair<String, String>> AllReqHeaders => ReqHeaders;
+        public override IEnumerable<KeyValuePair<String, IEnumerable<String>>> AllReqHeaders => ReqHeaders;
 
         public override string IfNoneMatch => _IfNoneMatch;
 
@@ -60,9 +70,12 @@ namespace SysWeaver.ReverseProxy
             var t = to as ManualHttpServerRequest;
             if (t == null)
                 throw new Exception("Invalid types!");
-            var tr = t.ResHeaders;
-            foreach (var x in ResHeaders)
-                tr[x.Key] = x.Value;
+            foreach (var kv in ResHeaders)
+            {
+                if (!kv.Key.FastEquals("Set-Cookie"))
+                    t.ResHeaders.Add(kv.Key, kv.Value);
+            }
+            t._ResStatusCode = _ResStatusCode;
         }
 
         public override IPAddress GetIP() => _IP;
@@ -71,13 +84,13 @@ namespace SysWeaver.ReverseProxy
             => ReqCookies.TryGetValue(name, out var v) ? v : null;
 
         public override string GetReqHeader(string name)
-            => ReqHeaders.TryGetValue(name, out var v) ? v : null;
+            => ReqHeaders[name];
 
         public override string GetResHeader(string name)
-            => ResHeaders.TryGetValue(name, out var v) ? v : null;
+            => ResHeaders[name];
 
         public override string GetResMime()
-            => ResHeaders.TryGetValue("Content-Type", out var v) ? v : null;
+            => ResHeaders["Content-Type"];
 
         public override bool IsDead()
             => false;
@@ -90,20 +103,21 @@ namespace SysWeaver.ReverseProxy
 
         public override void SetResContentLength(long length)
         {
-            ResHeaders["Content-Length"] = length.ToString();
+            ResHeaders.Remove("Content-Length");
+            ResHeaders.Add("Content-Length", length.ToString());
         }
 
         public override void SetResHeader(string header, string value)
         {
-            if (String.IsNullOrEmpty(value))
-                ResHeaders.TryRemove(header, out var _);
-            else
-                ResHeaders[header] = value;
+            ResHeaders.Remove(header);
+            if (!String.IsNullOrEmpty(value))
+                ResHeaders.Add(header, value);
         }
 
         public override void SetResMime(string mime)
         {
-            ResHeaders["Content-Type"] = mime;
+            ResHeaders.Remove("Content-Type");
+            ResHeaders.Add("Content-Type", mime);
         }
 
         public override void SetResStatusCode(int statusCode)
@@ -111,20 +125,9 @@ namespace SysWeaver.ReverseProxy
             _ResStatusCode = statusCode;
         }
 
-        public override void UpdateCookie(string name, string value, DateTime exp, string path = "/;HttpOnly")
+        public override void UpdateCookie(string str)
         {
-            var now = DateTime.UtcNow;
-            var maxDate = now.AddYears(1);
-            if (exp > maxDate)
-                exp = maxDate;
-            var maxAge = (long)(exp - now).TotalSeconds;
-            var str = maxAge <= 0 ? HttpServerTools.MakeCookie(name, "", 0, path) : HttpServerTools.MakeCookie(name, value, maxAge, path);
-            var h = ResHeaders;
-            if (h.TryGetValue("Set-Cookie", out var t))
-                t = String.Concat(t, ';', str);
-            else
-                t = str;
-            h["Set-Cookie"] = t;
+            ResHeaders.Add("Set-Cookie", str);
         }
 
 
@@ -144,7 +147,7 @@ namespace SysWeaver.ReverseProxy
             var s = ResHeaders;
             var d = h.ResHeaders;
             foreach (var x in s)
-                d[x.Key] = x.Value;
+                d.Add(x.Key, x.Value);
             h.Init(Session);
             return h;
         }

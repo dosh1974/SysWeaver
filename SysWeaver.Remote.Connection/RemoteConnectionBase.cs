@@ -207,8 +207,9 @@ namespace SysWeaver.Remote
                     MaxConnectionsPerServer = Math.Max(2, p.MaxConcurrency),
                     Proxy = proxy,
                     ServerCertificateCustomValidationCallback = certValid,
+                    ClientCertificateOptions = certValid == null ? ClientCertificateOption.Automatic : ClientCertificateOption.Manual,
                     AllowAutoRedirect = p.AllowAutoRedirect,
-                },
+                }
             };
             ClientHandler = handler;
             UrlBase = p.BaseUrl.TrimEnd('/') + '/';

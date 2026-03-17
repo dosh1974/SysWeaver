@@ -32,13 +32,13 @@ namespace SysWeaver.Net
         readonly NameValueCollection ResHeaders;
 
 
-        public override IEnumerable<KeyValuePair<String, String>> AllReqHeaders
+        public override IEnumerable<KeyValuePair<String, IEnumerable<String>>> AllReqHeaders
         {
             get
             {
                 var h = ReqHeaders;
                 foreach (var key in h.AllKeys)
-                    yield return new KeyValuePair<String, String>(key, h.Get(key));
+                    yield return new KeyValuePair<String, IEnumerable<String>>(key, h.GetValues(key));
             }
         }
 
@@ -84,14 +84,8 @@ namespace SysWeaver.Net
             return cookie;
         }
 
-        public override void UpdateCookie(String n, String value, DateTime exp, String path = "/;HttpOnly")
+        public override void UpdateCookie(String str)
         {
-            var now = DateTime.UtcNow;
-            var maxDate = now.AddYears(1);
-            if (exp > maxDate)
-                exp = maxDate;
-            var maxAge = (long)(exp - now).TotalSeconds;
-            var str = maxAge <= 0 ? HttpServerTools.MakeCookie(n, "", 0, path) : HttpServerTools.MakeCookie(n, value, maxAge, path);
             Res.AppendHeader("Set-Cookie", str);
         }
 
