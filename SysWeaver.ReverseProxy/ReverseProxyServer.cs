@@ -15,47 +15,117 @@ namespace SysWeaver.ReverseProxy
     [WebApiUrl("../ReverseProxy")]
     public sealed partial class ReverseProxyServer : IHttpServerRawModule, IHaveStats
     {
+        public override string ToString() => BaseUrl;
 
-        public async ValueTask<bool> Handle(HttpServerRequest r)
+        public ReverseProxyServer(ReverseProxyServerParams p, IMessageHost msg = null)
+        {
+            p = p ?? new ReverseProxyServerParams();
+            HashSet<String> ignoreDomains = new HashSet<String>(StringComparer.Ordinal);
+            foreach (var x in p.AllButDomains.Nullable())
+            {
+                var t = x?.Trim();
+                if (!String.IsNullOrEmpty(x))
+                    ignoreDomains.Add(x.FastToLower());
+            }
+            bool haveDomains = ignoreDomains.Count > 0;
+            var baseUrl = p.BaseUrl?.Trim('/');
+            if (String.IsNullOrEmpty(baseUrl) && (!haveDomains))
+                throw new Exception("Invalid base url (must supply a unique URL since ALL requests will be redirected)");
+            if (!String.IsNullOrEmpty(baseUrl))
+            {
+                if (baseUrl.FastEquals("ReverseProxy"))
+                    throw new Exception("Invalid base url (must supply a unique URL since ALL requests will be redirected)");
+                baseUrl += '/';
+                BaseUrl = baseUrl;
+                BaseUrlLen = baseUrl.Length;
+                msg?.AddMessage(String.Concat("Client url routing: \"", baseUrl, "[ClientId]<-EndPoint>/<..url..>\""));
+            }
+            if (haveDomains)
+            {
+                IgnoreDomains = ignoreDomains.Freeze();
+                msg?.AddMessage(String.Concat("Client domain routing: \"http{s}://[ClientId]<-EndPoint>.*.*/<..url..>\""));
+            }
+            else
+            {
+                OnlyForPrefixes = [baseUrl];
+            }
+        }
+
+        readonly IReadOnlySet<String> IgnoreDomains;
+        readonly String BaseUrl;
+        readonly int BaseUrlLen;
+
+        readonly ConcurrentDictionary<String, Client> Clients = new (StringComparer.Ordinal);
+        public String[] OnlyForPrefixes { get; init; }
+        public ValueTask<bool> Handle(HttpServerRequest r)
+        {
+            var localUrl = r.LocalUrl;
+            var baseUrlLen = BaseUrlLen;
+            var ignoreDomains = IgnoreDomains;
+            String clientId, endPoint;
+            if (ignoreDomains != null)
+            {
+                var t = new Uri(r.Url);
+                var host = t.Host;
+                if (!ignoreDomains.Contains(host.FastToLower()))
+                {
+                    //  Domain switch
+                    clientId = host.SplitFirst('.');
+                    clientId = clientId.SplitFirst('-', out endPoint);
+                    return HandleClient(r, clientId, endPoint, localUrl, r.Host.Len, r.Host.Name);
+                }
+                if ((baseUrlLen <= 0) || (!localUrl.FastStartsWith(BaseUrl)))
+                    return TaskExt.FalseValueTask;
+            }
+            //  Sub path switch
+            var clientUrl = localUrl.Substring(baseUrlLen);
+            clientId = clientUrl.SplitFirst('/', out clientUrl);
+            var referrer = String.Concat(r.Host, clientId, '/');
+            if (String.IsNullOrEmpty(clientId))
+                throw new HttpResponseException(404);
+            if (String.IsNullOrEmpty(clientUrl))
+                clientUrl = "";
+            clientId = clientId.SplitFirst('-', out endPoint);
+            return HandleClient(r, clientId, endPoint, clientUrl, 1 + baseUrlLen + r.Host.Len + clientId.Length, referrer);
+        }
+
+        async ValueTask<bool> HandleClient(HttpServerRequest r, String clientId, String endPoint, String clientUrl, int prefixLength, String referrer)
         {
             var m = r.HttpMethod;
             if (m == HttpServerMethods.Other)
                 throw new HttpResponseException(404);
-            var url = r.LocalUrl.Substring(BaseUrlLen);
-            var qs = r.QueryStringStart;
-            if (qs > 0)
-                url += r.Url.Substring(qs - 1);
-            var clientId = url.SplitFirst('/', out url);
-            if (String.IsNullOrEmpty(clientId))
-                throw new HttpResponseException(404);
-            if (String.IsNullOrEmpty(url))
-                url = "";
+
             if (!Clients.TryGetValue(clientId, out var client))
                 throw new HttpResponseException(503);
+
+            var qs = r.QueryStringStart;
+            if (qs > 0)
+                clientUrl += r.Url.Substring(qs - 1);
+
             Byte[] data = null;
             if (m == HttpServerMethods.POST)
                 data = await r.InputStream.ReadAllBytesAsync().ConfigureAwait(false);
             var headers = ReverseProxyTools.EncodeHeaders(r.AllReqHeaders);
             var hl = headers.Length;
-            for (int i = 0; i < hl; ++ i)
+            for (int i = 0; i < hl; ++i)
             {
                 var h = headers[i];
                 if (h.StartsWith("Referer:", StringComparison.OrdinalIgnoreCase))
                 {
-                    var t = h.Substring(9 + BaseUrlLen + r.Host.Prefix.Length + clientId.Length);
+                    var t = h.Substring(8).Trim().Substring(prefixLength);
                     headers[i] = "Referer:" + t;
                 }
             }
             var req = new ReverseProxyRequest
             {
                 ClientId = clientId,
+                EndPoint = endPoint,
                 RequestId = GetRequestGuid(),
-                Url = url,
+                Url = clientUrl,
                 Method = m,
                 Data = data,
                 Headers = headers,
             };
-
             var res = await client.MakeRequest(req).ConfigureAwait(false);
             if (res == null)
                 throw new HttpResponseException(503);
@@ -73,7 +143,9 @@ namespace SysWeaver.ReverseProxy
             if (data != null)
                 await r.SetResBodyAsync(data).ConfigureAwait(false);
             return true;
+
         }
+
 
         static readonly IReadOnlyDictionary<String, Action<HttpServerRequest, String>> SpecialHeaders = new Dictionary<String, Action<HttpServerRequest, String>>(StringComparer.Ordinal)
             {
@@ -81,30 +153,7 @@ namespace SysWeaver.ReverseProxy
                 { "Content-Length", (req, value) => req.SetResContentLength(long.Parse(value)) },
                 { "Set-Cookie", (req, value) => req.UpdateCookie(value) },
             }.Freeze();
-        
 
-        public String[] OnlyForPrefixes { get; init; }
-
-        public override string ToString() => BaseUrl;
-
-        public ReverseProxyServer(ReverseProxyServerParams p)
-        {
-            p = p ?? new ReverseProxyServerParams();
-            var baseUrl = p.BaseUrl?.Trim('/');
-            if (String.IsNullOrEmpty(baseUrl))
-                throw new Exception("Invalid base url (must supply a unique URL since ALL requests will be redirected)");
-            if (baseUrl.FastEquals("ReverseProxy"))
-                throw new Exception("Invalid base url (must supply a unique URL since ALL requests will be redirected)");
-            baseUrl += '/';
-            BaseUrl = baseUrl;
-            BaseUrlLen = baseUrl.Length;
-            OnlyForPrefixes = [baseUrl];
-        }
-
-        readonly String BaseUrl;
-        readonly int BaseUrlLen;
-
-        readonly ConcurrentDictionary<String, Client> Clients = new (StringComparer.Ordinal);
 
 
         [WebApi]

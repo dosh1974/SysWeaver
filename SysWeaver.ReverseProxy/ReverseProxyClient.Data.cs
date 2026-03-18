@@ -18,7 +18,7 @@ namespace SysWeaver.ReverseProxy
                 LocalLink = i ? (internalBase + l) : l;
                 var s = p.Name;
                 ServerName = String.IsNullOrEmpty(s) ? "(server base url)" : s;
-                ServerUrl = String.Concat(serverBase, s, '/');
+                ServerUrl = (serverBase + s).TrimEnd('-') + '/';
             }
 
             /// <summary>

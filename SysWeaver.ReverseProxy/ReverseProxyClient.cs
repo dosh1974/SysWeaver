@@ -21,6 +21,53 @@ namespace SysWeaver.ReverseProxy
     {
         static readonly Char[] TrimChars = " \t\r\n/".ToCharArray();
 
+        public static void ValidateEndPointName(String s)
+        {
+            foreach (var c in s)
+            {
+                if ((c >= 'a') && (c <= 'z'))
+                    continue;
+                if ((c >= 'A') && (c <= 'Z'))
+                    continue;
+                if ((c >= '0') && (c <= '9'))
+                    continue;
+                throw new Exception(String.Concat("Invalid char '", c, "' found in end point name \"" + s + "\", only a-z, A-Z or 0-9 is allowed!"));
+            }
+        }
+        public static String SanitizeClientId(String s)
+        {
+            var l = s.Length;
+            Span<Char> temp = stackalloc Char[l];
+            int o = 0;
+            for (int i = 0; i < l; ++ i)
+            {
+                var c = s[i];
+                if ((c >= 'a') && (c <= 'z'))
+                {
+                    temp[o] = c;
+                    ++o;
+                    continue;
+                }
+                if ((c >= 'A') && (c <= 'Z'))
+                {
+                    temp[o] = c;
+                    ++o;
+                    continue;
+                }
+                if ((c >= '0') && (c <= '9'))
+                {
+                    temp[o] = c;
+                    ++o;
+                    continue;
+                }
+            }
+            if (o == 0)
+                throw new Exception(String.Concat("Invalid client id \"", s, "\", only a-z, A-Z or 0-9 is allowed!"));
+            if (o == l)
+                return s;
+            return new string(temp[..o]);
+        }
+
         public ReverseProxyClient(ServiceManager manager, ReverseProxyClientParams p)
         {
             var maxThreads = Environment.ProcessorCount;
@@ -30,35 +77,33 @@ namespace SysWeaver.ReverseProxy
                 threadCount = 1;
             Params = p;
             p.TimeoutInMilliSeconds = 15 * 60 * 1000;
-            var clientId = EnvInfo.ResolveText(p.ClientId ?? "$(MachineName)");
+            var testId = EnvInfo.ResolveText(p.ClientId ?? "$(MachineName)");
+            var clientId = SanitizeClientId(testId);
+            if (!testId.FastEquals(clientId))
+                manager.AddMessage(String.Concat("Evaluated client id \"", testId, "\" was reduced to \"", clientId, "\", only a-z, A-Z or 0-9 is allowed!"), MessageLevels.Warning);
+            else
+                manager.AddMessage(String.Concat("Reverse proxy client id: \"", clientId, '"'));
             ClientId = clientId;
             Manager = manager;
             if (!SetLocalServer(manager.TryGet<HttpServerBase>()))
                 manager.OnServiceAdded += OnServiceAdded;
             Dictionary<String, LocalEndPoint> endPoints = new Dictionary<string, LocalEndPoint>(StringComparer.Ordinal);
-            foreach (var exp in p.EndPoints.Nullable())
+            using (var _ = manager.Tab())
             {
-                var name = exp.SplitFirst(':', out var ep).Trim(TrimChars);
-                endPoints.Add(name, new LocalEndPoint(name, ep));
+                foreach (var exp in p.EndPoints.Nullable())
+                {
+                    var name = exp.SplitFirst(':', out var ep).Trim(TrimChars);
+                    ValidateEndPointName(name);
+                    endPoints.Add(name, new LocalEndPoint(name, ep));
+                    manager.AddMessage(String.Concat('"', name, "\" => \"", ep, '"'));
+                }
             }
             if (endPoints.Count <= 0)
                 endPoints.Add("", new LocalEndPoint("", ""));
             EndPoints = endPoints.Freeze();
             if (endPoints.Count == 1)
-            {
-                if (endPoints.FirstOrDefault().Key.Length > 0)
-                    EndPointTree = FrozenStringTreeList.Build(endPoints);
-                else
-                    SingleEndPoint = endPoints.FirstOrDefault().Value;
-            }
-            else
-            {
-                foreach (var x in endPoints)
-                    if (x.Key.Length <= 0)
-                        throw new Exception(String.Concat("Must have a name when multiple end points are used!, found for \"", x.Value, '"'));
-                EndPointTree = FrozenStringTreeList.Build(endPoints);
-            }
-            ServerBaseUrl = String.Concat(p.BaseUrl.TrimEnd('/'), '/', p.ServerBaseUrl ?? "ReverseProxyFiles", '/', clientId, '/');
+                SingleEndPoint = endPoints.FirstOrDefault().Value;
+            ServerBaseUrl = String.Concat(p.BaseUrl.TrimEnd('/'), '/', p.ServerBaseUrl ?? "ReverseProxyFiles", '/', clientId, '-');
 
 
             Func<HttpRequestMessage, X509Certificate2, X509Chain, SslPolicyErrors, bool> certValid = null;
@@ -86,7 +131,6 @@ namespace SysWeaver.ReverseProxy
         readonly String ServerBaseUrl;
         readonly LocalEndPoint SingleEndPoint;
         readonly IReadOnlyDictionary<String, LocalEndPoint> EndPoints;
-        readonly FrozenStringTreeList<LocalEndPoint> EndPointTree;
 
 
         public IEnumerable<Stats> GetStats()
@@ -151,7 +195,7 @@ namespace SysWeaver.ReverseProxy
             {
                 ClientId = ClientId,
             };
-            var ept = EndPointTree;
+            var eps = EndPoints;
             for (; ; )
             {
                 ReverseProxyRequest res;
@@ -187,14 +231,16 @@ namespace SysWeaver.ReverseProxy
                     String url = res.Url;
                     //  Find end point
                     LocalEndPoint endPoint = SingleEndPoint;
-                    if (ept != null)
-                        endPoint = ept.StartsWithAny(url)?.FirstOrDefault();
+                    var epName = res.EndPoint;
+                    if (!String.IsNullOrEmpty(epName))
+                        eps.TryGetValue(epName, out endPoint);
                     if (endPoint == null)
                     {
                         SetErrorResponse(response, res.RequestId, "Not Found - The server cannot find the requested resource.", 404);
                         continue;
                     }
-                    url = endPoint.BaseUrl + url.Substring(endPoint.NameLen);
+                    var baseUrl = endPoint.BaseUrl;
+                    url = baseUrl + url;
                     var headers = res.Headers;
                     var hl = headers.Length;
                     for (int i = 0; i < hl; ++ i)
@@ -202,16 +248,15 @@ namespace SysWeaver.ReverseProxy
                         var h = headers[i];
                         if (h.StartsWith("Referer:", StringComparison.OrdinalIgnoreCase))
                         {
-                            var t = endPoint.BaseUrl + h.Substring(8 + endPoint.NameLen);
+                            var t = baseUrl + h.Substring(8);
                             headers[i] = "Referer:" + t;
                         }
 
                     }
-
                     if (endPoint.IsInternal)
                     {
                         //  Local (in process)
-                        url = LocalPrefix + url;
+                        url = local.LocalUri + url;
                         var host = local.GetHost(out var prefix, out int qs, ref url);
                         using var t = new ManualHttpServerRequest(res.Method.ToString(), url, prefix, local, host, qs);
                         var data = res.Data;
@@ -306,7 +351,6 @@ namespace SysWeaver.ReverseProxy
         {
             if (server == null)
                 return false;
-            LocalPrefix = server.AllPrefixes.FirstOrDefault().Replace("*", "localhost").TrimEnd('/') + '/';
             Local = server;
             Manager.OnServiceAdded -= OnServiceAdded;
             return true;
@@ -315,7 +359,6 @@ namespace SysWeaver.ReverseProxy
         void OnServiceAdded(object service, ServiceInfo info)
             => SetLocalServer(service as HttpServerBase);
 
-        String LocalPrefix;
         HttpServerBase Local;
         readonly ServiceManager Manager;
 
@@ -338,6 +381,7 @@ namespace SysWeaver.ReverseProxy
         /// All local reverse proxy endpoints
         /// </summary>
         /// <param name="r">Paramaters</param>
+        /// <param name="context">Paramaters</param>
         /// <returns></returns>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.DevAdminOps)]
@@ -345,11 +389,11 @@ namespace SysWeaver.ReverseProxy
         [WebApiRequestCache(1)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
         [WebMenuTable(null, "Debug/Http Server/{0}", "Reverse proxy end points", null, "icons/network.svg")]
-        public TableData ReverseProxyEndPointsTable(TableDataRequest r)
+        public TableData ReverseProxyEndPointsTable(TableDataRequest r, HttpServerRequest context)
         {
             var b = ServerBaseUrl;
-            var l = LocalPrefix;
-            return TableDataTools.Get(r, 2000, EndPoints.Values.Select(x => new Data(b, l, x)));
+            var lp = context.Host.Name;
+            return TableDataTools.Get(r, 2000, EndPoints.Values.Select(x => new Data(b, lp, x)));
         }
 
 

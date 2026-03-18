@@ -8,13 +8,14 @@ namespace SysWeaver.Net
         public override string ToString() => Name;
 
         public readonly String Name;
+        public readonly int Len;
 
 //        public HttpServerHostInfo(String name, StringTree prefixes)
-        public HttpServerHostInfo(String name, FrozenStringTree prefixes, String prefix)
+        public HttpServerHostInfo(String name, HttpServerPrefix prefix)
         {
             Name = name;
             Prefix = prefix;
-            Prefixes = prefixes;
+            Len = name.Length;
         }
         /// <summary>
         /// Used to find what prefix a request to this host is using
@@ -25,7 +26,7 @@ namespace SysWeaver.Net
         /// <summary>
         ///  If there is a single prefix this is set
         /// </summary>
-        public readonly String Prefix;
+        public readonly HttpServerPrefix Prefix;
 
         /// <summary>
         /// Modules can assign custom data that should be associated with a host

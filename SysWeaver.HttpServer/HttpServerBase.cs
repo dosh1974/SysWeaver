@@ -1764,7 +1764,7 @@ namespace SysWeaver.Net
                 var n = prefix.Prefix;
                 if (n.FastStartsWith("http://"))
                 {
-                    n = n.Replace(":80/", "");
+                    n = n.Replace(":80/", "/");
                     if (n.FastEndsWith(":80"))
                         n = n.Substring(0, n.Length - 3);
                     prefix.Prefix = n;
@@ -1772,7 +1772,7 @@ namespace SysWeaver.Net
                 }
                 if (n.FastStartsWith("https://"))
                 {
-                    n = n.Replace(":443/", "");
+                    n = n.Replace(":443/", "/");
                     if (n.FastEndsWith(":443"))
                         n = n.Substring(0, n.Length - 4);
                     prefix.Prefix = n;
@@ -2290,7 +2290,9 @@ namespace SysWeaver.Net
 
         readonly SemiFrozenDictionary<String, HttpServerHostInfo> Hosts = new SemiFrozenDictionary<string, HttpServerHostInfo>(StringComparer.Ordinal);
 
-        HttpServerHostInfo CreateHost(String hostName)
+
+
+        HttpServerHostInfo CreateHost(String hostName, String url)
         {
             var hosts = Hosts;
             lock (hosts)
@@ -2298,15 +2300,30 @@ namespace SysWeaver.Net
                 if (!hosts.TryGetValue(hostName, out var host))
                 {
                     var pr = Prefixes;
+                    var start = hostName.IndexOf("://") + 3;
+                    var end = hostName.IndexOf(':', start);
+                    if (end < 0)
+                        end = hostName.Length;
+                    String wild = hostName.Substring(start, end - start);
                     if (pr.Length == 1)
                     {
-                        host = new HttpServerHostInfo(hostName, null, pr[0].Prefix.Replace("*", hostName).TrimEnd('/') + '/');
+                        var prefix = pr[0];
+                        var t = prefix.Prefix.Replace("*", wild);
+                        host = new HttpServerHostInfo(t, prefix);
+                        hosts[hostName] = host;
+                        return host;
                     }
-                    else
+                    foreach (var prefix in pr)
                     {
-                        host = new HttpServerHostInfo(hostName, FrozenStringTree.Build(pr.Select(x => x.Prefix.Replace("*", hostName).TrimEnd('/') + '/')), null);
+                        var t = prefix.Prefix.Replace("*", wild);
+                        if (url.FastStartsWith(t))
+                        {
+                            host = new HttpServerHostInfo(t, prefix);
+                            hosts[hostName] = host;
+                            return host;
+                        }
                     }
-                    hosts[hostName] = host;
+                    throw new Exception("Unknown host name!");
                 }
                 return host;
             }
@@ -2329,7 +2346,7 @@ namespace SysWeaver.Net
             return host;
         }*/
 
-        static readonly SearchValues<Char> HostEnd = SearchValues.Create(['/', ':', '?' ]);
+        static readonly SearchValues<Char> HostEnd = SearchValues.Create(['/', '?' ]);
         static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
 
         public unsafe HttpServerHostInfo GetHost(out String prefix, out int queryStart, ref String url)
@@ -2339,16 +2356,16 @@ namespace SysWeaver.Net
             var urlLen = urlSpan.Length;
             fixed (Char* urlStart = urlSpan)
             {
-                var urlEnd = urlStart+ urlLen;
+                var urlEnd = urlStart + urlLen;
                 var pos = urlStart;
                 var start = CharPtrTools.IndexOf("://", pos, urlEnd) + 3;
                 var end = CharPtrTools.IndexOfAny(HostEnd, start, urlEnd);
                 if (end == null)
                     end = urlEnd;
-                var hostName = Ti.ToLower(url.Substring((int)(start - urlStart), (int)(end - start)));
+                var hostName = Ti.ToLower(url.Substring(0, (int)(end - urlStart)));
                 if (!Hosts.TryGetValue(hostName, out var host))
-                    host = CreateHost(hostName);
-                prefix = host.Prefix ?? host.Prefixes.StartsWithAny(url);
+                    host = CreateHost(hostName, url);
+                prefix = host.Name;
                 ++end;
                 var qs = CharPtrTools.IndexOf('?', end, urlEnd);
                 if (qs == null)
