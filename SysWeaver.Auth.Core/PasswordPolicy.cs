@@ -8,6 +8,8 @@ namespace SysWeaver.Auth
     /// </summary>
     public sealed class PasswordPolicy
     {
+        public static readonly PasswordPolicy Default = new();
+
         public override string ToString() => String.Concat('[', MinLength, ", ", MaxLength, "]",
             MixedCase ? ", mixed case" : "",
             MixedNumerical ? ", mixed numerical" : "",

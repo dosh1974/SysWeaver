@@ -87,8 +87,8 @@ namespace SysWeaver.Auth
         /// </summary>
         /// <param name="userName">The plain text username</param>
         /// <returns>The salt and user guid, or null if the user is unknown Tuple.Create(salt, userGuid)</returns>
-        public abstract Task<String> GetSaltAsync(String userName);
-
+        public virtual Task<String> GetSaltAsync(String userName)
+             => Task.FromResult("NoLogin");
 
         /// <summary>
         /// If any authorization information changes (db updates, files reloaded etc), increase this counter (invalidates cached auth's)
@@ -98,7 +98,7 @@ namespace SysWeaver.Auth
         /// <summary>
         /// The required password policy 
         /// </summary>
-        public abstract PasswordPolicy PasswordPolicy { get; }
+        public virtual PasswordPolicy PasswordPolicy { get => PasswordPolicy.Default; }
 
 
 

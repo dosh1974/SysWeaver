@@ -789,7 +789,15 @@ namespace SysWeaver.Net
                     }
                     var user = await Auth.TokenAuth(token).ConfigureAwait(false);
                     if (user == null)
-                        throw new Exception("Invalid auth token");
+                    {
+                        //  We don't have an auth manager so we must fail, no point retrying with user/password
+                        data.SetResStatusCode(401);
+                        const String message = "Unauthorized - The token is invalid!";
+                        if (!data.IsHead)
+                            data.SetResText(await Translator.TranslateSafe(message, session.Language, "en", "An error message that is displayed when an authorization token is invalid").ConfigureAwait(false));
+                        audit.OnApiException(trackId, data, api, new Exception(message));
+                        return;
+                    }
                     session.SetAuth(user);
                     await data.Server.RunOnLogin(session).ConfigureAwait(false);
                     if (track)
@@ -928,7 +936,7 @@ namespace SysWeaver.Net
                     //  We don't have an auth manager so we must fail, no point retrying with user/password
                     data.SetResStatusCode(401);
                     if (!isHead)
-                        data.SetResText(await Translator.TranslateSafe("Unauthorized - No auth manager found! Endpoints requiring auth is not accessible!", session.Language, "en", "This is the message to display when trying to access a protected end point in a web server that doesn't have any wau to authenticate a user").ConfigureAwait(false));
+                        data.SetResText(await Translator.TranslateSafe("Unauthorized - No auth manager found! Endpoints requiring auth is not accessible!", session.Language, "en", "This is the message to display when trying to access a protected end point in a web server that doesn't have any way to authenticate a user").ConfigureAwait(false));
                     return true;
                 }
                 //  Get request auth
