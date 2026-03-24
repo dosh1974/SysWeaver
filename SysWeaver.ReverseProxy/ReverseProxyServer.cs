@@ -246,20 +246,34 @@ namespace SysWeaver.ReverseProxy
         }
 
         /// <summary>
-        /// All reverse proxy clients that are currently connected to the server
+        /// Get brief information about all reverse proxy clients
         /// </summary>
         /// <param name="r">Paramaters</param>
         /// <returns></returns>
-        [WebApi("debug/{0}")]
+        [WebApi]
+        [WebApiClientCache(1)]
+        [WebApiRequestCache(1)]
+        public TypedTableData<ReverseProxyClientBrief> GetClientBriefs(TableDataRequest r)
+        {
+            var b = BaseUrl;
+            return TableDataTools.GetTyped(r, 2000, Clients.Select(x => new ReverseProxyClientBrief(x, b)));
+        }
+
+
+        /// <summary>
+        /// Get detailed information about all reverse proxy clients
+        /// </summary>
+        /// <param name="r">Paramaters</param>
+        /// <returns></returns>
+        [WebApi]
         [WebApiAuth(Roles.DevAdminOps)]
         [WebApiClientCache(1)]
         [WebApiRequestCache(1)]
-        [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
-        [WebMenuTable(null, "Debug/Http Server/{0}", "Reverse proxy connections", null, "icons/world.svg")]
-        public TableData ReverseProxyConnectionsTable(TableDataRequest r)
+        [WebMenuTable(null, "Debug/Http Server/{0}", "Reverse proxy clients", null, "icons/world.svg")]
+        public TypedTableData<ReverseProxyClientDetail> GetClientDetails(TableDataRequest r)
         {
             var b = BaseUrl;
-            return TableDataTools.Get(r, 2000, Clients.Select(x => new Data(x, b)));
+            return TableDataTools.GetTyped(r, 2000, Clients.Select(x => new ReverseProxyClientDetail(x, b)));
         }
 
         public IEnumerable<Stats> GetStats()

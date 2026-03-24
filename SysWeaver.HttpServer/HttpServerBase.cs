@@ -2005,17 +2005,19 @@ namespace SysWeaver.Net
         }
 
         readonly ConcurrentDictionary<IHttpServerRawModule, int> RawModules = new ConcurrentDictionary<IHttpServerRawModule, int>();
+
         /// <summary>
         /// All RawMods in order that doesn't respond to certain prefixes only
         /// </summary>
         IHttpServerRawModule[] OrderedRawMods;
+
         /// <summary>
         /// All RawMods in order
         /// </summary>
         IHttpServerRawModule[] AllRawMods;
+
         /// <summary>
         /// A tree with RawModules that respond to certain prefixes only
-        
         /// </summary>
         FrozenStringTreeList<IHttpServerRawModule> PrefixRawMods;
 

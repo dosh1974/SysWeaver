@@ -140,12 +140,15 @@ namespace SysWeaver.ReverseProxy
                 yield return x;
             foreach (var x in ProxyFails.GetStats(sys, "ProxyFails."))
                 yield return x;
+            foreach (var x in EndPointFails.GetStats(sys, "EndPointFails."))
+                yield return x;
         }
 
         readonly ReverseProxyClientParams Params;
         readonly AsyncLock CreateConnectionLock = new AsyncLock();
         readonly ExceptionTracker ConnectFails = new ExceptionTracker();
         readonly ExceptionTracker ProxyFails = new ExceptionTracker();
+        readonly ExceptionTracker EndPointFails = new ExceptionTracker();
 
 
 
@@ -226,19 +229,20 @@ namespace SysWeaver.ReverseProxy
                     }
                     return true;
                 }
+                LocalEndPoint endPoint = SingleEndPoint;
+                String url = res.Url;
+                //  Find end point
+                var epName = res.EndPoint;
+                if (!String.IsNullOrEmpty(epName))
+                    eps.TryGetValue(epName, out endPoint);
+                if (endPoint == null)
+                {
+                    SetErrorResponse(response, res.RequestId, "Not Found - The server cannot find the requested resource.", 404);
+                    continue;
+                }
                 try
                 {
-                    String url = res.Url;
-                    //  Find end point
-                    LocalEndPoint endPoint = SingleEndPoint;
-                    var epName = res.EndPoint;
-                    if (!String.IsNullOrEmpty(epName))
-                        eps.TryGetValue(epName, out endPoint);
-                    if (endPoint == null)
-                    {
-                        SetErrorResponse(response, res.RequestId, "Not Found - The server cannot find the requested resource.", 404);
-                        continue;
-                    }
+                    Interlocked.Increment(ref endPoint.InProgress);
                     var baseUrl = endPoint.BaseUrl;
                     url = baseUrl + url;
                     var headers = res.Headers;
@@ -333,10 +337,18 @@ namespace SysWeaver.ReverseProxy
                 }
                 catch (Exception ex)
                 {
+
+                    EndPointFails.OnException(ex);
+                    endPoint?.Fails?.OnException(ex);
                     SetErrorResponse(response, res.RequestId, "Internal Server Error: " + ex.Message, 500);
                     continue;
                 }
-        
+                finally
+                {
+                    Interlocked.Decrement(ref endPoint.InProgress);
+                    Interlocked.Increment(ref endPoint.Completed);
+                }
+
             }
         }
 

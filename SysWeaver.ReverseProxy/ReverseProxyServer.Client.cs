@@ -8,7 +8,7 @@ namespace SysWeaver.ReverseProxy
 {
     public sealed partial class ReverseProxyServer 
     {
-        sealed class Client
+        internal sealed class Client
         {
             public String Ip;
             public long LastConnection;

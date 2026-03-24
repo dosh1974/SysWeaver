@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using SysWeaver.Data;
 
 namespace SysWeaver.ReverseProxy
@@ -19,6 +20,15 @@ namespace SysWeaver.ReverseProxy
                 var s = p.Name;
                 ServerName = String.IsNullOrEmpty(s) ? "(server base url)" : s;
                 ServerUrl = (serverBase + s).TrimEnd('-') + '/';
+
+                InProgress = Interlocked.Read(ref p.InProgress);
+                Completed = Interlocked.Read(ref p.Completed);
+
+                var f = p.Fails;
+                FailCount = f.Count;
+                var time = f.LastTime;
+                LastFailTime = time == 0 ? DateTime.MinValue : new DateTime(f.LastTime, DateTimeKind.Utc);
+                LastFail = f.LastException?.ToString();
             }
 
             /// <summary>
@@ -48,6 +58,31 @@ namespace SysWeaver.ReverseProxy
             [TableDataHide]
             public String ServerUrl;
 
+            /// <summary>
+            /// Number of requests currently in progress
+            /// </summary>
+            public long InProgress;
+
+            /// <summary>
+            /// Number of requests completed (including failed requests)
+            /// </summary>
+            public long Completed;
+
+            /// <summary>
+            /// Number of fails
+            /// </summary>
+            public long FailCount;
+
+            /// <summary>
+            /// The last time it failed
+            /// </summary>
+            public DateTime LastFailTime;
+
+            /// <summary>
+            /// The last fail message
+            /// </summary>
+            [TableDataText(64)]
+            public String LastFail;
 
         }
 

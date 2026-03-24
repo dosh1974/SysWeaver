@@ -13,8 +13,10 @@ namespace SysWeaver.ReverseProxy
             public readonly String Name;
             public readonly String BaseUrl;
             public readonly bool IsInternal;
-            public long InProgress;
+            public readonly ExceptionTracker Fails = new ExceptionTracker();
+
             public long Completed;
+            public long InProgress;
 
             public LocalEndPoint(string name, string baseUrl)
             {
