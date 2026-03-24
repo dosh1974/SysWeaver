@@ -12,8 +12,8 @@ Server can either route to clients using a sub path (in the url) or using the do
 The syntax is: https://*domain*/*base path*/*client id*-*end point*/*remote path*  
 - *domain* is the ip or domain name to the proxy service, ex: *proxy.example.com*.
 - *base path* is defined in the server params and defaults to: *ReverseProxyFiles*.   
-- *client id* is the id that a client connection is using, only a-z, A-Z, 0-9 and '-' are valid chars.   
-- *end point* is the name of the end point that the client connection accepts, only a-z, A-Z, 0-9 and '-' are valid chars.
+- *client id* is the id that a client connection is using, only a-z, A-Z and 0-9 are valid chars.   
+- *end point* is the name of the end point that the client connection accepts, only a-z, A-Z and 0-9 are valid chars.   
 - *remote path* is the local name on the local end point.
 If the client only have a single end point it can be configured to ignore an end-point name, the syntax is then *base path*/*client id*/*remote path*
 
@@ -30,8 +30,8 @@ Domain routing "solves" this, but requires much more configuration (if you have 
 
 ### DOMAIN ROUTING
 The syntax is https://*client id*-*end point*.*base-domain*/*remote path*  
-- *client id* is the id that a client connection is using, only a-z, A-Z, 0-9 and '-' are valid chars.   
-- *end point* is the name of the end point that the client connection accepts, only a-z, A-Z, 0-9 and '-' are valid chars.   
+- *client id* is the id that a client connection is using, only a-z, A-Z and 0-9 are valid chars.   
+- *end point* is the name of the end point that the client connection accepts, only a-z, A-Z and 0-9 are valid chars.   
 - *base-domain* is the base domain name to the proxy service, ex: *exmplae.com*.
 - *remote path* is the local name on the local end point.
 
