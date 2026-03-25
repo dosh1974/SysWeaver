@@ -25,7 +25,7 @@ namespace SysWeaver.Net
         /// <param name="decoder">Non-null if the file is pre-compressed, else null</param>
         /// <param name="updateAccessTime">If true, the file's access time is updated whenever the file is read</param>
         /// <returns>Must return a valid request handler</returns>
-        Task<IHttpRequestHandler> Modify(String key, Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime);
+        Task<IHttpRequestHandler> Modify(String key, Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic);
     }
 
     /// <summary>
@@ -34,7 +34,7 @@ namespace SysWeaver.Net
     public sealed class FileHttpServerModule : IHttpServerModule, IPerfMonitored
     {
 
-        delegate Task<IHttpRequestHandler> FtDel(String key, Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime);
+        delegate Task<IHttpRequestHandler> FtDel(String key, Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic);
 
         public FileHttpServerModule(FileHttpServerModuleParams p = null)
         {
@@ -213,7 +213,7 @@ namespace SysWeaver.Net
                         var ftKey = context.Url.Substring(context.QueryStringStart);
                         FileTransformers.TryGetValue(ftKey, out var fileTransformer);
                         fileTransformer = fileTransformer ?? NoFT;
-                        return await fileTransformer(ftKey, mime, fi, discFolder, isAccepted, decoder, discFolder.UpdateAccessTime).ConfigureAwait(false);
+                        return await fileTransformer(ftKey, mime, fi, discFolder, isAccepted, decoder, discFolder.UpdateAccessTime, discFolder.IsDynamic).ConfigureAwait(false);
                     }
                 }
                 return null;
@@ -261,7 +261,7 @@ namespace SysWeaver.Net
                     var ftKey = context.Url.Substring(context.QueryStringStart);
                     FileTransformers.TryGetValue(ftKey, out var fileTransformer);
                     fileTransformer = fileTransformer ?? NoFT;
-                    return await fileTransformer(ftKey, mime, fi, discFolder, isAccepted, decoder, discFolder.UpdateAccessTime).ConfigureAwait(false);
+                    return await fileTransformer(ftKey, mime, fi, discFolder, isAccepted, decoder, discFolder.UpdateAccessTime, discFolder.IsDynamic).ConfigureAwait(false);
                 }
             }
             return null;
@@ -277,7 +277,7 @@ namespace SysWeaver.Net
         #region File transforms
 
 
-        static readonly FtDel NoFT = (fileTransform, mime, fi, discFolder, isAccepted, decoder, updateAccessTime) => Task.FromResult((IHttpRequestHandler)new FileHttpRequestHandler(mime, fi, discFolder, isAccepted, decoder, updateAccessTime));
+        static readonly FtDel NoFT = (fileTransform, mime, fi, discFolder, isAccepted, decoder, updateAccessTime, isDynamic) => Task.FromResult((IHttpRequestHandler)new FileHttpRequestHandler(mime, fi, discFolder, isAccepted, decoder, updateAccessTime, isDynamic));
 
         public bool AddFileTransformer(String suffix, IFileTransformer t) => FileTransformers.TryAdd(suffix, (t ?? throw new ArgumentNullException(nameof(t))).Modify);
 

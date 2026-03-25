@@ -255,7 +255,7 @@ namespace SysWeaver.MicroService
 
         readonly ConcurrentDictionary<String, Tuple<int, int, long, FastMemCache<String, MediaInfo>>> MapRes = new ConcurrentDictionary<string, Tuple<int, int, long, FastMemCache<String, MediaInfo>>>(StringComparer.Ordinal);
 
-        public async Task<IHttpRequestHandler> Modify(string key, Tuple<string, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime)
+        public async Task<IHttpRequestHandler> Modify(string key, Tuple<string, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic)
         {
             var mon = PerfMon;
             var monPre = key + ".";
@@ -263,7 +263,7 @@ namespace SysWeaver.MicroService
             {
                 var m = await GetMediaInfo(key, fi.FullName, false).ConfigureAwait(false);
                 if (m?.IconFile != null)
-                    return new FileHttpRequestHandler(PngMime, new FileInfo(m.IconFile), options, false, null, updateAccessTime);
+                    return new FileHttpRequestHandler(PngMime, new FileInfo(m.IconFile), options, false, null, updateAccessTime, isDynamic);
                 return GetIcon(key, mime.Item1.Split(';')[0].TrimEnd());
             }
         }

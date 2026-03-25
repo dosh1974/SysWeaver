@@ -84,9 +84,9 @@
 	</ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FFmpeg.AutoGen.Bindings.DynamicallyLoaded" Version="8.0.0" />
-    <PackageReference Include="Magick.NET-Q16-x64" Version="14.10.4" />
-    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="FFmpeg.AutoGen.Bindings.DynamicallyLoaded" Version="8.0.0.1" />
+    <PackageReference Include="Magick.NET-Q16-x64" Version="14.11.1" />
+    <PackageReference Include="NAudio" Version="2.3.0" />
   </ItemGroup>
 
   <ItemGroup>

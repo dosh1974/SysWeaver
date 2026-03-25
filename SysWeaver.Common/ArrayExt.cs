@@ -355,6 +355,177 @@ namespace SysWeaver
             return t;
         }
 
+        /// <summary>
+        /// Converts a dictionary to an array of some type
+        /// </summary>
+        /// <typeparam name="K"></typeparam>
+        /// <typeparam name="V"></typeparam>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="dict">The dictionary to convert</param>
+        /// <param name="func">The function to use for instance creation</param>
+        /// <returns>An array</returns>
+        public static T[] ToArray<K, V, T>(this IReadOnlyDictionary<K, V> dict, Func<K, V, int, T> func)
+        {
+            if (dict == null)
+                return null;
+            var l = dict.Count;
+            if (l <= 0)
+                return Array.Empty<T>();
+            var tt = GC.AllocateUninitializedArray<T>(l);
+            int i = 0;
+            foreach (var kv in dict)
+            {
+                tt[i] = func(kv.Key, kv.Value, i);
+                ++i;
+            }
+            return tt;
+        }
+
+        /// <summary>
+        /// Converts a dictionary to an array of some type in parallel
+        /// </summary>
+        /// <typeparam name="K"></typeparam>
+        /// <typeparam name="V"></typeparam>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="dict">The dictionary to convert</param>
+        /// <param name="func">The function to use for instance creation</param>
+        /// <returns>An array</returns>
+        public static async Task<T[]> ToArrayAsync<K, V, T>(this IReadOnlyDictionary<K, V> dict, Func<K, V, int, Task<T>> func)
+        {
+            if (dict == null)
+                return null;
+            var l = dict.Count;
+            if (l <= 0)
+                return Array.Empty<T>();
+            var tt = GC.AllocateUninitializedArray<Task<T>>(l);
+            int i = 0;
+            foreach (var kv in dict)
+            {
+                tt[i] = func(kv.Key, kv.Value, i);
+                ++i;
+            }
+            await Task.WhenAll(tt).ConfigureAwait(false);
+            var t = GC.AllocateUninitializedArray<T>(l);
+            for (i = 0; i < l; ++i)
+                t[i] = tt[i].Result;
+            return t;
+        }
+
+        /// <summary>
+        /// Converts a dictionary to an array of some type in parallel
+        /// </summary>
+        /// <typeparam name="K"></typeparam>
+        /// <typeparam name="V"></typeparam>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="dict">The dictionary to convert</param>
+        /// <param name="func">The function to use for instance creation</param>
+        /// <returns>An array</returns>
+        public static async ValueTask<T[]> ToArrayValueAsync<K, V, T>(this IReadOnlyDictionary<K, V> dict, Func<K, V, int, ValueTask<T>> func)
+        {
+            if (dict == null)
+                return null;
+            var l = dict.Count;
+            if (l <= 0)
+                return Array.Empty<T>();
+            var tt = GC.AllocateUninitializedArray<ValueTask<T>>(l);
+            int i = 0;
+            foreach (var kv in dict)
+            {
+                tt[i] = func(kv.Key, kv.Value, i);
+                ++i;
+            }
+            await TaskExt.WhenAll(tt).ConfigureAwait(false);
+            var t = GC.AllocateUninitializedArray<T>(l);
+            for (i = 0; i < l; ++i)
+                t[i] = tt[i].Result;
+            return t;
+        }
+
+
+        /// <summary>
+        /// Converts a collection to an array of some type
+        /// </summary>
+        /// <typeparam name="K"></typeparam>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="col">The collection to convert</param>
+        /// <param name="func">The function to use for instance creation</param>
+        /// <returns>An array</returns>
+        public static T[] ToArray<K, T>(this IReadOnlyCollection<K> col, Func<K, int, T> func)
+        {
+            if (col == null)
+                return null;
+            var l = col.Count;
+            if (l <= 0)
+                return Array.Empty<T>();
+            var tt = GC.AllocateUninitializedArray<T>(l);
+            int i = 0;
+            foreach (var kv in col)
+            {
+                tt[i] = func(kv, i);
+                ++i;
+            }
+            return tt;
+        }
+
+        /// <summary>
+        /// Converts a collection to an array of some type in parallel
+        /// </summary>
+        /// <typeparam name="K"></typeparam>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="col">The collection to convert</param>
+        /// <param name="func">The function to use for instance creation</param>
+        /// <returns>An array</returns>
+        public static async Task<T[]> ToArrayAsync<K, T>(this IReadOnlyCollection<K> col, Func<K, int, Task<T>> func)
+        {
+            if (col == null)
+                return null;
+            var l = col.Count;
+            if (l <= 0)
+                return Array.Empty<T>();
+            var tt = GC.AllocateUninitializedArray<Task<T>>(l);
+            int i = 0;
+            foreach (var kv in col)
+            {
+                tt[i] = func(kv, i);
+                ++i;
+            }
+            await Task.WhenAll(tt).ConfigureAwait(false);
+            var t = GC.AllocateUninitializedArray<T>(l);
+            for (i = 0; i < l; ++i)
+                t[i] = tt[i].Result;
+            return t;
+        }
+
+        /// <summary>
+        /// Converts a collection to an array of some type in parallel
+        /// </summary>
+        /// <typeparam name="K"></typeparam>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="col">The collection to convert</param>
+        /// <param name="func">The function to use for instance creation</param>
+        /// <returns>An array</returns>
+        public static async ValueTask<T[]> ToArrayValueAsync<K, T>(this IReadOnlyCollection<K> col, Func<K, int, ValueTask<T>> func)
+        {
+            if (col == null)
+                return null;
+            var l = col.Count;
+            if (l <= 0)
+                return Array.Empty<T>();
+            var tt = GC.AllocateUninitializedArray<ValueTask<T>>(l);
+            int i = 0;
+            foreach (var kv in col)
+            {
+                tt[i] = func(kv, i);
+                ++i;
+            }
+            await TaskExt.WhenAll(tt).ConfigureAwait(false);
+            var t = GC.AllocateUninitializedArray<T>(l);
+            for (i = 0; i < l; ++i)
+                t[i] = tt[i].Result;
+            return t;
+        }
+
+
     }
 
 }

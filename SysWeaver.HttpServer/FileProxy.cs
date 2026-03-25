@@ -76,7 +76,7 @@ namespace SysWeaver.Net
         readonly int ClientCache;
         readonly int ServerCache;
 
-
+/*
         static readonly String[] Headers = [
             "Accept-Language",
             "If-None-Match",
@@ -85,7 +85,7 @@ namespace SysWeaver.Net
             "Content-Type",
             "Accept",
             ];
-
+*/
         public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
 
         async ValueTask<IHttpRequestHandler> HandleAsync(HttpServerRequest context)
@@ -100,6 +100,13 @@ namespace SysWeaver.Net
             var p = context.QueryStringStart;
             if (p > 0)
                 req = String.Concat(req, '?', context.Url.Substring(p));
+
+            var reqInput = await ProxyTools.GetFromRequest(context).ConfigureAwait(false);
+            var res = await ProxyTools.ProxyRequest(Client, reqInput.Item1, req, reqInput.Item2, reqInput.Item3).ConfigureAwait(false);
+            await ProxyTools.SetToRequest(context, res.Item2, (int)res.Item3, res.Item1).ConfigureAwait(false);
+            return HttpServerTools.AlreadyHandled;
+/*
+
             var m = new HttpRequestMessage
             {
                 Content = new StreamContent(context.InputStream),
@@ -158,7 +165,7 @@ namespace SysWeaver.Net
                 lwt,
                 etag,
                 cmp, 
-                Auth);
+                Auth);*/
         }
 
 

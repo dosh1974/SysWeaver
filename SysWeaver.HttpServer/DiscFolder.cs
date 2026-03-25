@@ -51,12 +51,15 @@ namespace SysWeaver.Net
         /// If true, the file's access time is chnage whenever the file is read
         /// </summary>
         public readonly bool UpdateAccessTime;
-        public DiscFolder(string path, FileHttpServerModuleFolder folder) 
+        public readonly bool IsDynamic;
+
+        public DiscFolder(string path, FileHttpServerModuleFolder folder)
             : base(folder.ClientCacheDuration, folder.RequestCacheDuration, folder.MaxCacheSize, folder.Compression, folder.Auth)
         {
             Path = path;
             AssumePreCompressed = folder.AssumePreCompressed;
             UpdateAccessTime = folder.UpdateAccessTime;
+            IsDynamic = folder.IsDynamic;
         }
 
     }

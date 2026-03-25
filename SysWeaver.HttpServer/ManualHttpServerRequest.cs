@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Net;
 
-namespace SysWeaver.ReverseProxy
+namespace SysWeaver.Net
 {
     public sealed class ManualHttpServerRequest : HttpServerRequest
     {
@@ -74,7 +74,7 @@ namespace SysWeaver.ReverseProxy
             {
                 if (!kv.Key.FastEquals("Set-Cookie"))
                 {
-                    if (!ReverseProxyTools.AllowMultipleHeaders.Contains(kv.Key.FastToLower()))
+                    if (!ProxyTools.AllowMultipleHeaders.Contains(kv.Key.FastToLower()))
                         t.ResHeaders.Remove(kv.Key);
                     t.ResHeaders.Add(kv.Key, kv.Value);
                 }

@@ -34,10 +34,12 @@ namespace SysWeaver.Net
         /// <param name="isAccepted"></param>
         /// <param name="decoder">If the file is precompressed, this should be the decoder to use</param>
         /// <param name="updateAccessTime">If true, the file's access time is updated whenever the file is read</param>
-        public FileHttpRequestHandler(Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder = null, bool updateAccessTime = false)
+        /// <param name="isDynamic">If true, no transformers will be applied</param>
+        public FileHttpRequestHandler(Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder = null, bool updateAccessTime = false, bool isDynamic = false)
         {
             if (mime == null)
                 mime = MimeTypeMap.GetMimeType(fi.Extension);
+            IsDynamic = isDynamic;
             UpdateAccessTime = updateAccessTime;
             Fi = fi;
             Decoder = decoder;
@@ -64,7 +66,7 @@ namespace SysWeaver.Net
         public int RequestCacheDuration { get; init; }
 
         public bool IsLocalized { get; init; }
-        public bool IsDynamic => false;
+        public bool IsDynamic { get; init; }
 
         public HttpCompressionPriority Compression { get; init; }
 

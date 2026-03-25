@@ -276,47 +276,50 @@ namespace SysWeaver.HttpTransformer
             var folder = fs[fi];
             var old = DateTime.UtcNow.AddDays(-RemoveAfterDays);
             var tempOld = DateTime.UtcNow.AddHours(-1);
-            var files = Directory.GetFiles(folder);
-            Dictionary<String, Group> groups = new Dictionary<string, Group>(files.Length >> 2);
-            foreach (var file in files)
+            if (Directory.Exists(folder))
             {
-                var at = new FileInfo(file).LastAccessTimeUtc;
-                var fn = Path.GetFileName(file);
-                if (fn.FastEndsWith(TempExt))
+                var files = Directory.GetFiles(folder);
+                Dictionary<String, Group> groups = new Dictionary<string, Group>(files.Length >> 2);
+                foreach (var file in files)
                 {
-                    if (at < tempOld)
+                    var at = new FileInfo(file).LastAccessTimeUtc;
+                    var fn = Path.GetFileName(file);
+                    if (fn.FastEndsWith(TempExt))
                     {
-                        var ex = await PathExt.TryDeleteFileAsync(file).ConfigureAwait(false);
-                        if (ex == null)
-                            Interlocked.Increment(ref DeletedFiles);
-                        else
-                            PrunerErrors.OnException(ex);
+                        if (at < tempOld)
+                        {
+                            var ex = await PathExt.TryDeleteFileAsync(file).ConfigureAwait(false);
+                            if (ex == null)
+                                Interlocked.Increment(ref DeletedFiles);
+                            else
+                                PrunerErrors.OnException(ex);
+                        }
+                        continue;
                     }
-                    continue;
-                }
-                if (fn.Length <= 26)
-                    continue;
-                var groupName = fn.Substring(0, 26);
-                if (!groups.TryGetValue(groupName, out var group))
-                {
-                    group = new Group();
-                    groups.Add(groupName, group);
-                }
-                group.Files.Add(file);
-                var ea = group.LastAccess;
-                group.LastAccess = at > ea ? at : ea;
-            }
-            foreach (var g in groups.Values)
-            {
-                if (g.LastAccess < old)
-                {
-                    foreach (var file in g.Files)
+                    if (fn.Length <= 26)
+                        continue;
+                    var groupName = fn.Substring(0, 26);
+                    if (!groups.TryGetValue(groupName, out var group))
                     {
-                        var ex = await PathExt.TryDeleteFileAsync(file).ConfigureAwait(false);
-                        if (ex == null)
-                            Interlocked.Increment(ref DeletedFiles);
-                        else
-                            PrunerErrors.OnException(ex);
+                        group = new Group();
+                        groups.Add(groupName, group);
+                    }
+                    group.Files.Add(file);
+                    var ea = group.LastAccess;
+                    group.LastAccess = at > ea ? at : ea;
+                }
+                foreach (var g in groups.Values)
+                {
+                    if (g.LastAccess < old)
+                    {
+                        foreach (var file in g.Files)
+                        {
+                            var ex = await PathExt.TryDeleteFileAsync(file).ConfigureAwait(false);
+                            if (ex == null)
+                                Interlocked.Increment(ref DeletedFiles);
+                            else
+                                PrunerErrors.OnException(ex);
+                        }
                     }
                 }
             }

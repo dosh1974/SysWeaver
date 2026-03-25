@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
@@ -152,6 +153,7 @@ namespace SysWeaver.ReverseProxy
 
 
 
+
         void SetErrorResponse(ReverseProxyResponse response, String requestId, String message, int statusCode)
         {
             var resData = Encoding.UTF8.GetBytes(message);
@@ -292,11 +294,16 @@ namespace SysWeaver.ReverseProxy
                         t.SetResContentLength(resData.Length);
                         response.Data = resData;
                         response.RequestId = res.RequestId;
-                        response.Headers = ReverseProxyTools.EncodeHeaders(t.ResHeaders);
+                        response.Headers = ProxyTools.EncodeHeaders(t.ResHeaders);
                         response.StatusCode = t._ResStatusCode;
                     }else
                     {
-                        var c = Client;
+                        var ret = await ProxyTools.ProxyRequest(Client, res.Method, url, res.Headers, res.Data).ConfigureAwait(false);
+                        response.Data = ret.Item1;
+                        response.RequestId = res.RequestId;
+                        response.Headers = ret.Item2;
+                        response.StatusCode = ret.Item3;
+/*                        var c = Client;
                         var method = new HttpMethod(res.Method.ToString());
                         using var localRequest = new HttpRequestMessage(method, url);
                         HttpContent content = null;
@@ -333,6 +340,7 @@ namespace SysWeaver.ReverseProxy
                         {
                             content?.Dispose();
                         }
+*/
                     }
                 }
                 catch (Exception ex)

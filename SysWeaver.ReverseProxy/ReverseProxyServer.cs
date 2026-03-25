@@ -72,7 +72,7 @@ namespace SysWeaver.ReverseProxy
                     //  Domain switch
                     clientId = host.SplitFirst('.');
                     clientId = clientId.SplitFirst('-', out endPoint);
-                    return HandleClient(r, clientId, endPoint, localUrl, r.Host.Len, r.Host.Name);
+                    return HandleClient(r, clientId, endPoint, localUrl, r.Host.Len);
                 }
                 if ((baseUrlLen <= 0) || (!localUrl.FastStartsWith(BaseUrl)))
                     return TaskExt.FalseValueTask;
@@ -86,75 +86,34 @@ namespace SysWeaver.ReverseProxy
             if (String.IsNullOrEmpty(clientUrl))
                 clientUrl = "";
             clientId = clientId.SplitFirst('-', out endPoint);
-            return HandleClient(r, clientId, endPoint, clientUrl, 1 + baseUrlLen + r.Host.Len + clientId.Length, referrer);
+            return HandleClient(r, clientId, endPoint, clientUrl, 1 + baseUrlLen + r.Host.Len + clientId.Length);
         }
 
-        async ValueTask<bool> HandleClient(HttpServerRequest r, String clientId, String endPoint, String clientUrl, int prefixLength, String referrer)
+        async ValueTask<bool> HandleClient(HttpServerRequest r, String clientId, String endPoint, String clientUrl, int prefixLength)
         {
-            var m = r.HttpMethod;
-            if (m == HttpServerMethods.Other)
-                throw new HttpResponseException(404);
-
             if (!Clients.TryGetValue(clientId, out var client))
                 throw new HttpResponseException(503);
-
+            var rdata = await ProxyTools.GetFromRequest(r, prefixLength).ConfigureAwait(false);
             var qs = r.QueryStringStart;
             if (qs > 0)
                 clientUrl += r.Url.Substring(qs - 1);
 
-            Byte[] data = null;
-            if (m == HttpServerMethods.POST)
-                data = await r.InputStream.ReadAllBytesAsync().ConfigureAwait(false);
-            var headers = ReverseProxyTools.EncodeHeaders(r.AllReqHeaders);
-            var hl = headers.Length;
-            for (int i = 0; i < hl; ++i)
-            {
-                var h = headers[i];
-                if (h.StartsWith("Referer:", StringComparison.OrdinalIgnoreCase))
-                {
-                    var t = h.Substring(8).Trim().Substring(prefixLength);
-                    headers[i] = "Referer:" + t;
-                }
-            }
             var req = new ReverseProxyRequest
             {
                 ClientId = clientId,
                 EndPoint = endPoint,
                 RequestId = GetRequestGuid(),
                 Url = clientUrl,
-                Method = m,
-                Data = data,
-                Headers = headers,
+                Method = rdata.Item1,
+                Headers = rdata.Item2,
+                Data = rdata.Item3,
             };
             var res = await client.MakeRequest(req).ConfigureAwait(false);
             if (res == null)
                 throw new HttpResponseException(503);
-            var sh = SpecialHeaders;
-            foreach (var h in res.Headers.Nullable())
-            {
-                var key = h.SplitFirst(':', out var value);
-                if (sh.TryGetValue(key, out var fn))
-                    fn(r, value);
-                else
-                    r.SetResHeader(key, value);
-            }
-            r.SetResStatusCode(res.StatusCode);
-            data = res.Data;
-            if (data != null)
-                await r.SetResBodyAsync(data).ConfigureAwait(false);
+            await ProxyTools.SetToRequest(r, res.Headers, res.StatusCode, res.Data).ConfigureAwait(false);
             return true;
-
         }
-
-
-        static readonly IReadOnlyDictionary<String, Action<HttpServerRequest, String>> SpecialHeaders = new Dictionary<String, Action<HttpServerRequest, String>>(StringComparer.Ordinal)
-            {
-                { "Content-Type", (req, value) => req.SetResMime(value) },
-                { "Content-Length", (req, value) => req.SetResContentLength(long.Parse(value)) },
-                { "Set-Cookie", (req, value) => req.UpdateCookie(value) },
-            }.Freeze();
-
-
 
         [WebApi]
         [WebApiAuth(Roles.Service)]

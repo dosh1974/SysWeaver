@@ -55,6 +55,10 @@ namespace SysWeaver.Net
         /// </summary>
         public bool UpdateAccessTime;
 
+        /// <summary>
+        /// If true, files in this folder are marked as dynamic hence bypass any transformer chains
+        /// </summary>
+        public bool IsDynamic;
 
     }
 
