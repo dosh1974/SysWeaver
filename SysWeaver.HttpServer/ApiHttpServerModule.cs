@@ -147,13 +147,11 @@ namespace SysWeaver.Net
         public void RemoveMethod(Object o, MethodInfo method, String url = null, String root = null)
         {
             var baseUrl = GetBaseUrl(method, url, root);
-            var entries = Entries;
-            var or = OnApiRemoved;
-            if (entries.TryRemove(baseUrl, out var ep))
+            if (Entries.TryRemove(baseUrl, out var ep))
             {
                 try
                 {
-                    or?.Invoke(ep);
+                    InternalRemoveEndPoint(ep);
                 }
                 catch
                 {
@@ -263,6 +261,23 @@ namespace SysWeaver.Net
 
         readonly ApiIoParams IoParams;
 
+
+
+        static bool IsDataTable(Type arg, Type ret)
+        {
+            if (!typeof(TableDataRequest).IsAssignableFrom(arg))
+                return false;
+            while (ret != typeof(Object))
+            {
+                if (typeof(TableData).IsAssignableFrom(ret))
+                    return true;
+                if (ret.IsGenericType && (ret.GetGenericTypeDefinition() == typeof(TypedTableData<>)))
+                    return true;
+                ret = ret.BaseType;
+            }
+            return false;
+        }
+
         void InternalAddEndPoint(Object o, MethodInfo method, String url)
         {
             var entries = Entries;
@@ -274,17 +289,16 @@ namespace SysWeaver.Net
                     return;
                 var e = ApiHttpEntry.Create(IoParams, o, method, url, PerfMon, Auth, CachedCompression, Compression, LocationPrefix, AuditBegin, AuditEnd, AuditException);
                 entries[url] = e;
-                var at = e.ArgType;
-                if (at == typeof(TableDataRequest))
-                {
-                    var rt = e.RetType;
-                    if (rt == typeof(TableData))
-                        Tables[e] = Interlocked.Increment(ref TableId);
-                    if (rt.IsGenericType && (rt.GetGenericTypeDefinition() == typeof(TypedTableData<>)))
-                        Tables[e] = Interlocked.Increment(ref TableId);
-                }
+                if (IsDataTable(e.ArgType, e.RetType))
+                    Tables[e] = Interlocked.Increment(ref TableId);
                 OnApiAdded?.Invoke(e);
             }
+        }
+
+        void InternalRemoveEndPoint(ApiHttpEntry e)
+        {
+            Tables.TryRemove(e, out var _);
+            OnApiRemoved?.Invoke(e);
         }
 
         int TableId;

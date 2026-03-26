@@ -72,7 +72,7 @@ namespace SysWeaver.Data
 
     }
 
-    public sealed class TypedTableData<T> : CommonTableData
+    public class TypedTableData<T> : CommonTableData
     {
 
         /// <summary>
@@ -94,6 +94,22 @@ namespace SysWeaver.Data
         public TypedTableData()
         {
         }
+
+        public void CopyFrom(TypedTableData<T> s)
+        {
+            base.CopyFrom(s);
+            Cc = s.Cc;
+            RefreshRate = s.RefreshRate;
+            Rows = s.Rows;
+        }
+
+        public TypedTableData<T> Clone()
+        {
+            var t = new TypedTableData<T>();
+            t.CopyFrom(this);
+            return t;
+        }
+
 
         public TypedTableData<N> Retype<N>(Func<T, N> convert)
             => new TypedTableData<N>

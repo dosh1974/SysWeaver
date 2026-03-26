@@ -602,6 +602,33 @@ namespace SysWeaver
             return true;
         }
 
+        /// <summary>
+        /// Replace all non ascii chars in a string
+        /// </summary>
+        /// <param name="s">The string to replace chars in</param>
+        /// <param name="replaceWith">The char to replace non-ascii chars to</param>
+        /// <returns>The original string if all ascii, or a string with replace values</returns>
+        public static String ReplaceNonAscii(this String s, Char replaceWith = ' ')
+        {
+            if (String.IsNullOrEmpty(s))
+                return s;
+            var l = s.Length;
+            Span<Char> local = stackalloc Char[l];
+            bool mod = false;
+            for (int i = 0; i < l; ++i)
+            {
+                var c = s[i];
+                if (c >= 128)
+                {
+                    c = replaceWith;
+                    mod = true;
+                }
+                local[i] = c;
+            }
+            return mod ? new String(local) : s;
+        }
+
+
 
         /// <summary>
         /// Check if a string is a valid "identifier", only 'a'-'z' and numbers is accepeted (no number at the first position)
