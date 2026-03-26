@@ -2,7 +2,7 @@
 using System.IO;
 using System.Text;
 
-namespace SysWeaver
+namespace SysWeaver.IO
 {
     public sealed class ReversedEndianBinaryReader : BinaryReader
     {
