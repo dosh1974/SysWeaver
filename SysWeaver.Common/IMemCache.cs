@@ -17,6 +17,111 @@ namespace SysWeaver
         /// <returns>Number of cached items</returns>
         int GetCount();
 
+        #region With exising
+
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <returns>The value of the item</returns>
+        V GetOrUpdate(K key, Func<K, V, V> func);
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
+        /// <returns>The value of the item</returns>
+        V GetOrUpdate<A>(K key, Func<K, V, A, V> func, A arg);
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
+        /// <returns>The value of the item</returns>
+        V GetOrUpdate<A0, A1>(K key, Func<K, V, A0, A1, V> func, A0 arg0, A1 arg1);
+
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        Task<V> GetOrUpdateAsync(K key, Func<K, V, Task<V>> func, bool waitUntilReady = true);
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item</returns>
+        Task<V> GetOrUpdateAsync<A>(K key, Func<K, V, A, Task<V>> func, A arg, bool waitUntilReady = true);
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item</returns>
+        Task<V> GetOrUpdateAsync<A0, A1>(K key, Func<K, V, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true);
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        ValueTask<V> GetOrUpdateValueAsync(K key, Func<K, V, ValueTask<V>> func, bool waitUntilReady = true);
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item</returns>
+        ValueTask<V> GetOrUpdateValueAsync<A>(K key, Func<K, V, A, ValueTask<V>> func, A arg, bool waitUntilReady = true);
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item</returns>
+        ValueTask<V> GetOrUpdateValueAsync<A0, A1>(K key, Func<K, V, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true);
+
+        #endregion//With exising
+
+
+        #region Without exising
+
         /// <summary>
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
@@ -113,6 +218,9 @@ namespace SysWeaver
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
         /// <returns>The value of the item</returns>
         ValueTask<V> GetOrUpdateValueAsync<A0, A1>(K key, Func<K, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true);
+
+        #endregion//Without exising
+
 
         /// <summary>
         /// Get some stats about the cache performance

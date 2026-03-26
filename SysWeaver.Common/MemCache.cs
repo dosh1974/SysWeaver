@@ -43,50 +43,6 @@ namespace SysWeaver
         readonly IEqualityComparer<K> Comparer;
         readonly Func<V, DateTime> GetExpirationTimeUtc;
 
-        /// <summary>
-        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-        /// </summary>
-        /// <param name="key">Tke key</param>
-        /// <param name="func">The delegate used to create a non-existing item</param>
-        /// <returns>The value of the item</returns>
-        public V GetOrUpdate(K key, Func<K, V> func)
-        {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
-            {
-                if (DateTime.UtcNow < val.Item1)
-                {
-                    Interlocked.Increment(ref HitCount);
-                    return val.Item2;
-                }
-            }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                var e = func(key);
-                var exp = GetExpirationTimeUtc(e);
-                val = ValueTuple.Create(exp, e, (Task<V>)null);
-                c[key] = val;
-                UpdatePrio(key, exp);
-                return val.Item2;
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
-
         void UpdatePrio(K key, DateTime exp)
         {
             var q = Q;
@@ -139,6 +95,789 @@ namespace SysWeaver
             value = default;
             return false;
         }
+
+        #region With exising
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <returns>The value of the item</returns>
+        public V GetOrUpdate(K key, Func<K, V, V> func)
+        {
+            var c = C;
+            if (c.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    return val.Item2;
+                }
+            }
+            Lock(key);
+            try
+            {
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                var e = func(key, val.Item2);
+                var exp = GetExpirationTimeUtc(e);
+                val = ValueTuple.Create(exp, e, (Task<V>)null);
+                c[key] = val;
+                UpdatePrio(key, exp);
+                return val.Item2;
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
+        /// <returns>The value of the item</returns>
+        public V GetOrUpdate<A>(K key, Func<K, V, A, V> func, A arg)
+        {
+            var c = C;
+            if (c.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    return val.Item2;
+                }
+            }
+            Lock(key);
+            try
+            {
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                var e = func(key, val.Item2, arg);
+                var exp = GetExpirationTimeUtc(e);
+                val = ValueTuple.Create(exp, e, (Task<V>)null);
+                c[key] = val;
+                UpdatePrio(key, exp);
+                return val.Item2;
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
+        /// <returns>The value of the item</returns>
+        public V GetOrUpdate<A0, A1>(K key, Func<K, V, A0, A1, V> func, A0 arg0, A1 arg1)
+        {
+            var c = C;
+            if (c.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    return val.Item2;
+                }
+            }
+            Lock(key);
+            try
+            {
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                var e = func(key, val.Item2, arg0, arg1);
+                var exp = GetExpirationTimeUtc(e);
+                val = ValueTuple.Create(exp, e, (Task<V>)null);
+                c[key] = val;
+                UpdatePrio(key, exp);
+                return val.Item2;
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        public async Task<V> GetOrUpdateAsync(K key, Func<K, V, Task<V>> func, bool waitUntilReady = true)
+        {
+            var c = C;
+            if (c.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    if (waitUntilReady)
+                    {
+                        var task = val.Item3;
+                        if (task != null)
+                            return await task.ConfigureAwait(false);
+                    }
+                    return val.Item2;
+                }
+            }
+            Lock(key);
+            try
+            {
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if (task != null)
+                            {
+                                Unlock(key);
+                                return await task.ConfigureAwait(false);
+                            }
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var e = await func(key, val.Item2).ConfigureAwait(false);
+                    var exp = GetExpirationTimeUtc(e);
+                    val = ValueTuple.Create(exp, e, (Task<V>)null);
+                    c[key] = val;
+                    UpdatePrio(key, exp);
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V e = default;
+                        try
+                        {
+                            e = await func(key, val.Item2).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        var exp = GetExpirationTimeUtc(e);
+                        val = ValueTuple.Create(exp, e, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            UpdatePrio(key, exp);
+                        }
+                        finally
+                        {
+                        }
+                        return e;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.Result;
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default(V);
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item</returns>
+        public async Task<V> GetOrUpdateAsync<A>(K key, Func<K, V, A, Task<V>> func, A arg, bool waitUntilReady = true)
+        {
+            var c = C;
+            if (c.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    if (waitUntilReady)
+                    {
+                        var task = val.Item3;
+                        if (task != null)
+                            return await task.ConfigureAwait(false);
+                    }
+                    return val.Item2;
+                }
+            }
+            Lock(key);
+            try
+            {
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if (task != null)
+                            {
+                                Unlock(key);
+                                return await task.ConfigureAwait(false);
+                            }
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var e = await func(key, val.Item2, arg).ConfigureAwait(false);
+                    var exp = GetExpirationTimeUtc(e);
+                    val = ValueTuple.Create(exp, e, (Task<V>)null);
+                    c[key] = val;
+                    UpdatePrio(key, exp);
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V e = default;
+                        try
+                        {
+                            e = await func(key, val.Item2, arg).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        var exp = GetExpirationTimeUtc(e);
+                        val = ValueTuple.Create(exp, e, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            UpdatePrio(key, exp);
+                        }
+                        finally
+                        {
+                        }
+                        return e;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.Result;
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default(V);
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item</returns>
+        public async Task<V> GetOrUpdateAsync<A0, A1>(K key, Func<K, V, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
+        {
+            var c = C;
+            if (c.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    if (waitUntilReady)
+                    {
+                        var task = val.Item3;
+                        if (task != null)
+                            return await task.ConfigureAwait(false);
+                    }
+                    return val.Item2;
+                }
+            }
+            Lock(key);
+            try
+            {
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if (task != null)
+                            {
+                                Unlock(key);
+                                return await task.ConfigureAwait(false);
+                            }
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var e = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
+                    var exp = GetExpirationTimeUtc(e);
+                    val = ValueTuple.Create(exp, e, (Task<V>)null);
+                    c[key] = val;
+                    UpdatePrio(key, exp);
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V e = default;
+                        try
+                        {
+                            e = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        var exp = GetExpirationTimeUtc(e);
+                        val = ValueTuple.Create(exp, e, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            UpdatePrio(key, exp);
+                        }
+                        finally
+                        {
+                        }
+                        return e;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.Result;
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default(V);
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        public async ValueTask<V> GetOrUpdateValueAsync(K key, Func<K, V, ValueTask<V>> func, bool waitUntilReady = true)
+        {
+            var c = C;
+            if (c.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    if (waitUntilReady)
+                    {
+                        var task = val.Item3;
+                        if (task != null)
+                            return await task.ConfigureAwait(false);
+                    }
+                    return val.Item2;
+                }
+            }
+            Lock(key);
+            try
+            {
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if (task != null)
+                            {
+                                Unlock(key);
+                                return await task.ConfigureAwait(false);
+                            }
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var e = await func(key, val.Item2).ConfigureAwait(false);
+                    var exp = GetExpirationTimeUtc(e);
+                    val = ValueTuple.Create(exp, e, (Task<V>)null);
+                    c[key] = val;
+                    UpdatePrio(key, exp);
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V e = default;
+                        try
+                        {
+                            e = await func(key, val.Item2).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        var exp = GetExpirationTimeUtc(e);
+                        val = ValueTuple.Create(exp, e, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            UpdatePrio(key, exp);
+                        }
+                        finally
+                        {
+                        }
+                        return e;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.Result;
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default(V);
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item</returns>
+        public async ValueTask<V> GetOrUpdateValueAsync<A>(K key, Func<K, V, A, ValueTask<V>> func, A arg, bool waitUntilReady = true)
+        {
+            var c = C;
+            if (c.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    if (waitUntilReady)
+                    {
+                        var task = val.Item3;
+                        if (task != null)
+                            return await task.ConfigureAwait(false);
+                    }
+                    return val.Item2;
+                }
+            }
+            Lock(key);
+            try
+            {
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if (task != null)
+                            {
+                                Unlock(key);
+                                return await task.ConfigureAwait(false);
+                            }
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var e = await func(key, val.Item2, arg).ConfigureAwait(false);
+                    var exp = GetExpirationTimeUtc(e);
+                    val = ValueTuple.Create(exp, e, (Task<V>)null);
+                    c[key] = val;
+                    UpdatePrio(key, exp);
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V e = default;
+                        try
+                        {
+                            e = await func(key, val.Item2, arg).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        var exp = GetExpirationTimeUtc(e);
+                        val = ValueTuple.Create(exp, e, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            UpdatePrio(key, exp);
+                        }
+                        finally
+                        {
+                        }
+                        return e;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.Result;
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default(V);
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item</returns>
+        public async ValueTask<V> GetOrUpdateValueAsync<A0, A1>(K key, Func<K, V, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
+        {
+            var c = C;
+            if (c.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    if (waitUntilReady)
+                    {
+                        var task = val.Item3;
+                        if (task != null)
+                            return await task.ConfigureAwait(false);
+                    }
+                    return val.Item2;
+                }
+            }
+            Lock(key);
+            try
+            {
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if (task != null)
+                            {
+                                Unlock(key);
+                                return await task.ConfigureAwait(false);
+                            }
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var e = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
+                    var exp = GetExpirationTimeUtc(e);
+                    val = ValueTuple.Create(exp, e, (Task<V>)null);
+                    c[key] = val;
+                    UpdatePrio(key, exp);
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V e = default;
+                        try
+                        {
+                            e = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        var exp = GetExpirationTimeUtc(e);
+                        val = ValueTuple.Create(exp, e, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            UpdatePrio(key, exp);
+                        }
+                        finally
+                        {
+                        }
+                        return e;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.Result;
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default(V);
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        #endregion//With exising
+
+
+
+        #region Without exising
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <returns>The value of the item</returns>
+        public V GetOrUpdate(K key, Func<K, V> func)
+        {
+            var c = C;
+            if (c.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    return val.Item2;
+                }
+            }
+            Lock(key);
+            try
+            {
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                var e = func(key);
+                var exp = GetExpirationTimeUtc(e);
+                val = ValueTuple.Create(exp, e, (Task<V>)null);
+                c[key] = val;
+                UpdatePrio(key, exp);
+                return val.Item2;
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+
 
         /// <summary>
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
@@ -824,6 +1563,7 @@ namespace SysWeaver
             }
         }
 
+        #endregion//Without exising
 
 
         /// <summary>

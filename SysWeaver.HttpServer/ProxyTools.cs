@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace SysWeaver.Net
@@ -172,6 +173,15 @@ namespace SysWeaver.Net
                 using var localResponse = await c.SendAsync(localRequest).ConfigureAwait(false);
                 var resData = await localResponse.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
                 return ValueTuple.Create(resData, ProxyTools.EncodeHeaders(localResponse.Headers, localResponse.Content?.Headers), (int)localResponse.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                var resData = Encoding.UTF8.GetBytes(ex.Message + " [500]");
+                return ValueTuple.Create(resData, new String[]
+                    {
+                        "Content-Length:" + resData.Length,
+                        "Content-Type:" + MimeTypeMap.PlainText
+                    }, 500);
             }
             finally
             {

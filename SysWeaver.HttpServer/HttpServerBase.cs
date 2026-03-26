@@ -2109,7 +2109,7 @@ namespace SysWeaver.Net
         {
             if (cookieString == null)
                 return null;
-            var sn = SessionCookieName;
+            var sn = SessionCookieNameEquals;
             var sp = cookieString.AsSpan();
             fixed (Char* s = sp)
             {
@@ -2118,10 +2118,7 @@ namespace SysWeaver.Net
                 start = CharPtrTools.IndexOf(sn, start, end);
                 if (start == null)
                     return null;
-                start = CharPtrTools.IndexOf('=', start, end);
-                if (start == null)
-                    return null;
-                ++start;
+                start += sn.Length;
                 var e = CharPtrTools.IndexOf(';', start, end);
                 if (e == null)
                     e = end;
