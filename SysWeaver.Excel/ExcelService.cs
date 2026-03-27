@@ -3,6 +3,7 @@ using GemBox.Spreadsheet.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading;
 using SysWeaver.Data;
 
 
@@ -12,20 +13,14 @@ namespace SysWeaver.Excel
     public sealed class ExcelService : IHaveTableDataExporters
     {
 
-        public override string ToString() => (HaveLicense ? "Licensed, table margins (inches): " : "Free limited version, table margins (inches): ") + TableMarginInch.ToString("0.####", CultureInfo.InvariantCulture);
+        public override string ToString() => (ExcelTools.HaveLicense ? "Licensed, table margins (inches): " : "Free limited version, table margins (inches): ") + TableMarginInch.ToString("0.####", CultureInfo.InvariantCulture);
 
         public ExcelService(ExcelParams p)
         {
             p = p ?? new ExcelParams();
-            var apiKey = p.GetApiKey(false);
-            if (string.IsNullOrEmpty(apiKey))
-                apiKey = "FREE-LIMITED-KEY";
-            HaveLicense = !apiKey.FastEquals("FREE-LIMITED-KEY");
-            SpreadsheetInfo.SetLicense(apiKey);
+            ExcelTools.SetLicense(p);
             TableMarginInch = Math.Max(0.0, p.TableMarginInch);
         }
-
-        public readonly bool HaveLicense;
 
         public IReadOnlyList<ITableDataExporter> TableDataExporters =>
             [
@@ -71,6 +66,36 @@ namespace SysWeaver.Excel
 
     public static class ExcelTools
     {
+        static readonly Object InitLock = new object();
+
+        /// <summary>
+        /// True if SetLicense have been called
+        /// </summary>
+        public static bool DidInit { get; private set; }
+
+        /// <summary>
+        /// True if a true license was used, false if a free limited license is used
+        /// </summary>
+        public static bool HaveLicense { get; private set; }
+
+        public static void SetLicense(ApiKeyParams p = null)
+        {
+            if (DidInit)
+                return;
+            lock (InitLock)
+            {
+                if (DidInit)
+                    return;
+                var apiKey = p?.GetApiKey(false);
+                if (string.IsNullOrEmpty(apiKey))
+                    apiKey = "FREE-LIMITED-KEY";
+                HaveLicense = !apiKey.FastEquals("FREE-LIMITED-KEY");
+                SpreadsheetInfo.SetLicense(apiKey);
+                DidInit = true;
+            }
+        }
+
+
         public static bool TryGetWebColor(String webColor, out DrawingColor col)
         {
             if (webColor == null)

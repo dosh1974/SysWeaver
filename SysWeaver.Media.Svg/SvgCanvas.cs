@@ -226,7 +226,41 @@ namespace SysWeaver.Media
             return AddElement(e, fill, stroke, strokeWidth);
         }
 
+        public XElement Image(ReadOnlySpan<Byte> data, String mime, double x, double y, double width, double height)
+        {
+            var e = CreateElement("image");
+            if (x != 0)
+                e.SetAttributeValue("x", x);
+            if (y != 0)
+                e.SetAttributeValue("y", y);
+            if (width > 0)
+                e.SetAttributeValue("width", width);
+            if (height > 0)
+                e.SetAttributeValue("height", height);
+            e.SetAttributeValue("href", String.Concat("data:", mime, ";base64,", Convert.ToBase64String(data)));
+            return AddElement(e, null, null, 0);
+        }
 
+        public XElement Image(String url, double x, double y, double width, double height)
+        {
+            if ((url.IndexOf("://") < 0) || (!File.Exists(url)))
+            {
+                var mime = MimeTypeMap.GetMimeType(url.Substring(url.LastIndexOf('.') + 1));
+                var data = File.ReadAllBytes(url);
+                return Image(data.AsSpan(), mime.Item1, x, y, width, height);
+            }
+            var e = CreateElement("image");
+            if (x != 0)
+                e.SetAttributeValue("x", x);
+            if (y != 0)
+                e.SetAttributeValue("y", y);
+            if (width > 0)
+                e.SetAttributeValue("width", width);
+            if (height > 0)
+                e.SetAttributeValue("height", height);
+            e.SetAttributeValue("href", url);
+            return AddElement(e, null, null, 0);
+        }
 
 
 
