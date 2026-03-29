@@ -61,7 +61,7 @@ namespace SysWeaver.Net
         /// </summary>
         public readonly String Prefix;
         /// <summary>
-        /// The local url after stripping the prefix and query paramaters
+        /// The local url after stripping the prefix and query paramaters.
         /// </summary>
         public readonly String LocalUrl;
         /// <summary>

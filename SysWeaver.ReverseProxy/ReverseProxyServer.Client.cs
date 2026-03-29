@@ -17,7 +17,7 @@ namespace SysWeaver.ReverseProxy
             public long TotalSent;
             public long InProgress;
             public long TotalCompleted;
-
+            public readonly ProxyRequestCache Cache = new ProxyRequestCache();
 
             public readonly BlockUntilChange Waiter = new BlockUntilChange();
             public readonly ConcurrentQueue<ReverseProxyRequest> Pending = new ();

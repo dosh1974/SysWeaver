@@ -70,13 +70,15 @@ namespace SysWeaver.Net
             var t = to as ManualHttpServerRequest;
             if (t == null)
                 throw new Exception("Invalid types!");
+
+
             foreach (var kv in ResHeaders)
             {
                 if (!kv.Key.FastEquals("Set-Cookie"))
                 {
                     if (!ProxyTools.AllowMultipleHeaders.Contains(kv.Key.FastToLower()))
                         t.ResHeaders.Remove(kv.Key);
-                    t.ResHeaders.Add(kv.Key, kv.Value);
+                    t.ResHeaders.TryAddWithoutValidation(kv.Key, kv.Value);
                 }
             }
             t._ResStatusCode = _ResStatusCode;

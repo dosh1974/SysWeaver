@@ -7,6 +7,31 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.Net
 {
+
+    public class ProxyData
+    {
+        #if DEBUG
+        public override string ToString() => String.Concat(Method, " (", StatusCode, ") @ ", Data?.Length ?? 0, " bytes");
+        
+        #endif//DEBUG
+
+        public HttpServerMethods Method;
+        public String[] Headers;
+        public Byte[] Data;
+        public int StatusCode;
+        public ProxyData()
+        {
+        }
+
+        public ProxyData(HttpServerMethods method, string[] headers, byte[] data = null, int statusCode = 0)
+        {
+            Method = method;
+            Headers = headers;
+            Data = data;
+            StatusCode = statusCode;
+        }
+    }
+
     public static class ProxyTools
     {
 
@@ -82,6 +107,8 @@ namespace SysWeaver.Net
             return h.ToArray();
         }
 
+
+
         /// <summary>
         /// Get headers and other data required to proxy a request
         /// </summary>
@@ -89,7 +116,7 @@ namespace SysWeaver.Net
         /// <param name="prefixLength"></param>
         /// <returns></returns>
         /// <exception cref="HttpResponseException"></exception>
-        public static async ValueTask<ValueTuple<HttpServerMethods, String[], Byte[]>> GetFromRequest(HttpServerRequest r, int? prefixLength = 0)
+        public static async ValueTask<ProxyData> GetFromRequest(HttpServerRequest r, int? prefixLength = 0)
         {
             var m = r.HttpMethod;
             if (m == HttpServerMethods.Other)
@@ -109,21 +136,19 @@ namespace SysWeaver.Net
                     headers[i] = "Referer:" + t;
                 }
             }
-            return ValueTuple.Create(m, headers, data);
+            return new ProxyData(m, headers, data);
         }
 
         /// <summary>
         /// Ser response headers from the result of a proxied request
         /// </summary>
         /// <param name="r"></param>
-        /// <param name="headers"></param>
-        /// <param name="statusCode"></param>
         /// <param name="data"></param>
         /// <returns></returns>
-        public static ValueTask SetToRequest(HttpServerRequest r, String[] headers, int statusCode, Byte[] data = null)
+        public static ValueTask SetToRequest(HttpServerRequest r, ProxyData data)
         {
             var sh = SpecialHeaders;
-            foreach (var h in headers.Nullable())
+            foreach (var h in data.Headers.Nullable())
             {
                 var key = h.SplitFirst(':', out var value);
                 if (sh.TryGetValue(key, out var fn))
@@ -131,21 +156,21 @@ namespace SysWeaver.Net
                 else
                     r.SetResHeader(key, value);
             }
-            r.SetResStatusCode(statusCode);
-            return data == null ? TaskExt.CompValTask : r.SetResBodyAsync(data);
+            r.SetResStatusCode(data.StatusCode);
+            var d = data.Data;
+            return d == null ? TaskExt.CompValTask : r.SetResBodyAsync(d);
         }
 
         /// <summary>
         /// Make a proxied request 
         /// </summary>
         /// <param name="c"></param>
-        /// <param name="httpMethod"></param>
-        /// <param name="url"></param>
-        /// <param name="headers"></param>
-        /// <param name="postData"></param>
+        /// <param name="url">The url to do the request against</param>
+        /// <param name="data">The input data</param>
         /// <returns></returns>
-        public static async ValueTask<ValueTuple<Byte[], String[], int>> ProxyRequest(HttpClient c, HttpServerMethods httpMethod, String url, String[] headers, Byte[] postData = null)
+        public static async ValueTask<ProxyData> ProxyRequest(HttpClient c, String url, ProxyData data)
         {
+            var httpMethod = data.Method;
             var method = new HttpMethod(httpMethod.ToString());
             using var localRequest = new HttpRequestMessage(method, url);
             HttpContent content = null;
@@ -153,6 +178,7 @@ namespace SysWeaver.Net
             {
                 if (httpMethod == HttpServerMethods.POST)
                 {
+                    var postData = data.Data;
                     if (postData != null)
                     {
                         content = new ReadOnlyMemoryContent(postData);
@@ -162,7 +188,7 @@ namespace SysWeaver.Net
                 var h = localRequest.Headers;
                 var ch = ProxyTools.ContentHeaders;
                 // TODO: Set: X-Forwarded-For:
-                foreach (var x in headers.Nullable())
+                foreach (var x in data.Headers.Nullable())
                 {
                     var key = x.SplitFirst(':', out var value);
                     if (ch.Contains(key.FastToLower()))
@@ -172,16 +198,16 @@ namespace SysWeaver.Net
                 }
                 using var localResponse = await c.SendAsync(localRequest).ConfigureAwait(false);
                 var resData = await localResponse.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-                return ValueTuple.Create(resData, ProxyTools.EncodeHeaders(localResponse.Headers, localResponse.Content?.Headers), (int)localResponse.StatusCode);
+                return new ProxyData(data.Method, EncodeHeaders(localResponse.Headers, localResponse.Content?.Headers), resData, (int)localResponse.StatusCode);
             }
             catch (Exception ex)
             {
                 var resData = Encoding.UTF8.GetBytes(ex.Message + " [500]");
-                return ValueTuple.Create(resData, new String[]
+                return new ProxyData(data.Method, new String[]
                     {
                         "Content-Length:" + resData.Length,
                         "Content-Type:" + MimeTypeMap.PlainText
-                    }, 500);
+                    }, resData, 500);
             }
             finally
             {

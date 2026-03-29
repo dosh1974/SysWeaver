@@ -93,25 +93,26 @@ namespace SysWeaver.ReverseProxy
         {
             if (!Clients.TryGetValue(clientId, out var client))
                 throw new HttpResponseException(503);
-            var rdata = await ProxyTools.GetFromRequest(r, prefixLength).ConfigureAwait(false);
             var qs = r.QueryStringStart;
             if (qs > 0)
                 clientUrl += r.Url.Substring(qs - 1);
-
-            var req = new ReverseProxyRequest
+            await client.Cache.HandleAsync(r, clientUrl, async (url, data) =>
             {
-                ClientId = clientId,
-                EndPoint = endPoint,
-                RequestId = GetRequestGuid(),
-                Url = clientUrl,
-                Method = rdata.Item1,
-                Headers = rdata.Item2,
-                Data = rdata.Item3,
-            };
-            var res = await client.MakeRequest(req).ConfigureAwait(false);
-            if (res == null)
-                throw new HttpResponseException(503);
-            await ProxyTools.SetToRequest(r, res.Headers, res.StatusCode, res.Data).ConfigureAwait(false);
+                var req = new ReverseProxyRequest
+                {
+                    ClientId = clientId,
+                    EndPoint = endPoint,
+                    RequestId = GetRequestGuid(),
+                    Url = clientUrl,
+                    Method = data.Method,
+                    Headers = data.Headers,
+                    Data = data.Data,
+                };
+                var res = await client.MakeRequest(req).ConfigureAwait(false);
+                if (res == null)
+                    throw new HttpResponseException(503);
+                return new ProxyData(data.Method, res.Headers, res.Data, res.StatusCode);
+            }).ConfigureAwait(false);
             return true;
         }
 

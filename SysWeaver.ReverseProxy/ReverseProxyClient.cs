@@ -298,11 +298,11 @@ namespace SysWeaver.ReverseProxy
                         response.StatusCode = t._ResStatusCode;
                     }else
                     {
-                        var ret = await ProxyTools.ProxyRequest(Client, res.Method, url, res.Headers, res.Data).ConfigureAwait(false);
-                        response.Data = ret.Item1;
+                        var ret = await ProxyTools.ProxyRequest(Client, url, new ProxyData(res.Method, res.Headers, res.Data)).ConfigureAwait(false);
+                        response.Data = ret.Data;
                         response.RequestId = res.RequestId;
-                        response.Headers = ret.Item2;
-                        response.StatusCode = ret.Item3;
+                        response.Headers = ret.Headers;
+                        response.StatusCode = ret.StatusCode;
 /*                        var c = Client;
                         var method = new HttpMethod(res.Method.ToString());
                         using var localRequest = new HttpRequestMessage(method, url);

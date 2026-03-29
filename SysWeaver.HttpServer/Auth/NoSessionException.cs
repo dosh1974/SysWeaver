@@ -29,7 +29,7 @@ namespace SysWeaver.Net
 
     public sealed class UserNotAllowedException : Exception
     {
-        public UserNotAllowedException() : base("The user is not allowed to access this reasource!")
+        public UserNotAllowedException() : base("The user is not allowed to access this resource!")
         {
         }
     }
