@@ -136,5 +136,68 @@ namespace SysWeaver.Media
             return new ReadOnlyMemory<Byte>(ms.GetBuffer(), 0, (int)ms.Length);
         }
 
+
+
+        /// <summary>
+        /// Convert the image data to a MagickImage
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="filename"></param>
+        /// <returns></returns>
+        public static MagickImage ToImage(this ImageData32 data)
+        {
+            var w = (uint)data.Width;
+            var h = (uint)data.Height;
+            var img = new MagickImage(MagickColors.Black, w, h);
+            try
+            {
+                img.ImportPixels(data.Data.Span, new PixelImportSettings(w, h, StorageType.Char, PixelMapping.RGBA));
+                return img;
+            }
+            catch
+            {
+                img.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Save the image data to disc
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="filename"></param>
+        public static void Save(this ImageData32 data, String filename)
+        {
+            using var img = ToImage(data);
+            img.Write(filename);
+        }
+
+        /// <summary>
+        /// Save the image data to disc
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="filename"></param>
+        /// <returns></returns>
+        public static Task SaveAsync(this ImageData32 data, String filename)
+        {
+            using var img = ToImage(data);
+            return img.WriteAsync(filename);
+        }
+
+        /// <summary>
+        /// Save the image data to a stream
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="stream">The destination stream</param>
+        /// <param name="format">The image format, defaults to png</param>
+        /// <param name="keepOpen">Keep the stream open after the write</param>
+        public static void Save(this ImageData32 data, Stream stream, MagickFormat format = MagickFormat.Png, bool keepOpen = false)
+        {
+            using var ss = keepOpen ? null : stream;
+            using var img = ToImage(data);
+            img.Write(stream, format);
+        }
+
+
     }
 }

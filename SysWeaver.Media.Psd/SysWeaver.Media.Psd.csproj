@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>SysWeaver.Media</RootNamespace>
+    <RootNamespace>SysWeaver.Media.Psd</RootNamespace>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <NoWarn>1701;1702;1591</NoWarn>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
@@ -10,7 +10,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
-    <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
   </ItemGroup>
 
 </Project>

@@ -4,7 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
-
+using SysWeaver.Compression;
 using SysWeaver.IO;
 
 namespace SysWeaver.Media
@@ -90,9 +90,9 @@ namespace SysWeaver.Media
             }
         }
 
-        private static readonly uint[] CrcTable = GetCrcTable();
+        static readonly uint[] CrcTable = GetCrcTable();
 
-        private static uint[] GetCrcTable()
+        static uint[] GetCrcTable()
         {
             var crcTable = new uint[256];
             for (uint n = 0; n <= 255; n++)
@@ -137,7 +137,7 @@ namespace SysWeaver.Media
         /// <param name="data">Data</param>
         /// <param name="crc">Initial crc</param>
         /// <returns>The crc32 for the data</returns>
-        public static uint CalcCrc32(Byte[] data, uint crc = 0)
+        public static uint CalcCrc32(ReadOnlySpan<Byte> data, uint crc = 0)
         {
             var c = crc ^ 0xffffffff;
             foreach (var b in data)
@@ -153,9 +153,9 @@ namespace SysWeaver.Media
         /// <param name="len">Length to compute for</param>
         /// <param name="crc">Initial crc</param>
         /// <returns>The Adler32 checksum for the specified range</returns>
-        public static uint CalcAdler32(Byte[] data, long offset, long len, uint crc = 1)
+        public static uint CalcAdler32(ReadOnlySpan<Byte> data, int offset, int len, uint crc = 1)
         {
-            var end = offset + Math.Max(0, Math.Min(data.LongLength - offset, len));
+            var end = offset + Math.Max(0, Math.Min(data.Length - offset, len));
             var s1 = crc & 0xffff;
             var s2 = (crc >> 16) & 0xffff;
             while (offset < end)
@@ -173,7 +173,7 @@ namespace SysWeaver.Media
         /// <param name="data">Data</param>
         /// <param name="crc">Initial crc</param>
         /// <returns>The Adler32 checksum for the data</returns>
-        public static uint CalcAdler32(Byte[] data, uint crc = 1)
+        public static uint CalcAdler32(ReadOnlySpan<Byte> data, uint crc = 1)
         { 
             var s1 = crc & 0xffff;
             var s2 = (crc >> 16) & 0xffff;
@@ -194,7 +194,7 @@ namespace SysWeaver.Media
         /// <param name="a">Compression method</param>
         /// <param name="b">Compression type</param>
         /// <returns>Png file data</returns>
-        public static Byte[] MakePng(IEnumerable<Chunk> chunks, Byte[] newData, Byte a = 120, Byte b = 1)
+        public static Byte[] MakePng(IEnumerable<Chunk> chunks, ReadOnlySpan<Byte> newData, Byte a = 120, Byte b = 1)
         {
             using (var ms = new MemoryStream())
             {
@@ -240,16 +240,16 @@ namespace SysWeaver.Media
         /// <param name="newData">The new IDAT data, this is just the raw scanline data (including the filter byte)</param>
         /// <param name="a">Compression method</param>
         /// <param name="b">Compression type</param>
-        public static void WriteChunks(Stream pngFile, IEnumerable<Chunk> chunks, Byte[] newData, Byte a = 120, Byte b = 1)
+        /// <param name="comp">Compression level</param>
+        public static void WriteChunks(Stream pngFile, IEnumerable<Chunk> chunks, ReadOnlySpan<Byte> newData, Byte a = 120, Byte b = 1, CompressionLevel comp = CompressionLevel.NoCompression)
         {
             var imageDataCrc = Png.CalcAdler32(newData);
             using (var ms = new MemoryStream(newData.Length + 4096))
             {
                 ms.WriteByte(a);
                 ms.WriteByte(b);
-                using (var t = new MemoryStream(newData, false))
-                using (var cms = new DeflateStream(ms, CompressionLevel.NoCompression, true))
-                    t.CopyTo(cms);
+                using (var cms = new DeflateStream(ms, comp, true))
+                    cms.Write(newData);
                 var c0 = (Byte)(imageDataCrc >> 24);
                 var c1 = (Byte)(imageDataCrc >> 16);
                 var c2 = (Byte)(imageDataCrc >> 8);
@@ -474,8 +474,9 @@ namespace SysWeaver.Media
         /// <param name="stream">The raw image data (first) byte is the filter of the first row</param>
         /// <param name="info">Information about the image</param>
         /// <param name="leaveOpen">True to leave the input stream open</param>
+        /// <param name="keepFilterByte">If true, the original filter byte is kept</param>
         /// <returns>Unfiltered raw image data (including the filter byte)</returns>
-        public static Byte[] UnfilterData(Stream stream, ImageInfo info, bool leaveOpen = true)
+        public static Byte[] UnfilterData(Stream stream, ImageInfo info, bool leaveOpen = true, bool keepFilterByte = false)
         {
             using (leaveOpen ? stream : null)
             {
@@ -498,15 +499,16 @@ namespace SysWeaver.Media
                     if (filter < 0)
                         break;
                     //  Decompress
-                    var read = stream.Read(image.UncompressedScanline, pb, pitch);
-                    if (read != pitch)
-                        throw new IOException("Invalid PNG stream, the pitch of the decoded scan line doesn't match the width specified in the header!");
+                    stream.ReadExactly(image.UncompressedScanline, pb, pitch);
+                    //if (read != pitch)
+                        //throw new IOException("Invalid PNG stream, the pitch of the decoded scan line doesn't match the width specified in the header!");
                     //  Filter
                     if ((filter >= 0) && (filter <= Filters.Length))
                         Filters[filter](image);
                     //  Decode
                     if (p >= maxP)
                         throw new IOException("Invalid PNG stream, data contains more scanlines than specified in the header!");
+                    data[p] = (Byte)filter;
                     Array.Copy(image.UnfilteredScanline, pb, data, p + 1, pitch);
                     p += pitchFilter;
                     //  Swap scanlines
@@ -526,11 +528,12 @@ namespace SysWeaver.Media
         /// <param name="stream">The data found in an IDAT header without the header (2 bytes) and footer (4 bytes)</param>
         /// <param name="info">Information about the image</param>
         /// <param name="leaveOpen">True to leave the input stream open</param>
+        /// <param name="keepFilterByte">If true, the original filter byte is kept</param>
         /// <returns>Unfiltered raw image data (including the filter byte)</returns>
-        public static Byte[] DecodeAndUnfilterData(Stream stream, ImageInfo info, bool leaveOpen = true)
+        public static Byte[] DecodeAndUnfilterData(Stream stream, ImageInfo info, bool leaveOpen = true, bool keepFilterByte = false)
         {
             using var g = new DeflateStream(stream, CompressionMode.Decompress, leaveOpen);
-            return UnfilterData(g, info);
+            return UnfilterData(g, info, true, keepFilterByte);
         }
 
         /// <summary>
@@ -557,7 +560,7 @@ namespace SysWeaver.Media
 
         #region Implementation
 
-        private sealed class Image : ImageInfo
+        sealed class Image : ImageInfo
         {
             public uint Position;
             public uint[] Palette;
@@ -612,9 +615,9 @@ namespace SysWeaver.Media
         /// </summary>
         public static readonly uint Id_tRNS = Get("tRNS");
 
-        private delegate bool ChunkProcessor(BinaryReader r, Image image, uint chunkLength);
+        delegate bool ChunkProcessor(BinaryReader r, Image image, uint chunkLength);
 
-        private static readonly Dictionary<uint, ChunkProcessor> Chunks = new Dictionary<uint, ChunkProcessor>()
+        static readonly Dictionary<uint, ChunkProcessor> Chunks = new Dictionary<uint, ChunkProcessor>()
         {
             { Id_IHDR,  IHDR},
             { Id_PLTE,  PLTE},
@@ -626,7 +629,7 @@ namespace SysWeaver.Media
 
         #region IHDR
 
-        private static bool tRNS(BinaryReader r, Image image, uint chunkLength)
+        static bool tRNS(BinaryReader r, Image image, uint chunkLength)
         {
             switch (image.ColorType)
             {
@@ -648,8 +651,9 @@ namespace SysWeaver.Media
             return true;
         }
 
-        private static readonly Byte[] ChannelCounts = new byte[] { 1, 0, 3, 1, 2, 0, 4 };
-        private static bool IHDR(BinaryReader r, Image image, uint chunkLength)
+        static readonly Byte[] ChannelCounts = new byte[] { 1, 0, 3, 1, 2, 0, 4 };
+
+        static bool IHDR(BinaryReader r, Image image, uint chunkLength)
         {
             image.Width = r.ReadInt32();
             image.Height = r.ReadInt32();
@@ -674,7 +678,7 @@ namespace SysWeaver.Media
 
         #region PLTE
 
-        private static bool PLTE(BinaryReader r, Image image, uint chunkLength)
+        static bool PLTE(BinaryReader r, Image image, uint chunkLength)
         {
             int count = (int)(chunkLength / 3);
             image.Palette = new uint[count];
@@ -694,7 +698,7 @@ namespace SysWeaver.Media
 
         #region IDAT
 
-        private static bool IDAT(BinaryReader r, Image image, uint chunkLength)
+        static bool IDAT(BinaryReader r, Image image, uint chunkLength)
         {
             bool first = image.ImageData == null;
             if (first)
@@ -709,7 +713,7 @@ namespace SysWeaver.Media
 
         #region IEND
 
-        private static bool IEND(BinaryReader r, Image image, uint chunkLength)
+        static bool IEND(BinaryReader r, Image image, uint chunkLength)
         {
             if (image.ImageData == null)
                 return false;
@@ -755,6 +759,12 @@ namespace SysWeaver.Media
 
         #region Filters
 
+        public const int FilterIndexNone = 0;
+        public const int FilterIndexSub = 1;
+        public const int FilterIndexUp = 2;
+        public const int FilterIndexAverage = 3;
+        public const int FilterIndexPaeth = 4;
+
         /// <summary>
         /// Applying a png filter to a scanline
         /// </summary>
@@ -766,28 +776,28 @@ namespace SysWeaver.Media
         /// <param name="srcPitch">The number of bytes from one source scanline to the next</param>
         /// <param name="y">The current row, used to determine special cases for the first scanline</param>
         /// <param name="filter">[0, 4] The filter to apply: 0:None, 1:Sub, 2:Up, 3:Average, 4:Paeth</param>
-        public static void ApplyFilterToScanline(Byte[] dest, int destOffset, int bytesPerRow, Byte[] src, int srcOffset, int srcPitch, int y, int filter)
+        /// <param name="bytesPerPixel">Bytes per pixel, </param>
+        public static void ApplyFilterToScanline(Byte[] dest, int destOffset, int bytesPerRow, Byte[] src, int srcOffset, int srcPitch, int y, int filter, int bytesPerPixel)
         {
             dest[destOffset] = (Byte)filter;
             ++destOffset;
+            var pixelBytes = bytesPerRow - 1;
             switch (filter)
             {
                 //  None
                 case 0:
-                    Buffer.BlockCopy(src, srcOffset, dest, destOffset, bytesPerRow - 1);
+                    Buffer.BlockCopy(src, srcOffset, dest, destOffset, pixelBytes);
                     break;
                 //  Sub
                 case 1:
                     {
-                        var prevX = src[srcOffset];
-                        dest[destOffset] = prevX;
-                        for (int i = 2; i < bytesPerRow; ++i)
+                        for (int i = 0; i < pixelBytes; ++i)
                         {
-                            ++srcOffset;
+                            var di = i - bytesPerPixel;
+                            var prev = di < 0 ? 0 : src[di + srcOffset];
+                            var n = src[i + srcOffset];
+                            dest[destOffset] = (Byte)(n - prev);
                             ++destOffset;
-                            var n = src[srcOffset];
-                            dest[destOffset] = (Byte)(n - prevX);
-                            prevX = n;
                         }
                     }
                     break;
@@ -795,10 +805,10 @@ namespace SysWeaver.Media
                 case 2:
                     if (y == 0)
                     {
-                        Buffer.BlockCopy(src, srcOffset, dest, destOffset, bytesPerRow - 1);
+                        Buffer.BlockCopy(src, srcOffset, dest, destOffset, pixelBytes);
                         break;
                     }
-                    for (int i = 1; i < bytesPerRow; ++i)
+                    for (int i = 0; i < pixelBytes; ++i)
                     {
                         var prevY = src[srcOffset - srcPitch];
                         var n = src[srcOffset];
@@ -811,33 +821,34 @@ namespace SysWeaver.Media
                 case 3:
                     if (y == 0)
                     {
-                        for (int i = 1; i < bytesPerRow; ++i)
+                        for (int i = 0; i < pixelBytes; ++i)
                         {
-                            var prevX = i > 1 ? src[srcOffset - 1] : 0;
+                            var di = i - bytesPerPixel;
+                            var prevX = di < 0 ? 0 : src[srcOffset + di];
                             var prev = prevX >> 1;
-                            var n = src[srcOffset];
+                            var n = src[srcOffset + i];
                             dest[destOffset] = (Byte)(n - prev);
                             ++destOffset;
-                            ++srcOffset;
                         }
                         break;
                     }
-                    for (int i = 1; i < bytesPerRow; ++i)
+                    for (int i = 0; i < pixelBytes; ++i)
                     {
-                        var prevX = i > 1 ? src[srcOffset - 1] : 0;
-                        var prevY = src[srcOffset - srcPitch];
+                        var di = i - bytesPerPixel;
+                        var prevX = di < 0 ? 0 : src[srcOffset + di];
+                        var prevY = src[srcOffset - srcPitch + i];
                         var prev = (prevX + prevY) >> 1;
-                        var n = src[srcOffset];
+                        var n = src[srcOffset + i];
                         dest[destOffset] = (Byte)(n - prev);
                         ++destOffset;
-                        ++srcOffset;
                     }
                     break;
                 //  Paeth
                 case 4:
-                    for (int i = 1; i < bytesPerRow; ++i)
+                    for (int i = 0; i < pixelBytes; ++i)
                     {
-                        int a = i > 1 ? src[srcOffset - 1] : 0;
+                        var di = i - bytesPerPixel;
+                        int a = di < 0 ? 0 : src[srcOffset + di];
                         int b, c;
                         if (y <= 0)
                         {
@@ -845,8 +856,8 @@ namespace SysWeaver.Media
                             c = 0;
                         }else
                         {
-                            b = src[srcOffset - srcPitch];
-                            c = i > 1 ? src[srcOffset - srcPitch - 1] : 0;
+                            b = src[srcOffset - srcPitch + i];
+                            c = di < 0 ? 0 : src[srcOffset - srcPitch + di];
                         }
                         var p = a + b - c;
                         var pa = p - a;
@@ -878,10 +889,9 @@ namespace SysWeaver.Media
                                 prev = c;
                             }
                         }
-                        var n = src[srcOffset];
+                        var n = src[srcOffset + i];
                         dest[destOffset] = (Byte)(n - prev);
                         ++destOffset;
-                        ++srcOffset;
                     }
                     break;
                 default:
@@ -889,7 +899,7 @@ namespace SysWeaver.Media
             }
         }
 
-        private static void FilterNone(Image image)
+        static void FilterNone(Image image)
         {
             var s = image.UncompressedScanline;
             var d = image.UnfilteredScanline;
@@ -898,7 +908,7 @@ namespace SysWeaver.Media
             for (int i = o; i < e; ++i)
                 d[i] = s[i];
         }
-        private static void FilterSub(Image image)
+        static void FilterSub(Image image)
         {
             var s = image.UncompressedScanline;
             var d = image.UnfilteredScanline;
@@ -907,7 +917,7 @@ namespace SysWeaver.Media
             for (int i = o; i < e; ++i)
                 d[i] = (Byte)(s[i] + d[i - o]);
         }
-        private static void FilterUp(Image image)
+        static void FilterUp(Image image)
         {
             var s = image.UncompressedScanline;
             var d = image.UnfilteredScanline;
@@ -917,7 +927,7 @@ namespace SysWeaver.Media
             for (int i = o; i < e; ++i)
                 d[i] = (Byte)(s[i] + p[i]);
         }
-        private static void FilterAverage(Image image)
+        static void FilterAverage(Image image)
         {
             var s = image.UncompressedScanline;
             var d = image.UnfilteredScanline;
@@ -927,7 +937,7 @@ namespace SysWeaver.Media
             for (int i = o; i < e; ++i)
                 d[i] = (Byte)(s[i] + ((p[i] + d[i - o]) >> 1));
         }
-        private static void FilterPaeth(Image image)
+        static void FilterPaeth(Image image)
         {
             var s = image.UncompressedScanline;
             var d = image.UnfilteredScanline;
@@ -968,7 +978,7 @@ namespace SysWeaver.Media
             return pr;
         }
 
-        private static readonly Action<Image>[] Filters = new Action<Image>[]
+        static readonly Action<Image>[] Filters = new Action<Image>[]
         {
             FilterNone, FilterSub, FilterUp, FilterAverage, FilterPaeth
 
@@ -979,12 +989,12 @@ namespace SysWeaver.Media
         #region Color decoders
 
 
-        private static readonly Byte[] Bpp1 = { 0, 0xff };
-        private static readonly Byte[] Bpp2 = { 0,
+        static readonly Byte[] Bpp1 = { 0, 0xff };
+        static readonly Byte[] Bpp2 = { 0,
                                                     (Byte)(((1 * 255) + 1) / 3),
                                                     (Byte)(((2 * 255) + 1) / 3),
                                                 0xff };
-        private static readonly Byte[] Bpp4 = { 0,
+        static readonly Byte[] Bpp4 = { 0,
                                                     (Byte)(((1 * 255) + 7) / 15),
                                                     (Byte)(((2 * 255) + 7) / 15),
                                                     (Byte)(((3 * 255) + 7) / 15),
@@ -1002,7 +1012,7 @@ namespace SysWeaver.Media
                                                 0xff };
 
 
-        private static readonly Dictionary<Tuple<int, int>, Action<Image>> Decoders = new Dictionary<Tuple<int, int>, Action<Image>>()
+        static readonly Dictionary<Tuple<int, int>, Action<Image>> Decoders = new Dictionary<Tuple<int, int>, Action<Image>>()
         {
             { Tuple.Create(0, 1), Decode_Greyscale_1 },
             { Tuple.Create(0, 2), Decode_Greyscale_2 },
@@ -1026,7 +1036,7 @@ namespace SysWeaver.Media
 
         };
 
-        private static void Decode_Greyscale_1(Image image)
+        static void Decode_Greyscale_1(Image image)
         {
             uint alphaMask = image.ColorTrans == null ? 0xffffffffU : (uint)image.ColorTrans[0];
             var o = image.PixelBytes;
@@ -1059,7 +1069,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_Greyscale_2(Image image)
+        static void Decode_Greyscale_2(Image image)
         {
             uint alphaMask = image.ColorTrans == null ? 0xffffffffU : (uint)image.ColorTrans[0];
             var o = image.PixelBytes;
@@ -1092,7 +1102,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_Greyscale_4(Image image)
+        static void Decode_Greyscale_4(Image image)
         {
             uint alphaMask = image.ColorTrans == null ? 0xffffffffU : (uint)image.ColorTrans[0];
             var o = image.PixelBytes;
@@ -1125,7 +1135,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_Greyscale_8(Image image)
+        static void Decode_Greyscale_8(Image image)
         {
             uint alphaMask = image.ColorTrans == null ? 0xffffffffU : (uint)image.ColorTrans[0];
             var o = image.PixelBytes;
@@ -1151,7 +1161,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_Greyscale_16(Image image)
+        static void Decode_Greyscale_16(Image image)
         {
             uint alphaMask = image.ColorTrans == null ? 0xffffffffU : (uint)image.ColorTrans[0];
             var o = image.PixelBytes;
@@ -1178,7 +1188,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_Rgb_8(Image image)
+        static void Decode_Rgb_8(Image image)
         {
             bool masked = image.ColorTrans != null;
             uint alphaMaskR = masked ? (uint)image.ColorTrans[0] : 0xffffffffU;
@@ -1206,7 +1216,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_Rgb_16(Image image)
+        static void Decode_Rgb_16(Image image)
         {
             bool masked = image.ColorTrans != null;
             uint alphaMaskR = masked ? (uint)image.ColorTrans[0] : 0xffffffffU;
@@ -1240,7 +1250,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_Index_1(Image image)
+        static void Decode_Index_1(Image image)
         {
             var alpha = image.IndexedTrans;
             var alphaLen = alpha?.Length ?? 0;
@@ -1269,7 +1279,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_Index_2(Image image)
+        static void Decode_Index_2(Image image)
         {
             var alpha = image.IndexedTrans;
             var alphaLen = alpha?.Length ?? 0;
@@ -1298,7 +1308,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_Index_4(Image image)
+        static void Decode_Index_4(Image image)
         {
             var alpha = image.IndexedTrans;
             var alphaLen = alpha?.Length ?? 0;
@@ -1327,7 +1337,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_Index_8(Image image)
+        static void Decode_Index_8(Image image)
         {
             var alpha = image.IndexedTrans;
             var alphaLen = alpha?.Length ?? 0;
@@ -1350,7 +1360,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_GreyscaleAlpha_8(Image image)
+        static void Decode_GreyscaleAlpha_8(Image image)
         {
             var o = image.PixelBytes;
             var s = image.UnfilteredScanline;
@@ -1369,7 +1379,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_GreyscaleAlpha_16(Image image)
+        static void Decode_GreyscaleAlpha_16(Image image)
         {
             var o = image.PixelBytes;
             var s = image.UnfilteredScanline;
@@ -1388,7 +1398,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_Rgba_8(Image image)
+        static void Decode_Rgba_8(Image image)
         {
             var o = image.PixelBytes;
             var s = image.UnfilteredScanline;
@@ -1406,7 +1416,7 @@ namespace SysWeaver.Media
             image.Position = p;
         }
 
-        private static void Decode_Rgba_16(Image image)
+        static void Decode_Rgba_16(Image image)
         {
             var o = image.PixelBytes;
             var s = image.UnfilteredScanline;
@@ -1427,7 +1437,7 @@ namespace SysWeaver.Media
 
         #endregion//Color decoders
 
-        private static readonly Byte[] Header = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
+        static readonly Byte[] Header = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
 
         #endregion//Implementation
 
