@@ -1179,7 +1179,7 @@ namespace SysWeaver.Media
             var marginX = p.MarginX;
             var marginY = p.MarginY;
             double unit = fit ? Math.Max(fitWidth, fitHeight) * 0.5 : p.Size;
-            var paths = GetSvgTextPaths(text, p.Font, unit, Math.Max(15, p.MaxDecimals));
+            var paths = GetSvgTextPaths(text, p.Font, unit, Math.Min(15, p.MaxDecimals));
             if (fit)
                 FitPaths(paths, fitWidth, fitHeight, marginX, marginY, p.MaxDecimals);
             return paths;
