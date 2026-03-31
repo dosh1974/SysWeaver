@@ -60,6 +60,9 @@ namespace SysWeaver.ReverseProxy
         public ValueTask<bool> Handle(HttpServerRequest r)
         {
             var localUrl = r.LocalUrl;
+            if (r.DidIndex)
+                localUrl = localUrl.Substring(0, localUrl.Length - 10);
+
             var baseUrlLen = BaseUrlLen;
             var ignoreDomains = IgnoreDomains;
             String clientId, endPoint;

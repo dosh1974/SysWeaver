@@ -509,13 +509,13 @@ namespace SysWeaver.Net
                         return;
                     }
                     url = req.GetDisplayUrl();
-                    var host = GetHost(out var prefix, out var queryStart, ref url);
+                    var host = GetHost(out var prefix, out var queryStart, out var didIndex, ref url);
                     if (prefix == null)
                     {
                         await HandleInvalidPrefix(req, res).ConfigureAwait(false);
                         return;
                     }
-                    using var data = new AspHttpServerRequest(c, url, prefix, this, host, queryStart);
+                    using var data = new AspHttpServerRequest(c, url, prefix, this, host, queryStart, didIndex);
                     await Handle(data).ConfigureAwait(false);
                 }
                 catch (HttpListenerException ex)

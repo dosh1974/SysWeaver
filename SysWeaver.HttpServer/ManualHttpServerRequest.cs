@@ -13,8 +13,8 @@ namespace SysWeaver.Net
     public sealed class ManualHttpServerRequest : HttpServerRequest
     {
 
-        public ManualHttpServerRequest(String httpMethod, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart)
-            : base(httpMethod, url, prefix, server, host, queryStart)
+        public ManualHttpServerRequest(String httpMethod, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart, bool didIndex = false)
+            : base(httpMethod, url, prefix, server, host, queryStart, didIndex)
         {
         }
 

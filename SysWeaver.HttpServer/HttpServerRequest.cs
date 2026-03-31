@@ -148,8 +148,14 @@ namespace SysWeaver.Net
             { "HEAD", HttpServerMethods.HEAD },
         }.Freeze();
 
-        protected HttpServerRequest(String httpMethod, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart)
+        /// <summary>
+        /// True if "index.html" was added automatically
+        /// </summary>
+        public readonly bool DidIndex;
+
+        protected HttpServerRequest(String httpMethod, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart, bool didIndex)
         {
+            DidIndex = didIndex;
             Method = httpMethod;
             var m = IntMethods.TryGetValue(httpMethod ?? "", out var hm) ? hm : HttpServerMethods.Other;
             HttpMethod = m;

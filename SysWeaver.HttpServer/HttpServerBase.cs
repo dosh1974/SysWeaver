@@ -506,7 +506,7 @@ namespace SysWeaver.Net
 
         HttpServerRequest ReplaceUrl(HttpServerRequest s, String newUrl, String newMethod = null)
         {
-            var host = GetHost(out var prefix, out var queryStart, ref newUrl);
+            var host = GetHost(out var prefix, out var queryStart, out var didIndex, ref newUrl);
             if (prefix == null)
                 return null;
             return s.ReplaceUrl(newUrl, host, prefix, queryStart, this, newMethod);
@@ -2356,9 +2356,10 @@ namespace SysWeaver.Net
         static readonly SearchValues<Char> HostEnd = SearchValues.Create(['/', '?' ]);
         static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
 
-        public unsafe HttpServerHostInfo GetHost(out String prefix, out int queryStart, ref String url)
+        public unsafe HttpServerHostInfo GetHost(out String prefix, out int queryStart, out bool didIndex, ref String url)
         {
             url = HttpUtility.UrlDecode(url);
+            didIndex = false;
             var urlSpan = url.AsSpan();
             var urlLen = urlSpan.Length;
             fixed (Char* urlStart = urlSpan)
@@ -2379,7 +2380,10 @@ namespace SysWeaver.Net
                 {
                     queryStart = -1;
                     if (urlStart[urlLen - 1] == '/')
+                    {
+                        didIndex = true;
                         url += "index.html";
+                    }
                 }
                 else
                 {
@@ -2387,6 +2391,7 @@ namespace SysWeaver.Net
                     if (urlStart[queryStart - 1] == '/')
                     {
                         url = urlSpan[..queryStart].ConcatToString("index.html", urlSpan[queryStart..]);
+                        didIndex = true;
                         queryStart += 10;
                     }
                 }

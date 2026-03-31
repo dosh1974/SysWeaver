@@ -263,7 +263,7 @@ namespace SysWeaver.ReverseProxy
                     {
                         //  Local (in process)
                         url = local.LocalUri + url;
-                        var host = local.GetHost(out var prefix, out int qs, ref url);
+                        var host = local.GetHost(out var prefix, out int qs, out var didIndex, ref url);
                         using var t = new ManualHttpServerRequest(res.Method.ToString(), url, prefix, local, host, qs);
                         var data = res.Data;
                         if (data != null)

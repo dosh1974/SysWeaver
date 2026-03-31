@@ -415,13 +415,13 @@ namespace SysWeaver.Net
                         return;
                     }
                     url = req.Url.AbsoluteUri;
-                    var host = GetHost(out var prefix, out var queryStart, ref url);
+                    var host = GetHost(out var prefix, out var queryStart, out var didIndex, ref url);
                     if (prefix == null)
                     {
                         await Handle404(req, res).ConfigureAwait(false);
                         return;
                     }
-                    using var data = new NetHttpServerRequest(c, url, prefix, this, host, queryStart);
+                    using var data = new NetHttpServerRequest(c, url, prefix, this, host, queryStart, didIndex);
                     data.SetResHeader("Server", "");
                     await Handle(data).ConfigureAwait(false);
                 }

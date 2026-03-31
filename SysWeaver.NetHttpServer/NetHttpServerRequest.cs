@@ -11,10 +11,10 @@ namespace SysWeaver.Net
 {
     public sealed class NetHttpServerRequest : HttpServerRequest
     {
-        public NetHttpServerRequest(HttpListenerContext context, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart, String newMethod = null) 
+        public NetHttpServerRequest(HttpListenerContext context, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart, bool didIndex, String newMethod = null) 
             : base(
                     newMethod ?? context.Request.HttpMethod,
-                    url, prefix, server, host, queryStart)
+                    url, prefix, server, host, queryStart, didIndex)
         {
             Context = context;
             var req = context.Request;
@@ -153,7 +153,7 @@ namespace SysWeaver.Net
 
         public override HttpServerRequest ReplaceUrl(string newUrl, HttpServerHostInfo host, String prefix, int queryStart, HttpServerBase server, String newMethod = null)
         {
-            var h = new NetHttpServerRequest(Context, newUrl, prefix, server, host, queryStart, newMethod);
+            var h = new NetHttpServerRequest(Context, newUrl, prefix, server, host, queryStart, false, newMethod);
             h.Init(Session);
             return h;
         }
