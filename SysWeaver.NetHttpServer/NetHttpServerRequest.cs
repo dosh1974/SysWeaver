@@ -157,6 +157,14 @@ namespace SysWeaver.Net
             h.Init(Session);
             return h;
         }
+
+        public override string GetRawQuery(string def = "")
+        {
+            var q = Req.Url.Query;
+            if (String.IsNullOrEmpty(q))
+                return def;
+            return q.Substring(1);
+        }
     }
 
 

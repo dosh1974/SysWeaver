@@ -197,6 +197,13 @@ namespace SysWeaver.Net
             base.Dispose();
         }
 
+        public override string GetRawQuery(string def = "")
+        {
+            var qs = Req.QueryString;
+            if (!qs.HasValue)
+                return def;
+            return qs.Value.Substring(1);
+        }
     }
 
 

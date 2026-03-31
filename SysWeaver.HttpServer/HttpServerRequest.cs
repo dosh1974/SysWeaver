@@ -106,17 +106,24 @@ namespace SysWeaver.Net
         /// </summary>
         public readonly int QueryStringStart;
 
+
         /// <summary>
-        /// Get the raw query string (everything after ?) or an empty string if no query is present.
+        /// Get the query string (everything after ?) or the supplied default if no no query is present.
         /// </summary>
         /// <returns></returns>
-        public String GetRawQuery(String def = "")
+        public virtual String GetQuery(String def = "")
         {
             var i = QueryStringStart;
             if (i <= 0)
                 return def;
             return Url.Substring(i);
         }
+
+        /// <summary>
+        /// Get the raw query string (everything after ?) or the supplied default if no no query is present.
+        /// </summary>
+        /// <returns></returns>
+        public virtual String GetRawQuery(String def = "") => GetQuery(def);
 
         /// <summary>
         /// The compression encoder and level to use, set before calling WriteStream or GetData

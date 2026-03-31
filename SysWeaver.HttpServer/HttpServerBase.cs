@@ -856,7 +856,7 @@ namespace SysWeaver.Net
             data.SetResMime("text/plain; charset=UTF-8");
             if (!data.IsHead)
             {
-                var tz = data.GetRawQuery();
+                var tz = data.GetQuery();
                 if (!String.IsNullOrEmpty(tz))
                 {
                     var ss = tz.Split(';');

@@ -95,7 +95,7 @@ namespace SysWeaver.ReverseProxy
                 throw new HttpResponseException(503);
             var qs = r.QueryStringStart;
             if (qs > 0)
-                clientUrl += r.Url.Substring(qs - 1);
+                clientUrl = String.Concat(clientUrl, '?', r.GetRawQuery());
             await client.Cache.HandleAsync(r, clientUrl, async (url, data) =>
             {
                 var req = new ReverseProxyRequest

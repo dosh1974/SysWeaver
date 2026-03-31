@@ -18,6 +18,22 @@ namespace SysWeaver.Media
         public double MaxX = double.MinValue;
         public double MaxY = double.MinValue;
 
+        public SvgMinMaxState Expand(double top, double right, double bottom, double left)
+        {
+            MinY -= top;
+            MaxX += right;
+            MaxY += bottom;
+            MinX -= left;
+            IsEmpty = (MaxY <= MinY) || (MaxX <= MinX);
+            return this;
+        }
+
+        public SvgMinMaxState Expand(double horizontal, double vertical)
+            => Expand(vertical, horizontal, vertical, horizontal);
+
+        public SvgMinMaxState Expand(double d)
+            => Expand(d, d, d, d);
+
         public readonly Action<double, double> Update;
 
         public SvgMinMaxState()

@@ -150,7 +150,7 @@ namespace SysWeaver.Net
                 return HttpServerTools.NullHttpRequestHandlerValueTask;
             if (!auth.Contains("debug"))
                 return HttpServerTools.NullHttpRequestHandlerValueTask;
-            int seed = int.Parse(data.GetRawQuery(EnvInfo.AppSeed.ToString()));
+            int seed = int.Parse(data.GetQuery(EnvInfo.AppSeed.ToString()));
             var enc = Encoding.UTF8;
             var svgS = new SvgScene(256, 256);
             svgS.AddFavIcon(EnvInfo.AppName, null, new HashColors(EnvInfo.AppName, seed));
@@ -278,7 +278,7 @@ namespace SysWeaver.Net
                 return HttpServerTools.NullHttpRequestHandlerValueTask;
             if (!auth.Contains("debug"))
                 return HttpServerTools.NullHttpRequestHandlerValueTask;
-            int seed = int.Parse(data.GetRawQuery(EnvInfo.AppSeed.ToString()));
+            int seed = int.Parse(data.GetQuery(EnvInfo.AppSeed.ToString()));
             var enc = Encoding.UTF8;
             var svgS = new SvgScene(512, 384);
             svgS.AddFavIcon(EnvInfo.AppName, EnvInfo.AppDisplayName, new HashColors(EnvInfo.AppName, seed));

@@ -19,6 +19,8 @@ namespace SysWeaver
         public String GetMessage(IReadOnlyDictionary<String, String> vars)
             => GetBody().Get(vars);
 
+
+
         /// <summary>
         /// Get the text template for the body
         /// </summary>

@@ -226,6 +226,12 @@ namespace SysWeaver.Media
             return AddElement(e, fill, stroke, strokeWidth);
         }
 
+        public XElement Graph(String fill = null, String stroke = null, double strokeWidth = 1)
+        {
+            var e = CreateElement("g");
+            return AddElement(e, fill, stroke, strokeWidth);
+        }
+
         public XElement Image(ReadOnlySpan<Byte> data, String mime, double x, double y, double width, double height)
         {
             var e = CreateElement("image");
@@ -241,9 +247,47 @@ namespace SysWeaver.Media
             return AddElement(e, null, null, 0);
         }
 
+        static bool FileExists(String url)
+        {
+            try
+            {
+                return File.Exists(url);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
+        public String GetTransformToFit(SvgMinMaxState s, double x, double y, double width, double height, double angle = 0, String coordFormat = null)
+        {
+            double scaleX = width / s.Width;
+            double scaleY = height / s.Height;
+            var scale = Math.Min(scaleX, scaleY);
+            var dx = -s.MinX - s.Width * 0.5;
+            var dy = -s.MinY - s.Height * 0.5;
+            var cx = x + width * 0.5;
+            var cy = y + height * 0.5;
+
+            StringBuilder tr = new StringBuilder();
+            if ((cx != 0) || (cy != 0))
+                tr.Append("translate(").Append(Coord(cx, coordFormat)).Append(' ').Append(Coord(cy, coordFormat)).Append(") ");
+            if (angle != 0)
+                tr.Append("rotate(").Append(Coord(angle, coordFormat)).Append(") ");
+            if (scale != 1)
+                tr.Append("scale(").Append(Coord(scale, coordFormat)).Append(") ");
+            if ((dx != 0) || (dy != 0))
+                tr.Append("translate(").Append(Coord(dx, coordFormat)).Append(' ').Append(Coord(dy, coordFormat)).Append(") ");
+            var l = tr.Length;
+            if (l <= 1)
+                return null;
+            tr.Length = l - 1;
+            return tr.ToString();
+        }
+
         public XElement Image(String url, double x, double y, double width, double height)
         {
-            if ((url.IndexOf("://") < 0) || (!File.Exists(url)))
+            if ((url.IndexOf("://") < 0) && (!url.FastStartsWith("data:")) && FileExists(url))
             {
                 var mime = MimeTypeMap.GetMimeType(url.Substring(url.LastIndexOf('.') + 1));
                 var data = File.ReadAllBytes(url);
