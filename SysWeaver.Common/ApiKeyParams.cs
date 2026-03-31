@@ -52,17 +52,10 @@ namespace SysWeaver
                 fn = EnvInfo.MakeAbsoulte(fn);
                 if (!File.Exists(fn))
                     throw new Exception("Credentials file " + fn.ToFilename() + " must exist!");
-                var l = FileExt.ReadLines(fn, null, true, true);
-                var lc = l.Length;
-                if (lc < 1)
+                var t = FileExt.ReadNonCommentString(fn);
+                if (t == null)
                     throw new Exception("Credentials file " + fn.ToFilename() + " must contain at least one line of text!");
-                for (int i = 0; i < lc; ++i)
-                {
-                    var t = l[i];
-                    if (t[0] == '#')
-                        continue;
-                    return t;
-                }
+                return t;
             }
             else
             {

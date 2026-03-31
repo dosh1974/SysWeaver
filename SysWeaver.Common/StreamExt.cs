@@ -7,6 +7,42 @@ using System.Threading.Tasks;
 
 namespace SysWeaver
 {
+
+
+    public static class EncodingExt
+    {
+
+        static readonly SemiFrozenDictionary<Encoding, Byte[]> Preambles = new SemiFrozenDictionary<Encoding, byte[]>();
+
+        /// <summary>
+        /// Get a string from bytes without any Bom (pre-amble)
+        /// </summary>
+        /// <param name="encoding"></param>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        public static String GetStringWithoutBom(this Encoding encoding, ReadOnlySpan<Byte> data)
+        {
+            if (encoding == null)
+                encoding = Encoding.UTF8;
+            var pp = Preambles;
+            if (!pp.TryGetValue(encoding, out var pre))
+            {
+                pre = encoding.GetPreamble();
+                pp.TryAdd(encoding, pre);
+            }
+            if (pre != null)
+            {
+                var l = pre.Length;
+                if (l <= data.Length)
+                {
+                    if (pre.SequenceEqual(data[..l]))
+                        data = data[l..];
+                }
+            }
+            return encoding.GetString(data);
+        }
+    }
+
     public static class StreamExt
     {
 
@@ -21,7 +57,7 @@ namespace SysWeaver
         public static String ReadAllText(this Stream stream, Encoding encoding = null, bool leaveOpen = false)
         {
             using var mem = ReadAllUnmanagedMemory(stream, leaveOpen);
-            return (encoding ?? Encoding.UTF8).GetString(mem.Memory.Span);
+            return encoding.GetStringWithoutBom(mem.Memory.Span);
         }
 
         /// <summary>
@@ -35,7 +71,7 @@ namespace SysWeaver
         public static async ValueTask<String> ReadAllTextAsync(this Stream stream, Encoding encoding = null, bool leaveOpen = false)
         {
             using var mem = await ReadAllUnmanagedMemoryAsync(stream, leaveOpen).ConfigureAwait(false);
-            return (encoding ?? Encoding.UTF8).GetString(mem.Memory.Span);
+            return encoding.GetStringWithoutBom(mem.Memory.Span);
         }
 
 

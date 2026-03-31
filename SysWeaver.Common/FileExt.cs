@@ -170,6 +170,27 @@ namespace SysWeaver
 
 
 
+        /// <summary>
+        /// Return the first non-empty, non-comment line of text (comments are lines that start with a '#').
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <returns></returns>
+        public static String ReadNonCommentString(String filename)
+        {
+            var l = ReadLines(filename, null, true, true);
+            var lc = l.Length;
+            if (lc < 1)
+                return null;
+            for (int i = 0; i < lc; ++i)
+            {
+                var t = l[i];
+                if (t[0] == '#')
+                    continue;
+                return t;
+            }
+            return null;
+        }
+
 
 
         /// <summary>
