@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -7,10 +8,73 @@ using System.Xml.Linq;
 
 namespace SysWeaver.Media
 {
-    public sealed class SvgCanvas
+
+    public static class SvgCanvasTools
     {
         public static readonly CultureInfo Ci = CultureInfo.InvariantCulture;
         public static readonly XNamespace Namespace = XNamespace.Get("http://www.w3.org/2000/svg");
+
+        public static String SvgValue(double value, String coordFormat = "0.###")
+            => value.ToString(coordFormat, Ci);
+
+
+        public static XElement SvgOpacity(this XElement e, double opacity)
+        {
+            if (opacity >= 1)
+                return e;
+            if (opacity < 0)
+                opacity = 0;
+            e.SetAttributeValue("opacity", SvgValue(opacity));
+            return e;
+        }
+
+        public static XElement SvgClipPath(this XElement e, String clipId)
+        {
+            if (String.IsNullOrEmpty(clipId))
+                return e;
+            e.SetAttributeValue("clip-path", clipId);
+            return e;
+        }
+
+        public static XElement SvgFillOpacity(this XElement e, double opacity)
+        {
+            if (opacity >= 1)
+                return e;
+            if (opacity < 0)
+                opacity = 0;
+            e.SetAttributeValue("fill-opacity", SvgValue(opacity));
+            return e;
+        }
+
+
+        public static XElement SvgFilter(this XElement e, String idRef)
+        {
+            if (idRef == null)
+                return e;
+            e.SetAttributeValue("filter", idRef);
+            return e;
+        }
+
+        public static XElement SvgStroke(this XElement e, String color, double thickness = 1, double opacity = 1)
+        {
+            if (thickness <= 0)
+                return e;
+            if (opacity <= 0)
+                return e;
+            if (String.IsNullOrEmpty(color))
+                return e;
+            if (thickness != 1)
+                e.SetAttributeValue("stroke-width", SvgValue(thickness));
+            e.SetAttributeValue("stroke", color);
+            if (opacity < 1)
+                e.SetAttributeValue("stroke-opacity", SvgValue(opacity));
+            return e;
+        }
+
+    }
+
+    public sealed class SvgCanvas
+    {
 
         public static SvgCanvas Create(String svgText, String defaultCoordFormat = "0.##")
         {
@@ -53,7 +117,7 @@ namespace SysWeaver.Media
         {
             if (String.IsNullOrEmpty(vv))
                 return def;
-            if (!double.TryParse(vv, Ci, out var value))
+            if (!double.TryParse(vv, SvgCanvasTools.Ci, out var value))
                 return def;
             return value;
         }
@@ -61,7 +125,7 @@ namespace SysWeaver.Media
         SvgCanvas(XDocument doc, String defaultCoordFormat = "0.##")
         {
             Doc = doc;
-            var ns = Namespace;
+            var ns = SvgCanvasTools.Namespace;
             var s = doc.Element(ns.GetName("svg"));
             Svg = s;
             var v = s.Attribute("viewBox");
@@ -85,7 +149,7 @@ namespace SysWeaver.Media
             }
             TryRemoveAttribute(s, "width");
             TryRemoveAttribute(s, "height");
-            s.SetAttributeValue("viewBox", String.Join(' ', Coord(OX), Coord(OY), Coord(width), Coord(height)));
+            s.SetAttributeValue("viewBox", String.Join(' ', Value(OX), Value(OY), Value(width), Value(height)));
             Width = width;
             Height = height;
         }
@@ -109,6 +173,37 @@ namespace SysWeaver.Media
         }
 
 
+        static readonly IReadOnlyDictionary<String, Func<SvgCanvas, String[], String>> ColorParsers = new Dictionary<String, Func<SvgCanvas, String[], String>>(StringComparer.Ordinal)
+        {
+            { "lineargradient", (svg, p) =>
+                {
+                    var c = (p.Length - 1) >> 1;
+                    var stops = new SvgGradStop[c];
+                    for (int i = 0; i < c; ++ i)
+                        stops[i] = new SvgGradStop(100.0 * ParseNumber(p[i + i + 1]), p[i + i + 2]);
+                    return svg.LinearGradientDef(stops);
+                } 
+            },
+            { "lineargradientdir", (svg, p) =>
+                {
+                    var c = (p.Length - 1) >> 1;
+                    var stops = new SvgGradStop[c - 2];
+                    for (int i = 2; i < c; ++ i)
+                        stops[i - 2] = new SvgGradStop(100.0 * ParseNumber(p[i + i + 1]), p[i + i + 2]);
+                    return svg.LinearGradientDef(ParseNumber(p[1]), ParseNumber(p[2]), ParseNumber(p[3]), ParseNumber(p[4]), stops);
+                }
+            },
+        }; 
+
+        public String Color(String color)
+        {
+            if (String.IsNullOrEmpty(color))
+                return null;
+            var cols = color.Split(' ');
+            if (ColorParsers.TryGetValue(cols[0].FastToLower(), out var fn))
+                return fn(this, cols);
+            return color;
+        }
 
         public SvgCanvas(double width, double height, String defaultCoordFormat = "0.##")
         {
@@ -121,7 +216,7 @@ namespace SysWeaver.Media
             d.Add(s);
             Doc = d;
             Svg = s;
-            s.SetAttributeValue("viewBox", String.Concat("0 0 ", Coord(width), ' ', Coord(height)));
+            s.SetAttributeValue("viewBox", String.Concat("0 0 ", Value(width), ' ', Value(height)));
         }
 
         public String ToSvgString()
@@ -142,8 +237,8 @@ namespace SysWeaver.Media
         public readonly double Width;
         public readonly double Height;
 
-        public String Coord(double value, String coordFormat = null)
-            => value.ToString(coordFormat ?? DefaultCoordFormat, Ci);
+        public String Value(double value, String coordFormat = null)
+            => SvgCanvasTools.SvgValue(value, coordFormat ?? DefaultCoordFormat);
 
 
         public void AddFilter(XElement el, String filterId)
@@ -162,22 +257,37 @@ namespace SysWeaver.Media
             if (!color.FastEquals("#000"))
                 d.SetAttributeValue("flood-color", color);
             if (stdDeviation != 0)
-                d.SetAttributeValue("stdDeviation", Coord(stdDeviation));
+                d.SetAttributeValue("stdDeviation", Value(stdDeviation));
             if (opacity != 1)
-                d.SetAttributeValue("flood-opacity", Coord(opacity));
+                d.SetAttributeValue("flood-opacity", Value(opacity));
             if (dx != 2)
-                d.SetAttributeValue("dx", Coord(dx));
+                d.SetAttributeValue("dx", Value(dx));
             if (dy != 2)
-                d.SetAttributeValue("dy", Coord(dy));
+                d.SetAttributeValue("dy", Value(dy));
             return b;
         }
 
         public XElement CreateElement(String localName)
-            => new XElement(Namespace + localName);
+            => new XElement(SvgCanvasTools.Namespace + localName);
 
         public void SetAttribute(XElement element, String localName, Object value)
             => element.SetAttributeValue(localName, value);
 
+
+        XElement Defs;
+
+        XElement AddDef(XElement e)
+        {
+            var defs = Defs;
+            if (defs == null)
+            {
+                defs = CreateElement("defs");
+                Defs = defs;
+                Svg.AddFirst(defs);
+            }
+            defs.Add(e);
+            return e;
+        }
 
         XElement AddElement(XElement e, String fill, String stroke, double strokeWidth)
         {
@@ -186,7 +296,7 @@ namespace SysWeaver.Media
             if (stroke != null)
             {
                 e.SetAttributeValue("stroke", stroke);
-                e.SetAttributeValue("stroke-width", Coord(strokeWidth));
+                e.SetAttributeValue("stroke-width", Value(strokeWidth));
             }
             Svg.Add(e);
             return e;
@@ -196,13 +306,13 @@ namespace SysWeaver.Media
         {
             var e = CreateElement("rect");
             if (x != 0)
-                e.SetAttributeValue("x", Coord(x));
+                e.SetAttributeValue("x", Value(x));
             if (y != 0)
-                e.SetAttributeValue("y", Coord(y));
+                e.SetAttributeValue("y", Value(y));
             if (width != 0)
-                e.SetAttributeValue("width", Coord(width));
+                e.SetAttributeValue("width", Value(width));
             if (height != 0)
-                e.SetAttributeValue("height", Coord(height));
+                e.SetAttributeValue("height", Value(height));
             return AddElement(e, fill, stroke, strokeWidth);
         }
 
@@ -210,14 +320,127 @@ namespace SysWeaver.Media
         {
             var e = CreateElement("circle");
             if (x != 0)
-                e.SetAttributeValue("cx", Coord(x));
+                e.SetAttributeValue("cx", Value(x));
             if (y != 0)
-                e.SetAttributeValue("cy", Coord(y));
+                e.SetAttributeValue("cy", Value(y));
             if (rad != 0)
-                e.SetAttributeValue("r", Coord(rad));
+                e.SetAttributeValue("r", Value(rad));
             return AddElement(e, fill, stroke, strokeWidth);
         }
 
+
+        public String GenId()
+        {
+            var c = CurrentId;
+            CurrentId = c + 1;
+            Span<Char> temp = stackalloc Char[16];
+            int dest = 0;
+            var ch = IdFirstChars;
+            do
+            {
+                var l = ch.Length;
+                var p = c % l;
+                c /= l;
+                temp[dest] = ch[p];
+                ++dest;
+                ch = IdSecondChars;
+            } while (c != 0);
+            return new String(temp[..dest]);
+        }
+
+        int CurrentId;
+
+        const String IdFirstChars = "abcdefghijklmnopqrstuvwxyz";
+        const String IdSecondChars = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+
+        public String DropShadowDef(double dx = 2, double dy = 2, double stdDeviation = 2, String color = "#000", double opacity = 1, String id = null)
+        {
+            id = id ?? GenId();
+            if (opacity <= 0)
+                return "";
+            var e = CreateElement("filter");
+            e.SetAttributeValue("id", id);
+            var ds = CreateElement("feDropShadow");
+            e.Add(ds);
+            if (dx != 2)
+                ds.SetAttributeValue("dx", Value(dx));
+            if (dy != 2)
+                ds.SetAttributeValue("dy", Value(dy));
+            if (stdDeviation != 2)
+                ds.SetAttributeValue("stdDeviation", stdDeviation);
+            ds.SetAttributeValue("flood-color", color ?? "#000");
+            if (opacity < 1)
+                ds.SetAttributeValue("flood-opacity", Value(opacity));
+            AddDef(e);
+            return String.Concat("url(#", id, ')');
+        }
+
+
+        public String ClipPathDef(String path, String id = null)
+        {
+            if (path == null)
+                return null;
+            var p = CreateElement("path");
+            p.SetAttributeValue("d", path);
+            return ClipPathDef(id, p);
+        }
+        public String ClipPathDef(String id, params XElement[] paths)
+        {
+            if (paths.Length <= 0)
+                return null;
+            id = id ?? GenId();
+            var e = CreateElement("clipPath");
+            e.SetAttributeValue("id", id);
+            foreach (var x in paths)
+                e.Add(x);
+            AddDef(e);
+            return String.Concat("url(#", id, ')');
+        }
+
+
+
+        public String LinearGradientDef(params SvgGradStop[] stops)
+            => LinearGradientDef(null, stops);
+
+        public String LinearGradientDef(String id, params SvgGradStop[] stops)
+        {
+            id = id ?? GenId();
+            var e = CreateElement("linearGradient");
+            e.SetAttributeValue("id", id);
+            foreach (var x in stops)
+            {
+                var s = CreateElement("stop");
+                s.SetAttributeValue("offset", Value(x.Pos) + "%");
+                s.SetAttributeValue("stop-color", x.Color);
+                e.Add(s);
+            }
+            AddDef(e);
+            return String.Concat("url(#", id, ')');
+        }
+
+        public String LinearGradientDef(double x1, double y1, double x2, double y2, params SvgGradStop[] stops)
+            => LinearGradientDef(null, x1, y1, x2, y2, stops);
+
+        public String LinearGradientDef(String id, double x1, double y1, double x2, double y2, params SvgGradStop[] stops)
+        {
+            id = id ?? GenId();
+            var e = CreateElement("linearGradient");
+            e.SetAttributeValue("id", id);
+            e.SetAttributeValue("x1", Value(x1));
+            e.SetAttributeValue("y1", Value(y1));
+            e.SetAttributeValue("x2", Value(x2));
+            e.SetAttributeValue("y2", Value(y2));
+            foreach (var x in stops)
+            {
+                var s = CreateElement("stop");
+                s.SetAttributeValue("offset", Value(x.Pos) + "%");
+                s.SetAttributeValue("stop-color", x.Color);
+                e.Add(s);
+            }
+            AddDef(e);
+            return String.Concat("url(#", id, ')');
+        }
 
         public XElement Path(String d, String fill = null, String stroke = null, double strokeWidth = 1)
         {
@@ -271,13 +494,13 @@ namespace SysWeaver.Media
 
             StringBuilder tr = new StringBuilder();
             if ((cx != 0) || (cy != 0))
-                tr.Append("translate(").Append(Coord(cx, coordFormat)).Append(' ').Append(Coord(cy, coordFormat)).Append(") ");
+                tr.Append("translate(").Append(Value(cx, coordFormat)).Append(' ').Append(Value(cy, coordFormat)).Append(") ");
             if (angle != 0)
-                tr.Append("rotate(").Append(Coord(angle, coordFormat)).Append(") ");
+                tr.Append("rotate(").Append(Value(angle, coordFormat)).Append(") ");
             if (scale != 1)
-                tr.Append("scale(").Append(Coord(scale, coordFormat)).Append(") ");
+                tr.Append("scale(").Append(Value(scale, coordFormat)).Append(") ");
             if ((dx != 0) || (dy != 0))
-                tr.Append("translate(").Append(Coord(dx, coordFormat)).Append(' ').Append(Coord(dy, coordFormat)).Append(") ");
+                tr.Append("translate(").Append(Value(dx, coordFormat)).Append(' ').Append(Value(dy, coordFormat)).Append(") ");
             var l = tr.Length;
             if (l <= 1)
                 return null;
@@ -326,7 +549,7 @@ namespace SysWeaver.Media
         public XElement Add(SvgCanvas p, double x = 0, double y = 0, double maxWidth = 0, double maxHeight = 0, Action<XElement> onCopy = null)
         {
             var t = new XDocument(p.Doc);
-            var svg = t.Element(Namespace.GetName("svg"));
+            var svg = t.Element(SvgCanvasTools.Namespace.GetName("svg"));
             onCopy?.Invoke(svg);
             var e = CreateElement("g");
             double scale = 1;
@@ -349,9 +572,10 @@ namespace SysWeaver.Media
             var haveScale = scale != 1;
             if (haveTrans || haveScale)
             {
-                String s = haveTrans ? String.Concat("translate(", x.ToString(Ci), ' ', y.ToString(Ci), ") ") : "";
+                var ci = SvgCanvasTools.Ci;
+                String s = haveTrans ? String.Concat("translate(", x.ToString(ci), ' ', y.ToString(ci), ") ") : "";
                 if (haveScale)
-                    s += String.Concat("scale(", scale.ToString(Ci), ")");
+                    s += String.Concat("scale(", scale.ToString(ci), ")");
                 /*                String s = haveScale ? String.Concat("scale(", scale.ToString(Ci), ") ") : "";
                                 if (haveTrans)
                                     s += String.Concat("translate(", x.ToString(Ci), ' ', y.ToString(Ci), ')');

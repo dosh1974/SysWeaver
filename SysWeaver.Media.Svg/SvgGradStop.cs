@@ -8,6 +8,11 @@ namespace SysWeaver.Media
         public readonly double Pos;
         public readonly String Color;
 
+        /// <summary>
+        /// Create a gradient stop
+        /// </summary>
+        /// <param name="pos">[0, 100] The position as a percentage</param>
+        /// <param name="color">The css color</param>
         public SvgGradStop(double pos, string color)
         {
             Pos = pos;

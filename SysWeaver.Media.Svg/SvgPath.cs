@@ -8,6 +8,28 @@ using WaterTrans.GlyphLoader;
 
 namespace SysWeaver.Media
 {
+
+    public class SvgCornerShape
+    {
+        public SvgCornerShape(double rad, double exp = 1)
+        {
+            RadX = rad;
+            RadY = rad;
+            Exp = exp;
+        }
+
+        public SvgCornerShape(double radX, double radY, double exp)
+        {
+            RadX = radX;
+            RadY = radY;
+            Exp = exp;
+        }
+
+        public double RadX;
+        public double RadY;
+        public double Exp; // 0 = Line, 1 = Rounded, -1 = Scooped
+    }
+
     public static class SvgPath
     {
         public static void UpdateMinMax(SvgMinMaxState state, String svgPath)
@@ -1333,8 +1355,208 @@ namespace SysWeaver.Media
 
             b.Append('z');
             return b.ToString();
-
         }
+
+
+
+
+        /// <summary>
+        /// Create a svg path in the shape of a rectangle with specific corner shapes
+        /// </summary>
+        /// <param name="width"></param>
+        /// <param name="height"></param>
+        /// <param name="shape">Shape of the corners</param>
+        /// <param name="maxDecimals"></param>
+        /// <param name="offsetX"></param>
+        /// <param name="offsetY"></param>
+        /// <returns></returns>
+        public static String GetFancyRect(double width, double height, SvgCornerShape shape, int maxDecimals = 3, double offsetX = 0, double offsetY = 0)
+            => GetFancyRect(width, height, shape, shape, shape, shape, maxDecimals, offsetX, offsetY);
+
+
+        /// <summary>
+        /// Create a svg path in the shape of a rectangle with specific corner shapes
+        /// </summary>
+        /// <param name="width"></param>
+        /// <param name="height"></param>
+        /// <param name="topLeft">Shape of top left corner</param>
+        /// <param name="topRight">Shape of top right corner</param>
+        /// <param name="bottomRight">Shape of bottom right corner</param>
+        /// <param name="bottomLeft">Shape of bottom left corner</param>
+        /// <param name="maxDecimals"></param>
+        /// <param name="offsetX"></param>
+        /// <param name="offsetY"></param>
+        /// <returns></returns>
+        public static String GetFancyRect(double width, double height, SvgCornerShape topLeft, SvgCornerShape topRight, SvgCornerShape bottomRight, SvgCornerShape bottomLeft, int maxDecimals = 3, double offsetX = 0, double offsetY = 0)
+        {
+            var radTopLeftX = Math.Max(0, topLeft.RadX);
+            var radTopLeftY = Math.Max(0, topLeft.RadY);
+
+            var radTopRightX = Math.Max(0, topRight.RadX);
+            var radTopRightY = Math.Max(0, topRight.RadY);
+
+            var radBottomRightX = Math.Max(0, bottomRight.RadX);
+            var radBottomRightY = Math.Max(0, bottomRight.RadY);
+
+            var radBottomLeftX = Math.Max(0, bottomLeft.RadX);
+            var radBottomLeftY = Math.Max(0, bottomLeft.RadY);
+
+            //  Validate radie and determine what edges are available
+
+            var sum = radTopLeftX + radTopRightX;
+            var haveTop = sum < width;
+            if (sum > width)
+            {
+                radTopLeftX *= (width / sum);
+                radTopRightX = width - radTopLeftX;
+            }
+
+            sum = radBottomLeftX + radBottomRightX;
+            var haveBottom = sum < width;
+            if (sum > width)
+            {
+                radBottomLeftX *= (width / sum);
+                radBottomRightX = width - radBottomLeftX;
+            }
+
+            sum = radTopLeftY + radBottomLeftY;
+            var haveLeft = sum < height;
+            if (sum > height)
+            {
+                radTopLeftY *= (height / sum);
+                radBottomLeftY = height - radTopLeftY;
+            }
+
+            sum = radTopRightY + radBottomRightY;
+            var haveRight = sum < height;
+            if (sum > height)
+            {
+                radTopRightY *= (height / sum);
+                radBottomRightY = height - radTopRightY;
+            }
+
+            var x1 = offsetX + width;
+            var y1 = offsetY + height;
+
+            var fmt = SvgTools.GetFormat(maxDecimals);
+            StringBuilder b = new StringBuilder();
+        //  Top
+            b.Append('M');
+            b.Append(fmt(offsetX + radTopLeftX));
+            b.Append(' ');
+            b.Append(fmt(offsetY));
+            if (haveTop)
+            {
+                b.Append('H');
+                b.Append(fmt(x1 - radTopRightX));
+            }
+            //  Top right
+            if ((radTopRightX > 0) || (radTopRightY > 0))
+            {
+                var exp = topRight.Exp;
+                if (exp != 0)
+                {
+                    var scale = exp * 0.5 + 0.5;
+                    b.Append('Q');
+                    b.Append(fmt(x1 - radTopRightX + scale * radTopRightX));
+                    b.Append(' ');
+                    b.Append(fmt(offsetY + radTopRightY - scale * radTopRightY));
+                    b.Append(' ');
+                }else
+                {
+                    b.Append('L');
+                }
+                b.Append(fmt(x1));
+                b.Append(' ');
+                b.Append(fmt(offsetY + radTopRightY));
+            }
+            //  Right
+            if (haveRight)
+            {
+                b.Append('V');
+                b.Append(fmt(y1 - radBottomRightY));
+            }
+            //  Bottom right
+            if ((radBottomRightX > 0) || (radBottomRightY > 0))
+            {
+                var exp = bottomRight.Exp;
+                if (exp != 0)
+                {
+                    var scale = exp * 0.5 + 0.5;
+                    b.Append('Q');
+                    b.Append(fmt(x1 - radBottomRightX + scale * radBottomRightX));
+                    b.Append(' ');
+                    b.Append(fmt(y1 - radBottomRightY + scale * radBottomRightY));
+                    b.Append(' ');
+                }
+                else
+                {
+                    b.Append('L');
+                }
+                b.Append(fmt(x1 - radBottomRightX));
+                b.Append(' ');
+                b.Append(fmt(y1));
+            }
+            //  Bottom
+            if (haveBottom)
+            {
+                b.Append('H');
+                b.Append(fmt(offsetX + radBottomLeftX));
+            }
+            //  Bottom left
+            if ((radBottomLeftX > 0) || (radBottomLeftY > 0))
+            {
+                var exp = bottomLeft.Exp;
+                if (exp != 0)
+                {
+                    var scale = exp * 0.5 + 0.5;
+                    b.Append('Q');
+                    b.Append(fmt(offsetX + radBottomLeftX - scale * radBottomLeftX));
+                    b.Append(' ');
+                    b.Append(fmt(y1 - radBottomLeftY + scale * radBottomLeftY));
+                    b.Append(' ');
+                }
+                else
+                {
+                    b.Append('L');
+                }
+                b.Append(fmt(offsetX));
+                b.Append(' ');
+                b.Append(fmt(y1 - radBottomLeftY));
+            }
+            //  Left
+            if (haveLeft)
+            {
+                b.Append('V');
+                b.Append(fmt(offsetY + radTopLeftY));
+            }
+            //  Top left
+            if ((radTopLeftX > 0) || (radTopLeftY > 0))
+            {
+                var exp = topLeft.Exp;
+                if (exp != 0)
+                {
+                    var scale = exp * 0.5 + 0.5;
+                    scale = topLeft.Exp * 0.5 + 0.5;
+                    b.Append('Q');
+                    b.Append(fmt(offsetX + radTopLeftX - scale * radTopLeftX));
+                    b.Append(' ');
+                    b.Append(fmt(offsetY + radTopLeftY - scale * radTopLeftY));
+                    b.Append(' ');
+                }
+                else
+                {
+                    b.Append('L');
+                }
+                b.Append(fmt(offsetX + radTopLeftX));
+                b.Append(' ');
+                b.Append(fmt(offsetY));
+            }
+            b.Append('z');
+            return b.ToString();
+        }
+
+
 
 
         /// <summary>

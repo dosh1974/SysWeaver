@@ -174,9 +174,9 @@ namespace SysWeaver.MicroService
                 {
                     scalePos += 6;
                     var scaleEnd = a.IndexOf(')', scalePos);
-                    scale = double.Parse(a.Substring(scalePos, scaleEnd - scalePos), SvgCanvas.Ci);
+                    scale = double.Parse(a.Substring(scalePos, scaleEnd - scalePos), SvgCanvasTools.Ci);
                 }
-                var st = scale.ToString(SvgCanvas.Ci).TrimEnd('0').TrimEnd('.');
+                var st = scale.ToString(SvgCanvasTools.Ci).TrimEnd('0').TrimEnd('.');
                 el.SetAttributeValue("transform", String.Concat("translate(224 32) scale(-", st, ' ', st, ')'));
             }
             svgText = canvas.ToSvgString();
