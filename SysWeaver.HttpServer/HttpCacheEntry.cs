@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace SysWeaver.Net
@@ -6,18 +8,21 @@ namespace SysWeaver.Net
     sealed class HttpCacheEntry
     {
         public long LastUsed;
+        public readonly int Status;
         public readonly String LocalUrl;
         public readonly long Expires;
-        public readonly HttpServerRequest Res;
+        //public readonly HttpServerRequest Res;
         public readonly ReadOnlyMemory<Byte> Data;
+        public readonly IReadOnlyList<KeyValuePair<String, IReadOnlyList<String>>> Headers;
 
         public HttpCacheEntry(long lastUsed, long expires, HttpServerRequest res, ReadOnlyMemory<byte> data, String localUrl)
         {
             LastUsed = lastUsed;
             Expires = expires;
-            Res = res;
+            Headers = res.AllResHeaders.ToList();
             Data = data;
             LocalUrl = localUrl;
+            Status = res.GetResStatusCode();
         }
 
         /// <summary>
@@ -29,11 +34,9 @@ namespace SysWeaver.Net
         public ValueTask SendCached(HttpServerRequest data, bool isHead)
         {
             //  TODO: Handle range?
-            Res.CopyHeaders(data);
-            if (isHead)
-                return ValueTask.CompletedTask;
+            data.SetResHeaders(Status, Headers);
             var b = Data;
-            return b.IsEmpty ? ValueTask.CompletedTask : data.SetResBodyAsync(b);
+            return (isHead || b.IsEmpty) ? ValueTask.CompletedTask : data.SetResBodyAsync(b);
         }
 
     }

@@ -584,9 +584,12 @@ namespace SysWeaver.Net
 
         }
 
-        public async Task<Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>> InternalRead(HttpServerRequest data, String newUrl, HttpSession session = null, String ifNotModifiedSince = null)
+        public async Task<Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>> InternalRead(String newUrl, HttpSession session = null, String ifNotModifiedSince = null)
         {
-            var n = ReplaceUrl(data, newUrl, "GET");
+            var host = GetHost(out var pre, out int qs, out bool didIndex, ref newUrl);
+            using var n = new ManualHttpServerRequest("GET", newUrl, pre, this, host, qs, didIndex);
+            if (session != null)
+                n.Init(session);
             try
             {
                 var res = await GetHandler(n, null).ConfigureAwait(false);
@@ -595,7 +598,7 @@ namespace SysWeaver.Net
                     if (session == null)
                         return null;
                     if (OptionalEndPoints.TryGetValue(n.LocalUrl, out var oep))
-                        res = await oep(data, session).ConfigureAwait(false);
+                        res = await oep(n, session).ConfigureAwait(false);
                     if (res == null)
                         return null;
                 }

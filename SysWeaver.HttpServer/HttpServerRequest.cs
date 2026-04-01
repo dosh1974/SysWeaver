@@ -173,8 +173,13 @@ namespace SysWeaver.Net
         /// <summary>
         /// Get all request headers
         /// </summary>
-        public abstract IEnumerable<KeyValuePair<String, IEnumerable<String>>> AllReqHeaders { get; }
+        public abstract IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllReqHeaders { get; }
 
+
+        /// <summary>
+        /// Get all response headers
+        /// </summary>
+        public abstract IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllResHeaders { get; }
 
 
         public void Init(HttpSession session)
@@ -233,6 +238,9 @@ namespace SysWeaver.Net
 
         public abstract void SetResContentLength(long length);
         public abstract void SetResStatusCode(int statusCode);
+
+        public abstract int GetResStatusCode();
+
         public abstract void SetResHeader(String header, String value);
         public abstract void SetResBody(ReadOnlySpan<Byte> data);
         public abstract ValueTask SetResBodyAsync(ReadOnlyMemory<Byte> data);
@@ -319,7 +327,9 @@ namespace SysWeaver.Net
             }
         }
 
-        public abstract void CopyHeaders(HttpServerRequest to);
+        protected static readonly IReadOnlySet<String> DefaultIgnoreHeaders = ReadOnlyData.Set("Set-Cookie");
+
+        public abstract void SetResHeaders(int status, IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> headers, IReadOnlySet<String> ignore = null);
 
         protected void OnDispose()
         {

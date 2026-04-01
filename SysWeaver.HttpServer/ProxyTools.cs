@@ -78,7 +78,7 @@ namespace SysWeaver.Net
 
 
 
-        public static String[] EncodeHeaders(params IEnumerable<KeyValuePair<string, IEnumerable<string>>>[] headers)
+        public static String[] EncodeHeaders<T>(params IEnumerable<KeyValuePair<string, T>>[] headers) where T : IEnumerable<String>
         {
             List<String> h = new List<string>(16);
             var l = headers.Length;

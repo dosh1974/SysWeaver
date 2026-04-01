@@ -217,18 +217,14 @@ namespace SysWeaver.Remote
             if (baseUrl == null)
                 throw new ArgumentException("Must specify a base url!", nameof(p.BaseUrl));
             baseUrl = PathTemplate.Resolve(baseUrl);
-            var fn = baseUrl;
-            try
+            if (PathExt.IsValidPathToFile(baseUrl, true))
             {
-                if (baseUrl.IndexOf("://") < 0)
-                    if (File.Exists(baseUrl))
-                        baseUrl = FileExt.ReadNonCommentString(baseUrl);
+                var fn = baseUrl;
+                baseUrl = FileExt.ReadNonCommentString(baseUrl);
+                if (baseUrl == null)
+                    throw new Exception("Base url file " + fn.ToFilename() + " must contain at least one line of text!");
             }
-            catch
-            {
-            }
-            if (baseUrl == null)
-                throw new Exception("Base url file " + fn.ToFilename() + " must contain at least one line of text!");
+            p.BaseUrl = baseUrl;
             UrlBase = baseUrl.TrimEnd('/') + '/';
             var c = new HttpClient(handler)
             {

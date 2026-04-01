@@ -172,8 +172,6 @@ namespace SysWeaver.Net.IconModule
         readonly int? ClientCacheDuration;
         readonly String Auth;
         readonly HttpCompressionPriority Comp;
-        readonly String Lwt;
-
 
         static readonly String LocGen = "Generated " + typeof(IconHttpServerModule).Assembly.GetName().Name;
         static readonly String LocEmbedded = "Embedded " + typeof(IconHttpServerModule).Assembly.GetName().Name;

@@ -142,7 +142,6 @@ namespace SysWeaver.Media
         /// Convert the image data to a MagickImage
         /// </summary>
         /// <param name="data"></param>
-        /// <param name="filename"></param>
         /// <returns></returns>
         public static MagickImage ToImage(this ImageData32 data)
         {

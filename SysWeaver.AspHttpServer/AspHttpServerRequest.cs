@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using System.IO;
 using System.Net;
 using System.Buffers;
+using Microsoft.Extensions.Primitives;
 
 namespace SysWeaver.Net
 {
@@ -25,7 +26,9 @@ namespace SysWeaver.Net
         internal readonly HttpRequest Req;
         internal readonly HttpResponse Res;
 
-        public override IEnumerable<KeyValuePair<String, IEnumerable<String>>> AllReqHeaders => Req.Headers.Select(x => new KeyValuePair<String, IEnumerable<String>>(x.Key, x.Value));
+        public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllReqHeaders => Req.Headers.Select(x => new KeyValuePair<String, IReadOnlyList<String>>(x.Key, x.Value.ToList()));
+        public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllResHeaders => Res.Headers.Select(x => new KeyValuePair<String, IReadOnlyList<String>>(x.Key, x.Value.ToList()));
+
 
         public override String IfNoneMatch => Req.Headers["If-None-Match"].FirstOrDefault()?.Trim();
         public override string AcceptEncoding => Req.Headers["Accept-Encoding"];
@@ -58,12 +61,8 @@ namespace SysWeaver.Net
 
         long Cl;
 
-        public override void SetResStatusCode(int statusCode)
-        {
-            Res.StatusCode = statusCode;
-            Status = statusCode;
-        }
-        int Status;
+        public override void SetResStatusCode(int statusCode) => Res.StatusCode = statusCode;
+        public override int GetResStatusCode() => Res.StatusCode;
 
 
 
@@ -140,48 +139,35 @@ namespace SysWeaver.Net
             }
         }
 
-        static readonly ArrayPool<String> Pool = ArrayPool<String>.Shared;
-
-        public override void CopyHeaders(HttpServerRequest toData)
+        static readonly IReadOnlyDictionary<String, Action<HttpResponse, IReadOnlyList<String>>> ResHeaderSetters = new Dictionary<String, Action<HttpResponse, IReadOnlyList<String>>>(StringComparer.Ordinal)
         {
-            var s = Res;
-            var to = (toData as AspHttpServerRequest).Res;
-            var toh = to.Headers;
-            var count = toh.Count;
-            var pool = Pool;
-            var toDelete = pool.Rent(count);
-            int delCount = 0;
-            foreach (var n in toh.Keys)
+            { "Content-Length", (to, vals) => to.ContentLength = long.Parse(vals.First()) },
+            { "Content-Type", (to, vals) => to.ContentType = vals.First() },
+        }.Freeze();
+
+        public override void SetResHeaders(int status, IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> headers, IReadOnlySet<String> ignore)
+
+        {
+            ignore = ignore ?? DefaultIgnoreHeaders;
+            var to = Res;
+            var ss = ResHeaderSetters;
+            foreach (var h in headers)
             {
-                if (!n.FastEquals("Set-Cookie"))
+                var k = h.Key;
+                if (ignore.Contains(k))
+                    continue;
+                var vals = h.Value;
+                var vc = vals.Count;
+                if (vc <= 0)
+                    continue;
+                if (ss.TryGetValue(k, out var set))
                 {
-                    toDelete[delCount] = n;
-                    ++delCount;
+                    set(to, vals);
+                    continue;
                 }
+                to.Headers[k] = new StringValues(vals.ToArray());
             }
-            if (delCount == count)
-            {
-                toh.Clear();
-            }else
-            {
-                while (delCount > 0)
-                {
-                    --delCount;
-                    toh.Remove(toDelete[delCount]);
-                }
-            }
-#if DEBUG
-            pool.Return(toDelete, true);
-#else//DEBUG
-            pool.Return(toDelete);
-#endif//DEBUG
-            var hs = Head;
-            if (hs != null)
-                foreach (var h in hs)
-                    toh.Append(h.Key, h.Value); 
-            to.ContentLength = Cl;
-            to.ContentType = Mime;
-            to.StatusCode = Status;
+            to.StatusCode = status;
         }
 
         public override HttpServerRequest ReplaceUrl(string newUrl, HttpServerHostInfo host, String prefix, int queryStart, HttpServerBase server, String newMethod = null)

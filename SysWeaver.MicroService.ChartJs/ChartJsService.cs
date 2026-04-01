@@ -65,7 +65,7 @@ namespace SysWeaver.MicroService
             if (!qp.TryGetValue("q", out var q))
                 return null;
             q = HttpServerTools.CleanupPaths(context.Prefix + "chart/" + q);
-            var data = await context.Server.InternalRead(context, q).ConfigureAwait(false);
+            var data = await context.Server.InternalRead(q, context.Session).ConfigureAwait(false);
             var ds = JsonSer.Create<ChartJsConfig>(data.Item1);
             var mem = await s.Export(ds, context).ConfigureAwait(false);
             return mem.Name;

@@ -14,7 +14,8 @@ namespace SysWeaver.Net
         { 
         }
 
-        public override IEnumerable<KeyValuePair<String, IEnumerable<String>>> AllReqHeaders => throw new NotImplementedException();
+        public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllReqHeaders => throw new NotImplementedException();
+        public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllResHeaders => throw new NotImplementedException();
 
 
         public override String IfNoneMatch => null;
@@ -29,7 +30,7 @@ namespace SysWeaver.Net
 
         public override string ProtocolVersion => throw new NotImplementedException();
 
-        public override void CopyHeaders(HttpServerRequest to)
+        public override void SetResHeaders(int status, IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> headers, IReadOnlySet<String> ignore)
         {
             throw new NotImplementedException();
         }
@@ -90,6 +91,11 @@ namespace SysWeaver.Net
         }
 
         public override void SetResStatusCode(int statusCode)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override int GetResStatusCode()
         {
             throw new NotImplementedException();
         }

@@ -12,6 +12,8 @@ namespace SysWeaver.HttpTransformer
     {
         public LosslessCompressionTransformer(CachedTransformer t, LosslessCompressionTransformerParams p = null)
         {
+            if (t == null)
+                throw new ArgumentException(String.Concat("A required instance of type \"", typeof(CachedTransformer).FullName, "\" was not supplied!"), nameof(t));
             p = p ?? new LosslessCompressionTransformerParams();
             var tr = this;
             foreach (var x in MimeTypeMap.AllMimeEntries)

@@ -111,6 +111,11 @@ namespace SysWeaver.Security
 
         public static IEnumerable<string> GetSubjectAlternativeNames(this X509Extension cert) => ParseSubjectAlternativeNames(cert.RawData);
 
+        public static bool IsSelfSigned(X509Certificate2 cert)
+        {
+            return cert.SubjectName.RawData.SequenceEqual(cert.IssuerName.RawData);
+        }
+
 
         /// <summary>
         /// Load a certificate from disc

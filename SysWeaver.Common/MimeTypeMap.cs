@@ -41,6 +41,11 @@ namespace SysWeaver
         public const String Svg = "image/svg+xml" + Utf8Suffix;
 
         /// <summary>
+        /// PDF data
+        /// </summary>
+        public const String Pdf = "application/pdf";
+
+        /// <summary>
         /// Raw data
         /// </summary>
         public const String Data = "application/octet-stream";

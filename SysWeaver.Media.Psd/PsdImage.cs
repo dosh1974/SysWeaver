@@ -253,19 +253,28 @@ namespace SysWeaver.Media.Psd
         }
 
 
-        public static bool OnPsdLayers(String filename, Func<Layer, bool> onLayer)
+        public static bool OnPsdLayers(String filename, Func<PsdFile, Layer, bool> onLayer)
         {
             PsdFile t = new PsdFile(filename, new LoadContext());
             foreach (var l in t.Layers)
-                if (!onLayer(l))
+                if (!onLayer(t, l))
                     return false;
             return true;
+        }
+
+        public static ImageData32 GetImageAndProcessPsdLayers(String filename, Func<PsdFile, Layer, bool> onLayer)
+        {
+            PsdFile t = new PsdFile(filename, new LoadContext());
+            foreach (var l in t.Layers)
+                if (!onLayer(t, l))
+                    return null;
+            return DecodeLayer(t.BaseLayer, filename);
         }
 
         public static List<NamedLayer> GetNamedLayers(String filename)
         {
             List<NamedLayer> layers = new List<NamedLayer>();
-            OnPsdLayers(filename, layer =>
+            OnPsdLayers(filename, (psd, layer) =>
             {
                 if (!layer.Visible)
                     return true;

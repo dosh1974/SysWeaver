@@ -63,11 +63,13 @@ namespace SysWeaver
 
         static HashSet<Char> GetInvalidFilenameChars()
         {
-            var t = new HashSet<char>(Path.GetInvalidFileNameChars());
-            t.Add(Path.VolumeSeparatorChar);
-            t.Add(Path.PathSeparator);
-            t.Add(Path.DirectorySeparatorChar);
-            t.Add(Path.AltDirectorySeparatorChar);
+            var t = new HashSet<char>(Path.GetInvalidFileNameChars())
+            {
+                Path.VolumeSeparatorChar,
+                Path.PathSeparator,
+                Path.DirectorySeparatorChar,
+                Path.AltDirectorySeparatorChar
+            };
             foreach (var x in Path.GetInvalidPathChars())
                 t.Add(x);
             return t;
@@ -1067,6 +1069,33 @@ namespace SysWeaver
             dir = new DirectoryInfo(dir).FullName;
             fileMask = pathWithMask.Substring(x);
             return dir;
+        }
+
+
+
+
+        /// <summary>
+        /// Validate that a string is a valid path to a filename and optionally that it exist
+        /// </summary>
+        /// <param name="filenameAndPath"></param>
+        /// <param name="mustExist"></param>
+        /// <returns></returns>
+        public static bool IsValidPathToFile(String filenameAndPath, bool mustExist = false)
+        {
+            if (String.IsNullOrEmpty(filenameAndPath))
+                return false;
+            if (filenameAndPath.IndexOf("://") >= 0)
+                return false;
+            //  TODO: Make smarter
+            try
+            {
+                var fi = new FileInfo(filenameAndPath);
+                return mustExist ? fi.Exists : true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
     }

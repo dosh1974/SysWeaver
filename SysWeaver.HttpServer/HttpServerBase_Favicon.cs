@@ -185,7 +185,7 @@ namespace SysWeaver.Net
             if ((bm != null) && check)
             {
                 using var _ = await FaviconRendererLock.Lock().ConfigureAwait(false);
-                var memLast = await InternalRead(data, data.Prefix + "icon.svg", session, FaviconLastModified).ConfigureAwait(false);
+                var memLast = await InternalRead(data.Prefix + "icon.svg", session, FaviconLastModified).ConfigureAwait(false);
                 if (memLast == null)
                     return bm;
                 bm = new SvgBitmapRenderer(memLast.Item1);
@@ -201,7 +201,7 @@ namespace SysWeaver.Net
                 bm = SvgFaviconBitmapRenderer;
                 if (bm != null)
                     return bm;
-                var memLast = await InternalRead(data, data.Prefix + "icon.svg", session).ConfigureAwait(false);
+                var memLast = await InternalRead(data.Prefix + "icon.svg", session).ConfigureAwait(false);
                 bm = new SvgBitmapRenderer(memLast.Item1);
                 Interlocked.Exchange(ref FaviconLastModified, memLast.Item2);
                 Interlocked.Exchange(ref SvgFaviconBitmapRenderer, bm)?.Dispose();
@@ -313,7 +313,7 @@ namespace SysWeaver.Net
             if ((bm != null) && check)
             {
                 using var _ = await LogoRendererLock.Lock().ConfigureAwait(false);
-                var memLast = await InternalRead(data, data.Prefix + "logo.svg", session, LogoLastModified).ConfigureAwait(false);
+                var memLast = await InternalRead(data.Prefix + "logo.svg", session, LogoLastModified).ConfigureAwait(false);
                 if (memLast == null)
                     return bm;
                 bm = new SvgBitmapRenderer(memLast.Item1);
@@ -329,7 +329,7 @@ namespace SysWeaver.Net
                 bm = SvgLogoBitmapRenderer;
                 if (bm != null)
                     return bm;
-                var memLast = await InternalRead(data, data.Prefix + "logo.svg", session).ConfigureAwait(false);
+                var memLast = await InternalRead(data.Prefix + "logo.svg", session).ConfigureAwait(false);
                 bm = new SvgBitmapRenderer(memLast.Item1);
                 Interlocked.Exchange(ref LogoLastModified, memLast.Item2);
                 Interlocked.Exchange(ref SvgLogoBitmapRenderer, bm)?.Dispose();

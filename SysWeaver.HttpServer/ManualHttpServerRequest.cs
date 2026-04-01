@@ -49,7 +49,8 @@ namespace SysWeaver.Net
         public int _ResStatusCode;
         public readonly Headers ResHeaders = new Headers();
 
-        public override IEnumerable<KeyValuePair<String, IEnumerable<String>>> AllReqHeaders => ReqHeaders;
+        public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllReqHeaders => ReqHeaders.Select(x => new KeyValuePair<String, IReadOnlyList<String>>(x.Key, x.Value.ToList()));
+        public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllResHeaders => ResHeaders.Select(x => new KeyValuePair<String, IReadOnlyList<String>>(x.Key, x.Value.ToList()));
 
         public override string IfNoneMatch => _IfNoneMatch;
 
@@ -64,24 +65,37 @@ namespace SysWeaver.Net
 
         public override string ProtocolVersion => _ProtocolVersion;
 
-
-        public override void CopyHeaders(HttpServerRequest to)
+        static readonly IReadOnlyDictionary<String, Action<ManualHttpServerRequest, IReadOnlyList<String>>> ResHeaderSetters = new Dictionary<String, Action<ManualHttpServerRequest, IReadOnlyList<String>>>(StringComparer.Ordinal)
         {
-            var t = to as ManualHttpServerRequest;
-            if (t == null)
-                throw new Exception("Invalid types!");
+            { "Content-Length", (to, vals) => to.SetResContentLength(long.Parse(vals.First())) },
+            { "Content-Type", (to, vals) => to.SetResMime(vals.First()) },
+        }.Freeze();
 
 
-            foreach (var kv in ResHeaders)
+        public override void SetResHeaders(int status, IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> headers, IReadOnlySet<String> ignore)
+        {
+            ignore = ignore ?? DefaultIgnoreHeaders;
+            var ss = ResHeaderSetters;
+            var to = this;
+            foreach (var h in headers)
             {
-                if (!kv.Key.FastEquals("Set-Cookie"))
+                var k = h.Key;
+                if (ignore.Contains(k))
+                    continue;
+                var vals = h.Value;
+                var vc = vals.Count;
+                if (vc <= 0)
+                    continue;
+                if (ss.TryGetValue(k, out var set))
                 {
-                    if (!ProxyTools.AllowMultipleHeaders.Contains(kv.Key.FastToLower()))
-                        t.ResHeaders.Remove(kv.Key);
-                    t.ResHeaders.TryAddWithoutValidation(kv.Key, kv.Value);
+                    set(to, vals);
+                    continue;
                 }
+                if (!ProxyTools.AllowMultipleHeaders.Contains(k.FastToLower()))
+                    ResHeaders.Remove(k);
+                ResHeaders.TryAddWithoutValidation(k, vals);
             }
-            t._ResStatusCode = _ResStatusCode;
+            _ResStatusCode = status;
         }
 
         public override IPAddress GetIP() => _IP;
@@ -140,10 +154,9 @@ namespace SysWeaver.Net
             ResHeaders.TryAddWithoutValidation("Content-Type", mime);
         }
 
-        public override void SetResStatusCode(int statusCode)
-        {
-            _ResStatusCode = statusCode;
-        }
+        public override void SetResStatusCode(int statusCode) => _ResStatusCode = statusCode;
+
+        public override int GetResStatusCode() => _ResStatusCode;
 
         public override void UpdateCookie(string str)
         {

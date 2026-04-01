@@ -12,24 +12,10 @@ namespace SysWeaver.Security
     /// <summary>
     /// Managed Lan certificates that is issued by the Lan Certificate Manager service
     /// </summary>
-    public sealed class LanCertificateProvider : ICertificateProvider, IDisposable
+    public sealed class LanCertificateProvider : ICertificateProvider, IDisposable, IPerfMonitored
     {
-        public override string ToString() => Filename;
+        public override string ToString() => String.Concat(DomainName, " from ", Server, " cached in \"", Filename, '"');
 
-
-        static String GetFirstLine(String filename)
-        {
-            foreach (var l in FileExt.ReadLines(filename, null, true, true))
-            {
-                var t = l;
-                var i = t.IndexOf('#');
-                if (i >= 0)
-                    t = t.Substring(0, i).TrimEnd();
-                if (t.Length > 0)
-                    return t;
-            }
-            return null;
-        }
 
         /// <summary>
         /// Creates a self sigend certificate
@@ -41,12 +27,26 @@ namespace SysWeaver.Security
             p = p ?? new LanCertificateProviderParams();
             Filename = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.Filename));
             Password = EnvInfo.ResolveText(p.Password);
-            DomainName = p.DomainName ?? "$(KeyFolder)/LanCertificateProvider_DomainName.txt";
+
+            String domainName = EnvInfo.ResolveText(p.DomainName ?? "$(KeyFolder)/LanCertificateProvider_DomainName.txt");
+            var tname = PathTemplate.Resolve(domainName);
+            if (PathExt.IsValidPathToFile(tname, true))
+            {
+                var d = FileExt.ReadNonCommentString(tname);
+                if (d == null)
+                    throw new Exception("Couldn't read a domain name from \"" + tname + "\"");
+                domainName = d;
+            }
+            StringValidate.DnsName(domainName);
+            DomainName = domainName;
+
             ServerCreds = p.ServerCreds ?? new CredentialParams
             {
                 CredFile = "$(KeyFolder)/LanCertificateProvider_SwLanCertManager.txt",
             };
-            ServerConfigFile = p.ServerConfigFile ?? "$(KeyFolder)/LanCertificateProvider_Server.txt"; 
+            var serverFilename = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.ServerConfigFile ?? "$(KeyFolder)/LanCertificateProvider_Server.txt"));
+            String server = FileExt.ReadNonCommentString(serverFilename);
+            Server = server.TrimEnd('/') + '/';
             Msg = msg;
             P = new SignedCertificateCreator(p);
             MinValidHours = Math.Max(p.MinValidHours, 2);
@@ -55,7 +55,7 @@ namespace SysWeaver.Security
 
         readonly String DomainName;
         readonly CredentialParams ServerCreds;
-        readonly String ServerConfigFile;
+        readonly String Server;
 
 
         readonly IMessageHost Msg;
@@ -77,63 +77,50 @@ namespace SysWeaver.Security
         IDisposable ExpireAction;
 
 
-        Byte[] LastCert;
+        Byte[] LastGoodCert;
+
+        const int CheckServerCertEveryMinutes = 60;
+        const int CheckSelfSignedCertEveryMinutes = 15;
+
+        public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(LanCertificateProvider));
 
         async ValueTask<ValueTuple<X509Certificate2, int>> InternalGetCert(IMessageHost msg = null)
         {
+            using var _ = PerfMon.Track(nameof(InternalGetCert));
             X509Certificate2 c;
             var f = Filename;
             var pw = Password;
             try
             {
-                var serverFilename = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(ServerConfigFile));
-                String server = GetFirstLine(serverFilename);
-                server = server.TrimEnd('/') + '/';
                 var cr = ServerCreds;
-                using var remoteManager = new RemoteConnection
+                GetLanCertResponse res;
+                using (var __ = PerfMon.Track(nameof(InternalGetCert) + ".Request"))
                 {
-                    BaseUrl = server,
-                    User = cr.User,
-                    Password = cr.Password,
-                    CredFile = cr.CredFile,
-                    AuthMethod = RemoteAuthMethod.SysWeaverLogin,
-                }.Create<ILanCertificateManager>();
-
-
-                String domainName = EnvInfo.ResolveText(DomainName);
-                var tname = PathTemplate.Resolve(DomainName);
-                if (tname.IndexOfAny(":/\\".ToCharArray()) > 0)
-                {
-                    tname = EnvInfo.MakeAbsoulte(tname);
-                    if (File.Exists(tname))
+                    using var remoteManager = new RemoteConnection
                     {
-                        var d = GetFirstLine(tname);
-                        if (d == null)
-                            throw new Exception("Couldn't read a domain name from \"" + tname + "\"");
-                        domainName = d;
-                    }
-                    else
+                        BaseUrl = Server,
+                        User = cr.User,
+                        Password = cr.Password,
+                        CredFile = cr.CredFile,
+                        AuthMethod = RemoteAuthMethod.SysWeaverLogin,
+                    }.Create<ILanCertificateManager>();
+                    res = await remoteManager.GetCert(new GetLanCertRequest
                     {
-                        throw new Exception("Domain name file \"" + tname + "\" does not exist!");
-                    }
+                        DomainName = DomainName,
+                        Password = pw,
+                        Cc = Cc,
+                    }).ConfigureAwait(false);
                 }
-                StringValidate.DnsName(domainName);
-                var res = await remoteManager.GetCert(new GetLanCertRequest
-                {
-                    DomainName = domainName,
-                    Password = pw,
-                    Cc = Cc,
-                }).ConfigureAwait(false);
                 if (res != null)
                 {
                     Cc = res.Cc;
-                    LastCert = res.CertPfx;
+                    LastGoodCert = res.CertPfx;
                 }
-                var cert = LastCert;
+                var cert = LastGoodCert;
                 if (cert != null)
                 {
                     c = await CertificateTools.Create(cert, pw, false).ConfigureAwait(false);
-                    return ValueTuple.Create(c, 10);
+                    return ValueTuple.Create(c, CheckServerCertEveryMinutes);
                 }
             }
             catch (Exception ex)
@@ -151,7 +138,7 @@ namespace SysWeaver.Security
                     if (!CertificateTools.IsSoonExpired(c, out var expires, MinValidHours))
                     {
                         if (p.IsSame(c))
-                            return ValueTuple.Create(c, 3);
+                            return ValueTuple.Create(c, CheckSelfSignedCertEveryMinutes);
                     }
                     c.Dispose();
                 }
@@ -170,7 +157,7 @@ namespace SysWeaver.Security
                 //await File.WriteAllBytesAsync(Path.ChangeExtension(f, "crt"), c.Export(X509ContentType.Cert, (String)null)).ConfigureAwait(false);
                 await File.WriteAllTextAsync(Path.ChangeExtension(f, "crt"), c.ExportCertificatePem()).ConfigureAwait(false);
             }
-            return ValueTuple.Create(c, 3);
+            return ValueTuple.Create(c, CheckSelfSignedCertEveryMinutes);
         }
 
         public async Task<X509Certificate2> GetCert()
@@ -196,7 +183,9 @@ namespace SysWeaver.Security
             var nn = await InternalGetCert().ConfigureAwait(false);
             var newCert = nn.Item1;
             var oldCert = C;
-            if (oldCert.Thumbprint.FastEquals(newCert.Thumbprint))
+            //  Same cert (or self signed being 
+            bool isWorse = CertificateTools.IsSelfSigned(newCert) && (!CertificateTools.IsSelfSigned(oldCert));
+            if (oldCert.Thumbprint.FastEquals(newCert.Thumbprint) || isWorse)
             {
                 ExpireAction = Scheduler.AddValueTask(DateTime.UtcNow.AddMinutes(nn.Item2), InvokeExpireSoon);
                 try

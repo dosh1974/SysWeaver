@@ -522,7 +522,7 @@ namespace SysWeaver.Chat
 
             var l = Uri.UnescapeDataString(request.Url);
             l = context.MakeRequestAbsolute(l);
-            var data = await context.Server.InternalRead(context, l).ConfigureAwait(false);
+            var data = await context.Server.InternalRead(l).ConfigureAwait(false);
             if (!context.Session.IsValid(data.Item3.Auth))
                 throw new UserNotAllowedException();
             if (!AllowPublicStore)
@@ -581,7 +581,7 @@ namespace SysWeaver.Chat
                     return localPrefix + r;
             }
             l = context.Prefix + l;
-            var data = await context.Server.InternalRead(context, l).ConfigureAwait(false);
+            var data = await context.Server.InternalRead(l).ConfigureAwait(false);
             if (!context.Session.IsValid(data.Item3.Auth))
                 throw new UserNotAllowedException();
             if (!AllowPublicStore)

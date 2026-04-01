@@ -6,6 +6,7 @@ using System.Threading;
 using System.Diagnostics;
 using System.Collections.Specialized;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace SysWeaver.Net
 {
@@ -32,13 +33,23 @@ namespace SysWeaver.Net
         readonly NameValueCollection ResHeaders;
 
 
-        public override IEnumerable<KeyValuePair<String, IEnumerable<String>>> AllReqHeaders
+        public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllReqHeaders
         {
             get
             {
                 var h = ReqHeaders;
                 foreach (var key in h.AllKeys)
-                    yield return new KeyValuePair<String, IEnumerable<String>>(key, h.GetValues(key));
+                    yield return new KeyValuePair<String, IReadOnlyList<String>>(key, h.GetValues(key));
+            }
+        }
+
+        public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllResHeaders
+        {
+            get
+            {
+                var h = ResHeaders;
+                foreach (var key in h.AllKeys)
+                    yield return new KeyValuePair<String, IReadOnlyList<String>>(key, h.GetValues(key));
             }
         }
 
@@ -60,6 +71,9 @@ namespace SysWeaver.Net
         {
             ResContentType = mime;
             Res.ContentType = mime;
+            if (mime.FastEquals("image/png") && LocalUrl.FastEquals("Hypnos/Api/MemberCard.svg"))
+                mime = null;
+
         }
 
         public override String ProtocolVersion => Req.ProtocolVersion.ToString();
@@ -67,6 +81,7 @@ namespace SysWeaver.Net
         public override void SetResContentLength(long length) => Res.ContentLength64 = length;
         public override void SetResStatusCode(int statusCode) => Res.StatusCode = statusCode;
 
+        public override int GetResStatusCode() => Res.StatusCode;
 
 
         IReadOnlyDictionary<String, String> Cookies;
@@ -128,22 +143,39 @@ namespace SysWeaver.Net
             }
         }
 
-        public override void CopyHeaders(HttpServerRequest toData)
-        {
-            var s = Res;
-            var to = (toData as NetHttpServerRequest).Res;
-            if (s == to)
-                return;
-            foreach (String h in s.Headers)
-            {
-                if (!h.FastEquals("Set-Cookie"))
-                    to.Headers[h] = s.Headers[h];
-            }
-            to.ContentLength64 = s.ContentLength64;
-            to.ContentEncoding = s.ContentEncoding;
-            to.StatusCode = s.StatusCode;
-        }
 
+        static readonly IReadOnlyDictionary<String, Action<HttpListenerResponse, IReadOnlyList<String>>> ResHeaderSetters = new Dictionary<String, Action<HttpListenerResponse, IReadOnlyList<String>>>(StringComparer.Ordinal)
+        {
+            { "Content-Length", (to, vals) => to.ContentLength64 = long.Parse(vals.First()) },
+            { "Content-Type", (to, vals) => to.ContentType = vals.First() },
+        }.Freeze();
+
+
+        public override void SetResHeaders(int status, IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> headers, IReadOnlySet<String> ignore)
+        {
+            ignore = ignore ?? DefaultIgnoreHeaders;
+            var ss = ResHeaderSetters;
+            var to = Res;
+            foreach (var h in headers)
+            {
+                var k = h.Key;
+                if (ignore.Contains(k))
+                    continue;
+                var vals = h.Value;
+                var vc = vals.Count;
+                if (vc <= 0)
+                    continue;
+                if (ss.TryGetValue(k, out var set))
+                {
+                    set(to, vals);
+                    continue;
+                }
+                to.Headers[k] = vals[0];
+                for (int i = 1; i < vc; ++i)
+                    to.AppendHeader(k, vals[i]);
+            }
+            to.StatusCode = status;
+        }
 
         public override void Dispose()
         {

@@ -14,8 +14,6 @@ namespace SysWeaver.Net
             public CacheData(KeyValuePair<String, HttpCacheEntry> cs, DateTime utcNow)
             {
                 var s = cs.Value;
-                var r = s.Res;
-
                 var p = cs.Key.Split('\n');
                 var pl = p.Length;
                 if (pl >= 4)
@@ -28,8 +26,6 @@ namespace SysWeaver.Net
                 LastUsed = new DateTime(Interlocked.Read(ref s.LastUsed), DateTimeKind.Utc);
                 Expires = new DateTime(s.Expires, DateTimeKind.Utc);
                 Size = s.Data.Length;
-                Accept = r.AcceptEncoding;
-                Encoding = r.GetResHeader("Content-Encoding");
             }   
 
             /// <summary>
@@ -56,17 +52,10 @@ namespace SysWeaver.Net
             [TableDataByteSize]
             public readonly long Size;
 
-
-            /// <summary>
-            /// Encoding used
-            /// </summary>
-            public readonly String Encoding;
-
             /// <summary>
             /// The time when this expires
             /// </summary>
             public readonly DateTime Expires;
-
 
 
             /// <summary>
@@ -74,10 +63,6 @@ namespace SysWeaver.Net
             /// </summary>
             public readonly DateTime LastUsed;
 
-            /// <summary>
-            /// Accepted encoding
-            /// </summary>
-            public readonly String Accept;
 
 
         }

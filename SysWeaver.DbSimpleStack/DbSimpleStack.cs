@@ -78,7 +78,7 @@ namespace SysWeaver.Db
         /// <param name="dp"></param>
         /// <param name="paramType">The type of p</param>
         /// <param name="msg">Optional message host</param>
-        public DbSimpleStack(DbParams p, IDialectProvider dp, Type paramType, IMessageHost msg)
+        protected DbSimpleStack(DbParams p, IDialectProvider dp, Type paramType, IMessageHost msg)
         {
             Msg = msg;
             paramType = paramType ?? typeof(DbParams);
@@ -86,14 +86,28 @@ namespace SysWeaver.Db
                 p = Activator.CreateInstance(paramType) as DbParams;
             if (p == null)
                 throw new Exception("No paramaters!");
-            if (p.Server.FastEquals("127.0.0.1") || String.IsNullOrEmpty(p.Server))
-                p.Server = "localhost";
 
+            var server = p.Server;
+            if (!String.IsNullOrEmpty(server))
+            {
+                server = PathTemplate.Resolve(server);
+                if (PathExt.IsValidPathToFile(server, true))
+                {
+                    var fn = server;
+                    server = FileExt.ReadNonCommentString(server);
+                    if (server == null)
+                        throw new Exception("Server address file " + fn.ToFilename() + " must contain at least one line of text!");
+
+                }
+            }
+            if (server.FastEquals("127.0.0.1") || String.IsNullOrEmpty(server))
+                server = "localhost";
+            p.Server = server;
             Config.ApplyConfig(paramType, p, 
-                Path.Combine("DbConfigs", String.Concat(paramType.Name, '_', PathExt.SafeFilename(p.Server), '_', p.Port, ".json")), 
-                String.Concat("These settings are forced for all SysWeaver application in this system.\nFor all db connections to ", p.Server, ':', p.Port)
+                Path.Combine("DbConfigs", String.Concat(paramType.Name, '_', PathExt.SafeFilename(server), '_', p.Port, ".json")), 
+                String.Concat("These settings are forced for all SysWeaver application in this system.\nFor all db connections to ", server, ':', p.Port)
                 );
-            LogPrefix = String.Concat('[', Name, '@', p.Server, ':', p.Port, "] ");
+            LogPrefix = String.Concat('[', Name, '@', server, ':', p.Port, "] ");
             P = p;
             DP = dp;
             BlobSer = SerManager.Get(p.BlobSer);

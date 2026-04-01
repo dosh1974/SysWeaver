@@ -18,8 +18,9 @@ namespace SysWeaver.HttpTransformer
 
         public ImageTransformer(CachedTransformer t, ImageTransformerParams p = null)
         {
+            if (t == null)
+                throw new ArgumentException(String.Concat("A required instance of type \"", typeof(CachedTransformer).FullName, "\" was not supplied!"), nameof(t));
             p = p ?? new ImageTransformerParams();
-
             if (p.Optimize)
             {
                 t.Add("image/png",
