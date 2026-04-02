@@ -155,13 +155,13 @@ namespace SysWeaver.MicroService
             var canvas = SvgCanvas.Create(svgText);
 
             var bg = canvas.Svg.Elements().FirstOrDefault(e => !"style".FastEquals(e.Name.LocalName));
-            canvas.CreateDropShadowClass("bg", "#000", 3, 1, 0, 0);
-            canvas.CreateDropShadowClass("ic", "#000", 4, 1, 2, 3);
-            canvas.AddFilter(bg, "bg");
+            //canvas.CreateDropShadowClass("bg", "#000", 3, 1, 0, 0);
+            //canvas.CreateDropShadowClass("ic", "#000", 4, 1, 2, 3);
+            //canvas.AddFilter(bg, "bg");
 
             var el = canvas.Add(files[rng.Next(fl)], 32, 32, 256 - 64, 256 - 64);
 
-            canvas.AddFilter(el, "ic");
+            //canvas.AddFilter(el, "ic");
 
 
 
