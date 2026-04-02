@@ -46,6 +46,16 @@ namespace SysWeaver
         public const String Pdf = "application/pdf";
 
         /// <summary>
+        /// xlsx data
+        /// </summary>
+        public const String Xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+        /// <summary>
+        /// Png image data
+        /// </summary>
+        public const String Png = "image/png";
+
+        /// <summary>
         /// Raw data
         /// </summary>
         public const String Data = "application/octet-stream";

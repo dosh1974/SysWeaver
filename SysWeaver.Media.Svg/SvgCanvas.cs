@@ -510,11 +510,16 @@ namespace SysWeaver.Media
 
         public XElement Image(String url, double x, double y, double width, double height)
         {
-            if ((url.IndexOf("://") < 0) && (!url.FastStartsWith("data:")) && FileExists(url))
+            if (!String.IsNullOrEmpty(url))
             {
-                var mime = MimeTypeMap.GetMimeType(url.Substring(url.LastIndexOf('.') + 1));
-                var data = File.ReadAllBytes(url);
-                return Image(data.AsSpan(), mime.Item1, x, y, width, height);
+                if (url[0] == '<')
+                    return EmbeddSvg(url, x, y, width, height);
+                if ((url.IndexOf("://") < 0) && (!url.FastStartsWith("data:")) && FileExists(url))
+                {
+                    var mime = MimeTypeMap.GetMimeType(url.Substring(url.LastIndexOf('.') + 1));
+                    var data = File.ReadAllBytes(url);
+                    return Image(data.AsSpan(), mime.Item1, x, y, width, height);
+                }
             }
             var e = CreateElement("image");
             if (x != 0)
@@ -525,11 +530,26 @@ namespace SysWeaver.Media
                 e.SetAttributeValue("width", width);
             if (height > 0)
                 e.SetAttributeValue("height", height);
-            e.SetAttributeValue("href", url);
+            if (!String.IsNullOrEmpty(url))
+                e.SetAttributeValue("href", url);
             return AddElement(e, null, null, 0);
         }
 
+        static readonly IReadOnlySet<String> IgnoreAttributes = ReadOnlyData.Set(StringComparer.Ordinal,
+            "xmlns", "version", "viewBox", "xlink"
+            );
 
+        public XElement EmbeddSvg(String svg, double x, double y, double width, double height)
+        {
+            var other = SvgCanvas.Create(svg);
+            var scaleX = width / other.Width;
+            var scaleY = height / other.Height;
+            var o = other.Svg;
+            var ignore = IgnoreAttributes;
+            var e = new XElement(SvgCanvasTools.Namespace + "g", o.Attributes().Where(x => !ignore.Contains(x.Name.LocalName)), o.Elements());
+            e.SetAttributeValue("transform", String.Concat("translate(", Value(x), ',', Value(y), ") scale(", Value(scaleX), ',', Value(scaleY), ')'));
+            return AddElement(e, null, null, 0);
+        }
 
         public static void SetFillAndStrokeHue(XElement doc, double hue, double saturation, double valueScale = 1)
         {
