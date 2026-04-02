@@ -482,16 +482,17 @@ namespace SysWeaver.Media
             }
         }
         
-        public String GetTransformToFit(SvgMinMaxState s, double x, double y, double width, double height, double angle = 0, String coordFormat = null)
+        public String GetTransformToFit(SvgMinMaxState s, double x, double y, double width, double height, double angle = 0, double ax = 0, double ay = 0, String coordFormat = null)
         {
             double scaleX = width / s.Width;
             double scaleY = height / s.Height;
             var scale = Math.Min(scaleX, scaleY);
-            var dx = -s.MinX - s.Width * 0.5;
-            var dy = -s.MinY - s.Height * 0.5;
+            var ex = width / scale - s.Width;
+            var ey = height / scale - s.Height;
+            var dx = -s.MinX - (s.Width + ex * ax) * 0.5;
+            var dy = -s.MinY - (s.Height + ey * ay) * 0.5;
             var cx = x + width * 0.5;
             var cy = y + height * 0.5;
-
             StringBuilder tr = new StringBuilder();
             if ((cx != 0) || (cy != 0))
                 tr.Append("translate(").Append(Value(cx, coordFormat)).Append(' ').Append(Value(cy, coordFormat)).Append(") ");
