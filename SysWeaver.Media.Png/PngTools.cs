@@ -4,17 +4,18 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
-using SysWeaver.Compression;
 using SysWeaver.IO;
 
-namespace SysWeaver.Media
+namespace SysWeaver.Media.Png
 {
+
+
     /// <summary>
     /// Portable PNG loader, decodes to 32-bit argb Byte array only.
     /// Do NOT support interlaced images - otherwise covers all files in the PngSuite: http://www.schaik.com/pngsuite/
     /// It's verified against the WIC png codec and agrees with a MSE of zero for all files except 16-bit per pixel gray scale images (the PNG WIC doesn't seem to support 16 bpp grayscale images at all).
     /// </summary>
-    public static class Png
+    public static class PngTools
     {
 
         /// <summary>
@@ -22,38 +23,17 @@ namespace SysWeaver.Media
         /// </summary>
         /// <param name="data">The data to test</param>
         /// <returns>Tru if the data header matches a png header</returns>
-        public static bool IsPng(Byte[] data)
+        public static bool IsPng(ReadOnlySpan<Byte> data)
         {
             if (data.Length < 8)
                 return false;
-            for (int i = 0; i < Header.Length; ++ i)
-            {
-                if (data[i] != Header[i])
-                    return false;
-            }
-            return true;
+            return Header.AsSpan().SequenceEqual(data[..8]);
         }                
 
-        /// <summary>
-        /// Represents a png chunk
-        /// </summary>
-        public sealed class Chunk
+        public static List<PngChunk> ReadChunks(String pngFile)
         {
-            public Chunk(uint length, uint id, Byte[] data, uint crc32)
-            {
-                Length = length;
-                Id = id;
-                Data = data;
-                Crc32 = crc32;
-            }
-            public override string ToString()
-            {
-                return String.Join("", (Char)((Id >> 24) & 0xff), (Char)((Id >> 16) & 0xff), (Char)((Id >> 8) & 0xff), (Char)((Id >> 0) & 0xff), " [0x", Id.ToString("x8"), "] @ ", Length);
-            }
-            public readonly uint Length;
-            public readonly uint Id;
-            public readonly Byte[] Data;
-            public readonly uint Crc32;
+            using var fs = new FileStream(pngFile, FileMode.Open);
+            return ReadChunks(fs).ToList();
         }
 
         /// <summary>
@@ -61,9 +41,9 @@ namespace SysWeaver.Media
         /// </summary>
         /// <param name="pngFile">The png file stream</param>
         /// <returns>The png chunks in the file</returns>
-        public static IEnumerable<Chunk> ReadChunks(Stream pngFile)
+        public static IEnumerable<PngChunk> ReadChunks(Stream pngFile)
         {
-            var end = Id_IEND;
+            var end = PngChunkIds.IEND;
             using var r = EndianAwareBinaryReader.OpenBigEndian(pngFile, Encoding.UTF8);
             //  Validate header
             for (int i = 0; i < 8; ++i)
@@ -84,7 +64,7 @@ namespace SysWeaver.Media
                 if (pngFile.Position != endPos)
                     throw new IOException("Invalid PNG stream, declared chunk size doesn't match the parsed chunk size!");
                 uint crc = r.ReadUInt32();
-                yield return new Chunk(length, hunkId, data, crc);
+                yield return new PngChunk(length, hunkId, data, crc);
                 if (hunkId == end)
                     break;
             }
@@ -194,7 +174,7 @@ namespace SysWeaver.Media
         /// <param name="a">Compression method</param>
         /// <param name="b">Compression type</param>
         /// <returns>Png file data</returns>
-        public static Byte[] MakePng(IEnumerable<Chunk> chunks, ReadOnlySpan<Byte> newData, Byte a = 120, Byte b = 1)
+        public static Byte[] MakePng(IEnumerable<PngChunk> chunks, ReadOnlySpan<Byte> newData, Byte a = 120, Byte b = 1)
         {
             using (var ms = new MemoryStream())
             {
@@ -209,7 +189,7 @@ namespace SysWeaver.Media
         /// <param name="chunks">Chunks (from an existing file)</param>
         /// <param name="newDataChunk">The new IDAT chunk</param>
         /// <returns>Png file data</returns>
-        public static Byte[] MakePng(IEnumerable<Chunk> chunks, Chunk newDataChunk)
+        public static Byte[] MakePng(IEnumerable<PngChunk> chunks, PngChunk newDataChunk)
         {
             using (var ms = new MemoryStream())
             {
@@ -223,13 +203,29 @@ namespace SysWeaver.Media
         /// </summary>
         /// <param name="chunks">Chunks (from an existing file)</param>
         /// <returns>Png file data</returns>
-        public static Byte[] MakePng(IEnumerable<Chunk> chunks)
+        public static Byte[] MakePng(IEnumerable<PngChunk> chunks)
         {
             using (var ms = new MemoryStream())
             {
                 WriteChunks(ms, chunks);
                 return ms.ToArray();
             }
+        }
+
+
+        /// <summary>
+        /// Helper method to write a new png file from some png chunks, but replacing the image data with manipulated IDAT data (good when loading / manipulating a file)
+        /// </summary>
+        /// <param name="pngFile">The name of the destination file</param>
+        /// <param name="chunks">Chunks (from an existing file)</param>
+        /// <param name="newData">The new IDAT data, this is just the raw scanline data (including the filter byte)</param>
+        /// <param name="a">Compression method</param>
+        /// <param name="b">Compression type</param>
+        /// <param name="comp">Compression level</param>
+        public static void WriteChunks(String pngFile, IEnumerable<PngChunk> chunks, ReadOnlySpan<Byte> newData, Byte a = 120, Byte b = 1, CompressionLevel comp = CompressionLevel.NoCompression)
+        {
+            using var fs = new FileStream(pngFile, FileMode.Create);
+            WriteChunks(fs, chunks, newData, a, b, comp);
         }
 
         /// <summary>
@@ -241,9 +237,9 @@ namespace SysWeaver.Media
         /// <param name="a">Compression method</param>
         /// <param name="b">Compression type</param>
         /// <param name="comp">Compression level</param>
-        public static void WriteChunks(Stream pngFile, IEnumerable<Chunk> chunks, ReadOnlySpan<Byte> newData, Byte a = 120, Byte b = 1, CompressionLevel comp = CompressionLevel.NoCompression)
+        public static void WriteChunks(Stream pngFile, IEnumerable<PngChunk> chunks, ReadOnlySpan<Byte> newData, Byte a = 120, Byte b = 1, CompressionLevel comp = CompressionLevel.NoCompression)
         {
-            var imageDataCrc = Png.CalcAdler32(newData);
+            var imageDataCrc = CalcAdler32(newData);
             using (var ms = new MemoryStream(newData.Length + 4096))
             {
                 ms.WriteByte(a);
@@ -260,9 +256,22 @@ namespace SysWeaver.Media
                 ms.WriteByte(c3);
                 ms.Flush();
                 var dta = ms.ToArray();
-                WriteChunks(pngFile, chunks, new Png.Chunk((uint)dta.LongLength, Png.Id_IDAT, dta, 0));
+                WriteChunks(pngFile, chunks, new PngChunk((uint)dta.LongLength, PngChunkIds.IDAT, dta, 0));
             }
         }
+
+        /// <summary>
+        /// Helper method to write a new png file from some png chunks, but replacing the image data with manipulated IDAT chunk (good when loading / manipulating a file)
+        /// </summary>
+        /// <param name="pngFile">The name of the destination file</param>
+        /// <param name="chunks">Chunks (from an existing file)</param>
+        /// <param name="newDataChunk">The new IDAT chunk</param>
+        public static void WriteChunks(String pngFile, IEnumerable<PngChunk> chunks, PngChunk newDataChunk)
+        {
+            using var fs = new FileStream(pngFile, FileMode.Create);
+            WriteChunks(fs, chunks, newDataChunk);
+        }
+
 
         /// <summary>
         /// Helper method to write a new png file from some png chunks, but replacing the image data with manipulated IDAT chunk (good when loading / manipulating a file)
@@ -270,11 +279,11 @@ namespace SysWeaver.Media
         /// <param name="pngFile">The destination stream</param>
         /// <param name="chunks">Chunks (from an existing file)</param>
         /// <param name="newDataChunk">The new IDAT chunk</param>
-       public static void WriteChunks(Stream pngFile, IEnumerable<Chunk> chunks, Chunk newDataChunk)
+        public static void WriteChunks(Stream pngFile, IEnumerable<PngChunk> chunks, PngChunk newDataChunk)
         {
-            WriteChunks(pngFile, chunks.Where(x => (x.Id != Png.Id_IDAT) || (newDataChunk != null)).Select(x =>
+            WriteChunks(pngFile, chunks.Where(x => (x.Id != PngChunkIds.IDAT) || (newDataChunk != null)).Select(x =>
             {
-                if (x.Id != Png.Id_IDAT)
+                if (x.Id != PngChunkIds.IDAT)
                     return x;
                 var t = newDataChunk;
                 newDataChunk = null;
@@ -283,12 +292,26 @@ namespace SysWeaver.Media
         }
 
 
+
+        /// <summary>
+        /// Helper method to write a new png file (as bytes) from some png chunks
+        /// </summary>
+        /// <param name="pngFile">The name of the destination file</param>
+        /// <param name="chunks">Chunks (from an existing file)</param>
+        public static void WriteChunks(String pngFile, IEnumerable<PngChunk> chunks)
+        {
+
+            using var fs = new FileStream(pngFile, FileMode.Create);
+            WriteChunks(fs, chunks);
+        }
+
+
         /// <summary>
         /// Helper method to write a new png file (as bytes) from some png chunks
         /// </summary>
         /// <param name="pngFile">The destination stream</param>
         /// <param name="chunks">Chunks (from an existing file)</param>
-        public static void WriteChunks(Stream pngFile, IEnumerable<Chunk> chunks)
+        public static void WriteChunks(Stream pngFile, IEnumerable<PngChunk> chunks)
         {
             pngFile.Write(Header, 0, 8);
             Byte[] w = new byte[4];
@@ -375,6 +398,9 @@ namespace SysWeaver.Media
             return image.ImageData;
         }
 
+
+
+
         public const int Red = 2;
         public const int Green = 1;
         public const int Blue = 0;
@@ -386,28 +412,15 @@ namespace SysWeaver.Media
         public const Byte GrayscaleAlpha = 4;
         public const Byte Rgba = 6;
 
-        public class ImageInfo
-        {
-            public int Width;
-            public int Height;
-            public Byte BitDepth;
-            public Byte ColorType;
-            public Byte CompressionMethod;
-            public Byte FilterMethod;
-            public Byte InterlaceMethodMethod;
-            public Byte ChannelCount;
-            public int Pitch;
-            public int PixelBytes;
-        }
 
         /// <summary>
         /// Decodes the information in the IHDR chunk
         /// </summary>
         /// <param name="ihdr">The IHDR chunk</param>
         /// <returns>The decoded image information</returns>
-        public static ImageInfo DecodeIHDR(Chunk ihdr)
+        public static PngImageInfo DecodeIHDR(PngChunk ihdr)
         {
-            var image = new ImageInfo();
+            var image = new PngImageInfo();
             using var ms = new MemoryStream(ihdr.Data, false);
             using var r = EndianAwareBinaryReader.OpenBigEndian(ms);
             image.Width = r.ReadInt32();
@@ -432,7 +445,7 @@ namespace SysWeaver.Media
         /// <param name="info">Information about the image</param>
         /// <param name="leaveOpen">True to leave the input stream open</param>
         /// <returns>An array with the filter used, one per row</returns>
-        public static Byte[] GetFilters(Stream s, ImageInfo info, bool leaveOpen = false)
+        public static Byte[] GetFilters(Stream s, PngImageInfo info, bool leaveOpen = false)
         {
             var h = info.Height;
             var skip = info.Pitch;
@@ -461,7 +474,7 @@ namespace SysWeaver.Media
         /// <param name="info">Information about the image</param>
         /// <param name="offset">Offset into the data for the first filter byte</param>
         /// <returns>An array with the filter used, one per row</returns>
-        public static Byte[] GetFilters(Byte[] imageData, ImageInfo info, int offset = 0)
+        public static Byte[] GetFilters(Byte[] imageData, PngImageInfo info, int offset = 0)
         {
             var pitch = info.Pitch;
             var pitchFilter = info.Pitch + 1;
@@ -476,7 +489,7 @@ namespace SysWeaver.Media
         /// <param name="leaveOpen">True to leave the input stream open</param>
         /// <param name="keepFilterByte">If true, the original filter byte is kept</param>
         /// <returns>Unfiltered raw image data (including the filter byte)</returns>
-        public static Byte[] UnfilterData(Stream stream, ImageInfo info, bool leaveOpen = true, bool keepFilterByte = false)
+        public static Byte[] UnfilterData(Stream stream, PngImageInfo info, bool leaveOpen = true, bool keepFilterByte = false)
         {
             using (leaveOpen ? stream : null)
             {
@@ -530,7 +543,7 @@ namespace SysWeaver.Media
         /// <param name="leaveOpen">True to leave the input stream open</param>
         /// <param name="keepFilterByte">If true, the original filter byte is kept</param>
         /// <returns>Unfiltered raw image data (including the filter byte)</returns>
-        public static Byte[] DecodeAndUnfilterData(Stream stream, ImageInfo info, bool leaveOpen = true, bool keepFilterByte = false)
+        public static Byte[] DecodeAndUnfilterData(Stream stream, PngImageInfo info, bool leaveOpen = true, bool keepFilterByte = false)
         {
             using var g = new DeflateStream(stream, CompressionMode.Decompress, leaveOpen);
             return UnfilterData(g, info, true, keepFilterByte);
@@ -543,7 +556,7 @@ namespace SysWeaver.Media
         /// <param name="info">Information about the image</param>
         /// <param name="leaveOpen">True to leave the input stream open</param>
         /// <returns>Unfiltered raw image data (including the filter byte)</returns>
-        public static Byte[] DecodeAndUnfilterIDAT(Stream idat, ImageInfo info, bool leaveOpen = true)
+        public static Byte[] DecodeAndUnfilterIDAT(Stream idat, PngImageInfo info, bool leaveOpen = true)
         {
             using (leaveOpen ? idat : null)
             {
@@ -558,9 +571,117 @@ namespace SysWeaver.Media
             }
         }
 
+
+        /// <summary>
+        /// Create an information chunk with the original creation time
+        /// </summary>
+        /// <param name="creationTime">The creation time</param>
+        /// <returns>A chunk that can be added</returns>
+        public static PngChunk SetCreationTimeInfo(DateTime creationTime)
+                => CreateInformationChunk("Creation Time", creationTime.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fffK"));
+
+
+        /// <summary>
+        /// Create an information chunk that can be added to a png
+        /// </summary>
+        /// <param name="info">The well known information to set</param>
+        /// <param name="value">The value to set it to</param>
+        /// <returns>A chunk that can be added</returns>
+        public static PngChunk CreateInformationChunk(PngKeywords info, String value)
+            => CreateInformationChunk(info.ToString().RemoveCamelCase(' ', true), value);
+
+
+
+        static readonly ReadOnlyMemory<Byte> ZLibStreamHeader = new Byte[] { 0x78, 0x9c };
+
+        public static Memory<Byte> GetCompressed(ReadOnlySpan<Byte> data)
+        {
+            var c = CalcAdler32(data);
+            using var ms = new ArrayPoolStream(data.Length + 128);
+            ms.Write(ZLibStreamHeader.Span);
+            using (var ds = new DeflateStream(ms, CompressionLevel.SmallestSize, true))
+                ds.Write(data);
+            Span<Byte> cc = stackalloc Byte[4];
+            cc[0] = (Byte)(c >> 24);
+            cc[1] = (Byte)(c >> 16);
+            cc[2] = (Byte)(c >> 8);
+            cc[3] = (Byte)(c >> 0);
+            ms.Write(cc);
+            return ms.GetBufferMemory();
+        }
+
+        /// <summary>
+        /// Create an information chunk that can be added to a png
+        /// </summary>
+        /// <param name="keyword">The keyword to set, use well known tags via the PngInfos overload unless you know what you're doing</param>
+        /// <param name="value">The value to set it to</param>
+        /// <returns>A chunk that can be added</returns>
+        public static PngChunk CreateInformationChunk(String keyword, String value)
+        {
+            if (!keyword.IsAsciiOnly())
+                throw new Exception("Keyword must be ASCII only!");
+            var kw = Encoding.ASCII.GetBytes(keyword);
+            var kwl = kw.Length;
+            if ((kwl <= 0) || (kwl > 79))
+                throw new Exception("Keyword must be [1, 79] chars long!");
+            int chunkLen;
+            Byte[] chunkData;
+            if (value.IsAsciiOnly())
+            {
+                var data = Encoding.ASCII.GetBytes(value);
+                var dataL = data.Length;
+                var compData = GetCompressed(data);
+                var compDatal = compData.Length;
+                if ((compDatal + 2) < dataL)
+                {
+                    chunkLen = kwl + 2 + compDatal;
+                    chunkData = new byte[chunkLen];
+                    var s = chunkData.AsSpan();
+                    kw.AsSpan().CopyTo(s);
+                    compData.Span.CopyTo(s.Slice(kwl + 2));
+                    return new PngChunk((uint)chunkLen, PngChunkIds.zTXt, chunkData);
+                }
+                else
+                {
+                    chunkLen = kwl + 1 + dataL;
+                    chunkData = new byte[chunkLen];
+                    var s = chunkData.AsSpan();
+                    kw.AsSpan().CopyTo(s);
+                    data.AsSpan().CopyTo(s.Slice(kwl + 1));
+                    return new PngChunk((uint)chunkLen, PngChunkIds.tEXt, chunkData);
+                }
+            }else
+            {
+                var data = Encoding.UTF8.GetBytes(value);
+                var dataL = data.Length;
+                var compData = GetCompressed(data);
+                var compDatal = compData.Length;
+                if ((compDatal + 6) < dataL)
+                {
+                    chunkLen = kwl + 5 + compDatal;
+                    chunkData = new byte[chunkLen];
+                    var s = chunkData.AsSpan();
+                    kw.AsSpan().CopyTo(s);
+                    s[kwl + 1] = 1;
+                    compData.Span.CopyTo(s.Slice(kwl + 5));
+                    return new PngChunk((uint)chunkLen, PngChunkIds.iTXt, chunkData);
+                }
+                else
+                {
+                    chunkLen = kwl + 5 + dataL;
+                    chunkData = new byte[chunkLen];
+                    var s = chunkData.AsSpan();
+                    kw.AsSpan().CopyTo(s);
+                    data.AsSpan().CopyTo(s.Slice(kwl + 5));
+                    return new PngChunk((uint)chunkLen, PngChunkIds.iTXt, chunkData);
+                }
+            }
+        }
+
+
         #region Implementation
 
-        sealed class Image : ImageInfo
+        sealed class Image : PngImageInfo
         {
             public uint Position;
             public uint[] Palette;
@@ -576,54 +697,16 @@ namespace SysWeaver.Media
 
         #region Chunks
 
-        /// <summary>
-        /// Convert a chunk name as a string to the 32 bit value
-        /// </summary>
-        /// <param name="s"></param>
-        /// <returns></returns>
-        public static uint Get(String s)
-        {
-            uint u = 0;
-            u |= (Byte)s[0];
-            u <<= 8;
-            u |= (Byte)s[1];
-            u <<= 8;
-            u |= (Byte)s[2];
-            u <<= 8;
-            u |= (Byte)s[3];
-            return u;
-        }
-
-        /// <summary>
-        /// IHDR chunk as a 32-bit integer
-        /// </summary>
-        public static readonly uint Id_IHDR = Get("IHDR");
-        /// <summary>
-        /// PLTE chunk as a 32-bit integer
-        /// </summary>
-        public static readonly uint Id_PLTE = Get("PLTE");
-        /// <summary>
-        /// IDAT chunk as a 32-bit integer
-        /// </summary>
-        public static readonly uint Id_IDAT = Get("IDAT");
-        /// <summary>
-        /// IEND chunk as a 32-bit integer
-        /// </summary>
-        public static readonly uint Id_IEND = Get("IEND");
-        /// <summary>
-        /// tRNS chunk as a 32-bit integer
-        /// </summary>
-        public static readonly uint Id_tRNS = Get("tRNS");
 
         delegate bool ChunkProcessor(BinaryReader r, Image image, uint chunkLength);
 
         static readonly Dictionary<uint, ChunkProcessor> Chunks = new Dictionary<uint, ChunkProcessor>()
         {
-            { Id_IHDR,  IHDR},
-            { Id_PLTE,  PLTE},
-            { Id_IDAT,  IDAT},
-            { Id_IEND,  IEND},
-            { Id_tRNS,  tRNS },
+            { PngChunkIds.IHDR,  IHDR},
+            { PngChunkIds.PLTE,  PLTE},
+            { PngChunkIds.IDAT,  IDAT},
+            { PngChunkIds.IEND,  IEND},
+            { PngChunkIds.tRNS,  tRNS },
 
         };
 

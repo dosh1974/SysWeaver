@@ -1,4 +1,5 @@
-﻿using OpenAI;
+﻿using CommunityToolkit.HighPerformance;
+using OpenAI;
 using OpenAI.Chat;
 using OpenAI.Images;
 using System;
@@ -17,6 +18,7 @@ using SysWeaver.Auth;
 using SysWeaver.Chat;
 using SysWeaver.Data;
 using SysWeaver.Media;
+using SysWeaver.Media.Png;
 using SysWeaver.MicroService;
 using SysWeaver.Net;
 using SysWeaver.Serialization;
@@ -124,7 +126,25 @@ namespace SysWeaver.AI
             }
             */
             BinaryData bytes = image.ImageBytes;
-            return bytes.ToMemory();
+            var pngMem = bytes.ToMemory();
+            List<PngChunk> chunks;
+            using (var s = pngMem.AsStream())
+                chunks = PngTools.ReadChunks(s).ToList();
+            List<PngChunk> add = new List<PngChunk>(10)
+            {
+                PngTools.SetCreationTimeInfo(DateTime.UtcNow),
+                PngTools.CreateInformationChunk(PngKeywords.Software, EnvInfo.AppDisplayName),
+                PngTools.CreateInformationChunk(PngKeywords.Source, String.Concat(model, ' ', options.Quality, ' ', options.Style).Trim().Replace("  ", " ").Replace("  ", " ")),
+                PngTools.CreateInformationChunk(PngKeywords.Description, p.Prompt),
+            };
+            var user = request?.Session?.Auth?.NickName;
+            if (user != null)
+                add.Add(PngTools.CreateInformationChunk(PngKeywords.Author, user));
+            if (!String.IsNullOrEmpty(p.Title))
+                add.Add(PngTools.CreateInformationChunk(PngKeywords.Title, p.Title));
+            chunks.InsertRange(1, add);
+            pngMem = PngTools.MakePng(chunks);
+            return pngMem;
         }
 
         static readonly IReadOnlySet<String> GptImageModels = ReadOnlyData.Set(

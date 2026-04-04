@@ -189,6 +189,49 @@ namespace SysWeaver.Media.Psd
 
         public static ImageData32 LoadAndExtractTextLayers(out List<PsdTextLayer> layers, String filename) => LoadAndExtractTextLayers(out layers, out var _, filename);
 
+        public static bool ExtractText(out String text, out double ty, Layer l)
+        {
+            text = null;
+            ty = 0;
+            var tysh = l.AdditionalInfo.FirstOrDefault(x => x.Key == "TySh");
+            if (tysh == null) //  TODO: Support < 6.0 using tySh ?
+                return false;
+            var fxrp = l.AdditionalInfo.FirstOrDefault(x => x.Key == "fxrp");
+            if (fxrp == null)
+                return false;
+            double xx, xy, yx, yy, tx;
+            using (var ms = new MemoryStream((tysh as RawLayerInfo).Data))
+            using (var r = new PsdBinaryReader(ms, Encoding.Default))
+            {
+                var version = r.ReadInt16();
+                xx = BitConverter.Int64BitsToDouble(r.ReadInt64());
+                xy = BitConverter.Int64BitsToDouble(r.ReadInt64());
+                yx = BitConverter.Int64BitsToDouble(r.ReadInt64());
+                yy = BitConverter.Int64BitsToDouble(r.ReadInt64());
+                tx = BitConverter.Int64BitsToDouble(r.ReadInt64());
+                ty = BitConverter.Int64BitsToDouble(r.ReadInt64());
+            }
+            using (var ms = new MemoryStream((tysh as RawLayerInfo).Data))
+            using (var r = new PsdBinaryReader(ms, Encoding.Default))
+            {
+                var version = r.ReadInt16();
+                var transforms = r.ReadBytes(6 * 8);
+                var textVersion = r.ReadInt16();
+                var descVersion = r.ReadInt32();
+                foreach (var c in ReadDescriptor(r))
+                {
+                    if (c.Key == "Txt ")
+                        text = ((String)c.Value).TrimEnd((Char)0);
+/*                    if (c.Key == "EngineData")
+                    {
+                        String ed = Encoding.UTF8.GetString((Byte[])c.Value);
+                    }
+*/
+                }
+            }
+            return true;
+        }
+
         public static ImageData32 LoadAndExtractTextLayers(out List<PsdTextLayer> layers, out IReadOnlyDictionary<String, String> props, String filename)
         {
             Dictionary<String, String> properties = new(StringComparer.Ordinal);
@@ -200,54 +243,15 @@ namespace SysWeaver.Media.Psd
             {
                 if (!l.Visible)
                     continue;
-                var tysh = l.AdditionalInfo.FirstOrDefault(x => x.Key == "TySh");
-                var fxrp = l.AdditionalInfo.FirstOrDefault(x => x.Key == "fxrp");
-                if (tysh == null)
+                if (!ExtractText(out var glyphs, out var ty, l))
                 {
                     var key = l.Name.Trim().SplitFirst('=', out var val);
                     if (!String.IsNullOrEmpty(val))
                         properties[key.TrimEnd()] = val.TrimStart();
-                }
-                if (tysh == null) //  TODO: Support < 6.0 using tySh ?
                     continue;
-                if (fxrp == null)
-                    continue;
-                double xx, xy, yx, yy, tx, ty;
-                using (var ms = new MemoryStream((tysh as RawLayerInfo).Data))
-                using (var r = new PsdBinaryReader(ms, Encoding.Default))
-                {
-                    var version = r.ReadInt16();
-                    xx = BitConverter.Int64BitsToDouble(r.ReadInt64());
-                    xy = BitConverter.Int64BitsToDouble(r.ReadInt64());
-                    yx = BitConverter.Int64BitsToDouble(r.ReadInt64());
-                    yy = BitConverter.Int64BitsToDouble(r.ReadInt64());
-                    tx = BitConverter.Int64BitsToDouble(r.ReadInt64());
-                    ty = BitConverter.Int64BitsToDouble(r.ReadInt64());
                 }
-                String glyphs = null;
-                using (var ms = new MemoryStream((tysh as RawLayerInfo).Data))
-                using (var r = new PsdBinaryReader(ms, Encoding.Default))
-                {
-                    var version = r.ReadInt16();
-                    var transforms = r.ReadBytes(6 * 8);
-                    var textVersion = r.ReadInt16();
-                    var descVersion = r.ReadInt32();
-                    foreach (var c in ReadDescriptor(r))
-                    {
-                        if (c.Key == "Txt ")
-                            glyphs = String.Join("", ((String)c.Value).ToCharArray().Where(x => x > 32));
-                        if (c.Key == "EngineData")
-                        {
-                            String ed = Encoding.UTF8.GetString((Byte[])c.Value);
-                        }
-
-                    }
-                }
-                if (!seenLayers.Add(glyphs))
-                    continue;
                 layers.Add(new PsdTextLayer(l.Name, glyphs, l.Rect.X, l.Rect.Y, l.Rect.Width, l.Rect.Height, (float)ty));
             }
-
             props = properties.Freeze();
             return DecodeLayer(layer, filename);
         }

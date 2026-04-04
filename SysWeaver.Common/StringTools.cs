@@ -157,6 +157,34 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// Make sure that the first character in each word is an uppercase letter (if it's a letter).
+        /// Examples:
+        /// "hello world" becomes "Hello World".
+        /// "World is mine" becomes "World Is Mine".
+        /// "123" remains "123".
+        /// </summary>
+        /// <param name="str">The text to make the first letter in each word uppercased</param>
+        /// <returns>The original string or a new string with the first letter in each word uppercased</returns>
+        public static unsafe String MakeFirstCharInWordsUppercase(this String str)
+        {
+            if (String.IsNullOrEmpty(str))
+                return str;
+            Char[] newStr = null;
+            str.OnWordStart(x =>
+            {
+                var o = str[x];
+                var n = o.FastToUpper();
+                if (o == n)
+                    return true;
+                if (newStr == null)
+                    newStr = str.ToCharArray();
+                newStr[x] = n;
+                return true;
+            });
+            return newStr == null ? str : new string(newStr);
+        }
+
+        /// <summary>
         /// Make sure that the first character is a lowercase letter (if it's a letter).
         /// Examples:
         /// "Hello" becomes "hello".
