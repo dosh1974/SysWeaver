@@ -31,6 +31,11 @@ namespace SysWeaver
         public const String Json = "application/json" + Utf8Suffix;
 
         /// <summary>
+        /// Javascript
+        /// </summary>
+        public const String Js = "application/javascript";
+
+        /// <summary>
         /// UTF8 encoded xml
         /// </summary>
         public const String Xml = "application/xml" + Utf8Suffix;
