@@ -168,6 +168,8 @@ namespace SysWeaver.ReverseProxy
 
         async ValueTask<bool> Connection(CancellationToken cancel)
         {
+            if (IsDisposing)
+                return false;
             var local = Local;
             if (local == null)
             {
@@ -178,21 +180,23 @@ namespace SysWeaver.ReverseProxy
             if (server == null)
             {
                 using var _ = await CreateConnectionLock.Lock().ConfigureAwait(false);
+                if (IsDisposing)
+                    return false;
+                server = Server;
+                if (server == null)
                 {
-                    server = Server;
-                    if (server == null)
+                    try
                     {
-                        try
-                        {
-                            server = Params.Create<IReverseProxyServer>();
-                            Server = server;
-                        }
-                        catch (Exception ex)
-                        {
-                            ConnectFails.OnException(ex);
-                            await Task.Delay(15000, cancel).ConfigureAwait(false);
-                            return true;
-                        }
+                        server = Params.Create<IReverseProxyServer>();
+                        Server = server;
+                    }
+                    catch (Exception ex)
+                    {
+                        ConnectFails.OnException(ex);
+                        if (IsDisposing)
+                            return false;
+                        await Task.Delay(15000, cancel).ConfigureAwait(false);
+                        return true;
                     }
                 }
             }
@@ -213,6 +217,8 @@ namespace SysWeaver.ReverseProxy
                 catch (Exception ex)
                 {
                     ProxyFails.OnException(ex);
+                    if (IsDisposing)
+                        return false;
                     await Task.Delay(5000, cancel).ConfigureAwait(false);
                     var aa = ex as HttpResponseException;
                     if (aa == null)
@@ -382,10 +388,13 @@ namespace SysWeaver.ReverseProxy
         HttpServerBase Local;
         readonly ServiceManager Manager;
 
+        volatile bool IsDisposing;
+
         public void Dispose()
         {
+            IsDisposing = true;
             Manager.OnServiceAdded -= OnServiceAdded;
-            Interlocked.Exchange(ref Server, null)?.Dispose();
+            (Server as Remote.IRemoteApi)?.Cancel();
             var t = ConnectionTasks;
             var ti = t.Length;
             while (ti > 0)
@@ -393,6 +402,8 @@ namespace SysWeaver.ReverseProxy
                 --ti;
                 Interlocked.Exchange(ref t[ti], null)?.Dispose();
             }
+            Interlocked.Exchange(ref Server, null)?.Dispose();
+
             Interlocked.Exchange(ref Client, null)?.Dispose();
             Interlocked.Exchange(ref ClientHandler, null)?.Dispose();
         }
