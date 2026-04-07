@@ -15,180 +15,156 @@
 /////////////////////////////////////////////////////////////////////////////////
 
 using System;
+using System.Buffers.Binary;
 using System.Drawing;
 using System.IO;
 using System.Text;
 
 namespace PhotoshopFile
 {
-  /// <summary>
-  /// Reads PSD data types in big-endian byte order.
-  /// </summary>
-  public class PsdBinaryReader : IDisposable
-  {
-    private BinaryReader reader;
-    private Encoding encoding;
-
-    public Stream BaseStream => reader.BaseStream;
-
-    public PsdBinaryReader(Stream stream, PsdBinaryReader reader)
-      : this (stream, reader.encoding)
-    {
-    }
-    
-    public PsdBinaryReader(Stream stream, Encoding encoding)
-    {
-      this.encoding = encoding;
-
-      // ReadPascalString and ReadUnicodeString handle encoding explicitly.
-      // BinaryReader.ReadString() is never called, so it is constructed with
-      // ASCII encoding to make accidental usage obvious.
-      reader = new BinaryReader(stream, Encoding.ASCII);
-    }
-
-    public byte ReadByte()
-    {
-      return reader.ReadByte();
-    }
-
-    public byte[] ReadBytes(int count)
-    {
-      return reader.ReadBytes(count);
-    }
-
-    public bool ReadBoolean()
-    {
-      return reader.ReadBoolean();
-    }
-
-    public Int16 ReadInt16()
-    {
-      var val = reader.ReadInt16();
-      unsafe
-      {
-        Util.SwapBytes((byte*)&val, 2);
-      }
-      return val;
-    }
-
-    public Int32 ReadInt32()
-    {
-      var val = reader.ReadInt32();
-      unsafe
-      {
-        Util.SwapBytes((byte*)&val, 4);
-      }
-      return val;
-    }
-
-    public Int64 ReadInt64()
-    {
-      var val = reader.ReadInt64();
-      unsafe
-      {
-        Util.SwapBytes((byte*)&val, 8);
-      }
-      return val;
-    }
-
-    public UInt16 ReadUInt16()
-    {
-      var val = reader.ReadUInt16();
-      unsafe
-      {
-        Util.SwapBytes((byte*)&val, 2);
-      }
-      return val;
-    }
-
-    public UInt32 ReadUInt32()
-    {
-      var val = reader.ReadUInt32();
-      unsafe
-      {
-        Util.SwapBytes((byte*)&val, 4);
-      }
-      return val;
-    }
-
-    public UInt64 ReadUInt64()
-    {
-      var val = reader.ReadUInt64();
-      unsafe
-      {
-        Util.SwapBytes((byte*)&val, 8);
-      }
-      return val;
-    }
-
-    //////////////////////////////////////////////////////////////////
-
     /// <summary>
-    /// Read padding to get to the byte multiple for the block.
+    /// Reads PSD data types in big-endian byte order.
     /// </summary>
-    /// <param name="startPosition">Starting position of the padded block.</param>
-    /// <param name="padMultiple">Byte multiple that the block is padded to.</param>
-    public void ReadPadding(long startPosition, int padMultiple)
+    public class PsdBinaryReader : IDisposable
     {
-      // Pad to specified byte multiple
-      var totalLength = reader.BaseStream.Position - startPosition;
-      var padBytes = Util.GetPadding((int)totalLength, padMultiple);
-      ReadBytes(padBytes);
-    }
+        private BinaryReader reader;
+        private Encoding encoding;
 
-    public Rectangle ReadRectangle()
-    {
-      var rect = new Rectangle();
-      rect.Y = ReadInt32();
-      rect.X = ReadInt32();
-      rect.Height = ReadInt32() - rect.Y;
-      rect.Width = ReadInt32() - rect.X;
-      return rect;
-    }
+        public Stream BaseStream => reader.BaseStream;
 
-    /// <summary>
-    /// Read a fixed-length ASCII string.
-    /// </summary>
-    public string ReadAsciiChars(int count)
-    {
-      var bytes = reader.ReadBytes(count); ;
-      var s = Encoding.ASCII.GetString(bytes);
-      return s;
-    }
+        public PsdBinaryReader(Stream stream, PsdBinaryReader reader)
+          : this(stream, reader.encoding)
+        {
+        }
 
-    /// <summary>
-    /// Read a Pascal string using the specified encoding.
-    /// </summary>
-    /// <param name="padMultiple">Byte multiple that the Pascal string is padded to.</param>
-    public string ReadPascalString(int padMultiple)
-    {
-      var startPosition = reader.BaseStream.Position;
+        public PsdBinaryReader(Stream stream, Encoding encoding)
+        {
+            this.encoding = encoding;
 
-      byte stringLength = ReadByte();
-      var bytes = ReadBytes(stringLength);
-      ReadPadding(startPosition, padMultiple);
+            // ReadPascalString and ReadUnicodeString handle encoding explicitly.
+            // BinaryReader.ReadString() is never called, so it is constructed with
+            // ASCII encoding to make accidental usage obvious.
+            reader = new BinaryReader(stream, Encoding.ASCII);
+        }
 
-      // Default decoder uses best-fit fallback, so it will not throw any
-      // exceptions if unknown characters are encountered.
-      var str = encoding.GetString(bytes);
-      return str;
-    }
+        public byte ReadByte()
+        {
+            return reader.ReadByte();
+        }
 
-    public string ReadUnicodeString()
-    {
-      var numChars = ReadInt32();
-      var length = 2 * numChars;
-      var data = ReadBytes(length);
-      var str = Encoding.BigEndianUnicode.GetString(data, 0, length);
+        public byte[] ReadBytes(int count)
+        {
+            return reader.ReadBytes(count);
+        }
 
-      return str;
-    }
+        public bool ReadBoolean()
+        {
+            return reader.ReadBoolean();
+        }
+
+        public Int16 ReadInt16()
+        {
+            return BinaryPrimitives.ReverseEndianness(reader.ReadInt16());
+        }
+
+        public Int32 ReadInt32()
+        {
+            return BinaryPrimitives.ReverseEndianness(reader.ReadInt32());
+        }
+
+        public Int64 ReadInt64()
+        {
+            return BinaryPrimitives.ReverseEndianness(reader.ReadInt64());
+        }
+
+        public UInt16 ReadUInt16()
+        {
+            return BinaryPrimitives.ReverseEndianness(reader.ReadUInt16());
+        }
+
+        public UInt32 ReadUInt32()
+        {
+            return BinaryPrimitives.ReverseEndianness(reader.ReadUInt32());
+        }
+
+        public UInt64 ReadUInt64()
+        {
+            return BinaryPrimitives.ReverseEndianness(reader.ReadUInt64());
+        }
+
+        //////////////////////////////////////////////////////////////////
+
+        /// <summary>
+        /// Read padding to get to the byte multiple for the block.
+        /// </summary>
+        /// <param name="startPosition">Starting position of the padded block.</param>
+        /// <param name="padMultiple">Byte multiple that the block is padded to.</param>
+        public void ReadPadding(long startPosition, int padMultiple)
+        {
+            // Pad to specified byte multiple
+            var totalLength = reader.BaseStream.Position - startPosition;
+            var padBytes = Util.GetPadding((int)totalLength, padMultiple);
+            if (padBytes > 0)
+            {
+                Span<Byte> bytes = stackalloc Byte[padBytes];
+                reader.ReadExactly(bytes);
+            }
+        }
+
+        public Rectangle ReadRectangle()
+        {
+            var rect = new Rectangle();
+            rect.Y = ReadInt32();
+            rect.X = ReadInt32();
+            rect.Height = ReadInt32() - rect.Y;
+            rect.Width = ReadInt32() - rect.X;
+            return rect;
+        }
+
+        /// <summary>
+        /// Read a fixed-length ASCII string.
+        /// </summary>
+        public string ReadAsciiChars(int count)
+        {
+            Span<Byte> bytes = stackalloc Byte[count];
+            reader.ReadExactly(bytes);
+            var s = Encoding.ASCII.GetString(bytes);
+            return s;
+        }
+
+        /// <summary>
+        /// Read a Pascal string using the specified encoding.
+        /// </summary>
+        /// <param name="padMultiple">Byte multiple that the Pascal string is padded to.</param>
+        public string ReadPascalString(int padMultiple)
+        {
+            var startPosition = reader.BaseStream.Position;
+
+            byte stringLength = ReadByte();
+            Span<Byte> bytes = stackalloc Byte[stringLength];
+            reader.ReadExactly(bytes);
+            ReadPadding(startPosition, padMultiple);
+
+            // Default decoder uses best-fit fallback, so it will not throw any
+            // exceptions if unknown characters are encountered.
+            var str = encoding.GetString(bytes);
+            return str;
+        }
+
+        public string ReadUnicodeString()
+        {
+            var numChars = ReadInt32();
+            Span<Byte> bytes = stackalloc Byte[2 * numChars];
+            reader.ReadExactly(bytes);
+            var str = Encoding.BigEndianUnicode.GetString(bytes);
+            return str;
+        }
 
         public string ReadUnicodeString(int numChars)
         {
-            var length = 2 * numChars;
-            var data = ReadBytes(length);
-            var str = Encoding.BigEndianUnicode.GetString(data, 0, length);
+            Span<Byte> bytes = stackalloc Byte[2 * numChars];
+            reader.ReadExactly(bytes);
+            var str = Encoding.BigEndianUnicode.GetString(bytes);
             return str;
         }
 
@@ -198,33 +174,33 @@ namespace PhotoshopFile
 
         private bool disposed = false;
 
-    public void Dispose()
-    {
-      Dispose(true);
-      GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-      // Check to see if Dispose has already been called. 
-      if (disposed)
-        return;
-
-      if (disposing)
-      {
-        if (reader != null)
+        public void Dispose()
         {
-          // BinaryReader.Dispose() is protected.
-          reader.Close();
-          reader = null;
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
-      }
 
-      disposed = true;
+        protected virtual void Dispose(bool disposing)
+        {
+            // Check to see if Dispose has already been called. 
+            if (disposed)
+                return;
+
+            if (disposing)
+            {
+                if (reader != null)
+                {
+                    // BinaryReader.Dispose() is protected.
+                    reader.Close();
+                    reader = null;
+                }
+            }
+
+            disposed = true;
+        }
+
+        #endregion
+
     }
-
-    #endregion
-
-  }
 
 }
