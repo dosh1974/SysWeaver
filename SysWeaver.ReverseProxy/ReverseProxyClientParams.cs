@@ -9,7 +9,6 @@ namespace SysWeaver.ReverseProxy
         {
             // Use strong auth method by default (no real reason to not use)
             AuthMethod = RemoteAuthMethod.SysWeaverLogin;
-            IgnoreCertErrors = true;
         }
 
         /// <summary>
