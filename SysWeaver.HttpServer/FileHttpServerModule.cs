@@ -24,6 +24,7 @@ namespace SysWeaver.Net
         /// <param name="isAccepted">True if the file is pre-compressed and a compressed copy is acceptable</param>
         /// <param name="decoder">Non-null if the file is pre-compressed, else null</param>
         /// <param name="updateAccessTime">If true, the file's access time is updated whenever the file is read</param>
+        /// <param name="isDynamic">If true, the file is probably changed frequenctly</param>
         /// <returns>Must return a valid request handler</returns>
         Task<IHttpRequestHandler> Modify(String key, Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic);
     }
