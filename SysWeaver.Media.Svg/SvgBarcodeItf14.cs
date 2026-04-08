@@ -11,7 +11,7 @@ namespace SysWeaver.Media
     public sealed class SvgBarcodeItf14
     {
 
-        public static readonly SvgBarcodeItf14 Default = new SvgBarcodeItf14(1, 0);
+        public static readonly SvgBarcodeItf14 Default = new (2, 0);
 
         /// <summary>
         /// Init an instance
@@ -21,7 +21,7 @@ namespace SysWeaver.Media
         public SvgBarcodeItf14(double narrowPixelWidth, int decimalCount = 1)
         {
             Narrow = narrowPixelWidth;
-            Wide = (5 * Narrow + 1) / 2;
+            Wide = Narrow * 2.5;
             Height = Narrow * 24;
             DecimalMask = decimalCount <= 0 ? "0" : ("0." + new string('#', decimalCount));
         }
@@ -170,6 +170,6 @@ namespace SysWeaver.Media
         public readonly double Wide;
         public readonly double Narrow;
 
-        static int[] Numbers = GetNumbers();
+        static readonly int[] Numbers = GetNumbers();
     }
 }
