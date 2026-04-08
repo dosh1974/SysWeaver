@@ -118,6 +118,21 @@ namespace SysWeaver.Media
             AddPath(path, p);
         }
 
+
+        public void AddRect(double x, double y, double w, double h, SvgColorStyle color, int maxDecimals = 4)
+        {
+            var style = AddStyle(color);
+            var fmt = SvgTools.GetFormat(maxDecimals);
+            var svg = new StringBuilder();
+            svg.Append($"\t\t\t<rect width='{fmt(w)}' height='{fmt(h)}' ");
+            if (x != 0)
+                svg.Append($"x='{x}' ");
+            if (y != 0)
+                svg.Append($"y='{y}' ");
+            svg.AppendLine($"class='{style}' />");
+            AddGeometry(svg.ToString());
+        }
+
         public void AddPath(String facePath, Svg3dParams p = null)
         {
             p = p ?? new Svg3dParams();

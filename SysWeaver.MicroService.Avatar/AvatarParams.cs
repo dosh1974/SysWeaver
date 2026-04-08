@@ -18,5 +18,10 @@ namespace SysWeaver.MicroService
         /// Required auth
         /// </summary>
         public String Auth;
+
+        /// <summary>
+        /// If true, avatar images will be transparent
+        /// </summary>
+        public bool UseTransparent;
     }
 }

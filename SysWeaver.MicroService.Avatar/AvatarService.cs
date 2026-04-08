@@ -23,6 +23,7 @@ namespace SysWeaver.MicroService
             Auth = AuthTools.GetList(p.Auth);
             var folder = p.DiscFolder;
             AsyncHandler = Handle;
+            UseTransparent = p.UseTransparent;
             Cache = new FastMemCache<int, ValueTask<IHttpRequestHandler>>(TimeSpan.FromSeconds(Math.Max(1, p.CacheSeconds)));
             DiscFolder = folder;
             if (String.IsNullOrEmpty(folder))
@@ -42,6 +43,8 @@ namespace SysWeaver.MicroService
                 ReadFiles();
             }
         }
+
+        readonly bool UseTransparent;
         readonly String DiscFolder;
         readonly IReadOnlyList<String> Auth;
 
@@ -129,7 +132,13 @@ namespace SysWeaver.MicroService
             var rng = new Random(seed);
             HashColors.GetRandom(out var h, out var s, rng.Next());
             var svg = new SvgScene(256, 256);
-
+            if (!UseTransparent)
+            {
+                svg.AddRect(0, 0, 256, 256, new SvgColorStyle
+                {
+                    FillColor = HashColors.GetWeb(h , s, 0.2)
+                });
+            }
             var bp = new SvgNgonParams();
             bp.Face.FillColor = HashColors.GetWeb(h, s, 0.7);
             bp.Face.StrokeColor = HashColors.GetWeb(h, s, 0.95);

@@ -19,7 +19,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// If true the images may be semi transparent (will be fitted into the square instead of filled into).
         /// </summary>
-        public bool AllowTransparent = true;
+        public bool AllowTransparent = false;
 
         /// <summary>
         /// The format to use for images, supported are:
