@@ -19,7 +19,7 @@ namespace SysWeaver.MicroService
             /// <summary>
             /// Folder name on disc
             /// </summary>
-            [TableDataUrl("{0}", "*../edit/Text.html?r=../FolderSync/" + nameof(GetManagedFolderManifest) + "?\"{1}/{0}\"", "Click to show the manifest file.")]
+            [TableDataUrl("{0}", "*../edit/text.html?r=../FolderSync/" + nameof(GetManagedFolderManifest) + "?\"{1}/{0}\"", "Click to show the manifest file.")]
             public String DiscFolder;
 
             /// <summary>

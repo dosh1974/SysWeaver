@@ -1,0 +1,122 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>SwCurl</name>
+    </assembly>
+    <members>
+        <member name="F:SwCurl.SwCompression.Auto">
+            <summary>
+            No payload compression at all.
+            If auth method in SysWeaver, Brotli compression is used.
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.AuthMethod">
+            <summary>
+            The auth method to use (if credentials are supplied)
+            SysWeaver is the most secure.
+            Bearer token can be used if auth method is HttpAuth and the user name is set to Bearer.
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.HttpMethod">
+            <summary>
+            The http method to use
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.Compression">
+            <summary>
+            The compression method to use for the payload
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.Mime">
+            <summary>
+            The mimetype of the payload if it's NOT a file
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.Encoding">
+            <summary>
+            The text encoding to use 
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.FileMime">
+            <summary>
+            The mimetype of the payload if it's a file.
+            If null, the mime is derived from the file extension.
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.Save">
+            <summary>
+            An optional filename where the result will be saved.
+            If there is an error it will be saved as ?status code, ex: "?404".
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.SwRoot">
+            <summary>
+            When logging in useing SysWeaver, the "root" of the service is required, by default this is the root of the supplied end point.
+            In some cases a services may listen to a prefix that is not at the root.
+            This parameters then contains the root (added to the root of the supplied end point).
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.IgnoreCertErrors">
+            <summary>
+            If true, then server cert errors are ignored. NOT reccomended!
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.NoFile">
+            <summary>
+            If true, the supplied payload will never be interpreted as a filename
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.UseTor">
+            <summary>
+            If true, use the tor network to make the request (anonymize your IP).
+            This is MUCH slower.
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.Timeout">
+            <summary>
+            Request time out in milliseconds
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.Silent">
+            <summary>
+            If true, no console message will be displayed
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.Dump">
+            <summary>
+            If true, dump the response to the console
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.UserAgent">
+            <summary>
+            Optional user agent string to use.
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.Binary">
+            <summary>
+            Force binary dump of text data
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.TabSize">
+            <summary>
+            Number of spaces to use for each tab
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.BinaryWidth">
+            <summary>
+            Number of bytes per row in the binary dump
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwCurlParmas.GetThreshold">
+            <summary>
+            If the post data is less than this, use a get request if possible (SysWeaver only)
+            </summary>
+        </member>
+        <member name="F:SwCurl.SwMethods.Auto">
+            <summary>
+            GET if no payload, POST if payload.
+            If auth method is SysWeaver, GET can be used even with payload.
+            </summary>
+        </member>
+    </members>
+</doc>

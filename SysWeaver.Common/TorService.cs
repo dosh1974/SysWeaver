@@ -3,6 +3,7 @@ using System.Linq.Expressions;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Threading;
 
 namespace SysWeaver
 {
@@ -19,9 +20,22 @@ namespace SysWeaver
             CreateTorClient = (x) => null;
             if (torType != null)
             {
-                CreateTorClient = Expression.Lambda<Func<bool, HttpClient>>(Expression.Call(torType.GetMethod("Create", BindingFlags.Static | BindingFlags.Public))).Compile();
-                Proxy = (WebProxy)torType.GetField("Proxy", BindingFlags.Static | BindingFlags.Public).GetValue(null);
-                IsAvailable = true;
+                try
+                {
+                    var mi = torType.GetMethod("Init", BindingFlags.Static | BindingFlags.NonPublic);
+                    Init = Expression.Lambda<Action>(Expression.Call(mi)).Compile();
+                    var m = torType.GetMethod("Create", BindingFlags.Static | BindingFlags.Public);
+                    var p = Expression.Parameter(typeof(Boolean));
+                    var ce = Expression.Call(m, p);
+                    var lce = Expression.Lambda<Func<bool, HttpClient>>(ce, p);
+                    CreateTorClient = lce.Compile();
+                    InternalProxy = (WebProxy)torType.GetField("Proxy", BindingFlags.Static | BindingFlags.Public).GetValue(null);
+                    IsAvailable = true;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Failed to init TOR client: " + ex);
+                }
             }
         }
 
@@ -38,7 +52,30 @@ namespace SysWeaver
         /// <summary>
         /// The proxy to use to route through tor
         /// </summary>
-        public static readonly WebProxy Proxy;
+        public static WebProxy Proxy
+        {
+            get
+            {
+                var l = InitLock;
+                var p = InternalProxy;
+                if (l == null)
+                    return p;
+                lock(l)
+                {
+                    var i = Interlocked.Exchange(ref Init, null);
+                    if (i == null)
+                        return p;
+                    i();
+                    Interlocked.Exchange(ref InitLock, null);
+                    return p;
+                }
+            }
+        }
+
+        static Action Init;
+        static Object InitLock = new object();
+
+        static readonly WebProxy InternalProxy;
 
 
     }

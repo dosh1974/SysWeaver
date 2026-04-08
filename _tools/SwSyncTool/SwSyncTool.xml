@@ -56,5 +56,21 @@
             (Advanced) Optionally specify a chunk size, must be a power of two.
             </summary>
         </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.OnNew">
+            <summary>
+            [Push]
+            An optional end point (API) to call when new data have been pushed, the API is on the server and relative to server root.
+            It's using a GET request.
+            The API is called with the same credentials (same session) as the Push operation.
+            </summary>
+        </member>
+        <member name="F:SwSyncTool.SwSyncToolProgram.SyncToolParmas.OnNop">
+            <summary>
+            [Push]
+            An optional end point (API) to call when NO new data have been pushed (already up to date), the API is on the server and relative to server root.
+            It's using a GET request.
+            The API is called with the same credentials (same session) as the Push operation.
+            </summary>
+        </member>
     </members>
 </doc>

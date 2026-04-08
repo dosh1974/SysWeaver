@@ -106,6 +106,11 @@ namespace SysWeaver.FolderSync
         readonly String UploadChunkBase;
         readonly IFolderSyncApi Api;
 
+        /// <summary>
+        /// The http client (with credentials) used to make requests
+        /// </summary>
+        public HttpClient Client => (Api as RemoteConnectionBase).Client;
+
         static readonly ICompType Comp = CompManager.GetFromHttp("br");
 
         static readonly IReadOnlySet<String> Uncompressible = ReadOnlyData.Set(StringComparer.Ordinal,

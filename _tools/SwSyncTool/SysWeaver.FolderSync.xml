@@ -4,6 +4,11 @@
         <name>SysWeaver.FolderSync</name>
     </assembly>
     <members>
+        <member name="P:SysWeaver.FolderSync.FolderSyncer.Client">
+            <summary>
+            The http client (with credentials) used to make requests
+            </summary>
+        </member>
         <member name="M:SysWeaver.FolderSync.FolderSyncer.PushFolders(System.String,System.String,System.Boolean,System.Boolean,System.Func{System.String,System.Boolean},System.Action{SysWeaver.FolderSync.FolderSyncEvents,System.String})">
             <summary>
             Update a remote repository from local folders
