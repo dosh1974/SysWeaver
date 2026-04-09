@@ -136,7 +136,7 @@ namespace SysWeaver.MicroService
             {
                 svg.AddRect(0, 0, 256, 256, new SvgColorStyle
                 {
-                    FillColor = HashColors.GetWeb(h , s, 0.2)
+                    FillColor = HashColors.GetWeb(h, s * 0.8, 0.5)
                 });
             }
             var bp = new SvgNgonParams();

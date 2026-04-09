@@ -11,21 +11,93 @@ namespace SysWeaver.Media
     public sealed class SvgBarcodeItf14
     {
 
-        public static readonly SvgBarcodeItf14 Default = new (2, 0);
+        /// <summary>
+        /// Default path
+        /// </summary>
+        public static readonly SvgBarcodeItf14 Default = new (2, -32, 0);
+        
+        
+        /// <summary>
+        /// Compact path, the height of the bar code need to be scaled up by 64 to show correctly.
+        /// </summary>
+        public static readonly SvgBarcodeItf14 Compact = new(2, 1, 0);
+
+
+
+        static void Throw1()
+        {
+            throw new Exception("Only 13 digits are supported!");
+        }
+        static void Throw2()
+        {
+            throw new Exception("Only digits can be supplied!");
+        }
+
+        public static Char ComputeCheckSum(String digits)
+        {
+            var ds = digits.AsSpan();
+            if (ds.Length != 13)
+                Throw1();
+            int sum = 0;
+            for (int i = 0; i < 13; i += 2)
+            {
+                var d = ds[i] - '0';
+                if ((d < 0) || (d >= 10))
+                    Throw2();
+                sum += d;
+            }
+            sum *= 3;
+            for (int i = 1; i < 13; i += 2)
+            {
+                var d = ds[i] - '0';
+                if ((d < 0) || (d >= 10))
+                    Throw2();
+                sum += d;
+            }
+            sum %= 10;
+            sum = sum == 0 ? 0 : (10 - sum);
+            return (Char)('0' + sum);
+        }
+
+        public static Char ComputeCheckSumUnsafe(String digits)
+        {
+            var ds = digits.AsSpan();
+            int sum = 0;
+            for (int i = 0; i < 13; i += 2)
+            {
+                var d = ds[i] - '0';
+                sum += d;
+            }
+            sum *= 3;
+            for (int i = 1; i < 13; i += 2)
+            {
+                var d = ds[i] - '0';
+                sum += d;
+            }
+            sum %= 10;
+            sum = sum == 0 ? 0 : (10 - sum);
+            return (Char)('0' + sum);
+        }
+
 
         /// <summary>
         /// Init an instance
         /// </summary>
         /// <param name="narrowPixelWidth">The width of the most narrow bar in the code, everything else is derviced using best practices</param>
+        /// <param name="height">Height, less than zero is a multiplier of the narrow width, greater than zero sets the height to that</param>
         /// <param name="decimalCount">Number of decimals</param>
-        public SvgBarcodeItf14(double narrowPixelWidth, int decimalCount = 1)
+        /// <param name="wideMultiplier">The multiplier to apply to get a wide bar</param>
+        /// <param name="barBleed">[0, 0.5] account for ink-bleed by reducing the black bar width by this amount (as a fraction)</param>
+        public SvgBarcodeItf14(double narrowPixelWidth, double height = -32, int decimalCount = 1, double wideMultiplier = 2.5, double barBleed = 0)
         {
             Narrow = narrowPixelWidth;
-            Wide = Narrow * 2.5;
-            Height = Narrow * 24;
+            Wide = Narrow * wideMultiplier;
+            Height = height == 0 ? (Narrow * 32) : (height < 0 ? (Narrow * -height) : height);
             DecimalMask = decimalCount <= 0 ? "0" : ("0." + new string('#', decimalCount));
+            BarBleed = Math.Max(0.0, Math.Min(0.5, barBleed)) * narrowPixelWidth;
         }
 
+        readonly double BarBleed;
         readonly String DecimalMask;
 
         String S(double v)
@@ -84,9 +156,10 @@ namespace SysWeaver.Media
             bitCount -= c;
             var w = Wide;
             var n = Narrow;
-            var h = Height - 4 * Narrow;
-            var sw = S(w);
-            var sn = S(n);
+            var h = Height;
+            var bb = BarBleed;
+            var sw = S(w - bb);
+            var sn = S(n - bb);
             var sh = S(h);
             var sy = S(y);
             for (int i = 0; i < c; i += 2)
