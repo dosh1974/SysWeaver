@@ -70,4 +70,21 @@ namespace SysWeaver
         }
     }
 
+
+    public class PushMessageStringArrayValue : PushMessage
+    {
+#if DEBUG
+        public override string ToString() => String.Join(" = ", base.ToString(), Value);
+#endif//DEBUG
+
+
+        public String[] Value;
+
+        public PushMessageStringArrayValue(string type, params string[] value)
+        {
+            Type = type;
+            Value = value;
+        }
+    }
+
 }

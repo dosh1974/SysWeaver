@@ -77,6 +77,51 @@ namespace SysWeaver.Net
         }
 
 
+
+        /// <summary>
+        /// Call this when the client for this session should invalidate some files
+        /// </summary>
+        /// <param name="session">The session to force reload from</param>
+        /// <param name="urls">The urls to refresh, this must be from the root.
+        /// Ex: "Auth/userImage".
+        /// </param>
+        public void OnSessionFilesChanged(HttpSession session, params String[] urls)
+            => session.PushMessage(new PushMessageStringArrayValue("FileReload", urls), false);
+
+        /// <summary>
+        /// Call this when some file associated with the currently logged in user is changed.
+        /// Note that the refresh will happen on all clients that the user is logged on into.
+        /// </summary>
+        /// <param name="session">The session to force reload from</param>
+        /// <param name="urls">The urls to refresh, this must be from the root.</param>
+        public void OnUserFilesChanged(HttpSession session, params String[] urls)
+        {
+            var a = session.Auth;
+            var c = new PushMessageStringArrayValue("FileReload", urls);
+            if (a == null)
+                session.PushMessage(c, false);
+            else
+                PushMessageUser(session, c, false);
+        }
+
+
+        /// <summary>
+        /// Call this when some file associated with the currently logged in user is changed.
+        /// Note that the refresh will happen on all clients that the user is logged on into.
+        /// </summary>
+        /// <param name="userGuid">Guid of the user</param>
+        /// <param name="urls">The urls to refresh, this must be from the root.</param>
+        public void OnUserFilesChanged(String userGuid, params String[] urls)
+            => PushMessageUser(userGuid, new PushMessageStringArrayValue("FileReload", urls), false);
+
+        /// <summary>
+        /// Call this when some file that all session are using.
+        /// </summary>
+        /// <param name="urls">The urls to refresh, this must be from the root.</param>
+        public void OnGlobalFilesChanged(params String[] urls)
+            => PushMessageAllSessions(new PushMessageStringArrayValue("FileReload", urls), false);
+
+
         /// <summary>
         /// Messages that are always sent to clients, must be lowercased
         /// </summary>
@@ -90,6 +135,7 @@ namespace SysWeaver.Net
             "server.restart",
             "reload",
             "refresh",
+            "filereload",
 #if DEBUG
             "test",
             "testa",
@@ -103,6 +149,9 @@ namespace SysWeaver.Net
         /// </summary>
         public static readonly PushMessage MessageReload = new PushMessage("reload");
 
+        /// <summary>
+        /// Refresh.. sent on lanmguage change
+        /// </summary>
         public static readonly PushMessage MessageRefresh = new PushMessage("refresh");
 
         static readonly PushMessage MessageUserLogIn = new PushMessage("user.login");

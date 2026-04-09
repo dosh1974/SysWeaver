@@ -112,8 +112,6 @@ This server supports the following sizes:
         StaticDataHttpServerModule StaticMod;
 
 
-
-
         void AddReadMe(StaticDataHttpServerModule sm)
         {
             if (sm == null)
@@ -368,25 +366,64 @@ This server supports the following sizes:
         /// Remove a user image from the cache
         /// </summary>
         /// <param name="userGuid"></param>
-        public void InvalidateUserImageCache(String userGuid)
+        /// <param name="context"></param>
+        public void InvalidateUserImageCache(String userGuid, HttpServerRequest context)
         {
+            var cr = ImageRoot + "Current/";
+            var files = new HashSet<String>(StringComparer.Ordinal)
+            {
+                cr + "small",
+                cr + "large",
+            };
             if (userGuid != null)
             {
                 var c = UserImageCache;
                 foreach (var x in UserImageSizes)
                 {
+                    files.Add(cr + x.Key);
                     var key = String.Concat(userGuid, '\n', x.Value);
                     c.Remove(key);
                 }
             }
+            foreach (var x in UserImageDependencies.Keys)
+                files.Add(x);
+            var ss = context.Server;
+            ss.InvalidateUserSessionCaches(userGuid, x =>
+            {
+                if (!files.Contains(x.SplitFirst('?')))
+                    return false;
+                Manager.AddMessage("Reloading " + x.ToQuoted());
+                return true;
+            });
+            ss.OnUserFilesChanged(userGuid, files.ToArray());
         }
+
+
+        readonly SemiFrozenDictionary<String, int> UserImageDependencies = new SemiFrozenDictionary<string, int>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Add a resource that depends on the user image (forces reloading etc)
+        /// </summary>
+        /// <param name="url">The url of the resource, relative from the site root, ex: "Data/Cards/MemberCard.svg"</param>
+        /// <returns>True if the resource was added</returns>
+        public bool AddUserImageDependency(String url)
+            => UserImageDependencies.TryAdd(url, 0);
+
+        /// <summary>
+        /// Remove a resource from the user image dependencies
+        /// </summary>
+        /// <param name="url"></param>
+        /// <returns></returns>
+        public bool RemoveUserImageDependency(String url)
+            => UserImageDependencies.TryRemove(url, out var x);
+
 
         /// <summary>
         /// Remove a user image from the cache
         /// </summary>
         /// <param name="context"></param>
         public void InvalidateUserImageCache(HttpServerRequest context)
-            => InvalidateUserImageCache(context.Session.Auth?.Guid);
+            => InvalidateUserImageCache(context.Session.Auth?.Guid, context);
 
         /// <summary>
         /// Determine if the request can be handled by this module
@@ -396,9 +433,6 @@ This server supports the following sizes:
         async ValueTask<IHttpRequestHandler> GetAsyncHandler(HttpServerRequest context)
         {
             var local = context.LocalUrl;
-            //var root = ImageRoot;
-            //if (!local.FastStartsWith(root))
-            //return null;
             local = local.Substring(ImageRootLen);
             var next = local.IndexOf('/');
             if (next < 0)
@@ -414,8 +448,6 @@ This server supports the following sizes:
             {
                 guid = context.Session?.Auth?.Guid;
                 key = String.Concat(guid, '\n', size);
-                //context.Etag = guid;
-                //cache.Remove(key);
             }
             else
             {
@@ -454,8 +486,8 @@ This server supports the following sizes:
                 var rr = h.Item2;
                 if (rr != null)
                 {
-                    context.ClientCacheDuration = isCurent ? 0 : 30;
-                    context.RequestCacheDuration = isCurent ? 0 : 25;
+                    context.ClientCacheDuration = 30;
+                    context.RequestCacheDuration = 25;
                     context.Etag = h.Item1;
                     return rr;
                 }

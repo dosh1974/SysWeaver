@@ -214,7 +214,7 @@ namespace SysWeaver.MicroService
                 await FileExt.WriteMemoryAsync(String.Concat(pathPrefix, '_', size, saveExt), imgs[i], true).ConfigureAwait(false);
             }
             await File.WriteAllTextAsync(hashFile, file.Hash).ConfigureAwait(false);
-            AuthManager?.InvalidateUserImageCache(uid);
+            AuthManager?.InvalidateUserImageCache(uid, r);
             r.Session.InvalidateCache();
             //r.Server.PushMessageUser(uid, HttpServerBase.MessageRefresh);
             return new FileUploadResult(FileUploadStatus.None, String.Concat("auth/UserImages/", name, "/large"));
@@ -231,7 +231,8 @@ namespace SysWeaver.MicroService
         [WebApiAuth]
         public async Task<bool> RemoveUserImage(HttpServerRequest r)
         {
-            var uid = r.Session.Auth.Guid;
+            var session = r.Session;
+            var uid = session.Auth.Guid;
             var name = uid.ToHex();
             if (!SystemLock.TryGet("SysWeaver.CustomUserImages." + name, out var ldisp))
                 return false;
@@ -245,9 +246,7 @@ namespace SysWeaver.MicroService
             var hashFile = pathPrefix + ".txt";
             var ex = await PathExt.TryDeleteFileAsync(hashFile).ConfigureAwait(false);
             var exs = await Sizes.ConvertAsyncValue(size => PathExt.TryDeleteFileAsync(String.Concat(pathPrefix, '_', size, saveExt))).ConfigureAwait(false);
-            AuthManager?.InvalidateUserImageCache(uid);
-            r.Session.InvalidateCache();
-            //r.Server.PushMessageUser(uid, HttpServerBase.MessageRefresh);
+            AuthManager?.InvalidateUserImageCache(uid, r);
             return true;
         }
 

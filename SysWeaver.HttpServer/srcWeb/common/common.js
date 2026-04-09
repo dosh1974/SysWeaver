@@ -490,12 +490,14 @@ class SessionManager
                         masterAbort = null;
                         if (response) {
                             cc = response.Cc;
+                            const prefix = response.Prefix;
                             const newEvents = response.Messages;
                             if (newEvents) {
                                 const nel = newEvents.length;
                                 for (let i = 0; i < nel; ++i) {
                                     const evData = newEvents[i];
                                     //console.log(logPrefix + "Master got event \"" + evData.Type + "\" from the server:\n" + JSON.stringify(evData, null, "\t"));
+                                    evData.Prefix = prefix;
                                     InterOp.Post(evData.Type, evData, true);
                                 }
                             }
@@ -2566,34 +2568,74 @@ function GetAbsolutePath(url, current) {
     return new URL(url, current ? current : window.location.href).href;
 }
 
-async function FlushCache(url) {
+/**
+ * Flush an url from the local cache.
+ * Returns a promise so use with await.
+ * @param {string} url The url to flush
+ */
+function FlushCache(url) {
     const x = new XMLHttpRequest();
-    x.open("HEAD", url, true);
+    x.open("GET", url, true);
     x.setRequestHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
     x.setRequestHeader("Pragma", "no-cache");
     x.setRequestHeader("Expires", "0");
-    waitFor(endWait => {
-        x.onreadystatechange = async () => {
-            if (x.readyState == 4)
+    x.timeout = 10;
+    return waitFor(endWait => {
+        x.ontimeout = () => {
+            if (endWait)
                 endWait();
+            endWait = null;
         };
-        x.send();
+        x.onreadystatechange = () => {
+            if (x.readyState >= 2) {
+                if (endWait)
+                    endWait();
+                endWait = null;
+            }
+        };
+        try {
+            x.send();
+        }
+        catch {
+            if (endWait)
+                endWait();
+            endWait = null;
+        }
     });
 }
 
+/**
+ * Start a flush of an url from the local cache.
+ * @param {string} url The url to flush
+ * @param {function():Promise} whenDone An optional function to call when the flush is completed
+ */
 function FlushCacheSync(url, whenDone) {
     const x = new XMLHttpRequest();
-    x.open("HEAD", url, true);
+    x.open("GET", url, true);
     x.setRequestHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
     x.setRequestHeader("Pragma", "no-cache");
     x.setRequestHeader("Expires", "0");
-    x.onreadystatechange = async () => {
-        if (x.readyState == 4) {
+    x.timeout = 10;
+    x.ontimeout = () => {
+        if (whenDone)
+            whenDone();
+        whenDone = null;
+    };
+    x.onreadystatechange = () => {
+        if (x.readyState >= 2) {
             if (whenDone)
-                await whenDone();
+                whenDone();
+            whenDone = null;
         }
     };
-    x.send();
+    try {
+        x.send();
+    }
+    catch {
+        if (whenDone)
+            whenDone();
+        whenDone = null;
+    }
 }
 
 
@@ -6666,18 +6708,223 @@ async function SysWeaverInit() {
         ReloadAll(true, true);
     }
 
-//  Interop responses for any window
-    const allMap = new Map();
-    allMap.set("Theme.Changed", async msg => {
+
+    const map = new Map();
+    const setTheme = ps.get('settheme');
+    const useTheme = ps.get('usetheme');
+
+    //  All windows
+    map.set("Theme.Changed", async msg => {
         if (msg.From !== id) {
             window.UseTheme = null;
             await applyTheme(true);
         }
     });
+    map.set("filereload", async msg => {
+        console.log("File reload: " + msg.Prefix + " => " + msg.Value.join(", "));
+        const pre = msg.Prefix;
+        const files = msg.Value;
+        const fl = files.length;
+        const fileMap = new Map();
+        const tasks = [];
+        for (let i = 0; i < fl; ++i) {
+            const ap = pre + files[i];
+            fileMap.set(ap, true);
+            tasks.push(FlushCache(ap));
+        }
+        await Promise.all(tasks);
+        await delay(10);
+        const items = document.body.getElementsByTagName("*");
+        const current = window.location.href;
+        function updateAttribute(el, atr) {
+            const a = el.getAttribute(atr);
+            if (!a)
+                return;
+            let url = a;
+            const pi = url.indexOf('?');
+            if (pi >= 0)
+                url = url.substring(0, pi);
+            url = GetAbsolutePath(url, current);
+            if (!fileMap.get(url))
+                return;
+            console.log("Update attribute " + atr + " on " + el.tagName + " with value " + a + " => " + url);
+            el.removeAttribute(atr);
+            el.setAttribute(atr, a);
+        }
 
-    const map = new Map();
-    const setTheme = ps.get('settheme');
-    const useTheme = ps.get('usetheme');
+        function IsWs(c) {
+            if (("" + c).trim() === "")
+                return true;
+            if (c === ',')
+                return true;
+            return false;
+        }
+
+        function IsPureWs(c) {
+            if (("" + c).trim() === "")
+                return true;
+            if (c === ',')
+                return true;
+            return false;
+        }
+
+        function getUrls(a) {
+            if (!a)
+                return null;
+            const urls = [];
+            const fullUrls = [];
+            let start = 0;
+            let end = a.length;
+            while (start < end) {
+                let urlPos = a.indexOf("url", start);
+                if (urlPos < 0)
+                    return urls.length <= 0 ? null : [urls, fullUrls];
+                if ((urlPos === 0) || IsWs(a.charAt(urlPos - 1))) {
+                    const startP = urlPos;
+                    urlPos += 3;
+                    // Find (
+                    while (urlPos < end) {
+                        let c = a.charAt(urlPos);
+                        if (c == '(') {
+                            ++urlPos;
+                            let urlEnd = ')';
+                            while (urlPos < end) {
+                                c = a.charAt(urlPos);
+                                if (!IsPureWs(c)) {
+                                    if ((c === "'") || (c === '"')) {
+                                        urlEnd = c;
+                                        ++urlPos;
+                                    }
+                                    const uend = a.indexOf(urlEnd, urlPos);
+                                    if (uend >= 0) {
+                                        let url = a.substring(urlPos, uend);
+                                        urlPos = uend;
+                                        const pi = url.indexOf('?');
+                                        if (pi >= 0)
+                                            url = url.substring(0, pi);
+                                        url = GetAbsolutePath(url, current);
+                                        if (fileMap.get(url)) {
+                                            fullUrls.push(url);
+                                            urls.push(a.substring(startP, uend + 1));
+                                        }
+                                    }
+                                    break;
+                                }
+                                ++urlPos;
+                            }
+                            break;
+                        }
+                        if (!IsPureWs(c))
+                            break;
+                        ++urlPos;
+                    }
+                    start = urlPos;
+                    continue;
+                }
+                start = urlPos + 3;
+            }
+            return urls.length <= 0 ? null : [urls, fullUrls];
+        }
+
+
+
+
+        function updateStyle(el, style) {
+            const els = el.style;
+            const a = els[style];
+            if (!getUrls(a))
+                return;
+            console.log("Update style " + style + " on " + el.tagName + " with value " + a);
+            els[style] = null;
+            els[style] = a;
+        }
+
+        const rid = ("" + Math.random()).replaceAll(".", "");
+        const r = "_fr=" + rid;
+
+
+        const cssMap = new Map();
+        const cssSets = [];
+
+        function updateCss(sm, style) {
+            const a = sm.get(style);
+            if (!a)
+                return;
+            const aa = a.toString();
+            const urlsX = getUrls(aa);
+            if (!urlsX)
+                return;
+            console.log("Update css " + style + " on " + sm + " with value " + a);
+            let na = aa;
+            const urls = urlsX[0];
+            const ul = urls.length;
+            for (let i = 0; i < ul; ++i) {
+                const ol = urls[i];
+                const oll = ol.length - 1;
+                const nl = ol.substring(0, oll) + (ol.indexOf('?') < 0 ? '?' : '&') + r + ol.charAt(oll);
+                na = na.replaceAll(ol, nl);
+            }
+
+            const fullUrls = urlsX[1];
+            const uul = fullUrls.length;
+            for (let i = 0; i < uul; ++i) {
+                const ol = fullUrls[i];
+                cssMap.set(ol + (ol.indexOf('?') < 0 ? '?' : '&') + r, 0);
+            }
+            cssSets.push(() => sm.set(style, na));
+        }
+
+
+        for (let i = items.length; i--;) {
+            const e = items[i];
+            updateAttribute(e, "href");
+            updateAttribute(e, "src");
+            updateAttribute(e, "data");
+            updateStyle(e, "backgroundImage");
+            updateStyle(e, "maskImage");
+        }
+        const cssTexts = document.styleSheets;
+        const cssL = cssTexts.length;
+        for (let i = 0; i < cssL; ++i) {
+            const rules = cssTexts[i].cssRules;
+            const rl = rules.length;
+            for (let j = 0; j < rl; ++j) {
+                const rule = rules[j];
+                const sm = rule.styleMap;
+                if (!sm)
+                    continue;
+                updateCss(sm, "background-image");
+                updateCss(sm, "mask-image");
+            }
+        }
+
+        
+
+        const ctasks = [];
+        cssMap.forEach((v, k) => ctasks.push(getRequest(k, true)));
+        let cssSL = ctasks.length;
+        if (cssSL > 0) {
+            await Promise.all(ctasks);
+            cssSL = cssSets.length;
+            setTimeout(() => {
+                for (let i = 0; i < cssSL; ++i)
+                    cssSets[i]();
+                const cl = document.body.classList;
+                const cll = cl.length;
+                for (let i = 0; i < cll; ++i) {
+                    if (cl[i].indexOf("force_css_reload_") === 0) {
+                        cl.remove(cl[i]);
+                        break;
+                    }
+                }
+                const cs = "force_css_reload_" + rid;
+                document.body.classList.add(cs);
+            }, 100);
+        }
+
+
+    });
+
     
     if (isTop) {
         //  Interop responses for top windows
@@ -6768,7 +7015,7 @@ async function SysWeaverInit() {
         if (!type)
             return;
         // console.log("Got \"" + type + "\":\n" + JSON.stringify(msg, null, "\t"));
-        const fn = allMap.get(type) ?? map.get(type);
+        const fn = map.get(type);
         if (fn) {
             await fn(msg);
         }

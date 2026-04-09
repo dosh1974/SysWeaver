@@ -2629,6 +2629,31 @@ namespace SysWeaver.Net
                 s.Value.InvalidateCache(shouldInvalidate);
         }
 
+        /// <summary>
+        /// Invalidate all user session caches, this does not invalidate the "global" cache
+        /// </summary>
+        /// <param name="userGuid">The user to invalidate caches for</param>
+        public void InvalidateUserSessionCaches(String userGuid)
+        {
+            if (!UserSessions.TryGetValue(userGuid, out var userData))
+                return;
+            foreach (var s in userData.Sessions.Keys)
+                s.InvalidateCache();
+        }
+
+        /// <summary>
+        /// Invalidate all user session caches the predicate returns true, this does not invalidate the "global" cache
+        /// </summary>
+        /// <param name="userGuid">The user to invalidate caches for</param>
+        /// <param name="shouldInvalidate">A function to determine if the entry shgould be cleared, the string is the local url</param>
+        public void InvalidateUserSessionCaches(String userGuid, Func<String, bool> shouldInvalidate)
+        {
+            if (!UserSessions.TryGetValue(userGuid, out var userData))
+                return;
+            foreach (var s in userData.Sessions.Keys)
+                s.InvalidateCache(shouldInvalidate);
+        }
+
         #endregion//Cache
 
         /// <summary>
@@ -2645,7 +2670,10 @@ namespace SysWeaver.Net
                 await Task.Delay(1000).ConfigureAwait(false);
                 return null;
             }
-            return await request.Session.GetMessages(events).ConfigureAwait(false);
+            var res = await request.Session.GetMessages(events).ConfigureAwait(false);
+            if (res != null)
+                res.Prefix = request.Prefix;
+            return res;
         }
 
 

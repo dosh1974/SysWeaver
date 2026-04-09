@@ -386,10 +386,10 @@ namespace SysWeaver.AI
         {
             yield return new Stats(nameof(LlmTranslator), "Low effort input tokens", Interlocked.Read(ref CountInputTokens[0]), "The approximate number of input tokens used for the low effort model");
             yield return new Stats(nameof(LlmTranslator), "Low effort output tokens", Interlocked.Read(ref CountOutputTokens[0]), "The approximate number of output tokens used for the low effort model");
-            yield return new Stats(nameof(LlmTranslator), "Medium effort input tokens", Interlocked.Read(ref CountInputTokens[1]), "The approximate number of input tokens used for the high effort model");
-            yield return new Stats(nameof(LlmTranslator), "Medium effort output tokens", Interlocked.Read(ref CountOutputTokens[1]), "The approximate number of output tokens used for the high effort model");
-            yield return new Stats(nameof(LlmTranslator), "High effort input tokens", Interlocked.Read(ref CountInputTokens[2]), "The approximate number of input tokens used for the medium effort model");
-            yield return new Stats(nameof(LlmTranslator), "High effort output tokens", Interlocked.Read(ref CountOutputTokens[2]), "The approximate number of output tokens used for the medium effort model");
+            yield return new Stats(nameof(LlmTranslator), "Medium effort input tokens", Interlocked.Read(ref CountInputTokens[1]), "The approximate number of input tokens used for the medium effort model");
+            yield return new Stats(nameof(LlmTranslator), "Medium effort output tokens", Interlocked.Read(ref CountOutputTokens[1]), "The approximate number of output tokens used for the medium effort model");
+            yield return new Stats(nameof(LlmTranslator), "High effort input tokens", Interlocked.Read(ref CountInputTokens[2]), "The approximate number of input tokens used for the high effort model");
+            yield return new Stats(nameof(LlmTranslator), "High effort output tokens", Interlocked.Read(ref CountOutputTokens[2]), "The approximate number of output tokens used for the high effort model");
         }
 
 

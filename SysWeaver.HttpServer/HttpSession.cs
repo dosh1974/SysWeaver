@@ -718,7 +718,12 @@ namespace SysWeaver.Net
         /// Messages from the server, this can be null if there are no new messages but the change counter have been updated
         /// </summary>
         public PushMessage[] Messages;
-        
+
+        /// <summary>
+        /// The base url, prepend any realtive url's with this to get the absolute url.
+        /// </summary>
+        public String Prefix;
+
         /// <summary>
         /// The change counter to use for the next request
         /// </summary>
