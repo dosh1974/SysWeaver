@@ -6886,15 +6886,19 @@ async function SysWeaverInit() {
         const cssTexts = document.styleSheets;
         const cssL = cssTexts.length;
         for (let i = 0; i < cssL; ++i) {
-            const rules = cssTexts[i].cssRules;
-            const rl = rules.length;
-            for (let j = 0; j < rl; ++j) {
-                const rule = rules[j];
-                const sm = rule.styleMap;
-                if (!sm)
-                    continue;
-                updateCss(sm, "background-image");
-                updateCss(sm, "mask-image");
+            try {
+                const rules = cssTexts[i].cssRules;
+                const rl = rules.length;
+                for (let j = 0; j < rl; ++j) {
+                    const rule = rules[j];
+                    const sm = rule.styleMap;
+                    if (!sm)
+                        continue;
+                    updateCss(sm, "background-image");
+                    updateCss(sm, "mask-image");
+                }
+            }
+            catch {
             }
         }
 
