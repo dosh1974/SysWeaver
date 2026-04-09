@@ -61,6 +61,11 @@ namespace SysWeaver
         public const String Png = "image/png";
 
         /// <summary>
+        /// Jpeg image data
+        /// </summary>
+        public const String Jpeg = "image/jpeg";
+
+        /// <summary>
         /// Raw data
         /// </summary>
         public const String Data = "application/octet-stream";

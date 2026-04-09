@@ -60,6 +60,21 @@ namespace SysWeaver.Media
         }
 
 
+        public void ToJpeg(Stream s, int width = 0, int height = 0, bool leaveOpen = false, int quality = 70)
+        {
+            GetScale(out var scaleX, out var scaleY, ref width, ref height);
+            using var _ = leaveOpen ? null : s;
+            Svg.Picture.ToImage(s, SKColors.Empty, SKEncodedImageFormat.Jpeg, quality, scaleX, scaleY, SKColorType.Rgba8888, SKAlphaType.Unpremul, Cs);
+        }
+
+        public Memory<Byte> ToJpeg(int width = 0, int height = 0, int quality = 70)
+        {
+            GetScale(out var scaleX, out var scaleY, ref width, ref height);
+            using var ms = new MemoryStream(width * height * 4);
+            Svg.Picture.ToImage(ms, SKColors.Empty, SKEncodedImageFormat.Jpeg, quality, scaleX, scaleY, SKColorType.Rgba8888, SKAlphaType.Unpremul, Cs);
+            return new Memory<byte>(ms.GetBuffer(), 0, (int)ms.Position);
+        }
+
         static readonly SKColorSpace Cs = SKColorSpace.CreateSrgb();
 
         readonly SKSvg Svg = new SKSvg();
