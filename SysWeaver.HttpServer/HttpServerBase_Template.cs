@@ -91,8 +91,10 @@ namespace SysWeaver.Net
 
             public void SetLangLm(String lastModified, String language)
             {
-                var c = Current;
-                c.LangLms.TryAdd(language, lastModified);
+                var clm = Current.LangLms;
+                if (clm == null)
+                    return;
+                clm.TryAdd(language, lastModified);
             }
         }
 

@@ -156,6 +156,8 @@ namespace SysWeaver.HttpTransformer
                 if (AcceptMimeChecks.Contains(mime))
                 {
                     formats = formats ?? req.GetReqHeader("Accept");
+                    if (formats == null)
+                        continue;
                     var mp = formats.IndexOf(mime);
                     if (mp < 0)
                         continue;

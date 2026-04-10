@@ -1104,6 +1104,10 @@ namespace SysWeaver.Net
                         return;
                 using var __ = PerfMon.Track((nameof(Handle) + ".") + t.Name);
                 var etag = t.GetEtag(out bool useAsync, data);
+
+                if (localUrl.FastEndsWith(".json"))
+                    etag = etag;
+
                 var ee = data.Etag;
                 if (ee != null)
                     etag = etag == null ? ee : String.Concat('_', etag, ee);
