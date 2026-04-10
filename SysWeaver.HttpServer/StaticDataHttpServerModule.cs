@@ -67,8 +67,7 @@ namespace SysWeaver.Net
         public void AddEmbeddedResources(Assembly asm, String rootNamespace = null, String urlRoot = null, int? clientCacheDuration = null, HttpCompressionPriority compression = null, bool disableCompession = false, DateTime? lastModified = null, String etag = null,String auth = null, AddCondition doAdd = null)
         {
             var lwt = lastModified ?? asm.GetLastWriteTimerUtc();
-            etag = etag ?? HttpServerTools.ToEtag(lwt);
-
+            //etag = etag ?? HttpServerTools.ToEtag(lwt);
             var order = asm.GetCustomAttribute<ResourceOrderAttribute>()?.Order ?? 0;
             var names = asm.GetManifestResourceNames();
             var replace = asm.GetCustomAttribute<ReplaceEmbeddedFilesAttribute>()?.Replace ?? false;

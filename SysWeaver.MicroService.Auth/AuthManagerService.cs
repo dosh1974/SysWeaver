@@ -65,7 +65,6 @@ This server supports the following sizes:
 
             var lwt1 = manager.ConfigLastWriteTimeUtc;
             var lwt2 = typeof(AuthManagerService).Assembly.GetLastWriteTimerUtc();
-            ETag = HttpServerTools.ToEtag(lwt1.Ticks + lwt2.Ticks);
             Lwt = lwt1 > lwt2 ? lwt1 : lwt2;
 
 
@@ -80,8 +79,7 @@ This server supports the following sizes:
         }
 
         readonly DateTime Lwt;
-        readonly String ETag;
-
+        
         void SetUserImageHandler(IUserImageHandler ui)
         {
             UserImageHandler = ui;
@@ -131,7 +129,7 @@ This server supports the following sizes:
                     :
                     String.Concat("- ", n, " ", ImageRoot, "[Guid]/", n, " (", s, 'x', s, ")\n");
             }
-            sm.AddText(ImageRoot + "ReadMe.txt", "Embedded in " + GetType().Assembly, t, null, null, null, null, false, Lwt, ETag);
+            sm.AddText(ImageRoot + "ReadMe.txt", "Embedded in " + GetType().Assembly, t, null, null, null, null, false, Lwt, null);
         }
 
         void RemoveReadMe()
@@ -465,31 +463,28 @@ This server supports the following sizes:
             {
                 var h = await cache.GetOrUpdateValueAsync(key, async __guid =>
                 {
-                    var eTag = HttpServerTools.ToEtag(DateTime.UtcNow);
                     var img = UserImageHandler;
                     if (img != null)
                     {
                         var r = await img.Get(guid, size).ConfigureAwait(false);
                         if (r != null)
-                            return ValueTuple.Create(eTag, r);
+                            return r;
                     }
-
                     var def = DefaultUserImageHandler;
                     if (def != null)
                     {
                         var r = await def.Get(guid, size).ConfigureAwait(false);
                         if (r != null)
-                            return ValueTuple.Create(eTag, r);
+                            return r;
                     }
-                    return ValueTuple.Create(eTag, await DefaultImages.GetOrUpdateAsync(guid, GetDefaultImage).ConfigureAwait(false));
+                    var dr = await DefaultImages.GetOrUpdateAsync(guid, GetDefaultImage).ConfigureAwait(false);
+                    return dr;
                 }).ConfigureAwait(false);
-                var rr = h.Item2;
-                if (rr != null)
+                if (h != null)
                 {
-                    context.ClientCacheDuration = 30;
-                    context.RequestCacheDuration = 25;
-                    context.Etag = h.Item1;
-                    return rr;
+                    //context.ClientCacheDuration = 30;
+                    //context.RequestCacheDuration = 25;
+                    return h;
                 }
             }
             return await context.Server.InternalRedirect(this, context, context.Prefix + "auth/icons/user_not_found.svg").ConfigureAwait(false);
@@ -497,7 +492,7 @@ This server supports the following sizes:
 
 
 
-        readonly FastMemCache<String, ValueTuple<String, IHttpRequestHandler>> UserImageCache = new FastMemCache<string, ValueTuple<String, IHttpRequestHandler>>(TimeSpan.FromSeconds(30), StringComparer.Ordinal);
+        readonly FastMemCache<String, IHttpRequestHandler> UserImageCache = new (TimeSpan.FromSeconds(30), StringComparer.Ordinal);
 
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(String root = null)
         {
@@ -543,7 +538,7 @@ This server supports the following sizes:
             var svgData = enc.GetBytes(svgText);
             var cmp = Comp;
             var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
-            var svgHandler = new StaticMemoryHttpRequestHandler("icon.svg", "Generated", svgMem, MimeTypeMap.Svg, SvgCompression, 30, 15, Lwt, ETag, cmp);
+            var svgHandler = new StaticMemoryHttpRequestHandler("icon.svg", "Generated", svgMem, MimeTypeMap.Svg, SvgCompression, 30, 15, Lwt, null, cmp);
             return svgHandler;
         }
 

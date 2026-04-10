@@ -80,7 +80,8 @@ namespace SysWeaver.Net
         {
             useAsync = false;
             request.SetResMime(Mime);
-            return HttpServerTools.ToEtag(Fi.LastWriteTimeUtc);
+            var fi = Fi;
+            return String.Concat(HttpServerTools.ToEtag(fi.LastWriteTimeUtc), ' ', HttpServerTools.ToEtag(fi.Length));
         }
 
 

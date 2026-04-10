@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -89,6 +90,22 @@ namespace SysWeaver.Net
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToEtag(long l) => CompactAsciiString.Secure.Encode(l);
+
+
+        /// <summary>
+        /// Create an etag from some data (using a hash)
+        /// </summary>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static String ToEtag(ReadOnlySpan<Byte> data)
+        {
+            Span<Byte> hash = stackalloc Byte[16];
+            MD5.HashData(data, hash);
+            var l0 = BitConverter.ToUInt64(hash[..8]);
+            var l1 = BitConverter.ToUInt64(hash[8..]);
+            return CompactAsciiString.Secure.Encode(l0) + CompactAsciiString.Secure.Encode(l1);
+        }
 
 
         /// <summary>

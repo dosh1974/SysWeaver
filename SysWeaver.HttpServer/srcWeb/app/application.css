@@ -127,7 +127,7 @@ app-header app-UserButton {
 }
 
     app-header app-UserButton .WithUser {
-        border-radius: calc(var(--h) * 0.5);
+        border-radius: 15%;
         transition: linear outline var(--ThemeFadeDuration);
         outline: 2px solid var(--ThemeAcc1) !important;
         overflow: hidden;

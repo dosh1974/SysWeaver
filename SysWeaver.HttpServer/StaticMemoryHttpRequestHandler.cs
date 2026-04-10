@@ -31,7 +31,7 @@ namespace SysWeaver.Net
             Compression = compression;
             var lm = lastModified ?? HttpServerTools.StartedTime;
             LastModified = lm;
-            ETag = etag ?? HttpServerTools.ToEtag(lm);
+            ETag = etag ?? (lastModified == null ? HttpServerTools.ToEtag(data.Span) : String.Concat(HttpServerTools.ToEtag(lm), ' ', HttpServerTools.ToEtag(data.Span)));
             Decoder = preCompressedFormat;
             CackeKey = HttpServerTools.GetStaticCacheUrl();
             CompPreference = compression?.ToString();

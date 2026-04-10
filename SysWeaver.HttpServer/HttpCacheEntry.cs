@@ -14,11 +14,12 @@ namespace SysWeaver.Net
         //public readonly HttpServerRequest Res;
         public readonly ReadOnlyMemory<Byte> Data;
         public readonly IReadOnlyList<KeyValuePair<String, IReadOnlyList<String>>> Headers;
+        public readonly String ETag;
 
-        public HttpCacheEntry(long lastUsed, long expires, HttpServerRequest res, ReadOnlyMemory<byte> data, String localUrl)
+        public HttpCacheEntry(long lastUsed, long etag, HttpServerRequest res, ReadOnlyMemory<byte> data, String localUrl)
         {
             LastUsed = lastUsed;
-            Expires = expires;
+            Expires = etag;
             Headers = res.AllResHeaders.ToList();
             Data = data;
             LocalUrl = localUrl;

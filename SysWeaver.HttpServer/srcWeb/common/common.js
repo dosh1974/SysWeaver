@@ -295,6 +295,9 @@ class SessionManager
 
     static Url = new URL(SessionManager.Current + "/../../Api/application/GetMessages").href;
 
+
+    static IsMaster = false;
+
     static async Init() {
         if (window.HaveSessionManager)
             return;
@@ -646,6 +649,7 @@ class SessionManager
                     if (checkMasterTimer)
                         clearInterval(checkMasterTimer);
                     isMaster = true;
+                    SessionManager.IsMaster = true;
                     //  Get server events
                     serverEvents = new Map();
                     InterOp.Post(masterChanged);
@@ -690,6 +694,7 @@ class SessionManager
             } else {
                 console.log(logPrefix + "Stopping master " + id);
                 isMaster = false;
+                SessionManager.IsMaster = false;
                 InterOp.Post(masterClosed, { Cc: cc });
             }
         }
@@ -2579,7 +2584,7 @@ function FlushCache(url) {
     x.setRequestHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
     x.setRequestHeader("Pragma", "no-cache");
     x.setRequestHeader("Expires", "0");
-    x.timeout = 10;
+    x.timeout = 1;
     return waitFor(endWait => {
         x.ontimeout = () => {
             if (endWait)
@@ -2595,6 +2600,7 @@ function FlushCache(url) {
         };
         try {
             x.send();
+            x.cancel();
         }
         catch {
             if (endWait)
@@ -2615,7 +2621,7 @@ function FlushCacheSync(url, whenDone) {
     x.setRequestHeader("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
     x.setRequestHeader("Pragma", "no-cache");
     x.setRequestHeader("Expires", "0");
-    x.timeout = 10;
+    x.timeout = 1;
     x.ontimeout = () => {
         if (whenDone)
             whenDone();
@@ -2630,6 +2636,7 @@ function FlushCacheSync(url, whenDone) {
     };
     try {
         x.send();
+        x.cancel();
     }
     catch {
         if (whenDone)
@@ -6699,6 +6706,7 @@ async function SysWeaverInit() {
         await delay(100);
         location.reload(true);
     }
+
     async function delayedUserReload(ev) {
         if (window.IgnoreUserChanged)
             return;
@@ -6716,26 +6724,51 @@ async function SysWeaverInit() {
     //  All windows
     map.set("Theme.Changed", async msg => {
         if (msg.From !== id) {
+            console.log("Theme changed!!");
             window.UseTheme = null;
             await applyTheme(true);
         }
     });
-    map.set("filereload", async msg => {
-        console.log("File reload: " + msg.Prefix + " => " + msg.Value.join(", "));
+
+    async function ReloadFiles(msg) {
+        //  Flush cache and build a map of uri's that need refresh
+        const fileMap = new Map();
         const pre = msg.Prefix;
         const files = msg.Value;
         const fl = files.length;
-        const fileMap = new Map();
-        const tasks = [];
-        for (let i = 0; i < fl; ++i) {
-            const ap = pre + files[i];
-            fileMap.set(ap, true);
-            tasks.push(FlushCache(ap));
+        const didReload = msg.DidReload;
+        if (SessionManager.IsMaster) {
+            if (didReload)
+                return;
+            console.log(id + ": File reload on master: " + msg.Prefix + " => " + msg.Value.join(", "));
+            const tasks = [];
+            for (let i = 0; i < fl; ++i) {
+                const ap = pre + files[i];
+                console.log(id + ": Flushing cache for \"" + ap + "\"");
+                fileMap.set(ap, true);
+                tasks.push(FlushCache(ap));
+            }
+            await Promise.all(tasks);
+            console.log(id + ": Cache flushed, notifying children");
+            msg.DidReload = true;
+            InterOp.Post(msg.Type, msg);
+        } else {
+            if (!didReload)
+                return;
+            console.log(id + ": File reload on child: " + msg.Prefix + " => " + msg.Value.join(", "));
+            for (let i = 0; i < fl; ++i) 
+                fileMap.set(pre + files[i], true);
         }
-        await Promise.all(tasks);
-        await delay(10);
+        //await delay(10);
         const items = document.body.getElementsByTagName("*");
         const current = window.location.href;
+
+        // Actions to perform once urls have been reloaded
+        const actions = [];
+        const reloadMap = new Map();
+        const postCssRefreshActions = [];
+
+        // Check and fix attributes
         function updateAttribute(el, atr) {
             const a = el.getAttribute(atr);
             if (!a)
@@ -6747,9 +6780,12 @@ async function SysWeaverInit() {
             url = GetAbsolutePath(url, current);
             if (!fileMap.get(url))
                 return;
-            console.log("Update attribute " + atr + " on " + el.tagName + " with value " + a + " => " + url);
-            el.removeAttribute(atr);
-            el.setAttribute(atr, a);
+            reloadMap.set(url, 1);
+            actions.push(() => {
+                console.log(id + ": Update attribute " + atr + " on " + el.tagName + " with value " + a + " => " + url);
+                el.removeAttribute(atr);
+                el.setAttribute(atr, a);
+            });
         }
 
         function IsWs(c) {
@@ -6768,6 +6804,9 @@ async function SysWeaverInit() {
             return false;
         }
 
+        // Extract urls from a css property value string
+        // [0] = Url's for search and replace
+        // [1] = Absolute url's (resources)
         function getUrls(a) {
             if (!a)
                 return null;
@@ -6826,27 +6865,29 @@ async function SysWeaverInit() {
             return urls.length <= 0 ? null : [urls, fullUrls];
         }
 
-
-
-
+        // Check and fix inline styles
         function updateStyle(el, style) {
             const els = el.style;
             const a = els[style];
-            if (!getUrls(a))
+            const u = getUrls(a);
+            if (!u)
                 return;
-            console.log("Update style " + style + " on " + el.tagName + " with value " + a);
-            els[style] = null;
-            els[style] = a;
+            const uu = u[1];
+            const ul = uu.length;
+            for (let i = 0; i < ul; ++i)
+                reloadMap.set(uu[i], 1);
+            actions.push(() => {
+                console.log(id + ": Update style " + style + " on " + el.tagName + " with value " + a);
+                els[style] = null;
+                els[style] = a;
+            });
         }
 
+
         const rid = ("" + Math.random()).replaceAll(".", "");
-        const r = "_fr=" + rid;
+        const r = "__forceRefresh__=" + rid;
 
-
-        const cssMap = new Map();
-        const cssSets = [];
-
-        function updateCss(sm, style) {
+        function updateCss(sm, style, rule) {
             const a = sm.get(style);
             if (!a)
                 return;
@@ -6854,27 +6895,35 @@ async function SysWeaverInit() {
             const urlsX = getUrls(aa);
             if (!urlsX)
                 return;
-            console.log("Update css " + style + " on " + sm + " with value " + a);
             let na = aa;
             const urls = urlsX[0];
+            const fullUrls = urlsX[1];
             const ul = urls.length;
             for (let i = 0; i < ul; ++i) {
-                const ol = urls[i];
+                reloadMap.set(fullUrls[i], 1);
+                let ol = urls[i];
                 const oll = ol.length - 1;
-                const nl = ol.substring(0, oll) + (ol.indexOf('?') < 0 ? '?' : '&') + r + ol.charAt(oll);
+                const close = ol.charAt(oll);
+                cleanUrl = ol.substring(0, oll);
+                const oldR = cleanUrl.lastIndexOf('__forceRefresh__=');
+                if (oldR > 0)
+                    cleanUrl = cleanUrl.substring(0, oldR - 1);
+                const nl = cleanUrl + (cleanUrl.indexOf('?') < 0 ? '?' : '&') + r + close;
                 na = na.replaceAll(ol, nl);
             }
-
-            const fullUrls = urlsX[1];
-            const uul = fullUrls.length;
-            for (let i = 0; i < uul; ++i) {
-                const ol = fullUrls[i];
-                cssMap.set(ol + (ol.indexOf('?') < 0 ? '?' : '&') + r, 0);
-            }
-            cssSets.push(() => sm.set(style, na));
+            const rname = rule.cssText.split('{')[0].trim();
+            actions.push(() => {
+                console.log(id + ": Update css " + style + " on " + rname + " with value " + aa + " => " + na);
+                //sm.set(style, aa);
+                sm.set(style, "inherit");
+            });
+            postCssRefreshActions.push(() => {
+                sm.set(style, na);
+                //sm.set(style, aa);
+            });
         }
 
-
+        // Register all elements (attributes and inline styles)
         for (let i = items.length; i--;) {
             const e = items[i];
             updateAttribute(e, "href");
@@ -6883,6 +6932,8 @@ async function SysWeaverInit() {
             updateStyle(e, "backgroundImage");
             updateStyle(e, "maskImage");
         }
+        /*
+        // Register all css style sheets
         const cssTexts = document.styleSheets;
         const cssL = cssTexts.length;
         for (let i = 0; i < cssL; ++i) {
@@ -6894,40 +6945,55 @@ async function SysWeaverInit() {
                     const sm = rule.styleMap;
                     if (!sm)
                         continue;
-                    updateCss(sm, "background-image");
-                    updateCss(sm, "mask-image");
+                    updateCss(sm, "background-image", rule);
+                    updateCss(sm, "mask-image", rule);
                 }
             }
             catch {
             }
         }
+        */
 
-        
+        //  Nothing to do, just return
+        if (actions.length <= 0)
+            return;
 
+        // Force reload all url's (in paralell)
         const ctasks = [];
-        cssMap.forEach((v, k) => ctasks.push(getRequest(k, true)));
-        let cssSL = ctasks.length;
-        if (cssSL > 0) {
-            await Promise.all(ctasks);
-            cssSL = cssSets.length;
-            setTimeout(() => {
-                for (let i = 0; i < cssSL; ++i)
-                    cssSets[i]();
-                const cl = document.body.classList;
-                const cll = cl.length;
-                for (let i = 0; i < cll; ++i) {
-                    if (cl[i].indexOf("force_css_reload_") === 0) {
-                        cl.remove(cl[i]);
-                        break;
-                    }
-                }
-                const cs = "force_css_reload_" + rid;
-                document.body.classList.add(cs);
-            }, 100);
-        }
+        reloadMap.forEach((v, k) => {
+            console.log(id + ": Reloading \"" + k + "\"");
+            ctasks.push(getRequest(k, true));
+        });
+        await Promise.all(ctasks);
+        console.log(id + ": All reloaded!");
 
+        //  Do all actions
+        const actionl = actions.length;
+        for (let i = 0; i < actionl; ++i)
+            actions[i]();
 
-    });
+        /*
+        const pcsl = postCssRefreshActions.length;
+        if (pcsl <= 0)
+            return;
+        const bcl = document.body.classList;
+        const bclDel = [];
+        bcl.forEach(k => {
+            if (k.indexOf("_ForceRefresh_") === 0)
+                bclDel.push(k);
+        });
+        const cln = "_ForceRefresh_" + rid;
+        bcl.add(cln);
+        await delay(200);
+        //  Do all actions
+        for (let i = 0; i < pcsl; ++i)
+            postCssRefreshActions[i]();
+        bclDel.forEach(k => bcl.remove(k));
+        //document.body.classList.remove(cln);
+        */
+    }
+
+    map.set("filereload", ReloadFiles);
 
     
     if (isTop) {
