@@ -18,8 +18,9 @@ namespace SysWeaver.Translation
         /// <param name="context">An optional context that describes in what situation this text is being used</param>
         /// <param name="effort">The effort to use when translating</param>
         /// <param name="retention">The duration to cache the translation</param>
+        /// <param name="contentType">The type of text</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
-        Task<string[]> Translate(string text, string to, string from = "en", String context = null, TranslationEffort effort = TranslationEffort.Medium, TranslationCacheRetention retention = TranslationCacheRetention.Medium);
+        Task<string[]> Translate(string text, string to, string from = "en", String context = null, TranslationEffort effort = TranslationEffort.Medium, TranslationCacheRetention retention = TranslationCacheRetention.Medium, TranslationContentTypes contentType = TranslationContentTypes.Text);
 
 
         /// <summary>
@@ -33,8 +34,9 @@ namespace SysWeaver.Translation
         /// <param name="context">An optional context that describes in what situation that the texts are being used</param>
         /// <param name="effort">The effort to use when translating</param>
         /// <param name="retention">The duration to cache the translation</param>
+        /// <param name="contentType">The type of text</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
-        Task<string[]> TranslateMultiple(string[] texts, string to, string from = "en", String context = null, TranslationEffort effort = TranslationEffort.Medium, TranslationCacheRetention retention = TranslationCacheRetention.Medium);
+        Task<string[]> TranslateMultiple(string[] texts, string to, string from = "en", String context = null, TranslationEffort effort = TranslationEffort.Medium, TranslationCacheRetention retention = TranslationCacheRetention.Medium, TranslationContentTypes contentType = TranslationContentTypes.Text);
 
 
         /// <summary>
@@ -47,8 +49,9 @@ namespace SysWeaver.Translation
         /// <param name="context">An optional context that describes in what situation this text is being used</param>
         /// <param name="effort">The effort to use when translating</param>
         /// <param name="retention">The duration to cache the translation</param>
+        /// <param name="contentType">The type of text</param>
         /// <returns>Translated text</returns>
-        Task<string> TranslateOne(string text, string to, string from = "en", String context = null, TranslationEffort effort = TranslationEffort.Medium, TranslationCacheRetention retention = TranslationCacheRetention.Medium);
+        Task<string> TranslateOne(string text, string to, string from = "en", String context = null, TranslationEffort effort = TranslationEffort.Medium, TranslationCacheRetention retention = TranslationCacheRetention.Medium, TranslationContentTypes contentType = TranslationContentTypes.Text);
 
 
         /// <summary>
@@ -61,8 +64,9 @@ namespace SysWeaver.Translation
         /// <param name="context">An optional context that describes in what situation this text is being used</param>
         /// <param name="effort">The effort to use when translating</param>
         /// <param name="retention">The duration to cache the translation</param>
-        /// <returns></returns>
-        Task<String> RequestOne(String from, String to, String text, String context = null, TranslationEffort effort = TranslationEffort.Medium, TranslationCacheRetention retention = TranslationCacheRetention.Medium);
+        /// <param name="contentType">The type of text</param>
+        /// <returns>Translated text</returns>
+        Task<String> RequestOne(String from, String to, String text, String context = null, TranslationEffort effort = TranslationEffort.Medium, TranslationCacheRetention retention = TranslationCacheRetention.Medium, TranslationContentTypes contentType = TranslationContentTypes.Text);
 
         /// <summary>
         /// Return a list of supported source languages

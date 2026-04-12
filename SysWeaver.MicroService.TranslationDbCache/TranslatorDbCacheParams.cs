@@ -53,7 +53,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Rebuild the inputs table when requests come in (is some what slower)
         /// </summary>
-        public bool RebuildInputs = true;
+        public bool RebuildInputs;
     }
 
 

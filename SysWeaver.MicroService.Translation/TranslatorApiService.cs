@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using SysWeaver.Net;
 using SysWeaver.Translation;
 
 namespace SysWeaver.MicroService
@@ -42,12 +43,16 @@ namespace SysWeaver.MicroService
         /// Translate some text to one or more languages
         /// </summary>
         /// <param name="request">Paramaters</param>
+        /// <param name="context">Web context</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
         [WebApi]
         [WebApiClientCache(ClientCache)]
-        [WebApiRequestCache(RequestCache)]
-        public Task<string[]> Translate(TranslateRequest request)
-            => T.Translate(request);
+        [WebApiRequestCache(RequestCache, WebApiCaches.Globally)]
+        public Task<string[]> Translate(TranslateRequest request, HttpServerRequest context)
+        {
+            request.UserName = context.Session.Auth?.Username;
+            return T.Translate(request);
+        }
 
         /// <summary>
         /// Translate multiple texts to one or more languages
@@ -58,18 +63,24 @@ namespace SysWeaver.MicroService
         [WebApiClientCache(ClientCache)]
         [WebApiRequestCache(RequestCache)]
         public Task<string[]> TranslateMultiple(TranslateMultipleRequest request)
-            => T.TranslateMultiple(request);
+        {
+            return T.TranslateMultiple(request);
+        }
 
         /// <summary>
         /// Translate some text to a new language
         /// </summary>
         /// <param name="request">Paramaters</param>
+        /// <param name="context">Web context</param>
         /// <returns>Translated text</returns>
         [WebApi]
         [WebApiClientCache(ClientCache)]
-        [WebApiRequestCache(RequestCache)]
-        public Task<string> TranslateOne(TranslateRequest request)
-            => T.TranslateOne(request);
+        [WebApiRequestCache(RequestCache, WebApiCaches.Globally)]
+        public Task<string> TranslateOne(TranslateRequest request, HttpServerRequest context)
+        {
+            request.UserName = context.Session.Auth?.Username;
+            return T.TranslateOne(request);
+        }
 
 
         /// <summary>

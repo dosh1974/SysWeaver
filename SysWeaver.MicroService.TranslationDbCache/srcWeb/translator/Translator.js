@@ -49,6 +49,32 @@ async function translatorEditMain() {
         if (!data)
             throw new Error(_TF("No data for the supplied id", "Error message displayed when a supplied id is unknown to the server"));
 
+        const sn = data.ServiceName;
+        if (sn) {
+            AddSection(
+                _TF("Application", "Title text for a section that displays the application that performed some action"),
+                _TF("The name of the application that requested this translation (first)", "Tool tip description for a section that displays the application that performed some action")
+            );
+            AddText(sn);
+        }
+
+        const un = data.UserName;
+        if (un) {
+            if (data.IsManual) {
+                AddSection(
+                    _TF("Translator", "Title text for a section that displays who translated some text"),
+                    _TF("The name of the user that manually translated this text", "Tool tip description for a section that displays who translated some text")
+                );
+                AddText(un);
+            } else {
+                AddSection(
+                    _TF("Auth", "Title text for a section that displays the name of the authentication used"),
+                    _TF("The name of the authentication user / API-key used for the automatic translation", "Tool tip description for a section that displays the name of the authentication used")
+                );
+                AddText(un);
+            }
+        }
+
         AddSection(
             _TF("Source language", "Title text for a section that displays the language used of a piece of text that will be translated to some other language"),
             _TF("The language that the original text (and prompt) was written in, typically 'en', 'en-US' or 'en-GB'", "Tool tip description for a section that displays the language used of a piece of text that will be translated to some other language")
@@ -106,7 +132,9 @@ async function translatorEditMain() {
                     const res = await sendRequest("../Api/translator/SetTranslation",
                         {
                             Key: id,
+                            OriginalTranslation: data.Translated,
                             NewTranslation: newData,
+                                
                         });
                     if (!res)
                         throw Error(_TF("Couldn't set translation (key no longer exist?)", "Error message displayed when an API request failed"));

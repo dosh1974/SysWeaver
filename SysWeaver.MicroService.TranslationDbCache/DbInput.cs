@@ -100,6 +100,29 @@ namespace SysWeaver.MicroService
         [Default(638984160000000000L)]
         public long Expiration { get; set; }
 
+
+        /// <summary>
+        /// The content type specified
+        /// </summary>
+        [Required]
+        [Index]
+        [Default((Byte)0)]
+        public Byte ContentType { get; set; }
+
+        /// <summary>
+        /// The name of the service / user that performed the translation
+        /// </summary>
+        [StringLength(Auth.AuhorizationLimits.MaxUserNameLength)]
+        [Index]
+        public String Service { get; set; }
+
+        /// <summary>
+        /// The name of the user that performed the translation
+        /// </summary>
+        [StringLength(Auth.AuhorizationLimits.MaxUserNameLength)]
+        [Index]
+        public String User { get; set; }
+
     }
 
 

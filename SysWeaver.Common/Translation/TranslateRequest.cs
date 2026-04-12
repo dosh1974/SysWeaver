@@ -46,7 +46,28 @@ namespace SysWeaver.Translation
         /// </summary>
         public TranslationCacheRetention Retention { get; set; } = TranslationCacheRetention.Medium;
 
+        /// <summary>
+        /// The duration to cache the translation
+        /// </summary>
+        public TranslationContentTypes ContentType { get; set; } = TranslationContentTypes.Text;
+
+        /// <summary>
+        /// Name of the service that requested the translation.
+        /// Ignore this. Leave it at default.
+        /// </summary>
+        [EditHide]
+        public String ServiceName { get; set; }
+
+        /// <summary>
+        /// Name of the user that requested the translation.
+        /// Ignore this. Leave it at default.
+        /// </summary>
+        [EditHide]
+        public String UserName { get; set; }
+
     }
+
+
 
 
 

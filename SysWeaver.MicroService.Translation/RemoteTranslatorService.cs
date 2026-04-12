@@ -118,8 +118,9 @@ namespace SysWeaver.MicroService
         /// <param name="context"></param>
         /// <param name="effort"></param>
         /// <param name="retention"></param>
+        /// <param name="contentType"></param>
         /// <returns></returns>
-        async Task<string[]> InternalValidated(string text, string[] tos, string from, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        async Task<string[]> InternalValidated(string text, string[] tos, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var count = tos.Length;
             if (String.IsNullOrEmpty(text))
@@ -130,7 +131,7 @@ namespace SysWeaver.MicroService
             {
                 var to = tos[i];
                 Interlocked.Increment(ref TranslationCount);
-                res[i] = await cache.GetOrUpdateAsync(ComputeHash(text, to, from, context), hash => InternalTranslate(from, to, text, context, effort, retention)).ConfigureAwait(false);
+                res[i] = await cache.GetOrUpdateAsync(ComputeHash(text, to, from, context), hash => InternalTranslate(from, to, text, context, effort, retention, contentType)).ConfigureAwait(false);
             }
             return res;
         }
@@ -143,9 +144,9 @@ namespace SysWeaver.MicroService
         /// <param name="request">Paramaters</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
         public Task<string[]> Translate(TranslateRequest request)
-            => Translate(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention);
+            => Translate(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
 
-        public async Task<string[]> Translate(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        public async Task<string[]> Translate(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             if (!text.AnyLetter())
                 return ArrayExt.Create(to.Split(',').Length, text);
@@ -165,7 +166,7 @@ namespace SysWeaver.MicroService
             {
                 to = GetTo(tos[i]);
                 Interlocked.Increment(ref TranslationCount);
-                res[i] = await cache.GetOrUpdateAsync(ComputeHash(text, to, from, context), hash => InternalTranslate(from, to, text, context, effort, retention)).ConfigureAwait(false);
+                res[i] = await cache.GetOrUpdateAsync(ComputeHash(text, to, from, context), hash => InternalTranslate(from, to, text, context, effort, retention, contentType)).ConfigureAwait(false);
             }
             return res;
         }
@@ -176,15 +177,15 @@ namespace SysWeaver.MicroService
         /// <param name="request">Paramaters</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
         public Task<string[]> TranslateMultiple(TranslateMultipleRequest request)
-            => TranslateMultiple(request.Texts, request.To, request.From, request.Context, request.Effort, request.Retention);
+            => TranslateMultiple(request.Texts, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
 
-        public async Task<string[]> TranslateMultiple(string[] texts, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        public async Task<string[]> TranslateMultiple(string[] texts, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var c = texts.Length;
             if (c <= 0)
                 return null;
             if (c == 1)
-                return await Translate(texts[0], to, from, context, effort, retention).ConfigureAwait(false);
+                return await Translate(texts[0], to, from, context, effort, retention, contentType).ConfigureAwait(false);
             var fromO = from;
             from = GetFrom(from);
             if (from != "*")
@@ -208,7 +209,7 @@ namespace SysWeaver.MicroService
             {
                 var text = texts[i];
                 if (text.AnyLetter())
-                    tasks[i] = InternalValidated(texts[i], tos, from, context, effort, retention);
+                    tasks[i] = InternalValidated(texts[i], tos, from, context, effort, retention, contentType);
                 else
                     tasks[i] = Task.FromResult(ArrayExt.Create(count, text));
             }
@@ -225,9 +226,9 @@ namespace SysWeaver.MicroService
         /// <param name="request">Paramaters</param>
         /// <returns>Translated text</returns>
         public Task<string> TranslateOne(TranslateRequest request)
-            => TranslateOne(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention);
+            => TranslateOne(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
 
-        public async Task<string> TranslateOne(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        public async Task<string> TranslateOne(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             if (!text.AnyLetter())
                 return text;
@@ -242,7 +243,7 @@ namespace SysWeaver.MicroService
             var too = to;
             to = GetTo(to);
             Interlocked.Increment(ref TranslationCount);
-            return await MemCaches[(int)retention].GetOrUpdateAsync(ComputeHash(text, to, from, context), hash => InternalTranslate(from, to, text, context, effort, retention)).ConfigureAwait(false);
+            return await MemCaches[(int)retention].GetOrUpdateAsync(ComputeHash(text, to, from, context), hash => InternalTranslate(from, to, text, context, effort, retention, contentType)).ConfigureAwait(false);
         }
 
 
@@ -349,7 +350,7 @@ namespace SysWeaver.MicroService
 
         readonly ExceptionTracker RemoteFails = new ExceptionTracker();
 
-        async Task<String> InternalTranslate(String from, String to, String text, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        async Task<String> InternalTranslate(String from, String to, String text, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             try
             {
@@ -365,6 +366,8 @@ namespace SysWeaver.MicroService
                         Text = text,
                         Effort = effort,
                         Retention = retention,
+                        ContentType = contentType,
+                        ServiceName = EnvInfo.AppName,
                     }).ConfigureAwait(false);
                 Interlocked.Increment(ref CacheMissCount);
                 return translated;
@@ -402,8 +405,8 @@ namespace SysWeaver.MicroService
 
         #region IInternalTranslator    
 
-        public Task<string> RequestOne(string from, string to, string text, string context, TranslationEffort effort, TranslationCacheRetention retention)
-            => InternalTranslate(from, to, text, context, effort, retention);
+        public Task<string> RequestOne(string from, string to, string text, string context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
+            => InternalTranslate(from, to, text, context, effort, retention, contentType);
 
         public IReadOnlyList<string> SupportedSourceLanguages()
         {

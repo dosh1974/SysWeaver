@@ -11,34 +11,13 @@ namespace SysWeaver
 
     public static class TranslatorExt
     {
-        public static async Task<String> TranslateSafeHtml(this ITranslator translator, String htmlText, String to, String from = "en", String context = null, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
-        {
-            if (translator == null)
-                return htmlText;
-            if (to == null)
-                return htmlText;
-            if (to.FastEquals(from))
-                return htmlText;
-            try
-            {
-                var newText = await translator.TranslateOne(new TranslateRequest
-                {
-                    Context = "This text is HTML, any HTML elements, attributes etc shouldn't be translated, unless title, placeholder attributes.\nAnything between a '[' and a ']' is a variable, and must NOT be translated but kept, ex: \"[Header]\", \"[UserName]\".\n" + (context ?? ""),
-                    From = from,
-                    To = to,
-                    Text = htmlText,
-                    Effort = effort,
-                    Retention = retention
-                }).ConfigureAwait(false);
-                return newText ?? htmlText;
-            }
-            catch
-            {
-                return htmlText;
-            }
-        }
+        public static Task<String> TranslateSafeHtml(this ITranslator translator, String htmlText, String to, String from = "en", String context = null, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
+            => TranslateSafe(translator, htmlText, to, from, context, effort, retention, TranslationContentTypes.Html);
 
-        public static async Task<String> TranslateSafe(this ITranslator translator, String text, String to, String from = "en", String context = null, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
+        public static Task<String> TranslateSafeMD(this ITranslator translator, String htmlText, String to, String from = "en", String context = null, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
+    => TranslateSafe(translator, htmlText, to, from, context, effort, retention, TranslationContentTypes.MarkDown);
+
+        public static async Task<String> TranslateSafe(this ITranslator translator, String text, String to, String from = "en", String context = null, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long, TranslationContentTypes contentType = TranslationContentTypes.Text)
         {
             if (translator == null)
                 return text;
@@ -57,7 +36,8 @@ namespace SysWeaver
                     To = to,
                     Text = text,
                     Effort = effort,
-                    Retention = retention
+                    Retention = retention,
+                    ContentType = contentType,
                 }).ConfigureAwait(false);
                 return newText ?? text;
             }

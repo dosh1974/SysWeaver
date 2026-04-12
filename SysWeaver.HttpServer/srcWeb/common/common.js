@@ -623,8 +623,8 @@ class SessionManager
 
 
         async function StartMaster(how, startCc) {
-            //  Enter lock
-            await navigator.locks.request("SysWeaver.SessionManager", async () => {
+
+            async function Start() {
                 if (isStarting)
                     return;
                 isStarting = true;
@@ -660,7 +660,13 @@ class SessionManager
                 finally {
                     isStarting = false;
                 }
-            });
+            }
+
+            //  Enter lock
+            if (navigator.locks)
+                await navigator.locks.request("SysWeaver.SessionManager", Start);
+            else
+                await Start();
         }
 
         async function MaybeStartMaster(first) {

@@ -68,8 +68,9 @@ namespace SysWeaver.Translation
         /// <param name="context"></param>
         /// <param name="effort">The effort to use when translating</param>
         /// <param name="retention">The duration to cache the translation</param>
+        /// <param name="contentType">The type of text</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
-        public Task<string[]> Translate(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        public Task<string[]> Translate(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var f = ValidateFrom(from);
             var t = ValidateTo(to);
@@ -101,8 +102,9 @@ namespace SysWeaver.Translation
         /// <param name="context"></param>
         /// <param name="effort">The effort to use when translating</param>
         /// <param name="retention">The duration to cache the translation</param>
+        /// <param name="contentType">The type of text</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
-        public Task<string[]> TranslateMultiple(string[] texts, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        public Task<string[]> TranslateMultiple(string[] texts, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var f = ValidateFrom(from);
             var t = ValidateTo(to);
@@ -133,8 +135,9 @@ namespace SysWeaver.Translation
         /// <param name="context"></param>
         /// <param name="effort">The effort to use when translating</param>
         /// <param name="retention">The duration to cache the translation</param>
+        /// <param name="contentType">The type of text</param>
         /// <returns>Translated text</returns>
-        public async Task<string> TranslateOne(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        public async Task<string> TranslateOne(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var f = ValidateFrom(from);
             var t = ValidateToSingle(to);
@@ -380,8 +383,9 @@ namespace SysWeaver.Translation
         /// <param name="context"></param>
         /// <param name="effort"></param>
         /// <param name="retention"></param>
+        /// <param name="contentType">The type of text</param>
         /// <returns></returns>
-        public Task<String> RequestOne(String from, String to, String text, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        public Task<String> RequestOne(String from, String to, String text, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var q = Uri.EscapeDataString(text);
             var url = "https://translate.google.com/m?tl=" + to + "&sl=" + from + "&q=" + q;

@@ -24,5 +24,21 @@
     }
 
 
+    public enum TranslationContentTypes
+    {
+        /// <summary>
+        /// Plain normal text
+        /// </summary>
+        Text,
+        /// <summary>
+        /// Mark down (aka MD) formatted text
+        /// </summary>
+        MarkDown,
+        /// <summary>
+        /// Html code
+        /// </summary>
+        Html,
+    }
+
 
 }

@@ -124,8 +124,9 @@ namespace SysWeaver.MicroService
         /// <param name="context"></param>
         /// <param name="effort"></param>
         /// <param name="retention"></param>
+        /// <param name="contentType"></param>
         /// <returns></returns>
-        async Task<string[]> InternalValidated(string text, string[] tos, string from, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        async Task<string[]> InternalValidated(string text, string[] tos, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var count = tos.Length;
             if (String.IsNullOrEmpty(text))
@@ -136,7 +137,7 @@ namespace SysWeaver.MicroService
             {
                 var to = tos[i];
                 Interlocked.Increment(ref TranslationCount);
-                res[i] = await cache.GetOrUpdateAsync(DbTranslation.ComputeHash(text, to, from, context), hash => InternalTranslate(hash, from, to, text, context, effort, retention)).ConfigureAwait(false);
+                res[i] = await cache.GetOrUpdateAsync(DbTranslation.ComputeHash(text, to, from, context), hash => InternalTranslate(hash, from, to, text, context, effort, retention, contentType)).ConfigureAwait(false);
             }
             return res;
         }
@@ -162,9 +163,9 @@ namespace SysWeaver.MicroService
         /// <param name="request">Paramaters</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
         public Task<string[]> Translate(TranslateRequest request)
-            => Translate(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention);
+            => Translate(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
 
-        public async Task<string[]> Translate(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        async Task<string[]> Translate(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             if (text.FastStartsWith(TranslationTools.NoTranslatePrefix))
                 return ArrayExt.Create(to.Split(',').Length, text.Substring(TranslationTools.NoTranslatePrefixLength));
@@ -187,7 +188,7 @@ namespace SysWeaver.MicroService
             {
                 to = GetTo(tos[i]);
                 Interlocked.Increment(ref TranslationCount);
-                res[i] = await cache.GetOrUpdateAsync(DbTranslation.ComputeHash(text, to, from, context), hash => InternalTranslate(hash, from, to, text, context, effort, retention)).ConfigureAwait(false);
+                res[i] = await cache.GetOrUpdateAsync(DbTranslation.ComputeHash(text, to, from, context), hash => InternalTranslate(hash, from, to, text, context, effort, retention, contentType)).ConfigureAwait(false);
             }
             return res;
         }
@@ -198,15 +199,15 @@ namespace SysWeaver.MicroService
         /// <param name="request">Paramaters</param>
         /// <returns>Translations in the same order as specified in the parameters</returns>
         public Task<string[]> TranslateMultiple(TranslateMultipleRequest request)
-            => TranslateMultiple(request.Texts, request.To, request.From, request.Context, request.Effort, request.Retention);
+            => TranslateMultiple(request.Texts, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
 
-        public async Task<string[]> TranslateMultiple(string[] texts, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        async Task<string[]> TranslateMultiple(string[] texts, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var c = texts.Length;
             if (c <= 0)
                 return null;
             if (c == 1)
-                return await Translate(texts[0], to, from, context, effort, retention).ConfigureAwait(false);
+                return await Translate(texts[0], to, from, context, effort, retention, contentType).ConfigureAwait(false);
             var fromO = from;
             var translator = T;
             from = GetFrom(from);
@@ -232,12 +233,12 @@ namespace SysWeaver.MicroService
                 var text = texts[i];
                 if (text.FastStartsWith(TranslationTools.NoTranslatePrefix))
                 {
-                    tasks[i] = InternalValidated(text.Substring(TranslationTools.NoTranslatePrefixLength), tos, from, context, effort, retention);
+                    tasks[i] = InternalValidated(text.Substring(TranslationTools.NoTranslatePrefixLength), tos, from, context, effort, retention, contentType);
                 }
                 else
                 {
                     if (text.AnyLetter())
-                        tasks[i] = InternalValidated(text, tos, from, context, effort, retention);
+                        tasks[i] = InternalValidated(text, tos, from, context, effort, retention, contentType);
                     else
                         tasks[i] = Task.FromResult(ArrayExt.Create(count, text));
                 }
@@ -255,9 +256,9 @@ namespace SysWeaver.MicroService
         /// <param name="request">Paramaters</param>
         /// <returns>Translated text</returns>
         public Task<string> TranslateOne(TranslateRequest request)
-            => TranslateOne(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention);
+            => TranslateOne(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType, request.ServiceName, request.UserName);
 
-        public Task<string> TranslateOne(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        Task<string> TranslateOne(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType, String serviceName, String userName)
         {
             if (text.FastStartsWith(TranslationTools.NoTranslatePrefix))
                 return Task.FromResult(text.Substring(TranslationTools.NoTranslatePrefixLength));
@@ -275,7 +276,7 @@ namespace SysWeaver.MicroService
             var too = to;
             to = GetTo(to);
             Interlocked.Increment(ref TranslationCount);
-            return MemCaches[(int)retention].GetOrUpdateAsync(DbTranslation.ComputeHash(text, to, from, context), hash => InternalTranslate(hash, from, to, text, context, effort, retention));
+            return MemCaches[(int)retention].GetOrUpdateAsync(DbTranslation.ComputeHash(text, to, from, context), hash => InternalTranslate(hash, from, to, text, context, effort, retention, contentType, serviceName, userName));
         }
 
         public string CanTranslateFrom(string from) => T.CanTranslateFrom(from);
@@ -341,10 +342,11 @@ namespace SysWeaver.MicroService
             return s.GetInt64Max(MaxRandom, MaxRandomMask);
         }
 
-        async Task<String> InternalTranslate(String hash, String from, String to, String text, String context, TranslationEffort effort, TranslationCacheRetention retention)
+        async Task<String> InternalTranslate(String hash, String from, String to, String text, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType, String serviceName = null, String userName = null)
         {
             if (text.FastStartsWith(TranslationTools.NoTranslatePrefix))
                 return text.Substring(TranslationTools.NoTranslatePrefixLength);
+            serviceName = (serviceName ?? EnvInfo.AppName).LimitLength(Auth.AuhorizationLimits.MaxUserNameLength, "");
             using var c = await Db.GetAsync().ConfigureAwait(false);
             var res = await c.FirstOrDefaultAsync<DbTranslation>(x => x.Hash == hash).ConfigureAwait(false);
             if (res != null)
@@ -364,6 +366,9 @@ namespace SysWeaver.MicroService
                             Translated = data.LimitLength(DbInput.MaxTranslatedLen, ""),
                             Time = res.Time,
                             Expiration = res.Expiration,
+                            ContentType = (Byte)contentType,
+                            Service = serviceName,
+                            User = userName.LimitLength(Auth.AuhorizationLimits.MaxUserNameLength, ""),
                         }).ConfigureAwait(false);
                     return data;
                 }
@@ -381,7 +386,7 @@ namespace SysWeaver.MicroService
                 var r = RetryOn;
                 for (int i = 0; ; ++i)
                 {
-                    translated = await T.RequestOne(from, to, text, context, effort, retention).ConfigureAwait(false);
+                    translated = await T.RequestOne(from, to, text, context, effort, retention, contentType).ConfigureAwait(false);
                     if (!r.Contains(translated))
                         break;
                     if (i >= 10)
@@ -414,6 +419,9 @@ namespace SysWeaver.MicroService
                     Translated = translated.LimitLength(DbInput.MaxTranslatedLen, ""),
                     Time = time,
                     Expiration = exp,
+                    ContentType = (Byte)contentType,
+                    Service = serviceName,
+                    User = userName.LimitLength(Auth.AuhorizationLimits.MaxUserNameLength, ""),
                 }).ConfigureAwait(false);
             }
             catch (Exception uex)
@@ -480,6 +488,8 @@ namespace SysWeaver.MicroService
                 if (tr == null)
                     return null;
             }
+            var t = inp.Service?.Split("\n");
+
             return new Translation
             {
                 Context = inp.Context,
@@ -490,8 +500,14 @@ namespace SysWeaver.MicroService
                 To = inp.To,
                 ToName = IsoLanguage.TryGetName(inp.To)?.Name,
                 Translated = DbTranslation.FromBlob(tr.Translated),
+                ContentType = (TranslationContentTypes)inp.ContentType,
+                ServiceName = inp.Service,
+                UserName = inp.User,
+                IsManual = inp.Expiration == DbInput.Max,
             };
         }
+
+
 
         /// <summary>
         /// Set a specific translation
@@ -516,12 +532,15 @@ namespace SysWeaver.MicroService
             var tr = await db.FirstOrDefaultAsync<DbTranslation>(x => x.Hash == key).ConfigureAwait(false);
             if (tr == null)
                 return false;
+            if (!r.OriginalTranslation.FastEquals(inp.Translated))
+                throw new Exception("The translation have changed, validate that your new translation should be used!");
             inp.Translated = text;
             tr.Translated = DbTranslation.ToBlob(text);
             var now = DateTime.UtcNow.Ticks;
             inp.Time = now;
             tr.Time = now;
             inp.Expiration = DbInput.Max;
+            inp.User = context.Session.Auth?.Username ?? inp.User;
             tr.Expiration = DbInput.Max;
             await db.Upsert(inp).ConfigureAwait(false);
             await db.Upsert(tr).ConfigureAwait(false);
@@ -557,72 +576,6 @@ namespace SysWeaver.MicroService
             return true;
         }
 
-
-    }
-
-
-    public sealed class SetTranslationRequest
-    {
-        /// <summary>
-        /// The hash key of the specific translation
-        /// </summary>
-        public String Key;
-
-        /// <summary>
-        /// The new translation
-        /// </summary>
-        public String NewTranslation;
-    }
-
-    public sealed class Translation
-    {
-
-        /// <summary>
-        /// True if this translation was done manually
-        /// </summary>
-        public bool IsManual;
-
-        /// <summary>
-        /// Time stamp when translation was performed
-        /// </summary>
-        public DateTime Time;
-
-        /// <summary>
-        /// The language of the input text
-        /// </summary>
-        public String From;
-
-        /// <summary>
-        /// The language name of the input text
-        /// </summary>
-        public String FromName;
-
-        /// <summary>
-        /// The text to translate.
-        /// Text is truncated to at most 768 chars.
-        /// </summary>
-        public String Text;
-
-        /// <summary>
-        /// The language to translate to
-        /// </summary>
-        public String To;
-
-        /// <summary>
-        /// The language name to translate to
-        /// </summary>
-        public String ToName;
-
-        /// <summary>
-        /// The context used for the translation.
-        /// Text is truncated to at most 768 chars.
-        /// </summary>
-        public String Context;
-
-        /// <summary>
-        /// The translated text.
-        /// </summary>
-        public String Translated;
 
     }
 
