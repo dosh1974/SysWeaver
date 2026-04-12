@@ -310,7 +310,7 @@ namespace SysWeaver.Media
             [ 1.0, 57.9, 62.1, 0.9, 0.9, 1.1, 0.8, 0.8],
         ];
 
-        public void AddFavIcon(String name, String subTitle = null, HashColors color = null, int seed = 0)
+        public void AddFavIcon(String name, String subTitle = null, HashColors color = null, int seed = 0, bool opaque = false)
         {
             color = color ?? new HashColors(name, seed);
             var t = new String(name.Where(x => Char.IsUpper(x)).Take(3).ToArray());
@@ -361,6 +361,11 @@ namespace SysWeaver.Media
             }
             SvgFont iconFont = GetFont();
 
+            if (opaque)
+                AddRect(0, 0, Width, Height, new SvgColorStyle
+                {
+                    FillColor = color.Background,
+                });
             String MakeGrad(string col0, string col1, String transform = null)
             {
                 SvgGradStop[] stops =

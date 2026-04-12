@@ -25,6 +25,7 @@ img {
         max-width: var(--size);
         max-height: var(--size);
         border-radius: calc(var(--size) * 0.1);
+        outline: 2px solid var(--ThemeAcc125);
     }
 
 

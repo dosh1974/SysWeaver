@@ -15,9 +15,21 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String InstanceName;
 
+        /// <summary>
+        /// Used for basic auth
+        /// </summary>
         public String SiteName;
 
+        /// <summary>
+        /// If true, allow IP address in email adresses
+        /// </summary>
         public bool AllowEmailIps;
+
+        /// <summary>
+        /// If true, generate transparent user images
+        /// </summary>
+        public bool TransparentUserImage;
+
     }
 
 

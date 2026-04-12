@@ -55,6 +55,7 @@ This server supports the following sizes:
             var auth = new AuthManager(p, auths);
             Auth = auth;
             AllowEmailIps = p.AllowEmailIps;
+            OpaqueUserImage = !p.TransparentUserImage;
 
             var siteName = p.SiteName ?? Path.GetFileNameWithoutExtension(EnvInfo.Executable);
             SiteName = siteName;
@@ -178,6 +179,7 @@ This server supports the following sizes:
         IReadOnlyDictionary<String, int> UserImageSizes;
 
         public readonly bool AllowEmailIps;
+        public readonly bool OpaqueUserImage;
         public readonly AuthManager Auth;
 
 
@@ -532,7 +534,7 @@ This server supports the following sizes:
         {
             var svgS = new SvgScene(256, 256);
             var hash = (int)QuickHash.Hash(name + guid);
-            svgS.AddFavIcon(name, null, null, hash);
+            svgS.AddFavIcon(name, null, null, hash, OpaqueUserImage);
             var svgText = svgS.ToSvg();
             var enc = Encoding.UTF8;
             var svgData = enc.GetBytes(svgText);

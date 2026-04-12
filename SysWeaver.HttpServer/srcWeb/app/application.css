@@ -129,18 +129,18 @@ app-header app-UserButton {
     app-header app-UserButton .WithUser {
         border-radius: 15%;
         transition: linear outline var(--ThemeFadeDuration);
-        outline: 2px solid var(--ThemeAcc1) !important;
+        outline: 2px solid var(--ThemeAcc125) !important;
         overflow: hidden;
         opacity: 1;
     }
 
         app-header app-UserButton .WithUser:hover {
-            outline: 3px solid var(--ThemeAcc1) !important;
+            outline: 3px solid var(--ThemeAcc150) !important;
         }
 
 
         app-header app-UserButton .WithUser:focus {
-            outline: 3px solid var(--ThemeAcc2) !important;
+            outline: 3px solid var(--ThemeAcc275) !important;
         }
 
 app-menu {
