@@ -276,7 +276,7 @@ namespace SysWeaver.Media
 
         XElement Defs;
 
-        XElement AddDef(XElement e)
+        public XElement AddDef(XElement e)
         {
             var defs = Defs;
             if (defs == null)
@@ -289,7 +289,14 @@ namespace SysWeaver.Media
             return e;
         }
 
-        XElement AddElement(XElement e, String fill, String stroke, double strokeWidth)
+        public XElement AddElement(XElement e)
+        {
+            Svg.Add(e);
+            return e;
+        }
+
+
+        public XElement AddElement(XElement e, String fill, String stroke, double strokeWidth)
         {
             if (fill != null)
                 e.SetAttributeValue("fill", fill);
