@@ -62,14 +62,15 @@ namespace SysWeaver.Media
         public static Char ComputeCheckSumUnsafe(String digits)
         {
             var ds = digits.AsSpan();
+            var len = ds.Length;
             int sum = 0;
-            for (int i = 0; i < 13; i += 2)
+            for (int i = 0; i < len ; i += 2)
             {
                 var d = ds[i] - '0';
                 sum += d;
             }
             sum *= 3;
-            for (int i = 1; i < 13; i += 2)
+            for (int i = 1; i < len; i += 2)
             {
                 var d = ds[i] - '0';
                 sum += d;

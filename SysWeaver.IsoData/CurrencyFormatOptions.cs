@@ -26,7 +26,7 @@ namespace SysWeaver.IsoData
         /// </summary>
         ForceRounding = 4,
         /// <summary>
-        /// Adds the specified thousands separfator
+        /// Adds the specified thousands separator
         /// </summary>
         ApplyThousandsSeparator = 8,
         /// <summary>
