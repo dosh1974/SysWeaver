@@ -109,8 +109,7 @@ namespace SysWeaver
         static async ValueTask<CdcFileHeader> ReadHeader(Stream s)
         {
             var temp = GC.AllocateUninitializedArray<Byte>(4);
-            if (await s.ReadAsync(temp).ConfigureAwait(false) != 4)
-                throw new Exception("Unexpected end of file! (expected header)");
+            await s.ReadExactlyAsync(temp).ConfigureAwait(false);
             if (!IsHeader(temp))
                 throw new Exception("Invalid file type!");
             var minTime = (long)ReadVar(s);
@@ -119,8 +118,7 @@ namespace SysWeaver
             if (dirSize > 0)
             {
                 var dir = GC.AllocateUninitializedArray<Byte>((int)dirSize);
-                if (await s.ReadAsync(dir).ConfigureAwait(false) != dirSize)
-                    throw new Exception("Unexpected end of file! (expected directory info)");
+                await s.ReadExactlyAsync(dir).ConfigureAwait(false);
                 files = DecodeFileArray(dir);
             }
             return new CdcFileHeader(minTime, files);
@@ -145,8 +143,7 @@ namespace SysWeaver
             var bsize = (long)ReadVar(s);
             bsize *= hashSize;
             var d = GC.AllocateUninitializedArray<Byte>((int)bsize);
-            if (await s.ReadAsync(d).ConfigureAwait(false) != bsize)
-                throw new Exception("Unexpected end of file! (expected block info)");
+            await s.ReadExactlyAsync(d).ConfigureAwait(false);
             return new CdcFileData(c, w, a, attr, d);
         }
 
@@ -1203,7 +1200,7 @@ namespace SysWeaver
             {
                 bufSize = data.Length;
                 var dataSize = await s.ReadAsync(data).ConfigureAwait(false);
-                if (dataSize <= 0)
+                if (dataSize < 0)
                     return Array.Empty<Byte>();
                 bool moreData = dataSize >= bufSize;
                 int offset = 0;
@@ -1247,7 +1244,8 @@ namespace SysWeaver
                         //  Read more data
                         MoveToFront(data, offset, dataSize);
                         offset = 0;
-                        dataSize += await s.ReadAsync(data.AsMemory(dataSize)).ConfigureAwait(false);
+                        var x = data.AsMemory(dataSize);
+                        dataSize += await s.ReadAsync(x).ConfigureAwait(false);
                         moreData = dataSize >= bufSize;
                     }
                 }
@@ -1314,17 +1312,29 @@ namespace SysWeaver
                     using var s = TryOpenCompressedChunk(hashMem.Span, props);
                     if (s == null)
                         return false;
-                    var len = s.Length;
+                    using var mem = await s.ReadAllUnmanagedMemoryAsync().ConfigureAwait(false);
+                    var mm = mem.Memory;
+/*
+#if DEBUG
+                    var chunkName = hashMem.ToHex();
+                    if (chunkName.FastEquals("cb16ce2f012fcd8b4a45f099fd4871ca48dfc960444bbcfb22c79af348b48ec3"))
+                        chunkName = null;
+                    var decomp = props.Comp.GetDecompressed(mm.Span);
+                    if (decomp.Length == 0)
+                        throw new Exception("Invalid chunk data!");
+#endif//DEBUG
+*/
+                    var len = mm.Length;
                     WriteVar(destStream, (ulong)len);
                     await destStream.WriteAsync(hashMem).ConfigureAwait(false);
-                    await s.CopyToAsync(destStream).ConfigureAwait(false);
+                    await destStream.WriteAsync(mm).ConfigureAwait(false);
                 }
             }
             return true;
         }
 
         /// <summary>
-        /// Get alist of all chunks that are missing
+        /// Get a list of all chunks that are missing
         /// </summary>
         /// <param name="chunks">The chunks to look for as a byte array of hashses</param>
         /// <param name="props"></param>
@@ -1385,11 +1395,9 @@ namespace SysWeaver
             var hash = GC.AllocateUninitializedArray<Byte>(hashSize);
             while (ContentDependentChunking.TryReadVar(sourceStream, out var dataSize))
             {
-                if (await sourceStream.ReadAsync(hash).ConfigureAwait(false) != hashSize)
-                    return false;
+                await sourceStream.ReadExactlyAsync(hash).ConfigureAwait(false);
                 var data = GC.AllocateUninitializedArray<Byte>((int)dataSize);
-                if (await sourceStream.ReadAsync(data).ConfigureAwait(false) != (long)dataSize)
-                    return false;
+                await sourceStream.ReadExactlyAsync(data).ConfigureAwait(false);
                 if (!await TrySaveChunk(hash.ToHex(), data, props).ConfigureAwait(false))
                     return false;
             }

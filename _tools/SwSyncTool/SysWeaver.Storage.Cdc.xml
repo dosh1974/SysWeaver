@@ -438,7 +438,7 @@
         </member>
         <member name="M:SysWeaver.ContentDependentChunking.GetMissingChunks(System.ReadOnlyMemory{System.Byte},SysWeaver.CdcProps)">
             <summary>
-            Get alist of all chunks that are missing
+            Get a list of all chunks that are missing
             </summary>
             <param name="chunks">The chunks to look for as a byte array of hashses</param>
             <param name="props"></param>

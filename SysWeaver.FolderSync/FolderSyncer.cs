@@ -319,46 +319,71 @@ namespace SysWeaver.FolderSync
                         Errors = t
                     };
                 //  Send missing chunks
-                var ucc = uniqueChunks.Count;
+                var chunksToSend = uniqueChunks.Keys.ToList();
+                var ucc = chunksToSend.Count;
                 if (ucc > 0)
                 {
                     Interlocked.Add(ref newChunkCount, ucc);
-                    ReadOnlyMemory<Byte> mem;
-                    using (var ms = new MemoryStream(ucc * CdcProps.Default.AverageSize + 4096))
+                    async Task<FolderSyncResult> SendSome(int offset, int count)
                     {
-                        if (!await ContentDependentChunking.TryWriteChunkList(ms, uniqueChunks.Keys, props).ConfigureAwait(false))
-                            throw new Exception("Failed to write chunks!");
-                        mem = ms.GetBuffer().AsMemory().Slice(0, (int)ms.Position);
-                    }
-                    var destFile = String.Concat(UploadChunkBase, res.FolderCode, "/Data");
-                    String data;
-                    String ct;
-                    using (var content = new ReadOnlyMemoryContent(mem))
-                    {
-                        var res2 = await client.PostAsync(destFile, content).ConfigureAwait(false);
-                        data = await res2.Content.ReadAsStringAsync().ConfigureAwait(false);
-                        ct = res2.Content.Headers.ContentType.MediaType;
-                    }
-                    if (ct.FastStartsWith("application/json"))
-                    {
-                        Interlocked.Add(ref newChunkSize, mem.Length);
-                        if (!data.FastEquals("true"))
+                        using var _ = await throttler.Lock().ConfigureAwait(false);
+                        IUnmanagedReadOnlyMemory<Byte> mem = null;
+                        using (var ms = new ArrayPoolStream(count * CdcProps.Default.AverageSize + 4096))
+                        {
+                            if (!await ContentDependentChunking.TryWriteChunkList(ms, chunksToSend.Skip(offset).Take(count), props).ConfigureAwait(false))
+                                throw new Exception("Failed to write chunks!");
+                            mem = ms.GetMemory();
+                        }
+                        using var mm = mem;
+                        var destFile = String.Concat(UploadChunkBase, res.FolderCode, "/Data");
+                        String data;
+                        String ct;
+                        using (var content = new ReadOnlyMemoryContent(mem.Memory))
+                        {
+                            var res2 = await client.PostAsync(destFile, content).ConfigureAwait(false);
+                            data = await res2.Content.ReadAsStringAsync().ConfigureAwait(false);
+                            ct = res2.Content.Headers.ContentType.MediaType;
+                        }
+                        var ml = mem.Memory.Length;
+                        if (ct.FastStartsWith("application/json"))
+                        {
+                            Interlocked.Add(ref newChunkSize, ml);
+                            if (!data.FastEquals("true"))
+                                return new FolderSyncResult
+                                {
+                                    SourceFiles = sourceFileCount,
+                                    SourceBytes = sourceBytes,
+                                    Errors = [new Exception("Failed to upload missing chunks!")],
+                                };
+                            Interlocked.Add(ref payloadSize, ml);
+                        }
+                        else
+                        {
                             return new FolderSyncResult
                             {
                                 SourceFiles = sourceFileCount,
                                 SourceBytes = sourceBytes,
-                                Errors = [new Exception("Failed to upload missing chunks!")],
+                                Errors = [new Exception(data)],
                             };
-                        Interlocked.Add(ref payloadSize, mem.Length);
+                        }
+                        return null;
                     }
-                    else
+                    const int maxChunksPerBatch = 64;
+                    var pchunks = (ucc + maxChunksPerBatch - 1) / maxChunksPerBatch;
+                    var r = new Task<FolderSyncResult>[pchunks];
+                    for (int i = 0, offset = 0; i < pchunks; ++ i, offset += maxChunksPerBatch)
                     {
-                        return new FolderSyncResult
-                        {
-                            SourceFiles = sourceFileCount,
-                            SourceBytes = sourceBytes,
-                            Errors = [new Exception(data)],
-                        };
+                        var count = ucc - offset;
+                        if (count > maxChunksPerBatch)
+                            count = maxChunksPerBatch;
+                        r[i] = SendSome(offset, count);
+                    }
+                    await Task.WhenAll(r).ConfigureAwait(false);
+                    foreach (var rr in r)
+                    {
+                        var xres = rr.Result;
+                        if (xres != null)
+                            return xres;
                     }
                 }
                 return new FolderSyncResult
@@ -372,7 +397,6 @@ namespace SysWeaver.FolderSync
                     NewChunkCount = newChunkCount,
                     NewChunkSize = newChunkSize,
                 };
-
             }
             else
             {

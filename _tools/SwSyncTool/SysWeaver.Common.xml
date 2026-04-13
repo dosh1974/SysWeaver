@@ -6135,6 +6135,11 @@
             Png image data
             </summary>
         </member>
+        <member name="F:SysWeaver.MimeTypeMap.Jpeg">
+            <summary>
+            Jpeg image data
+            </summary>
+        </member>
         <member name="F:SysWeaver.MimeTypeMap.Data">
             <summary>
             Raw data
@@ -9951,7 +9956,7 @@
             <param name="userLanguageBias">How much to bias the user language [0, 1]</param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.Translation.IInternalTranslator.Translate(System.String,System.String,System.String,System.String,SysWeaver.Translation.TranslationEffort,SysWeaver.Translation.TranslationCacheRetention)">
+        <member name="M:SysWeaver.Translation.IInternalTranslator.Translate(System.String,System.String,System.String,System.String,SysWeaver.Translation.TranslationEffort,SysWeaver.Translation.TranslationCacheRetention,SysWeaver.Translation.TranslationContentTypes)">
             <summary>
             Translate some text to one or more languages
             </summary>
@@ -9963,9 +9968,10 @@
             <param name="context">An optional context that describes in what situation this text is being used</param>
             <param name="effort">The effort to use when translating</param>
             <param name="retention">The duration to cache the translation</param>
+            <param name="contentType">The type of text</param>
             <returns>Translations in the same order as specified in the parameters</returns>
         </member>
-        <member name="M:SysWeaver.Translation.IInternalTranslator.TranslateMultiple(System.String[],System.String,System.String,System.String,SysWeaver.Translation.TranslationEffort,SysWeaver.Translation.TranslationCacheRetention)">
+        <member name="M:SysWeaver.Translation.IInternalTranslator.TranslateMultiple(System.String[],System.String,System.String,System.String,SysWeaver.Translation.TranslationEffort,SysWeaver.Translation.TranslationCacheRetention,SysWeaver.Translation.TranslationContentTypes)">
             <summary>
             Translate multiple texts to one or more languages
             </summary>
@@ -9977,9 +9983,10 @@
             <param name="context">An optional context that describes in what situation that the texts are being used</param>
             <param name="effort">The effort to use when translating</param>
             <param name="retention">The duration to cache the translation</param>
+            <param name="contentType">The type of text</param>
             <returns>Translations in the same order as specified in the parameters</returns>
         </member>
-        <member name="M:SysWeaver.Translation.IInternalTranslator.TranslateOne(System.String,System.String,System.String,System.String,SysWeaver.Translation.TranslationEffort,SysWeaver.Translation.TranslationCacheRetention)">
+        <member name="M:SysWeaver.Translation.IInternalTranslator.TranslateOne(System.String,System.String,System.String,System.String,SysWeaver.Translation.TranslationEffort,SysWeaver.Translation.TranslationCacheRetention,SysWeaver.Translation.TranslationContentTypes)">
             <summary>
             Translate some text to a new language
             </summary>
@@ -9990,9 +9997,10 @@
             <param name="context">An optional context that describes in what situation this text is being used</param>
             <param name="effort">The effort to use when translating</param>
             <param name="retention">The duration to cache the translation</param>
+            <param name="contentType">The type of text</param>
             <returns>Translated text</returns>
         </member>
-        <member name="M:SysWeaver.Translation.IInternalTranslator.RequestOne(System.String,System.String,System.String,System.String,SysWeaver.Translation.TranslationEffort,SysWeaver.Translation.TranslationCacheRetention)">
+        <member name="M:SysWeaver.Translation.IInternalTranslator.RequestOne(System.String,System.String,System.String,System.String,SysWeaver.Translation.TranslationEffort,SysWeaver.Translation.TranslationCacheRetention,SysWeaver.Translation.TranslationContentTypes)">
             <summary>
             Perform a request bypassing any caches, you probably shouldn't use this!
             </summary>
@@ -10003,7 +10011,8 @@
             <param name="context">An optional context that describes in what situation this text is being used</param>
             <param name="effort">The effort to use when translating</param>
             <param name="retention">The duration to cache the translation</param>
-            <returns></returns>
+            <param name="contentType">The type of text</param>
+            <returns>Translated text</returns>
         </member>
         <member name="M:SysWeaver.Translation.IInternalTranslator.SupportedSourceLanguages">
             <summary>
@@ -10116,6 +10125,11 @@
             The duration to cache the translation
             </summary>
         </member>
+        <member name="P:SysWeaver.Translation.TranslateMultipleRequest.ContentType">
+            <summary>
+            The duration to cache the translation
+            </summary>
+        </member>
         <member name="T:SysWeaver.Translation.TranslateRequest">
             <summary>
             Translates a single text 
@@ -10152,6 +10166,23 @@
         <member name="P:SysWeaver.Translation.TranslateRequest.Retention">
             <summary>
             The duration to cache the translation
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Translation.TranslateRequest.ContentType">
+            <summary>
+            The duration to cache the translation
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Translation.TranslateRequest.ServiceName">
+            <summary>
+            Name of the service that requested the translation.
+            Ignore this. Leave it at default.
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Translation.TranslateRequest.UserName">
+            <summary>
+            Name of the user that requested the translation.
+            Ignore this. Leave it at default.
             </summary>
         </member>
         <member name="F:SysWeaver.Translation.TranslationCacheRetention.Short">
@@ -10191,6 +10222,21 @@
             <summary>
             High quality translation, typically using a more expensive LLM.
             For static resources, typically combined with long retention.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslationContentTypes.Text">
+            <summary>
+            Plain normal text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslationContentTypes.MarkDown">
+            <summary>
+            Mark down (aka MD) formatted text
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Translation.TranslationContentTypes.Html">
+            <summary>
+            Html code
             </summary>
         </member>
         <member name="F:SysWeaver.Translation.TranslationTools.NoTranslatePrefix">
