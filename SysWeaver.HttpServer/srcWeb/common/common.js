@@ -3439,7 +3439,25 @@ function fixLinks() {
 
 
 
+const CurrencyFormatOptions = Object.freeze({
 
+    None: 0,
+    /** Adds a ISO 4217 currency code as a prefix, ex: "USD 100.00" */
+    IsoPrefix: 1,
+    /** Adds a ISO 4217 currency code as a suffix, ex: "100.00 USD" */
+    IsoSuffix: 2,
+    /** Uses symbol formatting, ex: "$100.00", "100.00 kr" or "MXV 100.00" */
+    Symbol: 3,
+
+    /** Rounds the value to the nearest integer (removing under units) */
+    ForceRounding: 4,
+    /** Adds the specified thousands separfator */
+    ApplyThousandsSeparator: 8,
+    /** Removes any underunit zeros, ex: "$100.00" => "$100" */
+    AutomaticRounding: 16,
+    /** The default formatting option */
+    Default: 3 | 8,
+});
 
 class ValueFormat {
 
@@ -3528,14 +3546,19 @@ class ValueFormat {
      * Convert a number to a string, using thousands separator and fixed number of digits
      * @param {number} value The value to convert
      * @param {integer} decimals Number of decimals, if less than zero, decimals are only shown if required (i.e not for integers)
+     * @param {string} thousandSeparator Optional string to use for thousand separator (default ' ').
+     * @param {string} decimalSeparator Optional string to use for decimal separator (default '.').
      * @returns {string} The resulting string
      */
-    static toString = function (value, decimals) {
+    static toString = function (value, decimals, thousandSeparator, decimalSeparator) {
+
+        thousandSeparator = thousandSeparator || ' ';
+        decimalSeparator = decimalSeparator || '.';
         if (decimals < 0) {
             if (Math.floor(value) === value)
                 decimals = 0;
             else
-                decimals = -decimals;
+                decimals = -decimals;   
         }
         const haveDecimals = (!!decimals) && (decimals > 0);
         if (haveDecimals)
@@ -3557,7 +3580,7 @@ class ValueFormat {
             rl -= 3;
             if (rl <= 0)
                 break;
-            r = r.slice(0, rl) + ' ' + r.slice(rl);
+            r = r.slice(0, rl) + thousandSeparator + r.slice(rl);
         }
         if (!haveDecimals)
             return r;
@@ -3566,8 +3589,58 @@ class ValueFormat {
             f = f.padEnd(decimals, '0');
         else if (fl > decimals)
             f = f.slice(0, decimals);
-        return r + '.' + f;
+        return r + decimalSeparator + f;
     }
+
+    /**
+     * Convert a value into an amount string for the supplied currency
+     * @param {IsoCurrency} currencyInfo A currency as provided by the IsoCurrency.Get function in iso_data/currencies.js
+     * @param {number} amount The value to convert into an amount string
+     * @param {integer} options The formatting rules to apply, see CurrencyFormatOptions.
+     * @param {string} decimalSeparatorOverride Optionally forcefully set a specific decimal separator
+     * @param {string} thousandSeparatorOverride Optionally forcefully set a specific thousand separator
+     * @returns {string} The amount formatted according to the currency info and options
+     */
+    static toAmount(currencyInfo, amount, options, decimalSeparatorOverride, thousandSeparatorOverride) {
+        options = typeof options !== "number" ? CurrencyFormatOptions.Default : options;
+        const decimalSeparator = decimalSeparatorOverride ?? currencyInfo.DecimalSeparator;
+        const thousandSeparator = typeof thousandSeparatorOverride === "string" ? thousandSeparatorOverride : currencyInfo.ThousandSeparator;
+        let num = currencyInfo.DecimalNumbers;
+        let value = null;
+        const underUnits = currencyInfo.UnderUnits;
+        if ((underUnits > 1) && ((options & CurrencyFormatOptions.ForceRounding) === 0)) {
+            let f = Math.round(Math.abs(amount) * underUnits);
+            const sign = Math.sign(amount);
+            let a = Math.trunc(f / underUnits);
+            f %= underUnits;
+            if ((f !== 0) || ((options & CurrencyFormatOptions.AutomaticRounding) === 0)) {
+                const fs = ("" + (f | 0)).padEnd(currencyInfo.DecimalNumbers, '0');
+                a *= sign;
+                value = (options & CurrencyFormatOptions.ApplyThousandsSeparator) !== 0
+                    ?
+                    (ValueFormat.toString(a, 0, thousandSeparatorOverride) + decimalSeparator + fs)
+                    :
+                    ("" + (a | 0) + decimalSeparator + fs);
+            }
+        }
+        if (!value) {
+            amount = Math.round(amount);
+            value = (options & CurrencyFormatOptions.ApplyThousandsSeparator) !== 0
+                ?
+                ValueFormat.toString(amount, 0, thousandSeparatorOverride)
+                :
+                ("" + (amount | 0));
+        }
+        const style = options & CurrencyFormatOptions.Symbol;
+        if (style === CurrencyFormatOptions.IsoPrefix)
+            value = currencyInfo.Iso4217 + ' ' + value;
+        if (style === CurrencyFormatOptions.IsoSuffix)
+            value = value + ' ' + currencyInfo.Iso4217;
+        if (style === CurrencyFormatOptions.Symbol)
+            value = currencyInfo.SymbolPrefix + value + currencyInfo.SymbolSuffix;
+        return value;
+    }
+
 
     static keyValueSplit = function (text, split) {
         const s = text.indexOf(split);

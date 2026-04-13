@@ -122,12 +122,13 @@ namespace SysWeaver.IsoData
         {
             var decimalSeparator = decimalSeparatorOverride ?? DecimalSeparator;
             String value = null;
-            if ((UnderUnits > 0) && ((options & CurrencyFormatOptions.ForceRounding) == 0))
+            var underUnits = UnderUnits;
+            if ((underUnits > 1) && ((options & CurrencyFormatOptions.ForceRounding) == 0))
             {
-                var f = Math.Round(Math.Abs(amount) * UnderUnits);
+                var f = Math.Round(Math.Abs(amount) * underUnits);
                 var sign = Math.Sign(amount);
-                var a = Math.Truncate(f / UnderUnits);
-                f %= UnderUnits;
+                var a = Math.Truncate(f / underUnits);
+                f %= underUnits;
                 if ((f != 0) || ((options & CurrencyFormatOptions.AutomaticRounding) == 0))
                 {
                     var fs = f.ToString(new string('0', DecimalNumbers));

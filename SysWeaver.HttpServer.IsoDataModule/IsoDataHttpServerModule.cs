@@ -241,6 +241,7 @@ namespace SysWeaver.Net.IsoDataModule
             }
             sb.Append(
 @"      ];  
+    
     static Lookup = function()
         {
             const l = IsoCurrency.Currencies;
@@ -256,13 +257,33 @@ namespace SysWeaver.Net.IsoDataModule
             return map;
         }();
 
+    /**
+     * Get information about a currency
+     * @param {string} currencyCode The ISO-4217 currency code to get intformation about
+     * @returns {IsoCurrency} The information or null
+    */
     static Get(currencyCode)
     {
         if (!currencyCode)
             return null;
         return IsoCurrency.Lookup.get(('' + currencyCode).toLowerCase());
-    };
-}
+    }
+
+    /**
+     * Convert a value into an amount string for the supplied currency
+     * @param {number} amount The value to convert into an amount string
+     * @param {integer} options The formatting rules to apply, see CurrencyFormatOptions.
+     * @param {string} decimalSeparatorOverride Optionally forcefully set a specific decimal separator
+     * @param {string} thousandSeparatorOverride Optionally forcefully set a specific thousand separator
+     * @returns {string} The amount formatted according to the currency info and options
+     */
+    toString(amount, options, decimalSeparatorOverride, thousandSeparatorOverride)
+    {
+        return ValueFormat.toAmount(this, amount, options, decimalSeparatorOverride, thousandSeparatorOverride);
+    }
+
+ }
+
 ");
             var code = sb.ToString();
             return code;
