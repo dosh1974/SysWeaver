@@ -583,6 +583,13 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
                     const se = v.lastIndexOf(')');
                     const vals = v.substring(sf + 1, se).split(',');
                     const vl = vals.length;
+                    if ((editType === "colhdr") || (editType === "col"))
+                        return {
+                            Red: parseFloat(vals[0]),
+                            Green: parseFloat(vals[vl > 1 ? 1 : (vl - 1)]),
+                            Blue: parseFloat(vals[vl > 2 ? 2 : (vl - 1)]),
+                            Alpha: parseFloat(vals[vl > 3 ? 3 : (vl - 1)]),
+                        };
                     return {
                         x: parseFloat(vals[0]),
                         y: parseFloat(vals[vl > 1 ? 1 : (vl - 1)]),
@@ -608,7 +615,11 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
                     KeyInst: null,
                     ElementInst: null
                 },
-                toString: v => "vec4(" + toFloat(v.x) + "," + toFloat(v.y) + "," + toFloat(v.z) + "," + toFloat(v.w) + ")",
+                toString: (v, editType) => {
+                    if ((editType === "colhdr") || (editType === "col"))
+                        return "vec4(" + toFloat(v.Red) + "," + toFloat(v.Green) + "," + toFloat(v.Blue) + "," + toFloat(v.Alpha) + ")";
+                    return "vec4(" + toFloat(v.x) + "," + toFloat(v.y) + "," + toFloat(v.z) + "," + toFloat(v.w) + ")";
+                },
             });
         return typeMap;
     })();
