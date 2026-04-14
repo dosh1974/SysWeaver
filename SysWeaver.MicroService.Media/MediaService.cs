@@ -22,6 +22,7 @@ namespace SysWeaver.MicroService
                 manager.TryRemoveExtensionViewer(x, out var _);
         }
 
+
         const string MediaEditor = "mediaView/MediaView.html?link={0}";
 
         /// <summary>

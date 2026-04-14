@@ -66,7 +66,6 @@ class EffectProgramData {
         const typeMap = EffectProgramData.TypeMap;
         const lines = src.split("\n");
         t.Lines = lines;
-        const lc = lines.length;
         let scriptProps = {};
         const members = [];
         let dynTypeName = "";
@@ -83,13 +82,13 @@ class EffectProgramData {
 
 
         function isSpace(line, pos, falseOutSize) {
-            if ((pos < 0) || (pos >= lc))
+            if ((pos < 0) || (pos >= line.length))
                 return !falseOutSize;
             return line.charAt(pos).trim() === "";
         }
 
         function isIdentifier(line, pos) {
-            if ((pos < 0) || (pos >= lc))
+            if ((pos < 0) || (pos >= line.length))
                 return false;
             const ch = line.charAt(pos);
             if (isLetter(ch))
@@ -129,6 +128,7 @@ class EffectProgramData {
         }
 
 
+        const lc = lines.length;
         for (let i = 0; i < lc; ++i) {
             const line = lines[i].trim();
             lines[i] = line;
@@ -166,7 +166,7 @@ class EffectProgramData {
                 if (!comment.startsWith("var:"))
                     continue;
                 const json = comment.substring(4).trim();
-                const desc = json.length > 0 ? JSON.parse(json) : {};
+                const desc = json.length > 0 ? JSON.parse(json.replace(/([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, "$1\"$2\":")) : {};
                 let pi = line.lastIndexOf('=', ci - 1);
                 const defValueText = line.substring(pi + 1, ci).replaceAll(';', '').trim();
                 while ((pi > 0) && (line.charAt(pi - 1) == ' '))
