@@ -399,12 +399,12 @@ namespace SysWeaver.Chat
                 max = 10;
             if (max > 200)
                 max = 200;
-            var u = context.Session?.Auth?.Guid;
             var m = await c.Provider.GetMessages(pid, context, from, max).ConfigureAwait(false);
             if (m != null)
             {
                 var l = m.Length;
                 int o = 0;
+                var u = context.Session?.Auth?.Guid;
                 for (int i = 0; i < l; ++i)
                 {
                     var mm = m[i];

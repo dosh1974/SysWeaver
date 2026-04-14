@@ -251,7 +251,7 @@ namespace SysWeaver.MicroService
                     {
                         var l = await ContentDependentChunking.TryDecompressChunk(destStream, hashData.Slice(i, hashSize).Span).ConfigureAwait(false);
                         if (l <= 0)
-                            throw new Exception("Failed to decompress chunk! " + hashData.Slice(i, hashSize).Span.ToHexString());
+                            throw new Exception("Failed to decompress chunk from network! " + hashData.Slice(i, hashSize).Span.ToHexString());
                     }
                     Interlocked.Add(ref sync.UploadSize, destStream.Position);
                 }
@@ -327,7 +327,7 @@ namespace SysWeaver.MicroService
                             {
                                 var l = await ContentDependentChunking.TryDecompressChunk(destStream, hashData.Slice(i, hashSize).Span).ConfigureAwait(false);
                                 if (l <= 0)
-                                    throw new Exception("Failed to decompress chunk! " + hashData.Slice(i, hashSize).Span.ToHexString());
+                                    throw new Exception("Failed to decompress chunk from cache! " + hashData.Slice(i, hashSize).Span.ToHexString());
                             }
                             Interlocked.Add(ref sync.UploadSize, destStream.Position);
                         }

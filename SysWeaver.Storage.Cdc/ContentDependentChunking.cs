@@ -193,7 +193,9 @@ namespace SysWeaver
                     await WriteHeader(s, minTime).ConfigureAwait(false);
                     await WriteFile(s, file, minTime, block, props.HashSize).ConfigureAwait(false);
                 }
-                File.Move(tempName, destName, true);
+                var ex = await PathExt.TryMoveFileAsync(tempName, destName).ConfigureAwait(false);
+                if (ex != null)
+                    throw ex;
             }
             finally
             {
@@ -249,7 +251,9 @@ namespace SysWeaver
                     for (int i = 0; i < fl; ++ i)
                         await WriteFile(s, files[i], minTime, blocks[i], hashSize).ConfigureAwait(false);
                 }
-                File.Move(tempName, destName, true);
+                var ex = await PathExt.TryMoveFileAsync(tempName, destName).ConfigureAwait(false);
+                if (ex != null)
+                    throw ex;
             }
             finally
             {
@@ -1046,7 +1050,8 @@ namespace SysWeaver
             {
 
                 await comp.WriteToFileAsync(tempName).ConfigureAwait(false);
-                File.Move(tempName, fileName, true);
+                if (await PathExt.TryMoveFileAsync(tempName, fileName).ConfigureAwait(false) != null)
+                    return false;
             }
             catch
             {
@@ -1092,7 +1097,8 @@ namespace SysWeaver
             try
             {
                 await data.WriteToFileAsync(tempName).ConfigureAwait(false);
-                File.Move(tempName, fileName, true);
+                if (await PathExt.TryMoveFileAsync(tempName, fileName).ConfigureAwait(false) != null)
+                    return false;
             }
             catch
             {
