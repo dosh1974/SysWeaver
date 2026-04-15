@@ -34,7 +34,7 @@ namespace SysWeaver.Net
 
         public IPAddress _IP = IPAddress.Loopback;
         public IReadOnlyDictionary<String, String> ReqCookies;
-        public Headers ReqHeaders;
+        public Headers ReqHeaders = new Headers();
 
 
         public sealed class Headers : HttpHeaders
@@ -127,10 +127,10 @@ namespace SysWeaver.Net
             => false;
 
         public override void SetResBody(ReadOnlySpan<byte> data)
-            => OutputStream.Write(data);
+            => (_OutputStream ??= new ArrayPoolStream()).Write(data);
 
         public override ValueTask SetResBodyAsync(ReadOnlyMemory<byte> data)
-            => OutputStream.WriteAsync(data);
+            => (_OutputStream ??= new ArrayPoolStream()).WriteAsync(data);
 
         public override void SetResContentLength(long length)
         {

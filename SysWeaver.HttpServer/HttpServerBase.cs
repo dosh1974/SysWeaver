@@ -602,6 +602,23 @@ namespace SysWeaver.Net
                     if (res == null)
                         return null;
                 }
+                if (res == HttpServerTools.AlreadyHandled)
+                {
+                    var s = n.OutputStream;
+                    if (s == null)
+                        return new Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>(
+                            ReadOnlyMemory<byte>.Empty,
+                            null,
+                            null,
+                            null
+                            );
+                    return new Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>(
+                        (s as ArrayPoolStream).GetBufferMemory(),
+                        null,
+                        null,
+                        null
+                        );
+                }
                 return await InternalRead(res, n, ifNotModifiedSince).ConfigureAwait(false);
             }
             catch
@@ -1104,10 +1121,6 @@ namespace SysWeaver.Net
                         return;
                 using var __ = PerfMon.Track((nameof(Handle) + ".") + t.Name);
                 var etag = t.GetEtag(out bool useAsync, data);
-
-                if (localUrl.FastEndsWith(".json"))
-                    etag = etag;
-
                 var ee = data.Etag;
                 if (ee != null)
                     etag = etag == null ? ee : String.Concat('_', etag, ee);
