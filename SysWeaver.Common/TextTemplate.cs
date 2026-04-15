@@ -18,11 +18,11 @@ namespace SysWeaver
     ///   # = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
     ///   % = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
     ///   $ = Make javascript string safe (HttpUtility.JavaScriptStringEncode), ex: "Hello world!".
-    ///   £ = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = $(£Var); => var x = "Hello world!".
-    ///   ¤ = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = $(¤Var); => var x = "12 &lt; 42".
+    ///   Â£ = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = $(Â£Var); => var x = "Hello world!".
+    ///   Â¤ = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = $(Â¤Var); => var x = "12 &lt; 42".
     ///   * = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
     /// Only one of _ , ^ and ~ may be used.
-    /// Only one of @, #, %, $, £, ¤ and * may be used.
+    /// Only one of @, #, %, $, Â£, Â¤ and * may be used.
     /// _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: _#, ^$
     /// </summary>
     public sealed class TextTemplate
@@ -44,11 +44,11 @@ namespace SysWeaver
         /// $(#Var) = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
         /// $(%Var) = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
         /// $($Var) = Make javascript string safe (HttpUtility.JavaScriptStringEncode ), ex: "Hello world!".
-        /// $(£Var) = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = $(£Var); => var x = "Hello world!".
-        /// $(¤Var) = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = $(¤Var); => var x = "12 &lt; 42".
+        /// $(Â£Var) = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = $(Â£Var); => var x = "Hello world!".
+        /// $(Â¤Var) = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = $(Â¤Var); => var x = "12 &lt; 42".
         /// $(*Var) = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
         /// Only one of _ , ^ and ~ may be used.
-        /// Only one of @, #, %, $, £, ¤ and * may be used.
+        /// Only one of @, #, %, $, Â£, Â¤ and * may be used.
         /// _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: $(_#Var)
         /// </param>/// 
         public TextTemplate(String text, String varBegin = "$(", String varEnd = ")", bool caseInSensitive = false, bool allowTransforms = true)
@@ -150,11 +150,11 @@ namespace SysWeaver
         /// [#Var] = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
         /// [%Var] = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
         /// [$Var] = Make javascript string safe (HttpUtility.JavaScriptStringEncode ), ex: "Hello world!".
-        /// [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
-        /// [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
+        /// [Â£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [Â£Var]; => var x = "Hello world!".
+        /// [Â¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [Â¤Var]; => var x = "12 &lt; 42".
         /// [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
         /// Only one of _ , ^ and ~ may be used.
-        /// Only one of @, #, %, $, £, ¤ and * may be used.
+        /// Only one of @, #, %, $, Â£, Â¤ and * may be used.
         /// _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: [_#Var]
         /// </param>
         public TextTemplate(String text, IReadOnlySet<String> replace, bool caseInSensitive = false, bool allowTransforms = true)
@@ -226,11 +226,11 @@ namespace SysWeaver
         /// [#Var] = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
         /// [%Var] = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
         /// [$Var] = Make javascript string safe (HttpUtility.JavaScriptStringEncode ), ex: "Hello world!".
-        /// [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
-        /// [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
+        /// [Â£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [Â£Var]; => var x = "Hello world!".
+        /// [Â¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [Â¤Var]; => var x = "12 &lt; 42".
         /// [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
         /// Only one of _ , ^ and ~ may be used.
-        /// Only one of @, #, %, $, £, ¤ and * may be used.
+        /// Only one of @, #, %, $, Â£, Â¤ and * may be used.
         /// _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: [_#Var]
         /// </param>
         public TextTemplate(String text, IReadOnlyDictionary<String, String> varsWithDefaults, bool caseInSensitive = false, bool allowTransforms = true)
@@ -394,11 +394,11 @@ namespace SysWeaver
         /// [#Var] = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
         /// [%Var] = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
         /// [$Var] = Make javascript string safe (HttpUtility.JavaScriptStringEncode), ex: "Hello world!".
-        /// [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
-        /// [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
+        /// [Â£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [Â£Var]; => var x = "Hello world!".
+        /// [Â¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [Â¤Var]; => var x = "12 &lt; 42".
         /// [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
         /// Only one of _ , ^ and ~ may be used.
-        /// Only one of @, #, %, $, £, ¤ and * may be used.
+        /// Only one of @, #, %, $, Â£, Â¤ and * may be used.
         /// _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: [_#Var]
         /// </param>
         /// <returns>The text with all replacements made</returns>
@@ -423,11 +423,11 @@ namespace SysWeaver
         /// [#Var] = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
         /// [%Var] = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
         /// [$Var] = Make javascript string safe (HttpUtility.JavaScriptStringEncode), ex: "Hello world!".
-        /// [£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [£Var]; => var x = "Hello world!".
-        /// [¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [¤Var]; => var x = "12 &lt; 42".
+        /// [Â£Var] = Make javascript string safe with quotes (HttpUtility.JavaScriptStringEncode), ex: var x = [Â£Var]; => var x = "Hello world!".
+        /// [Â¤Var] = Make javascript string safe with quotes of html content (HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode()), ex: var x = [Â¤Var]; => var x = "12 &lt; 42".
         /// [*Var] = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
         /// Only one of _ , ^ and ~ may be used.
-        /// Only one of @, #, %, $, £, ¤ and * may be used.
+        /// Only one of @, #, %, $, Â£, Â¤ and * may be used.
         /// _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: [_#Var]
         /// </param>
         /// <returns>The text with all replacements made</returns>
@@ -449,8 +449,8 @@ namespace SysWeaver
             { "#", HttpUtility.HtmlEncode }, 
             { "%", HttpUtility.UrlEncode }, 
             { "$", x => HttpUtility.JavaScriptStringEncode(x, false) },
-            { "£", x => HttpUtility.JavaScriptStringEncode(x, true) },
-            { "¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(x), true) },
+            { "Â£", x => HttpUtility.JavaScriptStringEncode(x, true) },
+            { "Â¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(x), true) },
             { "*", PathExt.SafeFilename },
 
 
@@ -458,8 +458,8 @@ namespace SysWeaver
             { "_#", x => HttpUtility.HtmlEncode(StringExt.FastToLower(x)) }, 
             { "_%", x => HttpUtility.UrlEncode(StringExt.FastToLower(x)) }, 
             { "_$", x => HttpUtility.JavaScriptStringEncode(StringExt.FastToLower(x), false) },
-            { "_£", x => HttpUtility.JavaScriptStringEncode(StringExt.FastToLower(x), true) },
-            { "_¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(StringExt.FastToLower(x)), true) },
+            { "_Â£", x => HttpUtility.JavaScriptStringEncode(StringExt.FastToLower(x), true) },
+            { "_Â¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(StringExt.FastToLower(x)), true) },
             { "_*", x => PathExt.SafeFilename(StringExt.FastToLower(x)) },
 
 
@@ -467,16 +467,16 @@ namespace SysWeaver
             { "^#", x => HttpUtility.HtmlEncode(StringExt.FastToUpper(x)) }, 
             { "^%", x => HttpUtility.UrlEncode(StringExt.FastToUpper(x)) }, 
             { "^$", x => HttpUtility.JavaScriptStringEncode(StringExt.FastToUpper(x), false) },
-            { "^£", x => HttpUtility.JavaScriptStringEncode(StringExt.FastToUpper(x), true) },
-            { "^¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(StringExt.FastToUpper(x)), true) },
+            { "^Â£", x => HttpUtility.JavaScriptStringEncode(StringExt.FastToUpper(x), true) },
+            { "^Â¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(StringExt.FastToUpper(x)), true) },
             { "^*", x => PathExt.SafeFilename(StringExt.FastToUpper(x)) },
 
             { "~@", x => HttpUtility.HtmlAttributeEncode(x.RemoveCamelCase()) },
             { "~#", x => HttpUtility.HtmlEncode(x.RemoveCamelCase()) },
             { "~%", x => HttpUtility.UrlEncode(x.RemoveCamelCase()) },
             { "~$", x => HttpUtility.JavaScriptStringEncode(x.RemoveCamelCase(), false) },
-            { "~£", x => HttpUtility.JavaScriptStringEncode(x.RemoveCamelCase(), true) },
-            { "~¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(x.RemoveCamelCase()), true) },
+            { "~Â£", x => HttpUtility.JavaScriptStringEncode(x.RemoveCamelCase(), true) },
+            { "~Â¤", x => HttpUtility.JavaScriptStringEncode(HttpUtility.HtmlEncode(x.RemoveCamelCase()), true) },
             { "~*", x => PathExt.SafeFilename(x.RemoveCamelCase()) },
         }.Freeze();
 
