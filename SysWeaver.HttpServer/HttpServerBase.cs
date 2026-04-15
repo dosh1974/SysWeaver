@@ -242,6 +242,8 @@ namespace SysWeaver.Net
 
         readonly PeriodicTask PruneTask;
 
+
+
         /// <summary>
         /// Call this when Auth on a session have been set
         /// </summary>
@@ -263,9 +265,11 @@ namespace SysWeaver.Net
                     {
                         u = new UserData(auth);
                         us.TryAdd(id, u);
+                        Interlocked.Increment(ref UserCount);
                     }
                 }
             }
+            Interlocked.Increment(ref SessionUserCount);
             u.Sessions.TryAdd(session, true);
             try
             {
@@ -311,6 +315,7 @@ namespace SysWeaver.Net
                 var s = u.Sessions;
                 if (!s.TryRemove(session, out var _))
                     return false;
+                Interlocked.Decrement(ref SessionUserCount);
                 session.PushMessage(new PushMessageStringValue("user.logout", reason ?? "Session expired"), true, false);
                 if (s.Count > 0)
                     return true;
@@ -321,6 +326,7 @@ namespace SysWeaver.Net
                     if (s.Count > 0)
                         return true;
                     us.TryRemove(id, out var _);
+                    Interlocked.Decrement(ref UserCount);
                 }
             }
             finally
@@ -452,7 +458,8 @@ namespace SysWeaver.Net
                         }
                         continue;
                     }
-                    sessions.TryAdd(xx, data);
+                    if (!sessions.TryAdd(xx, data))
+                        Interlocked.Decrement(ref CurrentSessionCount);
                 }
                 now -= (TimeSpan.TicksPerMinute * 1);
                 while (rs.TryPeek(out var data))
@@ -2065,10 +2072,54 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// Total number of session that have been established since the service started
+        /// </summary>
+        public long CreateSessionCount => Interlocked.Read(ref TotalSessionCount);
+
+        /// <summary>
+        /// Number of active sessions right now
+        /// </summary>
+        public long ActiveSessionCount => Interlocked.Read(ref CurrentSessionCount);
+
+        /// <summary>
+        /// Number of sessions that have a user logged in
+        /// </summary>
+        public long ActiveSessionWithUserCount => Interlocked.Read(ref SessionUserCount);
+
+        /// <summary>
+        /// Number of unique users that are logged in
+        /// </summary>
+        public long ActiveUserCount => Interlocked.Read(ref UserCount);
+
+
+        /// <summary>
+        /// Total number of session that have been established since the service started
+        /// </summary>
         long TotalSessionCount;
+
+        /// <summary>
+        /// Number of active sessions right now
+        /// </summary>
         long CurrentSessionCount;
 
+        /// <summary>
+        ///     Number of expired sessions
+        /// </summary>
         long ExpiredCount;
+
+        /// <summary>
+        /// Number of sessions that have a user logged in
+        /// </summary>
+        long SessionUserCount;
+
+        /// <summary>
+        /// Number of unique users that are logged in
+        /// </summary>
+        long UserCount;
+
+
+
         readonly ConcurrentQueue<HttpSession> ExpiredSessions = new ConcurrentQueue<HttpSession>();
 
         readonly String CookieOptions;
@@ -2151,7 +2202,6 @@ namespace SysWeaver.Net
 
         readonly ConcurrentDictionary<IReadOnlyMemoryKey<Char>, HttpSession> Sessions = new(ReadOnlyMemoryKey.HashStringEqualityComparer);
 
-
         async ValueTask<HttpSession> GetSession(HttpServerRequest req)
         {
             using (PerfMon.Track(nameof(GetSession)))
@@ -2224,6 +2274,7 @@ namespace SysWeaver.Net
             var sessions = Sessions;
             if (!sessions.TryRemove(ReadOnlyMemoryKey.Create(session.Token), out session))
                 return false;
+            Interlocked.Decrement(ref CurrentSessionCount);
             RunOnSessionRemove(session);
             ExpiredSessions.Enqueue(session);
             return true;
@@ -2482,9 +2533,11 @@ namespace SysWeaver.Net
             var ratio = (double)((Decimal)hit * 100M / (Decimal)(total <= 0 ? 1 : total));
             yield return new Stats(sys, "Cache.Ratio", ratio, "Cache hit ratio, how many time a cached resource was returned", TableDataNumberAttribute.Percentage);
             yield return new Stats(sys, "Cache.Request", total, "Total number of request that could have hit the cache");
-            yield return new Stats(sys, "Session.Current", Interlocked.Read(ref CurrentSessionCount), "Total number of active sessions");
-            yield return new Stats(sys, "Session.Total", Interlocked.Read(ref TotalSessionCount), "Total number of sessions created during the life time of the process");
+            yield return new Stats(sys, "Session.Total", Interlocked.Read(ref TotalSessionCount), "Total number of session that have been established since the service started");
+            yield return new Stats(sys, "Session.Current", Interlocked.Read(ref CurrentSessionCount), "Number of active sessions right now");
             yield return new Stats(sys, "Session.Expired", Interlocked.Read(ref ExpiredCount), "Number of expired sessions that are kept for 5 minutes extra for debug / tracking purposes");
+            yield return new Stats(sys, "Session.Authenticated", Interlocked.Read(ref SessionUserCount), "Number of active sessions that have a user logged in");
+            yield return new Stats(sys, "Session.Users", Interlocked.Read(ref UserCount), "Number of unique active users ");
         }
 
 

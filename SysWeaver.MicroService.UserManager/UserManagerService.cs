@@ -503,6 +503,90 @@ namespace SysWeaver.MicroService
             return auth;
         }
 
+
+
+
+        public sealed class UserStats
+        {
+            /// <summary>
+            /// Time when this data was collected
+            /// </summary>
+            public readonly DateTime Time;
+
+            /// <summary>
+            /// Current number of users
+            /// </summary>
+            public readonly long Current;
+            
+            /// <summary>
+            /// Total number of users ever registered
+            /// </summary>
+            public readonly long Total;
+
+            /// <summary>
+            /// Null if eveything is fine
+            /// </summary>
+            public readonly String ErrorMessage;
+
+            public UserStats(DateTime time, long current, long total, String errorMessage)
+            {
+                Time = time;
+                Current = current;
+                Total = total;
+                ErrorMessage = errorMessage;
+            }
+        }
+
+
+
+        volatile UserStats Stats;
+        readonly AsyncLock GetStatsLock = new AsyncLock();
+
+        public async ValueTask<UserStats> GetUserStats()
+        {
+            var now = DateTime.UtcNow;
+            var renewDate = now.AddSeconds(-30);
+            var stats = Stats;
+            if ((stats != null) && (stats.Time > renewDate))
+                return stats;
+            using var _ = await GetStatsLock.Lock().ConfigureAwait(false);
+            stats = Stats;
+            if ((stats != null) && (stats.Time > renewDate))
+                return stats;
+            Exception err = null;
+            try
+            {
+
+                using var c = await Db.GetAsync().ConfigureAwait(false);
+                var dp = c.DialectProvider;
+                var colName = dp.GetQuotedColumnName(nameof(DbUser.Id));
+                var tableName = dp.GetQuotedTableName(ModelDefinition<DbUser>.Definition);
+                var cmd = String.Concat("SELECT COUNT(", colName, "), MAX(", colName, ") FROM ", tableName);
+                using var reader = await c.ReaderCommandAsync(cmd).ConfigureAwait(false);
+                if (await reader.ReadAsync().ConfigureAwait(false))
+                {
+                    stats = new UserStats(now, reader.GetInt64(0), Math.Max(0, reader.GetInt64(1)), null);
+                    Interlocked.Exchange(ref Stats, stats);
+                    return stats;
+                }
+            }
+            catch (Exception ex)
+            {
+                err = ex;
+            }
+            if (stats != null)
+            {
+                stats = new UserStats(now, stats.Current, stats.Total, err?.Message ?? "No new stats, using oldstats");
+            }
+            else
+            {
+                stats = new UserStats(now, 0, 0, err?.Message ?? "No stats");
+            }
+            Interlocked.Exchange(ref Stats, stats);
+            return stats;
+        }
+
+
         /// <summary>
         /// Return true if there are any users in the db
         /// </summary>
