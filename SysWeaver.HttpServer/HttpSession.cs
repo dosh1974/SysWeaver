@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -619,7 +619,7 @@ namespace SysWeaver.Net
 
             var ma = MessagesAdded;
             long waiterId = 0;
-            var shared = !req.NonShared;
+            var shared = false;// !req.NonShared;
             if (shared)
             {
             //  Shared pool, get an id and trigger a change to abort exisiting shared connections
