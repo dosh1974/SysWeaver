@@ -582,13 +582,13 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
                 },
                 toString: (v, editType) => {
                     if ((editType === "colhdr") || (editType === "col"))
-                        return "vec3(" + toFloat(v.Red) + "," + toFloat(v.Green) + "," + toFloat(v.Blue) + ")";
-                    return "vec3(" + toFloat(v.x) + "," + toFloat(v.y) + "," + toFloat(v.z) + ")";
+                        return "vec3(" + toFloat(v.Red ?? 1.0) + "," + toFloat(v.Green ?? 1.0) + "," + toFloat(v.Blue ?? 1.0) + ")";
+                    return "vec3(" + toFloat(v.x ?? 1.0) + "," + toFloat(v.y ?? 1.0) + "," + toFloat(v.z ?? 1.0) + ")";
                 },
             });
         typeMap.set("vec4",
             {
-                parseDef: v => {
+                parseDef: (v, editType) => {
                     const sf = v.indexOf('(');
                     const se = v.lastIndexOf(')');
                     const vals = v.substring(sf + 1, se).split(',');
@@ -627,8 +627,8 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
                 },
                 toString: (v, editType) => {
                     if ((editType === "colhdr") || (editType === "col"))
-                        return "vec4(" + toFloat(v.Red) + "," + toFloat(v.Green) + "," + toFloat(v.Blue) + "," + toFloat(v.Alpha) + ")";
-                    return "vec4(" + toFloat(v.x) + "," + toFloat(v.y) + "," + toFloat(v.z) + "," + toFloat(v.w) + ")";
+                        return "vec4(" + toFloat(v.Red ?? 1.0) + "," + toFloat(v.Green ?? 1.0) + "," + toFloat(v.Blue ?? 1.0) + "," + toFloat(v.Alpha ?? 1.0) + ")";
+                    return "vec4(" + toFloat(v.x ?? 1.0) + "," + toFloat(v.y ?? 1.0) + "," + toFloat(v.z ?? 1.0) + "," + toFloat(v.w ?? 1.0) + ")";
                 },
             });
         return typeMap;

@@ -53,11 +53,11 @@
             //  Load parameters
             const subP = effect.indexOf('://') < 0 ? "../" : "";
             await ParseTools.FileToObject(subP + effect.substring(0, effect.lastIndexOf('.')) + ".json", props, (k, v) =>
-                fxParams[k1] = ParseTools.DecodeObject(v1));
+                fxParams[k] = ParseTools.DecodeObject(v));
 
             //  Parse parameters
             ParseTools.ParamsToObject(p, props, (k, v) =>
-                fxParams[k1] = ParseTools.DecodeObject(v1));
+                fxParams[k] = ParseTools.DecodeObject(v));
 
             //  Fix parameters
             props.FxProps = fxParams;

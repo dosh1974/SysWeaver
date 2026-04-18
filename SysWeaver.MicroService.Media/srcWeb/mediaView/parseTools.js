@@ -9,19 +9,21 @@
                         Red: parseInt(val.substring(1, 2), 16) / 15.0,
                         Green: parseInt(val.substring(2, 3), 16) / 15.0,
                         Blue: parseInt(val.substring(3, 4), 16) / 15.0,
+                        Alpha: 1.0,
                     };
                 case 5:
                     return {
                         Red: parseInt(val.substring(1, 2), 16) / 15.0,
-                        Green: parseInt(val.substring(2, 4), 16) / 15.0,
-                        Blue: parseInt(val.substring(3, 5), 16) / 15.0,
-                        Alpha: parseInt(val.substring(4, 6), 16) / 15.0,
+                        Green: parseInt(val.substring(2, 3), 16) / 15.0,
+                        Blue: parseInt(val.substring(3, 4), 16) / 15.0,
+                        Alpha: parseInt(val.substring(4, 5), 16) / 15.0,
                     };
                 case 7:
                     return {
                         Red: parseInt(val.substring(1, 3), 16) / 255.0,
                         Green: parseInt(val.substring(3, 5), 16) / 255.0,
                         Blue: parseInt(val.substring(5, 7), 16) / 255.0,
+                        Alpha: 1.0,
                     };
                 case 9:
                     return {
@@ -55,6 +57,8 @@
                 return;
             }                
             if (kt === "string") {
+                if (val.startsWith('$'))
+                    val = "#" + val.substring(1);
                 obj[key] = val;
                 console.log(logPrefix + key + ' = "' + val + '"');
                 return;
