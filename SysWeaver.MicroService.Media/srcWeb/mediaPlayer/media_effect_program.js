@@ -287,11 +287,21 @@ class EffectProgramData {
                 `#extension GL_OES_standard_derivatives : enable
 `;
         }
-        if (haveLod && (!haveLodExt)) {
-            t.Prefix +=
+        t.HaveLod = haveLod;
+        if (haveLod) {
+            if (!haveLodExt) {
+                t.Prefix +=
                 `#extension GL_EXT_shader_texture_lod : enable
 `;
+            }
+            t.Prefix +=
+                `#define texture2DLod texture2D
+`;
         }
+
+        
+
+
         if (!havePrecision) {
             t.Prefix +=
                 `#ifdef GL_ES

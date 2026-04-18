@@ -1,4 +1,6 @@
-﻿class MediaPlayerTools {
+﻿
+
+class MediaPlayerTools {
     static InitBase(i, e, params) {
         i.Cached = false;
         i.Element = e;

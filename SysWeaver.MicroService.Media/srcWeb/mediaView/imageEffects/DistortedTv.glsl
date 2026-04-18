@@ -1,4 +1,4 @@
-uniform float time;
+﻿uniform float time;
 uniform vec2 resolution;
 
 uniform sampler2D tex;
@@ -118,13 +118,15 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
         
     staticVal *= bottomStaticOpt;
 	
+    vec4 image = texture(	iChannel0, 	vec2(uv.x + xOffset,	  y));
 	float red 	=   texture(	iChannel0, 	vec2(uv.x + xOffset -0.01*rgbOffsetOpt,y)).r+staticVal;
-	float green = 	texture(	iChannel0, 	vec2(uv.x + xOffset,	  y)).g+staticVal;
+	float green = 	image.g+staticVal;
 	float blue 	=	texture(	iChannel0, 	vec2(uv.x + xOffset +0.01*rgbOffsetOpt,y)).b+staticVal;
 	
 	vec3 color = vec3(red,green,blue);
 	float scanline = sin(uv.y*800.0)*0.04*scalinesOpt;
 	color -= scanline;
 	
-	fragColor = vec4(color,1.0);
+
+	fragColor = vec4(color * image.w, image.w);
 }

@@ -3,7 +3,7 @@
     Height = 1080;
     Speed = 1;
     LimitSize = false;
-    DpiAdjust = true;
+    DpiAdjust = false;
     DpiScale = 1;
     Static = false;
     Transparent = false;
@@ -16,6 +16,8 @@
     AntiAlias = false;
     ScrollId = null;
     MouseId = null;
+    ImageSize = false;
+    ShowVars = false;
 }
 
 class MediaPlayerEffect {
@@ -277,10 +279,28 @@ class MediaPlayerEffect {
         src = await res.text();
 
         const programData = new EffectProgramData(gl, src, c);
+        const p = t.Params;
         t.ProgramData = programData;
-        props.FxProps = programData.ValidateVars(props.FxProps);
-        if (props.FxProps) {
-            props.EffectProps = JSON.parse(props.FxProps);
+
+        if (p.ShowVars) {
+            const pp = programData.ScriptTypeInfo;
+            if (pp) {
+                console.log("Default effect parameters:");
+                try {
+                    console.log(JSON.stringify(JSON.parse(pp.Default), null, "    "));
+                }
+                catch {
+                    console.log(pp.Default);
+                }
+            }
+        }
+
+        let fxProps = props.FxProps;
+        if (typeof fxProps === "object")
+            fxProps = JSON.stringify(fxProps);
+        fxProps = programData.ValidateVars(fxProps);
+        if (fxProps) {
+            props.EffectProps = JSON.parse(fxProps);
             t.ScriptMember = programData.ScriptMember;
             t.ScriptTypeInfo = programData.ScriptTypeInfo;
         }
@@ -291,8 +311,22 @@ class MediaPlayerEffect {
         }
 
         const tex = t.Texture;
-        if (tex)
-            await tex.Cache();
+        if (tex) {
+            const newSize = await tex.Cache(programData.HaveLod);
+            if (newSize) {
+                const w = newSize[0];
+                const h = newSize[1];
+                if ((t.Width != w) || (t.Height != h)) {
+                    e.style.width = w + "px";
+                    e.style.height = h + "px";
+                    t.Width = w;
+                    t.Height = h;
+                    p.Width = w;
+                    p.Height = h;
+                    p.AdaptiveSize = false;
+                }
+            }
+        }
 
         if (!await t.Compile())
             return false;
@@ -370,6 +404,8 @@ class MediaPlayerEffect {
     MouseX = 0.5;
     MouseY = 0.5;
 
+    OnRender = null;
+
     static render(t, animTime) {
         if (!t.Program)
             return;
@@ -388,11 +424,15 @@ class MediaPlayerEffect {
         let dpi = window.devicePixelRatio;
         if (dpi <= 0.25)
             dpi = 0.25;
-        dpi *= p.DpiScale;
-        if (p.DpiAdjust && (!p.Static))
+        let dpiS = p.DpiScale;
+        dpi *= dpiS;
+        if (p.DpiAdjust && (!p.Static)) {
             dpi *= MediaPlayerEffect.DpiScale;
-        let w = Math.round(e.clientWidth * dpi) | 0;
-        let h = Math.round(e.clientHeight * dpi) | 0;
+            dpiS *= MediaPlayerEffect.DpiScale;
+        }
+        const adaptive = p.AdaptiveSize;
+        let w = Math.round(adaptive ? (e.clientWidth * dpi) : (p.Width * dpiS)) | 0;
+        let h = Math.round(adaptive ? (e.clientHeight * dpi) : (p.Height * dpiS)) | 0;
         if (p.LimitSize) {
             const max = Math.max(p.Width, p.Height);
             const min = Math.min(p.Width, p.Height);
@@ -481,7 +521,9 @@ class MediaPlayerEffect {
 
         };
 
-
+        const onr = t.OnRender;
+        if (onr)
+            onr(gl, t);
         if (pq) {
             const ext = pq.E;
             const query = pq.Q;

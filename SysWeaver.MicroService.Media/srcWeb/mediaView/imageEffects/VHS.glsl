@@ -1,4 +1,4 @@
-uniform float time;
+﻿uniform float time;
 uniform vec2 resolution;
 
 uniform sampler2D tex;
@@ -68,10 +68,12 @@ void mainImage(out vec4 fragColour, in vec2 fragCoord)
     */
     
     //--- Background ---
-    vec3 background = vec3(texture(iChannel0, uv));
+    vec4 background = texture(iChannel0, uv);
     //--------------
     
-    fragColour = vec4(background-colour,1.0);
+    fragColour = vec4(background.xyz-colour,background.w);
+    fragColour.xyz *= background.w;
+
 }
 
 

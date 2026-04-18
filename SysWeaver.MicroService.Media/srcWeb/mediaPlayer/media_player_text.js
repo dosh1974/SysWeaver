@@ -1,7 +1,4 @@
-﻿
-
-
-class MediaPlayerParamsImage {
+﻿class MediaPlayerParamsText extends TextStyle {
     Crop = null;
     Duration = 10;
     Effect = null;
@@ -11,16 +8,14 @@ class MediaPlayerParamsImage {
     AdaptiveSize = false;
 }
 
-class MediaPlayerImage {
+class MediaPlayerText {
 
 
 
 
     constructor(url, params) {
         const t = this;
-        const cp = new MediaPlayerParamsImage();
-        const isSvg = url.endsWith(".svg");
-        cp.AdaptiveSize = isSvg;
+        const cp = new MediaPlayerParamsText();
         if (params)
             Object.assign(cp, params);
         params = cp;
@@ -41,8 +36,8 @@ class MediaPlayerImage {
     async Cache(keepHidden) {
 
         const t = this;
+        const c = await CanvasTools.CreateTextImageUrl(t.Url, t.Params);
         const e = t.Element;
-        const c = t.Url;
         const res = await waitEvent2(e, "load", "error", () => {
             e.src = c;
         });
@@ -165,7 +160,7 @@ class MediaPlayerImage {
 }
 
 
-class MediaPlayerImageTexture {
+class MediaPlayerTextTexture {
 
     constructor(gl, params, url) {
         const t = this;
@@ -181,7 +176,8 @@ class MediaPlayerImageTexture {
         const gl = t.GL;
         const texture = t.Texture;
         const image = new Image();
-        const res = await waitEvent2(image, "load", "error", () => image.src = t.Url);
+        const c = await CanvasTools.CreateTextImageUrl(t.Url, t.Params);
+        const res = await waitEvent2(image, "load", "error", () => image.src = c);
         if (res.type == "error")
             return false;
         t.Image = image;

@@ -1,0 +1,13 @@
+﻿
+body {
+    line-height: 100%;
+    vertical-align: middle;
+}
+
+    body > * {
+        object-fit: contain;
+        display: block;
+        width: 100% !important;
+        height: auto !important;
+        box-sizing: border-box;
+    }

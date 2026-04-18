@@ -1,18 +1,17 @@
-
+﻿
 
 uniform float time;
 uniform vec2 resolution;
 
 uniform sampler2D tex;
 
-#define iTime time
-#define iResolution resolution
-#define iChannel0 tex
-#define texture texture2D
+//#define texture texture2D
 
-
-
-
+const float DropSize = 1; //var:{}
+const float MaxBlur = 0.; //var:{}
+const float MinBlur = 0.;//var:{}
+const float RainAmount = 1;//var:{}
+const float RefractionAmount = 1;//var:{}
 
 // Rain, image filter
 
@@ -99,6 +98,7 @@ float StaticDrops(vec2 uv, float t) {
 }
 
 vec2 Drops(vec2 uv, float t, float l0, float l1, float l2) {
+    uv *= (1.0 / DropSize);
     float s = StaticDrops(uv, t)*l0; 
     vec2 m1 = DropLayer2(uv, t)*l1;
     vec2 m2 = DropLayer2(uv*1.85, t)*l2;
@@ -109,19 +109,15 @@ vec2 Drops(vec2 uv, float t, float l0, float l1, float l2) {
     return vec2(c, max(m1.y*l0, m2.y*l1));
 }
 
-void mainImage( out vec4 fragColor, in vec2 fragCoord )
+void main()
 {
-	vec2 uv = (fragCoord.xy-.5*iResolution.xy) / iResolution.y;
-    vec2 UV = fragCoord.xy/iResolution.xy;
-    float T = iTime;
-   
+    vec2 fragCoord = gl_FragCoord.xy;
+	vec2 uv = (fragCoord.xy-.5*resolution.xy) * 1.5 / (resolution.x + resolution.y);
+    vec2 UV = fragCoord.xy/resolution.xy;
+    float t = time*.2;
     
-    float t = T*.2;
+    float rainAmount = sin(time*.05)*.3*RainAmount+.7*RainAmount;
     
-    float rainAmount = sin(T*.05)*.3+.7;
-    
-    float maxBlur = 5.;
-    float minBlur = 0.;
 
     
     float staticDrops = S(-.5, 1., rainAmount)*2.;
@@ -133,12 +129,18 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     vec2 e = vec2(.001, 0.);
     float cx = Drops(uv+e, t, staticDrops, layer1, layer2).x;
     float cy = Drops(uv+e.yx, t, staticDrops, layer1, layer2).x;
-    vec2 n = vec2(cx-c.x, cy-c.x);		// expensive normals
+    vec2 n = vec2(cx-c.x, cy-c.x) * RefractionAmount;		// expensive normals
     
     
-    float focus = mix(maxBlur-c.y, minBlur, S(.1, .2, c.x));
-    vec4 col = texture2D(iChannel0, UV+n, focus);
-   
-    fragColor = col;
+    float focus = mix(MaxBlur-c.y, MinBlur, S(.1, .2, c.x));
+    
+    vec4 col;
+    if (MaxBlur > 0.0)
+        col = texture2DLod(tex, UV+n, focus);
+    else
+        col = texture2D(tex, UV+n);
+    col.xyz *= col.a;
+    gl_FragColor = col;
+
 }
 

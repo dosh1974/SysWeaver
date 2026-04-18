@@ -1,0 +1,341 @@
+﻿includeJs(document.currentScript.src, "../mediaPlayer/media_player.js");
+
+
+class CounterEffectParams {
+    Fade = 16.0;
+    ExtraSpacing = 10.0;
+    MaxDigits = 10;
+    FlipSpeed = 1;
+    FlipFraction = 0.1;
+    DecimalDigits = 2;
+    ThousandsSeparator = " ";
+    DecimalSeparator = ".";
+    Suffix = "";
+    Prefix = "";
+    DigitSpacing = 0;
+
+}
+
+
+class TextEffect {
+
+
+    /**
+     * Create a text effect
+     * @param {string} effectName Name of the effect (one of the predefined image effects, or the url to a .hlsl image effect file), default = "Rain"
+     * @param {string} text The text to display
+     * @param {TextStyle} textStyle The styling of the text
+     * @param {MediaPlayerParamsEffect} effectParams Additional effect params
+     * @returns {MediaPlayerEffect} The effect, use .Element to get and attach the elemnt, then .Show() and .Play()
+     */
+    static async CreateTextEffect(effectName, text, textStyle, effectParams) {
+        effectName = effectName ?? "Rain";
+        textStyle = textStyle ?? new TextStyle();
+        effectParams = effectParams ?? new MediaPlayerParamsEffect();
+        effectParams.Transparent = true;
+        const url = await CanvasTools.CreateTextImageUrl(text, textStyle);
+        if (!effectName.endsWith(".glsl"))
+            effectName = "imageEffects/" + effectName + ".glsl";
+        const ip = new MediaPlayerParamsImage();
+        ip.Effect = effectName;
+        ip.EffectParams = effectParams;
+        const player = MediaPlayer.Create(MediaTypes.Image, url, ip);
+        await player.Cache();
+        return player;
+    }
+
+
+    /**
+     * Create a counter effect
+     * @param {string} effectName Name of the effect (one of the predefined counter effects, or the url to a .hlsl counter effect file), default = "Rain"
+     * @param {TextStyle} textStyle The styling of the text
+     * @param {CounterEffectParams} counterParams Additional counter effect params
+     * @param {MediaPlayerParamsEffect} effectParams Additional effect params
+     * @returns {MediaPlayerEffect} The effect, use .Element to get and attach the elemnt, then .Show() and .Play()
+     */
+    static async CreateCounterEffect(effectName, textStyle, counterParams, effectParams) {
+
+        effectName = effectName ?? "ScrollUp";
+        counterParams = counterParams ?? new CounterEffectParams();
+        textStyle = textStyle ?? new TextStyle();
+        effectParams = effectParams ?? new MediaPlayerParamsEffect();
+        if (!effectParams.FxProps)
+            effectParams.FxProps = {};
+
+        const fade = Math.max(1, counterParams.Fade);
+        const extraSpacing = Math.max(0, counterParams.ExtraSpacing);
+        const maxDigits = Math.min(32, Math.max(1, counterParams.MaxDigits)) | 0;
+
+        textStyle.MarginTop = fade;
+        textStyle.MarginBottom = (fade + extraSpacing);
+
+        effectParams.Transparent = true;
+        const p = effectParams.FxProps;
+        p.ExtraSpacing = extraSpacing;
+        p.Fade = fade;
+
+        const data = await CanvasTools.CreateNumberImageUrl(textStyle, extraSpacing, counterParams.ThousandsSeparator, counterParams.DecimalSeparator, counterParams.Prefix, counterParams.Suffix);
+        const canvas = data[2];
+        const url = data[0];
+        //  Compute max width and get parts
+        const partWidths = [];
+        const partType = [];
+        let width = 0;
+        function DefPart(type, partWidth) {
+            width = Math.round(partWidth + width);
+            partWidths.push(partWidth);
+            partType.push(type);
+        }
+        if (canvas.SuffixWidth > 0)
+            DefPart(19, canvas.SuffixWidth);
+        const dd = counterParams.DecimalDigits;
+        let minDigits = 1;
+        if (dd > 0) {
+            minDigits += dd;
+            for (let i = 0; i < dd; ++i)
+                DefPart(0, canvas.NumberWidth);
+            DefPart(17, canvas.DecimalSeparatorWidth);
+        }
+        const tsw = canvas.ThousandsSeparatorWidth;
+        for (let i = 0; i < maxDigits; ++i) {
+            DefPart(0, canvas.NumberWidth);
+            if (((i % 3) === 2) && ((i + 1) < maxDigits) && (tsw > 0))
+                DefPart(16, tsw);
+        }
+        const endPosition = partType.length - 1;
+        if (canvas.PrefixWidth > 0)
+            DefPart(18, canvas.PrefixWidth);
+        DefPart(-1, 0);
+        p.MaxParts = partType.length;
+        //  Create effect
+        if (!effectName.endsWith(".glsl"))
+            effectName = "../counterEffects/" + effectName + ".glsl";
+        const ip = new MediaPlayerParamsImage();
+        ip.Effect = effectName;
+        ip.EffectParams = effectParams;
+        const player = MediaPlayer.Create(MediaTypes.Image, url, ip);
+        await player.Cache();
+        player.Params.Width = width;
+        player.Params.Height /= 11.0;
+        player.Params.Height -= extraSpacing;
+        player.Element.style.width = player.Params.Width + "px";
+        player.Element.style.height = player.Params.Height + "px";
+
+        const program = player.Program.Program;
+        const digits = new Float32Array(partType.length * 4);
+        const digitWidths = new Float32Array(partType.length);
+        const digitsu = player.GL.getUniformLocation(program, "digits");
+        const digitsWidthsu = player.GL.getUniformLocation(program, "digitWidths");
+        const numberScaleU = (canvas.NumberWidth / canvas.TotalWidth);
+        const otherOffsetU = numberScaleU;
+
+        //  pos, type + fraction, uvScale, uvAdd
+        //  type:
+        //  0-11: 10 digits + space to one
+        //  16: Thousands separator
+        //  17: Decimal separator
+        //  18: Prefix
+        //  19: Suffix
+        // Less than zero = End
+
+        const flipFraction = Math.max(0, Math.min(1, counterParams.FlipFraction));
+        let flipSpeed = Math.max(0, counterParams.FlipSpeed) * flipFraction;
+        player.OnNewSize = (nw, ow) =>
+        {
+            //console.log(ow + " => " + nw);
+        };
+        player.GetValue = time => time;
+
+
+
+        const digitSpacing = counterParams.DigitSpacing;
+        const numberStep = canvas.NumberWidth + digitSpacing;
+        let currentWidth = -1;
+
+        player.OnRender = (gl, p) => {
+        //  Read value
+            let t = player.GetValue(p.GetPos());
+            if (Array.isArray(t)) {
+                flipSpeed = Math.max(0, t[1]) * flipFraction;
+                t = t[0];
+            }
+
+
+            let moveInterval = flipSpeed;
+            let endPos = width;
+            let partIndex = 0;
+            let digs = minDigits;
+            let cnt = true;
+            let dest = 0;
+            let startPos = 0;
+            let scrollPrefix = 0;
+
+            for (; cnt; ++partIndex, dest += 4) {
+                const partWidth = partWidths[partIndex];
+                digitWidths[(dest >> 2)] = partWidth;
+                startPos = Math.round(endPos - partWidth);
+                const pt = partType[partIndex];
+                switch (pt) {
+                    case 0:
+                        {
+                            let d = Math.floor(t);
+                            const mt = Math.min(flipFraction, moveInterval);
+                            const dt = t % 1;
+                            const cut = 1.0 - mt;
+                            let f = Math.max(0.0, dt - cut) / mt;
+                            const isSpace = (t < 1.0) && (digs <= 0);
+                            f = (1.0 - Math.cos(f * Math.PI)) * 0.5;
+                            if (isSpace) {
+                                if (f <= 0) {
+                                    partIndex = endPosition;
+                                    dest -= 4;
+                                    continue;
+                                }
+                                scrollPrefix = f <= 0 ? 0 : ((1.0 - f) % 1.0);
+                            }
+                            d %= 10;
+                            const v = d;
+                            d += f;
+                            d = 11 - d;
+                            d %= 10;
+                            if (isSpace && (v == 0))
+                                d += 10;
+                            digits[dest + 0] = startPos - digitSpacing * 0.5;
+                            digits[dest + 1] = d / 11.0;
+                            digits[dest + 2] = numberScaleU / partWidth;
+                            digits[dest + 3] = 0;
+                            t /= 10.0;
+                            moveInterval /= 10.0;
+                            --digs;
+                            startPos -= digitSpacing;
+                        }
+                        break;
+                    case 16:
+                    case 17:
+                    case 18:
+                    case 19:
+                        if (pt === 18) {
+                            digits[dest + 0] = startPos + scrollPrefix * numberStep;
+                        }
+                        else
+                            digits[dest + 0] = startPos;
+                        digits[dest + 1] = (10 - (pt - 16)) / 11.0;
+                        digits[dest + 2] = 1.0 / canvas.TotalWidth;
+                        digits[dest + 3] = otherOffsetU;
+                        break;
+                    default:
+                        digits[dest + 0] = 0;
+                        digits[dest + 1] = 0;
+                        digits[dest + 2] = 0;
+                        digits[dest + 3] = 0;
+                        digits[dest + 4] = 0;
+                        digits[dest + 5] = 0;
+                        digits[dest + 6] = 0;
+                        digits[dest + 7] = 0;
+                        digitWidths[dest >> 2] = 0;
+                        digitWidths[(dest >> 2) + 1] = 0;
+                        cnt = false;
+                        break;
+                }
+                endPos = startPos;
+            }
+            const nw = width - startPos;
+            if (nw !== currentWidth) {
+                player.OnNewSize(nw, currentWidth < 0 ? nw : currentWidth);
+                currentWidth = nw;
+            }
+            gl.uniform1fv(digitsWidthsu, digitWidths);
+            gl.uniform4fv(digitsu, digits);
+        };
+        return player;
+    }
+
+
+
+
+
+    
+
+
+
+
+}
+
+
+
+
+
+
+async function textEffectMain() {
+    const target = document.body;
+    try {
+        const ps = getUrlParams();
+
+
+        const s = new TextStyle();
+        //      s.AttachTo = document.body;
+        s.Font = 'bold 160px "arial"';
+        s.Stroke = null;
+        s.StrokeWidth = 6;
+        s.MarginLeft = 0;
+        s.MarginRight = 0;
+        s.ShadowBlur = 20;
+        s.ShadowX = 6;
+        s.ShadowY = 15;
+
+        s.LetterSpacing = -5;
+
+        s.FillGradient = CanvasTools.CreateLinearGradient(0, 0.1, 0, 0.9,
+            0.0, "#f08",
+            0.5, "#24f",
+            1.0, "#80f"
+        );
+
+        s.StrokeGradient = CanvasTools.CreateLinearGradient(0, 0, 1, 1,
+            0.0, "#652",
+            0.5, "#661",
+            1.0, "#541"
+        );
+
+
+
+        const cp = new CounterEffectParams();
+        cp.Prefix = "SEK ";
+        cp.Suffix = ":-";
+        cp.DecimalSeparator = ",";
+        cp.DigitSpacing = -25.0;
+        cp.FlipFraction = 0.25;
+        cp.Fade = 40;
+        cp.ExtraSpacing = 0;
+
+        const fx = await TextEffect.CreateCounterEffect("ScrollUp", s, cp);
+        //const fx = await TextEffect.CreateTextEffect("Rain", "Hello world!", s);
+
+        document.body.append(fx.Element);
+
+        let value = 0;
+        document.body.onmousemove = me => {
+            value = me.offsetX;
+        };
+
+        //fx.GetValue = x => [991, 100];
+        //fx.GetValue = x => [990 + ((x % 3) | 0), 100];
+        //fx.GetValue = x => [value, 100];
+        //fx.GetValue = x => [(990 + x) * 100.0, 100];
+        fx.GetValue = x => [9950 + value * 0.3, 100];
+
+
+
+        await fx.Show();
+        await fx.Play();
+
+
+
+    }
+    catch (e) {
+        target.innerText = "Generic failure.\n" + e;
+        return;
+    }
+    PageLoaded();
+}
+

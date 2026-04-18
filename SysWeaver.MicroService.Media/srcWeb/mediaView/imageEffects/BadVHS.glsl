@@ -1,4 +1,4 @@
-uniform float time;
+﻿uniform float time;
 uniform vec2 resolution;
 
 uniform sampler2D tex;
@@ -11,10 +11,10 @@ uniform sampler2D tex;
 
 #define PI 3.14159265
 
-vec3 tex2D( sampler2D _tex, vec2 _p ){
-  vec3 col = texture( _tex, _p ).xyz;
+vec4 tex2D( sampler2D _tex, vec2 _p ){
+  vec4 col = texture( _tex, _p );
   if ( 0.5 < abs( _p.x - 0.5 ) ) {
-    col = vec3( 0.1 );
+    col.xyz = vec3( 0.1 );
   }
   return col;
 }
@@ -44,7 +44,7 @@ float noise( vec2 _v ){
 void mainImage( out vec4 fragColor, in vec2 fragCoord ){
   vec2 uv = gl_FragCoord.xy / resolution;
   vec2 uvn = uv;
-  vec3 col = vec3( 0.0 );
+  vec4 col = vec4( 0.0 );
 
   // tape wave
   uvn.x += ( noise( vec2( uvn.y, time ) ) - 0.5 )* 0.005;
@@ -61,9 +61,9 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ){
   uvn.x += snPhase * ( ( noise( vec2( uv.y * 100.0, time * 10.0 ) ) - 0.5 ) * 0.2 );
     
   col = tex2D( iChannel0, uvn );
-  col *= 1.0 - tcPhase;
-  col = mix(
-    col,
+  col.xyz *= 1.0 - tcPhase;
+  col.xyz = mix(
+    col.xyz,
     col.yzx,
     snPhase
   );
@@ -76,12 +76,13 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord ){
       tex2D( iChannel0, uvn + vec2( x - 4.0, 0.0 ) * 7E-3 ).z
     ) * 0.1;
   }
-  col *= 0.6;
+  col.xyz *= 0.6;
 
   // ac beat
-  col *= 1.0 + clamp( noise( vec2( 0.0, uv.y + time * 0.2 ) ) * 0.6 - 0.25, 0.0, 0.1 );
+  col.xyz *= 1.0 + clamp( noise( vec2( 0.0, uv.y + time * 0.2 ) ) * 0.6 - 0.25, 0.0, 0.1 );
 
-  gl_FragColor = vec4( col, 1.0 );
+  col.xyz *= col.w;
+  gl_FragColor = col;
 }
 
 #undef gl_FragCoord

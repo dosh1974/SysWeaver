@@ -9,9 +9,11 @@ class MediaTypes {
     static Audio = 2;
     /** Media is a youtube clip */
     static YouTube = 3;
-
     /** Media is a pixel shader effect, from GlslSandbox or ShaderToy (must be a pure shader with no inputs or multiple satges) */
     static Effect = 4;
+    /** Media is some stylized text, optionally with an effect */
+    static Text = 5;
+
 
     /** Array with names */
     static Names = Object.freeze(
@@ -21,6 +23,7 @@ class MediaTypes {
             "Audio",
             "YouTube",
             "Effect",
+            "Text",
         ]);
 
     /**
@@ -42,12 +45,13 @@ class MediaPlayer {
         await Promise.all([
             includeJs(current, "media_effect_program.js"),
             includeJs(current, "media_player_tools.js"),
-
+            includeJs(current, "canvasTools.js"),
             includeJs(current, "media_player_image.js"),
             includeJs(current, "media_player_audio.js"),
             includeJs(current, "media_player_video.js"),
             includeJs(current, "media_player_youtube.js"),
             includeJs(current, "media_player_effect.js"),
+            includeJs(current, "media_player_text.js"),
         ]
         );
         await MediaPlayerTools.CanUnMute();
@@ -58,7 +62,7 @@ class MediaPlayer {
      * @param {number} type One of the predefined media type integers defined in MediaTypes
      * @param {string} data The url or other data (for youtube is the video id etc)
      * @param {object} mediaParams The type specific parameters, mirroring one the Media* C# types.
-     * @returns {object} A media player object
+     * @returns {object} A media player object.
      */
     static Create(type, data, mediaParams) {
         switch (type) {
@@ -74,6 +78,11 @@ class MediaPlayer {
                 return new MediaPlayerYoutube(data, mediaParams);
             case MediaTypes.Effect:
                 return new MediaPlayerEffect(data, mediaParams);
+
+            case MediaTypes.Text:
+                if (mediaParams && mediaParams.Effect)
+                    return new MediaPlayerEffect(mediaParams.Effect, mediaParams.EffectParams, gl => new MediaPlayerTextTexture(gl, mediaParams, data));
+                return new MediaPlayerText(data, mediaParams);
         }
         return null;
     }

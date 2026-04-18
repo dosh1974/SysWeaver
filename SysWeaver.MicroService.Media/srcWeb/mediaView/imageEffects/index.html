@@ -1,0 +1,127 @@
+﻿<!doctype html>
+<html>
+<head>
+    <script src="../parseTools.js"></script>
+    <script>
+        /*
+            Parameters (basic):
+                image = 	Image url.
+                text = 		The text to show.
+
+            Effects:
+                    "Rain"
+                    "OldMovie"
+                    "DistortedTv"
+                    "BadVHS"
+                    "VHS"
+        */
+
+        async function main() {
+
+            const href = window.location.href;
+            const p = new URL(href).searchParams;
+
+
+            // MediaPlayerParamsImage
+            const props = {
+                Crop: null,
+                Duration: 10,
+                EffectSizeFromImage: true,
+                Transparent: true,
+                AdaptiveSize: false,
+            };
+
+            // MediaPlayerParamsEffect
+            const ep =
+            {
+                Width: 1920,
+                Height: 1080,
+                Speed: 1,
+                LimitSize: false,
+                DpiAdjust: false,
+                DpiScale: 1,
+                Static: false,
+                AdaptiveSize: true,
+                WrapU: false,
+                WrapY: false,
+                WebGL2: false,
+                MipMap: false,
+                AntiAlias: false,
+                ScrollId: null,
+                MouseId: null,
+                ImageSize: false,
+                ShowVars: false,
+            };
+
+
+            //  Effect paramaters
+            const fxParams =
+            {
+
+            };
+
+            const image = p.get("Image") ?? "../logo.png";
+
+            let effect = p.get("Effect") ?? "DistortedTv";
+            if (!effect.endsWith(".glsl"))
+                effect = "imageEffects/" + effect + ".glsl";
+
+            //  Load parametersRain
+            const subP = effect.indexOf('://') < 0 ? "../" : "";
+            await ParseTools.FileToObject(subP + effect.substring(0, effect.lastIndexOf('.')) + ".json", props, (k, v) =>
+                ParseTools.SetToObject(ep, k, v, (k1, v1) =>
+                    fxParams[k1] = ParseTools.DecodeObject(v1)));
+
+
+            //  Load parameters
+            const subP2 = image.indexOf('://') < 0 ? "../" : "";
+            await ParseTools.FileToObject(subP2 + image.substring(0, image.lastIndexOf('.')) + ".json", props, (k, v) =>
+                ParseTools.SetToObject(ep, k, v, (k1, v1) =>
+                    fxParams[k1] = ParseTools.DecodeObject(v1)));
+
+            //  Parse parameters
+            ParseTools.ParamsToObject(p, props, (k, v) =>
+                ParseTools.SetToObject(ep, k, v, (k1, v1) =>
+                    fxParams[k1] = ParseTools.DecodeObject(v1)));
+
+            //  Fix parameters
+            props.Effect = effect;
+            props.EffectParams = ep;
+            ep.FxProps = fxParams;
+            ep.Transparent = props.Transparent;
+            ep.AdaptiveSize = props.AdaptiveSize;
+            if (props.EffectSizeFromImage)
+                ep.AdaptiveSize = false;
+
+            //  Build url
+            url = '../MediaPreview.html?transparent=true&link=' + image + '&type=0&props=' + encodeURIComponent(JSON.stringify(props));
+            if (p.has("ShaderDebug") && (p.get("ShaderDebug") === "true"))
+                url += "&ShaderDebug=true";
+
+            console.log(url);
+            const c = document.createElement("iframe");
+            c.src = url;
+            document.body.appendChild(c);
+        }
+    </script>
+    <style>
+        html, body {
+            background-color: transparent;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        iframe {
+            border: none;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body onload="main()">
+</body>
+</html>

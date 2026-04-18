@@ -1,4 +1,4 @@
-uniform float time;
+﻿uniform float time;
 uniform vec2 resolution;
 
 uniform sampler2D tex;
@@ -79,14 +79,14 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 	vec2 suv = uv + 0.002 * vec2( rand(t), rand(t + 23.0));
 		
 	// Get the image
-	vec3 image = texture( iChannel0, vec2(suv.x, suv.y) ).xyz;
+	vec4 image = texture( iChannel0, vec2(suv.x, suv.y) );
 		
 	#ifdef BLACK_AND_WHITE
 	// Convert it to B/W
-	float luma = dot( vec3(0.2126, 0.7152, 0.0722), image );
-	vec3 oldImage = luma * vec3(0.7, 0.7, 0.7);
+	float luma = dot( vec3(0.2126, 0.7152, 0.0722), image.xyz );
+	vec4 oldImage = vec4(luma * vec3(0.7, 0.7, 0.7), image.w);
 	#else
-	vec3 oldImage = image;
+	vec4 oldImage = image;
 	#endif
 		
 	// Create a time-varying vignetting effect
@@ -128,12 +128,14 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 	#endif
 	
 	// Show the image modulated by the defects
-    fragColor.xyz = oldImage * vI;
+	oldImage.xyz *= vI;
+    fragColor = oldImage;
 		
 	// Add some grain (thanks, Jose!)
 	#ifdef GRAIN
     fragColor.xyz *= (1.0+(rand(uv+t*.01)-.2)*.15);		
     #endif		
 		
+	fragColor.xyz *= fragColor.w;
 
 }
