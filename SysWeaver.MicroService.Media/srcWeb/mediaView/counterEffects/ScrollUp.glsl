@@ -8,7 +8,10 @@ uniform float digitWidths[64];
 
 uniform sampler2D tex;
 
-const float ExtraSpacing = 100.0;//var:{}
+const float UvScale = 1.0;//var:{}
+const float UvAdd = 0.0;//var:{}
+
+
 const float Fade = 50.0;//var:{}
 const int MaxParts = 10;//var:{}
 
@@ -17,8 +20,7 @@ void main(void)
 	float x = gl_FragCoord.x - 0.5;
 	float y = gl_FragCoord.y;
 	float height = resolution.y;
-	float v = (y + ExtraSpacing) / (height + ExtraSpacing);
-	v /= 11.0;
+	float v = y * UvScale + UvAdd;
 	
 	float opacityTop = clamp(y * (1.0 / Fade), 0.0, 1.0);
 	float opacityBottom = clamp((height - y) * (1.0 / Fade), 0.0, 1.0);
@@ -26,6 +28,8 @@ void main(void)
 	vec4 part = vec4(0);
 	vec4 part2 = vec4(0);
 	float width2 = 0.0;
+	vec4 part3 = vec4(0);
+	float width3 = 0.0;
 	int j = 0;
 	for (int i = 0; i < MaxParts; ++ i)
 	{
@@ -34,6 +38,8 @@ void main(void)
 		{
 			width2 = digitWidths[i + 1];
 			part2 = digits[i + 1];
+			width3 = digitWidths[i + 2];
+			part3 = digits[i + 2];
 			break;
 		}
 	}
@@ -52,6 +58,21 @@ void main(void)
 		float ia = 1.0 - col.w;
 		col2 *= ia;
 		col += col2;
+
+
+		u = x - part3.x;
+		if (u < width3)
+		{
+			u *= part3.z;
+			u += part3.w;
+			vec4 col3 = texture2D(tex, vec2(u, v + part3.y));
+			float ia = 1.0 - col.w;
+			col3 *= ia;
+			col += col3;
+		}
+
+
+
 	}
 
 

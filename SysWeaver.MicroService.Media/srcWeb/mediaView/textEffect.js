@@ -63,16 +63,15 @@ class TextEffect {
             effectParams.FxProps = {};
 
         const fade = Math.max(1, counterParams.Fade);
-        const extraSpacing = Math.max(0, counterParams.ExtraSpacing);
+        const extraSpacing = Math.max(0, counterParams.ExtraSpacing) - fade;
         const maxDigits = Math.min(32, Math.max(1, counterParams.MaxDigits)) | 0;
 
-        textStyle.MarginTop = fade;
-        textStyle.MarginBottom = (fade + extraSpacing);
+        const waste = Math.max(0, fade + extraSpacing) + fade;
+        textStyle.MarginTop = 4;
+        textStyle.MarginBottom = 4 + waste;
 
         effectParams.Transparent = true;
-        const p = effectParams.FxProps;
-        p.ExtraSpacing = extraSpacing;
-        p.Fade = fade;
+        const digitSpacing = counterParams.DigitSpacing;
 
         const data = await CanvasTools.CreateNumberImageUrl(textStyle, extraSpacing, counterParams.ThousandsSeparator, counterParams.DecimalSeparator, counterParams.Prefix, counterParams.Suffix);
         const canvas = data[2];
@@ -82,7 +81,7 @@ class TextEffect {
         const partType = [];
         let width = 0;
         function DefPart(type, partWidth) {
-            width = Math.round(partWidth + width);
+            width = Math.round(partWidth + width + (type === 0 ? digitSpacing : 0));
             partWidths.push(partWidth);
             partType.push(type);
         }
@@ -94,32 +93,37 @@ class TextEffect {
             minDigits += dd;
             for (let i = 0; i < dd; ++i)
                 DefPart(0, canvas.NumberWidth);
-            DefPart(17, canvas.DecimalSeparatorWidth);
+            DefPart(20, canvas.DecimalSeparatorWidth);
         }
         const tsw = canvas.ThousandsSeparatorWidth;
         for (let i = 0; i < maxDigits; ++i) {
             DefPart(0, canvas.NumberWidth);
             if (((i % 3) === 2) && ((i + 1) < maxDigits) && (tsw > 0))
-                DefPart(16, tsw);
+                DefPart(17, tsw);
         }
         const endPosition = partType.length - 1;
         if (canvas.PrefixWidth > 0)
             DefPart(18, canvas.PrefixWidth);
         DefPart(-1, 0);
-        p.MaxParts = partType.length;
         //  Create effect
         if (!effectName.endsWith(".glsl"))
             effectName = "../counterEffects/" + effectName + ".glsl";
         const ip = new MediaPlayerParamsImage();
         ip.Effect = effectName;
         ip.EffectParams = effectParams;
+        ip.EffectSizeFromImage = false;
+        effectParams.Width = width;
+        effectParams.Height = canvas.height / 11.0 + fade - waste;
+        effectParams.AdaptiveSize = false;
+
+        const p = effectParams.FxProps;
+        p.MaxParts = partType.length;
+        p.UvScale = 1.0 / (effectParams.Height * 11.0);
+        p.UvAdd = fade / canvas.height;
+        p.Fade = fade;
+
         const player = MediaPlayer.Create(MediaTypes.Image, url, ip);
         await player.Cache();
-        player.Params.Width = width;
-        player.Params.Height /= 11.0;
-        player.Params.Height -= extraSpacing;
-        player.Element.style.width = player.Params.Width + "px";
-        player.Element.style.height = player.Params.Height + "px";
 
         const program = player.Program.Program;
         const digits = new Float32Array(partType.length * 4);
@@ -132,10 +136,11 @@ class TextEffect {
         //  pos, type + fraction, uvScale, uvAdd
         //  type:
         //  0-11: 10 digits + space to one
-        //  16: Thousands separator
-        //  17: Decimal separator
+        //  16: Keep blank
+        //  17: Thousands separator
         //  18: Prefix
         //  19: Suffix
+        //  20: Decimal separator
         // Less than zero = End
 
         const flipFraction = Math.max(0, Math.min(1, counterParams.FlipFraction));
@@ -148,9 +153,10 @@ class TextEffect {
 
 
 
-        const digitSpacing = counterParams.DigitSpacing;
         const numberStep = canvas.NumberWidth + digitSpacing;
         let currentWidth = -1;
+
+        let oldparts = "";
 
         player.OnRender = (gl, p) => {
         //  Read value
@@ -170,40 +176,56 @@ class TextEffect {
             let startPos = 0;
             let scrollPrefix = 0;
 
+            const parts = [];
+            const partSpacing = [];
+
             for (; cnt; ++partIndex, dest += 4) {
                 const partWidth = partWidths[partIndex];
                 digitWidths[(dest >> 2)] = partWidth;
                 startPos = Math.round(endPos - partWidth);
                 const pt = partType[partIndex];
+                let d = Math.floor(t);
+                const mt = Math.min(flipFraction, moveInterval);
+                const dt = t % 1;
+                const cut = 1.0 - mt;
+                let f = Math.max(0.0, dt - cut) / mt;
+                const isEnd = (t < 1.0) && (digs <= 0);
+                if (isEnd) {
+                    switch (pt) {
+                        case -1:
+                        case 18:
+                            break;
+                        default:
+                            if (f <= 0) {
+                                dest -= 4;
+                                partIndex = endPosition;
+                                continue;
+                            }
+                            scrollPrefix = f <= 0 ? 0 : ((1.0 - f) % 1.0);
+                            break;
+                    }
+                }
                 switch (pt) {
                     case 0:
                         {
-                            let d = Math.floor(t);
-                            const mt = Math.min(flipFraction, moveInterval);
-                            const dt = t % 1;
-                            const cut = 1.0 - mt;
-                            let f = Math.max(0.0, dt - cut) / mt;
-                            const isSpace = (t < 1.0) && (digs <= 0);
                             f = (1.0 - Math.cos(f * Math.PI)) * 0.5;
-                            if (isSpace) {
-                                if (f <= 0) {
-                                    partIndex = endPosition;
-                                    dest -= 4;
-                                    continue;
-                                }
-                                scrollPrefix = f <= 0 ? 0 : ((1.0 - f) % 1.0);
-                            }
                             d %= 10;
                             const v = d;
                             d += f;
                             d = 11 - d;
                             d %= 10;
-                            if (isSpace && (v == 0))
+                            if (isEnd && (v == 0)) {
                                 d += 10;
+                                if (parts[parts.length - 1] === 17) {
+                                    digits[dest - 4 + 1] = ((10 - (17 - 16) + 1) - f) / 11.0;
+                                }
+                            }
                             digits[dest + 0] = startPos - digitSpacing * 0.5;
                             digits[dest + 1] = d / 11.0;
                             digits[dest + 2] = numberScaleU / partWidth;
                             digits[dest + 3] = 0;
+                            parts.push(pt);
+                            partSpacing.push(partWidth + digitSpacing);
                             t /= 10.0;
                             moveInterval /= 10.0;
                             --digs;
@@ -214,14 +236,21 @@ class TextEffect {
                     case 17:
                     case 18:
                     case 19:
+                    case 20:
                         if (pt === 18) {
-                            digits[dest + 0] = startPos + scrollPrefix * numberStep;
+                            const pl = parts.length - 2;
+                            let spacing = numberStep;
+                            if (parts[pl] === 17)
+                                spacing += partSpacing[pl];
+                            digits[dest + 0] = startPos + scrollPrefix * spacing;
                         }
                         else
                             digits[dest + 0] = startPos;
                         digits[dest + 1] = (10 - (pt - 16)) / 11.0;
                         digits[dest + 2] = 1.0 / canvas.TotalWidth;
                         digits[dest + 3] = otherOffsetU;
+                        parts.push(pt);
+                        partSpacing.push(partWidth);
                         break;
                     default:
                         digits[dest + 0] = 0;
@@ -235,10 +264,22 @@ class TextEffect {
                         digitWidths[dest >> 2] = 0;
                         digitWidths[(dest >> 2) + 1] = 0;
                         cnt = false;
+                        parts.push(pt);
+                        partSpacing.push(partWidth);
                         break;
                 }
                 endPos = startPos;
             }
+
+
+
+            const ps = parts.join(", ");
+            if (ps !== oldparts) {
+                oldparts = ps;
+                console.log("Parts: " + ps);
+            }
+
+
             const nw = width - startPos;
             if (nw !== currentWidth) {
                 player.OnNewSize(nw, currentWidth < 0 ? nw : currentWidth);
@@ -274,7 +315,7 @@ async function textEffectMain() {
 
         const s = new TextStyle();
         //      s.AttachTo = document.body;
-        s.Font = 'bold 160px "arial"';
+        s.Font = 'bold 160px "Tahoma"';
         s.Stroke = null;
         s.StrokeWidth = 6;
         s.MarginLeft = 0;
@@ -286,9 +327,9 @@ async function textEffectMain() {
         s.LetterSpacing = -5;
 
         s.FillGradient = CanvasTools.CreateLinearGradient(0, 0.1, 0, 0.9,
-            0.0, "#f08",
-            0.5, "#24f",
-            1.0, "#80f"
+            0.0, "#fed",
+            0.5, "#fff",
+            1.0, "#fde"
         );
 
         s.StrokeGradient = CanvasTools.CreateLinearGradient(0, 0, 1, 1,
@@ -302,11 +343,13 @@ async function textEffectMain() {
         const cp = new CounterEffectParams();
         cp.Prefix = "SEK ";
         cp.Suffix = ":-";
-        cp.DecimalSeparator = ",";
+        cp.ThousandsSeparator = ",";
+        cp.DecimalSeparator = ".";
         cp.DigitSpacing = -25.0;
         cp.FlipFraction = 0.25;
         cp.Fade = 40;
         cp.ExtraSpacing = 0;
+        cp.MaxDigits = 8;
 
         const fx = await TextEffect.CreateCounterEffect("ScrollUp", s, cp);
         //const fx = await TextEffect.CreateTextEffect("Rain", "Hello world!", s);
@@ -321,8 +364,8 @@ async function textEffectMain() {
         //fx.GetValue = x => [991, 100];
         //fx.GetValue = x => [990 + ((x % 3) | 0), 100];
         //fx.GetValue = x => [value, 100];
-        //fx.GetValue = x => [(990 + x) * 100.0, 100];
-        fx.GetValue = x => [9950 + value * 0.3, 100];
+        fx.GetValue = x => [(990 + Math.pow(x, 1.6)) * 100.0, 500];
+        //fx.GetValue = x => [99950 + value * 0.3, 100];
 
 
 

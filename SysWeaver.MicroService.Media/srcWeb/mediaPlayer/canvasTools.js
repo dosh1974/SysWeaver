@@ -444,10 +444,10 @@ class CanvasTools {
         const cSuffixWidth = GetWidth(suffixM);
 
 
-        c.ThousandsSeparatorWidth = Math.ceil(cThousandsSeparatorWidth) + om;
-        c.DecimalSeparatorWidth = Math.ceil(cDecimalSeparatorWidth) + om;
-        c.PrefixWidth = Math.ceil(cPrefixWidth) + om;
-        c.SuffixWidth = Math.ceil(cSuffixWidth) + om;
+        c.ThousandsSeparatorWidth = Math.ceil(cThousandsSeparatorWidth) + (cThousandsSeparatorWidth > 0 ? om : 0);
+        c.DecimalSeparatorWidth = Math.ceil(cDecimalSeparatorWidth) + (cDecimalSeparatorWidth > 0 ? om : 0);
+        c.PrefixWidth = Math.ceil(cPrefixWidth) + (cPrefixWidth > 0 ? om : 0);
+        c.SuffixWidth = Math.ceil(cSuffixWidth) + (cSuffixWidth > 0 ? om : 0);
 
         //  Render
         cc.font = style.Font;
@@ -487,10 +487,10 @@ class CanvasTools {
                 cc.fillStyle = style.FillGradient ? CanvasTools.BuildCanvasGradient(cc, mlo, mt + oy, mlo + www, ih - mb + oy, style.FillGradient) : style.Fill;
                 cc.fillText(text, x, y + oy);
             }
-            text(cThousandsSeparatorWidth, tsM, 0, thousandSeparator);
-            text(cDecimalSeparatorWidth, dsM, 1, decimalSeparator);
+            text(cThousandsSeparatorWidth, tsM, 1, thousandSeparator);
             text(cPrefixWidth, prefixM, 2, prefix);
             text(cSuffixWidth, suffixM, 3, suffix);
+            text(cDecimalSeparatorWidth, dsM, 4, decimalSeparator);
             cc.restore();
         }
 
@@ -522,10 +522,10 @@ class CanvasTools {
                 cc.strokeText(text, x, y + oy);
 
             }
-            text(cThousandsSeparatorWidth, tsM, 0, thousandSeparator);
-            text(cDecimalSeparatorWidth, dsM, 1, decimalSeparator);
+            text(cThousandsSeparatorWidth, tsM, 1, thousandSeparator);
             text(cPrefixWidth, prefixM, 2, prefix);
             text(cSuffixWidth, suffixM, 3, suffix);
+            text(cDecimalSeparatorWidth, dsM, 4, decimalSeparator);
             cc.restore();
         }
 
