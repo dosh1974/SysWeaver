@@ -88,6 +88,8 @@ namespace SysWeaver.ReverseProxy
             Manager = manager;
             if (!SetLocalServer(manager.TryGet<HttpServerBase>()))
                 manager.OnServiceAdded += OnServiceAdded;
+
+            String defaultEndPointName = null;
             Dictionary<String, LocalEndPoint> endPoints = new Dictionary<string, LocalEndPoint>(StringComparer.Ordinal);
             using (var _ = manager.Tab())
             {
@@ -95,15 +97,18 @@ namespace SysWeaver.ReverseProxy
                 {
                     var name = exp.SplitFirst(':', out var ep).Trim(TrimChars);
                     ValidateEndPointName(name);
+                    defaultEndPointName = defaultEndPointName ?? name;
                     endPoints.Add(name, new LocalEndPoint(name, ep));
                     manager.AddMessage(String.Concat('"', name, "\" => \"", ep, '"'));
                 }
             }
             if (endPoints.Count <= 0)
-                endPoints.Add("", new LocalEndPoint("", ""));
+            {
+                defaultEndPointName = "AutoService";
+                endPoints.Add(defaultEndPointName, new LocalEndPoint("", ""));
+            }
             EndPoints = endPoints.Freeze();
-            if (endPoints.Count == 1)
-                SingleEndPoint = endPoints.FirstOrDefault().Value;
+            DefaultEndPointName = defaultEndPointName;
             ServerBaseUrl = String.Concat(p.BaseUrl.TrimEnd('/'), '/', p.ServerBaseUrl ?? "ReverseProxyFiles", '/', clientId, '-');
 
 
@@ -130,7 +135,7 @@ namespace SysWeaver.ReverseProxy
         HttpClient Client;
         DelegatingHandler ClientHandler;
         readonly String ServerBaseUrl;
-        readonly LocalEndPoint SingleEndPoint;
+        readonly String DefaultEndPointName;
         readonly IReadOnlyDictionary<String, LocalEndPoint> EndPoints;
 
 
@@ -237,12 +242,10 @@ namespace SysWeaver.ReverseProxy
                     }
                     return true;
                 }
-                LocalEndPoint endPoint = SingleEndPoint;
                 String url = res.Url;
                 //  Find end point
-                var epName = res.EndPoint;
-                if (!String.IsNullOrEmpty(epName))
-                    eps.TryGetValue(epName, out endPoint);
+                var epName = res.EndPoint ?? DefaultEndPointName;
+                eps.TryGetValue(epName, out var endPoint);
                 if (endPoint == null)
                 {
                     SetErrorResponse(response, res.RequestId, "Not Found - The server cannot find the requested resource.", 404);
