@@ -12,7 +12,7 @@ namespace SysWeaver.WebBrowser
         int Height { get; }
 
 
-        Task<bool> Resize(int width, int height);
+        Task<bool> Resize(int width, int height, double scale = 1.0);
 
         Task LoadUrl(String url, bool throwOnError = true);
 
@@ -20,7 +20,9 @@ namespace SysWeaver.WebBrowser
         
         Task<BrowserJsResponse> RunJs(String js);
         
-        Task<Byte[]> CapturePng();
+        Task<Byte[]> CapturePng(bool optimizeForSpeed = false);
+
+        Task<Byte[]> CaptureJpeg(int quality = 70, bool optimizeForSpeed = false);
 
         Task<bool> AddJsObject(String name, Object obj);
 

@@ -109,11 +109,11 @@ namespace SysWeaver.WebBrowser
                     return Task.FromResult(true);
                 }
 
-                public Task<bool> Resize(int width, int height)
+                public Task<bool> Resize(int width, int height, double scale)
                 {
                     if (P.NotUiThread)
-                        return P.Run(() => Resize(width, height));
-                    C.SetBoundsAndZoomFactor(new System.Drawing.Rectangle(0, 0, width, height), 1);
+                        return P.Run(() => Resize(width, height, scale));
+                    C.SetBoundsAndZoomFactor(new System.Drawing.Rectangle(0, 0, width, height), scale <= 0 ? 1 : scale);
                     Width = width;
                     Height = height;
                     return Task.FromResult(true);
@@ -179,16 +179,28 @@ namespace SysWeaver.WebBrowser
                     return new BrowserJsResponse(true, res, res);
                 }
 
-                public async Task<Byte[]> CapturePng()
+                public async Task<Byte[]> CapturePng(bool optimizeForSpeed = false)
                 {
                     if (P.NotUiThread)
-                        return await P.Run(CapturePng).ConfigureAwait(false);
+                        return await P.Run(() => CapturePng(optimizeForSpeed)).ConfigureAwait(false);
                     var core = C.CoreWebView2;
-                    var opt = @"{""format"":""png"",""optimizeForSpeed"":false,""quality"":100}";
+                    var opt = @"{""format"":""png"",""optimizeForSpeed"":" + (optimizeForSpeed ? "true" : "false") + @",""quality"":100}";
                     var data = await core.CallDevToolsProtocolMethodAsync("Page.captureScreenshot", opt);
                     var l = data.Length;
                     return Convert.FromBase64String(data.Substring(9, l - 11));
                 }
+
+                public async Task<Byte[]> CaptureJpeg(int quality = 70, bool optimizeForSpeed = false)
+                {
+                    if (P.NotUiThread)
+                        return await P.Run(() => CaptureJpeg(quality, optimizeForSpeed)).ConfigureAwait(false);
+                    var core = C.CoreWebView2;
+                    var opt = @"{""format"":""jpeg"",""optimizeForSpeed"":" + (optimizeForSpeed ? "true" : "false") + @",""quality"":" + quality + @"}";
+                    var data = await core.CallDevToolsProtocolMethodAsync("Page.captureScreenshot", opt);
+                    var l = data.Length;
+                    return Convert.FromBase64String(data.Substring(9, l - 11));
+                }
+
 
                 readonly Proxy P;
                 readonly CoreWebView2Controller C;

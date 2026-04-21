@@ -15,11 +15,18 @@ namespace SysWeaver.MicroService
         [ComVisible(true)]
         public sealed class AdaptiveSize : IDisposable
         {
-            public AdaptiveSize(IMessageHost m, String prefix)
+            public AdaptiveSize(IMessageHost m, String prefix, ScreenshotImageFormats format, int quality, bool optimizeForSpeed)
             {
                 M = m;
                 Prefix = prefix;
+                Format = format;
+                Quality = quality;
+                OptimizeForSpeed = optimizeForSpeed;
             }
+            readonly ScreenshotImageFormats Format;
+            readonly int Quality;
+            readonly bool OptimizeForSpeed;
+
             readonly String Prefix;
             readonly IMessageHost M;
             internal IBrowserWindow Win;
@@ -41,7 +48,7 @@ namespace SysWeaver.MicroService
             }
 
 
-            public async Task setSize(int width, int height)
+            public async Task setSize(int width, int height, double scale)
             {
                 if (Dead)
                     return;
@@ -50,7 +57,7 @@ namespace SysWeaver.MicroService
                 try
                 {
                     M.AddMessage(Prefix + "Page is changing size to " + width + "x" + height, MessageLevels.Debug);
-                    await Win.Resize(width, height).ConfigureAwait(false);
+                    await Win.Resize(width, height, scale).ConfigureAwait(false);
                 }
                 finally
                 {
@@ -80,7 +87,15 @@ namespace SysWeaver.MicroService
                         return;
                     Dead = true;
                     M.AddMessage(Prefix + "Page is taking a screen shot", MessageLevels.Debug);
-                    Data = await Win.CapturePng().ConfigureAwait(false);
+                    switch (Format)
+                    {
+                        default:
+                            Data = await Win.CapturePng(OptimizeForSpeed).ConfigureAwait(false);
+                            break;
+                        case ScreenshotImageFormats.Jpg:
+                            Data = await Win.CaptureJpeg(Quality, OptimizeForSpeed).ConfigureAwait(false);
+                            break;
+                    }
                     Duration = duration;
                     Fps = fps;
                 }

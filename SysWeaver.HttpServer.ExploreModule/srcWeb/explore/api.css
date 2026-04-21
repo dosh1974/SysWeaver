@@ -13,6 +13,10 @@ SysWeaver-ApiSection {
     overflow-x: auto;
 }
 
+SysWeaver-Page.PadBottom {
+    padding-bottom: 50svh;
+}
+
 SysWeaver-TabContent {
     background-color: var(--ThemeBackground);
 }
@@ -98,13 +102,27 @@ SysWeaver-TabContent.CODE
 }
 
 
-SysWeaver-TabContent.CODE > iframe {
-    width: 100%;
-    height: 100%;
-    border: none;
-    min-height: 10vh;
-    resize: vertical;
-}
+    SysWeaver-TabContent.CODE > iframe {
+        border-radius: var(--ThemeRadInp);
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        border: none;
+        min-height: 50vh;
+        resize: vertical;
+    }
+
+    SysWeaver-TabContent.CODE > img {
+        border-radius: var(--ThemeRadInp);
+        overflow: hidden;
+        width: 100%;
+        height: auto;
+        border: none;
+        display: inline;
+        object-fit: scale-down;
+        object-position: center top;
+    }
+
 
 .IconSecured {
     mask-image: url("../icons/lock.svg");

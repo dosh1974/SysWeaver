@@ -116,7 +116,7 @@ namespace SysWeaver.MicroService
             var url = pre + "mediaView/MediaPreview.html?pos=" + pos.ToString(CultureInfo.InvariantCulture) + "&type=" + type + "&link=" + filename;
             if (fill)
                 url += "&fill";
-            GetPngResponse data;
+            ScreenshotImageResponse data;
             int rw = 640;
             int rh = 360;
             if ((width > 0) && (height > 0))
@@ -134,7 +134,7 @@ namespace SysWeaver.MicroService
                 }
             }
             using (await MaxThumbLock.Lock().ConfigureAwait(false))
-                data = await Thumbnail.GetPng(new GetPngRequest
+                data = await Thumbnail.GetImage(new ScreenshotImageRequest
                 {
                     Control = true,
                     Url = url,
@@ -153,7 +153,7 @@ namespace SysWeaver.MicroService
                 mi.Height = 1080;
                 return mi;
             }
-            var png = data.Png;
+            var png = data.Data;
             if ((rw != width) || (rh != height))
             {
                 using var image = ImageTools.ReadImage(png);

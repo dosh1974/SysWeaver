@@ -15,7 +15,6 @@ namespace SysWeaver.MicroService
 
 
 
-
     /// <summary>
     /// </summary>
     [IsMicroService]
@@ -28,6 +27,7 @@ namespace SysWeaver.MicroService
         {
             M = manager;
             p = p ?? new ThumbnailWebParams();
+            GoogleMapsKey = p.GoogleMapsKey?.GetApiKey(false);
             Browser = manager.Get<IBrowserService>();
             PngMime = MimeTypeMap.GetMimeType("png");
             Options = new RequestOptions(p.ClientCacheDuration, p.RequestCacheDuration, 0, null, p.Auth);
@@ -37,6 +37,8 @@ namespace SysWeaver.MicroService
             }.Freeze();
             MaxScreenShotLock = new AsyncLock(Math.Max(1, p.MaxConcurrency));
         }
+
+        readonly String GoogleMapsKey;
         
         public async Task<StaticMemoryHttpRequestHandler> GetProxiedUrl(String url)
         {
@@ -130,20 +132,26 @@ namespace SysWeaver.MicroService
                 return null;
             return new DynamicDataHttpRequestHandler(PngMime, async r =>
             {
-                var d = await GetAdaptivePngAsync(src, width, height).ConfigureAwait(false);
+                var d = await GetAdaptiveImageAsync(src, width, height).ConfigureAwait(false);
                 return d.Item1.AsMemory();
             }, Options);
         }
 
-        public async Task<Byte[]> GetPngAsync(String url, int width = 1920, int height = 1080)
+        public async Task<Byte[]> GetImageAsync(String url, int width = 1920, int height = 1080, double scale = 1, ScreenshotImageFormats format = ScreenshotImageFormats.Png, int quality = 70, bool optimizeForSpeed = false)
         {
             using var _ = await MaxScreenShotLock.Lock().ConfigureAwait(false);
-            using var __ = PerfMon.Track(nameof(GetPngAsync));
+            using var __ = PerfMon.Track(nameof(GetImageAsync));
             using var b = await Browser.OpenWindow().ConfigureAwait(false);
-            await b.Resize(width, height).ConfigureAwait(false);
+            await b.Resize(width, height, scale).ConfigureAwait(false);
             await b.LoadUrl(url).ConfigureAwait(false);
             await b.WaitLoaded().ConfigureAwait(false);
-            return await b.CapturePng().ConfigureAwait(false);
+            switch (format)
+            {
+                default:
+                    return await b.CapturePng(optimizeForSpeed).ConfigureAwait(false);
+                case ScreenshotImageFormats.Jpg:
+                    return await b.CaptureJpeg(quality, optimizeForSpeed).ConfigureAwait(false);
+            }
         }
 
         const String ServiceName = "ThumbnailWeb";
@@ -158,17 +166,17 @@ namespace SysWeaver.MicroService
         long JsInControlCount;
         long AdaptCount;
 
-        public async Task<Tuple<Byte[], MediaInfo>> GetAdaptivePngAsync(String url, int initWidth = 1920, int initHeight = 1080)
+        public async Task<Tuple<Byte[], MediaInfo>> GetAdaptiveImageAsync(String url, int initWidth = 1920, int initHeight = 1080, double scale = 1, ScreenshotImageFormats format = ScreenshotImageFormats.Png, int quality = 70, bool optimizeForSpeed = false)
         {
             String prefix = "[ThumbnailWeb " + Interlocked.Increment(ref PC) + "] ";
             using var _ = await MaxScreenShotLock.Lock().ConfigureAwait(false);
-            using var __ = PerfMon.Track(nameof(GetAdaptivePngAsync));
+            using var __ = PerfMon.Track(nameof(GetAdaptiveImageAsync));
             M.AddMessage(prefix + "Creating browser", MessageLevels.Debug);
             using var b = await Browser.OpenWindow().ConfigureAwait(false);
-            using var a = new AdaptiveSize(M, prefix);
+            using var a = new AdaptiveSize(M, prefix, format, quality, optimizeForSpeed);
             await b.AddJsObject("ScreenShotHost", a).ConfigureAwait(false);
             M.AddMessage(prefix + "Resizing window to " + initWidth + "x" + initHeight, MessageLevels.Debug);
-            await b.Resize(initWidth, initHeight).ConfigureAwait(false);
+            await b.Resize(initWidth, initHeight, scale).ConfigureAwait(false);
             //M.AddMessage(prefix + "Wait for resize to take effect");
             //await Task.Delay(100).ConfigureAwait(false);
             M.AddMessage(prefix + "Loading url " + url.ToQuoted(), MessageLevels.Debug);
@@ -180,6 +188,7 @@ namespace SysWeaver.MicroService
             {
                 Width = initWidth,
                 Height = initHeight,
+                Desc = url,
             };
             Interlocked.Increment(ref AdaptCount);
             if (a.JsIsInControl)
@@ -205,7 +214,15 @@ namespace SysWeaver.MicroService
             if (data == null)
             {
                 M.AddMessage(prefix + "Taking screen shot", MessageLevels.Debug);
-                data = await b.CapturePng().ConfigureAwait(false);
+                switch (format)
+                {
+                    default:
+                        data = await b.CapturePng(optimizeForSpeed).ConfigureAwait(false);
+                        break;
+                    case ScreenshotImageFormats.Jpg:
+                        data = await b.CaptureJpeg(quality, optimizeForSpeed).ConfigureAwait(false);
+                        break;
+                }
             }
             M.AddMessage(prefix + "All done", MessageLevels.Debug);
             return Tuple.Create(data, n);
@@ -221,13 +238,13 @@ namespace SysWeaver.MicroService
             String e = "";
             if (d != null)
                 e = String.Concat("&props=", Uri.EscapeDataString(JsonSer.ToString(d)));
-            return String.Concat(context.Prefix, "../mediaView/MediaPreview.html?type=", r.Type, "&link=", Uri.EscapeDataString(r.Url), "&pos=", r.Pos.ToString(CultureInfo.InvariantCulture), e);
+            return String.Concat(context.Prefix, "mediaView/MediaPreview.html?type=", r.Type, "&link=", Uri.EscapeDataString(r.Url), "&pos=", r.Pos.ToString(CultureInfo.InvariantCulture), e);
         }
 
-        async Task<GetPngResponse> InternalGetMedia(GetMediaRequest r, HttpServerRequest context)
+        async Task<ScreenshotImageResponse> InternalGetMedia(GetMediaRequest r, HttpServerRequest context)
         {
             var url = InternalGetMediaUrl(r, context);
-            var x = await GetAdaptivePngAsync(url, r.Width, r.Height).ConfigureAwait(false);
+            var x = await GetAdaptiveImageAsync(url, r.Width, r.Height).ConfigureAwait(false);
             if (x.Item2?.Desc.FastEquals("CORS") ?? false)
             {
                 var h = await GetProxiedUrl(r.Url).ConfigureAwait(false);
@@ -235,12 +252,12 @@ namespace SysWeaver.MicroService
                 {
                     r.Url = "../" + h.Uri;
                     url = InternalGetMediaUrl(r, context);
-                    x = await GetAdaptivePngAsync(url, r.Width, r.Height).ConfigureAwait(false);
+                    x = await GetAdaptiveImageAsync(url, r.Width, r.Height).ConfigureAwait(false);
                 }
             }
-            return new GetPngResponse
+            return new ScreenshotImageResponse
             {
-                Png = x.Item1,
+                Data = x.Item1,
                 Info = x.Item2,
             };
         }
@@ -248,7 +265,7 @@ namespace SysWeaver.MicroService
         async Task<ReadOnlyMemory<Byte>> InternalGetMediaPng(GetMediaRequest r, HttpServerRequest context)
         {
             var url = InternalGetMediaUrl(r, context);
-            var x = await GetAdaptivePngAsync(url, r.Width, r.Height).ConfigureAwait(false);
+            var x = await GetAdaptiveImageAsync(url, r.Width, r.Height).ConfigureAwait(false);
             if (x.Item2?.Desc.FastEquals("CORS") ?? false)
             {
                 var h = await GetProxiedUrl(r.Url).ConfigureAwait(false);
@@ -256,7 +273,7 @@ namespace SysWeaver.MicroService
                 {
                     r.Url = "../" + h.Uri;
                     url = InternalGetMediaUrl(r, context);
-                    x = await GetAdaptivePngAsync(url, r.Width, r.Height).ConfigureAwait(false);
+                    x = await GetAdaptiveImageAsync(url, r.Width, r.Height).ConfigureAwait(false);
                 }
             }
             return x.Item1;
@@ -273,8 +290,9 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiClientCache(30)]
-        [WebApiRequestCache(25)]
-        public Task<GetPngResponse> GetMediaImage(GetMediaImageRequest r, HttpServerRequest context)
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
+        [WebApiCompression("")]
+        public Task<ScreenshotImageResponse> GetMediaImage(GetMediaImageRequest r, HttpServerRequest context)
             => InternalGetMedia(r, context);
 
         /// <summary>
@@ -284,7 +302,7 @@ namespace SysWeaver.MicroService
         /// <param name="context"></param>
         /// <returns></returns>
         [WebApiClientCache(30)]
-        [WebApiRequestCache(25)]
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiRaw("image/png", true)]
         [WebApi(nameof(MediaImage) + ".png")]
         public Task<ReadOnlyMemory<Byte>> MediaImage(GetMediaImageRequest r, HttpServerRequest context)
@@ -302,8 +320,9 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiClientCache(30)]
-        [WebApiRequestCache(25)]
-        public Task<GetPngResponse> GetMediaVideo(GetMediaVideoRequest r, HttpServerRequest context)
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
+        [WebApiCompression("")]
+        public Task<ScreenshotImageResponse> GetMediaVideo(GetMediaVideoRequest r, HttpServerRequest context)
             => InternalGetMedia(r, context);
 
         /// <summary>
@@ -313,7 +332,7 @@ namespace SysWeaver.MicroService
         /// <param name="context"></param>
         /// <returns></returns>        
         [WebApiClientCache(30)]
-        [WebApiRequestCache(25)]
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiRaw("image/png", true)]
         [WebApi(nameof(MediaVideo) + ".png")]
         public Task<ReadOnlyMemory<Byte>> MediaVideo(GetMediaVideoRequest r, HttpServerRequest context)
@@ -331,8 +350,9 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiClientCache(30)]
-        [WebApiRequestCache(25)]
-        public Task<GetPngResponse> GetMediaEffect(GetMediaEffectRequest r, HttpServerRequest context)
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
+        [WebApiCompression("")]
+        public Task<ScreenshotImageResponse> GetMediaEffect(GetMediaEffectRequest r, HttpServerRequest context)
             => InternalGetMedia(r, context);
 
         /// <summary>
@@ -342,7 +362,7 @@ namespace SysWeaver.MicroService
         /// <param name="context"></param>
         /// <returns></returns>        
         [WebApiClientCache(30)]
-        [WebApiRequestCache(25)]
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiRaw("image/png", true)]
         [WebApi(nameof(MediaEffect) + ".png")]
         public Task<ReadOnlyMemory<Byte>> MediaEffect(GetMediaEffectRequest r, HttpServerRequest context)
@@ -360,8 +380,9 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiClientCache(30)]
-        [WebApiRequestCache(25)]
-        public Task<GetPngResponse> GetMediaYouTube(GetMediaYouTubeRequest r, HttpServerRequest context)
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
+        [WebApiCompression("")]
+        public Task<ScreenshotImageResponse> GetMediaYouTube(GetMediaYouTubeRequest r, HttpServerRequest context)
             => InternalGetMedia(r, context);
 
         /// <summary>
@@ -371,7 +392,7 @@ namespace SysWeaver.MicroService
         /// <param name="context"></param>
         /// <returns></returns>            
         [WebApiClientCache(30)]
-        [WebApiRequestCache(25)]
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiRaw("image/png", true)]
         [WebApi(nameof(MediaYouTube) + ".png")]
         public Task<ReadOnlyMemory<Byte>> MediaYouTube(GetMediaYouTubeRequest r, HttpServerRequest context)
@@ -379,43 +400,158 @@ namespace SysWeaver.MicroService
 
         #endregion//Media YouTube
 
+
+        #region Media Map
+          
+        static readonly String[] GoogleMapTypeNames =
+            [
+                "satellite",
+                "roadmap",
+            ];
+
         /// <summary>
-        /// Get png and data for a given url
+        /// Get a png from a google map position
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>            
+        [WebApiClientCache(30)]
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
+        [WebApiRaw("image/png", true)]
+        [WebApi("GetGoogleMap.png")]
+        public Task<ReadOnlyMemory<Byte>> GetGoogleMapPng(GetGoogleMapRequest r, HttpServerRequest context)
+            => InternalGetGoogleMap(r, ScreenshotImageFormats.Png, 100, context);
+
+
+        /// <summary>
+        /// Get a jpg from a google map position
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="context"></param>
+        /// <returns></returns>            
+        [WebApiClientCache(30)]
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
+        [WebApiRaw("image/jpeg", true)]
+        [WebApi("GetGoogleMap.jpg")]
+        public Task<ReadOnlyMemory<Byte>> GetGoogleMapJpg(GetGoogleMapJpegRequest r, HttpServerRequest context)
+            => InternalGetGoogleMap(r, ScreenshotImageFormats.Jpg, r.Quality, context);
+
+
+        async Task<ReadOnlyMemory<Byte>> InternalGetGoogleMap(GetGoogleMapRequest r, ScreenshotImageFormats format, int quality, HttpServerRequest context)
+        {
+            var key = GoogleMapsKey;
+            if (String.IsNullOrEmpty(key))
+                throw new Exception("Must supply a google maps key for embeeded maps in the parameters!");
+            var center = r.Center.Replace(" ", "");
+            if (center.IndexOf(',') < 0)
+                throw new Exception("Invalid center, expecting lattitude, longitude");
+            var zoom = r.Zoom;
+            if ((zoom < 0) || (zoom > 20))
+                zoom = 15;
+            var lang = IsoData.IsoLanguage.TryGetName(r.Language)?.Iso639_1 ?? "en";
+            var dpi = r.Dpi;
+            if (dpi < 25)
+                dpi = 25;
+            if (dpi > 400)
+                dpi = 400;
+            int width = r.Width;
+            if (width < 64)
+                width = 64;
+            if (width > 16384)
+                width = 16384;
+
+            int height = r.Height;
+            if (height < 64)
+                height = 64;
+            if (height > 16384)
+                height = 16384;
+
+            String url = String.Concat(context.Prefix,
+                "mediaView/MapView.html?key=", key,
+                "&center=", Uri.EscapeDataString(center),
+                "&zoom=", zoom,
+                "&language=", lang,
+                "&maptype=", GoogleMapTypeNames[(int)r.Type],
+                "&dpi=", dpi.ToString(CultureInfo.InvariantCulture),
+                "");
+
+            var p = r.Pin?.Trim();
+            if (!String.IsNullOrEmpty(p))
+            {
+                url = String.Concat(url, "&pin=", p);
+                p = r.PinX?.Trim();
+                if (!String.IsNullOrEmpty(p))
+                    url = String.Concat(url, "&pinX=", p);
+                p = r.PinY?.Trim();
+                if (!String.IsNullOrEmpty(p))
+                    url = String.Concat(url, "&pinY=", p);
+                var h = r.PinHeight;
+                if (h > 0)
+                {
+                    if (h > 512)
+                        h = 512;
+                    url = String.Concat(url, "&pinHeight=", h.ToString(CultureInfo.InvariantCulture));
+                }
+            }
+            var res = await GetAdaptiveImageAsync(url, width, height, 1, format, quality, r.OptimizeForSpeed).ConfigureAwait(false);
+            //            var res = await GetAdaptivePngAsync(url, width, height, dpi / 100.0).ConfigureAwait(false);
+            return res.Item1;
+        }
+
+        #endregion//Media Map
+
+        /// <summary>
+        /// Get an image and meta data for a given url
         /// </summary>
         /// <param name="r"></param>
         /// <returns></returns>
         [WebApi]
         [WebApiClientCache(5)]
-        [WebApiRequestCache(3)]
-        public async Task<GetPngResponse> GetPng(GetPngRequest r)
+        [WebApiRequestCache(4, WebApiCaches.Globally)]
+        [WebApiCompression("")]
+        [WebApiAuth(Roles.Service)]
+        public async Task<ScreenshotImageResponse> GetImage(ScreenshotImageRequest r)
         {
             if (r.Control)
             {
-                var x = await GetAdaptivePngAsync(r.Url, r.Width, r.Height).ConfigureAwait(false);
-                return new GetPngResponse
+                var x = await GetAdaptiveImageAsync(r.Url, r.Width, r.Height, r.Scale, r.Format, r.Quality, r.OptimizeForSpeed).ConfigureAwait(false);
+                return new ScreenshotImageResponse
                 {
-                    Png = x.Item1,
+                    Data = x.Item1,
                     Info = x.Item2,
                 };
             }
-            var y = await GetPngAsync(r.Url, r.Width, r.Height).ConfigureAwait(false);
-            return new GetPngResponse
+            var y = await GetImageAsync(r.Url, r.Width, r.Height, r.Scale, r.Format, r.Quality, r.OptimizeForSpeed).ConfigureAwait(false);
+            return new ScreenshotImageResponse
             {
-                Png = y,
+                Data = y,
             };
         }
 
         /// <summary>
-        /// Get a png (screenshot) from an url
+        /// Get an image (screenshot) from an url
+        /// </summary>
+        /// <param name="r">Paramaters</param>
+        /// <returns>Response</returns>
+        [WebApiClientCache(30)] 
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
+        [WebApiRaw("image/png", true)]
+        [WebApi("WebScreenshot.png")]
+        public async Task<ReadOnlyMemory<Byte>> WebScreenshotPng(ScreenshotPngRequest r)
+            => (await GetImage(ScreenshotImageRequest.From(r)).ConfigureAwait(false)).Data;
+
+        /// <summary>
+        /// Get a jpeg (screenshot) from an url
         /// </summary>
         /// <param name="r">Paramaters</param>
         /// <returns>Response</returns>
         [WebApiClientCache(30)]
-        [WebApiRequestCache(25)]
-        [WebApiRaw("image/png", true)]
-        [WebApi(nameof(WebScreenshot) + ".png")]
-        public async Task<ReadOnlyMemory<Byte>> WebScreenshot(GetPngRequest r)
-            => (await GetPng(r).ConfigureAwait(false)).Png;
+        [WebApiRequestCache(25, WebApiCaches.Globally)]
+        [WebApiRaw("image/jpeg", true)]
+        [WebApi("WebScreenshot.jpg")]
+        public async Task<ReadOnlyMemory<Byte>> WebScreenshotJpg(ScreenshotJpegRequest r)
+            => (await GetImage(ScreenshotImageRequest.From(r)).ConfigureAwait(false)).Data;
+
 
         static readonly String[] Flags = [
             "ad", "ae", "af", "ag", "ai", "al", "am", "ao", "aq",
@@ -479,24 +615,24 @@ namespace SysWeaver.MicroService
             //var flags = Flags;
             var flags = Effects;
             var fl = flags.Length;
-            GetPngResponse res = null;
+            ScreenshotImageResponse res = null;
             long tot = 0;
             for (int i = 0; i < count; ++i)
             {
                 String flag = flags[i % fl];
-                var p = new GetPngRequest
+                var p = new ScreenshotImageRequest
                 {
                     Control = true,
                     Width = 320,
                     Height = 180,
                 };
-                res = await GetPng(p).ConfigureAwait(false);
-                await File.WriteAllBytesAsync(Path.Combine(f, String.Join(i.ToString().PadLeft(4, '0'), nameof(StressTestSerial), ".png")), res.Png).ConfigureAwait(false);
-                tot += res.Png.Length;
+                res = await GetImage(p).ConfigureAwait(false);
+                await File.WriteAllBytesAsync(Path.Combine(f, String.Join(i.ToString().PadLeft(4, '0'), nameof(StressTestSerial), ".png")), res.Data).ConfigureAwait(false);
+                tot += res.Data.Length;
             }
 
             M.AddMessage(Prefix + "Took: " + (DateTime.UtcNow - start) + ", data len: " + tot);
-            var d = "data:image/png;base64," + Convert.ToBase64String(res.Png);
+            var d = "data:image/png;base64," + Convert.ToBase64String(res.Data);
             return d;
         }
 
@@ -509,13 +645,13 @@ namespace SysWeaver.MicroService
             //var flags = Flags;
             var flags = Effects;
             var fl = flags.Length;
-            GetPngResponse res = null;
+            ScreenshotImageResponse res = null;
             Task[] tasks = new Task[count];
             long tot = 0;
             for (int i = 0; i < count; ++i)
             {
                 String flag = flags[i % fl];
-                var p = new GetPngRequest
+                var p = new ScreenshotImageRequest
                 {
                     Control = true,
                     Width = 320,
@@ -524,9 +660,9 @@ namespace SysWeaver.MicroService
                 var ii = i + 1;
                 async Task DoOne()
                 {
-                    var r = await GetPng(p).ConfigureAwait(false);
-                    await File.WriteAllBytesAsync(Path.Combine(f, String.Join((ii - 1).ToString().PadLeft(4, '0'), nameof(StressTestParalell), ".png")), r.Png).ConfigureAwait(false);
-                    Interlocked.Add(ref tot, r.Png.Length);
+                    var r = await GetImage(p).ConfigureAwait(false);
+                    await File.WriteAllBytesAsync(Path.Combine(f, String.Join((ii - 1).ToString().PadLeft(4, '0'), nameof(StressTestParalell), ".png")), r.Data).ConfigureAwait(false);
+                    Interlocked.Add(ref tot, r.Data.Length);
                     if (ii == count)
                         res = r;
                 }
@@ -534,7 +670,7 @@ namespace SysWeaver.MicroService
             }
             await Task.WhenAll(tasks).ConfigureAwait(false);
             M.AddMessage(Prefix + "Took: " + (DateTime.UtcNow - start) + ", data len: " + tot);
-            var d = "data:image/png;base64," + Convert.ToBase64String(res.Png);
+            var d = "data:image/png;base64," + Convert.ToBase64String(res.Data);
             return d;
         }
 

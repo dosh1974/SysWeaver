@@ -36,6 +36,7 @@ async function apiMain() {
 
 
         const target = document.createElement("SysWeaver-Page");
+        target.classList.add("PadBottom");
         document.body.appendChild(target);
 
         const haveArg = !!data.Arg;
@@ -318,9 +319,15 @@ async function apiMain() {
                     if (isRaw) {
                         title = _TF("PREVIEW", "The text of a tab header that will display the API result of a specific MIME type (as an embedded iframe)");
                         const url = URL.createObjectURL(res);
-                        const frm = createIFrame();
-                        tc0.appendChild(frm);
-                        frm.src = url;
+                        if (data.Mime.indexOf("image/") === 0) {
+                            const frm = createImg();
+                            tc0.appendChild(frm);
+                            frm.src = url;
+                        } else {
+                            const frm = createIFrame();
+                            tc0.appendChild(frm);
+                            frm.src = url;
+                        }
                     } else {
                         if ((res == null) && (!data.Return)) {
                             tc0.classList.add("NoResult");

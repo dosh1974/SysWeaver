@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using CefSharp;
+using CefSharp.DevTools.Page;
 using CefSharp.OffScreen;
 
 namespace SysWeaver.WebBrowser
@@ -255,9 +256,14 @@ namespace SysWeaver.WebBrowser
                 return false;
             }
 
-            public async Task<bool> Resize(int width, int height)
+            public async Task<bool> Resize(int width, int height, double scale)
             {
-                await CefSharp.RunTask(() => Browser.ResizeAsync(width, height)).ConfigureAwait(false);
+                await CefSharp.RunTask(async () =>
+                {
+                    var b = Browser;
+                    b.DeviceScaleFactor = (float)(scale <= 0 ? 1 : scale);
+                    await b.ResizeAsync(width, height).ConfigureAwait(false);
+                }).ConfigureAwait(false);
                 return true;
             }
 
@@ -269,11 +275,33 @@ namespace SysWeaver.WebBrowser
             }
 
 
-            public async Task<Byte[]> CapturePng()
+
+
+            /// <summary>
+            /// Capture page screenshot.
+            /// </summary>
+            /// <param name="optimizeForSpeed">if true, optimize for speed</param>
+            /// <param name="format">Image compression format (defaults to png).</param>
+            /// <param name="quality">Compression quality from range [0..100] (jpeg only).</param>
+            /// <returns>A task that can be awaited to obtain the screenshot as a byte[].</returns>
+            public async Task<byte[]> InternalCaptureScreenshotAsync(bool optimizeForSpeed = false, CaptureScreenshotFormat? format = null, int? quality = null)
             {
-                return await CefSharp.RunTask(() => Browser.CaptureScreenshotAsync()).ConfigureAwait(false);
+                var size = Browser.Size;
+                using var devToolsClient = Browser.GetDevToolsClient();
+                var screenShot = await devToolsClient.Page.CaptureScreenshotAsync(format, quality, fromSurface: true, optimizeForSpeed: optimizeForSpeed).ConfigureAwait(continueOnCapturedContext: false);
+                return screenShot.Data;
             }
-            
+
+            public async Task<Byte[]> CapturePng(bool optimizeForSpeed = false)
+            {
+                return await CefSharp.RunTask(() => InternalCaptureScreenshotAsync(optimizeForSpeed)).ConfigureAwait(false);
+            }
+
+            public async Task<Byte[]> CaptureJpeg(int quality = 70, bool optimizeForSpeed = false)
+            {
+                return await CefSharp.RunTask(() => InternalCaptureScreenshotAsync(optimizeForSpeed, CaptureScreenshotFormat.Jpeg, quality)).ConfigureAwait(false);
+            }
+
 
         }
 

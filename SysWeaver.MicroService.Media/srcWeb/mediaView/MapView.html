@@ -1,0 +1,288 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
+    <style>
+        html {
+            --dpi: 1;
+            --idpi: 1;
+            --pinX: -50%;
+            --pinY: -100%;
+            --pinHeight: 96px;
+            background-color: transparent;
+            margin: 0;
+            padding: 0;
+            width: calc(var(--dpi) * 100vw);
+            height: calc(var(--dpi) * 100vh);
+            overflow: hidden;
+            user-select: none;
+        }
+
+        body {
+            background-color: transparent;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            color: #e00;
+            font-size: 200%;
+        }
+
+            body iframe {
+                zoom: var(--dpi);
+                opacity: 0;
+                transition: opacity linear 0.1s;
+                border: none;
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                width: calc(100vw * var(--idpi) + 10px);
+                height: calc(100vh * var(--idpi) + 140px);
+                transform: translate(-50%, -50%);
+            }
+
+            body.NoInteraction iframe {
+                pointer-events: none;
+            }
+
+            body.Show iframe {
+                opacity: 1;
+            }
+
+            body.Show img {
+                opacity: 1;
+            }
+
+
+            body.NoFade iframe {
+                transition: none !important;
+                opacity: 1 !important;
+            }
+
+            body.NoFade img {
+                transition: none !important;
+                opacity: 1 !important;
+            }
+
+            body img {
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity linear 0.1s;
+                position: absolute;
+                z-index: 1;
+                width: auto;
+                height: var(--pinHeight);
+                left: 50vw;
+                top: 50vh;
+                transform: translate(var(--pinX), var(--pinY));
+            }
+
+            body a {
+                position: absolute;
+                z-index: 2;
+                width: 100vw;
+                height: 100vh;
+                display: block;
+                cursor: pointer;
+            }
+
+    </style>
+    <title>Map View</title>
+    <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../icon.svg">
+    <link rel="apple-touch-icon" type="image/png" href="../apple-touch-icon.png">
+    <link rel="manifest" href="../app/manifest.json">
+</head>
+<body>
+<script>
+
+    function _TF(x, c) {
+        return x;
+    }
+
+
+    async function main() {
+        const href = window.location.href;
+        const p = new URL(href).searchParams;
+        const b = document.body;
+        try {
+
+            const key = p.get("key");
+            if (!key)
+                throw new Error('Must supply a google map API key using the "key" parameter');
+            let center = p.get("center");
+            if (!center)
+                throw new Error('Must supply a coordinate the "center" parameter');
+            const parts = center.split(',');
+            if (parts.length !== 2)
+                throw new Error('Must use comma separated coordinates');
+
+            function fix(x) {
+                let y = "";
+                const l = x.length;
+                for (let i = 0; i < l; ++i) {
+                    const c = x.charAt(i);
+                    if ((c >= '0') && (c <= '9'))
+                        y += c;
+                    if (c === '.')
+                        y += c;
+                }
+                if (y.length <= 0)
+                    throw new Error("Invalid coordinate: " + x);
+                const val = parseFloat(y);
+                if (isNaN(val))
+                    throw new Error("Invalid coordinate: " + x);
+                return val;
+            }
+
+            function last(x) {
+                x = x.trim();
+                const c = ("" + x.charAt(x.length - 1)).toLowerCase();
+                return c;
+            }
+
+            let p0 = fix(parts[0]);
+            let p1 = fix(parts[1]);
+            if (last(parts[0]) === 's')
+                p0 = -p0;
+            const lp = last(parts[1]);
+            if (lp === 'w')
+                p1 = -p1;
+            center = p0 + "," + p1;
+
+            const dpi = parseFloat(p.get("dpi") ?? "100");
+            const zoom = parseInt(p.get("zoom") ?? "16");
+            const lang = p.get("language") ?? p.get("lang") ?? "en";
+            const maptype = p.get("maptype") ?? "roadmap";
+        //  Link
+            let interactive = p.has("interactive") ? (p.get("interactive") === "true") : false;
+            let link = p.get("link");
+            let title = p.get("title");
+            if (link) {
+                const linkMap = new Map();
+                linkMap.set("", [null, null]);
+                linkMap.set("false", [null, null]);
+                linkMap.set("null", [null, null]);
+                linkMap.set("true", ["https://www.google.com/maps/search/" + center + "?hl=" + lang, _TF("Click to view using Google Maps", "Title of an image of a map that when clicked will open Google Maps in a new tab")]);
+                linkMap.set("view", ["https://www.google.com/maps/search/" + center + "?hl=" + lang, _TF("Click to view using Google Maps", "Title of an image of a map that when clicked will open Google Maps in a new tab")]);
+                linkMap.set("dir", ["https://www.google.com/maps/dir/ /" + center + "?hl=" + lang, _TF("Click to get directions using Google Maps", "Title of an image of a map that when clicked will open Google Maps in a new tab")]);
+                if (linkMap.has(link)) {
+                    b.classList.add("Link");
+                    const d = linkMap.get(link);
+                    link = d[0];
+                    if (!title)
+                        title = d[1];
+                }
+            }
+            if (!interactive)
+                b.classList.add("NoInteraction");
+        //  Pin
+            let pin = p.get("pin") ?? null;
+            let pinX = p.get("pinX");
+            if ((!pinX) && (pinX !== 0))
+                pinX = "50%";
+            let pinY = p.get("pinY");
+            if ((!pinY) && (pinY !== 0))
+                pinY = "100%";
+            let pinHeight = p.get("pinHeight");
+            if (pin) {
+                const pinMap = new Map();
+                pinMap.set("", [null, null, null, null]);
+                pinMap.set("false", [null, null, null, null]);
+                pinMap.set("null", [null, null, null, null]);
+                pinMap.set("true", ["map/Pin.svg", "31.7708333333%", "74.3055555556%", 96]);
+                pinMap.set("flag", ["map/Pin.svg", "31.7708333333%", "74.3055555556%", 96]); 
+                if (pinMap.has(pin)) {
+                    const d = pinMap.get(pin);
+                    pin = d[0];
+                    pinX = d[1] ?? pinX;
+                    pinY = d[2] ?? pinY;
+                    if (!pinHeight)
+                        pinHeight = d[3];
+                }
+                if (!pinHeight)
+                    pinHeight = 96;
+            }
+
+            document.documentElement.style.cssText =
+                "--dpi: " + (dpi / 100.0) +
+                ";--idpi: " + (100.0 / dpi) + 
+                ";--pinX: -" + (pinX) + 
+                ";--pinY: -" + (pinY) + 
+                ";--pinHeight: " + pinHeight + "px" + 
+
+                ";";
+
+
+            //  Screen shot host supprt
+            if (window["CefSharp"])
+                await CefSharp.BindObjectAsync();
+            function GetHo() {
+                try {
+                    return chrome?.webview?.hostObjects?.ScreenShotHost ?? null;
+                }
+                catch {
+                    return null;
+                }
+            }
+            const shost = window["ScreenShotHost"] ?? GetHo() ?? null;
+            if (shost) {
+                await shost.isSupported();
+                b.classList.add("NoFade");
+            }
+
+
+
+            const url = "https://www.google.com/maps/embed/v1/view?key=" + key + "&center=" + center + "&zoom=" + zoom + "&language=" + lang + "&maptype=" + maptype;
+
+            const f = document.createElement("iframe");
+            f.setAttribute("frameborder", "0");
+            f.setAttribute("referrerpolicy", "no-referrer-when-downgrade");
+            f.setAttribute("allowfullscreen", "");
+            b.appendChild(f);
+
+            function delay(msToWait) {
+                return new Promise(resolve => setTimeout(resolve, msToWait));
+            }
+
+            f.onload = async () => {
+                await delay(100);
+                b.classList.add("Show");
+                if (shost) {
+                    await delay(500);
+                    await shost.doIt(0, 0, null);
+                }
+            };
+            f.onerror = async () => {
+                b.innerText = 'Error loading map!';
+                b.classList.add("Show");
+            };
+
+            if (pin) {
+                const pinE = document.createElement("img");
+                pinE.src = pin;
+                b.appendChild(pinE);
+            }
+
+            if (link) {
+                const linkE= document.createElement("a");
+                linkE.href = link;
+                linkE.target = "_blank";
+                if (title)
+                    linkE.title = title;
+                b.appendChild(linkE);
+            }
+            f.src = url;
+        }
+        catch (e) {
+            console.log("Error: " + e.message);
+            b.innerText = e.message;
+            b.classList.add("Show");
+        }
+    }
+    main();
+</script>
+</body>
+</html>
