@@ -1952,6 +1952,7 @@ function fixElementWithSrc(e, showError) {
         return null;
     if (e.SrcObs)
         return e;
+    e.setAttribute("draggable", "false");
     e.style.opacity = 0;
     e.addEventListener("load", InternalSrcElementOnLoad);
     if (showError)

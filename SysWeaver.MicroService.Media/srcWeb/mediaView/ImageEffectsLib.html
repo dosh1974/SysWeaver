@@ -1,0 +1,188 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body
+        {
+            overflow-x: hidden;
+        }
+
+        Effect-Card {
+            display: block;
+            position: relative;
+            background-color: rgba(var(--ThemeMainRGB), 0.1);
+            border-radius: var(--ThemeRad);
+            border: 1px solid var(--ThemeMain50);
+            margin: 1em 1em;
+            overflow: hidden;
+            width: calc(100% - 2em);
+            cursor: pointer;
+            outline: 2px solid transparent;
+            outline-offset: 3px;
+            transition: outline linear var(--ThemeFadeDuration);
+        }
+
+            Effect-Card:hover {
+                outline: 2px solid var(--ThemeAcc275);
+            }
+
+            Effect-Card:focus {
+                outline: 2px solid var(--ThemeAcc2);
+            }
+
+                Effect-Card:focus:hover {
+                    outline: 2px solid var(--ThemeAcc2);
+                }
+
+        Effect-Title {
+            display: block;
+            background-color: rgba(var(--ThemeMainRGB), 0.2);
+            color: var(--ThemeAcc1);
+            padding: 0.5em 1em;
+            font-weight: bold;
+            font-size: 125%;
+            width: 100%;
+        }
+
+        Effect-Info {
+            display: block;
+            color: var(--ThemeMain);
+            padding: 0.5em 1em;
+            width: 100%;
+            user-select: text;
+        }
+
+
+        Effect-Card img {
+            border: none;
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        canvas.MediaHidden
+        {
+            position: absolute;
+            left: 10000px;
+            bottom: 10000px;
+            opacity: 0.001;
+        }
+
+    </style>
+    <script>
+
+        function _TF(x, c) {
+            return x;
+        }
+
+        function _T(x, a, c) {
+            return x.replaceAll("{0}", a);
+        }
+
+        async function main() {
+            try {
+                const GetApi = "GetImageEffects";
+                const Folder = "imageEffects";
+                const mp = new MediaPlayerParamsEffect();
+                mp.Width = 960;
+                mp.Height = 540;
+                mp.AdaptiveSize = false;
+                mp.Static = false;
+                function CreateTexture(gl) {
+                    return new MediaPlayerImageTexture(gl, {
+                        EffectSizeFromImage: true,
+                    }, "../logo.png");
+                }
+                const href = window.location.href;
+                const p = new URL(href).searchParams;
+                const b = document.createElement("SysWeaver-Page");
+                document.body.appendChild(b);
+                const effects = await getRequest("Api/" + GetApi);
+                const el = effects.length;
+                for (let i = 0; i < el; ++i) {
+                    const name = effects[i];
+                    const e = document.createElement("Effect-Card");
+                    const t = document.createElement("Effect-Title");
+                    const info = document.createElement("Effect-Info");
+                    const f = document.createElement("img");
+                    f.setAttribute("draggable", "false");
+                    t.innerText = name;
+                    const url = Folder + "/?Effect=" + name + "&Image=../logo.png";
+                    f.onclick = ev => {
+                        if (badClick(ev))
+                            return;
+                        Open(url, "_self");
+                    };
+
+                    let image, compilationTime, avgDrawTimeMs;
+                    try {
+                        const effect = new MediaPlayerEffect(Folder + "/" + name + ".glsl", mp, CreateTexture);
+                        b.appendChild(effect.Element);
+                        await effect.Cache(true);
+                        compilationTime = effect.Program.CompilationTime;
+                        effect.Seek(5);
+                        await effect.Play();
+                        if (effect.Query) {
+                            while (effect.AvgDrawTimeMs <= 0)
+                                await delay(1);
+                        }
+                        avgDrawTimeMs = effect.AvgDrawTimeMs;
+                        await effect.Stop();
+                        image = await new Promise((resolve, reject) => {
+                            effect.Element.toBlob(data => {
+                                if (data) {
+                                    resolve(data);
+                                } else
+                                    reject();
+                            }, "image/jpeg", 70);
+                        });
+                        await effect.OnDispose();
+                    }
+                    catch (ex) {
+                        console.warn("Failed to read effect \"" + name + "\", " + ex.message);
+                        continue;
+                    }
+
+                    f.src = URL.createObjectURL(image);
+                    info.innerText = "" +
+                        _T("Compilation duration {0} ms", "" + compilationTime.toFixed(1), "Text that displays the compilation duration in milli seconds. {0} is replaced with the duration in milli seconds") +
+                        " - " +
+                        _T("Draw time {0} ms", "" + avgDrawTimeMs.toFixed(3), "Text that displays the number of milli seconds it takes on average to render a graphics frame on the GPU. {0} is replaced with the duration in milli seconds");
+
+                    e.appendChild(t);
+                    e.appendChild(info);
+                    e.appendChild(f);
+                    b.appendChild(e);
+                    ValueFormat.copyOnClick(e, url, true, true);
+                }
+
+
+            }
+            catch (er) {
+                console.log("Error: " + er.message);
+                document.body.innerText = er.message;
+            }
+        }
+    </script>
+    <title>Image Effects Demo</title>
+    <script defer src="../common/common.js"></script>
+    <script defer src="../mediaPlayer/media_player_effect.js"></script>
+    <script defer src="../mediaPlayer/media_effect_program.js"></script>
+    <script defer src="../mediaPlayer/media_player_tools.js"></script>
+    <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../icon.svg">
+    <link rel="apple-touch-icon" type="image/png" href="../apple-touch-icon.png">
+    <link rel="manifest" href="../app/manifest.json">
+    <link rel="stylesheet" href="../common/theme.css">
+</head>
+<body onload="main()">
+</body>
+</html>

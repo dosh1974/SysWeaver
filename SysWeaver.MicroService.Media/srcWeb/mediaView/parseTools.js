@@ -130,8 +130,14 @@
                 mode: "cors",
                 cache: "default",
             }));
-            if (res.status === 200)
+            if (res.status === 200) {
                 effectVars = await res.json();
+/*                const t = await res.text();
+                if (t) {
+                    const a = JSON.parse(t);
+                    effectVars = a;
+                }*/
+            }
         }
         catch {
         }

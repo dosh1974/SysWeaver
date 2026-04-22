@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"  width="1152" height="648" viewBox="0 0 1152 648">
+  <style>
+    .t {
+      font: bold 128px verdana;
+	  fill: #fff;
+	  stroke: #000;
+	  stroke-width: 3px;
+    }
+  </style>
+	<path d="M 4 34    a 30 30 0 0 1 30 -30 h 316 a 30 30 0 0 1 30 30 v 148 a 30 30 0 0 1 -30 30 h -316 a 30 30 0 0 1 -30 -30 z" fill="#c55" />
+	<path d="M 388 34  a 30 30 0 0 1 30 -30 h 316 a 30 30 0 0 1 30 30 v 148 a 30 30 0 0 1 -30 30 h -316 a 30 30 0 0 1 -30 -30 z" fill="#4b4" />
+	<path d="M 772 34  a 30 30 0 0 1 30 -30 h 316 a 30 30 0 0 1 30 30 v 148 a 30 30 0 0 1 -30 30 h -316 a 30 30 0 0 1 -30 -30 z" fill="#66f" />
+
+	<path d="M 4 250   a 30 30 0 0 1 30 -30 h 316 a 30 30 0 0 1 30 30 v 148 a 30 30 0 0 1 -30 30 h -316 a 30 30 0 0 1 -30 -30 z" fill="#ea2" />
+	<path d="M 388 250 a 30 30 0 0 1 30 -30 h 316 a 30 30 0 0 1 30 30 v 148 a 30 30 0 0 1 -30 30 h -316 a 30 30 0 0 1 -30 -30 z" fill="#2ea" />
+	<path d="M 772 250 a 30 30 0 0 1 30 -30 h 316 a 30 30 0 0 1 30 30 v 148 a 30 30 0 0 1 -30 30 h -316 a 30 30 0 0 1 -30 -30 z" fill="#a2e" />
+
+	<path d="M 4 466   a 30 30 0 0 1 30 -30 h 316 a 30 30 0 0 1 30 30 v 148 a 30 30 0 0 1 -30 30 h -316 a 30 30 0 0 1 -30 -30 z" fill="#ae2" />
+	<path d="M 388 466 a 30 30 0 0 1 30 -30 h 316 a 30 30 0 0 1 30 30 v 148 a 30 30 0 0 1 -30 30 h -316 a 30 30 0 0 1 -30 -30 z" fill="#2ae" />
+	<path d="M 772 466 a 30 30 0 0 1 30 -30 h 316 a 30 30 0 0 1 30 30 v 148 a 30 30 0 0 1 -30 30 h -316 a 30 30 0 0 1 -30 -30 z" fill="#e2a" />
+
+	<text text-anchor="middle" dominant-baseline="middle" x="192" y="108" class="t">A1</text> 
+	<text text-anchor="middle" dominant-baseline="middle" x="576" y="108" class="t">B1</text> 
+	<text text-anchor="middle" dominant-baseline="middle" x="960" y="108" class="t">C1</text> 
+
+	<text text-anchor="middle" dominant-baseline="middle" x="192" y="324" class="t">A2</text> 
+	<text text-anchor="middle" dominant-baseline="middle" x="576" y="324" class="t">B2</text> 
+	<text text-anchor="middle" dominant-baseline="middle" x="960" y="324" class="t">C2</text> 
+
+	<text text-anchor="middle" dominant-baseline="middle" x="192" y="540" class="t">A3</text> 
+	<text text-anchor="middle" dominant-baseline="middle" x="576" y="540" class="t">B3</text> 
+	<text text-anchor="middle" dominant-baseline="middle" x="960" y="540" class="t">C3</text> 
+
+</svg>

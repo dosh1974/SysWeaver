@@ -18,6 +18,7 @@
     MouseId = null;
     ImageSize = false;
     ShowVars = false;
+    FxProps = null;
 }
 
 class MediaPlayerEffect {
@@ -136,15 +137,21 @@ class MediaPlayerEffect {
         await t.Pause();
         while (t.IsAnimating)
             await delay(1);
-        const gl = t.GL;
+        if (t.Element.parentNode)
+            t.Element.remove();
+        if (t.Texture)
+            t.Texture.Dispose();
         if (t.Program)
             t.Program.Dispose();
+        const gl = t.GL;
         gl.deleteBuffer(t.Pos);
+
+
     }
 
     ResetCounters() {
         const t = this;
-        t.TotalTime = 0;
+        t.TotalTime = 10000000;
         t.MeasureCount = 0;
         t.AvgDrawTimeMs = 0;
         t.PrintCounter = 0;
@@ -382,13 +389,16 @@ class MediaPlayerEffect {
         if (timeElapsed <= 0)
             return;
         const t = this;
-        const tot = t.TotalTime + timeElapsed;
+        let tot = t.TotalTime;
+        if (timeElapsed < tot)
+            tot = timeElapsed;
         const c = t.MeasureCount + 1;
         t.TotalTime = tot;
         t.MeasureCount = c;
         if ((c & 31) !== 0)
-            return;
-        t.AvgDrawTimeMs = tot / c;
+            if (!t.Params.Static)
+                return;
+        t.AvgDrawTimeMs = tot;
         const pc = t.PrintCounter + 1;
         if (t.Params.DpiAdjust)
             if (pc > 1)
@@ -397,7 +407,7 @@ class MediaPlayerEffect {
 //        if ((pc & 7) === 0)
 //            console.log(t.Url + " - Average draw time: " + t.AvgDrawTimeMs + " ms [" + c + " measurements");
         t.MeasureCount = 0;
-        t.TotalTime = 0;
+        t.TotalTime = 100000000000.0;
     }
 
     ScrollElement = null;
@@ -465,9 +475,10 @@ class MediaPlayerEffect {
         }
         if (p.Static) {
             if (t.Rendered)
-                return;
-            t.CurrentPosition = 0;
-            time = 0;
+                if ((!t.Query) || (t.MeasureCount > 1))
+                    return;
+            //t.CurrentPosition = 0;
+            //time = 0;
         }
         t.Rendered = true;
         const gl = t.GL;
@@ -608,13 +619,113 @@ class MediaPlayerEffect {
         const t = this;
         if (t.Paused) {
             t.CurrentPosition = time;
+            t.Rendered = false;
             MediaPlayerEffect.render(t);
         } else {
             t.ResumeTime = (time - t.CurrentPosition);
             t.CurrentPosition = time;
+            t.Rendered = false;
         }
 
     }
 
 
+}
+
+
+
+class MediaPlayerImageTexture {
+
+    constructor(gl, params, url) {
+        const t = this;
+        const texture = gl.createTexture();
+        t.Params = params;
+        t.Url = url;
+        t.GL = gl;
+        t.Texture = texture;
+    }
+
+    async Cache(haveLod) {
+        const t = this;
+        const gl = t.GL;
+        const texture = t.Texture;
+        const image = new Image();
+        const res = await waitEvent2(image, "load", "error", () => image.src = t.Url);
+        if (res.type == "error")
+            return false;
+        t.Image = image;
+        t.Width = image.width;
+        t.Height = image.height;
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        const tp = t.Params;
+        const ep = tp.EffectParams;
+        while (haveLod || (ep && ep.MipMap)) {
+            if (!(gl instanceof WebGL2RenderingContext)) {
+                function powerOf2(v) {
+                    return v && !(v & (v - 1));
+                }
+                if (!powerOf2(image.width)) {
+                    console.warn("Need to enabled WebGL2 to have mipmaps of images then has a non power of two dimension, width = " + image.width);
+                    break;
+                }
+                if (!powerOf2(image.height)) {
+                    console.warn("Need to enabled WebGL2 to have mipmaps of images then has a non power of two dimension, height = " + image.height);
+                    break;
+                }
+            }
+            gl.generateMipmap(gl.TEXTURE_2D);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            break;
+        }
+        if (!tp.EffectSizeFromImage)
+            return null;
+        return [image.width, image.height];
+    }
+
+    Apply(uvScaleAndOffset, texSize) {
+
+        const t = this;
+        const gl = t.GL;
+        const texture = t.Texture;
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        if (t.HaveClip) {
+            if (uvScaleAndOffset)
+                gl.uniform4f(uvScaleAndOffset, t.UvA, t.UvB, t.UvC, t.UvD);
+            if (texSize)
+                gl.uniform2f(texSize, t.ClipWidth, t.ClipHeight);
+            return;
+        }
+        if (uvScaleAndOffset)
+            gl.uniform4f(uvScaleAndOffset, 1.0, -1.0, 0.0, 1.0);
+        if (texSize)
+            gl.uniform2f(texSize, t.Width, t.Height);
+    }
+
+    ApplyClip(p) {
+        const t = this;
+        t.HaveClip = false;
+        p = p ?? t.Params;
+        if (!MediaPlayerTools.ComputeClip(t, p))
+            return;
+        t.HaveClip = true;
+        const ow = t.Width;
+        const oh = t.Height;
+        const cw = t.ClipWidth;
+        const ch = t.ClipHeight;
+        t.UvA = cw / ow;
+        t.UvB = -ch / oh;
+        t.UvC = t.ClipX / ow;
+        t.UvD = (oh - t.ClipB) / oh;
+    }
+
+    Dispose() {
+        const t = this;
+        t.GL.deleteTexture(t.Texture);
+    }
 }

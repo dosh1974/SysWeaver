@@ -1,0 +1,13 @@
+{
+	"TileCountX": 3,
+	"TileCountY": 3,
+	"TileCount": 9,
+	"TileWidth": 384,
+	"TileHeight": 216,
+	"PageWidth": 1152,
+	"PageHeight": 648,
+	"ImageWidth": 380,
+	"ImageHeight": 212,
+	"UniqueCount": 9,
+	"Border": 2
+}

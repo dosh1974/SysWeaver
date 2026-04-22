@@ -1,0 +1,270 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body
+        {
+            overflow-x: hidden;
+        }
+
+        Effect-Card {
+            display: block;
+            position: relative;
+            background-color: rgba(var(--ThemeMainRGB), 0.1);
+            border-radius: var(--ThemeRad);
+            border: 1px solid var(--ThemeMain50);
+            margin: 1em 1em;
+            overflow: hidden;
+            width: calc(100% - 2em);
+            cursor: pointer;
+            outline: 2px solid transparent;
+            outline-offset: 3px;
+            transition: outline linear var(--ThemeFadeDuration);
+        }
+
+            Effect-Card:hover {
+                outline: 2px solid var(--ThemeAcc275);
+            }
+
+            Effect-Card:focus {
+                outline: 2px solid var(--ThemeAcc2);
+            }
+
+                Effect-Card:focus:hover {
+                    outline: 2px solid var(--ThemeAcc2);
+                }
+
+        Effect-Title {
+            display: block;
+            background-color: rgba(var(--ThemeMainRGB), 0.2);
+            color: var(--ThemeAcc1);
+            padding: 0.5em 1em;
+            font-weight: bold;
+            font-size: 125%;
+            width: 100%;
+        }
+
+        Effect-Info {
+            display: block;
+            color: var(--ThemeMain);
+            padding: 0.5em 1em;
+            width: 100%;
+            user-select: text;
+        }
+
+
+        Effect-Card img {
+            border: none;
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        canvas.MediaHidden
+        {
+            position: absolute;
+            left: 10000px;
+            bottom: 10000px;
+            opacity: 0.001;
+        }
+
+    </style>
+    <script>
+
+/*
+	Parameters (basic):
+		Effect = 		Name of the effect file to use, default = "Stripes".
+		Image = 		Url to the image (use "../" to get to the site root).
+
+	Parameters (common for all effect):
+		Width = 		The width in pixels of the canvas, default 1920, ignored if AdaptiveSize = true.
+		Height = 		The height in pixels of the canvas, default 1080, ignored if AdaptiveSize = true.
+		Speed = 		A scale factor for the speed, default = 1.
+		LimitSize = 	If true and AdaptiveSize is true the size of the canvas is limited to Width x Height pixels or Height x Width (if in portrait mode).
+		DpiAdjust = 	Adjust for device DPI settings, default = true (if false and AdaptiveSize = true the resolution will be very low on mobile devices).
+		DpiScale = 		Scale the quality, default = 1, must be less or equal to one.
+		AdaptiveSize = 	If true, the size of the canvas will match the element size, else the Width x Height size will be used.
+		ScrollId = 		Id of the element to read scroll information from, default element is top.document.body
+		MouseId = 		Id of the element to read mouse position information from, default element is top.document.body
+		AntiAlias = 	Antialias (true or false, default true).
+		MipMap = 		Enable mip-maps for the texture, default false, if the texture is a non-power of two, WebGL2 needs to be used (and supported).
+		WebGL2 = 		Use WebGL2, default false. Required for mip-maps of non-power of two textures, less supported.
+	
+	Effect specific parameters (different for each effect).
+		First, if a .json file is present next to the image, parameters are read from that ("test.png", "test.json").
+		Some common parameters for texture atlases (as used in the collages and their effects):
+
+			TileCountX = Number of tiles per row, ex: 6.
+			TileCountY = Number of rows of tiles, ex: 9.
+			TileCount = Total number of tiles (TileCountX * TileCountY), ex: 54.
+			TileWidth = Width in pixels of a "tile", ex: 328.
+			TileHeight = Height in pixels of a "tile", ex: 188.
+			PageWidth = Width in pixels of the whole image, ex: 1968.
+			PageHeight = Height in pixels of the whole image, ex: 1692.
+			ImageWidth = Width in pixels of an image in a tile, ex: 320.
+			ImageHeight = Height in pixels of an image in a tile, ex: 180.
+			UniqueCount = Number of unique images, ex: 50.
+			Border = Number of transparent pixels surrounding the image in a tile, ex: 4.
+			
+		Any other url parameter is passed to the effect.
+		
+			3d-tiles (TileCountX, TileCountY, TileCount, ImageWidth, ImageHeight):
+				FillWidth = [0, 1] how much of a grid square to fill, default: 0.5.
+				PlaneCount = Number of planes with images, default: 16.
+				PlaneSpread = How far between each plane is, default: 0.5.
+				ZoomSpeed = How fast the camera moves, default: 0.5.
+				GridScale = Size of the grid, default: 2.0.
+				JitterStrength = [0, 1] how unaligned the images are, default: 0.9.
+			Scroll (TileCountX, TileCountY, TileWidth, TileHeight):
+				ReflectionStretch = How scaled the reflection is in relation to the original, default: 0.75.
+				ReflectionIntensity	= [0, 1] intensity (opacity) of the reflection, default: 0.3.
+				ScrollSpeed = How fast to scroll in images per second, default: 0.5.
+				ScrollSpeedX = Speed of influence for the horizontal scroll bar position in pixels, default: 0.
+				ScrollSpeedY = Speed of influence for the vertical scroll bar position in pixels, default: 0.
+				ScrollSpeedRX = Speed of influence for the horizontal normalized scroll bar position [0, 1], default: 0.
+				ScrollSpeedRY = Speed of influence for the vertical normalized scroll bar position [0, 1], default: 0.
+				MouseSpeedX = Speed of influence for the horizontal mouse position. Where 1.0 matches the mouse speed, default: 0.
+				MouseSpeedY = Speed of influence for the vertical mouse position. Where 1.0 matches the mouse speed, default: 0.
+			Stripes (TileCountX, TileWidth, TileHeight):
+			
+			
+			Wheel (TileCountX, TileCountY, TileCount, ImageWidth, ImageHeight, PageWidth, PageHeight)
+				ScrollSpeed = How fast to scroll in images per second, default: 0.5.
+				ScrollSpeedX = Speed of influence for the horizontal scroll bar position in pixels, default: 0.
+				ScrollSpeedY = Speed of influence for the vertical scroll bar position in pixels, default: 0.
+				ScrollSpeedRX = Speed of influence for the horizontal normalized scroll bar position [0, 1], default: 0.
+				ScrollSpeedRY = Speed of influence for the vertical normalized scroll bar position [0, 1], default: 0.
+				MouseSpeedX = Speed of influence for the horizontal mouse position. Where 1.0 matches the mouse speed, default: 0.
+				MouseSpeedY = Speed of influence for the vertical mouse position. Where 1.0 matches the mouse speed, default: 0.
+				ImageCount = Number of images on the wheel.
+				LeftDist = Default 0.75, distance from left.
+				ShadowDistTop = 0.1, distance for the shadow on the top.
+				ShadowDistBottom = 1.0, distance for the shadow on the bottom.
+				ShadowIntTop = 0.7, Intensity of shadow on top.
+				ShadowIntBottom = 0.2, Intensity of shadow on the bottom.
+				VingetteInt = 20, vingetting Intensity
+				VingettePow = 1, vingetting power
+				NoiseInt = 0.0, amount of noise
+*/
+
+        function _TF(x, c) {
+            return x;
+        }
+
+        function _T(x, a, c) {
+            return x.replaceAll("{0}", a);
+        }
+
+        async function main() {
+            try {
+                const GetApi = "GetCollageEffects";
+                const Folder = "collageEffects";
+                const mp = new MediaPlayerParamsEffect();
+                mp.Width = 960;
+                mp.Height = 540;
+                mp.AdaptiveSize = false;
+                mp.Static = false;
+                mp.FxProps = await getRequest("DemoCollage.json");
+
+
+                function CreateTexture(gl) {
+                    return new MediaPlayerImageTexture(gl, {
+                        EffectSizeFromImage: false,
+                    }, "DemoCollage.svg");
+                }
+
+                const href = window.location.href;
+                const p = new URL(href).searchParams;
+                const b = document.createElement("SysWeaver-Page");
+                document.body.appendChild(b);
+                const effects = await getRequest("Api/" + GetApi);
+
+
+                const el = effects.length;
+                for (let i = 0; i < el; ++i) {
+                    const name = effects[i];
+                    const e = document.createElement("Effect-Card");
+                    const t = document.createElement("Effect-Title");
+                    const info = document.createElement("Effect-Info");
+                    const f = document.createElement("img");
+                    f.setAttribute("draggable", "false");
+                    t.innerText = name;
+                    const url = Folder + "/?Effect=" + name + "&Image=DemoCollage.svg";
+                    f.onclick = ev => {
+                        if (badClick(ev))
+                            return;
+                        Open(url, "_self");
+                    };
+
+                    let image, compilationTime, avgDrawTimeMs;
+                    try {
+                        const effect = new MediaPlayerEffect(Folder + "/" + name + ".glsl", mp, CreateTexture);
+                        b.appendChild(effect.Element);
+                        await effect.Cache(true);
+                        compilationTime = effect.Program.CompilationTime;
+                        effect.Seek(5);
+                        await effect.Play();
+                        if (effect.Query) {
+                            while (effect.AvgDrawTimeMs <= 0)
+                                await delay(1);
+                        }
+                        avgDrawTimeMs = effect.AvgDrawTimeMs;
+                        await effect.Stop();
+                        image = await new Promise((resolve, reject) => {
+                            effect.Element.toBlob(data => {
+                                if (data) {
+                                    resolve(data);
+                                } else
+                                    reject();
+                            }, "image/jpeg", 70);
+                        });
+                        await effect.OnDispose();
+                    }
+                    catch (ex) {
+                        console.warn("Failed to read effect \"" + name + "\", " + ex.message);
+                        continue;
+                    }
+
+                    f.src = URL.createObjectURL(image);
+                    info.innerText = "" +
+                        _T("Compilation duration {0} ms", "" + compilationTime.toFixed(1), "Text that displays the compilation duration in milli seconds. {0} is replaced with the duration in milli seconds") +
+                        " - " +
+                        _T("Draw time {0} ms", "" + avgDrawTimeMs.toFixed(3), "Text that displays the number of milli seconds it takes on average to render a graphics frame on the GPU. {0} is replaced with the duration in milli seconds");
+
+                    e.appendChild(t);
+                    e.appendChild(info);
+                    e.appendChild(f);
+                    b.appendChild(e);
+                    ValueFormat.copyOnClick(e, url, true, true);
+                }
+
+
+            }
+            catch (er) {
+                console.log("Error: " + er.message);
+                document.body.innerText = er.message;
+            }
+        }
+    </script>
+    <title>Image Effects Demo</title>
+    <script defer src="../common/common.js"></script>
+    <script defer src="../mediaPlayer/media_player_effect.js"></script>
+    <script defer src="../mediaPlayer/media_effect_program.js"></script>
+    <script defer src="../mediaPlayer/media_player_tools.js"></script>
+    <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../icon.svg">
+    <link rel="apple-touch-icon" type="image/png" href="../apple-touch-icon.png">
+    <link rel="manifest" href="../app/manifest.json">
+    <link rel="stylesheet" href="../common/theme.css">
+</head>
+<body onload="main()">
+</body>
+</html>

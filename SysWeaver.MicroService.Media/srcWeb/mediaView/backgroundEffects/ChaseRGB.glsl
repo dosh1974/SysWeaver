@@ -88,7 +88,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 	if (Noise > 0.0)
 		col *= (noise(vec2(gl_FragCoord) * -15.5 + vec2(7.13, -3.343) * time) * Noise + (1.0-Noise));
 		
-    fragColor = vec4(tonemap(col)*Brightness, 0.0);
+    fragColor = vec4(tonemap(col)*Brightness, 0.1);
 }
 // --------[ Original ShaderToy ends here ]---------- //
 

@@ -37,5 +37,5 @@ void main( void ) {
 	}
         vec3 c = Color * dist * 0.03;
         float noiseMul = noise(vec2(gl_FragCoord) * -15.5 + vec2(7.13, -3.343) * time) * 0.1 + 0.95;
-	gl_FragColor = vec4(c * noiseMul, 0.0);
+	gl_FragColor = vec4(c * noiseMul, 0.1);
 }
