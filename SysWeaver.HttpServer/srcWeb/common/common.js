@@ -1517,7 +1517,7 @@ function bufferToHex(buffer) {
  * @param {ArrayBuffer|Uint8Array|Blob} The data
  * @returns {string} The data contained in the buffer as a base64 encoded string
  */
-async function bufferToBase64(buffer) {
+async function bufferToBase64(buffer, keepUri) {
     if (!buffer)
         return null;
     if (!(buffer instanceof Blob))
@@ -1529,6 +1529,8 @@ async function bufferToBase64(buffer) {
         reader.onload = () => r(reader.result);
         reader.readAsDataURL(buffer);
     });
+    if (keepUri)
+        return base64url;     
     // remove the `data:...;base64,` part from the start
     return base64url.slice(base64url.indexOf(',') + 1);
 }

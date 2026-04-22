@@ -6,20 +6,45 @@ using SysWeaver.Net;
 namespace SysWeaver.MicroService
 {
 
+
+    public sealed class MediaParams
+    {
+
+        public ApiKeyParams GoogleMapsKey = new ApiKeyParams
+        {
+            CredFile = "$(KeyFolder)/GoogleMaps_Embed.txt"
+        };
+    }
+
+
     [WebApiUrl("../mediaView/Api/")]
+    [WebMenuPath(null, "Debug/Media", "Media", "Media previews etc", "../icons/display.svg")]
+    [WebMenuEmbedded(null, "Debug/Media/BackgroundEffects", "Background effects", "mediaView/BackgroundEffectsLib.html", "Show all background effects available", "../icons/computer.svg", 1, Roles.Dev)]
+    [WebMenuEmbedded(null, "Debug/Media/ImageEffects", "Image effects", "mediaView/ImageEffectsLib.html", "Show all image effects available", "../icons/image.svg", 2, Roles.Dev)]
+    [WebMenuEmbedded(null, "Debug/Media/CollageEffects", "Collage effects", "mediaView/CollageEffectsLib.html", "Show all collage effects available", "../icons/brick.svg", 3, Roles.Dev)]
+    [WebMenuEmbedded(null, "Debug/Media/GoogleMapDemo", "Google map demo", "mediaView/MapDemo.html", "A demo showcase of the Google map support", "../icons/table_country.svg", 4, Roles.Dev)]
     public sealed class MediaService : IDisposable
     {
 
-        public MediaService(ServiceManager manager)
+        public MediaService(ServiceManager manager, MediaParams p = null)
         {
+            p = p ?? new MediaParams();
+            GoogleMapsKey = p.GoogleMapsKey?.GetApiKey(false);
+
             Manager = manager;
             var te = MediaEditor;
             foreach (var x in MediaExtensions)
                 manager.TryAddExtensionViewer(x, te);
         }
 
+        readonly String GoogleMapsKey;
         readonly ServiceManager Manager;
 
+        [WebApi]
+        [WebApiClientCacheStatic]
+        [WebApiRequestCacheStatic]
+        [WebApiAuth(Roles.Dev)]
+        public String GetGoogleMapsKey() => GoogleMapsKey;
 
         /// <summary>
         /// Get a list of all background effects

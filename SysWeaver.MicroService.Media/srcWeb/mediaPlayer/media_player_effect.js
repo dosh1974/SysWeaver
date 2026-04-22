@@ -26,6 +26,72 @@ class MediaPlayerEffect {
     static DpiScale = parseFloat(localStorage.getItem("SysWeaver.Media.EffectDpiScale") ?? "1");
 
 
+    /** Create a screenshot of an effect.
+     * Cache the screen shot in local storage (recreates if etag changes)
+     */
+    static async GetImage(cacheName, url, mp, ct) {
+        const key = "SysWeaver.EffectInfo." + cacheName + "." + await hashString(url);
+        try {
+            try {
+                const cached = localStorage.getItem(key);
+                if (cached) {
+                    const data = JSON.parse(cached);
+                    const r = new Request(url, {
+                        method: "HEAD",
+                        mode: "cors",
+                        cache: "default",
+                    });
+                    const res = await fetch(r);
+                    if (res.status == 200) {
+                        const et = res.headers.get("etag");
+                        if (data.T === et)
+                            return data.R;
+                    }
+                }
+            }
+            catch (ce) {
+                console.warn("Failed to load cached effect image: " + ce.message);
+            }
+            const effect = new MediaPlayerEffect(url, mp, ct);
+            const ee = effect.Element;
+            ee.style.position = "absolute";
+            ee.style.top = "-10000px";
+            document.body.appendChild(ee);
+            await effect.Cache(true);
+            const compilationTime = effect.Program.CompilationTime;
+            const etag = effect.Etag;
+            effect.Seek(5);
+            await effect.Play();
+            if (effect.Query) {
+                while (effect.AvgDrawTimeMs <= 0)
+                    await delay(1);
+            }
+            const avgDrawTimeMs = effect.AvgDrawTimeMs;
+            await effect.Stop();
+            const image = await new Promise((resolve, reject) => {
+                effect.Element.toBlob(data => {
+                    if (data) {
+                        resolve(data);
+                    } else
+                        reject();
+                }, "image/jpeg", 70);
+            });
+            await effect.OnDispose();
+            url = await bufferToBase64(image, true);
+            const ret = [url, compilationTime, avgDrawTimeMs];
+            localStorage.setItem(key, JSON.stringify({
+                R: ret,
+                T: etag,
+            }));
+            return ret;
+        }
+        catch (ex) {
+            console.warn("Failed to read effect \"" + name + "\", " + ex.message);
+            return [null, ex.message];
+        }
+    }
+
+
     static GetElementFromId(id) {
         const tw = top;
         if (!id)
@@ -283,6 +349,10 @@ class MediaPlayerEffect {
             console.warn("Failed to load effect \"" + c + "\"");
             return false;
         }
+        t.Etag = res.headers.get("etag");
+        //const contentType = res.headers.get('Content-Type');
+
+
         src = await res.text();
 
         const programData = new EffectProgramData(gl, src, c);

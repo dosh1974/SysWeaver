@@ -127,9 +127,23 @@
         const b = document.body;
         try {
 
-            const key = p.get("key");
-            if (!key)
-                throw new Error('Must supply a google map API key using the "key" parameter');
+            let key = p.get("key");
+            if (!key) {
+                try {
+                    const res = await fetch(new Request("Api/GetGoogleMapsKey", {
+                        method: "GET",
+                        mode: "cors",
+                        cache: "default",
+                    }));
+                    if (res.status === 200)
+                        key = await res.json();
+                }
+                catch {
+                }
+                if (!key)
+                    throw new Error('Must supply a google map API key using the "key" parameter');
+            }
+            key = key.trim();
             let center = p.get("center");
             if (!center)
                 throw new Error('Must supply a coordinate the "center" parameter');

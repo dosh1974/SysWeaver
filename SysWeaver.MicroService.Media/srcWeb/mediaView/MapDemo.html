@@ -14,61 +14,65 @@
             max-width: 85.1em !important;
         }
 
-        Map-Section {
-            display: block;
-            background-color: var(--ThemeMain);
-            color: var(--ThemeBackground);
-            padding: 0.25em 1em;
-            text-transform: uppercase;
-            font-weight: bold;
-            margin: 6em 1em 1em 1em;
-            border-radius: var(--ThemeRad);
-        }
 
-        Map-Card {
-            display: inline-block;
-            position: relative;
-            background-color: rgba(var(--ThemeMainRGB), 0.1);
-            border-radius: var(--ThemeRad);
-            border: 1px solid var(--ThemeMain50);
-            margin: 1em 1em;
-            overflow: hidden;
-            width: 26em;
-            cursor: pointer;
-            outline: 2px solid transparent;
-            outline-offset: 3px;
-            transition: outline linear var(--ThemeFadeDuration);
-        }
+            Map-Section {
+                display: block;
+                background-color: var(--ThemeMain);
+                color: var(--ThemeBackground);
+                padding: 0.25em 1em;
+                text-transform: uppercase;
+                font-weight: bold;
+                margin: 6em 1em 1em 1em;
+                border-radius: var(--ThemeRad);
+            }
+                Map-Section:first-child {
+                    margin-top: 1em;
+                }
 
-        Map-Card:hover {
-            outline: 2px solid var(--ThemeAcc275);
-        }
-
-        Map-Card:focus {
-            outline: 2px solid var(--ThemeAcc2);
-        }
-
-            Map-Card:focus:hover {
-                outline: 2px solid var(--ThemeAcc2);
+            Map-Card {
+                display: inline-block;
+                position: relative;
+                background-color: rgba(var(--ThemeMainRGB), 0.1);
+                border-radius: var(--ThemeRad);
+                border: 1px solid var(--ThemeMain50);
+                margin: 1em 1em;
+                overflow: hidden;
+                width: 26em;
+                cursor: pointer;
+                outline: 2px solid transparent;
+                outline-offset: 3px;
+                transition: outline linear var(--ThemeFadeDuration);
             }
 
-        Map-Card icon-28x28{
-            position: absolute;
-            right: 0.5em; 
-            top: 0.5em;
-        }
+                Map-Card:hover {
+                    outline: 2px solid var(--ThemeAcc275);
+                }
+
+                Map-Card:focus {
+                    outline: 2px solid var(--ThemeAcc2);
+                }
+
+                    Map-Card:focus:hover {
+                        outline: 2px solid var(--ThemeAcc2);
+                    }
+
+                Map-Card icon-28x28 {
+                    position: absolute;
+                    right: 0.5em;
+                    top: 0.5em;
+                }
 
 
 
-        Map-Title {
-            display: block;
-            background-color: rgba(var(--ThemeMainRGB), 0.2);
-            color: var(--ThemeAcc1);
-            padding: 0.5em 1em;
-            font-weight: bold;
-            font-size: 125%;
-            width: 100%;
-        }
+            Map-Title {
+                display: block;
+                background-color: rgba(var(--ThemeMainRGB), 0.2);
+                color: var(--ThemeAcc1);
+                padding: 0.5em 1em;
+                font-weight: bold;
+                font-size: 125%;
+                width: 100%;
+            }
 
             Map-Card iframe {
                 border: none;
@@ -80,12 +84,8 @@
 
     </style>
     <script>
-
-        function _TF(x, c) {
-            return x;
-        }
-
         async function main() {
+            const onLoaded = AddLoading();
             try {
                 const href = window.location.href;
                 const p = new URL(href).searchParams;
@@ -93,9 +93,23 @@
                 document.body.appendChild(b);
 
 
-                const key = p.get("key");
-                if (!key)
-                    throw new Error('Must supply a google map API key using the "key" parameter');
+                let key = p.get("key");
+                if (!key) {
+                    try {
+                        const res = await fetch(new Request("Api/GetGoogleMapsKey", {
+                            method: "GET",
+                            mode: "cors",
+                            cache: "default",
+                        }));
+                        if (res.status === 200)
+                            key = await res.json();
+                    }
+                    catch {
+                    }
+                    if (!key)
+                        throw new Error('Must supply a google map API key using the "key" parameter');
+                }
+                key = key.trim();
 
                 const center = p.get("center") ?? "51.507318549291746, -0.1276379124532523";
 
@@ -204,8 +218,10 @@
 
             }
             catch (e) {
-                console.log("Error: " + e.message);
-                b.innerText = e.message;
+                Fail(e.message);
+            }
+            finally {
+                onLoaded();
             }
         }
     </script>

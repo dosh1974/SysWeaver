@@ -79,15 +79,8 @@
     </style>
     <script>
 
-        function _TF(x, c) {
-            return x;
-        }
-
-        function _T(x, a, c) {
-            return x.replaceAll("{0}", a);
-        }
-
         async function main() {
+            const onLoaded = AddLoading();
             try {
                 const GetApi = "GetBackgroundEffects";
                 const Folder = "backgroundEffects";
@@ -116,37 +109,13 @@
                             return;
                         Open(url, "_self");
                     };
-
-                    let image, compilationTime, avgDrawTimeMs;
-                    try {
-                        const effect = new MediaPlayerEffect(Folder + "/" + name + ".glsl", mp);
-                        b.appendChild(effect.Element);
-                        await effect.Cache(true);
-                        compilationTime = effect.Program.CompilationTime;
-                        effect.Seek(5);
-                        await effect.Play();
-                        if (effect.Query) {
-                            while (effect.AvgDrawTimeMs <= 0)
-                                await delay(1);
-                        }
-                        avgDrawTimeMs = effect.AvgDrawTimeMs;
-                        await effect.Stop();
-                        image = await new Promise((resolve, reject) => {
-                            effect.Element.toBlob(data => {
-                                if (data) {
-                                    resolve(data);
-                                } else
-                                    reject();
-                            }, "image/jpeg", 70);
-                        });
-                        await effect.OnDispose();
-                    }
-                    catch (ex) {
-                        console.warn("Failed to read effect \"" + name + "\", " + ex.message);
+                    const r = await MediaPlayerEffect.GetImage("Collage", Folder + "/" + name + ".glsl", mp);
+                    const image = r[0];
+                    if (!image)
                         continue;
-                    }
-
-                    f.src = URL.createObjectURL(image);
+                    f.src = image;
+                    const compilationTime = r[1];
+                    const avgDrawTimeMs = r[2];
                     info.innerText = "" +
                         _T("Compilation duration {0} ms", "" + compilationTime.toFixed(1), "Text that displays the compilation duration in milli seconds. {0} is replaced with the duration in milli seconds") +
                         " - " +
@@ -161,9 +130,11 @@
 
 
             }
-            catch (er) {
-                console.log("Error: " + er.message);
-                document.body.innerText = er.message;
+            catch (e) {
+                Fail(e.message);
+            }
+            finally {
+                onLoaded();
             }
         }
     </script>
