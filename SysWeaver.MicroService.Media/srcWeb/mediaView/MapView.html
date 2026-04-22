@@ -43,6 +43,11 @@
                 transform: translate(-50%, -50%);
             }
 
+
+            body.Dark iframe {
+                filter: invert(1) hue-rotate(180deg) brightness(0.8);
+            }
+
             body.NoInteraction iframe {
                 pointer-events: none;
             }
@@ -88,6 +93,14 @@
                 cursor: pointer;
             }
 
+            body Map-Title {
+                position: absolute;
+                z-index: 2;
+                width: 100vw;
+                height: 100vh;
+                display: block;
+            }
+
     </style>
     <title>Map View</title>
     <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
@@ -97,6 +110,11 @@
 </head>
 <body>
 <script>
+
+
+    function _T(x, a, c) {
+        return x.replaceAll("{0}", a);
+    }
 
     function _TF(x, c) {
         return x;
@@ -126,7 +144,7 @@
                     const c = x.charAt(i);
                     if ((c >= '0') && (c <= '9'))
                         y += c;
-                    if (c === '.')
+                    if ((c === '.') || (c === '-'))
                         y += c;
                 }
                 if (y.length <= 0)
@@ -155,7 +173,11 @@
             const dpi = parseFloat(p.get("dpi") ?? "100");
             const zoom = parseInt(p.get("zoom") ?? "16");
             const lang = p.get("language") ?? p.get("lang") ?? "en";
-            const maptype = p.get("maptype") ?? "roadmap";
+            let maptype = p.get("maptype") ?? "roadmap";
+            if (maptype === "dark") {
+                b.classList.add("Dark");
+                maptype = "roadmap";
+            }
         //  Link
             let interactive = p.has("interactive") ? (p.get("interactive") === "true") : false;
             let link = p.get("link");
@@ -174,6 +196,9 @@
                     link = d[0];
                     if (!title)
                         title = d[1];
+                } else {
+                    if (!title)
+                        title = _T('Click to open "{0}" in a new tab', link, "Title of an image of a map that when clicked will open a page in a new tab. {0} will be replaced with the address of the page");
                 }
             }
             if (!interactive)
@@ -192,8 +217,23 @@
                 pinMap.set("", [null, null, null, null]);
                 pinMap.set("false", [null, null, null, null]);
                 pinMap.set("null", [null, null, null, null]);
-                pinMap.set("true", ["map/Pin.svg", "31.7708333333%", "74.3055555556%", 96]);
-                pinMap.set("flag", ["map/Pin.svg", "31.7708333333%", "74.3055555556%", 96]); 
+                pinMap.set("true", ["map/RedMarker.svg", "50%", "95.4545454545%", 80]); 
+                pinMap.set("star", ["map/Star.svg", "50%", "100%", 80]); 
+                pinMap.set("green-pennant", ["map/GreenPennant.svg", "5%", "95%", 80]); 
+                pinMap.set("blue-medieval", ["map/BlueMedieval.svg", "15.709768274%", "100%", 80]); 
+                pinMap.set("game-flag", ["map/GameFlag.svg", "28%", "98%", 80]); 
+                pinMap.set("green-static-flag", ["map/GreenStaticFlag.svg", "40.15625%", "100%", 80]); 
+                pinMap.set("red-flag", ["map/RedFlag.svg", "31.7708333333%", "74.3055555556%", 96]);
+                pinMap.set("green-flag", ["map/GreenFlag.svg", "31.7708333333%", "74.3055555556%", 96]); 
+                pinMap.set("blue-flag", ["map/BlueFlag.svg", "31.7708333333%", "74.3055555556%", 96]); 
+                pinMap.set("red-needle", ["map/RedNeedle.svg", "50%", "98.275862069%", 80]); 
+                pinMap.set("green-needle", ["map/GreenNeedle.svg", "50%", "98.275862069%", 80]); 
+                pinMap.set("blue-needle", ["map/BlueNeedle.svg", "50%", "98.275862069%", 80]); 
+                pinMap.set("red-marker", ["map/RedMarker.svg", "50%", "95.4545454545%", 80]); 
+                pinMap.set("green-marker", ["map/GreenMarker.svg", "50%", "95.4545454545%", 80]); 
+                pinMap.set("blue-marker", ["map/BlueMarker.svg", "50%", "95.4545454545%", 80]); 
+
+                
                 if (pinMap.has(pin)) {
                     const d = pinMap.get(pin);
                     pin = d[0];
@@ -267,12 +307,20 @@
             }
 
             if (link) {
-                const linkE= document.createElement("a");
+                const linkE = document.createElement("a");
                 linkE.href = link;
                 linkE.target = "_blank";
                 if (title)
                     linkE.title = title;
                 b.appendChild(linkE);
+            } else {
+                if (title) {
+                    if (!interactive) {
+                        const linkE = document.createElement("Map-Title");
+                        linkE.title = title;
+                        b.appendChild(linkE);
+                    }
+                }
             }
             f.src = url;
         }

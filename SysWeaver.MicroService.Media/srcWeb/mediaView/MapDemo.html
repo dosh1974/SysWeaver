@@ -1,0 +1,184 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        Map-Section {
+            display: block;
+            background-color: var(--ThemeMain);
+            color: var(--ThemeBackground);
+            padding: 0.25em 1em;
+            text-transform: uppercase;
+            font-weight: bold;
+            margin: 6em 1em 1em 1em;
+            border-radius: var(--ThemeRad);
+        }
+
+        Map-Card {
+            display: inline-block;
+            position: relative;
+            background-color: rgba(var(--ThemeMainRGB), 0.1);
+            border-radius: var(--ThemeRad);
+            border: 1px solid rgba(--ThemeMainRGB, 0.5);
+            margin: 1em 2em;
+            overflow: hidden;
+        }
+
+        Map-Card icon-28x28{
+            position: absolute;
+            right: 0.5em; 
+            top: 0.5em;
+        }
+
+
+        Map-Title {
+            display: block;
+            background-color: rgba(var(--ThemeMainRGB), 0.2);
+            color: var(--ThemeAcc1);
+            padding: 0.5em 1em;
+            font-weight: bold;
+            font-size: 125%;
+            width: 384px;
+        }
+
+        Map-Card iframe {
+            border: none;
+            display: block;
+            width: 384px;
+            height: 288px;
+        }
+    </style>
+    <script>
+
+        function _TF(x, c) {
+            return x;
+        }
+
+        async function main() {
+            const href = window.location.href;
+            const p = new URL(href).searchParams;
+            const b = document.body;
+            try {
+
+                const key = p.get("key");
+                if (!key)
+                    throw new Error('Must supply a google map API key using the "key" parameter');
+
+                const center = p.get("center") ?? "51.507318549291746, -0.1276379124532523";
+
+                function Section(title) {
+                    const s = document.createElement("Map-Section");
+                    s.innerText = title;
+                    b.appendChild(s);
+                }
+
+                function Add(title, type, pin, link, extra) {
+
+                    let url = "MapView.html?key=" + key + "&center=" + center;
+                    if (type)
+                        url += "&maptype=" + type;
+                    if (pin)
+                        url += "&pin=" + pin;
+                    if (link)
+                        url += "&link=" + link;
+                    if (extra)
+                        url += extra;
+                    const e = document.createElement("Map-Card");
+                    const t = document.createElement("Map-Title");
+                    const f = document.createElement("iframe");
+                    t.innerText = title;
+                    e.appendChild(t);
+                    e.appendChild(f);
+                    f.src = url;
+                    b.appendChild(e);
+                    const icon = new ColorIcon(
+                        "../icons/fullscreen_enter.svg",
+                        "IconColorThemeMain",
+                        28, 28,
+                        _TF("Click to show full screen", "Tool tip text on an icon that when clicked will show the content in full screen"),
+                        ev => Open(url, "_self"));
+                    e.appendChild(icon.Element);
+                    ValueFormat.copyOnClick(e, url, true, true);
+                }
+                Section("Map types");
+                Add("Satellite", "satellite");
+                Add("Roadmap", "roadmap");
+                Add("Dark (roadmap)", "dark");
+
+                Section("Pin styles");
+                Add("Red flag", "dark", "red-flag");
+                Add("Green flag", "dark", "green-flag");
+                Add("Blue flag", "dark", "blue-flag");
+                Add("Red marker", "dark", "red-marker");
+                Add("Green marker", "dark", "green-marker");
+                Add("Blue marker", "dark", "blue-marker");
+                Add("Red needle", "dark", "red-needle");
+                Add("Green needle", "dark", "green-needle");
+                Add("Blue needle", "dark", "blue-needle");
+                Add("Star marker", "dark", "star");
+                Add("Green pennant", "dark", "green-pennant");
+                Add("Blue medieval", "dark", "blue-medieval");
+                Add("Game flag", "dark", "game-flag");
+
+                Add("Custom", "dark", "https://www.svgrepo.com/show/178888/push-pin-attachment.svg", "&pinX=50%&pinY=100%");
+                
+
+                Section("Links");
+                Add("View", "satellite", "true", "view");
+                Add("Direction", "satellite", "true", "dir");
+                Add("Custom", "satellite", "true", "https://www.cnn.com/");
+
+
+                Section("Zoom");
+                Add("5", null, null, null, "&zoom=5");
+                Add("10", null, null, null, "&zoom=10");
+                Add("15", null, null, null, "&zoom=15");
+                Add("17 satellite", "satellite", null, null, "&zoom=17");
+                Add("19 satellite", "satellite", null, null, "&zoom=19");
+                Add("21 satellite", "satellite", null, null, "&zoom=21");
+
+                Section("DPI scale (tile edges may be visible)");
+                Add("50%", "satellite", null, null, "&dpi=50");
+                Add("100%", "satellite", null, null, "&dpi=100");
+                Add("150%)", "satellite", null, null, "&dpi=150");
+                Add("200%", "satellite", null, null, "&dpi=200");
+                Add("300%", "satellite", null, null, "&dpi=300");
+                Add("400%", "satellite", null, null, "&dpi=400");
+
+                Section("Languages");
+                Add("English", null, null, null, "&lang=en&zoom=13");
+                Add("Spanish", null, null, null, "&lang=es&zoom=13");
+                Add("Russian", null, null, null, "&lang=ru&zoom=13");
+                Add("Arabic", null, null, null, "&lang=ar&zoom=13");
+                Add("Japanese", null, null, null, "&lang=ja&zoom=13");
+                Add("Korean", null, null, null, "&lang=ko&zoom=13");
+
+
+                Section("Misc");
+                Add("Interactive", "satellite", null, null, "&interactive=true");
+                Add("Custom title", "dark", null, null, "&title=Hello world!");
+
+            }
+            catch (e) {
+                console.log("Error: " + e.message);
+                b.innerText = e.message;
+            }
+        }
+    </script>
+    <title>Map Demo</title>
+    <script defer src="../common/common.js"></script>
+    <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../icon.svg">
+    <link rel="apple-touch-icon" type="image/png" href="../apple-touch-icon.png">
+    <link rel="manifest" href="../app/manifest.json">
+    <link rel="stylesheet" href="../common/theme.css">
+</head>
+<body onload="main()">
+</body>
+</html>

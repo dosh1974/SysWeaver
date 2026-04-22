@@ -328,6 +328,12 @@ async function apiMain() {
                             tc0.appendChild(frm);
                             frm.src = url;
                         }
+                        tc0.title = _TF("Click to open in a new tab.", "A tool tip description on an HTML element, that when clicked will open the data on a new browser tab");
+                        tc0.onclick = async ev => {
+                            if (!isPureClick(ev))
+                                return;
+                            Open(url, "_blank");
+                        };
                     } else {
                         if ((res == null) && (!data.Return)) {
                             tc0.classList.add("NoResult");

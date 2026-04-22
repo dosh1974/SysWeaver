@@ -110,6 +110,7 @@ SysWeaver-TabContent.CODE
         border: none;
         min-height: 50vh;
         resize: vertical;
+        cursor: pointer;
     }
 
     SysWeaver-TabContent.CODE > img {
@@ -121,6 +122,7 @@ SysWeaver-TabContent.CODE
         display: inline;
         object-fit: scale-down;
         object-position: center top;
+        cursor: pointer;
     }
 
 

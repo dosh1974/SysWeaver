@@ -2,8 +2,19 @@
 {
     public enum GoogleMapTypes
     {
+        /// <summary>
+        /// Satelite image
+        /// </summary>
         Satellite = 0,
-        Roadmap
+        /// <summary>
+        /// Raod map image
+        /// </summary>
+        Roadmap,
+        /// <summary>
+        /// Dark mode road map (just using filters)
+        /// </summary>
+        Dark
+
     }
 
 

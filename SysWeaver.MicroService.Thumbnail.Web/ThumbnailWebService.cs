@@ -407,6 +407,7 @@ namespace SysWeaver.MicroService
             [
                 "satellite",
                 "roadmap",
+                "dark",
             ];
 
         /// <summary>
