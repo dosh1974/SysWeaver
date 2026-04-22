@@ -8,7 +8,7 @@ uniform vec2 resolution;
 #define HPI (3.1415926535/2.0)
 #define N 300
 
-const vec3 Color = vec4(1.0, 0.6, 0.1);//	var: { "type": "colhdr" }
+const vec3 Color = vec3(1.0, 0.6, 0.1);//	var: { "type": "colhdr" }
 
 
 float rand(vec2 n) { 

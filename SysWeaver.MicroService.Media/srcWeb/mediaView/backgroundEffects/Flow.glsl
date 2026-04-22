@@ -13,7 +13,7 @@ float GetEdge(float t, float v, float base, float slope)
 
 float Ss(float x)
 {
-    return x * x * (3.0f - 2.0f * x);
+    return x * x * (3.0 - 2.0 * x);
 }
 
 float GetEdgeDistance(float edge, float u, float hardness)

@@ -1,6 +1,6 @@
 
-const vec4 Color1 = vec3(0.1,0.6,0.2,1.0);//	var: { "type": "colhdr" }
-const vec4 Color2 = vec3(0.03,0.2,0.0.06,1.0);//	var: { "type": "colhdr" }
+const vec4 Color1 = vec4(0.1,0.6,0.2,1.0);//	var: { "type": "colhdr" }
+const vec4 Color2 = vec4(0.03,0.2,0.06,1.0);//	var: { "type": "colhdr" }
 
 
 

@@ -114,7 +114,7 @@
                             return;
                         Open(url, "_self");
                     };
-                    const r = await MediaPlayerEffect.GetImage("Collage", Folder + "/" + name + ".glsl", mp, CreateTexture);
+                    const r = await MediaPlayerEffect.GetImage("Image", Folder + "/" + name + ".glsl", mp, CreateTexture);
                     const image = r[0];
                     if (!image)
                         continue;

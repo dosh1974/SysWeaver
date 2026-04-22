@@ -62,6 +62,13 @@ class EffectProgramData {
             t.waitCompilation = shader => gl.getShaderParameter(shader, gl.COMPILE_STATUS);
             t.waitLinking = prog => gl.getProgramParameter(prog, gl.LINK_STATUS);
         }
+
+        let debug = window.ShaderDebug;
+        if (typeof debug === "undefined") {
+            const p = new URL(window.location.href).searchParams;
+            debug = p.has("ShaderDebug") ? (p.get("ShaderDebug") === "true") : false;
+            window.ShaderDebug = debug;
+        }
         //  Parse and find variables
         const typeMap = EffectProgramData.TypeMap;
         const lines = src.split("\n");
@@ -99,32 +106,53 @@ class EffectProgramData {
                 return true;
             return false;
         }
+
+        /** Check in an identifier exists */
         function haveIdentifier(line, name) {
-            const ti = line.indexOf(name);
-            if (ti < 0)
-                return false;
-            if (isIdentifier(line, ti - 1))
-                return false;
-            if (isIdentifier(line, ti + name.length))
+            const sl = name.length;
+            if (sl <= 0)
                 return false;
             const c = line.indexOf("//");
-            if ((c >= 0) && (c < ti))
-                return false;
-            return true;
+            let start = 0;
+            for (; ;) {
+                const ti = line.indexOf(name, start);
+                if (ti < 0)
+                    return false;
+                if ((c >= 0) && (ti >= c))
+                    return false;
+                if (isIdentifier(line, ti - 1)) {
+                    start = ti + sl;
+                    continue;
+                }
+                start = ti + sl;
+                if (isIdentifier(line, start))
+                    continue;
+                return true;
+            }
         }
 
+        /** Check in an identifier exists (starting with a space such as function names) */
         function haveSpaceIdentifier(line, name) {
-            const ti = line.indexOf(name);
-            if (ti < 0)
-                return false;
-            if (!isSpace(line, ti - 1))
-                return false;
-            if (isIdentifier(line, ti + name.length))
+            const sl = name.length;
+            if (sl <= 0)
                 return false;
             const c = line.indexOf("//");
-            if ((c >= 0) && (c < ti))
-                return false;
-            return true;
+            let start = 0;
+            for (; ;) {
+                const ti = line.indexOf(name, start);
+                if (ti < 0)
+                    return false;
+                if ((c >= 0) && (ti >= c))
+                    return false;
+                if (!isSpace(line, ti - 1)) {
+                    start = ti + sl;
+                    continue;
+                }
+                start = ti + sl;
+                if (isIdentifier(line, start))
+                    continue;
+                return true;
+            }
         }
 
 
@@ -132,29 +160,27 @@ class EffectProgramData {
         for (let i = 0; i < lc; ++i) {
             const line = lines[i].trim();
             lines[i] = line;
-            if (!line.startsWith("const")) {
-
-                if (!line.startsWith("//")) {
-                    if (!havePrecision)
-                        havePrecision |= haveSpaceIdentifier(line, "precision");
-                    if (!haveMain)
-                        haveMain |= haveSpaceIdentifier(line, "main");
-                    if (!haveMainImage)
-                        haveMainImage |= haveSpaceIdentifier(line, "mainImage");
-                    if (!haveDerExt)
-                        haveDerExt |= haveSpaceIdentifier(line, "GL_OES_standard_derivatives");
-                    if (!haveDer) {
-                        haveDer |= haveIdentifier(line, "dFdx");
-                        haveDer |= haveIdentifier(line, "dFdy");
-                        haveDer |= haveIdentifier(line, "fwidth");
-                    }
-                    if (!haveLodExt)
-                        haveLodExt |= haveSpaceIdentifier(line, "GL_EXT_shader_texture_lod");
-                    if (!haveLod) {
-                        haveLod |= haveIdentifier(line, "texture2DLod");
-                    }
+            if (!line.startsWith("//")) {
+                if (!havePrecision)
+                    havePrecision |= haveSpaceIdentifier(line, "precision");
+                if (!haveMain)
+                    haveMain |= haveSpaceIdentifier(line, "main");
+                if (!haveMainImage)
+                    haveMainImage |= haveSpaceIdentifier(line, "mainImage");
+                if (!haveDerExt)
+                    haveDerExt |= haveSpaceIdentifier(line, "GL_OES_standard_derivatives");
+                if (!haveDer) {
+                    haveDer |= haveIdentifier(line, "dFdx");
+                    haveDer |= haveIdentifier(line, "dFdy");
+                    haveDer |= haveIdentifier(line, "fwidth");
                 }
-                continue;
+                if (!haveLodExt)
+                    haveLodExt |= haveSpaceIdentifier(line, "GL_EXT_shader_texture_lod");
+                if (!haveLod) {
+                    haveLod |= haveIdentifier(line, "texture2DLod");
+                }
+                if (!line.startsWith("const"))
+                    continue;
             }
             if (!isSpace(line, 5))
                 continue;
@@ -326,6 +352,25 @@ uniform vec4 iMouse;                // mouse pixel coords. xy: current (if MLB d
 uniform vec4 iDate;                 // (year, month, day, time in seconds)
 `;
         }
+
+
+        if (debug) {
+            console.log("haveDer: " + haveDer);
+            console.log("haveDerExt: " + haveDerExt);
+
+            console.log("haveLod: " + haveLod);
+            console.log("haveLodExt: " + haveLodExt);
+
+            console.log("haveLod: " + haveLod);
+            console.log("haveLodExt: " + haveLodExt);
+
+            console.log("haveMain: " + haveMain);
+            console.log("haveMainImage: " + haveMainImage);
+
+            console.log("### Shader prefix ###\n" + t.Prefix);
+            console.log("### Shader suffix ###\n" + t.Suffix);
+        }
+
     }
 
     // Compiles the program using some vars
@@ -345,6 +390,7 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
         if (!abortCheckFn)
             abortCheckFn = () => false;
         //  Apply vars and build source 
+
         t.ScriptPropsApply(vars);
         const src = t.Prefix + t.Lines.join("\n") + t.Suffix;
         let vsSrc;
@@ -356,6 +402,11 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
         else {
             vsSrc = defaultVS;
             fsSrc = src;
+        }
+        const debug = window.ShaderDebug;
+        if (debug) {
+            console.log("### Final vertex shader ###\n" + vsSrc);
+            console.log("### Final fragment shader ###\n" + fsSrc);
         }
         //  Compile shaders
         gl.shaderSource(fs, fsSrc);
@@ -378,23 +429,13 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
             return "Aborted";
         }
 		//	Output true shader 
-		let debug = window.ShaderDebug;
-		if (typeof debug === "undefined")
-		{
-			const p = new URL(window.location.href).searchParams;
-			debug = p.has("ShaderDebug") ? (p.get("ShaderDebug") === "true") : false;
-			window.ShaderDebug = debug;
-		}
 		if (debug)
 		{
 			const compTool = gl.getExtension("WEBGL_debug_shaders");
 			if (compTool)
 			{
-				console.log("### Vertex shader ###")
-				console.log(compTool.getTranslatedShaderSource(vs));
-			
-				console.log("### Fragment shader ###")
-				console.log(compTool.getTranslatedShaderSource(fs));
+				console.log("### OpenGL vertex shader ###\n" + compTool.getTranslatedShaderSource(vs));
+		        console.log("### OpenGL fragment shader ###\n" + compTool.getTranslatedShaderSource(fs));
 			}
 		}
 		//  Link the program and wait for finish (or abort)

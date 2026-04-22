@@ -37,7 +37,7 @@ class MediaPlayerEffect {
                 if (cached) {
                     const data = JSON.parse(cached);
                     const r = new Request(url, {
-                        method: "HEAD",
+                        method: "GET",
                         mode: "cors",
                         cache: "default",
                     });
@@ -86,7 +86,7 @@ class MediaPlayerEffect {
             return ret;
         }
         catch (ex) {
-            console.warn("Failed to read effect \"" + name + "\", " + ex.message);
+            console.warn("Failed to read effect \"" + url + "\", " + ex.message);
             return [null, ex.message];
         }
     }

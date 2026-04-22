@@ -7,7 +7,7 @@ precision highp float;
 uniform float time;
 uniform vec2 resolution;
 
-const vec3 Color = vec4(0.1, 0.6, 1.0);//	var: { "type": "colhdr" }
+const vec3 Color = vec3(0.1, 0.6, 1.0);//	var: { "type": "colhdr" }
 
 float rand(vec2 n) { 
 	return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
