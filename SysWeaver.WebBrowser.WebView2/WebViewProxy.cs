@@ -37,7 +37,9 @@ namespace SysWeaver.WebBrowser
                 var p = Params;
                 if (p.DisableGPU)
                     env.AdditionalBrowserArguments = "--disable-gpu";
-                var e = await CoreWebView2Environment.CreateAsync(runtimePath, null, env).ConfigureAwait(false);
+                var folder = Path.Combine(Folders.AllAppFolders[0], "WebView2User");
+                await PathExt.EnsureFolderExistAsync(folder).ConfigureAwait(false);
+                var e = await CoreWebView2Environment.CreateAsync(runtimePath, folder, env).ConfigureAwait(false);
                 E = e;
             }
 

@@ -18,8 +18,10 @@ namespace SysWeaver.MicroService
         public MediaService(ServiceManager manager, MediaParams p = null)
         {
             p = p ?? new MediaParams();
-            GoogleMapsKey = p.GoogleMapsKey?.GetApiKey(false);
-            
+            var gmk = p.GoogleMapsKey?.GetApiKey(false);
+            GoogleMapsKey = gmk;
+            if (gmk == null)
+                manager.AddMessage("No Google Maps key supplied, Google map demo won't work!", MessageLevels.Debug);
             Manager = manager;
             var te = MediaEditor;
             foreach (var x in MediaExtensions)

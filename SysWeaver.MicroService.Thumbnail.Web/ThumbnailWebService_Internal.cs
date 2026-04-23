@@ -15,13 +15,14 @@ namespace SysWeaver.MicroService
         [ComVisible(true)]
         public sealed class AdaptiveSize : IDisposable
         {
-            public AdaptiveSize(IMessageHost m, String prefix, ScreenshotImageFormats format, int quality, bool optimizeForSpeed)
+            public AdaptiveSize(IMessageHost m, String prefix, ScreenshotImageFormats format, int quality, bool optimizeForSpeed, int extraDelay)
             {
                 M = m;
                 Prefix = prefix;
                 Format = format;
                 Quality = quality;
                 OptimizeForSpeed = optimizeForSpeed;
+                ExtraDelay = extraDelay;
             }
             readonly ScreenshotImageFormats Format;
             readonly int Quality;
@@ -32,7 +33,7 @@ namespace SysWeaver.MicroService
             internal IBrowserWindow Win;
             readonly SemaphoreSlim CsBlocker = new SemaphoreSlim(0, 1);
             readonly SemaphoreSlim JsBlocker = new SemaphoreSlim(0, 1);
-
+            readonly int ExtraDelay;
 
             public bool Dead;
 
@@ -86,6 +87,11 @@ namespace SysWeaver.MicroService
                     if (Dead)
                         return;
                     Dead = true;
+                    if (ExtraDelay > 0)
+                    {
+                        M.AddMessage(String.Concat(Prefix, "Waiting for ", ExtraDelay, " ms"), MessageLevels.Debug);
+                        await Task.Delay(ExtraDelay).ConfigureAwait(false);
+                    }
                     M.AddMessage(Prefix + "Page is taking a screen shot", MessageLevels.Debug);
                     switch (Format)
                     {
@@ -103,6 +109,7 @@ namespace SysWeaver.MicroService
                 {
                 }
                 b.Release();
+                CsBlocker.Release();
                 IsCapturing = false;
             }
 
@@ -113,7 +120,7 @@ namespace SysWeaver.MicroService
 
                     try
                     {
-                        await CsBlocker.WaitAsync(timeOut).ConfigureAwait(false);
+                        await CsBlocker.WaitAsync(timeOut + ExtraDelay).ConfigureAwait(false);
                     }
                     catch //(Exception ex)
                     {

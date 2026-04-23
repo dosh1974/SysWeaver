@@ -51,7 +51,11 @@ namespace SysWeaver
                 fn = PathTemplate.Resolve(fn);
                 fn = EnvInfo.MakeAbsoulte(fn);
                 if (!File.Exists(fn))
-                    throw new Exception("Credentials file " + fn.ToFilename() + " must exist!");
+                {
+                    if (mustBeValid)
+                        throw new Exception("Credentials file " + fn.ToFilename() + " must exist!");
+                    return null;
+                }
                 var t = FileExt.ReadNonCommentString(fn);
                 if (t == null)
                     throw new Exception("Credentials file " + fn.ToFilename() + " must contain at least one line of text!");
@@ -59,13 +63,14 @@ namespace SysWeaver
             }
             else
             {
+                var r = ApiKey?.Trim();
                 if (mustBeValid)
                 {
-                    if (String.IsNullOrEmpty(ApiKey))
+                    if (String.IsNullOrEmpty(r))
                         throw new Exception(nameof(ApiKey) + " parameter may not be empty!");
                 }
+                return r;
             }
-            return ApiKey;
         }
 
     }

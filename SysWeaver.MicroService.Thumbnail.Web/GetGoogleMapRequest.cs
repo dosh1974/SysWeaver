@@ -94,6 +94,14 @@ namespace SysWeaver.MicroService
         /// </summary>
         [EditDefault(false)]
         public bool OptimizeForSpeed;
+
+        /// <summary>
+        /// Wait an additional time before capturing the screen shot (in ms)
+        /// </summary>
+        [EditDefault(0)]
+        [EditRange(0, 100_000)]
+        public int ExtraDelayMs = 0;
+
     }
 
 
