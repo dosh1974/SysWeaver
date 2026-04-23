@@ -186,7 +186,11 @@ namespace SysWeaver.MicroService
                 await PathExt.TryDeleteFileAsync(dest).ConfigureAwait(false);
                 Interlocked.Exchange(ref file.InProgress, 0);
                 Exs.OnException(exx);
-                Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, fo folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, to folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                sync.Files.TryRemove(fileKey, out var __);
+                if (sync.Files.Count <= 0)
+                    if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) == 0)
+                        await Finalize(jobId, sync, context).ConfigureAwait(false);
                 throw;
             }
             finally
@@ -368,42 +372,47 @@ namespace SysWeaver.MicroService
             }
         }
 
-        async ValueTask<bool> Finalize(String jobId, Sync sync, HttpServerRequest context)
+
+
+        async ValueTask<bool> Finalize(String jobId, Sync sync, HttpServerRequest context, bool isError = false)
         {
             var dest = sync.DestPath;
             var target = sync.Target;
             try
             {
-                await WriteManifest(target, sync.R, dest, sync.CopyCount, sync.CopySize, sync.UploadCount, sync.UploadSize, sync.NetworkSize, sync.User, sync.Start).ConfigureAwait(false);
-                if (sync.UseFolder)
+                if (!isError)
                 {
-                    var exx = await InternalActivate(target, target.DestPath, dest, context).ConfigureAwait(false);
-                    if (exx == null)
+                    await WriteManifest(target, sync.R, dest, sync.CopyCount, sync.CopySize, sync.UploadCount, sync.UploadSize, sync.NetworkSize, sync.User, sync.Start).ConfigureAwait(false);
+                    if (sync.UseFolder)
                     {
-                        Manager.AddMessage(String.Concat(LogPrefix, "Activated folder \"", target.Name, "\""));
+                        var exx = await InternalActivate(target, target.DestPath, dest, context).ConfigureAwait(false);
+                        if (exx == null)
+                        {
+                            Manager.AddMessage(String.Concat(LogPrefix, "Activated folder \"", target.Name, "\""));
+                        }
+                        else
+                        {
+                            Exs.OnException(exx);
+                            Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, activating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                            return false;
+                        }
                     }
                     else
                     {
-                        Exs.OnException(exx);
-                        Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, activating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
-                        return false;
-                    }
-                }
-                else
-                {
-                    var bakFolder = String.Concat(dest.TrimEnd(Path.DirectorySeparatorChar), "_", jobId);
-                    var exx = await PathExt.TryMoveFolderAsync(dest, bakFolder).ConfigureAwait(false);
-                    if (exx == null)
-                    {
-                        new DirectoryInfo(bakFolder).LastAccessTimeUtc = DateTime.UtcNow;
-                        context.Server.InvalidateCache();
-                        Manager.AddMessage(String.Concat(LogPrefix, "Synced folder \"", target.Name, "\""));
-                    }
-                    else
-                    {
-                        Exs.OnException(exx);
-                        Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, creating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
-                        return false;
+                        var bakFolder = String.Concat(dest.TrimEnd(Path.DirectorySeparatorChar), "_", jobId);
+                        var exx = await PathExt.TryMoveFolderAsync(dest, bakFolder).ConfigureAwait(false);
+                        if (exx == null)
+                        {
+                            new DirectoryInfo(bakFolder).LastAccessTimeUtc = DateTime.UtcNow;
+                            context.Server.InvalidateCache();
+                            Manager.AddMessage(String.Concat(LogPrefix, "Synced folder \"", target.Name, "\""));
+                        }
+                        else
+                        {
+                            Exs.OnException(exx);
+                            Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, creating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                            return false;
+                        }
                     }
                 }
                 return true;

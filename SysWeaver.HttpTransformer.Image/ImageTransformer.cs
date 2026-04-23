@@ -54,8 +54,8 @@ namespace SysWeaver.HttpTransformer
                         CachedTransformerBuildStrategies.AlwaysDefer, 
                         [
                             new ImageFormat(".jpg"),
-                            new ImageFormat(MagickFormat.Avif, ".avif", 95),
-                            new ImageFormat(MagickFormat.WebP, ".webp", 100),
+                            new ImageFormat(MagickFormat.Avif, ".avif", 50),
+                            new ImageFormat(MagickFormat.WebP, ".webp", 60),
                         ]));
                 t.Add("image/pjpeg",
                     new ImageHandler(

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -522,6 +522,10 @@ namespace SysWeaver
             try
             {
                 Retry.Op(() => InternalMove(source, dest), retryCount, delayInMs);
+                Retry.Op(() => 
+                {
+                    using (new FileStream(dest, FileMode.Open, FileAccess.Read, FileShare.None)) ;
+                }, retryCount, delayInMs);
                 return null;
             }
             catch (Exception ex)
@@ -544,6 +548,10 @@ namespace SysWeaver
             try
             {
                 await Retry.OpAsync(() => InternalMove(source, dest), retryCount, delayInMs).ConfigureAwait(false);
+                await Retry.OpAsync(() =>
+                {
+                    using (new FileStream(dest, FileMode.Open, FileAccess.Read, FileShare.None)) ;
+                }, retryCount, delayInMs).ConfigureAwait(false);
                 return null;
             }
             catch (Exception ex)
@@ -847,6 +855,15 @@ namespace SysWeaver
         }
 
 
+
+        static void IsFolderReady(String folder)
+        {
+            foreach (var f in Directory.GetFiles(folder, "*", SearchOption.AllDirectories))
+            {
+                using (new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.None)) ;
+            }
+        }
+
         /// <summary>
         /// Renames / moves a folder
         /// </summary>
@@ -859,6 +876,7 @@ namespace SysWeaver
             try
             {
                 Retry.Op(() => Directory.Move(from, to), retryCount, delayInMs);
+                Retry.Op(() => IsFolderReady(to), retryCount, delayInMs);
                 return null;
             }
             catch (Exception ex)
@@ -879,6 +897,7 @@ namespace SysWeaver
             try
             {
                 await Retry.OpAsync(() => Directory.Move(from, to), retryCount, delayInMs).ConfigureAwait(false);
+                await Retry.OpAsync(() => IsFolderReady(to), retryCount, delayInMs).ConfigureAwait(false);
                 return null;
             }
             catch (Exception ex)
