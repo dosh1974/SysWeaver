@@ -734,13 +734,7 @@ namespace SysWeaver.Chat
                 if (l <= 0)
                     return d;
                 cl = context.Session.Language;
-                Task<LanguageInfo>[] tasks = new Task<LanguageInfo>[l];
-                for (int i = 0; i < l; ++i)
-                    tasks[i] = server.GetLocalizedLanguage(langs[i], cl);
-                await Task.WhenAll(tasks).ConfigureAwait(false);
-                for (int i = 0; i < l; ++i)
-                    d[i] = tasks[i].Result;
-                return d;
+                return await langs.ConvertAsync(l => server.GetLocalizedLanguage(l, cl)).ConfigureAwait(false);
             });
         }
 

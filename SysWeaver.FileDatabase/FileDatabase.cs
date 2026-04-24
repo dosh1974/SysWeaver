@@ -241,9 +241,7 @@ namespace SysWeaver.FileDatabase
                     }
                     if (tasks.Count > 0)
                         await Task.WhenAll(tasks).ConfigureAwait(false);
-                    tasks = all.Select(x => delete(x.Value)).ToList();
-                    if (tasks.Count > 0)
-                        await Task.WhenAll(tasks).ConfigureAwait(false);
+                    await all.ProcessAsync(x => delete(x.Value)).ConfigureAwait(false);
                     ValidFolders = validFolders;
                     Watchers = ws.ToArray();
                     Folders = newFolders.ToArray();

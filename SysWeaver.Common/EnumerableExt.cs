@@ -193,18 +193,29 @@ namespace SysWeaver
         /// <typeparam name="T"></typeparam>
         /// <param name="list">The list to process</param>
         /// <param name="action">The action to perform on each element</param>
+        /// <param name="maxConcurrency">The maximum number of concurrent operations.
+        /// If less than zero, it's a percentage of the number of available logical processors.
+        /// If zero the concurrency is the number of processors minus one.
+        /// Ex:
+        /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
+        /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
+        /// 0 = Number of processors minus one (so 7 if there are 8 processors).
+        /// </param>
         /// <returns></returns>
-        public static async Task ProcessAsync<T>(this IReadOnlyList<T> list, Func<T, Task> action)
+        public static Task ProcessAsync<T>(this IReadOnlyList<T> list, Func<T, Task> action, int maxConcurrency = 0)
         {
             if (list == null)
-                return;
+                return Task.CompletedTask;
             var l = list.Count;
             if (l <= 0)
-                return;
+                return Task.CompletedTask;
+            if (l == 1)
+                return action(list[0]);
+            ConcurrencyLimiter.LimitConcurrency(ref action, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<Task>(l);
             for (int i = 0; i < l; ++i)
                 tt[i] = action(list[i]);
-            await Task.WhenAll(tt).ConfigureAwait(false);
+            return Task.WhenAll(tt);
         }
 
         /// <summary>
@@ -214,9 +225,17 @@ namespace SysWeaver
         /// <typeparam name="T"></typeparam>
         /// <param name="enumerable">The enumerable to process</param>
         /// <param name="action">The action to perform on each element</param>
+        /// <param name="maxConcurrency">The maximum number of concurrent operations.
+        /// If less than zero, it's a percentage of the number of available logical processors.
+        /// If zero the concurrency is the number of processors minus one.
+        /// Ex:
+        /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
+        /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
+        /// 0 = Number of processors minus one (so 7 if there are 8 processors).
+        /// </param>
         /// <returns></returns>
-        public static Task ProcessAsync<T>(this IEnumerable<T> enumerable, Func<T, Task> action)
-            => ProcessAsync(enumerable.ToList(), action);
+        public static Task ProcessAsync<T>(this IEnumerable<T> enumerable, Func<T, Task> action, int maxConcurrency = 0)
+            => ProcessAsync(enumerable.ToList(), action, maxConcurrency);
 
         /// <summary>
         /// Process all elements in a list.
@@ -225,18 +244,29 @@ namespace SysWeaver
         /// <typeparam name="T"></typeparam>
         /// <param name="list">The list to process</param>
         /// <param name="action">The action to perform on each element</param>
+        /// <param name="maxConcurrency">The maximum number of concurrent operations.
+        /// If less than zero, it's a percentage of the number of available logical processors.
+        /// If zero the concurrency is the number of processors minus one.
+        /// Ex:
+        /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
+        /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
+        /// 0 = Number of processors minus one (so 7 if there are 8 processors).
+        /// </param>
         /// <returns></returns>
-        public static async ValueTask ProcessAsyncValue<T>(this IReadOnlyList<T> list, Func<T, ValueTask> action)
+        public static ValueTask ProcessAsyncValue<T>(this IReadOnlyList<T> list, Func<T, ValueTask> action, int maxConcurrency = 0)
         {
             if (list == null)
-                return;
+                return TaskExt.CompValTask;
             var l = list.Count;
             if (l <= 0)
-                return;
+                return TaskExt.CompValTask;
+            if (l == 1)
+                return action(list[0]);
+            ConcurrencyLimiter.LimitConcurrency(ref action, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<ValueTask>(l);
             for (int i = 0; i < l; ++i)
                 tt[i] = action(list[i]);
-            await TaskExt.WhenAll(tt).ConfigureAwait(false);
+            return TaskExt.WhenAll(tt);
         }
 
         /// <summary>
@@ -246,9 +276,17 @@ namespace SysWeaver
         /// <typeparam name="T"></typeparam>
         /// <param name="enumerable">The enumerable to process</param>
         /// <param name="action">The action to perform on each element</param>
+        /// <param name="maxConcurrency">The maximum number of concurrent operations.
+        /// If less than zero, it's a percentage of the number of available logical processors.
+        /// If zero the concurrency is the number of processors minus one.
+        /// Ex:
+        /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
+        /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
+        /// 0 = Number of processors minus one (so 7 if there are 8 processors).
+        /// </param>
         /// <returns></returns>
-        public static ValueTask ProcessAsyncValue<T>(this IEnumerable<T> enumerable, Func<T, ValueTask> action)
-            => ProcessAsyncValue(enumerable.ToList(), action);
+        public static ValueTask ProcessAsyncValue<T>(this IEnumerable<T> enumerable, Func<T, ValueTask> action, int maxConcurrency = 0)
+            => ProcessAsyncValue(enumerable.ToList(), action, maxConcurrency);
 
 
 
@@ -261,18 +299,29 @@ namespace SysWeaver
         /// <typeparam name="T"></typeparam>
         /// <param name="list">The list to process</param>
         /// <param name="action">The action to perform on each element</param>
+        /// <param name="maxConcurrency">The maximum number of concurrent operations.
+        /// If less than zero, it's a percentage of the number of available logical processors.
+        /// If zero the concurrency is the number of processors minus one.
+        /// Ex:
+        /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
+        /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
+        /// 0 = Number of processors minus one (so 7 if there are 8 processors).
+        /// </param>
         /// <returns></returns>
-        public static async Task ProcessAsync<T>(this IReadOnlyList<T> list, Func<T, int, Task> action)
+        public static Task ProcessAsync<T>(this IReadOnlyList<T> list, Func<T, int, Task> action, int maxConcurrency = 0)
         {
             if (list == null)
-                return;
+                return Task.CompletedTask;
             var l = list.Count;
             if (l <= 0)
-                return;
+                return Task.CompletedTask;
+            if (l == 1)
+                return action(list[0], 0);
+            ConcurrencyLimiter.LimitConcurrency(ref action, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<Task>(l);
             for (int i = 0; i < l; ++i)
                 tt[i] = action(list[i], i);
-            await Task.WhenAll(tt).ConfigureAwait(false);
+            return Task.WhenAll(tt);
         }
 
         /// <summary>
@@ -282,9 +331,17 @@ namespace SysWeaver
         /// <typeparam name="T"></typeparam>
         /// <param name="enumerable">The enumerable to process</param>
         /// <param name="action">The action to perform on each element</param>
+        /// <param name="maxConcurrency">The maximum number of concurrent operations.
+        /// If less than zero, it's a percentage of the number of available logical processors.
+        /// If zero the concurrency is the number of processors minus one.
+        /// Ex:
+        /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
+        /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
+        /// 0 = Number of processors minus one (so 7 if there are 8 processors).
+        /// </param>
         /// <returns></returns>
-        public static Task ProcessAsync<T>(this IEnumerable<T> enumerable, Func<T, int, Task> action)
-            => ProcessAsync(enumerable.ToList(), action);
+        public static Task ProcessAsync<T>(this IEnumerable<T> enumerable, Func<T, int, Task> action, int maxConcurrency = 0)
+            => ProcessAsync(enumerable.ToList(), action, maxConcurrency);
 
         /// <summary>
         /// Process all elements in a list.
@@ -293,18 +350,29 @@ namespace SysWeaver
         /// <typeparam name="T"></typeparam>
         /// <param name="list">The list to process</param>
         /// <param name="action">The action to perform on each element</param>
+        /// <param name="maxConcurrency">The maximum number of concurrent operations.
+        /// If less than zero, it's a percentage of the number of available logical processors.
+        /// If zero the concurrency is the number of processors minus one.
+        /// Ex:
+        /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
+        /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
+        /// 0 = Number of processors minus one (so 7 if there are 8 processors).
+        /// </param>
         /// <returns></returns>
-        public static async ValueTask ProcessAsyncValue<T>(this IReadOnlyList<T> list, Func<T, int, ValueTask> action)
+        public static ValueTask ProcessAsyncValue<T>(this IReadOnlyList<T> list, Func<T, int, ValueTask> action, int maxConcurrency = 0)
         {
             if (list == null)
-                return;
+                return TaskExt.CompValTask;
             var l = list.Count;
             if (l <= 0)
-                return;
+                return TaskExt.CompValTask;
+            if (l == 1)
+                return action(list[0], 0);
+            ConcurrencyLimiter.LimitConcurrency(ref action, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<ValueTask>(l);
             for (int i = 0; i < l; ++i)
                 tt[i] = action(list[i], i);
-            await TaskExt.WhenAll(tt).ConfigureAwait(false);
+            return TaskExt.WhenAll(tt);
         }
 
         /// <summary>
@@ -314,9 +382,17 @@ namespace SysWeaver
         /// <typeparam name="T"></typeparam>
         /// <param name="enumerable">The enumerable to process</param>
         /// <param name="action">The action to perform on each element</param>
+        /// <param name="maxConcurrency">The maximum number of concurrent operations.
+        /// If less than zero, it's a percentage of the number of available logical processors.
+        /// If zero the concurrency is the number of processors minus one.
+        /// Ex:
+        /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
+        /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
+        /// 0 = Number of processors minus one (so 7 if there are 8 processors).
+        /// </param>
         /// <returns></returns>
-        public static ValueTask ProcessAsyncValue<T>(this IEnumerable<T> enumerable, Func<T, int, ValueTask> action)
-            => ProcessAsyncValue(enumerable.ToList(), action);
+        public static ValueTask ProcessAsyncValue<T>(this IEnumerable<T> enumerable, Func<T, int, ValueTask> action, int maxConcurrency = 0)
+            => ProcessAsyncValue(enumerable.ToList(), action, maxConcurrency);
 
 
 

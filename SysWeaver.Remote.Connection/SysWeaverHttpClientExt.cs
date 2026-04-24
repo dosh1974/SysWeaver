@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -297,23 +298,7 @@ namespace SysWeaver
             if (count <= 0)
                 return false;
             urlbase = urlbase + "upload/Upload?repo=" + repo;
-            List<Task<FileStatus>> tasks = new List<Task<FileStatus>>(count);
-            for (int i = 0; i < count; ++i)
-            {
-                var f = info[i];
-                if (f.Status != FileStatus.Upload)
-                    continue;
-                tasks.Add(UploadOne(client, urlbase, f));
-            }
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-            for (int i = 0, src = 0; i < count; ++i)
-            {
-                var f = info[i];
-                if (f.Status != FileStatus.Upload)
-                    continue;
-                f.Status = tasks[src].Result;
-                ++src;
-            }
+            await info.Where(f => f.Status == FileStatus.Upload).ProcessAsync(f => UploadOne(client, urlbase, f)).ConfigureAwait(false);
             return true;
         }
 

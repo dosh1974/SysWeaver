@@ -876,14 +876,11 @@ namespace SysWeaver.Data
                 --limit;
             }
             var rc = rows.Count;
-            count += rc;
-            if ((limit == 0) && (lookAhead > 0))
+            count = rc;
+            while ((lookAhead > 0) && it.MoveNext())
             {
-                while ((lookAhead > 0) && it.MoveNext())
-                {
-                    ++count;
-                    --lookAhead;
-                }
+                ++count;
+                --lookAhead;
             }
             return rc > 0 ? rows.ToArray() : Empty;
         }
@@ -905,14 +902,11 @@ namespace SysWeaver.Data
                 --limit;
             }
             var rc = rows.Count;
-            count += rc;
-            if ((limit == 0) && (lookAhead > 0))
+            count = rc;
+            while ((lookAhead > 0) && it.MoveNext())
             {
-                while ((lookAhead > 0) && it.MoveNext())
-                {
-                    ++count;
-                    --lookAhead;
-                }
+                ++count;
+                --lookAhead;
             }
             return rc > 0 ? rows.ToArray() : EmptyT;
         }

@@ -2793,17 +2793,10 @@ namespace SysWeaver.Net
                     var langs = await GetSupportedLanguages().ConfigureAwait(false);
                     if (langs == null)
                         return null;
-                    var l = langs.Length;
-                    var d = new LanguageInfo[l];
-                    if (l <= 0)
-                        return d;
+                    if (langs.Length <= 0)
+                        return Array.Empty<LanguageInfo>();
                     cl = context.Session.Language;
-                    Task<LanguageInfo>[] tasks = new Task<LanguageInfo>[l];
-                    for (int i = 0; i < l; ++i)
-                        tasks[i] = GetLocalizedLanguage(langs[i], cl);
-                    await Task.WhenAll(tasks).ConfigureAwait(false);
-                    for (int i = 0; i < l; ++i)
-                        d[i] = tasks[i].Result;
+                    var d = await langs.ConvertAsync(lang => GetLocalizedLanguage(lang, cl)).ConfigureAwait(false);
                     return d;
                 });
 

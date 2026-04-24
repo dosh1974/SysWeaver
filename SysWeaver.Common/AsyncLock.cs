@@ -72,8 +72,16 @@ namespace SysWeaver
             D = new I(maxConcurrentAccess);
         }
 
+#if DEBUG
+        public override string ToString() => "Lock : " + D.S.CurrentCount;
+#endif//DEBUG
+
+
         sealed class I : IDisposable
         {
+#if DEBUG
+            public override string ToString() => "Lock instance: " + S.CurrentCount;
+#endif//DEBUG
             public I(int maxConcurrentAccess)
             {
                 if (maxConcurrentAccess <= 0)

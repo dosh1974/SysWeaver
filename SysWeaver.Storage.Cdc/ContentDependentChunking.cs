@@ -368,11 +368,7 @@ namespace SysWeaver
             if (files != null)
             {
                 //  Folder, process files in parallel
-                var fl = files.Length;
-                ValueTask[] tasks = new ValueTask[fl];
-                for (int i = 0; i < fl; ++ i)
-                    tasks[i] = DoOne(Path.Combine(destName, files[i]), await ReadFile(s, hashSize).ConfigureAwait(false));
-                await TaskExt.WhenAll(tasks).ConfigureAwait(false);
+                await files.ProcessAsyncValue(async f => await DoOne(Path.Combine(destName, f), await ReadFile(s, hashSize).ConfigureAwait(false)).ConfigureAwait(false)).ConfigureAwait(false);
             }
             else
             {
@@ -490,12 +486,7 @@ namespace SysWeaver
 
             if (files != null)
             {
-                //  Folder, process files in parallel
-                var fl = files.Length;
-                ValueTask[] tasks = new ValueTask[fl];
-                for (int i = 0; i < fl; ++i)
-                    tasks[i] = DoOne(Path.Combine(destName, files[i]), await ReadFile(s, hashSize).ConfigureAwait(false));
-                await TaskExt.WhenAll(tasks).ConfigureAwait(false);
+                await files.ProcessAsyncValue(async f => await DoOne(Path.Combine(destName, f), await ReadFile(s, hashSize).ConfigureAwait(false)).ConfigureAwait(false)).ConfigureAwait(false);
             }
             else
             {

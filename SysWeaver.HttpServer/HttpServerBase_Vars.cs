@@ -182,15 +182,9 @@ namespace SysWeaver.Net
             {
                 using var _ = PerfMon.Track(nameof(GetTranslationVars));
                 using var __ = PerfMon.Track(String.Concat(nameof(GetTranslationVars), '.', language));
-                Task<String>[] tasks = new Task<String>[l];
+                var trs = await v.ConvertAsync(d => tr.TranslateSafe(d.Text, language, "en", d.Context)).ConfigureAwait(false);
                 for (int i = 0; i < l; ++i)
-                {
-                    var d = v[i];
-                    tasks[i] = tr.TranslateSafe(d.Text, language, "en", d.Context);
-                }
-                await Task.WhenAll(tasks).ConfigureAwait(false);
-                for (int i = 0; i < l; ++i)
-                    r.Add(v[i].VarName, tasks[i].Result);
+                    r.Add(v[i].VarName, trs[i]);
             }
             if (vars != null)
             {

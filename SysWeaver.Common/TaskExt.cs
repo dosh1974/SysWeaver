@@ -146,6 +146,11 @@ namespace SysWeaver
         public static readonly Task<String> EmptyStringTask = Task.FromResult("");
 
         /// <summary>
+        /// A complete task for an empty string array
+        /// </summary>
+        public static readonly Task<String[]> EmptyStringArrayTask = Task.FromResult(Array.Empty<String>());
+
+        /// <summary>
         /// A complete task for a True boolean
         /// </summary>
         public static readonly Task<Boolean> TrueTask = Task.FromResult(true);
@@ -171,6 +176,10 @@ namespace SysWeaver
         /// A complete value task for a null string
         /// </summary>
         public static readonly ValueTask<String> EmptyStringValueTask = ValueTask.FromResult("");
+
+        /// A complete task for an empty string array
+        /// </summary>
+        public static readonly ValueTask<String[]> EmptyStringArrayValueTask = ValueTask.FromResult(Array.Empty<String>());
 
         /// <summary>
         /// A complete value task for a True boolean

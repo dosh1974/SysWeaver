@@ -190,7 +190,7 @@ namespace SysWeaver.MicroService
                 sync.Files.TryRemove(fileKey, out var __);
                 if (sync.Files.Count <= 0)
                     if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) == 0)
-                        await Finalize(jobId, sync, context).ConfigureAwait(false);
+                        await Finalize(jobId, sync, context, true).ConfigureAwait(false);
                 throw;
             }
             finally
@@ -277,6 +277,10 @@ namespace SysWeaver.MicroService
                 Interlocked.Exchange(ref file.InProgress, 0);
                 Exs.OnException(exx);
                 Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, fo folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                sync.Files.TryRemove(fileKey, out var __);
+                if (sync.Files.Count <= 0)
+                    if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) == 0)
+                        await Finalize(jobId, sync, context, true).ConfigureAwait(false);
                 throw;
             }
             finally
@@ -350,20 +354,21 @@ namespace SysWeaver.MicroService
                     return null;
                 }).ConfigureAwait(false);
                 sync.Touch();
-                foreach (var e in exceptions)
-                    if (e != null)
-                        throw e;
-                if (sync.Files.Count > 0)
-                    return true;
-                if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) != 0)
-                    return true;
-                await Finalize(jobId, sync, context).ConfigureAwait(false);
+                var e = exceptions.FirstOrDefault(x => x != null);
+                if (sync.Files.Count <= 0)
+                    if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) == 0)
+                        await Finalize(jobId, sync, context, e != null).ConfigureAwait(false);
+                if (e != null)
+                    throw e;
                 return true;
             }
             catch (Exception exx)
             {
                 Exs.OnException(exx);
                 Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, to folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                if (sync.Files.Count <= 0)
+                    if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) == 0)
+                        await Finalize(jobId, sync, context, true).ConfigureAwait(false);
                 throw;
             }
             finally

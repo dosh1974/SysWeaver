@@ -204,19 +204,15 @@ namespace SysWeaver.MicroService
                     throw new Exception("Can't translate to \"" + tos[i] + "\"");
                 tos[i] = to;
             }
-            Task<String[]>[] tasks = new Task<string[]>[c];
-            for (int i = 0; i < c; ++i)
+            var data = await texts.ConvertAsync(text =>
             {
-                var text = texts[i];
                 if (text.AnyLetter())
-                    tasks[i] = InternalValidated(texts[i], tos, from, context, effort, retention, contentType);
-                else
-                    tasks[i] = Task.FromResult(ArrayExt.Create(count, text));
-            }
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+                    return InternalValidated(text, tos, from, context, effort, retention, contentType);
+                return Task.FromResult(ArrayExt.Create(count, text));
+            }).ConfigureAwait(false);
             String[] res = GC.AllocateUninitializedArray<string>(count * c);
             for (int i = 0, o = 0; i < c; ++i, o += count)
-                Array.Copy(tasks[i].Result, 0, res, o, count);
+                Array.Copy(data[i], 0, res, o, count);
             return res;
         }
 

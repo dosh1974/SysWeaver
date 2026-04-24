@@ -379,6 +379,8 @@ namespace SysWeaver.FolderSync
                         r[i] = SendSome(offset, count);
                     }
                     await Task.WhenAll(r).ConfigureAwait(false);
+
+
                     foreach (var rr in r)
                     {
                         var xres = rr.Result;

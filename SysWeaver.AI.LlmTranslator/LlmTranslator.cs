@@ -308,41 +308,30 @@ namespace SysWeaver.AI
 
         #region IInternalTranslator
 
-        public async Task<string[]> Translate(string text, string to, string from, string context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
+        public Task<string[]> Translate(string text, string to, string from, string context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var dest = to.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             var count = dest.Length;
             if (text.FastStartsWith(TranslationTools.NoTranslatePrefix))
             {
                 text = text.Substring(TranslationTools.NoTranslatePrefixLength);
-                return ArrayExt.Create(count, text);
+                return Task.FromResult(ArrayExt.Create(count, text));
             }
             if (count <= 0)
-                return Array.Empty<String>();
-            var tasks = dest.Convert(x => TranslateOne(text, x, from, context, effort, retention, contentType));
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-            return tasks.Convert(x => x.Result);
+                return TaskExt.EmptyStringArrayTask;
+            return dest.ConvertAsync(x => TranslateOne(text, x, from, context, effort, retention, contentType));
         }
 
         readonly int RetryCount;
 
-        public async Task<string[]> TranslateMultiple(string[] texts, string to, string from, string context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
+        public Task<string[]> TranslateMultiple(string[] texts, string to, string from, string context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {
             var dest = to.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             var count = dest.Length;
             if (count <= 0)
-                return Array.Empty<String>();
+                return Task.FromResult(Array.Empty<String>());
             var textCount = texts.Length;
-            var langCount = dest.Length;
-            Task<String>[] tasks = new Task<string>[textCount * langCount];
-            for (int i = 0, x = 0; i < langCount; ++ i)
-            {
-                var destLang = dest[i];
-                for (int j = 0; j < textCount; ++j, ++x)
-                    tasks[x] = TranslateOne(texts[j], destLang, from, context, effort, retention, contentType);
-            }
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-            return tasks.Convert(x => x.Result);
+            return ArrayExt.CreateAsync(textCount * dest.Length, i => TranslateOne(texts[i % textCount], dest[i / textCount], from, context, effort, retention, contentType));
         }
 
         public async Task<string> TranslateOne(string text, string to, string from, string context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)

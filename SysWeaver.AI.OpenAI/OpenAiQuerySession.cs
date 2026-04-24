@@ -1,6 +1,7 @@
 ﻿using OpenAI.Chat;
 using System;
 using System.ClientModel;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -112,7 +113,7 @@ namespace SysWeaver.AI
             return true;
         }
 
-        async Task<OpenAiCallInstance> AiCall(String name, BinaryData b, HttpServerRequest request, Dictionary<String, int> callIcons)
+        async Task<OpenAiCallInstance> AiCall(String name, BinaryData b, HttpServerRequest request, ConcurrentDictionary<String, int> callIcons)
         {
             var start = DateTime.UtcNow;
             if (!Tools.TryGetValue(name, out var tool))
@@ -141,8 +142,8 @@ namespace SysWeaver.AI
             if (tcl <= 0)
                 return;
             debugMsg?.StartBatch();
+            ConcurrentDictionary<String, int> icons = new (StringComparer.Ordinal);
             Task<OpenAiCallInstance>[] tasks = new Task<OpenAiCallInstance>[tcl];
-            Dictionary<String, int> icons = new Dictionary<string, int>();
             for (int i = 0; i < tcl; ++i)
             {
                 var tc = tcs[i];

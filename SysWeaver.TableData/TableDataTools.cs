@@ -1327,17 +1327,8 @@ namespace SysWeaver.Data
             if (rows == null)
                 return data;
             var l = rows.Length;
-            if (l <= 0)
-                return data;
-            if (l == 1)
-            {
-                await tr(translator, to, rows[0].Values, effort, retention).ConfigureAwait(false);
-                return data;
-            }
-            var tasks = new Task[l];
-            for (int i = 0; i < l; ++i)
-                tasks[i] = tr(translator, to, rows[i].Values, effort, retention);
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+            if (l > 0)
+                await rows.ProcessAsync(row => tr(translator, to, row.Values, effort, retention)).ConfigureAwait(false);
             return data;
         }
 
@@ -1363,12 +1354,8 @@ namespace SysWeaver.Data
             if (rows == null)
                 return data;
             var l = rows.Length;
-            if (l <= 0)
-                return data;
-            var tasks = new Task[l];
-            for (int i = 0; i < l; ++i)
-                tasks[i] = tr(translator, to, rows[i], effort, retention);
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+            if (l > 0)
+                await rows.ProcessAsync(row => tr(translator, to, row, effort, retention)).ConfigureAwait(false);
             return data;
         }
 

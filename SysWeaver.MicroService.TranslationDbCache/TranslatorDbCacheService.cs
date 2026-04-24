@@ -227,26 +227,17 @@ namespace SysWeaver.MicroService
                     throw new Exception("Can't translate to \"" + tos[i] + "\"");
                 tos[i] = to;
             }
-            Task<String[]>[] tasks = new Task<string[]>[c];
-            for (int i = 0; i < c; ++i)
+            var all = await texts.ConvertAsync(text =>
             {
-                var text = texts[i];
                 if (text.FastStartsWith(TranslationTools.NoTranslatePrefix))
-                {
-                    tasks[i] = InternalValidated(text.Substring(TranslationTools.NoTranslatePrefixLength), tos, from, context, effort, retention, contentType);
-                }
-                else
-                {
-                    if (text.AnyLetter())
-                        tasks[i] = InternalValidated(text, tos, from, context, effort, retention, contentType);
-                    else
-                        tasks[i] = Task.FromResult(ArrayExt.Create(count, text));
-                }
-            }
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+                    return InternalValidated(text.Substring(TranslationTools.NoTranslatePrefixLength), tos, from, context, effort, retention, contentType);
+                if (text.AnyLetter())
+                    return InternalValidated(text, tos, from, context, effort, retention, contentType);
+                return Task.FromResult(ArrayExt.Create(count, text));
+            }).ConfigureAwait(false);
             String[] res = GC.AllocateUninitializedArray<string>(count * c);
             for (int i = 0, o = 0; i < c; ++i, o += count)
-                Array.Copy(tasks[i].Result, 0, res, o, count);
+                Array.Copy(all[i], 0, res, o, count);
             return res;
         }
 

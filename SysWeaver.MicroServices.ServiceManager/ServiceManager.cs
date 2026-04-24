@@ -1280,11 +1280,7 @@ namespace SysWeaver.MicroService
                 return Task.CompletedTask;
             if (kl == 1)
                 return DeliverMessage(k[0], key, data);
-            Task[] tasks = GC.AllocateUninitializedArray<Task>(kl);
-            var du = tasks.AsSpan();
-            for (int i = 0; i < kl; ++i)
-                du[i] = DeliverMessage(k[i], key, data);
-            return Task.WhenAll(tasks);
+            return k.ProcessAsync(v => DeliverMessage(v, key, data));
         }
 
 
