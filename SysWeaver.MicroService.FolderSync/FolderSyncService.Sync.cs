@@ -13,6 +13,7 @@ namespace SysWeaver.MicroService
         sealed class Sync
         {
             public readonly ConcurrentDictionary<String, FileSync> Files = new ConcurrentDictionary<string, FileSync>();
+            public readonly ConcurrentDictionary<ReadOnlyMemory<Byte>, int> MissingChunks = new(ReadOnlyMemoryComparer.GetEqualityComparer<Byte>());
             public readonly ManagedFolder Target;
             public readonly String DestPath;
             public readonly bool UseFolder;

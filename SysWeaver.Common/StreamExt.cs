@@ -30,7 +30,7 @@ namespace SysWeaver
                 pre = encoding.GetPreamble();
                 pp.TryAdd(encoding, pre);
             }
-            if (pre != null)
+            if ((pre?.Length ?? 0) > 0)
             {
                 var l = pre.Length;
                 if (l <= data.Length)

@@ -876,7 +876,7 @@ namespace SysWeaver
             try
             {
                 Retry.Op(() => Directory.Move(from, to), retryCount, delayInMs);
-                Retry.Op(() => IsFolderReady(to), retryCount, delayInMs);
+                //Retry.Op(() => IsFolderReady(to), retryCount, delayInMs);
                 return null;
             }
             catch (Exception ex)
@@ -897,7 +897,7 @@ namespace SysWeaver
             try
             {
                 await Retry.OpAsync(() => Directory.Move(from, to), retryCount, delayInMs).ConfigureAwait(false);
-                await Retry.OpAsync(() => IsFolderReady(to), retryCount, delayInMs).ConfigureAwait(false);
+                //await Retry.OpAsync(() => IsFolderReady(to), retryCount, delayInMs).ConfigureAwait(false);
                 return null;
             }
             catch (Exception ex)

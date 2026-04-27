@@ -37,9 +37,10 @@ namespace SysWeaver
         /// </summary>
         /// <param name="memory">The memory to save</param>
         /// <param name="filename">The file to write to (overwites existing)</param>
+        /// <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void WriteToFile(this ReadOnlyMemory<Byte> memory, String filename)
-            => WriteMemory(filename, memory);
+        public static void WriteToFile(this ReadOnlyMemory<Byte> memory, String filename, bool ensureWriteTo = false)
+            => WriteMemory(filename, memory, ensureWriteTo);
 
         /// <summary>
         /// Save all memory to disc
@@ -69,29 +70,41 @@ namespace SysWeaver
         /// </summary>
         /// <param name="memory">The memory to save</param>
         /// <param name="filename">The file to write to (overwites existing)</param>
+        /// <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueTask WriteToFileAsync(this ReadOnlyMemory<Byte> memory, String filename)
-            => WriteMemoryAsync(filename, memory);
+        public static ValueTask WriteToFileAsync(this ReadOnlyMemory<Byte> memory, String filename, bool ensureWriteTo = false)
+            => WriteMemoryAsync(filename, memory, ensureWriteTo);
 
         /// <summary>
         /// Save all memory to disc
         /// </summary>
         /// <param name="memory">The memory to save</param>
         /// <param name="filename">The file to write to (overwites existing)</param>
+        /// <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueTask WriteToFileAsync(this Memory<Byte> memory, String filename)
-            => WriteMemoryAsync(filename, memory);
+        public static ValueTask WriteToFileAsync(this Memory<Byte> memory, String filename, bool ensureWriteTo = false)
+            => WriteMemoryAsync(filename, memory, ensureWriteTo);
 
         /// <summary>
         /// Save all span to disc
         /// </summary>
         /// <param name="filename">The file to write to (overwites existing)</param>
         /// <param name="span">The span to save</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void WriteSpan(String filename, ReadOnlySpan<Byte> span)
+        /// <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
+        public static void WriteSpan(String filename, ReadOnlySpan<Byte> span, bool ensureWriteTo = false)
         {
             using var s = new FileStream(filename, FileMode.Create, FileAccess.Write);
             s.Write(span);
+            if (!ensureWriteTo)
+                return;
+            s.Flush();
+            try
+            {
+                PlatformTools.Current.FlushToDisc(s.SafeFileHandle);
+            }
+            catch
+            {
+            }
         }
 
         /// <summary>
@@ -99,9 +112,10 @@ namespace SysWeaver
         /// </summary>
         /// <param name="span">The span to save</param>
         /// <param name="filename">The file to write to (overwites existing)</param>
+        /// <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void WriteToFile(this ReadOnlySpan<Byte> span, String filename)
-            => WriteSpan(filename, span);
+        public static void WriteToFile(this ReadOnlySpan<Byte> span, String filename, bool ensureWriteTo = false)
+            => WriteSpan(filename, span, ensureWriteTo);
 
 
         /// <summary>

@@ -150,5 +150,20 @@
             Create a json data blob from an object
             </summary>
         </member>
+        <member name="M:SysWeaver.SerExtensions.FromJsonData``1(System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            Create an object from some json data
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SerExtensions.FromJsonData``1(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Create an object from some json data
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SerExtensions.FromJsonData``1(System.Byte[])">
+            <summary>
+            Create an object from some json data
+            </summary>
+        </member>
     </members>
 </doc>

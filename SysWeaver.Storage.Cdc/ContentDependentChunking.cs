@@ -65,13 +65,13 @@ namespace SysWeaver
 
         static ulong ReadVar(Stream s)
         {
+            Span<Byte> data = stackalloc Byte[1];
             ulong res = 0;
             int shift = 0;
             for (; ; )
             {
-                int b = s.ReadByte();
-                if (b < 0)
-                    throw new Exception("Unexpected end of file!");
+                s.ReadExactly(data);
+                var b = data[0];
                 ulong d = (ulong)(b & 0x7f);
                 d <<= shift;
                 shift += 7;
@@ -838,12 +838,21 @@ namespace SysWeaver
             props = props ?? CdcProps.Default;
             ReadOnlyMemory<Byte> mem;
             long l;
-            using (var s = TryOpenCompressedChunk(hashStr, props))
+            try
             {
-                if (s == null)
-                    return 0;
-                mem = await props.Comp.GetDecompressedAsync(s).ConfigureAwait(false);
-                l = s.Position;
+                using (var s = TryOpenCompressedChunk(hashStr, props))
+                {
+                    if (s == null)
+                        return 0;
+                    mem = await props.Comp.GetDecompressedAsync(s).ConfigureAwait(false);
+                    l = s.Position;
+                }
+            }
+            catch
+            {
+                var fileName = GetFilename(hashStr, props);
+                await PathExt.TryDeleteFileAsync(fileName).ConfigureAwait(false);
+                throw;
             }
             await dest.WriteAsync(mem).ConfigureAwait(false);
             return l;
@@ -1067,6 +1076,9 @@ namespace SysWeaver
         static async ValueTask<bool> TrySaveChunk(String hashStr, ReadOnlyMemory<Byte> data, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
+#if DEBUG
+            var decompSize = props.Comp.GetDecompressed(data.Span);
+#endif//DEBUG
             var fileName = GetFilename(hashStr, props);
             var fi = new FileInfo(fileName);
             if (fi.Exists && (fi.Length > 0))
@@ -1090,6 +1102,10 @@ namespace SysWeaver
                 await data.WriteToFileAsync(tempName).ConfigureAwait(false);
                 if (await PathExt.TryMoveFileAsync(tempName, fileName).ConfigureAwait(false) != null)
                     return false;
+#if DEBUG
+                decompSize = props.Comp.GetDecompressed(File.ReadAllBytes(fileName));
+#endif//DEBUG
+
             }
             catch
             {
@@ -1390,7 +1406,7 @@ namespace SysWeaver
             props = props ?? CdcProps.Default;
             var hashSize = props.HashSize;
             var hash = GC.AllocateUninitializedArray<Byte>(hashSize);
-            while (ContentDependentChunking.TryReadVar(sourceStream, out var dataSize))
+            while (TryReadVar(sourceStream, out var dataSize))
             {
                 await sourceStream.ReadExactlyAsync(hash).ConfigureAwait(false);
                 var data = GC.AllocateUninitializedArray<Byte>((int)dataSize);
@@ -1400,8 +1416,6 @@ namespace SysWeaver
             }
             return true;
         }
-
-
 
 
         static int CenterSize(int average, int minimum, int sourceSize)

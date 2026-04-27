@@ -228,23 +228,42 @@ namespace SysWeaver.MicroService
                 var hashDataLen = hashData.Length;
                 var hashSize = CdcProps.Default.HashSize;
                 var hashCount = hashDataLen / hashSize;
-                var missingMap = new Byte[(hashCount + 7) >> 3];
+                var maxMissingLen = (hashCount + 7) >> 3;
+                var missingMap = new Byte[maxMissingLen];
                 bool anyMissing = false;
                 int chunkIndex = 0;
                 for (int i = 0; i < hashDataLen; i += hashSize, ++chunkIndex)
                 {
-                    if (!ContentDependentChunking.ValidateChunk(hashData.Slice(i, hashSize).Span))
+                    var hashMem = hashData.Slice(i, hashSize);
+                    if (!ContentDependentChunking.ValidateChunk(hashMem.Span))
                     {
-                        missingMap[chunkIndex >> 3] |= (Byte)(1 << (chunkIndex & 7));
                         anyMissing = true;
-                        Interlocked.Increment(ref sync.NewChunkCount);
+                        if (sync.MissingChunks.TryAdd(hashMem, 0))
+                        {
+                            missingMap[chunkIndex >> 3] |= (Byte)(1 << (chunkIndex & 7));
+                            Interlocked.Increment(ref sync.NewChunkCount);
+                        }
                     }
                 }
                 Interlocked.Add(ref sync.ChunkCount, hashCount);
                 if (anyMissing)
                 {
                     file.CdcChunks = hashData;
-                    return missingMap;
+                    var l = maxMissingLen;
+                    while (l > 0)
+                    {
+                        --l;
+                        if (missingMap[l] != 0)
+                        {
+                            ++l;
+                            break;
+                        }
+                    }
+                    if (l <= 0)
+                        return ReadOnlyMemory<Byte>.Empty;
+                    if (l == maxMissingLen)
+                        return missingMap;
+                    return new ReadOnlyMemory<Byte>(missingMap, 0, l);
                 }
                 var ex = await PathExt.EnsureCanWriteFileAsync(dest).ConfigureAwait(false);
                 if (ex != null)
@@ -255,7 +274,7 @@ namespace SysWeaver.MicroService
                     {
                         var l = await ContentDependentChunking.TryDecompressChunk(destStream, hashData.Slice(i, hashSize).Span).ConfigureAwait(false);
                         if (l <= 0)
-                            throw new Exception("Failed to decompress chunk from network! " + hashData.Slice(i, hashSize).Span.ToHexString());
+                            throw new Exception("Failed to decompress existing chunk! " + hashData.Slice(i, hashSize).Span.ToHexString());
                     }
                     Interlocked.Add(ref sync.UploadSize, destStream.Position);
                 }
@@ -310,10 +329,13 @@ namespace SysWeaver.MicroService
             Interlocked.Increment(ref sync.FileInProgess);
             try
             {
-                await ContentDependentChunking.AddChunkList(context.InputStream).ConfigureAwait(false);
+                if (!await ContentDependentChunking.AddChunkList(context.InputStream).ConfigureAwait(false))
+                    throw new Exception("Failed to add missing chunks!");
                 var rl = context.ReqContentLength;
                 Interlocked.Add(ref sync.NetworkSize, rl);
                 Interlocked.Add(ref sync.NewChunkSize, rl);
+                if (Interlocked.Increment(ref sync.UploadCount) != sync.NewChunkCount)
+                    return true;
                 var hashSize = CdcProps.Default.HashSize;
                 var exceptions = await sync.Files.ToList().ConvertAsyncValue(async fileX =>
                 {
@@ -333,7 +355,8 @@ namespace SysWeaver.MicroService
                         {
                             for (int i = 0; i < hashDataLen; i += hashSize)
                             {
-                                var l = await ContentDependentChunking.TryDecompressChunk(destStream, hashData.Slice(i, hashSize).Span).ConfigureAwait(false);
+                                String hash = hashData.Slice(i, hashSize).Span.ToHexString();
+                                var l = await ContentDependentChunking.TryDecompressChunk(destStream, hash).ConfigureAwait(false);
                                 if (l <= 0)
                                     throw new Exception("Failed to decompress chunk from cache! " + hashData.Slice(i, hashSize).Span.ToHexString());
                             }
@@ -349,7 +372,6 @@ namespace SysWeaver.MicroService
                         Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, Cdc to folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                         return exx;
                     }
-                    Interlocked.Increment(ref sync.UploadCount);
                     sync.Files.TryRemove(fileKey, out var __);
                     return null;
                 }).ConfigureAwait(false);

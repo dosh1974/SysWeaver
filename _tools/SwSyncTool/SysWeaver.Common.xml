@@ -205,6 +205,40 @@
             <param name="value"></param>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.ArrayExt.CreateAsync``1(System.Int32,System.Func{System.Int32,System.Threading.Tasks.Task{``0}},System.Int32)">
+            <summary>
+            Create and initiate an array async with a value per element
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="count"></param>
+            <param name="getValue">The function that given an index returned the value to use</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.ArrayExt.CreateAsyncValue``1(System.Int32,System.Func{System.Int32,System.Threading.Tasks.ValueTask{``0}},System.Int32)">
+            <summary>
+            Create and initiate an array async with a value per element
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="count"></param>
+            <param name="getValue">The function that given an index returned the value to use</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <returns></returns>
+        </member>
         <member name="M:SysWeaver.ArrayExt.ToArray``1(System.Collections.Generic.IEnumerable{``0},System.Int32)">
             <summary>
             Take N elements from an enumerable and create an array of them
@@ -274,7 +308,7 @@
             <param name="func"></param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.ArrayExt.ConvertAsync``2(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.Task{``1}})">
+        <member name="M:SysWeaver.ArrayExt.ConvertAsync``2(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.Task{``1}},System.Int32)">
             <summary>
             Convert an array to another element type using a function.
             Elements are converted in paralell (async).
@@ -283,9 +317,17 @@
             <typeparam name="T"></typeparam>
             <param name="array"></param>
             <param name="func"></param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.ArrayExt.ConvertAsyncValue``2(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.ValueTask{``1}})">
+        <member name="M:SysWeaver.ArrayExt.ConvertAsyncValue``2(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.ValueTask{``1}},System.Int32)">
             <summary>
             Convert an array to another element type using a function.
             Elements are converted in paralell (async).
@@ -294,6 +336,14 @@
             <typeparam name="T"></typeparam>
             <param name="array"></param>
             <param name="func"></param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns></returns>
         </member>
         <member name="M:SysWeaver.ArrayExt.ToArray``3(System.Collections.Generic.IReadOnlyDictionary{``0,``1},System.Func{``0,``1,System.Int32,``2})">
@@ -307,7 +357,7 @@
             <param name="func">The function to use for instance creation</param>
             <returns>An array</returns>
         </member>
-        <member name="M:SysWeaver.ArrayExt.ToArrayAsync``3(System.Collections.Generic.IReadOnlyDictionary{``0,``1},System.Func{``0,``1,System.Int32,System.Threading.Tasks.Task{``2}})">
+        <member name="M:SysWeaver.ArrayExt.ToArrayAsync``3(System.Collections.Generic.IReadOnlyDictionary{``0,``1},System.Func{``0,``1,System.Int32,System.Threading.Tasks.Task{``2}},System.Int32)">
             <summary>
             Converts a dictionary to an array of some type in parallel
             </summary>
@@ -316,9 +366,17 @@
             <typeparam name="T"></typeparam>
             <param name="dict">The dictionary to convert</param>
             <param name="func">The function to use for instance creation</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns>An array</returns>
         </member>
-        <member name="M:SysWeaver.ArrayExt.ToArrayValueAsync``3(System.Collections.Generic.IReadOnlyDictionary{``0,``1},System.Func{``0,``1,System.Int32,System.Threading.Tasks.ValueTask{``2}})">
+        <member name="M:SysWeaver.ArrayExt.ToArrayValueAsync``3(System.Collections.Generic.IReadOnlyDictionary{``0,``1},System.Func{``0,``1,System.Int32,System.Threading.Tasks.ValueTask{``2}},System.Int32)">
             <summary>
             Converts a dictionary to an array of some type in parallel
             </summary>
@@ -327,6 +385,14 @@
             <typeparam name="T"></typeparam>
             <param name="dict">The dictionary to convert</param>
             <param name="func">The function to use for instance creation</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns>An array</returns>
         </member>
         <member name="M:SysWeaver.ArrayExt.ToArray``2(System.Collections.Generic.IReadOnlyCollection{``0},System.Func{``0,System.Int32,``1})">
@@ -339,7 +405,7 @@
             <param name="func">The function to use for instance creation</param>
             <returns>An array</returns>
         </member>
-        <member name="M:SysWeaver.ArrayExt.ToArrayAsync``2(System.Collections.Generic.IReadOnlyCollection{``0},System.Func{``0,System.Int32,System.Threading.Tasks.Task{``1}})">
+        <member name="M:SysWeaver.ArrayExt.ToArrayAsync``2(System.Collections.Generic.IReadOnlyCollection{``0},System.Func{``0,System.Int32,System.Threading.Tasks.Task{``1}},System.Int32)">
             <summary>
             Converts a collection to an array of some type in parallel
             </summary>
@@ -347,9 +413,17 @@
             <typeparam name="T"></typeparam>
             <param name="col">The collection to convert</param>
             <param name="func">The function to use for instance creation</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns>An array</returns>
         </member>
-        <member name="M:SysWeaver.ArrayExt.ToArrayValueAsync``2(System.Collections.Generic.IReadOnlyCollection{``0},System.Func{``0,System.Int32,System.Threading.Tasks.ValueTask{``1}})">
+        <member name="M:SysWeaver.ArrayExt.ToArrayValueAsync``2(System.Collections.Generic.IReadOnlyCollection{``0},System.Func{``0,System.Int32,System.Threading.Tasks.ValueTask{``1}},System.Int32)">
             <summary>
             Converts a collection to an array of some type in parallel
             </summary>
@@ -357,6 +431,14 @@
             <typeparam name="T"></typeparam>
             <param name="col">The collection to convert</param>
             <param name="func">The function to use for instance creation</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns>An array</returns>
         </member>
         <member name="F:SysWeaver.ArrayPoolStream.Data">
@@ -1190,6 +1272,271 @@
             Make a copy of a tree
             </summary>
             <returns></returns>
+        </member>
+        <member name="F:SysWeaver.ConcurrencyLimiter.NoLimit">
+            <summary>
+            Use this value (Int.MaxValue) to avoid any limiting
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ConcurrencyLimiter.DefaultLimit">
+            <summary>
+            The default maximum concurrency used by default (when maxConcurrency is zero).
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``2(System.Func{``0,System.Int32,System.Threading.Tasks.Task{``1}}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``2(System.Func{``0,System.Int32,System.Threading.Tasks.ValueTask{``1}}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``2(System.Func{``0,System.Threading.Tasks.Task{``1}}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``2(System.Func{``0,System.Threading.Tasks.ValueTask{``1}}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``3(System.Func{``0,``1,System.Int32,System.Threading.Tasks.Task{``2}}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``3(System.Func{``0,``1,System.Int32,System.Threading.Tasks.ValueTask{``2}}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``3(System.Func{``0,``1,System.Threading.Tasks.Task{``2}}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``3(System.Func{``0,``1,System.Threading.Tasks.ValueTask{``2}}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``1(System.Func{``0,System.Int32,System.Threading.Tasks.Task}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``1(System.Func{``0,System.Int32,System.Threading.Tasks.ValueTask}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``1(System.Func{``0,System.Threading.Tasks.Task}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``1(System.Func{``0,System.Threading.Tasks.ValueTask}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``2(System.Func{``0,``1,System.Int32,System.Threading.Tasks.Task}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``2(System.Func{``0,``1,System.Int32,System.Threading.Tasks.ValueTask}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``2(System.Func{``0,``1,System.Threading.Tasks.Task}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.LimitConcurrency``2(System.Func{``0,``1,System.Threading.Tasks.ValueTask}@,System.Int32,System.Int32)">
+            <summary>
+            Applies a concurrency limiter to some task function
+            </summary>
+            <param name="fn">The function to limit</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        </member>
+        <member name="M:SysWeaver.ConcurrencyLimiter.CreateLock(System.Int32,System.Int32)">
+            <summary>
+            Return a lock for the given concurrency constraints
+            </summary>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
+            <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+            <returns>A lock or null</returns>
         </member>
         <member name="T:SysWeaver.ConcurrentCount`1">
             <summary>
@@ -2994,7 +3341,7 @@
             <param name="enumerable">The enumerable to process</param>
             <param name="action">The action to perform on each element</param>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsync``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.Task})">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsync``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.Task},System.Int32)">
             <summary>
             Process all elements in a list.
             Elements are processed in paralell (async).
@@ -3002,9 +3349,17 @@
             <typeparam name="T"></typeparam>
             <param name="list">The list to process</param>
             <param name="action">The action to perform on each element</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsync``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Threading.Tasks.Task})">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsync``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Threading.Tasks.Task},System.Int32)">
             <summary>
             Process all elements in an enumerable.
             Elements are processed in paralell (async).
@@ -3012,9 +3367,17 @@
             <typeparam name="T"></typeparam>
             <param name="enumerable">The enumerable to process</param>
             <param name="action">The action to perform on each element</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.ValueTask})">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.ValueTask},System.Int32)">
             <summary>
             Process all elements in a list.
             Elements are processed in paralell (async).
@@ -3022,9 +3385,17 @@
             <typeparam name="T"></typeparam>
             <param name="list">The list to process</param>
             <param name="action">The action to perform on each element</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Threading.Tasks.ValueTask})">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Threading.Tasks.ValueTask},System.Int32)">
             <summary>
             Process all elements in an enumerable.
             Elements are processed in paralell (async).
@@ -3032,9 +3403,17 @@
             <typeparam name="T"></typeparam>
             <param name="enumerable">The enumerable to process</param>
             <param name="action">The action to perform on each element</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsync``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Int32,System.Threading.Tasks.Task})">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsync``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Int32,System.Threading.Tasks.Task},System.Int32)">
             <summary>
             Process all elements in a list.
             Elements are processed in paralell (async).
@@ -3042,9 +3421,17 @@
             <typeparam name="T"></typeparam>
             <param name="list">The list to process</param>
             <param name="action">The action to perform on each element</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsync``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Int32,System.Threading.Tasks.Task})">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsync``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Int32,System.Threading.Tasks.Task},System.Int32)">
             <summary>
             Process all elements in an enumerable.
             Elements are processed in paralell (async).
@@ -3052,9 +3439,17 @@
             <typeparam name="T"></typeparam>
             <param name="enumerable">The enumerable to process</param>
             <param name="action">The action to perform on each element</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Int32,System.Threading.Tasks.ValueTask})">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Int32,System.Threading.Tasks.ValueTask},System.Int32)">
             <summary>
             Process all elements in a list.
             Elements are processed in paralell (async).
@@ -3062,9 +3457,17 @@
             <typeparam name="T"></typeparam>
             <param name="list">The list to process</param>
             <param name="action">The action to perform on each element</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Int32,System.Threading.Tasks.ValueTask})">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Int32,System.Threading.Tasks.ValueTask},System.Int32)">
             <summary>
             Process all elements in an enumerable.
             Elements are processed in paralell (async).
@@ -3072,6 +3475,14 @@
             <typeparam name="T"></typeparam>
             <param name="enumerable">The enumerable to process</param>
             <param name="action">The action to perform on each element</param>
+            <param name="maxConcurrency">The maximum number of concurrent operations.
+            If less than zero, it's a percentage of the number of available logical processors.
+            If zero the concurrency is the number of processors minus one.
+            Ex:
+            -50 = 50% of the number of processors (so 4 if there are 8 processors).
+            -200 = 200% of the number of processors (so 16 if there are 8 processors).
+            0 = Number of processors minus one (so 7 if there are 8 processors).
+            </param>
             <returns></returns>
         </member>
         <member name="M:SysWeaver.EnumerableExt.WithUniqueKeys``2(System.Collections.Generic.IEnumerable{System.Collections.Generic.KeyValuePair{``0,``1}},System.Collections.Generic.IEqualityComparer{``0})">
@@ -3683,12 +4094,13 @@
             <param name="memory">The memory to save</param>
             <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         </member>
-        <member name="M:SysWeaver.FileExt.WriteToFile(System.ReadOnlyMemory{System.Byte},System.String)">
+        <member name="M:SysWeaver.FileExt.WriteToFile(System.ReadOnlyMemory{System.Byte},System.String,System.Boolean)">
             <summary>
             Save all memory to disc
             </summary>
             <param name="memory">The memory to save</param>
             <param name="filename">The file to write to (overwites existing)</param>
+            <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         </member>
         <member name="M:SysWeaver.FileExt.WriteMemoryAsync(System.String,System.ReadOnlyMemory{System.Byte},System.Boolean)">
             <summary>
@@ -3698,33 +4110,37 @@
             <param name="memory">The memory to save</param>
             <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         </member>
-        <member name="M:SysWeaver.FileExt.WriteToFileAsync(System.ReadOnlyMemory{System.Byte},System.String)">
+        <member name="M:SysWeaver.FileExt.WriteToFileAsync(System.ReadOnlyMemory{System.Byte},System.String,System.Boolean)">
             <summary>
             Save all memory to disc
             </summary>
             <param name="memory">The memory to save</param>
             <param name="filename">The file to write to (overwites existing)</param>
+            <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         </member>
-        <member name="M:SysWeaver.FileExt.WriteToFileAsync(System.Memory{System.Byte},System.String)">
+        <member name="M:SysWeaver.FileExt.WriteToFileAsync(System.Memory{System.Byte},System.String,System.Boolean)">
             <summary>
             Save all memory to disc
             </summary>
             <param name="memory">The memory to save</param>
             <param name="filename">The file to write to (overwites existing)</param>
+            <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         </member>
-        <member name="M:SysWeaver.FileExt.WriteSpan(System.String,System.ReadOnlySpan{System.Byte})">
+        <member name="M:SysWeaver.FileExt.WriteSpan(System.String,System.ReadOnlySpan{System.Byte},System.Boolean)">
             <summary>
             Save all span to disc
             </summary>
             <param name="filename">The file to write to (overwites existing)</param>
             <param name="span">The span to save</param>
+            <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         </member>
-        <member name="M:SysWeaver.FileExt.WriteToFile(System.ReadOnlySpan{System.Byte},System.String)">
+        <member name="M:SysWeaver.FileExt.WriteToFile(System.ReadOnlySpan{System.Byte},System.String,System.Boolean)">
             <summary>
             Save all span to disc
             </summary>
             <param name="span">The span to save</param>
             <param name="filename">The file to write to (overwites existing)</param>
+            <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         </member>
         <member name="M:SysWeaver.FileExt.ReadBytesAsync(System.String)">
             <summary>
@@ -9183,6 +9599,11 @@
             A complete task for a null string
             </summary>
         </member>
+        <member name="F:SysWeaver.TaskExt.EmptyStringArrayTask">
+            <summary>
+            A complete task for an empty string array
+            </summary>
+        </member>
         <member name="F:SysWeaver.TaskExt.TrueTask">
             <summary>
             A complete task for a True boolean
@@ -9208,6 +9629,7 @@
             A complete value task for a null string
             </summary>
         </member>
+        <!-- Badly formed XML comment ignored for member "F:SysWeaver.TaskExt.EmptyStringArrayValueTask" -->
         <member name="F:SysWeaver.TaskExt.TrueValueTask">
             <summary>
             A complete value task for a True boolean
