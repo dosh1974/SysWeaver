@@ -177,6 +177,7 @@ namespace SysWeaver
         /// </summary>
         public static readonly ValueTask<String> EmptyStringValueTask = ValueTask.FromResult("");
 
+        /// <summary>
         /// A complete task for an empty string array
         /// </summary>
         public static readonly ValueTask<String[]> EmptyStringArrayValueTask = ValueTask.FromResult(Array.Empty<String>());

@@ -7,6 +7,7 @@ using SysWeaver.Serialization;
 namespace SysWeaver.IpLocation.Caches
 {
     [Alias("IpLocations")]
+    [PartitionByKey(nameof(Ip))]
     public sealed class DbIpLocation
     {
         /// <summary>

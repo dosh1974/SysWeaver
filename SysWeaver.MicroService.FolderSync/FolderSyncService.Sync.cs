@@ -55,16 +55,18 @@ namespace SysWeaver.MicroService
             /// <summary>
             /// Number of file chunks sent (all chunks in all missing files)
             /// </summary>
-            public long ChunkCount = 0;
+            public long ChunkCount;
             /// <summary>
             /// Number of new chunks that was sent (all missing chunks in all missing files)
             /// </summary>
-            public long NewChunkCount = 0;
+            public long NewChunkCount;
             /// <summary>
             /// Total number of compressed bytes that was sent (all missing chunk data in all missing files)
             /// </summary>
-            public long NewChunkSize = 0;
+            public long NewChunkSize;
 
+
+            public long SavedChunks;
 
             public Sync(ManagedFolderSyncRequest r, IEnumerable<FileSync> files, string destPath, ManagedFolder target, bool activate, IDisposable d, long copyCount, long copySize, String user, DateTime start)
             {

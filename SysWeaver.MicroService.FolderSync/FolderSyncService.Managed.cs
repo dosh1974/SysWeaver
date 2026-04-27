@@ -175,28 +175,34 @@ namespace SysWeaver.MicroService
                 sync.Touch();
                 new FileInfo(dest).LastWriteTimeUtc = file.LastModified;
                 sync.Files.TryRemove(fileKey, out var __);
-                if (sync.Files.Count > 0)
-                    return true;
-                if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) != 0)
-                    return true;
-                return await Finalize(jobId, sync, context).ConfigureAwait(false);
+                return await CompleteUpdate(sync, jobId, context).ConfigureAwait(false);
             }
             catch (Exception exx)
             {
                 await PathExt.TryDeleteFileAsync(dest).ConfigureAwait(false);
                 Interlocked.Exchange(ref file.InProgress, 0);
                 Exs.OnException(exx);
-                Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, to folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] File upload failed, to folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                 sync.Files.TryRemove(fileKey, out var __);
-                if (sync.Files.Count <= 0)
-                    if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) == 0)
-                        await Finalize(jobId, sync, context, true).ConfigureAwait(false);
+                await CompleteUpdate(sync, jobId, context, true).ConfigureAwait(false);
                 throw;
             }
             finally
             {
                 Interlocked.Decrement(ref sync.FileInProgess);
             }
+        }
+
+
+        ValueTask<bool> CompleteUpdate(Sync sync, String jobId, HttpServerRequest context, bool isError = false)
+        {
+            if (!sync.Files.IsEmpty)
+                return TaskExt.TrueValueTask;
+            if (sync.Files.Count > 0)
+                return TaskExt.TrueValueTask;
+            if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) != 0)
+                return TaskExt.TrueValueTask;
+            return Finalize(jobId, sync, context, isError);
         }
 
         /// <summary>
@@ -283,11 +289,7 @@ namespace SysWeaver.MicroService
                 sync.Touch();
                 new FileInfo(dest).LastWriteTimeUtc = file.LastModified;
                 sync.Files.TryRemove(fileKey, out var __);
-                if (sync.Files.Count > 0)
-                    return ReadOnlyMemory<Byte>.Empty;
-                if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) != 0)
-                    return ReadOnlyMemory<Byte>.Empty;
-                await Finalize(jobId, sync, context).ConfigureAwait(false);
+                await CompleteUpdate(sync, jobId, context).ConfigureAwait(false);
                 return ReadOnlyMemory<Byte>.Empty;
             }
             catch (Exception exx)
@@ -295,11 +297,9 @@ namespace SysWeaver.MicroService
                 await PathExt.TryDeleteFileAsync(dest).ConfigureAwait(false);
                 Interlocked.Exchange(ref file.InProgress, 0);
                 Exs.OnException(exx);
-                Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, fo folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] File upload failed, fo folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                 sync.Files.TryRemove(fileKey, out var __);
-                if (sync.Files.Count <= 0)
-                    if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) == 0)
-                        await Finalize(jobId, sync, context, true).ConfigureAwait(false);
+                await CompleteUpdate(sync, jobId, context, true).ConfigureAwait(false);
                 throw;
             }
             finally
@@ -329,12 +329,13 @@ namespace SysWeaver.MicroService
             Interlocked.Increment(ref sync.FileInProgess);
             try
             {
-                if (!await ContentDependentChunking.AddChunkList(context.InputStream).ConfigureAwait(false))
+                long added = await ContentDependentChunking.AddChunkList(context.InputStream).ConfigureAwait(false);
+                if (added < 0)
                     throw new Exception("Failed to add missing chunks!");
                 var rl = context.ReqContentLength;
                 Interlocked.Add(ref sync.NetworkSize, rl);
                 Interlocked.Add(ref sync.NewChunkSize, rl);
-                if (Interlocked.Increment(ref sync.UploadCount) != sync.NewChunkCount)
+                if (Interlocked.Add(ref sync.SavedChunks, added) != sync.NewChunkCount)
                     return true;
                 var hashSize = CdcProps.Default.HashSize;
                 var exceptions = await sync.Files.ToList().ConvertAsyncValue(async fileX =>
@@ -363,34 +364,33 @@ namespace SysWeaver.MicroService
                             Interlocked.Add(ref sync.UploadSize, destStream.Position);
                         }
                         new FileInfo(dest).LastWriteTimeUtc = file.LastModified;
+                        Interlocked.Increment(ref sync.UploadCount);
+                        return null;
                     }
                     catch (Exception exx)
                     {
                         await PathExt.TryDeleteFileAsync(dest).ConfigureAwait(false);
                         Interlocked.Exchange(ref file.InProgress, 0);
                         Exs.OnException(exx);
-                        Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, Cdc to folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                        Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] File upload failed, Cdc to folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                         return exx;
                     }
-                    sync.Files.TryRemove(fileKey, out var __);
-                    return null;
+                    finally
+                    {
+                        sync.Files.TryRemove(fileKey, out var __);
+                    }
                 }).ConfigureAwait(false);
                 sync.Touch();
                 var e = exceptions.FirstOrDefault(x => x != null);
-                if (sync.Files.Count <= 0)
-                    if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) == 0)
-                        await Finalize(jobId, sync, context, e != null).ConfigureAwait(false);
                 if (e != null)
                     throw e;
-                return true;
+                return await CompleteUpdate(sync, jobId, context).ConfigureAwait(false);
             }
             catch (Exception exx)
             {
                 Exs.OnException(exx);
-                Manager.AddMessage(String.Concat(LogPrefix, "File upload failed, to folder \"", target.Name, "\""), exx, MessageLevels.Warning);
-                if (sync.Files.Count <= 0)
-                    if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) == 0)
-                        await Finalize(jobId, sync, context, true).ConfigureAwait(false);
+                Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] File upload failed, to folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                await CompleteUpdate(sync, jobId, context, true).ConfigureAwait(false);
                 throw;
             }
             finally
@@ -407,20 +407,25 @@ namespace SysWeaver.MicroService
             var target = sync.Target;
             try
             {
-                if (!isError)
+                if (isError)
                 {
+                    Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Sync job failed for folder \"", target.Name, "\""), MessageLevels.Warning);
+                }
+                else
+                {
+                    Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Writing sync job manifest for \"", target.Name, "\""));
                     await WriteManifest(target, sync.R, dest, sync.CopyCount, sync.CopySize, sync.UploadCount, sync.UploadSize, sync.NetworkSize, sync.User, sync.Start).ConfigureAwait(false);
                     if (sync.UseFolder)
                     {
                         var exx = await InternalActivate(target, target.DestPath, dest, context).ConfigureAwait(false);
                         if (exx == null)
                         {
-                            Manager.AddMessage(String.Concat(LogPrefix, "Activated folder \"", target.Name, "\""));
+                            Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Activated folder \"", target.Name, "\""));
                         }
                         else
                         {
                             Exs.OnException(exx);
-                            Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, activating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                            Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Sync failed, activating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                             return false;
                         }
                     }
@@ -432,12 +437,12 @@ namespace SysWeaver.MicroService
                         {
                             new DirectoryInfo(bakFolder).LastAccessTimeUtc = DateTime.UtcNow;
                             context.Server.InvalidateCache();
-                            Manager.AddMessage(String.Concat(LogPrefix, "Synced folder \"", target.Name, "\""));
+                            Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Synced folder \"", target.Name, "\""));
                         }
                         else
                         {
                             Exs.OnException(exx);
-                            Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, creating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                            Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Sync failed, creating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                             return false;
                         }
                     }
@@ -447,7 +452,7 @@ namespace SysWeaver.MicroService
             catch (Exception exx)
             {
                 Exs.OnException(exx);
-                Manager.AddMessage(String.Concat(LogPrefix, "Sync failed for folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Sync failed for folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                 throw;
             }
             finally
@@ -843,7 +848,6 @@ namespace SysWeaver.MicroService
                     if (!foundExtra)
                         return new ManagedFolderDiff();
                 }
-
                 String jobId;
                 DateTime now;
                 for (int ret = 0; ; ++ret)
@@ -866,6 +870,7 @@ namespace SysWeaver.MicroService
                     }
                     await Task.Delay(1).ConfigureAwait(false);
                 }
+                Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Begun a sync push job to \"", target.Name, "\" using temporary folder \"", newFolderName, '"'));
                 var f = new DirectoryInfo(newFolderName);
                 f.LastWriteTimeUtc = now;
                 long copySize = 0;
@@ -888,12 +893,12 @@ namespace SysWeaver.MicroService
                         var exx = await InternalActivate(target, dest, newFolderName, context).ConfigureAwait(false);
                         if (exx == null)
                         {
-                            Manager.AddMessage(String.Concat(LogPrefix, "Activated folder \"", target.Name, "\""));
+                            Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Activated folder \"", target.Name, "\""));
                         }
                         else
                         {
                             Exs.OnException(exx);
-                            Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, activating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                            Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Sync failed, activating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                             throw exx;
                         }
                     }
@@ -904,12 +909,12 @@ namespace SysWeaver.MicroService
                         {
                             new DirectoryInfo(newFolderName).LastAccessTimeUtc = DateTime.UtcNow;
                             context.Server.InvalidateCache();
-                            Manager.AddMessage(String.Concat(LogPrefix, "Synced folder \"", target.Name, "\""));
+                            Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Synced folder \"", target.Name, "\""));
                         }
                         else
                         {
                             Exs.OnException(exx);
-                            Manager.AddMessage(String.Concat(LogPrefix, "Sync failed, creating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
+                            Manager.AddMessage(String.Concat(LogPrefix, '[', jobId, "] Sync failed, creating folder \"", target.Name, "\""), exx, MessageLevels.Warning);
                             throw exx;
                         }
                     }

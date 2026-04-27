@@ -1400,21 +1400,23 @@ namespace SysWeaver
         /// </summary>
         /// <param name="sourceStream"></param>
         /// <param name="props">The properties, if null the default properties will be used (recommended)</param>
-        /// <returns>True if the chunks was added, elase false</returns>
-        public static async ValueTask<bool> AddChunkList(Stream sourceStream, CdcProps props = null)
+        /// <returns>The number of chunks added, or -1 if the function fails to add a chunk</returns>
+        public static async ValueTask<long> AddChunkList(Stream sourceStream, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             var hashSize = props.HashSize;
             var hash = GC.AllocateUninitializedArray<Byte>(hashSize);
+            long count = 0;
             while (TryReadVar(sourceStream, out var dataSize))
             {
                 await sourceStream.ReadExactlyAsync(hash).ConfigureAwait(false);
                 var data = GC.AllocateUninitializedArray<Byte>((int)dataSize);
                 await sourceStream.ReadExactlyAsync(data).ConfigureAwait(false);
                 if (!await TrySaveChunk(hash.ToHex(), data, props).ConfigureAwait(false))
-                    return false;
+                    return -1;
+                ++count;
             }
-            return true;
+            return count;
         }
 
 

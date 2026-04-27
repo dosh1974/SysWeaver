@@ -522,11 +522,11 @@ namespace SysWeaver
             try
             {
                 Retry.Op(() => InternalMove(source, dest), retryCount, delayInMs);
-                Retry.Op(() => 
+/*                Retry.Op(() => 
                 {
                     using (new FileStream(dest, FileMode.Open, FileAccess.Read, FileShare.None)) ;
                 }, retryCount, delayInMs);
-                return null;
+*/                return null;
             }
             catch (Exception ex)
             {
@@ -548,11 +548,13 @@ namespace SysWeaver
             try
             {
                 await Retry.OpAsync(() => InternalMove(source, dest), retryCount, delayInMs).ConfigureAwait(false);
-                await Retry.OpAsync(() =>
+/*                await Retry.OpAsync(() =>
                 {
-                    using (new FileStream(dest, FileMode.Open, FileAccess.Read, FileShare.None)) ;
+                    using (new FileStream(dest, FileMode.Open, FileAccess.Read, FileShare.None))
+                    {
+                    }
                 }, retryCount, delayInMs).ConfigureAwait(false);
-                return null;
+*/                return null;
             }
             catch (Exception ex)
             {
@@ -855,15 +857,17 @@ namespace SysWeaver
         }
 
 
-
+        /*
         static void IsFolderReady(String folder)
         {
             foreach (var f in Directory.GetFiles(folder, "*", SearchOption.AllDirectories))
             {
-                using (new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.None)) ;
+                using (new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.None))
+                {
+                }
             }
         }
-
+        */
         /// <summary>
         /// Renames / moves a folder
         /// </summary>

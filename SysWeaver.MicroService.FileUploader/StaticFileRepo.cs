@@ -515,7 +515,7 @@ namespace SysWeaver.MicroService
             using var __y = ldisp;
             if (ChunkCache.TryGet(file.ChunkCacheKey, out var chunks))
             {
-                if (!await ContentDependentChunking.AddChunkList(s).ConfigureAwait(false))
+                if (await ContentDependentChunking.AddChunkList(s).ConfigureAwait(false) < 0)
                     return new FileUploadResult(FileUploadStatus.InvalidFile);
                 await s.DisposeAsync().ConfigureAwait(false);
                 s = ContentDependentChunking.OpenChunkStream(chunks);

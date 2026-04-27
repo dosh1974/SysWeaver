@@ -637,7 +637,7 @@ namespace SysWeaver.FolderSync
                             missingChunkCount += (ml / hs);
                             var mem = await client.PostRawRequestRaw(baseUrl + nameof(IFolderSyncEndPoints.GetChunks), missing);
                             using (var ms = mem.AsStream())
-                                if (!await ContentDependentChunking.AddChunkList(ms, props).ConfigureAwait(false))
+                                if (await ContentDependentChunking.AddChunkList(ms, props).ConfigureAwait(false) < 0)
                                     throw new Exception("Failed to add missing chunks!");
                             cl = mem.Length;
                             transferBytes += cl;
