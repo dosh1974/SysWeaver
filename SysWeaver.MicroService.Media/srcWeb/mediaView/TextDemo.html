@@ -1,0 +1,302 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        SysWeaver-Page {
+            max-width: 85.1em !important;
+        }
+
+
+
+        Map-Card {
+            display: block;
+            position: relative;
+            background-color: rgba(var(--ThemeMainRGB), 0.1);
+            border-radius: var(--ThemeRad);
+            border: 1px solid var(--ThemeMain50);
+            margin: 1em 1em;
+            overflow: hidden;
+            cursor: pointer;
+            outline: 2px solid transparent;
+            outline-offset: 3px;
+            transition: outline linear var(--ThemeFadeDuration);
+        }
+
+            Map-Card:hover {
+                outline: 2px solid var(--ThemeAcc275);
+            }
+
+            Map-Card:focus {
+                outline: 2px solid var(--ThemeAcc2);
+            }
+
+                Map-Card:focus:hover {
+                    outline: 2px solid var(--ThemeAcc2);
+                }
+
+            Map-Card icon-28x28 {
+                margin: 0 0.25em;
+                float:right;
+            }
+
+
+
+        Map-Title {
+            display: block;
+            background-color: rgba(var(--ThemeMainRGB), 0.2);
+            color: var(--ThemeAcc1);
+            padding: 0.5em 1em;
+            font-weight: bold;
+            font-size: 125%;
+            width: 100%;
+        }
+
+        Map-Card img {
+            display: inline-block;
+            margin: 0.5em auto;
+            object-fit: scale-down;
+            border: none;
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+
+        }
+    </style>
+    <script>
+        async function main() {
+            const onLoaded = AddLoading();
+            try {
+                const href = window.location.href;
+                const p = new URL(href).searchParams;
+                const b = document.createElement("SysWeaver-Page");
+                document.body.appendChild(b);
+
+                const text = p.get("Text") ?? "Abc123";
+
+                const effects = [
+                    "Rain",
+                    "SliceGlitch",
+                    "OldMovie",
+                    "3D-flag",
+                ];
+                const effectIcons = [
+                    "download",
+                    "gradient",
+                    "movie",
+                    "os_windows",
+                ];
+                const el = effects.length;
+                const margin = 32;
+
+                async function Add(title, style) {
+
+                    style.MarginTop = margin;
+                    style.MarginRight = margin;
+                    style.MarginBottom = margin;
+                    style.MarginLeft = margin;
+                    const e = document.createElement("Map-Card");
+                    const t = document.createElement("Map-Title");
+                    const f = document.createElement("img");
+                    f.tabIndex = "-1";
+                    t.innerText = title;
+                    e.appendChild(t);
+                    e.appendChild(f);
+                    b.appendChild(e);
+
+                    const p = ParseTools.ObjectToParams(style);
+                    const url = "textEffects/?" + p + "&Text=" + text + "&Effect=";
+                    for (let i = 0; i < el; ++i) {
+                        const ef = effects[i];
+                        const icon = new ColorIcon(
+                            "../icons/" + effectIcons[i] + ".svg",
+                            "IconColorThemeMain",
+                            28, 28,
+                            _T("Click to show full screen with the {0} effect", ef, "Tool tip text on an icon that when clicked will show the content in full screen using a specific effect. {0} is replaced with the name of the effect"),
+                            ev => Open(url + ef, "_self"));
+                        t.appendChild(icon.Element);
+                    }
+
+
+                    const c = await CanvasTools.CreateTextImageUrl(text, style);
+                    f.src = c;
+
+                    f.onclick = ev => {
+                        if (badClick(ev))
+                            return;
+                        Open(url + "None", "_self");
+                    };
+                    ValueFormat.copyOnClick(e, url + "None", true, true);
+
+
+
+                }
+                Add("Fill and stroke color", Object.assign(new TextStyle(),
+                    {
+                        Font: 'bold 256px serif',
+                        Fill: "#687",
+                        Stroke: "#020",
+                        StrokeWidth: 4,
+                        ShadowFill: null,
+                        StrokeFirst: false,
+                    }));
+
+                Add("Drop shadow", Object.assign(new TextStyle(),
+                    {
+                        Font: 'bold 256px verdana',
+                        Fill: "#687",
+                        Stroke: "#020",
+                        StrokeWidth: 4,
+                        ShadowX: 4,
+                        ShadowX: 8,
+                        StrokeFirst: false,
+                    }));
+                Add("Letter spacing", Object.assign(new TextStyle(),
+                    {
+                        Font: 'bold 256px verdana',
+                        Fill: "#786",
+                        Stroke: null,
+                        StrokeWidth: 0,
+                        ShadowX: 4,
+                        ShadowX: 8,
+                        LetterSpacing: -30,
+                    }));
+                Add("Letter spacing", Object.assign(new TextStyle(),
+                    {
+                        Font: 'bold 256px verdana',
+                        Fill: "#786",
+                        StrokeWidth: 0,
+                        ShadowX: 4,
+                        ShadowX: 8,
+                        LetterSpacing: 70,
+                    }));
+                Add("Horizontal gradient", Object.assign(new TextStyle(),
+                    {
+                        Font: 'bold 256px verdana',
+                        FillGradient: Object.assign(new TextLinearGradient(), {
+                            X1: 0,
+                            Y1: 0,
+                            X2: 0,
+                            Y2: 1,
+                            Stops: [
+                                { P: 0.2, Color: "#000" },
+                                { P: 0.35, Color: "#00f" },
+                                { P: 0.40, Color: "#bbf" },
+                                { P: 0.45, Color: "#00f" },
+                                { P: 0.8, Color: "#000" },
+                            ]
+                        }),
+                        StrokeFirst: false,
+                        Stroke: "#0ff",
+                        StrokeWidth: 4,
+                        ShadowX: 4,
+                        ShadowX: 8,
+                    }));
+                Add("Diagonal gradient", Object.assign(new TextStyle(),
+                    {
+                        Font: 'bold 256px verdana',
+                        FillGradient: Object.assign(new TextLinearGradient(), {
+                            X1: 0,
+                            Y1: 0.2,
+                            X2: 1,
+                            Y2: 0.8,
+                            Stops: [
+                                { P: 0, Color: "#f00" },
+                                { P: 0.2, Color: "#ff0" },
+                                { P: 0.4, Color: "#0f0" },
+                                { P: 0.6, Color: "#0ff" },
+                                { P: 0.8, Color: "#00f" },
+                                { P: 1, Color: "#f0f" },
+                            ]
+                        }),
+                        Stroke: null,
+                        ShadowX: 4,
+                        ShadowX: 8,
+                    }));
+                Add("Gold", Object.assign(new TextStyle(),
+                    {
+                        Font: 'bold 256px tahoma',
+                        StrokeWidth: 8,
+                        FillGradient: Object.assign(new TextLinearGradient(), {
+                            X1: 0,
+                            Y1: 0,
+                            X2: 0,
+                            Y2: 1,
+                            Stops: [
+                                { P: 0, Color: "#AE7723" },
+                                { P: 0.0299, Color: "#C0923B" },
+                                { P: 0.0825, Color: "#DBBB60" },
+                                { P: 0.1302, Color: "#EFD97A" },
+                                { P: 0.1709, Color: "#FBEB8A" },
+                                { P: 0.2, Color: "#FFF290" },
+                                { P: 0.3619, Color: "#FFF08A" },
+                                { P: 0.5316, Color: "#EABD54" },
+                                { P: 0.6023, Color: "#CFA03C" },
+                                { P: 0.7129, Color: "#A9771C" },
+                                { P: 0.8006, Color: "#925E07" },
+                                { P: 0.8538, Color: "#895500" },
+                                { P: 0.8834, Color: "#8D5903" },
+                                { P: 0.9118, Color: "#97640C" },
+                                { P: 0.9399, Color: "#AA781C" },
+                                { P: 0.9677, Color: "#C39332" },
+                                { P: 0.995, Color: "#E3B64E" },
+                                { P: 1, Color: "#EABD54" },
+                            ]
+                        }),
+                        StrokeGradient: Object.assign(new TextLinearGradient(), {
+                            X1: 0,
+                            Y1: 0,
+                            X2: 1,
+                            Y2: 1,
+                            Stops: [
+                                { P: 0, Color: "#EDD685" },
+                                { P: 0.2812, Color: "#BB871D" },
+                                { P: 0.5174, Color: "#D9B253" },
+                                { P: 0.7922, Color: "#FFEFA2" },
+                                { P: 1, Color: "#C4942C" },
+                            ]
+                        }),
+                    }));
+                Add("Neon", Object.assign(new TextStyle(),
+                    {
+                        Font: 'bold 256px verdana',
+                        Fill: null,
+                        LetterSpacing: -15,
+                        Stroke: "#f6f",
+                        StrokeWidth: 3,
+                        ShadowX: 0,
+                        ShadowY: 0,
+                        ShadowFill: null,
+                        ShadowBlur: 20,
+                        ShadowStroke: "#f0f",
+                        StrokeFirst: false,
+                    }));
+            }
+            catch (e) {
+                Fail(e.message);
+            }
+            finally {
+                onLoaded();
+            }
+        }
+    </script>
+    <title>Text Demo</title>
+    <script defer src="../common/common.js"></script>
+    <script defer src="parseTools.js"></script>
+    <script defer src="../mediaPlayer/canvasTools.js"></script>
+    <link rel="icon" type="image/x-icon" href="../favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="../icon.svg">
+    <link rel="apple-touch-icon" type="image/png" href="../apple-touch-icon.png">
+    <link rel="manifest" href="../app/manifest.json">
+    <link rel="stylesheet" href="../common/theme.css">
+</head>
+<body onload="main()">
+</body>
+</html>

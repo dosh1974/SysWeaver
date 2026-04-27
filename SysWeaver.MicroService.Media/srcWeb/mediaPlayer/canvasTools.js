@@ -126,7 +126,7 @@ class CanvasTools {
         let g = null;
         const w = x2 - x1;
         const h = y2 - y1;
-        if (gradient instanceof TextLinearGradient)
+        if (!g)
             g = cc.createLinearGradient(x1 + w * gradient.X1, y1 + h * gradient.Y1, x1 + w * gradient.X2, y1 + h * gradient.Y2);
         if (!g)
             return null;
@@ -164,7 +164,8 @@ class CanvasTools {
         let mb = style.MarginBottom;
         let ml = style.MarginLeft;
 
-        const haveFill = style.Fill || style.FillGradient;
+        const haveFill = (style.Fill || style.FillGradient) && (style.Fill != 'none');
+
         const sw = style.StrokeWidth;
         const haveStroke = (style.Stroke || style.StrokeGradient) && (sw > 0);
 
@@ -379,7 +380,7 @@ class CanvasTools {
         let mb = style.MarginBottom;
         let ml = style.MarginLeft;
 
-        const haveFill = style.Fill || style.FillGradient;
+        const haveFill = (style.Fill || style.FillGradient) && (style.Fill != 'none');
         const sw = style.StrokeWidth;
         const haveStroke = (style.Stroke || style.StrokeGradient) && (sw > 0);
 

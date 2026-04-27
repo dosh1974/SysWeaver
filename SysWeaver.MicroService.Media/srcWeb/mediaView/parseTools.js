@@ -43,6 +43,11 @@
         logPrefix = logPrefix ?? "";
         try {
             const kt = typeof obj[key];
+            if (val === null) {
+                obj[key] = null;
+                console.log(logPrefix + key + ' = null');
+                return;
+            }
             if (kt === "undefined") {
                 if (onNotFound)
                     onNotFound(key, val);
@@ -93,7 +98,9 @@
     static ParamsToObject(searchParams, dest, onNotFound, logPrefix) {
         for (let k of searchParams) {
             const key = k[0];
-            const val = k[1];
+            let val = k[1];
+            if (val === "null")
+                val = null;
             ParseTools.SetToObject(dest, key, val, onNotFound, logPrefix);
         }
     }
@@ -111,6 +118,37 @@
             if (typeof val !== "function")
                 ParseTools.SetToObject(dest, key, "" + val, onNotFound, logPrefix);
         }
+    }
+
+    /**
+     * Take an object and create url parameters with the same name
+     * @param {object} srcObject The object to create an url parameters from
+     * @returns {string} The url parameters
+     */
+    static ObjectToParams(srcObject) {
+        const pm = new URLSearchParams();
+        for (let key in srcObject) {
+            let val = srcObject[key];
+            const vt = typeof val;
+            if (val !== null) {
+                if (vt === "undefined")
+                    continue;
+                if (vt === "function")
+                    continue;
+                if (vt === "object") {
+                    pm.set(key, JSON.stringify(val));
+                    continue;
+                }
+                if (!val) {
+                    if (vt === "number")
+                        val = 0;
+                    if (vt === "boolean")
+                        val = false;
+                }
+            }
+            pm.set(key, val);
+        }
+        return pm.toString();
     }
 
 
