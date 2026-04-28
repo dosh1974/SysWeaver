@@ -202,6 +202,7 @@ async function apiMain() {
                         obj = JSON.parse(local);
                     } else {
                         const lobj = JSON.parse(local);
+                        delete lobj.$type;
                         Object.assign(obj, lobj);
                     }
                     await Edit.CleanUp(data.Arg, obj);
@@ -287,7 +288,15 @@ async function apiMain() {
                 try {
                     if (haveArg) {
                         const obj = input.GetObject();
-                        localStorage.setItem(key, JSON.stringify(obj));
+
+                        const oldT = obj.$type;
+                        delete obj.$type;
+                        try {
+                            localStorage.setItem(key, JSON.stringify(obj));
+                        }
+                        finally {
+                            obj.$type = oldT;
+                        }
                         res = await sendRequest(fullUri, obj, true, null, isRaw);
                     } else {
                         res = await getRequest(fullUri, true, isRaw);

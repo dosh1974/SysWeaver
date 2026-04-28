@@ -450,6 +450,108 @@ namespace SysWeaver
 
 
 
+
+
+
+        /// <summary>
+        /// Convert an array to another element type using a function
+        /// </summary>
+        /// <typeparam name="E"></typeparam>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="array"></param>
+        /// <param name="func"></param>
+        /// <returns></returns>
+        public static T[] Convert<E, T>(this IReadOnlyList<E> array, Func<E, int, T> func)
+        {
+            if (array == null)
+                return null;
+            var l = array.Count;
+            if (l <= 0)
+                return Array.Empty<T>();
+            var t = GC.AllocateUninitializedArray<T>(l);
+            var p = t.AsSpan();
+            for (int i = 0; i < l; ++i)
+                p[i] = func(array[i], i);
+            return t;
+        }
+
+        /// <summary>
+        /// Convert an array to another element type using a function.
+        /// Elements are converted in paralell (async).
+        /// </summary>
+        /// <typeparam name="E"></typeparam>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="array"></param>
+        /// <param name="func"></param>
+        /// <param name="maxConcurrency">The maximum number of concurrent operations.
+        /// If less than zero, it's a percentage of the number of available logical processors.
+        /// If zero the concurrency is the number of processors minus one.
+        /// Ex:
+        /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
+        /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
+        /// 0 = Number of processors minus one (so 7 if there are 8 processors).
+        /// </param>
+        /// <returns></returns>
+        public static async Task<T[]> ConvertAsync<E, T>(this IReadOnlyList<E> array, Func<E, int, Task<T>> func, int maxConcurrency = 0)
+        {
+            if (array == null)
+                return null;
+            var l = array.Count;
+            if (l <= 0)
+                return Array.Empty<T>();
+            if (l == 1)
+                return [await func(array[0], 0).ConfigureAwait(false)];
+            ConcurrencyLimiter.LimitConcurrency(ref func, maxConcurrency, l);
+            var tt = GC.AllocateUninitializedArray<Task<T>>(l);
+            for (int i = 0; i < l; ++i)
+                tt[i] = func(array[i], i);
+            await Task.WhenAll(tt).ConfigureAwait(false);
+            var t = GC.AllocateUninitializedArray<T>(l);
+            for (int i = 0; i < l; ++i)
+                t[i] = tt[i].Result;
+            return t;
+        }
+
+
+
+        /// <summary>
+        /// Convert an array to another element type using a function.
+        /// Elements are converted in paralell (async).
+        /// </summary>
+        /// <typeparam name="E"></typeparam>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="array"></param>
+        /// <param name="func"></param>
+        /// <param name="maxConcurrency">The maximum number of concurrent operations.
+        /// If less than zero, it's a percentage of the number of available logical processors.
+        /// If zero the concurrency is the number of processors minus one.
+        /// Ex:
+        /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
+        /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
+        /// 0 = Number of processors minus one (so 7 if there are 8 processors).
+        /// </param>
+        /// <returns></returns>
+        public static async ValueTask<T[]> ConvertAsyncValue<E, T>(this IReadOnlyList<E> array, Func<E, int, ValueTask<T>> func, int maxConcurrency = 0)
+        {
+            if (array == null)
+                return null;
+            var l = array.Count;
+            if (l <= 0)
+                return Array.Empty<T>();
+            if (l == 1)
+                return [await func(array[0], 0).ConfigureAwait(false)];
+            ConcurrencyLimiter.LimitConcurrency(ref func, maxConcurrency, l);
+            var tt = GC.AllocateUninitializedArray<ValueTask<T>>(l);
+            for (int i = 0; i < l; ++i)
+                tt[i] = func(array[i], i);
+            await TaskExt.WhenAll(tt).ConfigureAwait(false);
+            var t = GC.AllocateUninitializedArray<T>(l);
+            for (int i = 0; i < l; ++i)
+                t[i] = tt[i].Result;
+            return t;
+        }
+
+
         /// <summary>
         /// Converts a dictionary to an array of some type
         /// </summary>
