@@ -168,30 +168,30 @@ namespace SysWeaver.Data
         /// <summary>
         /// Get table data from an enumerable sequence
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The element (row) type</typeparam>
         /// <param name="request">What part of the data, sorting etc</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
         /// <returns>Some table data</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TypedTableData<T> GetTyped<T>(TableDataRequest request, IEnumerable<T> data, String title = null)
-            => TableDataType<T>.GetTyped(request ?? DefRequest, data, title);
+            => TableDataType<T>.GetTyped<TypedTableData<T>>(request ?? DefRequest, data, title);
 
 
         /// <summary>
         /// Get table data from an enumerable sequence without any filtering, sorting or limiting
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The element (row) type</typeparam>
         /// <param name="data">Source data</param>
         /// <returns>Some table data</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TypedTableData<T> GetAllTyped<T>(IEnumerable<T> data)
-            => TableDataType<T>.GetAllTyped(data);
+            => TableDataType<T>.GetAllTyped<TypedTableData<T>>(data);
 
         /// <summary>
         /// Get table data from an enumerable sequence
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The element (row) type</typeparam>
         /// <param name="request">What part of the data, sorting etc</param>
         /// <param name="refreshRate">Number of ms to wait befor a new refresh</param>
         /// <param name="data">Source data</param>
@@ -199,7 +199,7 @@ namespace SysWeaver.Data
         /// <returns>Some table data</returns>
         public static TypedTableData<T> GetTyped<T>(TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null)
         {
-            var r = TableDataType<T>.GetTyped(request ?? DefRequest, data, title);
+            var r = TableDataType<T>.GetTyped<TypedTableData<T>>(request ?? DefRequest, data, title);
             if (r != null)
                 r.RefreshRate = refreshRate;
             return r;
@@ -208,7 +208,7 @@ namespace SysWeaver.Data
         /// <summary>
         /// Get table data from an enumerable sequence with any translations applied
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The element (row) type</typeparam>
         /// <param name="translationContext">The translator and target language to use</param>
         /// <param name="request">What part of the data, sorting etc</param>
         /// <param name="refreshRate">Number of ms to wait befor a new refresh</param>
@@ -217,10 +217,77 @@ namespace SysWeaver.Data
         /// <returns>Some table data</returns>
         public static Task<TypedTableData<T>> GetTyped<T>(ITranslationContext translationContext, TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null)
         {
-            var r = TableDataType<T>.GetTyped(request ?? DefRequest, data, title);
+            var r = TableDataType<T>.GetTyped<TypedTableData<T>>(request ?? DefRequest, data, title);
             if (r != null)
                 r.RefreshRate = refreshRate;
-            return r.Translate<T>(translationContext);
+            return r.Translate<T, TypedTableData<T>>(translationContext);
+        }
+
+        #endregion// Typed versions
+
+
+        #region Typed base versions
+
+        /// <summary>
+        /// Get table data from an enumerable sequence
+        /// </summary>
+        /// <typeparam name="T">The element (row) type</typeparam>
+        /// <typeparam name="R">The data type</typeparam>
+        /// <param name="request">What part of the data, sorting etc</param>
+        /// <param name="data">Source data</param>
+        /// <param name="title">Optional title of the table</param>
+        /// <returns>Some table data</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static R GetTyped<T, R>(TableDataRequest request, IEnumerable<T> data, String title = null) where R : TypedTableData<T>, new()
+            => TableDataType<T>.GetTyped<R>(request ?? DefRequest, data, title);
+
+
+        /// <summary>
+        /// Get table data from an enumerable sequence without any filtering, sorting or limiting
+        /// </summary>
+        /// <typeparam name="T">The element (row) type</typeparam>
+        /// <typeparam name="R">The data type</typeparam>
+        /// <param name="data">Source data</param>
+        /// <returns>Some table data</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static R GetAllTyped<T, R>(IEnumerable<T> data) where R : TypedTableData<T>, new()
+            => TableDataType<T>.GetAllTyped<R>(data);
+
+        /// <summary>
+        /// Get table data from an enumerable sequence
+        /// </summary>
+        /// <typeparam name="T">The element (row) type</typeparam>
+        /// <typeparam name="R">The data type</typeparam>
+        /// <param name="request">What part of the data, sorting etc</param>
+        /// <param name="refreshRate">Number of ms to wait befor a new refresh</param>
+        /// <param name="data">Source data</param>
+        /// <param name="title">Optional title of the table</param>
+        /// <returns>Some table data</returns>
+        public static R GetTyped<T, R>(TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null) where R : TypedTableData<T>, new()
+        {
+            var r = TableDataType<T>.GetTyped<R>(request ?? DefRequest, data, title);
+            if (r != null)
+                r.RefreshRate = refreshRate;
+            return r;
+        }
+
+        /// <summary>
+        /// Get table data from an enumerable sequence with any translations applied
+        /// </summary>
+        /// <typeparam name="T">The element (row) type</typeparam>
+        /// <typeparam name="R">The data type</typeparam>
+        /// <param name="translationContext">The translator and target language to use</param>
+        /// <param name="request">What part of the data, sorting etc</param>
+        /// <param name="refreshRate">Number of ms to wait befor a new refresh</param>
+        /// <param name="data">Source data</param>
+        /// <param name="title">Optional title of the table</param>
+        /// <returns>Some table data</returns>
+        public static Task<R> GetTyped<T, R>(ITranslationContext translationContext, TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null) where R : TypedTableData<T>, new()
+        {
+            var r = TableDataType<T>.GetTyped<R>(request ?? DefRequest, data, title);
+            if (r != null)
+                r.RefreshRate = refreshRate;
+            return r.Translate<T, R>(translationContext);
         }
 
 
@@ -448,6 +515,7 @@ namespace SysWeaver.Data
         /// <typeparam name="T"></typeparam>
         /// <param name="name">The column name (member name)</param>
         /// <returns>The column index or -1 if not found</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int GetColumnIndex<T>(String name) => TableDataType<T>.NameToColumnIndex.TryGetValue(name, out var index) ? index : -1;
 
 
@@ -1336,14 +1404,15 @@ namespace SysWeaver.Data
         /// <summary>
         /// Translate the data in a table data.
         /// </summary>
-        /// <typeparam name="T">The type must match the type used when creating the table</typeparam>
+        /// <typeparam name="T">The type must match the element type used when creating the table</typeparam>
+        /// <typeparam name="R">The type must match the type used when creating the table</typeparam>
         /// <param name="data">The data to translate</param>
         /// <param name="translator">The translator to use</param>
         /// <param name="to">The target language</param>
         /// <param name="effort">The effort (cost / time) to put into the translation</param>
         /// <param name="retention">How long to cache the translation</param>
         /// <returns>A task to await for translation completion</returns>
-        public static async Task<TypedTableData<T>> Translate<T>(this TypedTableData<T> data, ITranslator translator, String to, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
+        public static async Task<R> Translate<T, R>(this R data, ITranslator translator, String to, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long) where R : TypedTableData<T>, new()
         {
             if ((translator == null) || (data == null))
                 return data;
@@ -1366,6 +1435,7 @@ namespace SysWeaver.Data
         /// <param name="data">The data to translate</param>
         /// <param name="translationContext">The translator and target language to use</param>
         /// <returns>A task to await for translation completion</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Task<TableData> Translate<T>(this TableData data, ITranslationContext translationContext)
             => Translate<T>(data, translationContext?.Translator, translationContext?.Language);
 
@@ -1373,12 +1443,14 @@ namespace SysWeaver.Data
         /// <summary>
         /// Translate the data in a table data.
         /// </summary>
-        /// <typeparam name="T">The type must match the type used when creating the table</typeparam>
+        /// <typeparam name="T">The type must match the element type used when creating the table</typeparam>
+        /// <typeparam name="R">The type must match the type used when creating the table</typeparam>
         /// <param name="data">The data to translate</param>
         /// <param name="translationContext">The translator and target language to use</param>
         /// <returns>A task to await for translation completion</returns>
-        public static Task<TypedTableData<T>> Translate<T>(this TypedTableData<T> data, ITranslationContext translationContext)
-            => Translate<T>(data, translationContext?.Translator, translationContext?.Language);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Task<R> Translate<T, R>(this R data, ITranslationContext translationContext) where R : TypedTableData<T>, new()
+            => Translate<T, R>(data, translationContext?.Translator, translationContext?.Language);
 
 
 
@@ -1406,7 +1478,11 @@ namespace SysWeaver.Data
             return data;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TypedTableData<T> HandleCc<T>(this TypedTableData<T> data, long requestCc, TableDataColumn[] cols, String title = null)
+            => HandleCc<T, TypedTableData<T>>(data, requestCc, cols, title);
+
+        public static R HandleCc<T, R>(this R data, long requestCc, TableDataColumn[] cols, String title = null) where R : TypedTableData<T>
         {
             if (requestCc == -1)
             {

@@ -923,10 +923,10 @@ namespace SysWeaver.Data
                 Cols = Cols,
             };
         }
-        public static TypedTableData<T> GetAllTyped(IEnumerable<T> data)
+        public static R GetAllTyped<R>(IEnumerable<T> data) where R : TypedTableData<T>, new()
         {
             var rows = ExtractTypedGet(out var _, data);
-            return new TypedTableData<T>
+            return new R
             {
                 Rows = rows,
                 Cols = TypedCols,
@@ -964,7 +964,7 @@ namespace SysWeaver.Data
             }.HandleCc(request.Cc, Cols, title);
         }
 
-        public static TypedTableData<T> GetTyped(TableDataRequest request, IEnumerable<T> data, String title)
+        public static R GetTyped<R>(TableDataRequest request, IEnumerable<T> data, String title) where R : TypedTableData<T>, new()
         {
             long count = 0;
             T[] rows = EmptyT;
@@ -988,11 +988,11 @@ namespace SysWeaver.Data
             catch
             {
             }
-            return new TypedTableData<T>
+            return new R
             {
                 Rows = rows,
                 RowCount = count,
-            }.HandleCc(request.Cc, TypedCols, title);
+            }.HandleCc<T, R>(request.Cc, TypedCols, title);
 
         }
 
