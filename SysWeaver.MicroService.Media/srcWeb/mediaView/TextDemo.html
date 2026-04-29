@@ -80,21 +80,42 @@
                 document.body.appendChild(b);
 
                 const text = p.get("Text") ?? "Abc123";
+                const texts = p.get("Texts") ?? "Hi,Hello,Howdy,Hallo,Salam,مرحبًا,Hola,Guten%20tag,Ndewo,Ciao,Olá,Jambo,Hallå,Hej,Molo,Bonjour";
 
                 const effects = [
+                    "BadVHS",
                     "Rain",
                     "SliceGlitch",
                     "OldMovie",
                     "3D-flag",
                 ];
                 const effectIcons = [
+                    "preview_play",
                     "download",
                     "gradient",
                     "movie",
                     "os_windows",
                 ];
                 const el = effects.length;
+
+
+                const ceffects = [
+                    "3d-tiles",
+                    "Stripes",
+                    "Scroll",
+                    "Wheel",
+                ];
+                const ceffectIcons = [
+                    "world",
+                    "brick",
+                    "credit_card",
+                    "settings",
+                ];
+
+                const cel = effects.length;
+
                 const margin = 32;
+                const cscale = 0.5;
 
                 async function Add(title, style) {
 
@@ -111,8 +132,43 @@
                     e.appendChild(f);
                     b.appendChild(e);
 
+                    const icon = new ColorIcon(
+                        "../icons/copy.svg",
+                        "IconColorThemeAcc1",
+                        28, 28,
+                        _TF("Click to copy the text style as json to the clipboard", "Tool tip text on an icon that when clicked will copy the styling for some text to the clipboard in json format"),
+                        ev => ValueFormat.copyToClipboardInfo(JSON.stringify(style, null, "\t"), _TF("Copied json to the clipboard", "Notification text shown when a user copied some json text to the clipboard"))
+                    );
+                    t.appendChild(icon.Element);
+
                     const p = ParseTools.ObjectToParams(style);
+                    const fontP = style.Font.split(' ');
+                    const fontPI = fontP.length;
+                    for (let i = 0; i < fontPI; ++i) {
+                        const t = fontP[i];
+                        const tl = t.length;
+                        if (tl <= 2)
+                            continue;
+                        if (t.substring(tl - 2) === "px") {
+                            const size = parseFloat(t.substring(0, tl - 2));
+                            fontP[i] = (size * cscale) + "px";
+                            break;
+                        }
+                    }
+                    const cstyle = Object.assign({}, style);
+                    cstyle.Font = fontP.join(" ");   
+                    cstyle.MarginTop = 2;
+                    cstyle.MarginRight = 2;
+                    cstyle.MarginBottom = 2;
+                    cstyle.MarginLeft = 2;
+                    cstyle.StrokeWidth *= cscale;
+                    cstyle.ShadowX *= cscale;
+                    cstyle.ShadowX *= cscale;
+                    cstyle.LetterSpacing *= cscale;
+                    const cp = ParseTools.ObjectToParams(cstyle);
+
                     const url = "textEffects/?" + p + "&Text=" + text + "&Effect=";
+
                     for (let i = 0; i < el; ++i) {
                         const ef = effects[i];
                         const icon = new ColorIcon(
@@ -124,15 +180,18 @@
                         t.appendChild(icon.Element);
                     }
 
+                    const curl = "textEffects/?" + cp + "&Texts=" + texts + "&Effect=";
 
-                    const icon = new ColorIcon(
-                        "../icons/copy.svg",
-                        "IconColorThemeAcc1",
-                        28, 28,
-                        _TF("Click to copy the text style as json to the clipboard", "Tool tip text on an icon that when clicked will copy the styling for some text to the clipboard in json format"),
-                        ev => ValueFormat.copyToClipboardInfo(JSON.stringify(style, null, "\t"), _TF("Copied json to the clipboard", "Notification text shown when a user copied some json text to the clipboard"))
-                    );
-                    t.appendChild(icon.Element);
+                    for (let i = 0; i < cel; ++i) {
+                        let ef = ceffects[i];
+                        const icon = new ColorIcon(
+                            "../icons/" + ceffectIcons[i] + ".svg",
+                            "IconColorThemeAcc2",
+                            28, 28,
+                            _T("Click to show full screen with the {0} effect", ef, "Tool tip text on an icon that when clicked will show the content in full screen using a specific effect. {0} is replaced with the name of the effect"),
+                            ev => Open(curl + ef, "_self"));
+                        t.appendChild(icon.Element);
+                    }
 
 
 

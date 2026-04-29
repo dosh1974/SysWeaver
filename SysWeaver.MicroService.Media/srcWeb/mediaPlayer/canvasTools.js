@@ -356,8 +356,18 @@ class CanvasTools {
      * @param {object} stats Optional object that will recieve some stats
      * @returns {HTMLCanvasElement} The generated canvas element
      */
-    static CreateTextGrid(texts, style, columnCount = 4, stats = null) {
+    static CreateTextGrid(texts, style, columnCount = 2, stats = null) {
+        const minMargin = 1;
         style = style ?? new TextStyle();
+        if (style.MarginLeft < minMargin)
+            style.MarginLeft = minMargin;
+        if (style.MarginTop < minMargin)
+            style.MarginTop = minMargin;
+        if (style.MarginRight < minMargin)
+            style.MarginRight = minMargin;
+        if (style.MarginBottom < minMargin)
+            style.MarginBottom = minMargin;
+
         const c = document.createElement("canvas");
         if (style.AttachTo)
             style.AttachTo.appendChild(c);
@@ -423,8 +433,9 @@ class CanvasTools {
             stats.TileHeight = ih;
             stats.PageWidth = iw * columnCount;
             stats.PageHeight = ih * rowCount;
-            stats.ImageWidth = iw;
-            stats.ImageHeight = ih;
+            stats.ImageWidth = iw - minMargin * 2;
+            stats.ImageHeight = ih - minMargin * 2;
+            stats.Border = minMargin
             stats.UniqueCount = textCount;
         }
         return c;
@@ -436,10 +447,11 @@ class CanvasTools {
      * Create an image Blob with the given text and styling
      * @param {string} text The text to render
      * @param {TextStyle} style The styling of the text
+     * @param {integer} columnCount Number of columns in the genereated image
      * @param {object} stats Optional object that will recieve some stats
      * @returns {Promise<Blob>} A promise returning a Blob containing the image
      */
-    static CreateTextGridBlob(texts, style, columnCount = 4, stats = null) {
+    static CreateTextGridBlob(texts, style, columnCount = 2, stats = null) {
 
         const c = CanvasTools.CreateTextGrid(texts, style, columnCount, stats);
         return new Promise((resolve, reject) => {
@@ -461,7 +473,7 @@ class CanvasTools {
      * @param {object} stats Optional object that will recieve some stats
      * @returns {Promise<string>} A promise returning an url to the image
      */
-    static async CreateTextGridUrl(texts, style, columnCount = 4, stats = null) {
+    static async CreateTextGridUrl(texts, style, columnCount = 2, stats = null) {
 
         const b = await CanvasTools.CreateTextGridBlob(texts, style, columnCount, stats);
         return URL.createObjectURL(b);

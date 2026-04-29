@@ -42,10 +42,10 @@ class MediaPlayer {
 
     static async Init() {
         const current = document.currentScript.src;
+        await includeJs(current, "canvasTools.js"),
         await Promise.all([
             includeJs(current, "media_effect_program.js"),
             includeJs(current, "media_player_tools.js"),
-            includeJs(current, "canvasTools.js"),
             includeJs(current, "media_player_image.js"),
             includeJs(current, "media_player_audio.js"),
             includeJs(current, "media_player_video.js"),

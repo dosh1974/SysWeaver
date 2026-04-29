@@ -1,6 +1,6 @@
 ﻿class MediaPlayerParamsText extends TextStyle {
     CollageSeparator = null;
-    CollageColumns = 4;
+    CollageColumns = 2;
     Crop = null;
     Duration = 10;
     Effect = null;
@@ -52,9 +52,9 @@ class MediaPlayerText {
                 fx = {};
                 ep.FxProps = fx;
             }
-            c = await CanvasTools.CreateTextGridUrl(texts, t.Params, t.CollageColumns, fx);
+            c = await CanvasTools.CreateTextGridUrl(texts, p, p.CollageColumns, fx);
         } else {
-            c = await CanvasTools.CreateTextImageUrl(t.Url, t.Params);
+            c = await CanvasTools.CreateTextImageUrl(t.Url, p);
         }
         const e = t.Element;
         const res = await waitEvent2(e, "load", "error", () => {
@@ -209,9 +209,9 @@ class MediaPlayerTextTexture {
                 fx = {};
                 ep.FxProps = fx;
             }
-            c = await CanvasTools.CreateTextGridUrl(texts, t.Params, t.CollageColumns, fx);
+            c = await CanvasTools.CreateTextGridUrl(texts, p, p.CollageColumns, fx);
         } else {
-            c = await CanvasTools.CreateTextImageUrl(t.Url, t.Params);
+            c = await CanvasTools.CreateTextImageUrl(t.Url, p);
         }
         const res = await waitEvent2(image, "load", "error", () => image.src = c);
         if (res.type == "error")
