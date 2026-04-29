@@ -1,28 +1,27 @@
-﻿#ifdef GL_ES
-precision mediump float;
-#endif
 uniform float time;
 uniform vec2 resolution;
-#define iTime time
-#define iResolution resolution
 
-const vec3 Color = vec3(0.04, 0.15, 0.03);	//	var: { "type": "colhdr" }
-const float StrokeColor = 0.5;				//	var: {}
-const float StrokeIntensity = 0.5;			//	var: {}
+const vec4 Color = vec4(1.0, 1.0, 1.0, 1.0); //	var: { "type": "colhdr", "desc": "The grid color"}
+const vec4 BgColor = vec4(0.0, 0.0, 0.0, 1.0); //var: { "type": "colhdr", "desc": "The background color"}
+const float CellCount = 20.0;//var:{}
 
+const float DistortionAmount = 0.03;//var:{}
+const float DistortionSpeed = 0.5;//var:{}
+const float DistortionFreq = 4.0;//var:{}
 
+const float BreathAmount = 0.1;//var:{}
+const float BreathSpeed = 0.05;//var:{}
 
+const float Smoothness = 10.0;//var:{}
 
-#define TAU 6.28318530718
-#define MAX_ITER 8
 
 // Post processing parameters
 
 const float NoiseInt = 0.0; 	//	var: { "min": 0, "max": 1.0, "step": 0.05, "desc": "The amount of noise, set to 0 to disable"}
 
-const float VingetteIntensity = 0.0;	//	var: { "min": 0, "max": 1, "step": 0.05, "name": "Vingette intensity", "desc": "The intesity of the vingette effect, set to zero to disable vingetting"}
+const float VingetteIntensity = 1.0;	//	var: { "min": 0, "max": 1, "step": 0.05, "name": "Vingette intensity", "desc": "The intesity of the vingette effect, set to zero to disable vingetting"}
 const float VingetteSpread = 16.0;	//	var: { "min": 10, "max": 1000, "step": 10, "name": "Vingette spread", "desc": "The spread of the vingette effect"}
-const float VingettePow = 0.3;	//	var: { "min": 0.1, "max": 10, "step": 0.1, "name": "Vingette power", "desc": "The curve of the vingetting"}
+const float VingettePow = 0.5;	//	var: { "min": 0.1, "max": 10, "step": 0.1, "name": "Vingette power", "desc": "The curve of the vingetting"}
 
 const float TopLeftO = 1.0;	//var:	{ "min": 0, "max": 1, "step": 0.05, "name": "Top left opacity", "desc": "The opacity of the output in the top left corner"}
 const float TopRightO = 1.0;//var:{ "min": 0, "max": 1, "step": 0.05, "name": "Top right opacity", "desc": "The opacity of the output in the top right corner"}
@@ -63,35 +62,25 @@ vec4 PostProcess(vec4 color, vec2 uv)
 	return color;
 }
 
-
-void mainImage( out vec4 fragColor, in vec2 fragCoord ) 
+void main()
 {
-	float time = iTime * .05+23.0;
-    // uv should be the 0-1 uv of texture...
-	vec2 uv = fragCoord.xy / max(iResolution.x, iResolution.y);
+   
+    vec2 uv = gl_FragCoord.xy / resolution.xy;
+    float aspect = resolution.x / resolution.y;
     
-    	vec2 p = mod(uv*TAU, TAU)-250.0;
-	vec2 i = vec2(p);
-	float c = 1.0;
-	float inten = .005;
-
-	for (int n = 0; n < MAX_ITER; n++) 
-	{
-		float t = time * (1.0 - (3.5 / float(n+1)));
-		i = p + vec2(cos(t - i.x) + sin(t + i.y), sin(t - i.y) + cos(t + i.x));
-		c += 1.0/length(vec2(p.x / (sin(i.x+t)/inten),p.y / (cos(i.y+t)/inten)));
-	}
-	c /= float(MAX_ITER);
-	c = 1.17-pow(c, 1.4);
+    float t = time * DistortionSpeed;
+	vec4 a4 = vec4(1.0, 0.3, 0.5, 0.7) * t + vec4(13.0, 17.0, 23.0, 29.0);
+	a4 = uv.xxyy * DistortionFreq + a4;
+	a4 = sin(a4);
+	a4.xy *= a4.zw;
+	a4.xy = a4.xy * DistortionAmount + uv;
 	
-	float stroke = pow(abs(c), 10.0);
-	
-	vec4 color = vec4(Color * (1.0 + StrokeColor * stroke) + stroke * StrokeIntensity, 1.0);
-	color.rgb *= color.a;
-	fragColor = PostProcess(color, uv);
-}
-
-void main(void)
-{
-    mainImage(gl_FragColor, gl_FragCoord.xy);
+    float scale = CellCount * 3.14159265359;
+	if (BreathAmount > 0.0)
+	    scale *= (1.0 + BreathAmount * sin(time * BreathSpeed));
+    vec2 scaledUV = a4.xy * vec2(aspect, 1.0) * scale;
+	vec2 grid = clamp(sin(scaledUV) * Smoothness + 0.5, 0.0, 1.0);
+	grid -= grid.yx;
+	float i = max(grid.x, grid.y);
+    gl_FragColor = PostProcess(mix(BgColor, Color, i), uv);
 }

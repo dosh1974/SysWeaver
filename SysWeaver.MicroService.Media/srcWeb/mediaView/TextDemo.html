@@ -125,6 +125,17 @@
                     }
 
 
+                    const icon = new ColorIcon(
+                        "../icons/copy.svg",
+                        "IconColorThemeAcc1",
+                        28, 28,
+                        _TF("Click to copy the text style as json to the clipboard", "Tool tip text on an icon that when clicked will copy the styling for some text to the clipboard in json format"),
+                        ev => ValueFormat.copyToClipboardInfo(JSON.stringify(style, null, "\t"), _TF("Copied json to the clipboard", "Notification text shown when a user copied some json text to the clipboard"))
+                    );
+                    t.appendChild(icon.Element);
+
+
+
                     const c = await CanvasTools.CreateTextImageUrl(text, style);
                     f.src = c;
 

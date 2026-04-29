@@ -1,4 +1,6 @@
 ﻿class MediaPlayerParamsText extends TextStyle {
+    CollageSeparator = null;
+    CollageColumns = 4;
     Crop = null;
     Duration = 10;
     Effect = null;
@@ -36,7 +38,24 @@ class MediaPlayerText {
     async Cache(keepHidden) {
 
         const t = this;
-        const c = await CanvasTools.CreateTextImageUrl(t.Url, t.Params);
+        const p = t.Params;
+        let c;
+        if (p.CollageSeparator) {
+            const texts = t.Url.split(p.CollageSeparator);
+            let ep = p.EffectParams;
+            if (!ep) {
+                ep = {};
+                p.EffectParams = ep;
+            }
+            let fx = ep.FxProps;
+            if (!fx) {
+                fx = {};
+                ep.FxProps = fx;
+            }
+            c = await CanvasTools.CreateTextGridUrl(texts, t.Params, t.CollageColumns, fx);
+        } else {
+            c = await CanvasTools.CreateTextImageUrl(t.Url, t.Params);
+        }
         const e = t.Element;
         const res = await waitEvent2(e, "load", "error", () => {
             e.src = c;
@@ -176,7 +195,24 @@ class MediaPlayerTextTexture {
         const gl = t.GL;
         const texture = t.Texture;
         const image = new Image();
-        const c = await CanvasTools.CreateTextImageUrl(t.Url, t.Params);
+        const p = t.Params;
+        let c;
+        if (p.CollageSeparator) {
+            const texts = t.Url.split(p.CollageSeparator);
+            let ep = p.EffectParams;
+            if (!ep) {
+                ep = {};
+                p.EffectParams = ep;
+            }
+            let fx = ep.FxProps;
+            if (!fx) {
+                fx = {};
+                ep.FxProps = fx;
+            }
+            c = await CanvasTools.CreateTextGridUrl(texts, t.Params, t.CollageColumns, fx);
+        } else {
+            c = await CanvasTools.CreateTextImageUrl(t.Url, t.Params);
+        }
         const res = await waitEvent2(image, "load", "error", () => image.src = c);
         if (res.type == "error")
             return false;

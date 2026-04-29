@@ -5,8 +5,8 @@
     <script>
         /*
             Parameters (basic):
-                effect = 	Name of the effect file to use.
-                text = 		The text to show.
+                Effect = 	Name of the effect file to use.
+                Text = 		The text to show.
 
             Effects:
                     "Rain"
@@ -20,37 +20,67 @@
 
             const href = window.location.href;
             const p = new URL(href).searchParams;
-            
+            const isCollage = p.has("Texts");
   
             // MediaPlayerParamsText
-            const props = {
-                Text: "SysWeaver",
-                EffectSizeFromImage: true,
-                Crop: null,
-                Duration: 10,
-                Transparent: true,
-                AdaptiveSize: false,
-                Font: 'bold 300px Tahoma',
-                LetterSpacing: 0,
-                Fill: "#631",
-                FillGradient: null,
-                Stroke: "#fd4",
-                StrokeGradient: null,
-                StrokeWidth: 8,
-                StrokeCap: "round",
-                ShadowFill: "#000c",
-                ShadowStroke: null,
-                ShadowX: 3,
-                ShadowY: 5,
-                ShadowBlur: 12,
-                MarginLeft: 16,
-                MarginTop: 8,
-                MarginRight: 16,
-                MarginBottom: 8,
-                StrokeFirst: false,
-                AttachTo: null,
-            };
-
+            const props = isCollage ?
+                {
+                    EffectSizeFromImage: false,
+                    AdaptiveSize: true,
+                    Crop: null,
+                    Duration: 10,
+                    Transparent: true,
+                    Font: 'bold 80px Tahoma',
+                    LetterSpacing: 0,
+                    Fill: "#15b",
+                    FillGradient: null,
+                    Stroke: "#fd4",
+                    StrokeGradient: null,
+                    StrokeWidth: 3,
+                    StrokeCap: "round",
+                    ShadowFill: "#000c",
+                    ShadowStroke: null,
+                    ShadowX: 0,
+                    ShadowY: 0,
+                    ShadowBlur: 6,
+                    MarginLeft: 1,
+                    MarginTop: 1,
+                    MarginRight: 1,
+                    MarginBottom: 1,
+                    StrokeFirst: true,
+                    AttachTo: null,
+                    Texts: "Hello,World,SysWeaver",
+                    CollageSeparator: ',',
+                    CollageColumns: 4,  
+                }
+                : 
+                {
+                    EffectSizeFromImage: true,
+                    Crop: null,
+                    Duration: 10,
+                    Transparent: true,
+                    AdaptiveSize: false,
+                    Font: 'bold 300px Tahoma',
+                    LetterSpacing: 0,
+                    Fill: "#15b",
+                    FillGradient: null,
+                    Stroke: "#fd4",
+                    StrokeGradient: null,
+                    StrokeWidth: 8,
+                    StrokeCap: "round",
+                    ShadowFill: "#000c",
+                    ShadowStroke: null,
+                    ShadowX: 3,
+                    ShadowY: 5,
+                    ShadowBlur: 12,
+                    MarginLeft: 16,
+                    MarginTop: 8,
+                    MarginRight: 16,
+                    MarginBottom: 8,
+                    StrokeFirst: true,
+                    AttachTo: null,
+                    Text: "SysWeaver",
+                };
             // MediaPlayerParamsEffect
             const ep =
             {
@@ -80,9 +110,9 @@
 
             };
 
-            let effect = p.get("Effect") ?? "DistortedTv";
+            let effect = p.get("Effect") ?? (isCollage ? "Stripes" : "DistortedTv");
             if (!effect.endsWith(".glsl"))
-                effect = "imageEffects/" + effect + ".glsl";
+                effect = (isCollage ? "collageEffects/" : "imageEffects/") + effect + ".glsl";
 
             //  Load parameters
             const subP = effect.indexOf('://') < 0 ? "../" : "";
@@ -98,8 +128,9 @@
             //  Fix parameters
             props.Effect = effect;
 
-            const text = props.Text ?? "SysWeaver";
+            const text = (isCollage ? props.Texts : props.Text) ?? "SysWeaver";
             delete props.Text;
+            delete props.Texts;
             props.EffectParams = ep;
             ep.FxProps = fxParams;
             ep.Transparent = props.Transparent;

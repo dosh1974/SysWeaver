@@ -372,20 +372,7 @@ class MediaPlayerEffect {
             }
         }
 
-        let fxProps = props.FxProps;
-        if (typeof fxProps === "object")
-            fxProps = JSON.stringify(fxProps);
-        fxProps = programData.ValidateVars(fxProps);
-        if (fxProps) {
-            props.EffectProps = JSON.parse(fxProps);
-            t.ScriptMember = programData.ScriptMember;
-            t.ScriptTypeInfo = programData.ScriptTypeInfo;
-        }
-        else {
-            delete props.EffectProps;
-            t.ScriptMember = null;
-            t.ScriptTypeInfo = null;
-        }
+        //  Load / create texture, may change FxProps
 
         const tex = t.Texture;
         if (tex) {
@@ -404,6 +391,24 @@ class MediaPlayerEffect {
                 }
             }
         }
+
+
+        let fxProps = props.FxProps;
+        if (typeof fxProps === "object")
+            fxProps = JSON.stringify(fxProps);
+        fxProps = programData.ValidateVars(fxProps);
+        if (fxProps) {
+            props.EffectProps = JSON.parse(fxProps);
+            t.ScriptMember = programData.ScriptMember;
+            t.ScriptTypeInfo = programData.ScriptTypeInfo;
+        }
+        else {
+            delete props.EffectProps;
+            t.ScriptMember = null;
+            t.ScriptTypeInfo = null;
+        }
+
+
 
         if (!await t.Compile())
             return false;

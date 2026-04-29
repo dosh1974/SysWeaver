@@ -314,6 +314,142 @@ async function textEffectMain() {
 
 
         const s = new TextStyle();
+
+        Object.assign(s, {
+            "Font": "bold 160px tahoma",
+            "LetterSpacing": -5,
+            "Fill": "#fff",
+            "FillGradient": {
+                "X1": 0,
+                "Y1": 0,
+                "X2": 0,
+                "Y2": 1,
+                "Stops": [
+                    {
+                        "P": 0,
+                        "Color": "#AE7723"
+                    },
+                    {
+                        "P": 0.0299,
+                        "Color": "#C0923B"
+                    },
+                    {
+                        "P": 0.0825,
+                        "Color": "#DBBB60"
+                    },
+                    {
+                        "P": 0.1302,
+                        "Color": "#EFD97A"
+                    },
+                    {
+                        "P": 0.1709,
+                        "Color": "#FBEB8A"
+                    },
+                    {
+                        "P": 0.2,
+                        "Color": "#FFF290"
+                    },
+                    {
+                        "P": 0.3619,
+                        "Color": "#FFF08A"
+                    },
+                    {
+                        "P": 0.5316,
+                        "Color": "#EABD54"
+                    },
+                    {
+                        "P": 0.6023,
+                        "Color": "#CFA03C"
+                    },
+                    {
+                        "P": 0.7129,
+                        "Color": "#A9771C"
+                    },
+                    {
+                        "P": 0.8006,
+                        "Color": "#925E07"
+                    },
+                    {
+                        "P": 0.8538,
+                        "Color": "#895500"
+                    },
+                    {
+                        "P": 0.8834,
+                        "Color": "#8D5903"
+                    },
+                    {
+                        "P": 0.9118,
+                        "Color": "#97640C"
+                    },
+                    {
+                        "P": 0.9399,
+                        "Color": "#AA781C"
+                    },
+                    {
+                        "P": 0.9677,
+                        "Color": "#C39332"
+                    },
+                    {
+                        "P": 0.995,
+                        "Color": "#E3B64E"
+                    },
+                    {
+                        "P": 1,
+                        "Color": "#EABD54"
+                    }
+                ]
+            },
+            "Stroke": "#006",
+            "StrokeGradient": {
+                "X1": 0,
+                "Y1": 0,
+                "X2": 1,
+                "Y2": 1,
+                "Stops": [
+                    {
+                        "P": 0,
+                        "Color": "#EDD685"
+                    },
+                    {
+                        "P": 0.2812,
+                        "Color": "#BB871D"
+                    },
+                    {
+                        "P": 0.5174,
+                        "Color": "#D9B253"
+                    },
+                    {
+                        "P": 0.7922,
+                        "Color": "#FFEFA2"
+                    },
+                    {
+                        "P": 1,
+                        "Color": "#C4942C"
+                    }
+                ]
+            },
+            "StrokeWidth": 8,
+            "StrokeCap": "round",
+            "ShadowFill": "#000c",
+            "ShadowStroke": null,
+            "ShadowX": 3,
+            "ShadowY": 5,
+            "ShadowBlur": 12,
+            "MarginLeft": 4,
+            "MarginTop": 0,
+            "MarginRight": 4,
+            "MarginBottom": 0,
+            "StrokeFirst": true,
+            "AttachTo": null,
+            "ComputedMargins": [
+                33,
+                41,
+                43,
+                35
+            ]
+        });
+
+        /*
         //      s.AttachTo = document.body;
         s.Font = 'bold 160px "Tahoma"';
         s.Stroke = null;
@@ -338,7 +474,7 @@ async function textEffectMain() {
             1.0, "#541"
         );
 
-
+        */
 
         const cp = new CounterEffectParams();
         cp.Prefix = "SEK ";
@@ -371,6 +507,36 @@ async function textEffectMain() {
 
         await fx.Show();
         await fx.Play();
+
+
+
+//Hi,Hello,Howdy,Hallo,Salam,مرحبًا,Hola,Guten tag,Ndewo,Ciao,Olá,Jambo,Hallå,Hej,Molo,Bonjour
+
+
+        const texts =
+            [
+                "Hi",
+                "Hello",
+                "Howdy",
+                "Hallo",
+                "Salam",
+                "مرحبًا",
+                "Hola",
+                "Guten tag",
+                "Ndewo",
+                "Ciao",
+                "Olá",
+                "Jambo",
+                "Hallå",
+                "Hej",
+                "Molo",
+                "Bonjour",
+            ];
+
+        const cc = CanvasTools.CreateTextGrid(texts, s, 3)
+        document.body.append(cc);
+
+
 
 
 
