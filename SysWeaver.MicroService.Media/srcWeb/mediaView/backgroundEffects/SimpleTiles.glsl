@@ -46,7 +46,7 @@ vec4 PostProcess(vec4 color, vec2 uv)
 	if (VingetteIntensity > 0.0)
 		color *= PpVingette(uv);
 	if ((TopLeftO < 1.0) || (TopRightO < 1.0) || (BottomRightO < 1.0) || (BottomLeftO < 1.0))
-		color *= mix(mix(BottomLeftO, BottomRightO, uv.x), mix(TopLeftO, TopRightO, uv.x), uv.y);
+		color *= clamp(mix(mix(BottomLeftO, BottomRightO, uv.x), mix(TopLeftO, TopRightO, uv.x), uv.y), 0.0, 1.0);
 	return color;
 }
 

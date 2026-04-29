@@ -2,6 +2,7 @@
 <html>
 <head>
     <script src="../parseTools.js"></script>
+    <meta name="color-scheme" content="light">
     <script>
         /*
             Parameters (basic):
@@ -69,13 +70,15 @@
 
             console.log(url);
             const c = document.createElement("iframe");
+            c.setAttribute("frameborder", "0");
+            c.setAttribute("allowtransparency", "true");
             c.src = url;
             document.body.appendChild(c);
         }
     </script>
     <style>
         html, body {
-            background-color: transparent;
+            background: none transparent !important;
             margin: 0;
             padding: 0;
             width: 100%;

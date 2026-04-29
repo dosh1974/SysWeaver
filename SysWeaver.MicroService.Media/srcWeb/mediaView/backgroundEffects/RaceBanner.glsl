@@ -1,4 +1,4 @@
-uniform float time;
+﻿uniform float time;
 uniform vec2 resolution;
 
 const vec4 Color = vec4(1.0, 1.0, 1.0, 1.0); //	var: { "type": "colhdr", "desc": "The grid color"}
@@ -58,7 +58,7 @@ vec4 PostProcess(vec4 color, vec2 uv)
 	if (VingetteIntensity > 0.0)
 		color *= PpVingette(uv);
 	if ((TopLeftO < 1.0) || (TopRightO < 1.0) || (BottomRightO < 1.0) || (BottomLeftO < 1.0))
-		color *= mix(mix(BottomLeftO, BottomRightO, uv.x), mix(TopLeftO, TopRightO, uv.x), uv.y);
+		color *= clamp(mix(mix(BottomLeftO, BottomRightO, uv.x), mix(TopLeftO, TopRightO, uv.x), uv.y), 0.0, 1.0);
 	return color;
 }
 
@@ -82,5 +82,7 @@ void main()
 	vec2 grid = clamp(sin(scaledUV) * Smoothness + 0.5, 0.0, 1.0);
 	grid -= grid.yx;
 	float i = max(grid.x, grid.y);
-    gl_FragColor = PostProcess(mix(BgColor, Color, i), uv);
+	vec4 col = mix(BgColor, Color, i);
+	col.xyz *= col.w;
+    gl_FragColor = PostProcess(col, uv);
 }
