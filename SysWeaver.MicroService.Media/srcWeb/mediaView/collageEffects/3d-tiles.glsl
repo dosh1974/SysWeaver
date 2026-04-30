@@ -133,7 +133,7 @@ vec4 Image(float index, vec2 uv)
 {
 	float u = (mod(index, TileCountX) + uv.x) / TileCountX;
 	float v = (floor(index / TileCountX) + uv.y) / TileCountY;
-	vec4 t = texture2D(tex, vec2(u, v));
+	vec4 t = texture2D(tex, vec2(u, v), -2.0);
 	t.xyz *= t.a;
     return t;
 	

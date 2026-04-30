@@ -1,3 +1,61 @@
+﻿
+
+const float Size = 1.0; 	        //	var: { "min": 0.1, "max": 100.0, "step": 0.1, "desc": "The size of the hex grid"}
+const float CenterX = 0.5; //	var: { "min": -1.0, "max": 1.0, "step": 0.05, "desc": "The horizontal pulse center position"}
+const float CenterY = 0.5; //	var: { "min": -1.0, "max": 1.0, "step": 0.05, "desc": "The vertical pulse center position"}
+
+const float RingSpeed = .2;       // var: { "desc": "Speed at which rings expand outward" }
+const float RingFrequency = 5.0;  // var: { "desc": "Frequency determines the number of rings" }
+
+// Post processing parameters
+
+const float NoiseInt = 0.0; 	//	var: { "min": 0, "max": 1.0, "step": 0.05, "desc": "The amount of noise, set to 0 to disable"}
+
+const float VingetteIntensity = 0.0;	//	var: { "min": 0, "max": 1, "step": 0.05, "name": "Vingette intensity", "desc": "The intesity of the vingette effect, set to zero to disable vingetting"}
+const float VingetteSpread = 16.0;	//	var: { "min": 10, "max": 1000, "step": 10, "name": "Vingette spread", "desc": "The spread of the vingette effect"}
+const float VingettePow = 0.5;	//	var: { "min": 0.1, "max": 10, "step": 0.1, "name": "Vingette power", "desc": "The curve of the vingetting"}
+
+const float TopLeftO = 1.0;	//var:	{ "min": 0, "max": 1, "step": 0.05, "name": "Top left opacity", "desc": "The opacity of the output in the top left corner"}
+const float TopRightO = 1.0;//var:{ "min": 0, "max": 1, "step": 0.05, "name": "Top right opacity", "desc": "The opacity of the output in the top right corner"}
+const float BottomRightO = 1.0;//var:{ "min": 0, "max": 1, "step": 0.05, "name": "Bottom right opacity", "desc": "The opacity of the output in the bottom right corner"}
+const float BottomLeftO = 1.0;//var:{ "min": 0, "max": 1, "step": 0.05, "name": "Bottom left opacity", "desc": "The opacity of the output in the bottom left corner"}
+
+
+float PpRand(vec2 n) { 
+	return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
+}
+
+float PpNoise(vec2 n) {
+	vec2 b = floor(n), f = smoothstep(vec2(0.0), vec2(1.0), fract(n));
+	return mix(mix(PpRand(b), PpRand(b + vec2(1.0, 0.0)), f.x), mix(PpRand(b + vec2(0.0, 1.0)), PpRand(b + 1.0), f.x), f.y);
+}
+	
+float PpVingette(vec2 uv)
+{
+    vec2 suv = -uv * uv.yx + uv;   // MAD
+    float vig = suv.x * suv.y * VingetteSpread; //
+	if (VingettePow == 0.5)
+		return sqrt(vig) * VingetteIntensity + (1.0 - VingetteIntensity);
+	if (VingettePow == 1.0)
+		return vig * VingetteIntensity + (1.0 - VingetteIntensity);
+	if (VingettePow == 2.0)
+		return vig * vig * VingetteIntensity + (1.0 - VingetteIntensity);
+	return pow(vig, VingettePow) * VingetteIntensity + (1.0 - VingetteIntensity);
+}
+
+vec4 PostProcess(vec4 color, vec2 uv)
+{
+	if (NoiseInt > 0.0)
+		color.rgb *= (PpNoise(vec2(gl_FragCoord) * vec2(-13.0, 17.0) + (iTime * vec2(121.12, 1445.23))) * NoiseInt + (1.0 - NoiseInt * 0.5));
+	if (VingetteIntensity > 0.0)
+		color *= PpVingette(uv);
+	if ((TopLeftO < 1.0) || (TopRightO < 1.0) || (BottomRightO < 1.0) || (BottomLeftO < 1.0))
+		color *= clamp(mix(mix(BottomLeftO, BottomRightO, uv.x), mix(TopLeftO, TopRightO, uv.x), uv.y), 0.0, 1.0);
+	return color;
+}
+
+
+
 float HexDist(vec2 p) {
     p = abs(p);
     
@@ -31,7 +89,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     float t = iTime;
     
     // Normalize the fragment coordinates
-    vec2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
+    vec2 uv = (vec2(-CenterX, -CenterY) * iResolution.xy + fragCoord) * (Size * 4.0) / (iResolution.x + iResolution.y);
     vec2 uv1 = uv;
     
     // Apply some transformation to uv1 for animation
@@ -45,14 +103,12 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     vec3 hexGrid = smoothstep(0.05, 0.0, HexCoords(uv1 * 5.0).y) * glowCol;
     
     // Define ring parameters
-    float ringSpeed = .15;       // Speed at which rings expand outward
-    float ringFrequency = 10.0;  // Frequency determines the number of rings
     
     // Compute distance from the center (0,0)
     float centerDistance = length(uv);
     
     // Compute rings factor using sine wave to create ring patterns
-    float pulse = smoothstep(0.10, 1.6005, abs(sin((centerDistance - ringSpeed * iTime) * ringFrequency))) -.5;
+    float pulse = smoothstep(0.10, 1.6005, abs(sin((centerDistance - RingSpeed * iTime) * RingFrequency))) -.5;
     
     // Apply a pulsing effect to the hexagon color
     //float pulse = sin(iTime + (uv2.x * 6.0 * cos(uv.y  * 2.50) + uv2.y * 6.0) *1.9) * 1.5 + 0.5;
@@ -100,5 +156,5 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 
 
     // Output the final color to the screen
-    fragColor = vec4(col, 1.0);
+    fragColor = PostProcess(vec4(col, 1.0), fragCoord / iResolution.xy);
 }

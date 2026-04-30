@@ -8,6 +8,7 @@
     EffectSizeFromImage = true;
     Transparent = false;
     AdaptiveSize = false;
+    DebugImage = false;
 }
 
 class MediaPlayerText {
@@ -56,12 +57,16 @@ class MediaPlayerText {
         } else {
             c = await CanvasTools.CreateTextImageUrl(t.Url, p);
         }
+        t.Width = image.width;
+        t.Height = image.height;
         const e = t.Element;
         const res = await waitEvent2(e, "load", "error", () => {
-            e.src = c;
+            e.src = c[0];
         });
         if (res.type == "error")
             return false;
+        if (p.DebugImage)
+            console.log("Text image: " + e.src);
         t.Width = e.naturalWidth;
         t.Height = e.naturalHeight;
         if (t.Params.AdaptiveSize) {
@@ -194,9 +199,8 @@ class MediaPlayerTextTexture {
         const t = this;
         const gl = t.GL;
         const texture = t.Texture;
-        const image = new Image();
         const p = t.Params;
-        let c;
+        let image;
         if (p.CollageSeparator) {
             const texts = t.Url.split(p.CollageSeparator);
             let ep = p.EffectParams;
@@ -209,14 +213,21 @@ class MediaPlayerTextTexture {
                 fx = {};
                 ep.FxProps = fx;
             }
-            c = await CanvasTools.CreateTextGridUrl(texts, p, p.CollageColumns, fx);
+            image = await CanvasTools.CreateTextGrid(texts, p, p.CollageColumns, fx);
         } else {
-            c = await CanvasTools.CreateTextImageUrl(t.Url, p);
+            image = await CanvasTools.CreateTextImage(t.Url, p);
         }
-        const res = await waitEvent2(image, "load", "error", () => image.src = c);
-        if (res.type == "error")
-            return false;
-        t.Image = image;
+        if (p.DebugImage) {
+            const c = await CanvasTools.CreateCanvasImageUrl(image);
+            const e = new Image();
+            const res = await waitEvent2(e, "load", "error", () => {
+                e.src = c[0];
+            });
+            if (res.type !== "error") {
+                t.Image = e;
+                console.log("Text image: " + e.src);
+            }
+        }
         t.Width = image.width;
         t.Height = image.height;
         gl.bindTexture(gl.TEXTURE_2D, texture);

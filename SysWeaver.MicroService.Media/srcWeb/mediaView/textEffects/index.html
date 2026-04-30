@@ -52,6 +52,7 @@
                     Texts: "Hello,World,SysWeaver",
                     CollageSeparator: ',',
                     CollageColumns: 2,  
+                    DebugImage: false,
                 }
                 : 
                 {
@@ -80,6 +81,7 @@
                     StrokeFirst: true,
                     AttachTo: null,
                     Text: "SysWeaver",
+                    DebugImage: false,
                 };
             // MediaPlayerParamsEffect
             const ep =
@@ -150,8 +152,12 @@
         }
     </script>
     <style>
+        :root {
+            color-scheme: normal !important;
+        }
+
         html, body {
-            background-color: transparent;
+            background: none transparent !important;
             margin: 0;
             padding: 0;
             width: 100%;

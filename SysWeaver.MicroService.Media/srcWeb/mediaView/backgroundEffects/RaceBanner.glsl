@@ -79,7 +79,7 @@ void main()
 	if (BreathAmount > 0.0)
 	    scale *= (1.0 + BreathAmount * sin(time * BreathSpeed));
     vec2 scaledUV = a4.xy * vec2(aspect, 1.0) * scale;
-	vec2 grid = clamp(sin(scaledUV) * Smoothness + 0.5, 0.0, 1.0);
+	vec2 grid = clamp(cos(scaledUV) * Smoothness + 0.5, 0.0, 1.0);
 	grid -= grid.yx;
 	float i = max(grid.x, grid.y);
 	vec4 col = mix(BgColor, Color, i);

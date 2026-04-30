@@ -320,9 +320,11 @@ class CanvasTools {
      * Create an image Blob with the given text and styling
      * @param {string} text The text to render
      * @param {TextStyle} style The styling of the text
+     * @param {string} mime Optionally the mime type to use, ex: "image/jpeg", "image/png", "image/webp"
+     * @param {number} quality [0, 1] Optionally the encoding quality of the image for lossy formats.
      * @returns {Promise<Blob>} A promise returning a Blob containing the image
      */
-    static CreateTextImageBlob(text, style) {
+    static CreateTextImageBlob(text, style, mime = null, quality = 1) {
 
         const c = CanvasTools.CreateTextImage(text, style);
         return new Promise((resolve, reject) => {
@@ -331,7 +333,7 @@ class CanvasTools {
                     resolve(data);
                 else
                     reject();
-            });
+            }, mime ?? "image/webp", quality);
         });
     }
 
@@ -340,11 +342,13 @@ class CanvasTools {
      * Create an url to an image containing the given text and styling
      * @param {string} text The text to render
      * @param {TextStyle} style The styling of the text
+     * @param {string} mime Optionally the mime type to use, ex: "image/jpeg", "image/png", "image/webp"
+     * @param {number} quality [0, 1] Optionally the encoding quality of the image for lossy formats.
      * @returns {Promise<string>} A promise returning an url to the image
      */
-    static async CreateTextImageUrl(text, style) {
+    static async CreateTextImageUrl(text, style, mime = null, quality = 1) {
 
-        const b = await CanvasTools.CreateTextImageBlob(text, style);
+        const b = await CanvasTools.CreateTextImageBlob(text, style, mime, quality);
         return URL.createObjectURL(b);
     }
 
@@ -410,9 +414,11 @@ class CanvasTools {
 
         const iw = Math.ceil(maxW + ml + mr) | 0;
         const ih = Math.ceil(maxDesc + maxAsc + mt + mb) | 0;
-        c.width = iw * columnCount;
-        c.height = ih * rowCount;
 
+        const pw = iw * columnCount;
+        const ph = ih * rowCount;
+        c.width = pw;
+        c.height = ph;
         const y = mt + maxAsc;
 
         for (let i = 0; i < textCount; ++i) {
@@ -431,13 +437,14 @@ class CanvasTools {
             stats.TileCount = textCount;
             stats.TileWidth = iw;
             stats.TileHeight = ih;
-            stats.PageWidth = iw * columnCount;
-            stats.PageHeight = ih * rowCount;
+            stats.PageWidth = pw;
+            stats.PageHeight = ph;
             stats.ImageWidth = iw - minMargin * 2;
             stats.ImageHeight = ih - minMargin * 2;
             stats.Border = minMargin
             stats.UniqueCount = textCount;
         }
+        console.log("Text grid image size: " + pw + "x" + ph);
         return c;
     }
 
@@ -449,9 +456,11 @@ class CanvasTools {
      * @param {TextStyle} style The styling of the text
      * @param {integer} columnCount Number of columns in the genereated image
      * @param {object} stats Optional object that will recieve some stats
+     * @param {string} mime Optionally the mime type to use, ex: "image/jpeg", "image/png", "image/webp"
+     * @param {number} quality [0, 1] Optionally the encoding quality of the image for lossy formats.
      * @returns {Promise<Blob>} A promise returning a Blob containing the image
      */
-    static CreateTextGridBlob(texts, style, columnCount = 2, stats = null) {
+    static CreateTextGridBlob(texts, style, columnCount = 2, stats = null, mime = null, quality = 1) {
 
         const c = CanvasTools.CreateTextGrid(texts, style, columnCount, stats);
         return new Promise((resolve, reject) => {
@@ -460,7 +469,7 @@ class CanvasTools {
                     resolve(data);
                 else
                     reject();
-            });
+            }, mime ?? "image/webp", quality);
         });
     }
 
@@ -471,11 +480,13 @@ class CanvasTools {
      * @param {TextStyle} style The styling of the text
      * @param {integer} columnCount Number of columns in the genereated image
      * @param {object} stats Optional object that will recieve some stats
+     * @param {string} mime Optionally the mime type to use, ex: "image/jpeg", "image/png", "image/webp"
+     * @param {number} quality [0, 1] Optionally the encoding quality of the image for lossy formats.
      * @returns {Promise<string>} A promise returning an url to the image
      */
-    static async CreateTextGridUrl(texts, style, columnCount = 2, stats = null) {
+    static async CreateTextGridUrl(texts, style, columnCount = 2, stats = null, mime = null, quality = 1) {
 
-        const b = await CanvasTools.CreateTextGridBlob(texts, style, columnCount, stats);
+        const b = await CanvasTools.CreateTextGridBlob(texts, style, columnCount, stats, mime, quality);
         return URL.createObjectURL(b);
     }
 
@@ -630,13 +641,15 @@ class CanvasTools {
      * Create an image Blob with a numeric font useable in counter effects
      * @param {TextStyle} style The styling of the text
      * @param {integer} extraSpacing Extra spacing between each glyph (in the height)
-     * @param {thousandSeparator} string A string to use as thousands separator
-     * @param {decimalSeparator} string A string to use as decimal separator
-     * @param {prefix} string A string to use as a numerical prefix
-     * @param {suffix} string A string to use as a numerical suffix
+     * @param {string} thousandSeparator A string to use as thousands separator
+     * @param {string} decimalSeparator A string to use as decimal separator
+     * @param {string} prefix A string to use as a numerical prefix
+     * @param {string} suffix A string to use as a numerical suffix
+     * @param {string} mime Optionally the mime type to use, ex: "image/jpeg", "image/png", "image/webp"
+     * @param {number} quality [0, 1] Optionally the encoding quality of the image for lossy formats.
      * @returns {Promise<[Blob,HTMLCanvasElement]>} A promise returning an array with [Blob containing the image, Canvas element]
      */
-    static CreateNumberImageBlob(style, extraSpacing, thousandSeparator, decimalSeparator, prefix, suffix) {
+    static CreateNumberImageBlob(style, extraSpacing, thousandSeparator, decimalSeparator, prefix, suffix, mime = null, quality = 1) {
 
         const c = CanvasTools.CreateNumberImage(style, extraSpacing, thousandSeparator, decimalSeparator, prefix, suffix);
         return new Promise((resolve, reject) => {
@@ -645,7 +658,7 @@ class CanvasTools {
                     resolve([data, c]);
                 } else
                     reject();
-            });
+            }, mime ?? "image/webp", quality);
         });
     }
 
@@ -658,12 +671,48 @@ class CanvasTools {
      * @param {decimalSeparator} string A string to use as decimal separator
      * @param {prefix} string A string to use as a numerical prefix
      * @param {suffix} string A string to use as a numerical suffix
+     * @param {string} mime Optionally the mime type to use, ex: "image/jpeg", "image/png", "image/webp"
+     * @param {number} quality [0, 1] Optionally the encoding quality of the image for lossy formats.
      * @returns {Promise<[string,Blob,HTMLCanvasElement]>} A promise returning an array with: [url to the image, Blob containing the image, Canvas element]
      */
-    static async CreateNumberImageUrl(style, extraSpacing, thousandSeparator, decimalSeparator, prefix, suffix) {
-
-        const b = await CanvasTools.CreateNumberImageBlob(style, extraSpacing, thousandSeparator, decimalSeparator, prefix, suffix);
+    static async CreateNumberImageUrl(style, extraSpacing, thousandSeparator, decimalSeparator, prefix, suffix, mime = null, quality = 1) {
+        const b = await CanvasTools.CreateNumberImageBlob(style, extraSpacing, thousandSeparator, decimalSeparator, prefix, suffix, mime, quality);
         return [URL.createObjectURL(b[0]), b[0], b[1]];
     }
+
+
+
+    /**
+     * Convert a canvas to an image blob
+     * @param {HTMLCanvas} canvas The canvas to convert
+     * @param {string} mime Optionally the mime type to use, ex: "image/jpeg", "image/png", "image/webp"
+     * @param {number} quality [0, 1] Optionally the encoding quality of the image for lossy formats.
+     * @returns {Promise<Blob>} A promise returning an image blob containing the canvas
+     */
+    static CreateCanvasImageBlob(canvas, mime = null, quality = 1) {
+
+        return new Promise((resolve, reject) => {
+            canvas.toBlob(data => {
+                if (data) {
+                    resolve(data);
+                } else
+                    reject();
+            }, mime ?? "image/webp", quality);
+        });
+    }
+
+
+    /**
+     * Create an image url from a canvas
+     * @param {HTMLCanvas} canvas The canvas to convert
+     * @param {string} mime Optionally the mime type to use, ex: "image/jpeg", "image/png", "image/webp"
+     * @param {number} quality [0, 1] Optionally the encoding quality of the image for lossy formats.
+     * @returns {Promise<[string,Blob]>} A promise returning an array with: [url to the image, Blob containing the image]
+     */
+    static async CreateCanvasImageUrl(canvas, mime = null, quality = 1) {
+        const b = await CanvasTools.CreateCanvasImageBlob(canvas, mime, quality);
+        return [URL.createObjectURL(b), b];
+    }
+
 
 }
