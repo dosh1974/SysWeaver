@@ -5,9 +5,11 @@ const vec4 Color = vec4(1.0, 1.0, 1.0, 1.0); //	var: { "type": "colhdr", "desc":
 const vec4 BgColor = vec4(0.0, 0.0, 0.0, 1.0); //var: { "type": "colhdr", "desc": "The background color"}
 const float CellCount = 20.0;//var:{}
 
-const float DistortionAmount = 0.03;//var:{}
+const float DistortionAmountX = 0.03;//var:{}
+const float DistortionAmountY = 0.03;//var:{}
 const float DistortionSpeed = 0.5;//var:{}
-const float DistortionFreq = 4.0;//var:{}
+const float DistortionFreqX = 4.0;//var:{}
+const float DistortionFreqY = 4.0;//var:{}
 
 const float BreathAmount = 0.1;//var:{}
 const float BreathSpeed = 0.05;//var:{}
@@ -70,10 +72,10 @@ void main()
     
     float t = time * DistortionSpeed;
 	vec4 a4 = vec4(1.0, 0.3, 0.5, 0.7) * t + vec4(13.0, 17.0, 23.0, 29.0);
-	a4 = uv.xxyy * DistortionFreq + a4;
+	a4 = uv.xxyy * vec4(DistortionFreqX, DistortionFreqX, DistortionFreqY, DistortionFreqY) + a4;
 	a4 = sin(a4);
 	a4.xy *= a4.zw;
-	a4.xy = a4.xy * DistortionAmount + uv;
+	a4.xy = a4.xy * vec2(DistortionAmountX, DistortionAmountY) + uv;
 	
     float scale = CellCount * 3.14159265359;
 	if (BreathAmount > 0.0)

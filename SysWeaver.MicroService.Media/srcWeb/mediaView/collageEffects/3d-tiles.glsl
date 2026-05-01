@@ -11,16 +11,23 @@ const float ZoomSpeed = 0.5; // var:
 const float TileCountX = 6.0; // var:
 const float TileCountY = 9.0; // var:
 const float TileCount = 54.0; // var:
-const float FillWidth = 0.5; // var:
+const float FillWidth = 0.9; // var:
 const float PlaneSpread = 0.5; // var:
 const float GridScale = 2.0; // var:
 
 const float ImageWidth = 16.0; // var:
 const float ImageHeight = 9.0; // var:
 
-const float JitterStrength = 0.9; // var:
-
 const vec4 BackgroundColor = vec4(0,0,0,0); //	var: { "type": "colhdr", "desc": "The background color"}
+
+
+const float SpacingX = 1.25; // var:
+const float SpacingY = 1.25;// var:
+
+const float JitterX = 1.0; // var:
+const float JitterY = 1.0;// var:
+
+const float Density = 0.9;// var:
 
 
 
@@ -72,28 +79,6 @@ vec4 PostProcess(vec4 color, vec2 uv)
 }
 
 
-
-vec4 FastTv(vec4 col, vec2 uv, float iTime)
-{
-	//     float dist = sin(0.7*iTime+uv.y*17.0) * 0.003;
-
-    //vec4 col = texture2D(tex, vec2(uv.x + 0.000, uv.y));
-    //col.r = texture2D(tex, vec2(uv.x + dist, uv.y)).x;
-    //col.b = texture2D(tex, vec2(uv.x - dist, uv.y)).z;
-
-    //col.rgb = clamp(col * 0.5 + 0.5 * col * col * 1.2, 0.0, 1.0); // Contract
-
-    col.rgb *= 0.5 + 0.5 * 16.0 * uv.x * uv.y * (1.0 - uv.x) * (1.0 - uv.y); // Vingetting
-
-    //col.rgb *= vec3(0.95, 1.05, 0.95); // Tint
-
-    col.rgb *= 0.9 + 0.1 * sin(10.0 * iTime + uv.y * 1000.0); // TV-lines
-
-    //col.rgb *= 0.99 + 0.01 * sin(110.0 * iTime); // Brightness flicker
-	return col;
-}
-
-
 float PlaneIntersect(vec4 plane, vec3 rayDir, vec3 rayOrigin)
 {
 	float d = dot(rayDir, plane.xyz);
@@ -129,23 +114,16 @@ vec3 rotateX(vec3 ray, float angle)
 		);
 }
 
-vec4 Image(float index, vec2 uv)
+vec4 Image(float index, vec2 uv, float dist)
 {
 	float u = (mod(index, TileCountX) + uv.x) / TileCountX;
 	float v = (floor(index / TileCountX) + uv.y) / TileCountY;
-	vec4 t = texture2D(tex, vec2(u, v), -2.0);
-	t.xyz *= t.a;
-    return t;
-	
-	float iTime = time + index;
-	float dist1 = sin(0.7*iTime+uv.y*17.0) * 0.001;
-	float dist2 = sin(0.3*iTime+uv.y*19.0) * 0.001;
-	t.r = texture2D(tex, vec2(u + dist1, v)).r;
-	t.b = texture2D(tex, vec2(u - dist2, v)).b;
-	t = FastTv(t, uv, iTime);
+	vec4 t = texture2D(tex, vec2(u, v), dist);
 	t.xyz *= t.a;
     return t;
 }
+
+
 
 void main(void)
 {
@@ -153,7 +131,6 @@ void main(void)
 	float space = 1.0 - FillWidth;
 	float amp = space * 0.1;
 	float offset = FillWidth + space * 0.5;
-	float jitterMax = (space - amp * 2.0) * JitterStrength;
 	float aspect = ImageWidth / ImageHeight;
 	
 	float posZ = time * ZoomSpeed;
@@ -188,28 +165,39 @@ void main(void)
 			vec2 offs = sin(vec2(zzi, zzi)) * (vec2(si, 1.0 - si) * 3.0 + amp) + offset;
 			vec2 pos = (rayDir * dist + rayOrigin).xy;
 			pos *= GridScale;
-			pos.y *= aspect;
+			pos *= vec2(1.0 / SpacingX, aspect / SpacingY);
 			pos += offs;
 
-			vec4 id = floor(pos.xyxy) * vec4(4241.13, -3163.312, -5669.31, 4051.313);
-			id = sin(id);
-			vec2 jitter = fract((abs(id.xz) + abs(id.yw)) * 3.0);
-			vec2 uv = fract(pos) / FillWidth;
-			uv -= (jitter * jitterMax);
-			if ((uv.x >= 0.0) && (uv.y >= 0.0) && (uv.x < 1.0) && (uv.y < 1.0))
+			vec4 id = floor(pos.xyyx) * vec4(4241.13, -3163.312, -5669.31, 4051.313);
+			id.xy = sin(id.xy) * 111.3;
+			
+			if (fract(dot(id, vec4(32.1))) < Density)
 			{
-			
-				//gl_FragColor = vec4(jitter.x * 0.5, jitter.y * 0.5, 0, 1);
-				//return;
-			
-				float rid = mod(floor((id.x + id.y) * 100.0 * TileCount), TileCount);
-				float fog = max(0.0, 1.0 - (dist * fogScale)) * opacity;
-				vec4 tileCol = Image(rid, uv);
-				opacity *= (1.0 - tileCol.a);
-				col += (tileCol * fog); 
 				
-				if (opacity <= 0.01)
-					break;
+				id.xy += id.zw;
+				id.xy = fract(id.xy);
+
+				vec2 uv = fract(pos);
+				uv -= id.xy * vec2(JitterX * (SpacingX - 1.0) / SpacingX, JitterY * (SpacingY - 1.0) / SpacingY);
+				uv *= vec2(SpacingX / FillWidth, SpacingY / FillWidth);
+
+				//gl_FragColor = vec4(vec3(guid), 1.0);
+				//return;
+
+				
+				if ((uv.x >= 0.0) && (uv.y >= 0.0) && (uv.x <= 1.0) && (uv.y <= 1.0))
+				{
+				
+				
+					float rid = mod(floor((id.x + id.y) * 100.0 * TileCount), TileCount);
+					float fog = max(0.0, 1.0 - (dist * fogScale)) * opacity;
+					vec4 tileCol = Image(rid, uv, dist);
+					opacity *= (1.0 - tileCol.a);
+					col += (tileCol * fog); 
+					
+					if (opacity <= 0.01)
+						break;
+				}
 			}
 		}
 	}
