@@ -119,16 +119,13 @@ namespace SysWeaver
             => (collection?.Count ?? 0) <= 0 ? null : collection.ToArray();
 
         /// <summary>
-        /// If the array is null or empty return null, else return it
+        /// If the array is null or empty return null, else return the original array
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="array">The array to check</param>
-        /// <returns>null if the array is null or empty, else the array</returns>
+        /// <returns>null if the array is null or empty, else the original array</returns>
         public static T[] ArrayOrNullIfEmpty<T>(this T[] array)
-            => (array?.Length ?? 0) <= 0 ? null : array;
-
-
-
+            => (array == null || (array.Length <= 0)) ? null : array;
 
 
         /// <summary>
