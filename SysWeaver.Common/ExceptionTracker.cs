@@ -26,6 +26,8 @@ namespace SysWeaver
         /// <param name="ex">The exception that cause the failure</param>
         public void OnException(Exception ex)
         {
+            if (ex == null)
+                return;
             InternalException = ex;
             Interlocked.Exchange(ref InternalTime, DateTime.UtcNow.Ticks);
             Interlocked.Increment(ref InternalCount);

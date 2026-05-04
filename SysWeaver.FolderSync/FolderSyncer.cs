@@ -465,6 +465,43 @@ namespace SysWeaver.FolderSync
 
 
         /// <summary>
+        /// Get the "version" (aka hash) of a folder on the local machine
+        /// </summary>
+        /// <param name="destFolder">The folder to get the hash for</param>
+        /// <returns>A version string</returns>
+        public static async ValueTask<String> GetPullFolderVersion(String destFolder)
+        {
+            var srcFiles = Directory.GetFiles(destFolder, "*", SearchOption.AllDirectories);
+            var sfl = destFolder.Length + 1;
+            var l = srcFiles.Length;
+            var files = await srcFiles.ConvertAsyncValue(async x =>
+            {
+                var localFile = x.Substring(sfl).Replace(Path.DirectorySeparatorChar, '/');
+                var hash = await FileHash.GetHashAsync(x).ConfigureAwait(false);
+                return ValueTuple.Create(localFile, hash);
+            }).ConfigureAwait(false);
+            files.Sort();
+            var version = FolderSyncer.ComputeCombinedHash(files.Select(x => x.Item1).ToList(), files.Select(x => x.Item2).ToList());
+            return version;
+        }
+
+        /// <summary>
+        /// Check if a folder is different
+        /// </summary>
+        /// <param name="srcName"></param>
+        /// <param name="version"></param>
+        /// <returns></returns>
+        public async ValueTask<bool> CheckPullFolder(String srcName, String version)
+        {
+            return await Api.SharedFolderHasChanged(new SharedFolderSyncRequest
+            {
+                Folder = srcName,
+                Version = version,
+            }).ConfigureAwait(false);
+
+        }
+
+        /// <summary>
         /// Update a local folder from a remote repository
         /// </summary>
         /// <param name="srcName">The name of the remote repository</param>
@@ -474,7 +511,7 @@ namespace SysWeaver.FolderSync
         /// <param name="onEvent">An optional callback used to display what's going on</param>
         /// <returns>Sync results</returns>
         /// <exception cref="Exception"></exception>
-        public async ValueTask<FolderSyncResult> PullFolder(String srcName, String destFolder, bool switchTo = false, bool useCdc = true, Action<FolderSyncEvents, String> onEvent = null)
+        public async ValueTask<FolderPullSyncResult> PullFolder(String srcName, String destFolder, bool switchTo = false, bool useCdc = true, Action<FolderSyncEvents, String> onEvent = null)
         {
             //var props = useCdc ? new CdcProps(folders: [@"D:\Temp\CdcSyncTest"]) : null;
             var props = useCdc ? CdcProps.Default : null;
@@ -504,7 +541,7 @@ namespace SysWeaver.FolderSync
                     onEvent?.Invoke(FolderSyncEvents.Hashed, localFile);
                     if (files.TryAdd(localFile, new FolderSyncFile
                     {
-                        Name = localFile,
+                        Name = x,
                         Hash = hash,
                         LastModified = fi.LastWriteTimeUtc,
                     }))
@@ -514,6 +551,12 @@ namespace SysWeaver.FolderSync
 
                     }
                 }).ConfigureAwait(false);
+            }
+            bool needActivate = false;
+            foreach (var x in files)
+            {
+                needActivate = needActivate || x.Value.Name.FastStartsWith(downloadFolder);
+                x.Value.Name = x.Key;
             }
             onEvent?.Invoke(FolderSyncEvents.Scanned, destFolder);
             var t = files.Values.OrderBy(x => x.Name).ToList();
@@ -526,10 +569,18 @@ namespace SysWeaver.FolderSync
                     Version = version,
                 }).ConfigureAwait(false))
                 {
-                    return new FolderSyncResult
+                    if (needActivate && switchTo)
+                    {
+                        var bak = GetBakName(destFolder);
+                        var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder).ConfigureAwait(false);
+                        if (ex != null)
+                            throw ex;
+                    }
+                    return new FolderPullSyncResult
                     {
                         SourceBytes = sourceBytes,
                         SourceFiles = sourceFileCount,
+                        Version = version,
                     };
                 }
             }
@@ -541,20 +592,29 @@ namespace SysWeaver.FolderSync
             }).ConfigureAwait(false);
             //  Some error
             if (res == null)
-                return new FolderSyncResult
+                return new FolderPullSyncResult
                 {
                     SourceFiles = sourceFileCount,
                     SourceBytes = sourceBytes,
+                    Version = version,
                     Errors = [new Exception("Folder sync request failed")]
                 };
             onEvent?.Invoke(FolderSyncEvents.Checked, destFolder);
             //  Copy files
             if (version.FastEquals(res.Version))
             {
-                return new FolderSyncResult
+                if (needActivate && switchTo)
+                {
+                    var bak = GetBakName(destFolder);
+                    var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder).ConfigureAwait(false);
+                    if (ex != null)
+                        throw ex;
+                }
+                return new FolderPullSyncResult
                 {
                     SourceBytes = sourceBytes,
                     SourceFiles = sourceFileCount,
+                    Version = version,
                 };
             }
             version = res.Version;
@@ -687,7 +747,7 @@ namespace SysWeaver.FolderSync
                 if (ex != null)
                     throw ex;
             }
-            return new FolderSyncResult
+            return new FolderPullSyncResult
             {
                 SourceFiles = sourceFileCount,
                 SourceBytes = sourceBytes,
@@ -696,7 +756,8 @@ namespace SysWeaver.FolderSync
                 TransferredSourceBytes = discBytes,
                 ChunkCount = chunkTotalCount,
                 NewChunkCount = missingChunkCount,
-                NewChunkSize = missingChunkBytes
+                NewChunkSize = missingChunkBytes,
+                Version = version,
             };
         }
 

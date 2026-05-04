@@ -464,6 +464,7 @@ class MediaPlayerEffect {
         if (timeElapsed <= 0)
             return;
         const t = this;
+        const p = t.Params;
         let tot = t.TotalTime;
         if (timeElapsed < tot)
             tot = timeElapsed;
@@ -471,16 +472,16 @@ class MediaPlayerEffect {
         t.TotalTime = tot;
         t.MeasureCount = c;
         if ((c & 31) !== 0)
-            if (!t.Params.Static)
+            if (!p.Static)
                 return;
         t.AvgDrawTimeMs = tot;
         const pc = t.PrintCounter + 1;
-        if (t.Params.DpiAdjust)
+        if (p.DpiAdjust)
             if (pc > 1)
                 MediaPlayerEffect.AdjustDpi(t.AvgDrawTimeMs, max, min);
         t.PrintCounter = pc;
-//        if ((pc & 7) === 0)
-//            console.log(t.Url + " - Average draw time: " + t.AvgDrawTimeMs + " ms [" + c + " measurements");
+        if (window.ShaderDebug && ((pc & 7) === 0))
+            console.log(t.Url + " - Average draw time: " + t.AvgDrawTimeMs + " ms [" + c + " measurements");
         t.MeasureCount = 0;
         t.TotalTime = 100000000000.0;
     }

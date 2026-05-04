@@ -185,6 +185,23 @@ namespace SysWeaver.MicroService
 
         }
 
+
+
+
+
+        internal sealed class RemoteFolder
+        {
+            public readonly String DestPath;
+            public readonly RemoteCachedFolder Folder;
+            public String Version;
+
+            public RemoteFolder(RemoteCachedFolder folder, String destPath)
+            {
+                Folder = folder;
+                DestPath = destPath;
+            }
+
+        }
     }
 
 }

@@ -14,5 +14,16 @@
         /// </summary>
         public FolderPullFolder[] SharedFolders;
 
+        /// <summary>
+        /// A list of folders that in automatically synchronized from some source
+        /// </summary>
+        public RemoteCachedFolder[] RemoteFolders;
+
     }
+
+
+
+
+
+
 }

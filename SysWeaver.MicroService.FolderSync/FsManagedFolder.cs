@@ -86,4 +86,36 @@ namespace SysWeaver.MicroService
     }
 
 
+    public sealed class RemoteCachedFolder : CredentialParams
+    {
+        /// <summary>
+        /// If true, perform a sync when starting the service
+        /// </summary>
+        public bool SyncOnStart = true;
+
+        /// <summary>
+        /// The remote server address (where the folder to pull resides)
+        /// </summary>
+        public String RemoteAddress;
+
+        /// <summary>
+        /// The remote repository name (the folder to pull)
+        /// </summary>
+        public String Name;
+
+        /// <summary>
+        /// Optional cache folder on disc (defaults to using the SysWaver folders)
+        /// </summary>
+        public String DiscFolder;
+
+        /// <summary>
+        /// Optional web folder (if empty, the folder won't be available)
+        /// </summary>
+        public String WebFolder;
+
+
+
+    }
+
+
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CommunityToolkit.HighPerformance;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -142,6 +143,10 @@ namespace SysWeaver.MicroService
                 AddManagedFolder(x).RunAsync();
             foreach (var x in p.SharedFolders.Nullable())
                 AddSharedFolder(x).RunAsync();
+
+            foreach (var x in p.RemoteFolders.Nullable())
+                AddRemoteFolder(x).RunAsync();
+
             TempRemove = TimeSpan.Zero;
             Prune().RunAsync();
             TempRemove = TimeSpan.FromHours(12);
@@ -235,6 +240,39 @@ namespace SysWeaver.MicroService
                 fm.RemoveFolder(folder.ModFolder);
             return true;
         }
+
+
+
+
+
+        public async ValueTask<String> AddRemoteFolder(RemoteCachedFolder x)
+        {
+            var folder = GetRemoteFolderDest(x);
+            var folders = RemoteFolders;
+            var f = new RemoteFolder(x, folder);
+            if (!folders.TryAdd(folder.FastToLower(), f))
+                return folder;
+            await PathExt.EnsureFolderExistAsync(folder).ConfigureAwait(false);
+            if (x.SyncOnStart)
+                await TrySyncFolder(f).ConfigureAwait(false);
+            else
+                f.Version = await FolderSyncer.GetPullFolderVersion(folder).ConfigureAwait(false);
+            return folder;
+        }
+
+        public bool RemoveRemoteFolder(RemoteCachedFolder x)
+        {
+            var folder = GetRemoteFolderDest(x);
+            var folders = RemoteFolders;
+            if (!folders.TryRemove(folder.FastToLower(), out var f))
+                return false;
+            return true;
+        }
+
+
+
+
+
 
         readonly FileHttpServerModule FileMod;
         readonly ServiceManager Manager;
@@ -386,11 +424,15 @@ namespace SysWeaver.MicroService
             }
         }
 
-        readonly ConcurrentDictionary<String, ManagedFolder> PushFolders = new ConcurrentDictionary<String, ManagedFolder>(StringComparer.Ordinal);
+        readonly ConcurrentDictionary<String, ManagedFolder> PushFolders = new (StringComparer.Ordinal);
 
-        readonly ConcurrentDictionary<String, SharedFolder> PullFolders = new ConcurrentDictionary<String, SharedFolder>(StringComparer.Ordinal);
+        readonly ConcurrentDictionary<String, SharedFolder> PullFolders = new (StringComparer.Ordinal);
 
-        readonly ConcurrentDictionary<String, Sync> SyncJobs = new ConcurrentDictionary<string, Sync>(StringComparer.Ordinal);
+        readonly ConcurrentDictionary<String, RemoteFolder> RemoteFolders = new (StringComparer.Ordinal);
+
+        
+
+        readonly ConcurrentDictionary<String, Sync> SyncJobs = new (StringComparer.Ordinal);
 
 
 
