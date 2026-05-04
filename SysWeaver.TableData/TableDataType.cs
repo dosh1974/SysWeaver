@@ -796,14 +796,6 @@ namespace SysWeaver.Data
                     }
                 }
             }
-            /*            if (o >= 0)
-                        {
-                            var sorter = request.SortReverse ? SortDesc : Sort;
-                            var s = sorter[o];
-                            if (s != null)
-                                data = s(data);
-                        }
-            */
             return data;
         }
 
@@ -817,8 +809,8 @@ namespace SysWeaver.Data
             while (skip > 0)
             {
                 var s = skip;
-                if (s > 0x7ffffff)
-                    s = 0x7ffffff;
+                if (s > 0x7fff_ffff)
+                    s = 0x7fff_ffff;
                 skip -= s;
                 data = data.Skip((int)s);
             }
@@ -826,9 +818,13 @@ namespace SysWeaver.Data
             var limit = request.MaxRowCount;
             if (limit <= 0)
                 return data;
+            var lookAhead = request.LookAheadCount;
+            if (lookAhead < 0)
+                lookAhead = 0;
+            limit += lookAhead;
             if (limit > maxAllowedRows)
                 limit = maxAllowedRows;
-            data = data.Take((int)limit + 1);
+            data = data.Take((int)limit);
             return data;
         }
 
@@ -851,9 +847,13 @@ namespace SysWeaver.Data
             var limit = request.MaxRowCount;
             if (limit <= 0)
                 return data;
+            var lookAhead = request.LookAheadCount;
+            if (lookAhead < 0)
+                lookAhead = 0;
+            limit += lookAhead;
             if (limit > maxAllowedRows)
                 limit = maxAllowedRows;
-            data = data.Take((int)limit + 1);
+            data = data.Take((int)limit);
             return data;
         }
 
