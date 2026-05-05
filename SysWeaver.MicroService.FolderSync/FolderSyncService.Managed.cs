@@ -475,7 +475,7 @@ namespace SysWeaver.MicroService
             if (!PathExt.IsValidFilename(discFolder))
                 throw new Exception("Invalid disc folder!");
             var folderName = r.Folder.FastToLower();
-            if (!PushFolders.TryGetValue(folderName, out var folder))
+            if (!ManagedFolders.TryGetValue(folderName, out var folder))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(folder.Auth))
                 throw new Exception("Not authorized!");
@@ -509,7 +509,7 @@ namespace SysWeaver.MicroService
             if (!PathExt.IsValidFilename(discFolder))
                 throw new Exception("Invalid disc folder!");
             var folderName = r.Folder.FastToLower();
-            if (!PushFolders.TryGetValue(folderName, out var folder))
+            if (!ManagedFolders.TryGetValue(folderName, out var folder))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(folder.Auth))
                 throw new Exception("Not authorized!");
@@ -541,7 +541,7 @@ namespace SysWeaver.MicroService
             if (!PathExt.IsValidFilename(discFolder))
                 throw new Exception("Invalid disc folder!");
             var folderName = r.Folder.FastToLower();
-            if (!PushFolders.TryGetValue(folderName, out var folder))
+            if (!ManagedFolders.TryGetValue(folderName, out var folder))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(folder.Auth))
                 throw new Exception("Not authorized!");
@@ -578,7 +578,7 @@ namespace SysWeaver.MicroService
             if (!PathExt.IsValidFilename(discFolder))
                 throw new Exception("Invalid disc folder!");
             var folderName = r.Folder.FastToLower();
-            if (!PushFolders.TryGetValue(folderName, out var folder))
+            if (!ManagedFolders.TryGetValue(folderName, out var folder))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(folder.Auth))
                 throw new Exception("Not authorized!");
@@ -616,7 +616,7 @@ namespace SysWeaver.MicroService
             if (!PathExt.IsValidFilename(discFolder))
                 throw new Exception("Invalid disc folder!");
             var folderName = r.Folder.FastToLower();
-            if (!PushFolders.TryGetValue(folderName, out var folder))
+            if (!ManagedFolders.TryGetValue(folderName, out var folder))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(folder.Auth))
                 throw new Exception("Not authorized!");
@@ -663,7 +663,7 @@ namespace SysWeaver.MicroService
             if (!PathExt.IsValidFilename(discFolder))
                 throw new Exception("Invalid disc folder!");
             var folderName = r.Folder.FastToLower();
-            if (!PushFolders.TryGetValue(folderName, out var folder))
+            if (!ManagedFolders.TryGetValue(folderName, out var folder))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(folder.Auth))
                 throw new Exception("Not authorized!");
@@ -802,7 +802,7 @@ namespace SysWeaver.MicroService
         {
             DateTime start = DateTime.UtcNow;
             var folderName = r.Folder.FastToLower();
-            if (!PushFolders.TryGetValue(folderName, out var target))
+            if (!ManagedFolders.TryGetValue(folderName, out var target))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(target.Auth))
                 throw new Exception("Not authorized!");
@@ -1034,10 +1034,10 @@ namespace SysWeaver.MicroService
         static readonly IEnumerable<ManagedFolderData> Empty = Array.Empty<ManagedFolderData>();
 
         public IEnumerable<ManagedFolderData> GetManagedFolders(String syncName)
-            => PushFolders.TryGetValue(syncName.FastToLower(), out var f) ? GetManagedFolders(f) : Empty;
+            => ManagedFolders.TryGetValue(syncName.FastToLower(), out var f) ? GetManagedFolders(f) : Empty;
 
         public IEnumerable<ManagedFolderData> GetManagedFolders()
-            => PushFolders.Values.SelectMany(GetManagedFolders);
+            => ManagedFolders.Values.SelectMany(GetManagedFolders);
 
 
         /// <summary>
@@ -1047,7 +1047,7 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, "Debug/ManagedFolders", "Manged folders", "Details about folders that can be updated (managed) remotely", "IconSync", -6)]
+        [WebMenuTable(null, HttpServerBase.MenuPath, "Manged folders", "Details about folders that can be updated (managed) remotely", "IconSync", 50)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public TableData ManagedFoldersTable(TableDataRequest r)
@@ -1077,7 +1077,7 @@ namespace SysWeaver.MicroService
             var f = folder.Split('/');
             var folderName = f[0].FastToLower();
             var ff = f[1];
-            if (!PushFolders.TryGetValue(folderName, out var data))
+            if (!ManagedFolders.TryGetValue(folderName, out var data))
                 throw new Exception("Unknown folder id");
             var target = data.DestPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var fname = Path.GetFileName(target);

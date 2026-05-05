@@ -24,7 +24,7 @@ namespace SysWeaver.MicroService
 
         async ValueTask<bool> ScanSharedFolders()
         {
-            foreach (var x in PullFolders.Values)
+            foreach (var x in SharedFolders.Values)
             {
                 if (!SystemLock.TryGet(x.LockName, out var l))
                     continue;
@@ -45,6 +45,7 @@ namespace SysWeaver.MicroService
         }
 
 
+
         /// <summary>
         /// Check if a new version of a shared folder is available
         /// </summary>
@@ -56,7 +57,7 @@ namespace SysWeaver.MicroService
         public bool SharedFolderHasChanged(SharedFolderSyncRequest r, HttpServerRequest context)
         {
             var folderName = r.Folder.FastToLower();
-            if (!PullFolders.TryGetValue(folderName, out var target))
+            if (!SharedFolders.TryGetValue(folderName, out var target))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(target.Auth))
                 throw new Exception("Not authorized!");
@@ -68,6 +69,35 @@ namespace SysWeaver.MicroService
             var version = filesD.Item1;
             return !version.FastEquals(r.Version);
         }
+
+
+        /// <summary>
+        /// Wait until a a new version of a shared folder is available (or the request time's out)
+        /// </summary>
+        /// <param name="r">Folder name and version (aka hash)</param>
+        /// <param name="context"></param>
+        /// <returns>True if a new version is available</returns>
+        [WebApi]
+        [WebApiAuth("")]
+        public async Task<bool> WaitUntilSharedFolderHasChanged(SharedFolderSyncRequest r, HttpServerRequest context)
+        {
+            var folderName = r.Folder.FastToLower();
+            if (!SharedFolders.TryGetValue(folderName, out var target))
+                throw new Exception("Unknown folder id");
+            if (!context.Session.IsValid(target.Auth))
+                throw new Exception("Not authorized!");
+            var version = r.Version;
+            try
+            {
+                var newVersion = await target.Changer.WaitForChange(version, (5 * 60 - 10) * 1000).ConfigureAwait(false);
+                return !newVersion.FastEquals(version);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
 
         /// <summary>
         /// Check for updates against a shared folder
@@ -82,7 +112,7 @@ namespace SysWeaver.MicroService
         {
             DateTime start = DateTime.UtcNow;
             var folderName = r.Folder.FastToLower();
-            if (!PullFolders.TryGetValue(folderName, out var target))
+            if (!SharedFolders.TryGetValue(folderName, out var target))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(target.Auth))
                 throw new Exception("Not authorized!");
@@ -138,7 +168,7 @@ namespace SysWeaver.MicroService
         {
             DateTime start = DateTime.UtcNow;
             var folderName = r.Folder.FastToLower();
-            if (!PullFolders.TryGetValue(folderName, out var target))
+            if (!SharedFolders.TryGetValue(folderName, out var target))
                 throw new Exception("Unknown folder id");
             if (!context.Session.IsValid(target.Auth))
                 throw new Exception("Not authorized!");
@@ -188,14 +218,16 @@ namespace SysWeaver.MicroService
 
         readonly FastMemCache<String, ReadOnlyMemory<Byte>> ChunkDataListCache = new(TimeSpan.FromMinutes(5), StringComparer.Ordinal);
 
-        PullData GetPullFolderData(SharedFolder folder)
+        SharedFolderData GetPullFolderData(SharedFolder folder)
         {
+
             var uploadName = folder.Name;
             var path = folder.DestPath;
             var a = folder.Auth;
-            var data = new PullData
+            var data = new SharedFolderData
             {
                 Name = uploadName,
+                Version = folder.Files?.Item1,
                 DiscFolder = path,
                 Auth = a == null ? null : String.Join(',', a),
                 Folder = folder,
@@ -204,8 +236,8 @@ namespace SysWeaver.MicroService
         }
 
 
-        public IEnumerable<PullData> GetSharedFolderData()
-            => PullFolders.Values.Select(GetPullFolderData);
+        public IEnumerable<SharedFolderData> GetSharedFolderData()
+            => SharedFolders.Values.Select(GetPullFolderData);
 
 
         /// <summary>
@@ -215,7 +247,7 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         [WebApi]
         [WebApiAuth(Roles.AdminOps)]
-        [WebMenuTable(null, "Debug/SharedFolders", "Shared folders", "Details about folders that can be synched (downloaded)", "IconSync", -5)]
+        [WebMenuTable(null, HttpServerBase.MenuPath, "Shared folders", "Details about folders that can be synched (downloaded)", "IconSync", 51)]
         [WebApiClientCache(4)]
         [WebApiRequestCache(3)]
         public TableData SharedFoldersTable(TableDataRequest r)

@@ -820,6 +820,7 @@ SysWeaver-Loading {
 
 
 SysWeaver-Code {
+    text-align: left;
     display: block;
     width: 100%;
     height: 100%;
@@ -860,6 +861,7 @@ SysWeaver-Code {
 
 
 SysWeaver-LongText {
+    text-align: left;
     display: block;
     min-height: 4em;
     width: 100%;
@@ -875,6 +877,7 @@ SysWeaver-LongText {
     }
 
 SysWeaver-MdText {
+    text-align: left;
     display: block;
     min-height: 4em;
     width: 100%;

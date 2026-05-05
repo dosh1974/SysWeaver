@@ -319,4 +319,135 @@ namespace SysWeaver
     }
 
 
+
+    /// <summary>
+    /// Provides a mechanism to async wait for a "change".
+    /// Changes are tracked using a "change id" that is supplied by the calling code.
+    /// </summary>
+    public sealed class BlockUntilStringValueChange : BlockUntilString
+    {
+        /// <summary>
+        /// Provides a mechanism to async wait for a "change".
+        /// Changes are tracked using a "change id" that is supplied by the calling code.
+        /// </summary>
+        /// <param name="startChangeId">The change id to start with</param>
+        public BlockUntilStringValueChange(String startChangeId = null) : base(startChangeId)
+        {
+        }
+
+        /// <summary>
+        /// Triggers a change, any task waiting for a change on this instance will continue and return the new change id.
+        /// </summary>
+        /// <param name="newChangeId"></param>
+        public void Change(String newChangeId)
+        {
+            using (AfterChange())
+                Interlocked.Exchange(ref C, newChangeId);
+        }
+    }
+
+    public abstract class BlockUntilString : IDisposable
+    {
+        protected BlockUntilString(String current)
+        {
+            C = current;
+            S = StateBlockUntil.Get();
+        }
+        public String Cc => C;
+
+        StateBlockUntil S;
+        protected volatile String  C;
+
+        bool IsDisposed;
+
+        /// <summary>
+        /// Any waiting tasks will continue returning the currentChangeId change id.
+        /// </summary>
+        public void Dispose()
+        {
+            IsDisposed = true;
+            Interlocked.Exchange(ref S, null).Dispose();
+        }
+
+        protected IDisposable AfterChange() => Interlocked.Exchange(ref S, IsDisposed ? null : StateBlockUntil.Get());
+
+        /// <summary>
+        /// Total number of wait objects allocated
+        /// </summary>
+        public static long TotalAllocCount => Interlocked.Read(ref StateBlockUntil.TotalAllocCount);
+
+        /// <summary>
+        /// Total number of wait objects that are unused, roughly 100 is allowed.
+        /// </summary>
+        public static long AllocatedUnused => Interlocked.Read(ref StateBlockUntil.AllocCount);
+
+
+        /// <summary>
+        /// Wait until a change is performed or the wait is aborted.
+        /// </summary>
+        /// <param name="currentChangeId">The last change id known to the caller, typiacally start at 0 and then update with the result of this method</param>
+        /// <param name="msToWait">Number of ms to wait, when expired, the method will return with the same change id.</param>
+        /// <param name="cancel">Custom cancellation, if triggered, the method will return with the same change id.</param>
+        /// <returns>The new change id (if changed), or the currentChangeId change id if the wait is aborted</returns>
+        public async Task<String> WaitForChange(String currentChangeId, int msToWait, CancellationToken cancel)
+        {
+            var s = S;
+            var t = C;
+            if ((s == null) || (!t.FastEquals(currentChangeId)))
+                return t;
+            await s.WaitForChange(msToWait, cancel).ConfigureAwait(false);
+            return C;
+        }
+
+        /// <summary>
+        /// Wait until a change is performed or the wait is aborted.
+        /// </summary>
+        /// <param name="currentChangeId">The last change id known to the caller, typiacally start at 0 and then update with the result of this method</param>
+        /// <param name="cancel">Custom cancellation, if triggered, the method will return with the same change id.</param>
+        /// <returns>The new change id (if changed), or the currentChangeId change id if the wait is aborted</returns>
+        public async Task<String> WaitForChange(String currentChangeId, CancellationToken cancel)
+        {
+            var s = S;
+            var t = C;
+            if ((s == null) || (!t.FastEquals(currentChangeId)))
+                return t;
+            await s.WaitForChange(cancel).ConfigureAwait(false);
+            return C;
+        }
+
+
+        /// <summary>
+        /// Wait until a change is performed or the wait is aborted.
+        /// </summary>
+        /// <param name="currentChangeId">The last change id known to the caller, typiacally start at 0 and then update with the result of this method</param>
+        /// <param name="msToWait">Number of ms to wait, when expired, the method will return with the same change id.</param>
+        /// <returns>The new change id (if changed), or the currentChangeId change id if the wait is aborted</returns>
+        public async Task<String> WaitForChange(String currentChangeId, int msToWait)
+        {
+            var s = S;
+            var t = C;
+            if ((s == null) || (!t.FastEquals(currentChangeId)))
+                return t;
+            await s.WaitForChange(msToWait).ConfigureAwait(false);
+            return C;
+        }
+
+        /// <summary>
+        /// Wait until a change is performed or the wait is aborted.
+        /// </summary>
+        /// <param name="currentChangeId">The last change id known to the caller, typiacally start at 0 and then update with the result of this method</param>
+        /// <returns>The new change id (if changed), or the currentChangeId change id if the wait is aborted</returns>
+        public async Task<String> WaitForChange(String currentChangeId)
+        {
+            var s = S;
+            var t = C;
+            if ((s == null) || (!t.FastEquals(currentChangeId)))
+                return t;
+            await s.WaitForChange().ConfigureAwait(false);
+            return C;
+        }
+
+    }
+
+
 }

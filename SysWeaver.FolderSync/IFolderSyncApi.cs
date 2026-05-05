@@ -14,13 +14,6 @@ namespace SysWeaver.FolderSync
         Task<ManagedFolderDiff> CheckManagedFolder(ManagedFolderSyncRequest r);
 
         /// <summary>
-        /// Check if a new version of a shared folder is available
-        /// </summary>
-        /// <param name="r">Folder name and version (aka hash)</param>
-        /// <returns>True if a new version is available</returns>
-        Task<bool> SharedFolderHasChanged(SharedFolderSyncRequest r);
-
-        /// <summary>
         /// Check for updates against a shared folder
         /// </summary>
         /// <param name="r">Folder and local files</param>
@@ -28,6 +21,21 @@ namespace SysWeaver.FolderSync
         Task<SharedFolderDiff> CheckSharedFolder(LocalFolderInfo r);
 
 
+        /// <summary>
+        /// Check if a new version of a shared folder is available
+        /// </summary>
+        /// <param name="r">Folder name and version (aka hash)</param>
+        /// <returns>True if a new version is available</returns>
+        Task<bool> SharedFolderHasChanged(SharedFolderSyncRequest r);
+
+
+        /// <summary>
+        /// Wait until a a new version of a shared folder is available (or the request time's out)
+        /// </summary>
+        /// <param name="r">Folder name and version (aka hash)</param>
+        /// <returns>True if a new version is available</returns>
+        [RemoteTimeout(5 * 60 * 1000)]
+        Task<bool> WaitUntilSharedFolderHasChanged(SharedFolderSyncRequest r);
 
     }
 

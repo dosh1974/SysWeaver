@@ -2,9 +2,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -59,18 +61,37 @@ namespace SysWeaver.FolderSync
         }
 
 
-        public static String ComputeCombinedHash(IReadOnlyList<String> fileNames, IReadOnlyList<String> hashStrings)
+        static readonly IReadOnlySet<String> IgnoreRemoteFiles = ReadOnlyData.Set(StringComparer.Ordinal,
+            RemoteManifestName
+            );
+
+
+        public static String ComputeCombinedHash(IList<String> fileNames, IList<String> hashStrings)
         {
             var count = hashStrings.Count;
+            var ignore = IgnoreRemoteFiles;
+            int o = 0;
+            for (int i = 0; i < count; ++i)
+            {
+                var fn = fileNames[i];
+                if (ignore.Contains(fn))
+                    continue;
+                fileNames[o] = fn;
+                hashStrings[o] = hashStrings[i];
+                ++o;
+            }
+            count = o;
             if (count <= 0)
                 return "Empty";
+
             int maxL = 0;
             for (int i = 0; i < count; ++ i)
             {
+                var ln = fileNames[i];
                 var ll = hashStrings[i].Length;
                 if (ll > maxL)
                     maxL = ll;
-                ll = fileNames[i].Length;
+                ll = ln.Length;
                 if (ll > maxL)
                     maxL = ll;
             }
@@ -82,7 +103,8 @@ namespace SysWeaver.FolderSync
             int l;
             for (int i = 0; i < count; ++ i)
             {
-                if (!e.TryGetBytes(fileNames[i], data, out l))
+                var ln = fileNames[i];
+                if (!e.TryGetBytes(ln, data, out l))
                     throw new Exception("Internal error!");
                 h.TransformBlock(data, 0, l, data, 0);
                 if (!e.TryGetBytes(hashStrings[i], data, out l))
@@ -105,6 +127,8 @@ namespace SysWeaver.FolderSync
         readonly String UploadCdcBase;
         readonly String UploadChunkBase;
         readonly IFolderSyncApi Api;
+
+        public IRemoteApi RemoteConnection => Api;
 
         /// <summary>
         /// The http client (with credentials) used to make requests
@@ -463,7 +487,6 @@ namespace SysWeaver.FolderSync
             };
         }
 
-
         /// <summary>
         /// Get the "version" (aka hash) of a folder on the local machine
         /// </summary>
@@ -486,7 +509,7 @@ namespace SysWeaver.FolderSync
         }
 
         /// <summary>
-        /// Check if a folder is different
+        /// Check if a new version of a shared folder is available
         /// </summary>
         /// <param name="srcName"></param>
         /// <param name="version"></param>
@@ -494,6 +517,23 @@ namespace SysWeaver.FolderSync
         public async ValueTask<bool> CheckPullFolder(String srcName, String version)
         {
             return await Api.SharedFolderHasChanged(new SharedFolderSyncRequest
+            {
+                Folder = srcName,
+                Version = version,
+            }).ConfigureAwait(false);
+
+        }
+
+
+        /// <summary>
+        /// Wait until a new version of a shared folder is available (or the request time's out)
+        /// </summary>
+        /// <param name="srcName"></param>
+        /// <param name="version"></param>
+        /// <returns></returns>
+        public async ValueTask<bool> WaitPullFolder(String srcName, String version)
+        {
+            return await Api.WaitUntilSharedFolderHasChanged(new SharedFolderSyncRequest
             {
                 Folder = srcName,
                 Version = version,
@@ -513,10 +553,9 @@ namespace SysWeaver.FolderSync
         /// <exception cref="Exception"></exception>
         public async ValueTask<FolderPullSyncResult> PullFolder(String srcName, String destFolder, bool switchTo = false, bool useCdc = true, Action<FolderSyncEvents, String> onEvent = null)
         {
+            var start = DateTime.UtcNow;
             //var props = useCdc ? new CdcProps(folders: [@"D:\Temp\CdcSyncTest"]) : null;
             var props = useCdc ? CdcProps.Default : null;
-            //var throttler = new AsyncLock(1);
-            var throttler = new AsyncLock(MaxThreads);
             ConcurrentDictionary<String, FolderSyncFile> files = new(StringComparer.Ordinal);
             long sourceBytes = 0;
             long sourceFileCount = 0;
@@ -534,7 +573,6 @@ namespace SysWeaver.FolderSync
 
                 await srcFiles.ProcessAsyncValue(async x =>
                 {
-                    using var _ = await throttler.Lock().ConfigureAwait(false);
                     var localFile = x.Substring(sfl).Replace(Path.DirectorySeparatorChar, '/');
                     var hash = await FileHash.GetHashAsync(x).ConfigureAwait(false);
                     var fi = new FileInfo(x);
@@ -550,7 +588,7 @@ namespace SysWeaver.FolderSync
                         Interlocked.Add(ref sourceBytes, fi.Length);
 
                     }
-                }).ConfigureAwait(false);
+                }, MaxThreads).ConfigureAwait(false);
             }
             bool needActivate = false;
             foreach (var x in files)
@@ -561,6 +599,7 @@ namespace SysWeaver.FolderSync
             onEvent?.Invoke(FolderSyncEvents.Scanned, destFolder);
             var t = files.Values.OrderBy(x => x.Name).ToList();
             var version = FolderSyncer.ComputeCombinedHash(t.Select(x => x.Name).ToList(), t.Select(x => x.Hash).ToList());
+            var bak = String.Concat(destFolder, '_', version);
             if (files.Count > 16)
             {
                 if (!await api.SharedFolderHasChanged(new SharedFolderSyncRequest
@@ -571,7 +610,6 @@ namespace SysWeaver.FolderSync
                 {
                     if (needActivate && switchTo)
                     {
-                        var bak = GetBakName(destFolder);
                         var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder).ConfigureAwait(false);
                         if (ex != null)
                             throw ex;
@@ -605,7 +643,6 @@ namespace SysWeaver.FolderSync
             {
                 if (needActivate && switchTo)
                 {
-                    var bak = GetBakName(destFolder);
                     var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder).ConfigureAwait(false);
                     if (ex != null)
                         throw ex;
@@ -622,7 +659,6 @@ namespace SysWeaver.FolderSync
             sourceFileCount = 0;
             await res.Keep.Nullable().ProcessAsyncValue(async x =>
             {
-                using var _ = await throttler.Lock().ConfigureAwait(false);
                 var fn = x.Replace('/', Path.DirectorySeparatorChar);
                 var dst = Path.Combine(downloadFolder, fn);
                 var fi = new FileInfo(dst);
@@ -640,7 +676,7 @@ namespace SysWeaver.FolderSync
                 files.TryRemove(x, out var _);
                 Interlocked.Increment(ref sourceFileCount);
                 Interlocked.Add(ref sourceBytes, fi.Length);
-            }).ConfigureAwait(false);
+            }, MaxThreads).ConfigureAwait(false);
             long transferred = 0;
             long transferredBytes = 0;
             long discBytes = 0;
@@ -654,7 +690,7 @@ namespace SysWeaver.FolderSync
                 var remote = api as RemoteConnectionBase;
                 var client = remote.Client;
                 var baseUrl = remote.UrlBase;
-                var baseDownloadUrl = String.Concat(baseUrl, "ManagedFolders/", srcName, '/');
+                var baseDownloadUrl = String.Concat(baseUrl, "SharedFolders/", srcName, '/');
 
                 async ValueTask<ReadOnlyMemory<Byte>> CacheCdc(String fn)
                 {
@@ -669,7 +705,6 @@ namespace SysWeaver.FolderSync
                 await dls.ProcessAsyncValue(async dl =>
                 {
                     var x = dl.Name;
-                    using var _ = await throttler.Lock().ConfigureAwait(false);
                     var fn = x.Replace('/', Path.DirectorySeparatorChar);
                     var targetFile = Path.Combine(downloadFolder, fn);
                     var ex = await PathExt.EnsureCanWriteFileAsync(targetFile).ConfigureAwait(false);
@@ -709,13 +744,32 @@ namespace SysWeaver.FolderSync
                     else
                     {
                         using var get = await client.GetAsync(baseDownloadUrl + x).ConfigureAwait(false);
+                        var ss = get.StatusCode;
+                        if (ss != HttpStatusCode.OK)
+                            throw new Exception(String.Concat("Failed to download file \"", x, "\": (", (int)ss, ") " + ss));
                         var cc = get.Content;
                         transferBytes = cc.Headers.ContentLength;
-                        using var dest = new FileStream(targetFile, FileMode.Create, FileAccess.Write);
-                        await cc.CopyToAsync(dest).ConfigureAwait(false);
+                        using (var dest = new FileStream(targetFile, FileMode.Create, FileAccess.Write))
+                            await cc.CopyToAsync(dest).ConfigureAwait(false);
                     }
                     if (!(await FileHash.GetHashAsync(targetFile).ConfigureAwait(false)).FastEquals(dl.Hash))
-                        throw new Exception("Downloaded file is corrupted!");
+                    {
+                        if (useCdc)
+                        {
+//                            var data = await client.GetByteArrayAsync(baseDownloadUrl + x).ConfigureAwait(false);
+//                            await File.WriteAllBytesAsync(targetFile, data).ConfigureAwait(false);
+                            using var get = await client.GetAsync(baseDownloadUrl + x).ConfigureAwait(false);
+                            var ss = get.StatusCode;
+                            if (ss != HttpStatusCode.OK)
+                                throw new Exception(String.Concat("Failed to download file \"", x, "\": (", (int)ss, ") " + ss));
+                            var cc = get.Content;
+                            transferBytes = cc.Headers.ContentLength;
+                            using (var dest = new FileStream(targetFile, FileMode.Create, FileAccess.Write))
+                                await cc.CopyToAsync(dest).ConfigureAwait(false);
+                            if (!(await FileHash.GetHashAsync(targetFile).ConfigureAwait(false)).FastEquals(dl.Hash))
+                                throw new Exception(String.Concat("The hash of the downloaded file \"", x, "\", doesn't match the server hash!"));
+                        }
+                    }
                     var fi = new FileInfo(targetFile);
                     fi.LastWriteTimeUtc = dl.LastModified;
                     var destBytes = fi.Length;
@@ -726,28 +780,20 @@ namespace SysWeaver.FolderSync
                     Interlocked.Increment(ref sourceFileCount);
                     Interlocked.Add(ref sourceBytes, destBytes);
                     onEvent?.Invoke(FolderSyncEvents.Completed, targetFile);
-                }).ConfigureAwait(false);
+                }, MaxThreads).ConfigureAwait(false);
             }
             //  Delete files
             await files.Keys.ProcessAsyncValue(async x =>
             {
-                using var _ = await throttler.Lock().ConfigureAwait(false);
                 var fn = x.Replace('/', Path.DirectorySeparatorChar);
                 var targetFile = Path.Combine(downloadFolder, fn);
                 var ex = await PathExt.TryDeleteFileAsync(targetFile).ConfigureAwait(false);
                 if (ex != null)
                     throw ex;
                 onEvent?.Invoke(FolderSyncEvents.Completed, targetFile);
-            }).ConfigureAwait(false);
+            }, MaxThreads).ConfigureAwait(false);
             await PathExt.TryRemoveEmptyFoldersAsync(downloadFolder).ConfigureAwait(false);
-            if (switchTo)
-            {
-                var bak = GetBakName(destFolder);
-                var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder).ConfigureAwait(false);
-                if (ex != null)
-                    throw ex;
-            }
-            return new FolderPullSyncResult
+            var ret = new FolderPullSyncResult
             {
                 SourceFiles = sourceFileCount,
                 SourceBytes = sourceBytes,
@@ -759,6 +805,39 @@ namespace SysWeaver.FolderSync
                 NewChunkSize = missingChunkBytes,
                 Version = version,
             };
+            await WriteRemoteManifest(downloadFolder, ret, start).ConfigureAwait(false);
+            if (switchTo)
+            {
+                var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder).ConfigureAwait(false);
+                if (ex != null)
+                    throw ex;
+            }
+            return ret;
+        }
+
+
+        const String RemoteManifestName = "_RemoteSync.txt";
+
+        static String V(long value) => value.ToString("### ### ### ### ### ### ### ##0").TrimStart();
+
+        async ValueTask WriteRemoteManifest(String folder, FolderPullSyncResult r, DateTime start)
+        {
+            var end = DateTime.UtcNow;
+            var duration = end - start;
+            StringBuilder b = new StringBuilder();
+            int tab = 16;
+            b.Append("Version :".PadRight(tab)).AppendLine(r.Version);
+            b.Append("Start :".PadRight(tab)).AppendLine(start.ToString("O"));
+            b.Append("End :".PadRight(tab)).AppendLine(end.ToString("O"));
+            b.Append("Duration :".PadRight(tab)).AppendLine(duration.ToString());
+            b.Append("Files :".PadRight(tab)).AppendLine(V(r.SourceFiles));
+            b.Append("Size :".PadRight(tab)).Append(V(r.SourceBytes)).AppendLine(" bytes");
+            b.Append("Downloaded :".PadRight(tab)).Append(V(r.TransferredCount)).Append(" [ ").Append((100M * (Decimal)r.TransferredCount / (Decimal)Math.Max(1, r.SourceFiles)).ToString("0.00", CultureInfo.InvariantCulture)).AppendLine(" % ]");
+            b.Append("Download size :".PadRight(tab)).Append(V(r.TransferredSourceBytes)).Append(" bytes [ ").Append((100M * (Decimal)r.TransferredSourceBytes / (Decimal)Math.Max(1, r.SourceBytes)).ToString("0.00", CultureInfo.InvariantCulture)).AppendLine(" % ]");
+            b.Append("Network size :".PadRight(tab)).Append(V(r.TransferredNetworkSize)).Append(" bytes [ ").Append((100M * (Decimal)r.TransferredNetworkSize / (Decimal)Math.Max(1, r.TransferredSourceBytes)).ToString("0.00", CultureInfo.InvariantCulture)).AppendLine(" % ]");
+            b.Append("New chunks :".PadRight(tab)).AppendLine(V(r.NewChunkCount));
+            b.Append("New chunk size :".PadRight(tab)).Append(V(r.NewChunkSize)).AppendLine(" bytes");
+            await File.WriteAllTextAsync(Path.Combine(folder, RemoteManifestName), b.ToString()).ConfigureAwait(false);
         }
 
 

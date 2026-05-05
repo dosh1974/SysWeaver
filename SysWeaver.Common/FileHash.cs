@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
@@ -182,7 +182,7 @@ namespace SysWeaver
 
         static readonly FastMemCache<String, String> Cache = new (TimeSpan.FromMinutes(30), StringComparer.Ordinal);
 
-        static ValueTask<String> InternalHashAsync(String filename, bool isWeb)
+        static async ValueTask<String> InternalHashAsync(String filename, bool isWeb)
         {
             if (!isWeb)
             {
@@ -190,14 +190,17 @@ namespace SysWeaver
                 {
                     var fi = new FileInfo(filename);
                     if (fi.Exists)
-                        return Cache.GetOrUpdateValueAsync(String.Join(';', filename, fi.Length, fi.LastWriteTimeUtc), async _ =>
-                            await InternalUncachedHashAsync(filename, isWeb).ConfigureAwait(false));
+                    {
+                        var key = await GetCacheKeyAsync(filename, fi).ConfigureAwait(false);
+                        return await Cache.GetOrUpdateValueAsync(key, _ =>
+                            InternalUncachedHashAsync(filename, isWeb)).ConfigureAwait(false);
+                    }
                 }
                 catch
                 {
                 }
             }
-            return InternalUncachedHashAsync(filename, isWeb);
+            return await InternalUncachedHashAsync(filename, isWeb).ConfigureAwait(false);
         }
 
         static async ValueTask<String> InternalUncachedHashAsync(String filename, bool isWeb)
@@ -333,7 +336,7 @@ namespace SysWeaver
                 var fi = new FileInfo(filename);
                 if (!fi.Exists)
                     return null;
-                keyName = String.Join('|', fi.FullName, fi.LastWriteTimeUtc, fi.Length);
+                keyName = String.Join('|', fi.FullName, fi.CreationTimeUtc, fi.LastWriteTimeUtc, fi.Length);
             }
             catch
             {
@@ -345,6 +348,30 @@ namespace SysWeaver
             return keyName;
         }
 
+
+        /// <summary>
+        /// Given a file, compute name for meta data
+        /// </summary>
+        /// <param name="filename">The existing file to get the hash of the content</param>
+        /// <param name="fi">File information</param>
+        /// <returns>The key name for this file</returns>
+        public static async Task<String> GetCacheKeyAsync(String filename, FileInfo fi)
+        {
+            String keyName;
+            try
+            {
+                if (!fi.Exists)
+                    return null;
+                keyName = String.Join('|', fi.FullName, fi.CreationTimeUtc, fi.LastWriteTimeUtc, fi.Length);
+            }
+            catch
+            {
+                return null;
+            }
+            var keyHash = MD5.HashData(System.Runtime.InteropServices.MemoryMarshal.Cast<Char, Byte>(keyName.AsSpan()));
+            keyName = HashTools.GetHashString16(keyHash);
+            return keyName;
+        }
 
         /// <summary>
         /// Given a file, compute name for meta data
@@ -366,9 +393,7 @@ namespace SysWeaver
                 try
                 {
                     var fi = new FileInfo(filename);
-                    if (!fi.Exists)
-                        return null;
-                    keyName = String.Join('|', fi.FullName, fi.LastWriteTimeUtc, fi.Length);
+                    return await GetCacheKeyAsync(filename, fi).ConfigureAwait(false);
                 }
                 catch
                 {

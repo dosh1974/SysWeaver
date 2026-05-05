@@ -129,6 +129,10 @@ namespace SysWeaver.MicroService
             nameof(SharedFolderHasChanged),
             nameof(GetSharedFileChunks),
             nameof(SharedFoldersTable),
+            nameof(GetFolderVersion),
+            nameof(SyncRemoteFolderNow),
+            nameof(RemoteFoldersTable),
+            nameof(WaitUntilSharedFolderHasChanged),
             ""
             );
 
@@ -156,14 +160,14 @@ namespace SysWeaver.MicroService
 
         public async ValueTask<String> AddManagedFolder(FsManagedFolder x)
         {
-            var folders = PushFolders;
+            var folders = ManagedFolders;
             var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
             var name = x.Name;
             path = PathExt.CreateDataFolder(path);
             if (String.IsNullOrEmpty(name))
                 name = Path.GetFileName(path);
             var auth = x.Auth ?? Roles.Debug;
-            var pullF = x.AllowPull ? new FolderPullFolder
+            var pullF = x.AllowPull ? new FsSharedFolder
             {
                 Name = name,
                 DiscFolder = path,
@@ -193,7 +197,7 @@ namespace SysWeaver.MicroService
             path = new DirectoryInfo(path).FullName;
             if (String.IsNullOrEmpty(name))
                 name = Path.GetFileName(path);
-            if (!PushFolders.TryRemove(name.FastToLower(), out var folder))
+            if (!ManagedFolders.TryRemove(name.FastToLower(), out var folder))
                 return false;
             var pf = folder.PullFolder;
             if (pf != null)
@@ -204,9 +208,9 @@ namespace SysWeaver.MicroService
             return true;
         }
 
-        public async ValueTask<String> AddSharedFolder(FolderPullFolder x)
+        public async ValueTask<String> AddSharedFolder(FsSharedFolder x)
         {
-            var folders = PullFolders;
+            var folders = SharedFolders;
             var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
             var name = x.Name;
             path = PathExt.CreateDataFolder(path);
@@ -226,14 +230,14 @@ namespace SysWeaver.MicroService
             return path;
         }
 
-        public bool RemoveSharedFolder(FolderPullFolder x)
+        public bool RemoveSharedFolder(FsSharedFolder x)
         {
             var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
             var name = x.Name;
             path = new DirectoryInfo(path).FullName;
             if (String.IsNullOrEmpty(name))
                 name = Path.GetFileName(path);
-            if (!PullFolders.TryRemove(name.FastToLower(), out var folder))
+            if (!SharedFolders.TryRemove(name.FastToLower(), out var folder))
                 return false;
             var fm = FileMod;
             if (fm != null)
@@ -241,37 +245,52 @@ namespace SysWeaver.MicroService
             return true;
         }
 
-
-
-
-
-        public async ValueTask<String> AddRemoteFolder(RemoteCachedFolder x)
+        public async ValueTask<String> AddRemoteFolder(FsRemoteFolder x)
         {
             var folder = GetRemoteFolderDest(x);
             var folders = RemoteFolders;
-            var f = new RemoteFolder(x, folder);
-            if (!folders.TryAdd(folder.FastToLower(), f))
-                return folder;
+            var name = EnvInfo.ResolveText(x.Name);
+            var f = new RemoteFolder(name, x, folder, Manager);
+            if (!folders.TryAdd(name.FastToLower(), f))
+                throw new Exception(String.Concat("A folder named \"", name, "\" already added!"));
             await PathExt.EnsureFolderExistAsync(folder).ConfigureAwait(false);
             if (x.SyncOnStart)
-                await TrySyncFolder(f).ConfigureAwait(false);
+                await f.TrySyncFolder().ConfigureAwait(false);
             else
                 f.Version = await FolderSyncer.GetPullFolderVersion(folder).ConfigureAwait(false);
+            var wf = x.WebFolder;
+            if ((wf != null) && (wf.WebFolder != null))
+            {
+                var d = new FileHttpServerModuleFolder
+                {
+                    DiscFolder = folder,
+                };
+                wf.CopyTo(d);
+                FileMod.AddFolder(d);
+            }
+            f.StartUpdater();
             return folder;
         }
 
-        public bool RemoveRemoteFolder(RemoteCachedFolder x)
+        public bool RemoveRemoteFolder(FsRemoteFolder x)
         {
-            var folder = GetRemoteFolderDest(x);
             var folders = RemoteFolders;
-            if (!folders.TryRemove(folder.FastToLower(), out var f))
+            var name = EnvInfo.ResolveText(x.Name);
+            if (!folders.TryRemove(name.FastToLower(), out var f))
                 return false;
+            f.Dispose();
+            var wf = x.WebFolder;
+            if ((wf != null) && (wf.WebFolder != null))
+            {
+                var d = new FileHttpServerModuleFolder
+                {
+                    DiscFolder = f.DestPath,
+                };
+                wf.CopyTo(d);
+                FileMod.RemoveFolder(d);
+            }
             return true;
         }
-
-
-
-
 
 
         readonly FileHttpServerModule FileMod;
@@ -308,7 +327,7 @@ namespace SysWeaver.MicroService
             }
 
             var tempRemove = TempRemove;
-            foreach (var f in PushFolders)
+            foreach (var f in ManagedFolders)
             {
                 try
                 {
@@ -419,14 +438,14 @@ namespace SysWeaver.MicroService
             var fm = FileMod;
             if (fm != null)
             {
-                foreach (var x in PushFolders.Values)
+                foreach (var x in ManagedFolders.Values)
                     fm.RemoveFolder(x.ModFolder);
             }
         }
 
-        readonly ConcurrentDictionary<String, ManagedFolder> PushFolders = new (StringComparer.Ordinal);
+        readonly ConcurrentDictionary<String, ManagedFolder> ManagedFolders = new (StringComparer.Ordinal);
 
-        readonly ConcurrentDictionary<String, SharedFolder> PullFolders = new (StringComparer.Ordinal);
+        readonly ConcurrentDictionary<String, SharedFolder> SharedFolders = new (StringComparer.Ordinal);
 
         readonly ConcurrentDictionary<String, RemoteFolder> RemoteFolders = new (StringComparer.Ordinal);
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -162,9 +162,19 @@ namespace SysWeaver
             if (!CancelToken.IsCancellationRequested)
                 Cancel.Cancel();
             onStopping?.Invoke();
+            try
+            {
+                OnStopping?.Invoke();
+            }
+            catch
+            {
+            }
             IsDisposedCompleted.WaitOne();
             return true;
         }
+
+
+        public event Action OnStopping;
 
         /// <summary>
         /// Stop and dispose, if a task is currently being invoked, it waits for it to complete (cancellation is requested)

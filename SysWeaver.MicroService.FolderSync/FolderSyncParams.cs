@@ -12,12 +12,12 @@
         /// A list of shared folders.
         /// Shared folder can be synced down to clients using the SwSyncTool's pull command or by using the SysWeaver.FolderSyncer class.
         /// </summary>
-        public FolderPullFolder[] SharedFolders;
+        public FsSharedFolder[] SharedFolders;
 
         /// <summary>
         /// A list of folders that in automatically synchronized from some source
         /// </summary>
-        public RemoteCachedFolder[] RemoteFolders;
+        public FsRemoteFolder[] RemoteFolders;
 
     }
 

@@ -875,10 +875,14 @@ namespace SysWeaver
         /// <param name="to">The desired name of the target folder</param>
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
-        public static Exception TryMoveFolder(String from, String to, int retryCount = 10, int delayInMs = 100)
+        /// <param name="replaceTo">If replace to is true and a folder named to exists, it will be removed before moving</param>
+        /// <returns>An exception if there was an error, null if everything went well</returns>
+        public static Exception TryMoveFolder(String from, String to, int retryCount = 10, int delayInMs = 100, bool replaceTo = false)
         {
             try
             {
+                if (replaceTo)
+                    TryDeleteDirectory(to, false, retryCount, delayInMs);
                 Retry.Op(() => Directory.Move(from, to), retryCount, delayInMs);
                 //Retry.Op(() => IsFolderReady(to), retryCount, delayInMs);
                 return null;
@@ -896,10 +900,14 @@ namespace SysWeaver
         /// <param name="to">The desired name of the target folder</param>
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
-        public static async ValueTask<Exception> TryMoveFolderAsync(String from, String to, int retryCount = 10, int delayInMs = 100)
+        /// <param name="replaceTo">If replace to is true and a folder named to exists, it will be removed before moving</param>
+        /// <returns>An exception if there was an error, null if everything went well</returns>
+        public static async ValueTask<Exception> TryMoveFolderAsync(String from, String to, int retryCount = 10, int delayInMs = 100, bool replaceTo = false)
         {
             try
             {
+                if (replaceTo)
+                    await TryDeleteDirectoryAsync(to, false, retryCount, delayInMs).ConfigureAwait(false);
                 await Retry.OpAsync(() => Directory.Move(from, to), retryCount, delayInMs).ConfigureAwait(false);
                 //await Retry.OpAsync(() => IsFolderReady(to), retryCount, delayInMs).ConfigureAwait(false);
                 return null;
@@ -919,13 +927,14 @@ namespace SysWeaver
         /// <param name="newFolder">The folder that should replace the target folder</param>
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
-        public static Exception TryFolderSwap(String targetFolder, String backupFolder, String newFolder, int retryCount = 10, int delayInMs = 100)
+        /// <param name="replaceBak">If true and the backup folder exist, it will de deleted before swapping</param>
+        public static Exception TryFolderSwap(String targetFolder, String backupFolder, String newFolder, int retryCount = 10, int delayInMs = 100, bool replaceBak = true)
         {
             Exception ex;
             bool didBak = Directory.Exists(targetFolder);
             if (didBak)
             {
-                ex = TryMoveFolder(targetFolder, backupFolder, retryCount, delayInMs);
+                ex = TryMoveFolder(targetFolder, backupFolder, retryCount, delayInMs, replaceBak);
                 if (ex != null)
                     return ex;
             }
@@ -945,13 +954,14 @@ namespace SysWeaver
         /// <param name="newFolder">The folder that should replace the target folder</param>
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
-        public static async ValueTask<Exception> TryFolderSwapAsync(String targetFolder, String backupFolder, String newFolder, int retryCount = 10, int delayInMs = 100)
+        /// <param name="replaceBak">If true and the backup folder exist, it will de deleted before swapping</param>
+        public static async ValueTask<Exception> TryFolderSwapAsync(String targetFolder, String backupFolder, String newFolder, int retryCount = 10, int delayInMs = 100, bool replaceBak = true)
         {
             Exception ex;
             bool didBak = Directory.Exists(targetFolder);
             if (didBak)
             {
-                ex = await TryMoveFolderAsync(targetFolder, backupFolder, retryCount, delayInMs).ConfigureAwait(false);
+                ex = await TryMoveFolderAsync(targetFolder, backupFolder, retryCount, delayInMs, replaceBak).ConfigureAwait(false);
                 if (ex != null)
                     return ex;
             }

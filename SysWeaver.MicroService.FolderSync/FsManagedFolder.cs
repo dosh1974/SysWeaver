@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using SysWeaver.Net;
 
 namespace SysWeaver.MicroService
 {
@@ -66,7 +67,7 @@ namespace SysWeaver.MicroService
     }
 
 
-    public sealed class FolderPullFolder
+    public sealed class FsSharedFolder
     {
         /// <summary>
         /// Name of repository, used when synching
@@ -86,7 +87,7 @@ namespace SysWeaver.MicroService
     }
 
 
-    public sealed class RemoteCachedFolder : CredentialParams
+    public sealed class FsRemoteFolder : CredentialParams
     {
         /// <summary>
         /// If true, perform a sync when starting the service
@@ -94,14 +95,19 @@ namespace SysWeaver.MicroService
         public bool SyncOnStart = true;
 
         /// <summary>
+        /// The unique local name of this remote folder
+        /// </summary>
+        public String Name;
+
+        /// <summary>
         /// The remote server address (where the folder to pull resides)
         /// </summary>
         public String RemoteAddress;
 
         /// <summary>
-        /// The remote repository name (the folder to pull)
+        /// The remote repository name (the folder to pull), if null or empty Name is used.
         /// </summary>
-        public String Name;
+        public String RemoteName;
 
         /// <summary>
         /// Optional cache folder on disc (defaults to using the SysWaver folders)
@@ -109,9 +115,9 @@ namespace SysWeaver.MicroService
         public String DiscFolder;
 
         /// <summary>
-        /// Optional web folder (if empty, the folder won't be available)
+        /// Optional web folder paramaters, if null the folder won't be available
         /// </summary>
-        public String WebFolder;
+        public FileHttpServerModuleWebFolder WebFolder;
 
 
 
