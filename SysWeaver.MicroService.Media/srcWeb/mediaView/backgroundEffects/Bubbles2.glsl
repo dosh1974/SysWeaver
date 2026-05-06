@@ -140,7 +140,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 	vec2 uv = fragCoord / iResolution.xy;
 	vec4 bgCol = mix(BgColorBottom, BgColorTop, uv.y);
 	bgCol.rgb *= bgCol.a;
-	float time = iTime + 17.0;
+	float time = iTime + 117.0;
 	
 	vec3 lightDir = normalize(vec3(-1.0, 2.0, 0.5));
 
