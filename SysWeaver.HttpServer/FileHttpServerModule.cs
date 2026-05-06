@@ -1,4 +1,4 @@
-using SysWeaver.Compression;
+﻿using SysWeaver.Compression;
 
 using System;
 using System.Collections.Concurrent;
@@ -61,6 +61,22 @@ namespace SysWeaver.Net
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor(nameof(FileHttpServerModule));
 
 
+        public bool ChangeDiscFolder(String webFolder, String currentDiscFolder, String newDiscFolder)
+        {
+            webFolder = webFolder.TrimEnd('/') + '/';
+            var r = WebFolders;
+            lock (r)
+            {
+                if (!r.TryGetValue(webFolder, out var rs))
+                    return false;
+                var wt = rs.DiscFolders.FirstOrDefault(x => x.Path.FastEquals(currentDiscFolder));
+                if (wt == null)
+                    return false;
+                wt.Path = newDiscFolder;
+            }
+            return true;
+        }
+
         /// <summary>
         /// Add a folder (prefer to add folders using the constructor params)
         /// </summary>
@@ -107,6 +123,7 @@ namespace SysWeaver.Net
 
         public bool RemoveFolder(FileHttpServerModuleFolder folder)
         {
+            // TODO: Delete
             return true;
         }
 

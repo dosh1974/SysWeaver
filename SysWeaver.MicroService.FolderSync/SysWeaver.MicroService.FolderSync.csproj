@@ -12,5 +12,11 @@
     <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
     <ProjectReference Include="..\SysWeaver.Storage.Cdc\SysWeaver.Storage.Cdc.csproj" />
   </ItemGroup>
-
+  
+  <Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+    <Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcData\*+ .\data" />
+    <ItemGroup>
+      <EmbeddedResource Include="data\**\*.br" Visible="false" />
+    </ItemGroup>
+  </Target>
 </Project>

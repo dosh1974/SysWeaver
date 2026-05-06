@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
@@ -1463,6 +1463,32 @@ namespace SysWeaver
                 lines[i] = lines[i].Trim('\r');
             return lines;
         }
+
+
+        /// <summary>
+        /// Create a new string with a repeated string
+        /// </summary>
+        /// <param name="part">The string to repeat, ex: "Hello"</param>
+        /// <param name="count">The number of times to repeat the string, ex: 3</param>
+        /// <returns>A repeated string, ex: "HelloHelloHello"</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static String Create(String part, int count)
+            => String.Create(part.Length * count, part, CreateCountAction);
+
+        static void CreateCount(Span<Char> str, ReadOnlySpan<Char> c)
+        {
+            var il = c.Length;
+            var ol = str.Length;
+            for (int o = 0, i = 0; o < ol; ++ o)
+            {
+                str[o] = c[i];
+                ++i;
+                if (i >= il)
+                    i = 0;
+            }
+        }
+
+        static readonly SpanAction<Char, ReadOnlySpan<Char>> CreateCountAction = CreateCount;
 
 
     }

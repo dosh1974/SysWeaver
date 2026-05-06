@@ -57,11 +57,11 @@ class MediaPlayerText {
         } else {
             c = await CanvasTools.CreateTextImageUrl(t.Url, p);
         }
-        t.Width = image.width;
-        t.Height = image.height;
+        t.Width = c.width;
+        t.Height = c.height;
         const e = t.Element;
         const res = await waitEvent2(e, "load", "error", () => {
-            e.src = c[0];
+            e.src = c;
         });
         if (res.type == "error")
             return false;

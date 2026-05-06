@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Threading;
@@ -919,6 +920,57 @@ namespace SysWeaver
         }
 
 
+        static void DirectoryCopy(String from, String to)
+        {
+            var t = Path.GetFullPath(from).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var tl = t.Length + 1; 
+            foreach (var f in Directory.GetFiles(t, "*", SearchOption.AllDirectories))
+            {
+                var dest = Path.Combine(to, f.Substring(tl));
+                var dir = Path.GetDirectoryName(dest);
+                if (!Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+                File.Copy(f, dest, true);
+            }
+            foreach (var f in Directory.GetDirectories(t, "*", SearchOption.AllDirectories).OrderByDescending(x => x.Length))
+            {
+                var dest = Path.Combine(to, f.Substring(tl));
+                if (!Directory.Exists(dest))
+                    Directory.CreateDirectory(dest);
+                var di = new DirectoryInfo(dest);
+                var fi = new DirectoryInfo(f);
+                di.Attributes = fi.Attributes;
+                di.LastWriteTimeUtc = fi.LastWriteTimeUtc;
+                di.CreationTimeUtc = fi.CreationTimeUtc;
+            }
+        }
+
+
+        /// <summary>
+        /// Make a copy of a folder
+        /// </summary>
+        /// <param name="from">The existing folder that should be moved</param>
+        /// <param name="to">The desired name of the target folder</param>
+        /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
+        /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
+        /// <param name="replaceTo">If replace to is true and a folder named to exists, it will be removed before copying</param>
+        /// <returns>An exception if there was an error, null if everything went well</returns>
+        public static async ValueTask<Exception> TryCopyFolderAsync(String from, String to, int retryCount = 10, int delayInMs = 100, bool replaceTo = false)
+        {
+            try
+            {
+                if (replaceTo)
+                    await TryDeleteDirectoryAsync(to, false, retryCount, delayInMs).ConfigureAwait(false);
+                await Retry.OpAsync(() => DirectoryCopy(from, to), retryCount, delayInMs).ConfigureAwait(false);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return ex;
+            }
+        }
+
+
         /// <summary>
         /// Renames the target folder to backup folder then renames the new folder to target folder.
         /// </summary>
@@ -955,17 +1007,33 @@ namespace SysWeaver
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <param name="replaceBak">If true and the backup folder exist, it will de deleted before swapping</param>
-        public static async ValueTask<Exception> TryFolderSwapAsync(String targetFolder, String backupFolder, String newFolder, int retryCount = 10, int delayInMs = 100, bool replaceBak = true)
+        /// <param name="onBackupCopy">if non null, the existing folder is copied to the backup folder, then this function is executed</param>
+        public static async ValueTask<Exception> TryFolderSwapAsync(String targetFolder, String backupFolder, String newFolder, int retryCount = 10, int delayInMs = 100, bool replaceBak = true, Func<String, ValueTask<Exception>> onBackupCopy = null)
         {
             Exception ex;
             bool didBak = Directory.Exists(targetFolder);
             if (didBak)
             {
-                ex = await TryMoveFolderAsync(targetFolder, backupFolder, retryCount, delayInMs, replaceBak).ConfigureAwait(false);
-                if (ex != null)
-                    return ex;
+                if (onBackupCopy != null)
+                {
+                    ex = await TryCopyFolderAsync(targetFolder, backupFolder, retryCount, delayInMs, replaceBak).ConfigureAwait(false);
+                    if (ex != null)
+                        return ex;
+                    ex = await onBackupCopy(backupFolder).ConfigureAwait(false);
+                    if (ex != null)
+                    {
+                        await TryDeleteDirectoryAsync(backupFolder, false, retryCount, delayInMs).ConfigureAwait(false);
+                        return ex;
+                    }
+                }
+                else
+                {
+                    ex = await TryMoveFolderAsync(targetFolder, backupFolder, retryCount, delayInMs, replaceBak).ConfigureAwait(false);
+                    if (ex != null)
+                        return ex;
+                }
             }
-            ex = await TryMoveFolderAsync(newFolder, targetFolder, retryCount, delayInMs).ConfigureAwait(false);
+            ex = await TryMoveFolderAsync(newFolder, targetFolder, retryCount, delayInMs, didBak | replaceBak).ConfigureAwait(false);
             if (ex == null)
                 return null;
             if (didBak)

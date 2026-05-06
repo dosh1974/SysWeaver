@@ -549,9 +549,10 @@ namespace SysWeaver.FolderSync
         /// <param name="switchTo">If true, the newly synched folder will be used when updated</param>
         /// <param name="useCdc">If true, try to use Content Dependent Chunking</param>
         /// <param name="onEvent">An optional callback used to display what's going on</param>
+        /// <param name="onBackupCopy">if non null, the existing folder is copied to the backup folder, then this function is executed</param>
         /// <returns>Sync results</returns>
         /// <exception cref="Exception"></exception>
-        public async ValueTask<FolderPullSyncResult> PullFolder(String srcName, String destFolder, bool switchTo = false, bool useCdc = true, Action<FolderSyncEvents, String> onEvent = null)
+        public async ValueTask<FolderPullSyncResult> PullFolder(String srcName, String destFolder, bool switchTo = false, bool useCdc = true, Action<FolderSyncEvents, String> onEvent = null, Func<String, String, ValueTask<Exception>> onBackupCopy = null)
         {
             var start = DateTime.UtcNow;
             //var props = useCdc ? new CdcProps(folders: [@"D:\Temp\CdcSyncTest"]) : null;
@@ -610,7 +611,7 @@ namespace SysWeaver.FolderSync
                 {
                     if (needActivate && switchTo)
                     {
-                        var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder).ConfigureAwait(false);
+                        var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder, 10, 100, true, fn => onBackupCopy(fn, version)).ConfigureAwait(false);
                         if (ex != null)
                             throw ex;
                     }
@@ -643,7 +644,7 @@ namespace SysWeaver.FolderSync
             {
                 if (needActivate && switchTo)
                 {
-                    var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder).ConfigureAwait(false);
+                    var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder, 10, 100, true, fn => onBackupCopy(fn, version)).ConfigureAwait(false);
                     if (ex != null)
                         throw ex;
                 }
@@ -654,6 +655,7 @@ namespace SysWeaver.FolderSync
                     Version = version,
                 };
             }
+            var oldVersion = version;
             version = res.Version;
             sourceBytes = 0;
             sourceFileCount = 0;
@@ -808,7 +810,7 @@ namespace SysWeaver.FolderSync
             await WriteRemoteManifest(downloadFolder, ret, start).ConfigureAwait(false);
             if (switchTo)
             {
-                var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder).ConfigureAwait(false);
+                var ex = await PathExt.TryFolderSwapAsync(destFolder, bak, downloadFolder, 10, 100, true, fn => onBackupCopy(fn, oldVersion)).ConfigureAwait(false);
                 if (ex != null)
                     throw ex;
             }

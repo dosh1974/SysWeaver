@@ -1,4 +1,4 @@
-using SysWeaver.Auth;
+﻿using SysWeaver.Auth;
 
 using System;
 using System.Collections.Generic;
@@ -45,7 +45,7 @@ namespace SysWeaver.Net
     {
         public override string ToString() => Path;
 
-        public readonly String Path;
+        public volatile String Path;
         public readonly bool AssumePreCompressed;
         /// <summary>
         /// If true, the file's access time is chnage whenever the file is read

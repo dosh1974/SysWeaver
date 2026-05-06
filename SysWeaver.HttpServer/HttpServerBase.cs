@@ -690,6 +690,93 @@ namespace SysWeaver.Net
             return false;
         }
 
+        /// <summary>
+        /// Add's a HTTP redirect (30x) for all data in a folder
+        /// </summary>
+        /// <param name="fromFolder">The folder to redirect, must end with a '/'</param>
+        /// <param name="toFolder">The redirected target folder, must end with a '/'</param>
+        /// <param name="redirectCode">The redirct code to send</param>
+        /// <param name="replace">if true and the redirect already exist, replace with this new one</param>
+        /// <returns>true if the redirect was possible or false if it was already added</returns>
+        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="Exception"></exception>
+        public bool AddFolderRedirect(String fromFolder, String toFolder, int redirectCode = 307, bool replace = false)
+        {
+#if DEBUG
+            if (!fromFolder.FastEndsWith("/"))
+                throw new ArgumentException("Folders must end with a '/', every request within will be redirected", nameof(fromFolder));
+            if (!toFolder.FastEndsWith("/"))
+                throw new ArgumentException("Folders must end with a '/', every request within will be redirected", nameof(toFolder));
+#endif//DEBUG
+            var r = Redirects;
+            lock (r)
+            {
+                var tree = RedirectTree;
+                if (replace)
+                    RemoveFolderRedirect(fromFolder);
+                if (!StringTree.TryAdd(ref tree, fromFolder))
+                    return false;
+                if (!r.TryAdd(fromFolder, ValueTuple.Create(redirectCode, toFolder)))
+                    throw new Exception("Internal error!");
+                RedirectTree = tree;
+                RedirectSearch = new FrozenStringTree(tree);
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Removes a previosly added redirect
+        /// </summary>
+        /// <param name="fromFolder">The folder that was redirect, must end with a '/'</param>
+        /// <returns>true if the redirect was removed</returns>
+        /// <exception cref="ArgumentException"></exception>
+        /// <exception cref="Exception"></exception>
+        public bool RemoveFolderRedirect(String fromFolder)
+        {
+#if DEBUG
+            if (!fromFolder.FastEndsWith("/"))
+                throw new ArgumentException("Folders must end with a '/', every request within will be redirected", nameof(fromFolder));
+#endif//DEBUG
+            var r = Redirects;
+            lock (r)
+            {
+                if (!r.TryRemove(fromFolder, out var x))
+                    return false;
+                StringTree tree = new StringTree();
+                foreach (var s in r.Keys)
+                    if (!StringTree.TryAdd(ref tree, s))
+                        throw new Exception("Internal error!");
+                RedirectTree = tree;
+                RedirectSearch = new FrozenStringTree(tree);
+            }
+            return true;
+        }
+
+
+        bool HandleRedirect(String text, String localUrl, HttpServerRequest data)
+        {
+            if (!Redirects.TryGetValue(text, out var r))
+                return false;
+            var newUrl = String.Concat(data.Prefix, r.Item2, localUrl.Substring(text.Length));
+            var qs = data.GetQuery(null);
+            if (qs != null)
+                newUrl = String.Concat(newUrl, "?", qs);
+            data.SetResHeader("Location", newUrl);
+            data.SetResStatusCode(r.Item1);
+            return true;
+        }
+
+        bool DoRedirect(String localUrl, HttpServerRequest data)
+        {
+            var text = RedirectSearch.StartsWithAny(localUrl);
+            if (text == null)
+                return false;
+            return HandleRedirect(text, localUrl, data);
+        }
+
+        FrozenStringTree RedirectSearch = new FrozenStringTree(new StringTree());
+        readonly ConcurrentDictionary<String, ValueTuple<int, String>> Redirects = new (StringComparer.Ordinal);
+        StringTree RedirectTree = new StringTree();
 
         async ValueTask<IHttpRequestHandler> GetHandler(HttpServerRequest data, IHttpServerModule ignoreThis = null)
         {
@@ -1076,6 +1163,11 @@ namespace SysWeaver.Net
                 await fep(data, session).ConfigureAwait(false);
                 return;
             }
+            //  Handle redirects
+            var redirectFrom = RedirectSearch.StartsWithAny(localUrl);
+            if (redirectFrom != null)
+                if (HandleRedirect(redirectFrom, localUrl, data))
+                    return;
             //  Get module handler
             var t = await GetHandler(data).ConfigureAwait(false);
             if (t == null)

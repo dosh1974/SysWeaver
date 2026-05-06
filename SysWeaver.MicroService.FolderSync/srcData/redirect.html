@@ -1,0 +1,84 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
+    <link rel="icon" type="image/x-icon" href="${ToRoot}favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="${ToRoot}icon.svg">
+    <link rel="apple-touch-icon" type="image/png" href="${ToRoot}apple-touch-icon.png">
+    <link rel="manifest" href="${ToRoot}app/manifest.json">
+    <script>
+        async function main() {
+            const getVersionUrl = "${GetVersion}";
+            const src = "${Url}";
+            const autoReload = parseInt("${AutoReload}");
+            const f = document.createElement("iframe");
+            f.src = src;
+            f.onload = e => {
+                new MutationObserver(m => {
+                    const t = f.contentWindow.document.title;
+                    if (t !== document.title)
+                        document.title = t;
+                }).observe(f.contentWindow.document, { attributes: true });
+                document.title = f.contentWindow.document.title;
+            };
+            document.body.appendChild(f);
+            if (!getVersionUrl)
+                return;
+
+            async function getVersion() {
+                try {
+                    const res = await fetch(getVersionUrl);
+                    if (!res.ok)
+                        return "";
+                    return await res.json();
+                }
+                catch (e) {
+                }
+                return "";
+            }
+            const version = await getVersion();
+            console.log("Version: " + version);
+            if (autoReload > 0) {
+                setInterval(autoReload, async () => {
+                    //console.log("Checking version!");
+                    const newVersion = await getVersion();
+                    if ((newVersion !== version) && newVersion)
+                        location.reload(true);
+                });
+            } else {
+                addEventListener("message", async m => {
+                    const data = m.data;
+                    if (!data)
+                        return;
+                    if (data.Type !== "CheckVersion")
+                        return;
+                    //console.log("Checking version!");
+                    const newVersion = await getVersion();
+                    if ((newVersion !== version) && newVersion)
+                        location.reload(true);
+                });
+            }
+        }
+    </script>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+        }
+        iframe {
+            float: left;
+            border: none;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body onload="main()">
+</body>
+</html>

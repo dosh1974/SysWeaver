@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Threading.Tasks;
-using SysWeaver.Net;
 
 namespace SysWeaver.MicroService
 {
@@ -64,63 +63,6 @@ namespace SysWeaver.MicroService
         public ActivationHandler OnActivateAsync;
         public ActivationHandler OnDeactivateAsync;
         public ActivationHandler OnNewFolderAsync;
-    }
-
-
-    public sealed class FsSharedFolder
-    {
-        /// <summary>
-        /// Name of repository, used when synching
-        /// </summary>
-        public String Name;
-
-        /// <summary>
-        /// The folder to manage on disc
-        /// </summary>
-        public String DiscFolder;
-
-        /// <summary>
-        /// The auth required to sync this folder.
-        /// null is equal to Roles.Debug
-        /// </summary>
-        public String Auth;
-    }
-
-
-    public sealed class FsRemoteFolder : CredentialParams
-    {
-        /// <summary>
-        /// If true, perform a sync when starting the service
-        /// </summary>
-        public bool SyncOnStart = true;
-
-        /// <summary>
-        /// The unique local name of this remote folder
-        /// </summary>
-        public String Name;
-
-        /// <summary>
-        /// The remote server address (where the folder to pull resides)
-        /// </summary>
-        public String RemoteAddress;
-
-        /// <summary>
-        /// The remote repository name (the folder to pull), if null or empty Name is used.
-        /// </summary>
-        public String RemoteName;
-
-        /// <summary>
-        /// Optional cache folder on disc (defaults to using the SysWaver folders)
-        /// </summary>
-        public String DiscFolder;
-
-        /// <summary>
-        /// Optional web folder paramaters, if null the folder won't be available
-        /// </summary>
-        public FileHttpServerModuleWebFolder WebFolder;
-
-
-
     }
 
 

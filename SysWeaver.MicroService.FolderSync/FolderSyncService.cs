@@ -143,13 +143,36 @@ namespace SysWeaver.MicroService
             p = p ?? new();
             Manager = manager;
             FileMod = manager.TryGet<FileHttpServerModule>();
+            if (FileMod == null)
+                manager.AddMessage("No file module available, serving folder will not be possible!", MessageLevels.Warning);
+            StaticMod = manager.TryGet<StaticDataHttpServerModule>();
+            if (StaticMod == null)
+                manager.AddMessage("No static data module available, serving versioned data not possible!", MessageLevels.Warning);
+            var httpServer = manager.TryGet<HttpServerBase>();
+            HttpServer = httpServer;
+
+
+            String redirectText = typeof(FolderSyncService).GetManifestResourceText("data.redirect.html");
+            RedirectTemplate = new TextTemplate(redirectText, "${", "}");
+
+
             foreach (var x in p.ManagedFolders.Nullable())
                 AddManagedFolder(x).RunAsync();
             foreach (var x in p.SharedFolders.Nullable())
                 AddSharedFolder(x).RunAsync();
-
             foreach (var x in p.RemoteFolders.Nullable())
                 AddRemoteFolder(x).RunAsync();
+            if (httpServer != null)
+            {
+                RemoteOnHttpServerAdd(httpServer);
+            }
+
+
+
+
+            manager.OnServiceAdded += OnServiceAdded;
+            manager.OnServiceRemoved += OnServiceRemoved;
+
 
             TempRemove = TimeSpan.Zero;
             Prune().RunAsync();
@@ -157,6 +180,31 @@ namespace SysWeaver.MicroService
             PruneTask = new PeriodicTask(Prune, 5 * 60 * 1000, true, true, true);
             ScanTask = new PeriodicTask(ScanSharedFolders, 3000, true, true, true);
         }
+        readonly TextTemplate RedirectTemplate;
+
+        void OnServiceAdded(object service, ServiceInfo info)
+        {
+            var httpServer = service as HttpServerBase;
+            if (httpServer != null)
+            {
+                HttpServer = httpServer;
+                RemoteOnHttpServerAdd(httpServer);
+            }
+
+        }
+
+        void OnServiceRemoved(object service, ServiceInfo info)
+        {
+            var httpServer = service as HttpServerBase;
+            if (httpServer != null)
+            {
+                RemoteOnHttpServerRemove(httpServer);
+                HttpServer = null;
+            }
+        }
+
+        HttpServerBase HttpServer;
+
 
         public async ValueTask<String> AddManagedFolder(FsManagedFolder x)
         {
@@ -245,55 +293,10 @@ namespace SysWeaver.MicroService
             return true;
         }
 
-        public async ValueTask<String> AddRemoteFolder(FsRemoteFolder x)
-        {
-            var folder = GetRemoteFolderDest(x);
-            var folders = RemoteFolders;
-            var name = EnvInfo.ResolveText(x.Name);
-            var f = new RemoteFolder(name, x, folder, Manager);
-            if (!folders.TryAdd(name.FastToLower(), f))
-                throw new Exception(String.Concat("A folder named \"", name, "\" already added!"));
-            await PathExt.EnsureFolderExistAsync(folder).ConfigureAwait(false);
-            if (x.SyncOnStart)
-                await f.TrySyncFolder().ConfigureAwait(false);
-            else
-                f.Version = await FolderSyncer.GetPullFolderVersion(folder).ConfigureAwait(false);
-            var wf = x.WebFolder;
-            if ((wf != null) && (wf.WebFolder != null))
-            {
-                var d = new FileHttpServerModuleFolder
-                {
-                    DiscFolder = folder,
-                };
-                wf.CopyTo(d);
-                FileMod.AddFolder(d);
-            }
-            f.StartUpdater();
-            return folder;
-        }
-
-        public bool RemoveRemoteFolder(FsRemoteFolder x)
-        {
-            var folders = RemoteFolders;
-            var name = EnvInfo.ResolveText(x.Name);
-            if (!folders.TryRemove(name.FastToLower(), out var f))
-                return false;
-            f.Dispose();
-            var wf = x.WebFolder;
-            if ((wf != null) && (wf.WebFolder != null))
-            {
-                var d = new FileHttpServerModuleFolder
-                {
-                    DiscFolder = f.DestPath,
-                };
-                wf.CopyTo(d);
-                FileMod.RemoveFolder(d);
-            }
-            return true;
-        }
 
 
         readonly FileHttpServerModule FileMod;
+        readonly StaticDataHttpServerModule StaticMod;
         readonly ServiceManager Manager;
 
         PeriodicTask PruneTask;
@@ -304,6 +307,7 @@ namespace SysWeaver.MicroService
 
         async ValueTask<bool> Prune()
         {
+            using var _ = PerfMon.Track(nameof(Prune));
             List<String> toDelete = new List<string>();
             var syncJobs = SyncJobs;
             foreach (var x in syncJobs)
@@ -365,7 +369,7 @@ namespace SysWeaver.MicroService
             {
                 if (!SystemLock.TryGet("ActLock" + f, out var lck))
                     break;
-                using var _ = lck;
+                using var __ = lck;
                 await TryCompressFolderLog(f).ConfigureAwait(false);
             }
             foreach (var f in GetManagedFolders())
@@ -377,6 +381,7 @@ namespace SysWeaver.MicroService
                 if (f.Folder.Compress)
                     scheduled.Enqueue(f.FullPath);
             }
+            await PruneRemoteFolders().ConfigureAwait(false);
             return true;
         }
 
@@ -433,6 +438,8 @@ namespace SysWeaver.MicroService
 
         public void Dispose()
         {
+            Manager.OnServiceRemoved -= OnServiceRemoved;
+            Manager.OnServiceAdded -= OnServiceAdded;
             Interlocked.Exchange(ref ScanTask, null)?.Dispose();
             Interlocked.Exchange(ref PruneTask, null)?.Dispose();
             var fm = FileMod;
@@ -441,6 +448,8 @@ namespace SysWeaver.MicroService
                 foreach (var x in ManagedFolders.Values)
                     fm.RemoveFolder(x.ModFolder);
             }
+            foreach (var x in RemoteFolders.Values.Select(x => x.Folder).ToList())
+                RemoveRemoteFolder(x);
         }
 
         readonly ConcurrentDictionary<String, ManagedFolder> ManagedFolders = new (StringComparer.Ordinal);
