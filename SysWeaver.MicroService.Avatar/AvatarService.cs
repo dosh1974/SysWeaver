@@ -122,6 +122,43 @@ namespace SysWeaver.MicroService
 
         static readonly ValueTask<IHttpRequestHandler> NullHandler = ValueTask.FromResult<IHttpRequestHandler>(null);
 
+        const int Margin = 14;
+
+        static SvgCornerShape S(double radX, double radY, double exp)
+        {
+            const double s = (256 - Margin * 2) / 100.0;
+            return new SvgCornerShape(s * radX, s * radY, 0.01 * exp);
+        }
+
+        static SvgCornerShape S(double rad, double exp)
+        {
+            const double s = (256 - Margin * 2) / 100.0;
+            return new SvgCornerShape(s * rad, 0.01 * exp);
+        }
+
+        // Top left, Top right, Bottom right, Bottom left
+        static readonly SvgCornerShape[] FancyShapes =
+            [
+                S(50, 10, -50), S(50, 10, -50), S(50, 90, 80), S(50, 90, 80),   // Shield
+                S(25, 25, -70), S(25, 25, -70), S(25, 25, -70), S(25, 25, -70), // Plaque
+
+                S(15, 15, -100), S(15, 15, -100), S(15, 15, -100), S(15, 15, -100), // Plaque mini
+
+                S(20, 0), S(5, 0), S(20, 0), S(5, 0),                           // Future hard
+                S(20, 10, 0), S(5, 2.5, 0), S(20, 10, 0), S(5, 2.5, 0),         // Future hard 2
+
+                S(5, 0), S(20, 0), S(5, 0), S(20, 0),                           // Future hard rotated
+                S(5, 2.5, 0), S(20, 10, 0), S(5, 2.5, 0), S(20, 10, 0),         // Future hard 2 rotated
+
+
+                S(20, 20, -70), S(20, 20, -70), S(50, 70, 80), S(50, 70, 80),   // Shield 2
+                S(20, 100), S(2, 100), S(20, 100), S(2, 100),                   // Asym
+                S(2, 100), S(20, 100), S(2, 100), S(20, 100),                   // Asym rotated
+
+                S(25, -250), S(25, -250), S(25, -250), S(25, -250),             // Cross?
+
+            ];
+
         ValueTask<IHttpRequestHandler> Generate(int seed)
         {
             using var __ = PerfMon.Track(nameof(Generate));
@@ -143,21 +180,35 @@ namespace SysWeaver.MicroService
             bp.Face.FillColor = HashColors.GetWeb(h, s, 0.7);
             bp.Face.StrokeColor = HashColors.GetWeb(h, s, 0.95);
             bp.Face.StrokeWidth = 2;
-            bp.OffsetX = 8;
-            bp.OffsetY = 8;
-            bp.Size = 256 - 8 * 2;
+            bp.OffsetX = Margin;
+            bp.OffsetY = Margin;
+            bp.Size = 256 - Margin * 2;
             bp.Extrude = null;
             bp.Shadow = null;
-            if (rng.Next(4) != 0)
+            var sh = FancyShapes;
+            var shid = rng.Next(4 + (sh.Length >> 2));
+            switch (shid)
             {
-                bp.AngleOffset = rng.Next(18) * 20;
-                svg.AddNGon(5 + rng.Next(4), bp);
-            }
-            else
-            {
-                var rad = rng.Next(60) + 4;
-                var path = SvgPath.GetRoundedRect(bp.Size, bp.Size, rad, 3, bp.OffsetX, bp.OffsetY);
-                svg.AddPath(path, bp);
+                case 0:
+                    {
+                        var rad = rng.Next(60) + 4;
+                        var path = SvgPath.GetRoundedRect(bp.Size, bp.Size, rad, 3, bp.OffsetX, bp.OffsetY);
+                        svg.AddPath(path, bp);
+                    }
+                    break;
+                case 1:
+                case 2:
+                case 3:
+                    bp.AngleOffset = rng.Next(18) * 20;
+                    svg.AddNGon(5 + rng.Next(4), bp);
+                    break;
+                default:
+                    {
+                        var so = (shid - 4) * 4;
+                        var path = SvgPath.GetFancyRect(bp.Size, bp.Size, sh[so], sh[so + 1], sh[so + 2], sh[so + 3], 3, bp.OffsetX, bp.OffsetY);
+                        svg.AddPath(path, bp);
+                    }
+                    break;
             }
 
             var svgText = svg.ToSvg();
