@@ -156,7 +156,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 	float bg = fragCoord.y * (1.0 / BarWidth);
 	float ry = -uv.y;
 	float dBar = fract(bg);
-	float barIndex = bg - dBar;
+	float barIndex = floor(0.5 + bg - dBar);
 	vec4 color = mix(BgColorBottom, BgColorTop, uv.x);
 	color.rgb *= color.w;
 	

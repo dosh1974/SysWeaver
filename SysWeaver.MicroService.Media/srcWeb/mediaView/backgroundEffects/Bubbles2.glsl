@@ -82,7 +82,7 @@ vec4 BubbleLayer(vec3 lightDir, float time, vec2 uv, float layerOpacity, float l
 {
 	float dx = fract(uv.x);
 	float dy = mod(uv.y, Repeat);
-	float pos = uv.x - dx;
+	float pos = floor(0.5 + uv.x - dx);
 	float speed = PpRand(vec2(pos, layerIndex)) * (0.4 * BubbleSpeed) + (0.6 * BubbleSpeed);
 	float posNow = time * speed + pos * 113.121 - layerIndex * 1.31;
 	
