@@ -48,6 +48,23 @@ namespace SysWeaver
             return [..a, val];
         }
 
+
+        /// <summary>
+        /// Insert an item to the start of an array, reallocation will happen = slow
+        /// If the array is null a new array with the val is returned
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="a"></param>
+        /// <param name="val"></param>
+        /// <returns></returns>
+        public static T[] PushFront<T>(this T[] a, T val)
+        {
+            if (a == null)
+                return [val];
+            return [val, .. a];
+        }
+
+
         /// <summary>
         /// Concat two arrays.
         /// If both arrays are null, null is returned.

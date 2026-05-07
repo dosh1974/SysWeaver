@@ -289,11 +289,17 @@ namespace SysWeaver.MicroService
                 ExCount = ex.Count,
                 ExLastTime = c == 0 ? DateTime.MinValue : new DateTime(c, DateTimeKind.Utc),
                 LastException = ex.LastException?.ToString(),
+                DeleteAfterHours = Math.Max(f.DeleteAfterHours, 1),
+                SwapMethod = folder.SwapMethod.ToString().RemoveCamelCase(),
+                VersionCheck = f.VersionCheck,
+                AutoReload = Math.Max(0, f.AutoReload),
             };
-            var w = f.WebFolder;
-            if (w != null)
+            var wn = folder.WebFolder;
+            if (wn != null)
             {
-                data.WebFolder = w.WebFolder;
+                var w = f.WebFolder;
+                data.IsServed = true;
+                data.WebFolder = wn;
                 data.ClientCacheDuration = w.ClientCacheDuration;
                 data.RequestCacheDuration = w.RequestCacheDuration;
                 data.MaxCacheSize = w.MaxCacheSize;

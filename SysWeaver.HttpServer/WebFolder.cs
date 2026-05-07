@@ -9,7 +9,7 @@ namespace SysWeaver.Net
 
         public readonly String Url;
 
-        public readonly ConcurrentBag<DiscFolder> DiscFolders = new();
+        public volatile DiscFolder[] DiscFolders = [];
 
         public WebFolder(string webFolder)
         {

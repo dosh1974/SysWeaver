@@ -75,15 +75,17 @@ namespace SysWeaver.MicroService
     /// When swapping a folder to a new version there is a risk that the data is currently being loaded, hence end up with files from mixed versions.
     /// This is especially true when caching is involved.
     /// The only way to be sure that this can't happen is to make sure that url's of the new files haven't been used before (aka located in a unique folder).
-    /// There are two methods to mitigate this.
+    /// There are two methods to automatically mitigate this.
     /// </summary>
     public enum WebFolderSwapMethods
     {
         /// <summary>
         /// The index.html (and/or optional .html files) of the folder is "replaced" by a small shim page that iframe's the real page (at it's unqiue location).
+        /// Use this for data that are web pages.
         /// Pros:
         /// - The web brower url stays the same, automatic reloading when a new version happens may optionally be handled here.
         /// - Refreshing the page, loads the latest version.
+        /// - Bookmarking will be for the latest version.
         /// Cons:
         /// - Some behaviors such as meta tags etc can't be overridden,
         /// - Only works if the data is html pages, pure assets etc will not work.
@@ -91,13 +93,15 @@ namespace SysWeaver.MicroService
         IFramePage = 0,
         /// <summary>
         /// Uses a 307 redirect for all requests to the versioned page.
+        /// Use this for data that is unrelated, i.e it's ok to get one asset from version A and another from version B.
         /// Pros:
         /// - Will redirect any request.
         /// Cons:
         /// - Will change the address bar url.
         /// - Page refresh will reload the same version (not a potentionally newer version).
+        /// - Bookmarking will be version specific.
         /// - Every request will have to roundtrip an extra time.
-        /// - Two or more requests may end up with files from different versions (is a switch was made in between).
+        /// - Two or more requests may end up with files from different versions (if a switch was made in between).
         /// </summary>
         HttpRedirect,
         /// <summary>

@@ -100,18 +100,15 @@ namespace SysWeaver.Net
                     rs = new WebFolder(webFolder);
                     r[webFolder] = rs;
                 }
-                rs.DiscFolders.Add(new DiscFolder(df, folder));
-                OrderedFolders = r.OrderByDescending(x => x.Key.Length).ToArray();
-
-
-
-
-                Dictionary<String, String> discToWeb = new Dictionary<string, string>(StringComparer.Ordinal);
-                HashSet<String> seen = new HashSet<string>(StringComparer.Ordinal);
-                var tree = StringTree.Build(r.SelectMany(x => x.Value.DiscFolders.Select(a => a.Path + Path.DirectorySeparatorChar).Where(b => seen.Add(b))));
+                var t = rs.DiscFolders.PushFront(new DiscFolder(df, folder));
+                Dictionary<String, String> discToWeb = new (StringComparer.Ordinal);
+                HashSet<String> seen = new (StringComparer.Ordinal);
+                var tree = StringTree.Build(r.SelectMany(x => t.Select(a => a.Path + Path.DirectorySeparatorChar).Where(b => seen.Add(b))));
                 foreach (var x in r.Values)
-                    foreach (var y in x.DiscFolders)
+                    foreach (var y in t)
                         discToWeb[y.Path + Path.DirectorySeparatorChar] = x.Url;
+                rs.DiscFolders = t;
+                OrderedFolders = r.OrderByDescending(x => x.Key.Length).ToArray();
                 DiscToWeb = discToWeb;
                 DiscToWebPrefix = tree;
             }
@@ -123,7 +120,35 @@ namespace SysWeaver.Net
 
         public bool RemoveFolder(FileHttpServerModuleFolder folder)
         {
-            // TODO: Delete
+            var df = folder.DiscFolder ?? "web";
+            var di = new DirectoryInfo(df);
+            df = di.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var webFolder = (folder.WebFolder ?? "").Trim('/');
+            if (webFolder.Length > 0)
+                webFolder += '/';
+            var r = WebFolders;
+            lock (r)
+            {
+                if (!r.TryGetValue(webFolder, out var rs))
+                    return false;
+                var t = rs.DiscFolders;
+                var i = t.IndexOf(x => x.Path.FastEquals(df));
+                if (i < 0)
+                    return false;
+                t = t.RemoveAt(i);
+                if (t.Length <= 0)
+                    r.TryRemove(webFolder, out rs);
+                Dictionary<String, String> discToWeb = new (StringComparer.Ordinal);
+                HashSet<String> seen = new (StringComparer.Ordinal);
+                var tree = StringTree.Build(r.SelectMany(x => t.Select(a => a.Path + Path.DirectorySeparatorChar).Where(b => seen.Add(b))));
+                foreach (var x in r.Values)
+                    foreach (var y in t)
+                        discToWeb[y.Path + Path.DirectorySeparatorChar] = x.Url;
+                rs.DiscFolders = t;
+                OrderedFolders = r.OrderByDescending(x => x.Key.Length).ToArray();
+                DiscToWeb = discToWeb;
+                DiscToWebPrefix = tree;
+            }
             return true;
         }
 
