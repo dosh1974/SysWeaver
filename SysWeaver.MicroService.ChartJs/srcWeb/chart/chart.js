@@ -408,7 +408,101 @@ class CanvasChart {
         }
 
 
+        function FilterData(data) {
+            const minValue = chartOptions.MinValue;
+            const maxValue = chartOptions.MaxValue;
+            const hasMin = minValue || (minValue === 0.0);
+            const hasMax = maxValue || (maxValue === 0.0);
+            if (hasMin || hasMax) {
+                const dd = data.data;
+                const remove = new Map();
+                const datasets = dd.datasets;
+                const dsl = datasets.length;
+                let valCount = 0;
+                for (let dsi = 0; dsi < dsl; ++dsi) {
+                    const dsv = datasets[dsi].data;
+                    if (dsv) {
+                        const dsvl = dsv.length;
+                        if (dsvl > valCount)
+                            valCount = dsvl;
+                        for (let vi = 0; vi < dsvl; ++vi) {
+                            const val = dsv[vi];
+                            if (hasMax && (val > maxValue))
+                                remove.set(vi, true);
+                            if (hasMin && (val < minValue))
+                                remove.set(vi, true);
+                        }
+                    }
+                }
+                const removeO = [];
+                remove.forEach((_, ri) => removeO.push(ri));
+                const rl = removeO.length;
+                if (rl > 0) {
+                    if (rl > 1)
+                        removeO.sort((a, b) => b - a);
+                    const labels = dd.labels;
+                    if (labels && (labels.length >= valCount))
+                        for (let rc = 0; rc < rl; ++ rc)
+                            labels.splice(removeO[rc], 1);
+                    for (let dsi = 0; dsi < dsl; ++dsi) {
+                        const ds = datasets[dsi];
+                        let dsv = ds.data;
+                        if (dsv && (dsv.length >= valCount))
+                            for (let rc = 0; rc < rl; ++rc)
+                                dsv.splice(removeO[rc], 1);
+                        dsv = ds.backgroundColor
+                        if (dsv && (dsv.length >= valCount))
+                            for (let rc = 0; rc < rl; ++rc)
+                                dsv.splice(removeO[rc], 1);
+                        dsv = ds.borderColor
+                        if (dsv && (dsv.length >= valCount))
+                            for (let rc = 0; rc < rl; ++rc)
+                                dsv.splice(removeO[rc], 1);
+                    }
+                }
+            }
+        }
+
+        function Limit(data) {
+            const maxCount = chartOptions.MaxCount;
+            if (maxCount) {
+                const dd = data.data;
+                const datasets = dd.datasets;
+                const dsl = datasets.length;
+                let valCount = 0;
+                for (let dsi = 0; dsi < dsl; ++dsi) {
+                    const dsv = datasets[dsi].data;
+                    if (dsv) {
+                        const dsvl = dsv.length;
+                        if (dsvl > valCount)
+                            valCount = dsvl;
+                    }
+                }
+                if (valCount > maxCount) {
+                    const del = valCount - maxCount;
+                    const labels = dd.labels;
+                    if (labels && (labels.length >= valCount))
+                        labels.splice(maxCount, del);
+                    for (let dsi = 0; dsi < dsl; ++dsi) {
+                        const ds = datasets[dsi];
+                        let dsv = ds.data;
+                        if (dsv && (dsv.length >= valCount))
+                            dsv.splice(maxCount, del);
+                        dsv = ds.backgroundColor
+                        if (dsv && (dsv.length >= valCount))
+                            dsv.splice(maxCount, del);
+                        dsv = ds.borderColor
+                        if (dsv && (dsv.length >= valCount))
+                            dsv.splice(maxCount, del);
+                    }
+                }
+            }
+        }
+
+
         function ApplyChanges(data) {
+            FilterData(data);
+
             const style = getComputedStyle(document.body);
 
             data.options.responsive = true;
@@ -827,6 +921,7 @@ class CanvasChart {
                         ax.ticks.color = bc;
                     }
                 }
+                Limit(data);
             }
 
 
@@ -2203,6 +2298,19 @@ async function chartMain() {
         const vl = ps.get("valuelabel");
         if (vl)
             o.ValueLabel = parseInt(vl);
+
+        const miv = ps.get("minvalue");
+        if (miv)
+            o.MinValue = parseFloat(miv);
+
+        const mav = ps.get("maxvalue");
+        if (mav)
+            o.MaxValue = parseFloat(mav);
+
+        const mac = ps.get("maxcount");
+        if (mac)
+            o.MaxCount = parseInt(mac);
+
         o.OnFixedData = config => {
             let val = ps.get("bordersize");
             if (val != null)
