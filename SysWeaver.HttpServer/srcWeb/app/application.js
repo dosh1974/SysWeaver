@@ -331,12 +331,29 @@ class MainMenu {
             toElement.firstElementChild.style.backgroundPositionX = lines;
         }
 
+        let flags = data.Flags ?? 0;
         const exp = hrow.insertCell();
         const name = hrow.insertCell();
-        name.innerText = data.Name;
-        const icon = hrow.insertCell();
-        const flags = data.Flags ?? 0;
-
+        let type = data.Type;
+        let typeData = data.Data;
+        let iconClass = data.IconClass;
+        let icon;
+        if (data.Id === "-") {
+            name.colSpan = 2;
+            flags = 0;
+            hrow.classList.add("MenuSeparator");
+            if (data.Name) {
+                const s = document.createElement("span");
+                s.innerText = data.Name;
+                name.appendChild(s);
+            }
+            type = 0;
+            typeData = null;
+            iconClass = null;
+        } else {
+            name.innerText = data.Name;
+            icon = hrow.insertCell();
+        }
         const c = data.Children;
         const cl = c ? c.length : 0;
         const canExpand = cl > 0;
@@ -350,7 +367,6 @@ class MainMenu {
 
         let onclick = null;
         let url = null;
-        const typeData = data.Data;
         if (typeof typeData === "function") {
             onclick = async ev => {
                 if (badClick(ev))
@@ -368,7 +384,7 @@ class MainMenu {
             }
 
         } else {
-            switch (data.Type) {
+            switch (type) {
                 case 1:
                     url = "explore/table.html?q=../" + typeData;
                     onclick = ev => {
@@ -473,7 +489,6 @@ class MainMenu {
 
         const expIconClass = style.IconExpander;
         //  Force icon for expandable
-        let iconClass = data.IconClass;
         const useExpIcon = (!iconClass) && (!onclick) && (canExpand);
         if (useExpIcon)
             iconClass = style.IconExpanderMain;

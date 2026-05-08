@@ -1413,6 +1413,13 @@ class CanvasChart {
                         },
                     }));
 
+                    menuDest.push(WebMenuItem.From(
+                        {
+                            Id: "-",
+                            Name: "Data",
+                            Title: "Coloring of the data",
+                        }));
+
 
                     menuDest.push(WebMenuItem.From({
                         Name: "Original",

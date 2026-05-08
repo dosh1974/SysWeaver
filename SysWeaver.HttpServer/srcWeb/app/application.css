@@ -432,9 +432,10 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
             background-image: linear-gradient(to bottom,var(--ThemeMain25) 2px 2px);
             background-size: 2px 100%;
             background-repeat: no-repeat;
-            background-position-y: bottom calc(1em + 13px);
+            background-position-y: bottom calc(1em + 15px);
             margin-bottom: -0.5em;
             margin-top: -0.5em;
+            padding-bottom: 2px;
         }
 
             .DefaultMenu tr.MenuNested > td > table > tbody {
@@ -518,12 +519,36 @@ SysWeaver-PopupMenuBack.DefaultMenu tr.MenuData:hover td {
     overflow: visible;
 }
 
-.DefaultMenu tr.MenuChecked td:nth-child(2)::after {
-    content: '✓';
-    position: relative;
-    left: -16px;
+.DefaultMenu tr.MenuSeparator td:nth-child(3) {
+    opacity: 0.5;
+    color: var(--ThemeBackground);
+    font-weight: bold;
+    font-size: 80%;
+    font-style: italic;
+    border: none !important;
+    text-align: center;
+    height: 1em;
+    background: none !important;
+    background-position: 50% calc(50% + 3px) !important;
+    background-origin: content-box !important;
+    background-repeat: no-repeat !important;
+    background-size: 100% 1px !important;
+    background-image: linear-gradient(to left, var(--ThemeBackground) 0%, var(--ThemeBackground) 100%) !important;
 }
 
+
+.DefaultMenu tr.MenuData.MenuSeparator td:nth-child(3) > span {
+    padding: 0 0.5em;
+    margin: 0;
+    background-color: var(--ThemeAcc2);
+}
+
+
+    .DefaultMenu tr.MenuChecked td:nth-child(2)::after {
+        content: '✓';
+        position: relative;
+        left: 2px;
+    }
 
 
 .DefaultMenu tr.MenuClick {
