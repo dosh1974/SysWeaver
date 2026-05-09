@@ -58,8 +58,8 @@ void Blend(inout vec4 color, vec4 newColor)
 	color = color * (1.0 - newColor.a) + newColor;
 }
 
-const float Repeat = 7.0;//var:{}
-const float BubbleTransparency = 0.8;//var:{}
+const float Repeat = 6.0;//var:{}
+const float BubbleTransparency = 1.0;//var:{}
 
 const vec3 LightColor = vec3(0.95, 0.98, 1.2);// var: { "type": "colhdr" }
 const vec3 BubbleColor = vec3(0.1, 0.4, 0.5);// var: { "type": "colhdr" }
@@ -71,11 +71,19 @@ const float BubbleTurbSpeedY = 1.23;//var:{}
 const float BubbleWobbleSpeed = 9.0;//var:{}
 const float BubbleWobbleAmount = 0.04;//var:{}
 
-const int LayerCount = 16;//var:{}
+const int LayerCount = 21;//var:{}
 
 const float MinSize = 0.015;//var:{}
 const float MaxSize = 0.001;//var:{}
 const float Size = 1.0;//var:{}
+
+const float CamWobbleSpeed = 0.3; //var:{}
+const float CamLinearSpeedZ = 0.2; //var:{}
+
+const float FocusAnimAmplitude = 0.8; //var:{}
+const float FocusStrength = 200.0; //var:{}
+const float NearFocus = 250.0;//var:{}
+
 
 
 vec4 BubbleLayer(vec3 lightDir, float time, vec2 uv, float layerOpacity, float layerIndex, float hardness)
@@ -117,9 +125,9 @@ vec4 BubbleLayer(vec3 lightDir, float time, vec2 uv, float layerOpacity, float l
 	float d = 1.0 - rad;
 	if (d <= 0.0)
 		return vec4(0.0);
-	float opacity = min(d * hardness, 1.0);
+	float focus = min(d * hardness, 1.0);
 	vec3 normal = normalize(vec3(dc.x, dc.y, d * d));
-	opacity *= (pow(rad, 4.0) * BubbleTransparency + (1.0 - BubbleTransparency));
+	float opacity = (pow(rad, 4.0) * BubbleTransparency + (1.0 - BubbleTransparency));
 
 	d = dot(normal, lightDir);
 	float spec = max(d, 0.0);
@@ -128,12 +136,19 @@ vec4 BubbleLayer(vec3 lightDir, float time, vec2 uv, float layerOpacity, float l
 
 	spec = pow(spec, 16.0) * 0.8;
 
-	return mix(vec4(color, 1.0) * opacity * layerOpacity, vec4(LightColor, 1.0) * sqrt(layerOpacity), spec);
+	return mix(vec4(color, 1.0) * opacity * layerOpacity, vec4(LightColor, 1.0) * sqrt(layerOpacity), spec) * focus;
 	
 }
 
-const float CamWobbleSpeed = 0.3; //var:{}
-const float CamLinearSpeedZ = 0.2; //var:{}
+
+float AnimPulse(float time, float invFadeDuration)
+{
+	float focusTime = mod(time, 2.0);
+	float target = sign(focusTime - 1.0);
+	focusTime = min(fract(focusTime) * invFadeDuration, 1.0);
+	focusTime = smoothstep(0.0, 1.0, focusTime);
+	return mix(target, -target, focusTime);
+}
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {    
@@ -153,14 +168,31 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 
 	vec2 center = iResolution.xy * -0.5 + fragCoord + camPos.xy;
 
+	
+	
+	
+	const float layerCount = float(LayerCount);
+	const float invLayerCount = 1.0 / layerCount;
+	const float amp = FocusAnimAmplitude * 0.5;
+
+
+	float focus = 0.97 - (AnimPulse(time * (1.0 / 15.0), 5.0) * amp + amp);
+	
 	for (int i = 0; i < LayerCount; ++ i)
 	{
 		float fi = float(i);
 		float zi = fi + dzPos;
-		float a = zi / float(LayerCount) * min(float(LayerCount) - zi, 1.0);
-		float scale = mix(MinSize / Size, MaxSize / Size, zi / float(LayerCount));
+		float nzi = min(zi * invLayerCount, 1.0);	// 0 when far, 1 when close
+		float nearFade = clamp((layerCount - 0.1) - zi, 0.0, 1.0); // 0 when close to camera, else 1
+		float a = sqrt(nzi) * nearFade;
+		float scale = mix(MinSize / Size, MaxSize / Size, nzi);
 		vec2 pos = center * scale;
-		vec4 col = BubbleLayer(lightDir, time, pos, a, fi - camPos.z, (zi + 1.0) * 0.01 / scale);
+
+		float focusZ = nzi - focus;
+		focusZ *= focusZ;
+		focusZ = (mix(NearFocus, focusZ * FocusStrength, nearFade) + 4.0) * scale;
+		
+		vec4 col = BubbleLayer(lightDir, time, pos, a, fi - camPos.z, 1.0 / focusZ);
 		Blend(bgCol, col);
 	}
 	
