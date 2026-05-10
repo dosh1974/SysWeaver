@@ -69,30 +69,17 @@ namespace SysWeaver.AI
             var model = p.Model ?? DefaultImageModel;
             var client = CreateImageClient(model);
             ImageGenerationOptions options = null;
-            if (GptImageModels.Contains(model))
-            {
-                options = new ImageGenerationOptions
+            if (ModelOptions.TryGetValue(model, out var fn))
+                options = fn(p);
+            else
+                options = new()
                 {
-                    Quality = p.HighQuality ? "high" : "medium",
-                    Size = ImageSizes1[(int)p.Size],
-                };
-            }
-            if (model.FastEquals("dall-e-2"))
-            {
-                options = new ImageGenerationOptions
-                {
-                    Size = GeneratedImageSize.W1024xH1024,
+                    Quality = p.HighQuality ? GeneratedImageQuality.High : GeneratedImageQuality.Standard,
+                    Size = ImageSizes[(int)p.Size],
+                    Style = p.Vivid ? GeneratedImageStyle.Vivid : GeneratedImageStyle.Natural,
                     ResponseFormat = GeneratedImageFormat.Bytes,
                 };
-            }
-            options = options ?? new()
-            {
-                Quality = p.HighQuality ? GeneratedImageQuality.High : GeneratedImageQuality.Standard,
-                Size = ImageSizes[(int)p.Size],
-                Style = p.Vivid ? GeneratedImageStyle.Vivid : GeneratedImageStyle.Natural,
-                ResponseFormat = GeneratedImageFormat.Bytes,
-            };
-            
+           
             GeneratedImage image;
             image = await client.GenerateImageAsync(p.Prompt, options).ConfigureAwait(false);
             /*
@@ -147,10 +134,54 @@ namespace SysWeaver.AI
             return pngMem;
         }
 
-        static readonly IReadOnlySet<String> GptImageModels = ReadOnlyData.Set(
-            "gpt-image-1",
-            "gpt-image-1.5"
-        );
+
+
+
+        static readonly IReadOnlyDictionary<String, Func<OpenAiImagePrompt, ImageGenerationOptions>> ModelOptions = new Dictionary<String, Func<OpenAiImagePrompt, ImageGenerationOptions>>(StringComparer.Ordinal)
+        {
+            { 
+                "gpt-image-1", 
+                    p => new ImageGenerationOptions
+                    {
+                        Quality = p.HighQuality ? "high" : "medium",
+                        Size = ImageSizes1[(int)p.Size],
+                    }
+            },
+            { 
+                "gpt-image-1.5",
+                    p => new ImageGenerationOptions
+                    {
+                        Quality = p.HighQuality ? "high" : "medium",
+                        Size = ImageSizes1[(int)p.Size],
+                    }
+            },
+            {   
+                "gpt-image-2",
+                    p => new ImageGenerationOptions
+                    {
+                        Quality = p.HighQuality ? "high" : "medium",
+                        Size = ImageSizes2[(int)p.Size],
+                    }
+            },
+            {
+                "dall-e-2",
+                    p => new ImageGenerationOptions
+                    {
+                        Size = GeneratedImageSize.W1024xH1024,
+                        ResponseFormat = GeneratedImageFormat.Bytes,
+                    }
+            },
+            {
+                "dall-e-3",
+                    p => new ImageGenerationOptions
+                    {
+                        Quality = p.HighQuality ? GeneratedImageQuality.High : GeneratedImageQuality.Standard,
+                        Size = ImageSizes[(int)p.Size],
+                        Style = p.Vivid ? GeneratedImageStyle.Vivid : GeneratedImageStyle.Natural,
+                        ResponseFormat = GeneratedImageFormat.Bytes,
+                    }
+            },
+        }.Freeze();
 
 #pragma warning disable OPENAI001
 
@@ -172,6 +203,18 @@ namespace SysWeaver.AI
             GeneratedImageSize.W1024xH1536,
             GeneratedImageSize.W1536xH1024,
             ];
+
+
+        static readonly GeneratedImageSize[] ImageSizes2 = [
+            GeneratedImageSize.Auto,
+            new GeneratedImageSize(2048, 2048),
+            new GeneratedImageSize(2480, 3508),
+            new GeneratedImageSize(3508, 2480),
+            new GeneratedImageSize(2160, 3840),
+            new GeneratedImageSize(3840, 2160),
+            ];
+
+
 #pragma warning restore OPENAI001
 
     }

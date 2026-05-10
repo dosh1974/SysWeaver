@@ -35,7 +35,7 @@ namespace SysWeaver.AI
 
         /// <summary>
         /// The image model to use, only set if the user required a specfifc model.
-        /// Valid models are: "dall-e-2", "dall-e-3", "gpt-image-1" and "gpt-image-1.5".
+        /// Valid models are: "dall-e-2", "dall-e-3", "gpt-image-1", "gpt-image-1.5" and "gpt-image-2".
         /// </summary>
         [OpenAiOptional]
         public String Model;
