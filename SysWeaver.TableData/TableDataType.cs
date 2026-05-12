@@ -197,7 +197,7 @@ namespace SysWeaver.Data
             var fmt = TypeTranslator.StringFmt;
             var ns = TypeTranslator.NullString;
             var type = typeof(T);
-            foreach (var c in mi.GetCustomAttributes<AutoTranslateContextAttribute>(true))
+            foreach (var c in mi.GetCustomAttributes<AutoTranslateContextAttribute>(true).OrderBy(x => x.Order))
             {
                 var x = c.ContextText.Trim().TrimEnd('.');
                 if (String.IsNullOrEmpty(x))

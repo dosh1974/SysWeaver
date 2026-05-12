@@ -55,6 +55,22 @@ namespace SysWeaver
             ContextText = contextText;
             MemberNames = memberNames;
         }
+        
+        public AutoTranslateContextAttribute(String contextText, double order, params String[] memberNames)
+        {
+            Order = order;
+            ContextText = contextText;
+            MemberNames = memberNames;
+        }
+
+        public AutoTranslateContextAttribute(double order, String contextText, params String[] memberNames)
+        {
+            Order = order;
+            ContextText = contextText;
+            MemberNames = memberNames;
+        }
+
+        public readonly double Order;
         public readonly String ContextText;
         public readonly String[] MemberNames;
     }

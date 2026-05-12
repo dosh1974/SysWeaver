@@ -131,7 +131,7 @@ namespace SysWeaver.Translation
         }
 
 
-        static ParameterExpression TranslateString(ref bool haveDynamicSourceLanguage, Dictionary<String, Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task<String>>> members, List<Expression> prog, ParameterExpression p, Expression src, IXmlDocInfo context, AutoTranslateAttribute attr, IEnumerable<AutoTranslateContextAttribute> contexts, String memberName, TranslatorTypes trTypes, String fromLanguageMember)
+        static ParameterExpression TranslateString(ref bool haveDynamicSourceLanguage, Dictionary<String, Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task<String>>> members, List<Expression> prog, ParameterExpression p, Expression src, IXmlDocInfo context, AutoTranslateAttribute attr, IEnumerable<AutoTranslateContextAttribute> contextAttributes, String memberName, TranslatorTypes trTypes, String fromLanguageMember)
         {
             var strParams = TypeTranslator.ParamString;
             var value = Expression.Variable(src.Type);
@@ -140,27 +140,43 @@ namespace SysWeaver.Translation
 
 
             //  Get the context expression
-            List<String> staticContexts = new List<string>(10);
+            List<Expression> contexts = new List<Expression>();
+            String prevConstant = null;
+            void AddConstant(String s)
+            {
+                if (String.IsNullOrEmpty(s))
+                    return;
+                if (prevConstant == null)
+                {
+                    contexts.Add(Expression.Constant(s));
+                    prevConstant = s;
+                }
+                else
+                {
+                    prevConstant = TypeTranslator.MergeContexts(prevConstant, s);
+                    contexts[contexts.Count - 1] = Expression.Constant(prevConstant);
+                }
+            }
+
+
             if (context != null)
             {
                 var sum = context.Summary;
                 if (!String.IsNullOrEmpty(sum))
                 {
                     if (!attr.NoContext)
-                        staticContexts.Add(String.Concat("The description is \"", sum, "\"."));
+                        AddConstant(String.Concat("The description is \"", sum, "\"."));
                 }
             }
 
-            var typeContext = TypeTranslator.TypeContexts[(int)trTypes];
-            if (!String.IsNullOrEmpty(typeContext))
-                staticContexts.Add(typeContext);
+            if (typeof(T).Name.Contains("BadgeInfo"))
+                context = context;
 
-            List<Expression> dynContexts = new List<Expression>();
             var tempVal = TypeTranslator.TempVal;
             var fmt = TypeTranslator.StringFmt;
             var ns = TypeTranslator.NullString;
             var type = typeof(T);
-            foreach (var c in contexts)
+            foreach (var c in contextAttributes)
             {
                 var x = c.ContextText.Trim().TrimEnd('.');
                 if (String.IsNullOrEmpty(x))
@@ -168,19 +184,19 @@ namespace SysWeaver.Translation
                 x += '.';
                 if (x.IndexOf('{') < 0)
                 {
-                    staticContexts.Add(x);
+                    AddConstant(x);
                     continue;
                 }
                 var t = c.MemberNames;
                 if (t == null)
                 {
-                    staticContexts.Add(x);
+                    AddConstant(x);
                     continue;
                 }
                 var tl = t.Length;
                 if (tl <= 0)
                 {
-                    staticContexts.Add(x);
+                    AddConstant(x);
                     continue;
                 }
 
@@ -247,19 +263,27 @@ namespace SysWeaver.Translation
                     dynProg.Add(dynE);
                     dynE = Expression.Block(dynP, dynProg);
                 }
-                dynContexts.Add(dynE);
+                contexts.Add(dynE);
+                prevConstant = null;
             }
+
+
+            var typeContext = TypeTranslator.TypeContexts[(int)trTypes];
+            if (!String.IsNullOrEmpty(typeContext))
+                AddConstant(typeContext);
+
             Expression con = ns;
-            if (dynContexts.Count > 0)
+            var count = contexts.Count;
+            switch (count)
             {
-                if (staticContexts.Count > 0)
-                    dynContexts.Add(Expression.Constant(String.Join('\n', staticContexts)));
-                con = Expression.Call(TypeTranslator.MergeContextsMethod, Expression.NewArrayInit(typeof(String), dynContexts));
-            }
-            else
-            {
-                if (staticContexts.Count > 0)
-                    con = Expression.Constant(String.Join('\n', staticContexts));
+                case 0:
+                    break;
+                case 1:
+                    con = contexts[0];
+                    break;
+                default:
+                    con = Expression.Call(TypeTranslator.MergeContextsMethod, Expression.NewArrayInit(typeof(String), contexts));
+                    break;
             }
             //  
             var from = attr.FromLanguage;
@@ -383,7 +407,7 @@ namespace SysWeaver.Translation
                 var attr = mi.GetCustomAttribute<AutoTranslateAttribute>(true);
                 if (attr == null)
                     return;
-                progP.Add(TranslateString(ref haveDynamicSourceLanguage, members, prog, p, src, attr.NoContext ? null : mi.XmlDoc(), attr, mi.GetCustomAttributes<AutoTranslateContextAttribute>(true), mi.Name, mi.GetCustomAttribute<AutoTranslateTypeAttribute>(true)?.Type ?? TranslatorTypes.Text, mi.GetCustomAttribute<AutoTranslateDynLanguageAttribute>(true)?.MemberName));
+                progP.Add(TranslateString(ref haveDynamicSourceLanguage, members, prog, p, src, attr.NoContext ? null : mi.XmlDoc(), attr, mi.GetCustomAttributes<AutoTranslateContextAttribute>(true).OrderBy(x => x.Order), mi.Name, mi.GetCustomAttribute<AutoTranslateTypeAttribute>(true)?.Type ?? TranslatorTypes.Text, mi.GetCustomAttribute<AutoTranslateDynLanguageAttribute>(true)?.MemberName));
                 return;
             }
             var seen = new HashSet<Type>();

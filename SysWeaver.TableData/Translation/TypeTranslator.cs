@@ -163,7 +163,7 @@ namespace SysWeaver.Translation
 
         internal static readonly Expression NullString = Expression.Constant(null, typeof(String));
 
-        static String MergeContexts(String[] contexts)
+        public static String MergeContexts(params String[] contexts)
         {
             var c = contexts.Length;
             int l = 0;
@@ -208,7 +208,7 @@ namespace SysWeaver.Translation
 
         static readonly SpanAction<char, String[]> StringMergerAction = StringMerger;
 
-        internal static readonly MethodInfo MergeContextsMethod = typeof(TypeTranslator).GetMethod(nameof(MergeContexts), BindingFlags.Static | BindingFlags.NonPublic);
+        internal static readonly MethodInfo MergeContextsMethod = typeof(TypeTranslator).GetMethod(nameof(MergeContexts), BindingFlags.Static | BindingFlags.Public);
         internal static readonly MethodInfo ListAddMethod = typeof(List<Task>).GetMethod(nameof(List<Task>.Add), BindingFlags.Instance| BindingFlags.Public, [typeof(Task)]);
         internal static readonly MethodInfo TaskWhenAllMethod = typeof(Task).GetMethod(nameof(Task.WhenAll), BindingFlags.Static| BindingFlags.Public, [typeof(IEnumerable<Task>)]);
         internal static readonly MethodInfo TaskWhenAllArrayMethod = typeof(Task).GetMethod(nameof(Task.WhenAll), BindingFlags.Static | BindingFlags.Public, [typeof(Task[])]);
