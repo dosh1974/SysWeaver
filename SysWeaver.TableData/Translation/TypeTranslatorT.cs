@@ -169,9 +169,6 @@ namespace SysWeaver.Translation
                 }
             }
 
-            if (typeof(T).Name.Contains("BadgeInfo"))
-                context = context;
-
             var tempVal = TypeTranslator.TempVal;
             var fmt = TypeTranslator.StringFmt;
             var ns = TypeTranslator.NullString;
