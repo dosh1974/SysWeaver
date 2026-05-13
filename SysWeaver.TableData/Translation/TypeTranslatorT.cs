@@ -158,7 +158,6 @@ namespace SysWeaver.Translation
                 }
             }
 
-
             if (context != null)
             {
                 var sum = context.Summary;
@@ -179,7 +178,8 @@ namespace SysWeaver.Translation
                 if (String.IsNullOrEmpty(x))
                     continue;
                 x += '.';
-                if (x.IndexOf('{') < 0)
+                var argStart = x.IndexOf('{');
+                if (argStart < 0)
                 {
                     AddConstant(x);
                     continue;
@@ -196,6 +196,23 @@ namespace SysWeaver.Translation
                     AddConstant(x);
                     continue;
                 }
+#if DEBUG
+                while (argStart >= 0)
+                {
+                    ++argStart;
+                    var argEnd = x.IndexOf('}', argStart);
+                    if (argEnd < 0)
+                        throw new Exception(String.Concat("Mismatched '{' found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
+                    if (!int.TryParse(x.Substring(argStart, argEnd - argStart), out var ix))
+                        throw new Exception(String.Concat("Invalid argument index found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
+                    if (ix < 0)
+                        throw new Exception(String.Concat("Negative argument index found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
+                    if (ix >= tl)
+                        throw new Exception(String  .Concat("Invalid argument index ", ix, ", found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
+                    argStart = x.IndexOf('}', argEnd + 1);
+                }
+#endif//DEBUG
+
 
                 Expression[] reads = new Expression[tl];
                 for (int i = 0; i < tl; ++i)

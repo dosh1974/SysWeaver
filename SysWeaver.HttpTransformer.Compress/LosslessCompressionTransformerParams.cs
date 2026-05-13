@@ -2,7 +2,7 @@
 
 namespace SysWeaver.HttpTransformer
 {
-    public sealed class LosslessCompressionTransformerParams
+    public sealed class LosslessCompressionTransformerParams : CachedTransformerParams
     {
         public String[] Methods =
             [

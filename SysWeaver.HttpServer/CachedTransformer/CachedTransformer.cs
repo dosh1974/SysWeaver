@@ -14,7 +14,7 @@ using System.Globalization;
 namespace SysWeaver.HttpTransformer
 {
 
-    public sealed partial class CachedTransformer : IHttpTransformerService, IDisposable, IPerfMonitored, IHaveStats
+    public partial class CachedTransformer : IHttpTransformerService, IDisposable, IPerfMonitored, IHaveStats
     {
 
         public const string TempExt = ".tmp";
@@ -31,7 +31,7 @@ namespace SysWeaver.HttpTransformer
 
 
 
-        public CachedTransformer(CachedTransformerParams p = null)
+        protected CachedTransformer(CachedTransformerParams p = null)
         {
             p = p ?? new CachedTransformerParams();
 
@@ -81,20 +81,21 @@ namespace SysWeaver.HttpTransformer
         readonly ExceptionTracker BuildErrors = new ();
         
 
-        async ValueTask BuildOne(BuildJob job)
+        async ValueTask BuildOne(CachedTransformerJob job)
         {
             using var ___ = PerfMon.Track("BuildQueued");
             using var _ = await BuildLock.Lock().ConfigureAwait(false);
             using var __ = PerfMon.Track("Build");
             var e = job.Entry;
+            var info = job.File;
             try
             {
                 FileHttpRequestHandler[] files;
-                var baseName = job.BaseName;
-                var mime = job.Mime;
+                var baseName = info.BaseName;
+                var mime = info.Mime;
                 await PathExt.EnsureCanWriteFileAsync(baseName).ConfigureAwait(false);
                 using (var ____ = PerfMon.Track("Build." + mime))
-                    files = await job.Handler.Build(this, baseName, mime, job.Data, job.Ext, job.IsSupported, job.Decoder).ConfigureAwait(false);
+                    files = await info.Handler.Build(this, info, job.Data, e).ConfigureAwait(false);
                 if (files != null)
                     e.Files = files;
                 e.Completed = true;
@@ -104,7 +105,7 @@ namespace SysWeaver.HttpTransformer
                 BuildErrors.OnException(ex);
                 e.Completed = true;
             }
-            ScheduledJobs.TryRemove(job.CacheKey, out var _);
+            ScheduledJobs.TryRemove(info.CacheKey, out var _);
 }
 
         async ValueTask<bool> Build()
@@ -122,8 +123,10 @@ namespace SysWeaver.HttpTransformer
 
 
 
-        public bool Add(String mimeOrExtension, ICachedTransformer transformHandler)
-            => MimeHandlers.TryAdd(mimeOrExtension, transformHandler);
+        protected bool Add(String fileExtension, ICachedTransformer transformHandler)
+        {
+            return MimeHandlers.TryAdd(fileExtension.TrimStart('.').FastToLower(), transformHandler);
+        }
 
         readonly SemiFrozenDictionary<String, ICachedTransformer> MimeHandlers = new SemiFrozenDictionary<string, ICachedTransformer>(StringComparer.Ordinal);
 
@@ -202,10 +205,12 @@ namespace SysWeaver.HttpTransformer
             var mh = MimeHandlers;
             if (!(mh.TryGetValue(mime.SplitFirst(';'), out var mimeHandler) || mh.TryGetValue(ext, out mimeHandler)))
                 throw new Exception("Internal error!");
-            var e = mimeHandler.Validate(this, baseName, mime, mimeHandler.BuildStrategy != CachedTransformerBuildStrategies.AlwaysDirect);
+            var st = mimeHandler.BuildStrategy;
+            var info = new CachedTransformerFile(mimeHandler, key, baseName, state);
+            var e = mimeHandler.Validate(this, info);
             if (e != null)
                 return e;
-            var st = mimeHandler.BuildStrategy;
+
             bool defer = st != CachedTransformerBuildStrategies.AlwaysDirect;
             if (st == CachedTransformerBuildStrategies.CheckAccept)
             {
@@ -224,7 +229,7 @@ namespace SysWeaver.HttpTransformer
             }
             var data = await state.ReadAllData().ConfigureAwait(false);
             e.OrgSize = data.Length;
-            var job = new BuildJob(mimeHandler, key, e, data, baseName, state);
+            var job = new CachedTransformerJob(info, data, e);
             if (defer)
             {
                 BuildJobs.Enqueue(job);
@@ -248,7 +253,7 @@ namespace SysWeaver.HttpTransformer
         }
 
 
-        readonly ConcurrentQueue<BuildJob> BuildJobs = new ConcurrentQueue<BuildJob>();
+        readonly ConcurrentQueue<CachedTransformerJob> BuildJobs = new ConcurrentQueue<CachedTransformerJob>();
 
         readonly FastMemCache<String, CachedTransformerEntry> Cache = new (TimeSpan.FromHours(1), StringComparer.Ordinal);
 

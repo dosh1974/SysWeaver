@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Buffers;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -143,7 +143,7 @@ namespace SysWeaver
             var pos = Pos;
             var end = pos + count;
             var data = Data;
-            if (end > data.Length)
+            if ((data == null) || (end > data.Length))
                 data = Resize(end);
             buffer.AsSpan().Slice(offset, count).CopyTo(data.AsSpan(pos, count));
             pos += count;

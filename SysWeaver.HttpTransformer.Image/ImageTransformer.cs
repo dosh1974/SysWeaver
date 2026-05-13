@@ -13,17 +13,16 @@ using SysWeaver.Net;
 namespace SysWeaver.HttpTransformer
 {
 
-    public sealed class ImageTransformer 
+    public sealed class ImageTransformer : CachedTransformer
     {
 
-        public ImageTransformer(CachedTransformer t, ImageTransformerParams p = null)
+        public ImageTransformer(ImageTransformerParams p = null)
+            : base(p ?? new ImageTransformerParams())
         {
-            if (t == null)
-                throw new ArgumentException(String.Concat("A required instance of type \"", typeof(CachedTransformer).FullName, "\" was not supplied!"), nameof(t));
             p = p ?? new ImageTransformerParams();
             if (p.Optimize)
             {
-                t.Add("image/png",
+                Add("png",
                         new ImageHandler(
                             CachedTransformerBuildStrategies.AlwaysDefer,
                             [
@@ -31,7 +30,7 @@ namespace SysWeaver.HttpTransformer
                                 new ImageFormat(MagickFormat.WebP, ".webp", 95),
                                 new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
                             ]));
-                t.Add("image/bmp", 
+                Add("bmp", 
                         new ImageHandler(
                                 CachedTransformerBuildStrategies.AlwaysDefer, 
                                 [
@@ -40,7 +39,7 @@ namespace SysWeaver.HttpTransformer
                                     new ImageFormat(MagickFormat.Png, ".png"),
                                     new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
                                 ]));
-                t.Add("image/tiff", 
+                Add("tiff", 
                     new ImageHandler(
                         CachedTransformerBuildStrategies.AlwaysDefer, 
                         [
@@ -49,7 +48,7 @@ namespace SysWeaver.HttpTransformer
                             new ImageFormat(MagickFormat.Png, ".png"),
                             new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
                         ]));
-                t.Add("image/jpeg", 
+                Add("jpeg", 
                     new ImageHandler(
                         CachedTransformerBuildStrategies.AlwaysDefer, 
                         [
@@ -57,7 +56,7 @@ namespace SysWeaver.HttpTransformer
                             new ImageFormat(MagickFormat.Avif, ".avif", 50),
                             new ImageFormat(MagickFormat.WebP, ".webp", 60),
                         ]));
-                t.Add("image/pjpeg",
+                Add("pjpeg",
                     new ImageHandler(
                         CachedTransformerBuildStrategies.AlwaysDefer,
                         [
@@ -68,7 +67,7 @@ namespace SysWeaver.HttpTransformer
             }
             if (p.SupportNew)
             {
-                t.Add("image/webp", 
+                Add("webp", 
                     new ImageHandler(
                         CachedTransformerBuildStrategies.CheckAccept, 
                         [
@@ -76,7 +75,7 @@ namespace SysWeaver.HttpTransformer
                             new ImageFormat(MagickFormat.Png, ".png"),
                             new ImageFormat(MagickFormat.Jpeg, ".jpg", 95, null, false, true),
                         ]));
-                t.Add("image/avif", 
+                Add("avif", 
                     new ImageHandler(
                         CachedTransformerBuildStrategies.CheckAccept, 
                         [
@@ -90,7 +89,7 @@ namespace SysWeaver.HttpTransformer
             {
                 foreach (var x in s)
                 {
-                    t.Add(x, new ImageHandler(
+                    Add(x, new ImageHandler(
                         CachedTransformerBuildStrategies.AlwaysDirect, 
                         [
                             new ImageFormat(MagickFormat.Avif, ".avif", 90),

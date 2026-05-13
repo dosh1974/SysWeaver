@@ -23,25 +23,20 @@ namespace SysWeaver.HttpTransformer
         /// Check if all resources are available
         /// </summary>
         /// <param name="service"></param>
-        /// <param name="baseName">Filename base (no extension)</param>
-        /// <param name="inputMime">Mime of input</param>
-        /// <param name="isSupported">True if build strategy isn't AlwaysDirect</param>
+        /// <param name="info">Information about the file</param>
         /// <returns></returns>
-        CachedTransformerEntry Validate(CachedTransformer service, String baseName, string inputMime, bool isSupported);
+        CachedTransformerEntry Validate(CachedTransformer service, CachedTransformerFile info);
 
 
         /// <summary>
         /// Create resources
         /// </summary>
         /// <param name="service"></param>
-        /// <param name="baseName">Filename base (no extension)</param>
-        /// <param name="inputMime">Mime of input</param>
-        /// <param name="inputData">Data of input</param>
-        /// <param name="inputExt">Extension without leading dot of input</param>
-        /// <param name="isSupported">True if build strategy isn't AlwaysDirect</param>
-        /// <param name="decoder">The decoder to use to get the raw data</param>
+        /// <param name="info">Information about the web request</param>
+        /// <param name="data">Data in the request</param>
+        /// <param name="entry">Existing data in the cache</param>
         /// <returns></returns>
-        ValueTask<FileHttpRequestHandler[]> Build(CachedTransformer service, string baseName, string inputMime, ReadOnlyMemory<byte> inputData, String inputExt, bool isSupported, ICompDecoder decoder);
+        ValueTask<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> data, CachedTransformerEntry entry);
 
     }
 

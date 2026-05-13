@@ -1222,7 +1222,7 @@ namespace SysWeaver.Net
                 var etag = t.GetEtag(out bool useAsync, data);
                 var ee = data.Etag;
                 if (ee != null)
-                    etag = etag == null ? ee : String.Concat('_', etag, ee);
+                    etag = etag == null ? ee : String.Concat(etag, '_', ee);
                 var rcd = data.RequestCacheDuration ?? t.RequestCacheDuration;
 
                 //  Get template and prevent caching for dynamic templates 

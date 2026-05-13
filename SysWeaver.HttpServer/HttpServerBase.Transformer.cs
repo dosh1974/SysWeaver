@@ -15,26 +15,26 @@ namespace SysWeaver.Net
 
         readonly SemiFrozenDictionary<String, Transformer> Transformers = new(StringComparer.Ordinal);
 
-        public void AddTransformer(String mime, Func<HttpRequestTransformerState, ValueTask<bool>> transformer)
+        public void AddTransformer(String fileExtension, Func<HttpRequestTransformerState, ValueTask<bool>> transformer)
         {
             var t = Transformers;
             lock (t)
             {
-                bool n = !t.TryGetValue(mime, out var chain);
+                bool n = !t.TryGetValue(fileExtension, out var chain);
                 if (n)
                     chain = new Transformer();
                 chain.Transformers = chain.Transformers.Push(transformer);
                 if (n)
-                    t.TryAdd(mime, chain);
+                    t.TryAdd(fileExtension, chain);
             }
         }
 
-        public bool RemoveTransformer(String mime, Func<HttpRequestTransformerState, ValueTask<bool>> transformer)
+        public bool RemoveTransformer(String fileExtension, Func<HttpRequestTransformerState, ValueTask<bool>> transformer)
         {
             var t = Transformers;
             lock (t)
             {
-                if (!t.TryGetValue(mime, out var chain))
+                if (!t.TryGetValue(fileExtension, out var chain))
                     return false;
                 var ct = chain.Transformers;
                 var i = ct.IndexOf(transformer);
@@ -43,7 +43,7 @@ namespace SysWeaver.Net
                 var newA = chain.Transformers.RemoveAt(i);
                 if (newA.Length == 0)
                 {
-                    t.TryRemove(mime, out chain);
+                    t.TryRemove(fileExtension, out chain);
                     return true;
                 }
                 chain.Transformers = newA;

@@ -121,14 +121,16 @@ namespace SysWeaver.HttpTransformer
         }
 
 
-        public async ValueTask<FileHttpRequestHandler[]> Build(CachedTransformer service, string baseName, string inputMime, ReadOnlyMemory<byte> inputData, String inputExt, bool isSupported, ICompDecoder decoder)
+        public async ValueTask<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> inputData, CachedTransformerEntry entry)
         {
             var formats = Formats;
             var fl = formats.Length;
             List<FileHttpRequestHandler> files = new(fl + 1);
             var orgLen = inputData.Length;
+            var decoder = info.Decoder;
             if (decoder != null)
                 inputData = decoder.GetDecompressed(inputData.Span);
+            var baseName = info.BaseName;
             using (var image = new MagickImage(inputData.Span))
             {
                 for (int i = 0; i < fl; ++i)
@@ -143,7 +145,7 @@ namespace SysWeaver.HttpTransformer
                         files.Add(file);
                 }
             }
-            if (isSupported)
+            if (info.IsSupported)
             {
                 await CachedTransformer.SaveOrg(baseName, orgLen).ConfigureAwait(false);
                 files.Add(null);
@@ -152,13 +154,14 @@ namespace SysWeaver.HttpTransformer
         }
 
 
-        public CachedTransformerEntry Validate(CachedTransformer service, string baseName, String inputMime, bool isSupported)
+        public CachedTransformerEntry Validate(CachedTransformer service, CachedTransformerFile info)
         {
             var formats = Formats;
             var fl = formats.Length;
             List<FileHttpRequestHandler> files = new(fl + 1);
             var compType = service.CompType;
             var compExt = service.CompExt;
+            var baseName = info.BaseName;
             for (int i = 0; i < fl; ++i)
             {
                 var format = formats[i];
@@ -185,7 +188,7 @@ namespace SysWeaver.HttpTransformer
                 files.Add(new FileHttpRequestHandler(format.Mime, fi, CachedTransformer.Options, true, mime.Item2 ? compType : null, true));
             }
             long orgSize = 0;
-            if (isSupported)
+            if (info.IsSupported)
             {
                 orgSize = CachedTransformer.ReadOrg(baseName);
                 if (orgSize < 0)

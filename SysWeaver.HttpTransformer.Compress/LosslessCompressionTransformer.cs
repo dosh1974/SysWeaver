@@ -8,19 +8,18 @@ using SysWeaver.Net;
 
 namespace SysWeaver.HttpTransformer
 {
-    public sealed class LosslessCompressionTransformer : ICachedTransformer
+    public sealed class LosslessCompressionTransformer : CachedTransformer, ICachedTransformer
     {
-        public LosslessCompressionTransformer(CachedTransformer t, LosslessCompressionTransformerParams p = null)
+        public LosslessCompressionTransformer(LosslessCompressionTransformerParams p = null)
+            : base(p ?? new LosslessCompressionTransformerParams())
         {
-            if (t == null)
-                throw new ArgumentException(String.Concat("A required instance of type \"", typeof(CachedTransformer).FullName, "\" was not supplied!"), nameof(t));
             p = p ?? new LosslessCompressionTransformerParams();
             var tr = this;
-            foreach (var x in MimeTypeMap.AllMimeEntries)
+            foreach (var x in MimeTypeMap.AllExtensionEntries)
             {
                 if (!x.Compressed)
                     continue;
-                t.Add(x.Mime, tr);
+                Add(x.Extension, tr);
             }
             var f = p.Methods;
             var fl = f.Length;
@@ -50,13 +49,14 @@ namespace SysWeaver.HttpTransformer
 
         public CachedTransformerBuildStrategies BuildStrategy { get; init; }
 
-        public CachedTransformerEntry Validate(CachedTransformer service, string baseName, String inputMime, bool isSupported)
+        public CachedTransformerEntry Validate(CachedTransformer service, CachedTransformerFile info)
         {
             var methods = Methods;
             var exts = MethodsExtensions;
             var l = exts.Length;
             List<FileHttpRequestHandler> files = new (l + 1);
-            var mime = Tuple.Create(inputMime, false);
+            var mime = Tuple.Create(info.Mime, false);
+            var baseName = info.BaseName;
             for (int i = 0; i < l; ++ i)
             {
                 var ext = exts[i];
@@ -80,16 +80,18 @@ namespace SysWeaver.HttpTransformer
             };
         }
 
-        public async ValueTask<FileHttpRequestHandler[]> Build(CachedTransformer service, string baseName, string inputMime, ReadOnlyMemory<byte> inputData, string inputExt, bool isSupported, ICompDecoder decoder)
+        public async ValueTask<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> inputData, CachedTransformerEntry entry)
         {
             var methods = Methods;
             var exts = MethodsExtensions;
             var l = exts.Length;
             var orgLen = inputData.Length;
+            var decoder = info.Decoder;
             if (decoder != null)
                 inputData = decoder.GetDecompressed(inputData.Span);
             List<FileHttpRequestHandler> files = new(l + 1);
-            var mime = Tuple.Create(inputMime, false);
+            var mime = Tuple.Create(info.Mime, false);
+            var baseName = info.BaseName;
             for (int i = 0; i < l; ++i)
             {
                 var ext = exts[i];

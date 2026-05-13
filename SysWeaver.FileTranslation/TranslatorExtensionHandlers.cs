@@ -1,7 +1,7 @@
 ﻿using System;
 using SysWeaver.MicroService.ExtensionHandlers;
 
-namespace SysWeaver.MicroService
+namespace SysWeaver.Translation
 {
     public sealed class TranslatorExtensionHandlers : IDisposable
     {

@@ -7,12 +7,9 @@
 		<NoWarn>1701;1702;1591</NoWarn>
 	</PropertyGroup>
 
-	<ItemGroup>
-	  <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
-	</ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+    <ProjectReference Include="..\SysWeaver.FileTranslation\SysWeaver.FileTranslation.csproj" />
     <ProjectReference Include="..\SysWeaver.IsoData\SysWeaver.IsoData.csproj" />
     <ProjectReference Include="..\SysWeaver.MicroServices.ServiceManager\SysWeaver.MicroServices.ServiceManager.csproj" />
   </ItemGroup>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -176,21 +176,35 @@ namespace SysWeaver.Data
                 return null;
             var p = ValuesParam;
             var context = attr.NoContext ? null : mi.XmlDoc();
+
             //  Get the context expression
-            List<String> staticContexts = new List<string>(10);
+            List<Expression> contexts = new List<Expression>();
+            String prevConstant = null;
+            void AddConstant(String s)
+            {
+                if (String.IsNullOrEmpty(s))
+                    return;
+                if (prevConstant == null)
+                {
+                    contexts.Add(Expression.Constant(s));
+                    prevConstant = s;
+                }
+                else
+                {
+                    prevConstant = TypeTranslator.MergeContexts(prevConstant, s);
+                    contexts[contexts.Count - 1] = Expression.Constant(prevConstant);
+                }
+            }
+
             if (context != null)
             {
                 var sum = context.Summary;
                 if (!String.IsNullOrEmpty(sum))
                 {
                     if (!attr.NoContext)
-                        staticContexts.Add(String.Concat("The description is \"", sum, "\"."));
+                        AddConstant(String.Concat("The description is \"", sum, "\"."));
                 }
             }
-            var typeContext = TypeTranslator.TypeContexts[(int)(mi.GetCustomAttribute<AutoTranslateTypeAttribute>(true)?.Type ?? TranslatorTypes.Text)];
-            if (!String.IsNullOrEmpty(typeContext))
-                staticContexts.Add(typeContext);
-
 
             List<Expression> dynContexts = new List<Expression>();
             var tempVal = TypeTranslator.TempVal;
@@ -203,23 +217,42 @@ namespace SysWeaver.Data
                 if (String.IsNullOrEmpty(x))
                     continue;
                 x += '.';
-                if (x.IndexOf('{') < 0)
+                var argStart = x.IndexOf('{');
+                if (argStart < 0)
                 {
-                    staticContexts.Add(x);
+                    AddConstant(x);
                     continue;
                 }
                 var t = c.MemberNames;
                 if (t == null)
                 {
-                    staticContexts.Add(x);
+                    AddConstant(x);
                     continue;
                 }
                 var tl = t.Length;
                 if (tl <= 0)
                 {
-                    staticContexts.Add(x);
+                    AddConstant(x);
                     continue;
                 }
+
+#if DEBUG
+                while (argStart >= 0)
+                {
+                    ++argStart;
+                    var argEnd = x.IndexOf('}', argStart);
+                    if (argEnd < 0)
+                        throw new Exception(String.Concat("Mismatched '{' found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
+                    if (!int.TryParse(x.Substring(argStart, argEnd - argStart), out var ix))
+                        throw new Exception(String.Concat("Invalid argument index found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
+                    if (ix < 0)
+                        throw new Exception(String.Concat("Negative argument index found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
+                    if (ix >= tl)
+                        throw new Exception(String.Concat("Invalid argument index ", ix, ", found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
+                    argStart = x.IndexOf('}', argEnd + 1);
+                }
+#endif//DEBUG
+
 
                 List<Expression> reads = new (tl);
                 for (int i = 0; i < tl; ++i)
@@ -245,6 +278,8 @@ namespace SysWeaver.Data
                         reads.Add(Expression.ArrayAccess(p, Expression.Constant(cIndex)));
                 }
                 tl = reads.Count;
+                if (tl <= 0)
+                    continue;
                 List<ParameterExpression> dynP = new List<ParameterExpression>(tl);
                 List<Expression> dynProg = new List<Expression>(tl + 1);
                 for (int i = 0; i < tl; ++i)
@@ -270,18 +305,26 @@ namespace SysWeaver.Data
                 }
                 dynContexts.Add(dynE);
             }
+
+
+            var typeContext = TypeTranslator.TypeContexts[(int)(mi.GetCustomAttribute<AutoTranslateTypeAttribute>(true)?.Type ?? TranslatorTypes.Text)];
+            if (!String.IsNullOrEmpty(typeContext))
+                AddConstant(typeContext);
+
             Expression con = ns;
-            if (dynContexts.Count > 0)
+            var count = contexts.Count;
+            switch (count)
             {
-                if (staticContexts.Count > 0)
-                    dynContexts.Add(Expression.Constant(String.Join('\n', staticContexts)));
-                con = Expression.Call(TypeTranslator.MergeContextsMethod, Expression.NewArrayInit(typeof(String), dynContexts));
+                case 0:
+                    break;
+                case 1:
+                    con = contexts[0];
+                    break;
+                default:
+                    con = Expression.Call(TypeTranslator.MergeContextsMethod, Expression.NewArrayInit(typeof(String), contexts));
+                    break;
             }
-            else
-            {
-                if (staticContexts.Count > 0)
-                    con = Expression.Constant(String.Join('\n', staticContexts));
-            }
+
             Expression value = Expression.ArrayAccess(p, Expression.Constant(colIndex));
             var strParams = TypeTranslator.ParamString;
             var save = Expression.Lambda<Action<String>>(Expression.Assign(value, strParams), strParams);

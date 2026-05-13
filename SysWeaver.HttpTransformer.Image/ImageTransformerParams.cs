@@ -2,7 +2,7 @@
 
 namespace SysWeaver.HttpTransformer
 {
-    public class ImageTransformerParams
+    public class ImageTransformerParams : CachedTransformerParams
     {
 
         /// <summary>

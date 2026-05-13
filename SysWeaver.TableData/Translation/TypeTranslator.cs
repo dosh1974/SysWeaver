@@ -159,7 +159,27 @@ namespace SysWeaver.Translation
         );
 
 
+#if DEBUG
+
+        static String Fmt(String x, Object[] p)
+        {
+            try
+            {
+                return String.Format(x, p);
+            }
+            catch (Exception ex)
+            {
+                return x;
+            }
+        }
+
+        internal static readonly MethodInfo StringFmt = typeof(TypeTranslator).GetMethod(nameof(TypeTranslator.Fmt), BindingFlags.Static | BindingFlags.NonPublic, [typeof(String), typeof(Object[])]);
+
+#else//DEBUG
+
         internal static readonly MethodInfo StringFmt = typeof(String).GetMethod(nameof(String.Format), BindingFlags.Static | BindingFlags.Public, [typeof(String), typeof(Object[])]);
+
+#endif//DEBUG
 
         internal static readonly Expression NullString = Expression.Constant(null, typeof(String));
 

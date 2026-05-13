@@ -96,7 +96,7 @@ namespace SysWeaver
         public readonly IReadOnlyList<LanguageTemplateVar> Vars;
 
 
-        public readonly FastMemCache<String, IReadOnlyDictionary<String, String>> LangVars = new FastMemCache<string, IReadOnlyDictionary<string, string>>(TimeSpan.FromHours(24), StringComparer.Ordinal);
+        public readonly FastMemCache<String, IReadOnlyDictionary<String, String>> LangVars = new (TimeSpan.FromHours(24), StringComparer.Ordinal);
 
         public LanguageTemplate(String text, IEnumerable<LanguageTemplateVar> vars)
         {
