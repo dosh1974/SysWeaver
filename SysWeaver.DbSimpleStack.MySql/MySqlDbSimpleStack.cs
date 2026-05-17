@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
@@ -646,10 +646,10 @@ namespace SysWeaver.Db
                     return false;
                 createSql = r.GetString(1);
             }
-            var pStart = createSql.IndexOf("/*");
+            var pStart = createSql.FastIndexOf("/*");
             if (pStart > 0)
             {
-                if (createSql.IndexOf(" PARTITION ", pStart) > 0)
+                if (createSql.FastIndexOf(" PARTITION ", pStart) > 0)
                     return true;
             }
             StringBuilder sb = new StringBuilder("ALTER TABLE ");
@@ -748,7 +748,7 @@ namespace SysWeaver.Db
             switch (compression)
             {
                 case PageCompressions.None:
-                    if (options.IndexOf("compression=\"") < 0)
+                    if (options.FastIndexOf("compression=\"") < 0)
                         return;
                     await con.ExecuteAsync(String.Concat("ALTER TABLE ", DP.GetQuotedTableName(tableName), " COMPRESSION=\"none\"")).ConfigureAwait(false);
                     return;

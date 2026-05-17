@@ -228,7 +228,7 @@ namespace SysWeaver.MicroService
             if ((rng.Next() & 1) == 0)
             {
                 var a = el.Attribute("transform")?.Value;
-                var scalePos = a.IndexOf("scale(");
+                var scalePos = a.FastIndexOf("scale(");
                 double scale = 1;
                 if (scalePos >= 0)
                 {

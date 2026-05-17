@@ -98,7 +98,7 @@ namespace SysWeaver.Excel
             if (ol > 2)
             {
                 var textFmt = (options[2] ?? "{0}").Replace("{1}", "{0}");
-                var sp = textFmt.IndexOf("{0}");
+                var sp = textFmt.FastIndexOf("{0}");
                 if (sp >= 0)
                 {
                     prefix = EscapeNumberFormat(textFmt.Substring(0, sp));
@@ -196,7 +196,7 @@ namespace SysWeaver.Excel
             if (ol > 2)
             {
                 var textFmt = (options[2] ?? "{0}").Replace("{1}", "{0}");
-                var sp = textFmt.IndexOf("{0}");
+                var sp = textFmt.FastIndexOf("{0}");
                 if (sp >= 0)
                 {
                     prefix = EscapeNumberFormat(textFmt.Substring(0, sp));

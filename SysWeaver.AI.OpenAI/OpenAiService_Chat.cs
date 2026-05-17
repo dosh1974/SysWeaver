@@ -728,7 +728,7 @@ namespace SysWeaver.AI
             int i = 0;
             for (; ; )
             {
-                var j = s.IndexOf("sandbox:", i);
+                var j = s.FastIndexOf("sandbox:", i);
                 if (j < 0)
                     break;
                 var d = j - i;

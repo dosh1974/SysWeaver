@@ -645,7 +645,7 @@ namespace SysWeaver.Chat
                                 using var data = await us.ReadFile(context, localFile, false).ConfigureAwait(false);
                                 if (data != null)
                                 {
-                                    var filename = localFile.Substring(localFile.LastIndexOf("/") + 1);
+                                    var filename = localFile.Substring(localFile.LastIndexOf('/') + 1);
                                     var newName = await saveFile(filename, data.Memory).ConfigureAwait(false);
                                     files.Add(newName);
                                     node.SetAttributeValue(name, localPrefix + newName);
@@ -667,7 +667,7 @@ namespace SysWeaver.Chat
                                 var data = (d as StaticMemoryHttpRequestHandler)?.Data;
                                 if (data != null)
                                 {
-                                    var filename = localFile.Substring(localFile.LastIndexOf("/") + 1);
+                                    var filename = localFile.Substring(localFile.LastIndexOf('/') + 1);
                                     var newName = await saveFile(filename, data ?? throw new Exception("!")).ConfigureAwait(false);
                                     files.Add(newName);
                                     node.SetAttributeValue(name, localPrefix + newName);

@@ -1,4 +1,4 @@
-using SysWeaver.Compression;
+﻿using SysWeaver.Compression;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -397,7 +397,7 @@ namespace SysWeaver.Net
         /// <returns></returns>
         public String MakeAbsolute(String path)
         {
-            if (path.IndexOf("://") >= 0)
+            if (path.FastIndexOf("://") >= 0)
                 return path;
             var l = GetLocalUrl();
             if (l.Length < 0)
@@ -413,7 +413,7 @@ namespace SysWeaver.Net
         /// <returns>An absolute url</returns>
         public String MakeRequestAbsolute(String url)
         {
-            if (url.IndexOf("://") > 0)
+            if (url.FastIndexOf("://") > 0)
                 return url;
             var b = Url.Split('/');
             int i = b.Length - 1;

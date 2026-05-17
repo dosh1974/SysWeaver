@@ -46,7 +46,7 @@ namespace SysWeaver.Security
             {
                 var t = EnvInfo.ResolveText(u.Replace('\\', '/'));
                 FileTemplate = t;
-                var rootPos = t.IndexOf("$(");
+                var rootPos = t.FastIndexOf("$(");
                 if (rootPos > 0)
                     OnlyForPrefixes = [t.Substring(0, rootPos)];
 

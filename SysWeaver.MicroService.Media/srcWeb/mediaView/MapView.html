@@ -48,6 +48,10 @@
                 filter: invert(1) hue-rotate(180deg);
             }
 
+            body.OpenDark iframe {
+                filter: invert(1) hue-rotate(207deg) saturate(150%) brightness(80%);
+            }
+
             body.NoInteraction iframe {
                 pointer-events: none;
             }
@@ -126,24 +130,57 @@
         const p = new URL(href).searchParams;
         const b = document.body;
         try {
+			const openStreetMap = new Map();
+			openStreetMap.set("open", 1);
+			openStreetMap.set("openstreet", 1);
+			openStreetMap.set("openstreetmap", 1);
+			openStreetMap.set("opendark", 2);
+			openStreetMap.set("darkstreet", 2);
+			openStreetMap.set("openstreetdark", 2);
+			openStreetMap.set("openstreetmapdark", 2);
+            let maptype = (p.get("maptype") ?? "roadmap").toLowerCase();
+			let isOpenStreetMap = !!openStreetMap.get(maptype);
+			let key = null;
+			if (!isOpenStreetMap)
+			{
+				key = p.get("key");
+				if (!key) {
+					try {
+						const res = await fetch(new Request("Api/GetGoogleMapsKey", {
+							method: "GET",
+							mode: "cors",
+							cache: "default",
+						}));
+						if (res.status === 200)
+							key = await res.json();
+					}
+					catch {
+					}
+					if (!key)
+					{
+						console.warn('Must supply a google map API key using the "key" parameter, switching to open street map!');
+						if (maptype === "dark")
+							maptype = "opendark";
+						else
+							maptype = "open";
+						isOpenStreetMap = true;
+					}
+				}
+				if (key)
+					key = key.trim();
+			}
+			//	Handle "dark" mode
+			if (isOpenStreetMap)
+			{
+				if (openStreetMap.get(maptype) === 2)
+					b.classList.add("OpenDark");
+			}else {
+				if (maptype === "dark") {
+					b.classList.add("Dark");
+					maptype = "roadmap";
+				}
+			}
 
-            let key = p.get("key");
-            if (!key) {
-                try {
-                    const res = await fetch(new Request("Api/GetGoogleMapsKey", {
-                        method: "GET",
-                        mode: "cors",
-                        cache: "default",
-                    }));
-                    if (res.status === 200)
-                        key = await res.json();
-                }
-                catch {
-                }
-                if (!key)
-                    throw new Error('Must supply a google map API key using the "key" parameter');
-            }
-            key = key.trim();
             let center = p.get("center");
             if (!center)
                 throw new Error('Must supply a coordinate the "center" parameter');
@@ -187,11 +224,6 @@
             const dpi = parseFloat(p.get("dpi") ?? "100");
             const zoom = parseInt(p.get("zoom") ?? "16");
             const lang = p.get("language") ?? p.get("lang") ?? "en";
-            let maptype = p.get("maptype") ?? "roadmap";
-            if (maptype === "dark") {
-                b.classList.add("Dark");
-                maptype = "roadmap";
-            }
         //  Link
             let interactive = p.has("interactive") ? (p.get("interactive") === "true") : false;
             let link = p.get("link");
@@ -270,7 +302,7 @@
                 ";";
 
 
-            //  Screen shot host supprt
+            //  Screen shot host support
             if (window["CefSharp"])
                 await CefSharp.BindObjectAsync();
             function GetHo() {
@@ -289,7 +321,26 @@
 
 
 
-            const url = "https://www.google.com/maps/embed/v1/view?key=" + key + "&center=" + center + "&zoom=" + zoom + "&language=" + lang + "&maptype=" + maptype;
+
+
+            let url;
+			if (isOpenStreetMap)
+			{
+				const scale = zoom < 16 ? (1 << (16 - zoom)) : (1.0 / (1 << (zoom - 16)));
+				const w = 0.012 * scale * window.innerWidth / 1920.0;
+				const h = 0.0035 * scale * window.innerHeight / 1080.0;
+				
+				const cs = center.split(',');
+				const x = parseFloat(cs[1]);
+				const y = parseFloat(cs[0]);
+				url = "https://www.openstreetmap.org/export/embed.html?bbox=" 
+					+ (x - w) + "," + (y - h) + ","
+					+ (x + w) + "," + (y + h);
+			}else {
+				url = "https://www.google.com/maps/embed/v1/view?key=" + key + "&center=" + center + "&zoom=" + zoom + "&language=" + lang + "&maptype=" + maptype;
+			}
+			
+			
 
             const f = document.createElement("iframe");
             f.setAttribute("frameborder", "0");

@@ -54,7 +54,7 @@ namespace SysWeaver.Chart
             var d = data as String;
             if (d == null)
                 throw new Exception("Expected data of the type " + typeof(String).FullName.ToQuoted());
-            var bi = d.IndexOf(";base64,");
+            var bi = d.FastIndexOf(";base64,");
             if (bi < 0)
                 throw new Exception("Expected base64 encoded data!");
             var dd = Convert.FromBase64String(d.Substring(bi + 8));

@@ -644,43 +644,44 @@ class Table {
                     const icon = new ColorIcon("IconReset", "IconColorThemeAcc1", iconSize, iconSize,
                         _TF("Click to reset all filter values and parameters to their default (no filtering).", "A tool tip description on a button that if clicked will reset all paramaters to default")
                         , ev => {
-                        let changed = false;
-                        let fchanged = false;
-                        const rowFirst = getFirstRowIndex(trow);
-                        for (ci = 0; ci < columnCount; ++ci) {
-                            const filter = filters[ci];
-                            if (filter.Invert) {
-                                filter.Invert = false;
-                                fchanged = true;
-                                rows[rowFirst + 2].cells[ci + 1].firstElementChild.Update();
+                            let changed = false;
+                            let fchanged = false;
+                            const rowFirst = getFirstRowIndex(trow);
+                            for (ci = 0; ci < columnCount; ++ci) {
+                                const filter = filters[ci];
+                                if (filter.Invert) {
+                                    filter.Invert = false;
+                                    fchanged = true;
+                                    rows[rowFirst + 2].cells[ci + 1].firstElementChild.Update();
+                                }
+                                if (filter.CaseSensitive) {
+                                    filter.CaseSensitive = false;
+                                    fchanged = true;
+                                    rows[rowFirst + 2].cells[ci + 1].children[1].Update();
+                                }
+                                if (filter.Op != defIndex) {
+                                    filter.Op = defIndex;
+                                    fchanged = true;
+                                    rows[rowFirst].cells[ci + 1].firstElementChild.options[defIndex].selected = "selected";
+                                }
+                                if (filter.Value != "") {
+                                    filter.Value = "";
+                                    changed = true;
+                                    rows[rowFirst + 1].cells[ci + 1].firstElementChild.value = "";
+                                }
                             }
-                            if (filter.CaseSensitive) {
-                                filter.CaseSensitive = false;
-                                fchanged = true;
-                                rows[rowFirst + 2].cells[ci + 1].children[1].Update();
+                            changed &= fchanged;
+                            while (state.FilterRows > 1)
+                                changed |= deleteFilters(rowFirst + 3);
+                            changed |= table.ClearSearch();
+                            if (changed) {
+                                requestParams.Row = 0;
+                                onChangeFn();
                             }
-                            if (filter.Op != defIndex) {
-                                filter.Op = defIndex;
-                                fchanged = true;
-                                rows[rowFirst].cells[ci + 1].firstElementChild.options[defIndex].selected = "selected";
+                            else {
+                                saveFn();
                             }
-                            if (filter.Value != "") {
-                                filter.Value = "";
-                                changed = true;
-                                rows[rowFirst + 1].cells[ci + 1].firstElementChild.value = "";
-                            }
-                        }
-                        changed &= fchanged;
-                        while (state.FilterRows > 1)
-                            changed |= deleteFilters(rowFirst + 3);
-                        if (changed) {
-                            requestParams.Row = 0;
-                            onChangeFn();
-                        }
-                        else {
-                            saveFn();
-                        }
-                    });
+                        });
                     cell.Icon = icon;
                     cell.appendChild(icon.Element);
                 } else {
@@ -1408,6 +1409,45 @@ class Table {
             }
             close();
         }
+
+
+        //  Search
+        var searchEI = document.createElement("input");
+        searchEI.type = "text";
+        searchEI.value = state.RequestParams.SearchText ?? "";
+        searchEI.placeholder = _TF("Search for..", "A placehodler text for an input field that contains textual keyword used for searching a table of data");
+        footer.appendChild(searchEI);
+        function clearSearch() {
+            if (!searchEI.value)
+                return false;
+            searchEI.value = "";
+            clearSearchButton.SetEnabled(false);
+            state.RequestParams.SearchText = "";
+            return true;
+        }
+        table.ClearSearch = clearSearch;
+        const clearSearchButton = new ColorIcon("IconClear", navColor, navSize, navSize,
+            _TF("Clear the search text field", "A tool tip description on a button that if clicked will clear an input field that contains a search text"),
+            ev => {
+                searchEI.value = "";
+                clearSearchButton.SetEnabled(false);
+                if (state.RequestParams.SearchText) {
+                    state.RequestParams.SearchText = "";
+                    state.RequestParams.Row = 0;
+                    onChangeFn();
+                }
+            }).SetEnabled(searchEI.value);
+        searchEI.onchange = () => {
+            const st = searchEI.value.trim();
+            clearSearchButton.SetEnabled(st);
+            if (st !== state.RequestParams.SearchText) {
+                state.RequestParams.SearchText = st;
+                state.RequestParams.Row = 0;
+            }
+            onChangeFn();
+        };
+        footer.appendChild(searchEI);
+        footer.appendChild(clearSearchButton.Element);
 
 
         let first = true;

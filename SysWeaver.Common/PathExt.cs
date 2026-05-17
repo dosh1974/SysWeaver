@@ -838,7 +838,7 @@ namespace SysWeaver
         /// <returns>True if the file is a web file</returns>
         public static bool IsWeb(string filename)
             =>
-            filename.IndexOf("://") >= 0;
+            filename.FastIndexOf("://") >= 0;
 
         /// <summary>
         /// Get the filename part from an url
@@ -1185,7 +1185,7 @@ namespace SysWeaver
         {
             if (String.IsNullOrEmpty(filenameAndPath))
                 return false;
-            if (filenameAndPath.IndexOf("://") >= 0)
+            if (filenameAndPath.FastIndexOf("://") >= 0)
                 return false;
             //  TODO: Make smarter
             try

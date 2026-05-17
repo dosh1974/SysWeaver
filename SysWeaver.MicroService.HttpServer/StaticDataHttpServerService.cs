@@ -1,4 +1,4 @@
-using SysWeaver.Net;
+﻿using SysWeaver.Net;
 using System;
 using System.Collections.Concurrent;
 using System.Reflection;
@@ -33,7 +33,7 @@ namespace SysWeaver.MicroService
 
         static bool Filter(ref String x)
         {
-            var fi = x.IndexOf(".web.", StringComparison.Ordinal);
+            var fi = x.FastIndexOf(".web.");
             if (fi < 0)
                 return false;
             fi += 5;

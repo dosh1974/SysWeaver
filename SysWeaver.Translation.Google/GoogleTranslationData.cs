@@ -7,12 +7,12 @@ namespace SysWeaver.Translation
         public GoogleTranslationData(Tuple<String, DateTime, Object> d)
         {
             var url = d.Item1;
-            var i1 = url.IndexOf("?tl=");
+            var i1 = url.FastIndexOf("?tl=");
             i1 += 4;
-            var i2 = url.IndexOf("&sl=", i1);
+            var i2 = url.FastIndexOf("&sl=", i1);
             To = url.Substring(i1, i2 - i1);
             i2 += 4;
-            var i3 = url.IndexOf("&q=", i2);
+            var i3 = url.FastIndexOf("&q=", i2);
             From = url.Substring(i2, i3 - i2);
             i3 += 3;
             Text = Uri.UnescapeDataString(url.Substring(i3));

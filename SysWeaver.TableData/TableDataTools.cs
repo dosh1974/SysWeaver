@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -10,6 +10,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Docs;
+using SysWeaver.Search;
 using SysWeaver.Translation;
 
 namespace SysWeaver.Data
@@ -19,6 +20,11 @@ namespace SysWeaver.Data
 
     public static class TableDataTools
     {
+        /// <summary>
+        /// The default text searcher to use
+        /// </summary>
+        public static ITextSearch DefaultSearch = new SimpleTextSearch();
+
 
         /// <summary>
         /// Convert from typed table data to generic table data
@@ -805,14 +811,15 @@ namespace SysWeaver.Data
 
         static int GetOrder(MemberInfo mi) => mi.GetCustomAttribute<TableDataOrderAttribute>()?.Order ?? 0;
 
-        static internal IEnumerable<MemberInfo> GetPublicInstanceMembers(Type t)
+        static internal IEnumerable<MemberInfo> GetInstanceMembers(Type t, BindingFlags flags = BindingFlags.Public)
         {
+            flags |= BindingFlags.Instance;
             Func<MemberInfo, int> orderFn = GetOrder;
             if (t.IsInterface)
             {
                 HashSet<String> seen = new HashSet<string>();
                 List<MemberInfo> mi = new List<MemberInfo>();
-                foreach (var x in t.GetMembers(BindingFlags.Public | BindingFlags.Instance))
+                foreach (var x in t.GetMembers(flags))
                 {
                     if (x.MemberType != MemberTypes.Method)
                     {
@@ -823,7 +830,7 @@ namespace SysWeaver.Data
                 }
                 foreach (var i in t.GetInterfaces())
                 {
-                    foreach (var x in i.GetMembers(BindingFlags.Public | BindingFlags.Instance))
+                    foreach (var x in i.GetMembers(flags))
                     {
                         if (x.MemberType != MemberTypes.Method)
                         {
@@ -835,12 +842,14 @@ namespace SysWeaver.Data
                 }
                 foreach (var x in mi.OrderBy(orderFn))
                     yield return x;
-            }else
+            }
+            else
             {
-                foreach (var x in t.GetMembers(BindingFlags.Public | BindingFlags.Instance).Where(i => i.MemberType != MemberTypes.Method).OrderBy(orderFn))
+                foreach (var x in t.GetMembers(flags).Where(i => i.MemberType != MemberTypes.Method).OrderBy(orderFn))
                     yield return x;
             }
         }
+
 
         /// <summary>
         /// Get column information for a type

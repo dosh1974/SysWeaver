@@ -106,10 +106,10 @@
                     }
                     catch {
                     }
-                    if (!key)
-                        throw new Error('Must supply a google map API key using the "key" parameter');
+					if (!key)
+						key = "";
                 }
-                key = key.trim();
+				key = key.trim();
 
                 const center = p.get("center") ?? "51.507318549291746, -0.1276379124532523";
 
@@ -157,6 +157,10 @@
                 Add("Satellite", "satellite");
                 Add("Roadmap", "roadmap");
                 Add("Dark (roadmap)", "dark");
+                Add("Open street map", "open");
+                Add("Open street map (dark)", "opendark");
+
+
 
                 Section("Pin styles");
                 Add("Red flag", "dark", "red-flag");

@@ -753,30 +753,64 @@ html.SwSelfNarrow {
         mask-image: url("../icons/clock.svg");
     }
 
-    datatable-footer {
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        height: 36px;
-        background-image: linear-gradient(to top, var(--ThemeBackground), color-mix(in srgb, var(--ThemeBackground) 95%, var(--ThemeAcc1) 5%));
-        color: var(--ThemeAcc1);
-        box-shadow: 0px -4px 12px rgba(0,0,0,0.3), 0px -1px 3px var(--ThemeAcc150);
-        vertical-align: middle;
-        padding: 1px 0 4px 0;
-        text-align: center;
-        box-sizing: border-box;
-    }
+datatable-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 36px;
+    
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background-image: linear-gradient(to top, var(--ThemeBackground), color-mix(in srgb, var(--ThemeBackground) 95%, var(--ThemeAcc1) 5%));
+    color: var(--ThemeAcc1);
+    box-shadow: 0px -4px 12px rgba(0,0,0,0.3), 0px -1px 3px var(--ThemeAcc150);
+    vertical-align: middle;
+    padding: 1px 0 4px 0;
+    text-align: center;
+    box-sizing: border-box;
+}
 
         datatable-footer icon-26x26 {
             margin-right: 1em;
             margin-left: 1em;
-            margin-top: 5px;
-            cursor: pointer;
-            
         }
 
         datatable-footer *.Disabled {
             cursor: default;
             opacity: 0.5;
+        }
+
+
+
+        datatable-footer input {
+            display: inline-block;
+            margin-right: 0.25em;
+            margin-left: 1em;
+            width: 30ch;
+            min-width: 20ch;
+            max-width: 20ch;
+            font-family: var(--ThemeFont);
+            box-sizing: border-box;
+            border: none;
+            outline: none;
+            background-color: var(--ThemeBackground);
+            color: var(--ThemeMain);
+            border-radius: var(--ThemeRadInp);
+            padding: 2px 3.5px 2px 3.5px;
+            font-size: 100%;
+        }
+
+
+
+            datatable-footer input::placeholder {
+                color: var(--ThemeMain25);
+                font-style: italic;
+                font-size: 90%;
+            }
+
+        datatable-footer icon-26x26:last-child{
+            margin-left: 0.25em;
         }

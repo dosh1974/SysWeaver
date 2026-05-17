@@ -91,6 +91,54 @@ namespace SysWeaver
             return str.AsSpan(sl - vl, vl).SequenceEqual(value.AsSpan());
         }
 
+
+
+        /// <summary>
+        /// using case sensitive, invariant culture 
+        /// </summary>
+        /// <param name="str"></param>
+        /// <param name="value">The text to search for</param>
+        /// <returns>-1 if not found or the position where the string was found</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int FastIndexOf(this String str, String value)
+            => str.AsSpan().IndexOf(value.AsSpan());
+
+        /// <summary>
+        /// using case sensitive, invariant culture 
+        /// </summary>
+        /// <param name="str"></param>
+        /// <param name="value">The text to search for</param>
+        /// <param name="startPos">The start position for the search</param>
+        /// <returns>-1 if not found or the position where the string was found</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int FastIndexOf(this String str, String value, int startPos)
+        {
+            var t = str.AsSpan().Slice(startPos).IndexOf(value.AsSpan());
+            return t < 0 ? t : (t + startPos);
+        }
+
+
+        /// <summary>
+        /// using case sensitive, invariant culture 
+        /// </summary>
+        /// <param name="str"></param>
+        /// <param name="value">The text to search for</param>
+        /// <returns>-1 if not found or the position where the string was found</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int FastLastIndexOf(this String str, String value)
+            => str.AsSpan().LastIndexOf(value.AsSpan());
+
+        /// <summary>
+        /// using case sensitive, invariant culture 
+        /// </summary>
+        /// <param name="str"></param>
+        /// <param name="value">The text to search for</param>
+        /// <param name="startPos">The start position for the search</param>
+        /// <returns>-1 if not found or the position where the string was found</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int FastLastIndexOf(this String str, String value, int startPos)
+            => str.AsSpan().Slice(0, startPos).LastIndexOf(value.AsSpan());
+
         /// <summary>
         /// A fast case sensitive, invariant culture equals with method
         /// </summary>

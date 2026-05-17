@@ -8,13 +8,13 @@ namespace SysWeaver
 
         public static bool IsRoot(String webPath)
         {
-            var t = webPath.IndexOf("://");
+            var t = webPath.FastIndexOf("://");
             return t >= 0;
         }
 
         public static bool SplitServerLocal(out String server, out String local, String webPath)
         {
-            var t = webPath.IndexOf("://");
+            var t = webPath.FastIndexOf("://");
             if (t < 0)
             {
                 server = "";

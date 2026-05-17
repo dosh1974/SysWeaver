@@ -1,4 +1,4 @@
-using SysWeaver.Data;
+﻿using SysWeaver.Data;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -445,7 +445,7 @@ namespace SysWeaver
         {
             if (path == null)
                 return path;
-            if (path.IndexOf("://") >= 0)
+            if (path.FastIndexOf("://") >= 0)
                 return path;
             path = path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
             if (Path.IsPathRooted(path))

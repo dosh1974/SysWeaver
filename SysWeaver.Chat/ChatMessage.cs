@@ -107,7 +107,7 @@ namespace SysWeaver.Chat
             ICompType comp = null;
             if (data.FastStartsWith("data:"))
             {
-                var t = data.IndexOf("base64,");
+                var t = data.FastIndexOf("base64,");
                 if (t > 0)
                     mem = Convert.FromBase64String(data.Substring(t + 7));
             }

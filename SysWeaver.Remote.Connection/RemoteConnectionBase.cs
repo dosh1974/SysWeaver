@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using System.Net.Http;
 using System.Net;
@@ -534,7 +534,7 @@ namespace SysWeaver.Remote
                 return s;
             if (String.IsNullOrEmpty(s))
                 return s;
-            var i = s.IndexOf("://");
+            var i = s.FastIndexOf("://");
             if (i >= 0)
             {
                 i += 3;

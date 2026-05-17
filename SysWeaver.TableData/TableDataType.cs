@@ -6,6 +6,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading.Tasks;
 using SysWeaver.Docs;
+using SysWeaver.Search;
 using SysWeaver.Translation;
 
 namespace SysWeaver.Data
@@ -59,6 +60,7 @@ namespace SysWeaver.Data
             List<Func<IEnumerable<T>, IEnumerable<T>>> thenByDesc = new();
 
             List<Func<IEnumerable<T>, String, IEnumerable<T>>[]> filters = new();
+            List<Func<T, String, bool>[]> singleFilters = new();
 
             Dictionary<String, int> nameToColumnIndex = new(StringComparer.Ordinal);
             var valid = TableDataTools.ValidDataTypes;
@@ -70,6 +72,7 @@ namespace SysWeaver.Data
 
             List<String> primaryKey = new List<string>();
             HashSet<String> primaryKeys = new HashSet<string>(StringComparer.Ordinal);
+
             var pk = t.GetCustomAttribute<TableDataPrimaryKeyAttribute>(true);
             if (pk != null)
             {
@@ -83,10 +86,43 @@ namespace SysWeaver.Data
                         throw new Exception("At most 7 columns can be part of the primary key! Found in type " + t.FullName.ToQuoted());
                 }
             }
-            Dictionary<MemberInfo, int> memberCols = new (MemberInfoComparer.Inst);
-            foreach (var x in TableDataTools.GetPublicInstanceMembers(t))//t.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy))
+
+
+            List<ValueTuple<double, Expression>> getSearchText = new List<(double, Expression)>();
+            var strType = typeof(String);
+            foreach (var x in TableDataTools.GetInstanceMembers(t, BindingFlags.Public | BindingFlags.NonPublic))
             {
-                GetColumn(x, memberCols, cols, colTypes, filters, nameToColumnIndex, extract, op, op, ep, keys, key, primaryKey, primaryKeys, sort, sortDesc, thenBy, thenByDesc);
+                switch (x.MemberType)
+                {
+                    case MemberTypes.Field:
+                        {
+                            var ft = x as FieldInfo;
+                            if (ft.FieldType != strType)
+                                continue;
+                            var w = x.GetCustomAttribute<TableDataSearchAttribute>()?.Weight ?? 1.0;
+                            if (w > 0.0)
+                                getSearchText.Add((w, Expression.Field(op, ft)));
+                            break;
+                        }
+                    case MemberTypes.Property:
+                        {
+                            var ft = x as PropertyInfo;
+                            if (ft.PropertyType != strType)
+                                continue;
+                            var w = x.GetCustomAttribute<TableDataSearchAttribute>()?.Weight ?? 1.0;
+                            if (w > 0.0)
+                                getSearchText.Add((w, Expression.Property(op, ft)));
+                            break;
+                        }
+                }
+            }
+            var count = getSearchText.Count;
+            if (count > 0)
+                GetTexts = Expression.Lambda<Func<T, String[]>>(Expression.NewArrayInit(strType, getSearchText.OrderByDescending(x => x.Item1).Select(x => x.Item2)), op).Compile();
+            Dictionary<MemberInfo, int> memberCols = new (MemberInfoComparer.Inst);
+            foreach (var x in TableDataTools.GetInstanceMembers(t))//t.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy))
+            {
+                GetColumn(x, memberCols, cols, colTypes, filters, singleFilters, nameToColumnIndex, extract, op, op, ep, keys, key, primaryKey, primaryKeys, sort, sortDesc, thenBy, thenByDesc);
             }
             //  Have invalid names in primary key
             if (primaryKeys.Count > 0)
@@ -351,6 +387,7 @@ namespace SysWeaver.Data
             List<TableDataColumn> cols,
             List<Type> colTypes,
             List<Func<IEnumerable<T>, String, IEnumerable<T>>[]> filters,
+            List<Func<T, String, bool>[]> singleFilters,
             Dictionary<String, int> nameToColumnIndex,
             List<Expression> extract,
             Expression currentObj,
@@ -427,9 +464,9 @@ namespace SysWeaver.Data
                         }
                         var newNamePrefix = String.Format(exp.MemberNamePrefix ?? "{0}_", name);
                         var newTitlePrefix = String.Format(exp.TitlePrefix ?? "{1} ", name, title);
-                        foreach (var newX in TableDataTools.GetPublicInstanceMembers(mt))
+                        foreach (var newX in TableDataTools.GetInstanceMembers(mt))
                         {
-                            GetColumn(newX, members, cols, colTypes, filters, nameToColumnIndex, extract, newCurrentObj, op, ep, keys, key, primaryKey, primaryKeys, sort, sortDesc, thenBy, thenByDesc, newNamePrefix, newTitlePrefix);
+                            GetColumn(newX, members, cols, colTypes, filters, singleFilters, nameToColumnIndex, extract, newCurrentObj, op, ep, keys, key, primaryKey, primaryKeys, sort, sortDesc, thenBy, thenByDesc, newNamePrefix, newTitlePrefix);
                         }
                     }
                     return false;
@@ -538,7 +575,9 @@ namespace SysWeaver.Data
             Expression cmpGetValue = TableDataTools.CmpValueExp;
             if (textToObj != null)
                 cmpGetValue = Expression.Call(Expression.Constant(textToObj.Target), textToObj.Method, cmpGetValue);
-            GetFilters(out var fs, cmpGetValue, sortKey, stringValue, TableDataTools.CmpValueExp, op, ep);
+            GetFilters(out var fs, out var ss, cmpGetValue, sortKey, stringValue, TableDataTools.CmpValueExp, op, ep);
+
+            singleFilters.Add(ss.ToArray());
             filters.Add(fs.ToArray());
 
             //  Convert
@@ -556,9 +595,10 @@ namespace SysWeaver.Data
 
         
 
-        static void GetFilters(out List<Func<IEnumerable<T>, String, IEnumerable<T>>> filters, Expression getCompareValueExp, Expression value, Expression valueString, ParameterExpression compareValueObject, ParameterExpression op, ParameterExpression ep)
+        static void GetFilters(out List<Func<IEnumerable<T>, String, IEnumerable<T>>> filters, out List<Func<T, String, bool>> singleFilter, Expression getCompareValueExp, Expression value, Expression valueString, ParameterExpression compareValueObject, ParameterExpression op, ParameterExpression ep)
         {
             filters = new();
+            singleFilter = new();
             ParameterExpression[] ps = null;
             Expression assignVar = null;
             var getComapreStringExp = getCompareValueExp;
@@ -976,7 +1016,9 @@ namespace SysWeaver.Data
             };
         }
 
-        public static TableData Get(TableDataRequest request, IEnumerable<T> data, String title)
+        static readonly Func<T, String[]> GetTexts;
+
+        public static TableData Get(TableDataRequest request, IEnumerable<T> data, String title, ITextSearch search = null)
         {
             long count = 0;
             TableDataRow[] rows = Empty;
@@ -984,6 +1026,15 @@ namespace SysWeaver.Data
             {
                 //  Filter and sort
                 data = SortAndFilter(request, data);
+                //  Text search
+                var st = request.SearchText?.Trim();
+                if (!String.IsNullOrEmpty(st))
+                {
+                    var ranker = (search ?? TableDataTools.DefaultSearch).CreateRanker(st);
+                    var gt = GetTexts;
+                    if (gt != null)
+                        data = data.Select(x => ValueTuple.Create(ranker.Rank(gt(x)), x)).Where(x => x.Item1 > 0.0).OrderByDescending(x => x.Item1).Select(x => x.Item2);
+                }
                 //  Skip
                 var skip = request.Row;
                 while (skip > 0)
@@ -1007,7 +1058,7 @@ namespace SysWeaver.Data
             }.HandleCc(request.Cc, Cols, title);
         }
 
-        public static R GetTyped<R>(TableDataRequest request, IEnumerable<T> data, String title) where R : TypedTableData<T>, new()
+        public static R GetTyped<R>(TableDataRequest request, IEnumerable<T> data, String title, ITextSearch search = null) where R : TypedTableData<T>, new()
         {
             long count = 0;
             T[] rows = EmptyT;
@@ -1015,6 +1066,15 @@ namespace SysWeaver.Data
             {
                 //  Filter and sort
                 data = SortAndFilter(request, data);
+                //  Text search
+                var st = request.SearchText?.Trim();
+                if (!String.IsNullOrEmpty(st))
+                {
+                    var ranker = (search ?? TableDataTools.DefaultSearch).CreateRanker(st);
+                    var gt = GetTexts;
+                    if (gt != null)
+                        data = data.Select(x => ValueTuple.Create(ranker.Rank(gt(x)), x)).Where(x => x.Item1 > 0.0).OrderByDescending(x => x.Item1).Select(x => x.Item2);
+                }
                 //  Skip
                 var skip = request.Row;
                 while (skip > 0)

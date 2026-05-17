@@ -16,7 +16,7 @@ namespace SysWeaver.IpLocation.Sources
             Source = p.BaseUrl;
             Remote = p.Create<IRemote>();
             var s = Source;
-            var i = s.IndexOf("://");
+            var i = s.FastIndexOf("://");
             if (i >= 0)
                 s = s.Substring(i + 3);
             i = s.IndexOf('/');

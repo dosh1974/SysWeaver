@@ -283,7 +283,7 @@ namespace SysWeaver
         /// <returns>True if the file will be downloaded</returns>
         public static bool IsWeb(string filename)
         {
-            var t = filename.IndexOf("://");
+            var t = filename.FastIndexOf("://");
             if (t < 0)
                 return false;
             var x = filename.Substring(0, t);

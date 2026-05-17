@@ -162,7 +162,7 @@ namespace SysWeaver
         {
             var loc = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.Location));
             var hash = p.HashCheck ? Hash : NoHash;
-            var t = loc.IndexOf("://");
+            var t = loc.FastIndexOf("://");
             if (t < 0)
                 return new DiscManagedFile(this, loc, p, OnChange, hash);
             var schema = loc.Substring(0, t);

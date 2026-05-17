@@ -79,10 +79,17 @@ class MediaPlayerEffect {
             await effect.OnDispose();
             url = await bufferToBase64(image, true);
             const ret = [url, compilationTime, avgDrawTimeMs];
-            localStorage.setItem(key, JSON.stringify({
-                R: ret,
-                T: etag,
-            }));
+			try
+			{
+				localStorage.setItem(key, JSON.stringify({
+					R: ret,
+					T: etag,
+				}));
+			}
+			catch (ex)
+			{
+				console.warn(ex.message);
+			}
             return ret;
         }
         catch (ex) {

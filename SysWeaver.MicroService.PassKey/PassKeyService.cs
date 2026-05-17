@@ -185,7 +185,7 @@ namespace SysWeaver.MicroService
 
         static String FixRp(String pr)
         {
-            var p = pr.IndexOf("://");
+            var p = pr.FastIndexOf("://");
             p += 3;
             var li = pr.IndexOfAny(End, p);
             return li < 0 ? pr.Substring(p) : pr.Substring(p, li - p);

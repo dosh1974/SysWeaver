@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using SysWeaver.Data;
 using SysWeaver.Remote;
@@ -93,6 +93,12 @@ namespace SysWeaver.MicroService
         /// </summary>
         public readonly Object Instance;
 
+
+
+
+        String SearchInstance => Instance?.ToString();
+        String SearchParamType => ParamType?.ToString();
+        String SearchType => Type?.ToString();
 
     }
 

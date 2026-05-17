@@ -22,7 +22,7 @@ namespace SysWeaver
 
         static bool WildcardMatchesWindowsStyle(string fileName, string pattern)
         {
-            var dotdot = pattern.IndexOf("..", StringComparison.Ordinal);
+            var dotdot = pattern.FastIndexOf("..");
             if (dotdot >= 0)
             {
                 for (var i = dotdot; i < pattern.Length; i++)

@@ -1,4 +1,4 @@
-using SysWeaver.Auth;
+﻿using SysWeaver.Auth;
 using SysWeaver.Compression;
 using System;
 using System.Collections.Concurrent;
@@ -44,7 +44,7 @@ namespace SysWeaver.Net
 
         static String PathFix(String x)
         {
-            var i = x.LastIndexOf("/min.js");
+            var i = x.FastLastIndexOf("/min.js");
             if (i < 0)
                 return x;
             return String.Concat(x.Substring(0, i), ".min.js", x.Substring(i + 7));

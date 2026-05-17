@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -12,7 +12,7 @@ namespace SysWeaver
 
         static String StripPrefix(String s)
         {
-            int i = s.IndexOf("://", StringComparison.Ordinal);
+            int i = s.FastIndexOf("://");
             if (i < 0)
                 return null;
             i = s.IndexOf('/', i + 3);

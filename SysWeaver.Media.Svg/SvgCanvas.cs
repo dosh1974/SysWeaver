@@ -701,7 +701,7 @@ namespace SysWeaver.Media
             {
                 if (url[0] == '<')
                     return EmbeddSvg(url, x, y, width, height, moveDefsEtc);
-                if ((url.IndexOf("://") < 0) && (!url.FastStartsWith("data:")) && FileExists(url))
+                if ((url.FastIndexOf("://") < 0) && (!url.FastStartsWith("data:")) && FileExists(url))
                 {
                     var mime = MimeTypeMap.GetMimeType(url.Substring(url.LastIndexOf('.') + 1));
                     var data = File.ReadAllBytes(url);

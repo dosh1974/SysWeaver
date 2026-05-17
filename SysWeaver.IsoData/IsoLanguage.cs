@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using SysWeaver.Data;
@@ -392,7 +392,7 @@ namespace SysWeaver.IsoData
                 var cc = c.Comment?.FastToLower();
                 if (cc != null)
                 {
-                    if (cc.IndexOf("ancient") == 0)
+                    if (cc.FastIndexOf("ancient") == 0)
                         continue;
                 }
                 common.Add(c.Iso639_1);

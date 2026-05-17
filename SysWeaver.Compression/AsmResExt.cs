@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Buffers;
 using System.IO;
 using System.Linq;
@@ -35,7 +35,7 @@ namespace SysWeaver
             String prefix = null;
             foreach (var t in allRes)
             {
-                var k = t.IndexOf(".data.");
+                var k = t.FastIndexOf(".data.");
                 if (k >= 0)
                 {
                     prefix = t.Substring(0, k + 6);
