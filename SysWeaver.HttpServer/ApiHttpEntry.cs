@@ -142,12 +142,20 @@ namespace SysWeaver.Net
             String rawMime = null;
             bool rawCompress = false;
             bool rawIsTranslated = false;
+            ICompDecoder decoder = null;
             if (typeof(ReadOnlyMemory<byte>).IsAssignableFrom(retSerType))
             {
                 var raw = method.GetCustomAttribute<WebApiRawAttribute>(true);
                 if (raw != null)
                 {
                     rawMime = raw.Mime;
+                    var dec = raw.PreCompressedWith;
+                    if (!String.IsNullOrEmpty(dec))
+                    {
+                        decoder = CompManager.GetFromHttp(dec);
+                        if (decoder == null)
+                            throw new Exception("Decoder \"" + dec + "\" isn't found, when generating API for \"" + method.Name + "\" in \"" + method.DeclaringType.FullName + "\"");
+                    }
                     if (MimeTypeMap.TryGetMimeType(rawMime, out var mi))
                     {
                         rawMime = mi.Item1;
@@ -594,7 +602,7 @@ namespace SysWeaver.Net
             var e = new ApiHttpEntry(ioParams, perfMonitor, o, method, get ?? getAsync, post ?? postAsync, rawMime, rawIsTranslated, url, 
                 location, auth, pi, ri, serType, retSerType, clientCacheDuration, requestCacheDuration, compression, 
                 onStart, onEnd, onException, auditGroup, fixAuditParams, fixAuditReturn,
-                serviceRateLimiter, sessionRateLimiter
+                serviceRateLimiter, sessionRateLimiter, decoder
                 );
             return e;
         }
@@ -615,7 +623,8 @@ namespace SysWeaver.Net
             String auditGroup,
             Func<long, HttpServerRequest, Object, Object> filterParams, 
             Func<long, HttpServerRequest, Object, Object> filterReturn,
-            HttpRateLimiter serviceRateLimiter, HttpRateLimiterParams sessionRateLimiterParams
+            HttpRateLimiter serviceRateLimiter, HttpRateLimiterParams sessionRateLimiterParams,
+            ICompDecoder decoder
             )
         {
             IoParams = ioParams;
@@ -658,6 +667,7 @@ namespace SysWeaver.Net
                 TransExceptions = new ExceptionTracker();
             var lwt = mi.DeclaringType.Assembly.GetLastWriteTimerUtc();
             LastModified = lwt;
+            Decoder = decoder;
         }
 
         public HttpRateLimiter ServiceRateLimiter { get; init; }
@@ -725,7 +735,7 @@ namespace SysWeaver.Net
 
         public HttpCompressionPriority Compression { get; init; }
 
-        public ICompDecoder Decoder => null;
+        public ICompDecoder Decoder { get; init; }
 
         public IReadOnlyList<string> Auth { get; init; }
 

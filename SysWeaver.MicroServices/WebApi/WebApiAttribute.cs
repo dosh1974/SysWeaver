@@ -49,6 +49,11 @@ namespace SysWeaver.MicroService
         public readonly bool IsTranslated;
 
         /// <summary>
+        /// The compression method used on the returned data
+        /// </summary>
+        public readonly String PreCompressedWith;
+
+        /// <summary>
         /// The method must returns some readonly memory, and in that case the function should be treated as raw data (i.e no serialization will happen).
         /// </summary>
         /// <param name="mime">The mimetype of the raw output data</param>
@@ -60,6 +65,21 @@ namespace SysWeaver.MicroService
             DisableCompression = disableCompression;
             IsTranslated = isTranslated;
         }
+
+        /// <summary>
+        /// The method must returns some readonly memory, and in that case the function should be treated as raw data (i.e no serialization will happen).
+        /// </summary>
+        /// <param name="mime">The mimetype of the raw output data</param>
+        /// <param name="preCompressedWith">The compression method used on the returned data</param>
+        /// <param name="isTranslated">Set to true if the response data is localized (different pending on the specified language)</param>
+        public WebApiRawAttribute(String mime, String preCompressedWith, bool isTranslated = false)
+        {
+            Mime = mime;
+            PreCompressedWith = preCompressedWith;
+            IsTranslated = isTranslated;
+        }
+
+
     }
 
     /// <summary>

@@ -369,8 +369,12 @@ namespace SysWeaver
             {
                 foreach (var x in VarsAndFrequency.Where(x => !x.Value.Item3))
                     yield return x.Key;
-                foreach (var x in TransformedVars)
-                    yield return x.Value.Item1;
+                var t = TransformedVars;
+                if (t != null)
+                {
+                    foreach (var x in t)
+                        yield return x.Value.Item1;
+                }
             }
         }
 

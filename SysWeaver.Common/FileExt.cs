@@ -183,13 +183,34 @@ namespace SysWeaver
             => new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite).ReadAllLines(encoding, false, trim, removeEmpty);
 
 
+        /// <summary>
+        /// Check if a line is blang or starts with a comment
+        /// </summary>
+        /// <param name="t">The line of text (optionally with comments removed)</param>
+        /// <param name="trimComment">If true, support # in the middle of a line to indictae a comment until end of line</param>
+        /// <returns>True if the line is a comment or is empty</returns>
+        public static bool IsCommentOrBlank(ref String t, bool trimComment)
+        {
+            var tt = t.Trim();
+            if (tt.Length <= 0)
+                return true;
+            var ci = tt.IndexOf('#');
+            if (ci < 0)
+                return false;
+            if (ci <= 0)
+                return true;
+            if (trimComment)
+                t = t.Substring(0, t.IndexOf('#')).TrimEnd();
+            return false;
+        }
 
         /// <summary>
         /// Return the first non-empty, non-comment line of text (comments are lines that start with a '#').
         /// </summary>
         /// <param name="filename"></param>
+        /// <param name="trimComment">If true, everything on a line after a '#' will be trimmed</param>
         /// <returns></returns>
-        public static String ReadNonCommentString(String filename)
+        public static String ReadNonCommentString(String filename, bool trimComment = false)
         {
             var l = ReadLines(filename, null, true, true);
             var lc = l.Length;
@@ -198,12 +219,90 @@ namespace SysWeaver
             for (int i = 0; i < lc; ++i)
             {
                 var t = l[i];
-                if (t[0] == '#')
+                if (IsCommentOrBlank(ref t, trimComment))
                     continue;
                 return t;
             }
             return null;
         }
+
+        /// <summary>
+        /// Return the non-empty, non-comment lines of text (comments are lines that start with a '#').
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <param name="trimComment">If true, everything on a line after a '#' will be trimmed</param>
+        /// <returns></returns>
+        public static String[] ReadNonCommentLines(String filename, bool trimComment = false)
+        {
+            var l = ReadLines(filename, null, true, true);
+            var lc = l.Length;
+            if (lc < 1)
+                return Array.Empty<String>();
+            int o = 0;
+            for (int i = 0; i < lc; ++i)
+            {
+                var t = l[i];
+                if (IsCommentOrBlank(ref t, trimComment))
+                    continue;
+                l[o] = t;
+                ++o;
+            }
+            if (o <= 0)
+                return Array.Empty<String>();
+            Array.Resize(ref l, o);
+            return l;
+        }
+
+        /// <summary>
+        /// Return the first non-empty, non-comment line of text (comments are lines that start with a '#').
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <param name="trimComment">If true, everything on a line after a '#' will be trimmed</param>
+        /// <returns></returns>
+        public static async ValueTask<String> ReadNonCommentStringAsync(String filename, bool trimComment = false)
+        {
+            var l = await ReadLinesAsync(filename, null, true, true).ConfigureAwait(false);
+            var lc = l.Length;
+            if (lc < 1)
+                return null;
+            for (int i = 0; i < lc; ++i)
+            {
+                var t = l[i];
+                if (IsCommentOrBlank(ref t, trimComment))
+                    continue;
+                return t;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Return the non-empty, non-comment lines of text (comments are lines that start with a '#').
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <param name="trimComment">If true, everything on a line after a '#' will be trimmed</param>
+        /// <returns></returns>
+        public static async ValueTask<String[]> ReadNonCommentLinesAsync(String filename, bool trimComment = false)
+        {
+            var l = await ReadLinesAsync(filename, null, true, true).ConfigureAwait(false);
+            var lc = l.Length;
+            if (lc < 1)
+                return Array.Empty<String>();
+            int o = 0;
+            for (int i = 0; i < lc; ++i)
+            {
+                var t = l[i];
+                if (IsCommentOrBlank(ref t, trimComment))
+                    continue;
+                l[o] = t;
+                ++o;
+            }
+            if (o <= 0)
+                return Array.Empty<String>();
+            Array.Resize(ref l, o);
+            return l;
+        }
+
+
 
 
 
