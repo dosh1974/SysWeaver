@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+    <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
   </ItemGroup>
 
   <ItemGroup>
