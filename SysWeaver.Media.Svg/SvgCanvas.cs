@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ExCSS;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -75,6 +76,130 @@ namespace SysWeaver.Media
 
     public sealed class SvgCanvas
     {
+        double ToV(String v, double relSize)
+        {
+            v = v?.Trim();
+            if (String.IsNullOrEmpty(v))
+                return 0;
+            var l = v.Length;
+            if (l > 2)
+            {
+                if ((v[l - 2] == 'p') && (v[l - 1] == 'x'))
+                {
+                    v = v.Substring(0, l - 2).TrimEnd();
+                    l = v.Length;
+                }
+            }
+            if (l > 1)
+            {
+                --l;
+                if (v[l] == '%')
+                    return double.Parse(v.Substring(l).TrimEnd(), SvgCanvasTools.Ci) * relSize * 0.01;
+            }
+            return double.Parse(v, SvgCanvasTools.Ci);
+        }
+
+        double ToX(String x) => ToV(x, Width);
+        double ToY(String y) => ToV(y, Height);
+
+
+        public bool RasterizeText(int maxDecimals = 2)
+        {
+            var parser = new StylesheetParser();
+            var tas = TextAttributes;
+            var tacs = TextAnchors;
+            var vas = VerticalAlign;
+            var fn = Filename;
+            String[] extraFolders = String.IsNullOrEmpty(fn) ? null : [System.IO.Path.GetDirectoryName(fn)];
+            foreach (var t in Svg.Descendants(SvgCanvasTools.Namespace + "text").ToList())
+            {
+                var value = t.Value;
+                var ta = t.Attribute("text-anchor")?.Value ?? "start";
+                var x = ToX(t.Attribute("x")?.Value);
+                var y = ToY(t.Attribute("y")?.Value);
+                var maxWidth = ToX(t.Attribute("max-width")?.Value);
+                var maxHeight = ToY(t.Attribute("max-height")?.Value);
+                var verticalAlign = t.Attribute("vertical-align")?.Value ?? "baseline";
+                var maxScaleUp = ToV(t.Attribute("max-scale-up")?.Value ?? "1", 1.0);
+                if (maxScaleUp <= 0)
+                    maxScaleUp = 1.0;
+                var r = parser.Parse(String.Concat("inline {", t.Attribute("style")?.Value ?? "", '}'));
+                var style = (r.StyleRules.FirstOrDefault()).Style;
+                var font = style.FontFamily;
+                var fontWeight = style.FontWeight;
+                var fontStyle = style.FontStyle;
+                var fontSize = ToV(style.FontSize, 12.0);
+                var svgFont = SvgFont.GetOrCreate(font, fontStyle, fontWeight, extraFolders) ?? SvgFont.MontserratBlack;
+                var paths = SvgPath.GetSvgTextPaths(value, svgFont, fontSize, 10);
+                var minMax = SvgPath.GetMinMaxForPaths(paths);
+                double scaleX = 1.0;
+                double scaleY = 1.0;
+                if (maxWidth > 0)
+                    scaleX = maxWidth / minMax.Width;
+                if (maxHeight > 0)
+                    scaleY = maxHeight / minMax.Height;
+                double scale = Math.Min(maxScaleUp, Math.Min(scaleX, scaleY));
+
+
+                x -= minMax.MinX * scale;
+                x -= (minMax.Width * scale * (tacs.TryGetValue(ta, out var ws) ? ws : 0.0));
+
+                if (verticalAlign.FastEquals("baseline"))
+                {
+                    y -= svgFont.TF.Baseline * fontSize * scale;
+                }
+                else {
+
+                    y -= minMax.MinY * scale;
+                    y -= (minMax.Height * scale * (vas.TryGetValue(verticalAlign, out var hs) ? hs : 0.0));
+                }
+                SvgPath.TransformPaths(paths, scale, scale, x, y, maxDecimals);
+                var fontPath = SvgPath.JoinPaths(paths);
+                var e = CreateElement("path");
+                foreach (var attr in t.Attributes())
+                {
+                    var n = attr.Name.LocalName;
+                    if (tas.Contains(n))
+                        continue;
+                    if (n.FastEquals("style"))
+                    {
+                        style.Font = null;
+                        var css = style.CssText?.Trim();
+                        if (!String.IsNullOrEmpty(css))
+                            e.SetAttributeValue(n, css);
+                        continue;
+                    }
+                    e.SetAttributeValue(n, attr.Value);
+                }
+                e.SetAttributeValue("d", fontPath);
+                t.ReplaceWith(e);
+            }
+            return true;
+        }
+
+        static readonly IReadOnlyDictionary<String, double> TextAnchors = new Dictionary<String, double>(StringComparer.Ordinal)
+        {
+            { "middle", 0.5 },
+            { "end", 1.0 },
+        }.Freeze();
+
+        static readonly IReadOnlyDictionary<String, double> VerticalAlign = new Dictionary<String, double>(StringComparer.Ordinal)
+        {
+            { "middle", 0.5 },
+            { "bottom", 1.0 },
+        }.Freeze();
+
+
+        static readonly IReadOnlySet<String> TextAttributes = ReadOnlyData.Set(StringComparer.Ordinal,
+
+            "x", "y",
+            "text-anchor",
+            "max-width",
+            "max-height",
+            "max-scale-up",
+            "vertical-align"
+            );
+
 
         public static SvgCanvas Create(String svgText, String defaultCoordFormat = "0.##")
         {
@@ -86,7 +211,7 @@ namespace SysWeaver.Media
         public static SvgCanvas Load(String filename, String defaultCoordFormat = "0.##")
         {
             var doc = XDocument.Load(filename);
-            return new SvgCanvas(doc, defaultCoordFormat);
+            return new SvgCanvas(doc, defaultCoordFormat, filename);
         }
 
         public static SvgCanvas Load(Stream stream, String defaultCoordFormat = "0.##", bool leaveOpen = true)
@@ -122,9 +247,12 @@ namespace SysWeaver.Media
             return value;
         }
 
-        SvgCanvas(XDocument doc, String defaultCoordFormat = "0.##")
+        public readonly String Filename;
+
+        SvgCanvas(XDocument doc, String defaultCoordFormat = "0.##", String filename = null)
         {
             Doc = doc;
+            Filename = filename;
             var ns = SvgCanvasTools.Namespace;
             var s = doc.Element(ns.GetName("svg"));
             Svg = s;

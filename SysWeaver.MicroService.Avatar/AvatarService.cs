@@ -94,7 +94,7 @@ namespace SysWeaver.MicroService
             Interlocked.Exchange(ref Files, t.Convert(n =>
             {
                 using var __ = pm.Track("ReadFile");
-                return SvgCanvas.Load(new FileStream(n, FileMode.Open), "0.##", false);
+                return SvgCanvas.Load(new FileStream(n, FileMode.Open, FileAccess.Read), "0.##", false);
             }));
         }
 

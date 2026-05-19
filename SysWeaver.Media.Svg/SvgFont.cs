@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using WaterTrans.GlyphLoader;
 
 namespace SysWeaver.Media
@@ -66,6 +68,70 @@ namespace SysWeaver.Media
         public static SvgFont GetOrCreateCreateFromStream(Stream s, String filename = null, bool leaveOpen = false)
             => new SvgFont(s, filename, leaveOpen);
 
+        static String TryGetFontFile(String family, String style, String weight, params String[] extraFontFolders)
+        {
+            var ranker = new Search.SimpleTextSearch().CreateRanker(String.Join(' ', family, style, weight));
+            var s = new Search.SimpleTextSearch();
+            double best = -1;
+            String bestFont = null;
+            var fe = FontExtensions;
+            var folders = new List<String>();
+            if (extraFontFolders != null)
+                folders.AddRange(extraFontFolders.Where(x => x != null));
+            folders.AddRange(Paths.Where(x => x.Value > 0).Select(x => x.Key));
+            folders.Add(Environment.GetFolderPath(Environment.SpecialFolder.Fonts));
+            foreach (var folder in folders)
+            {
+                if (!Directory.Exists(folder))
+                    continue;
+                foreach (var f in Directory.GetFiles(folder))
+                {
+                    var fi = new FileInfo(f);
+                    var ext = fi.Extension.FastToLower();
+                    if (!fe.Contains(ext))
+                        continue;
+                    var fn = fi.Name;
+                    fn = fn.Substring(0, fn.Length - ext.Length);
+                    var o = ranker.Rank(fn);
+                    if (o <= best)
+                        continue;
+                    best = o;
+                    bestFont = f;
+                }
+            }
+            return bestFont;
+        }
+
+        static readonly IReadOnlySet<String> FontExtensions = ReadOnlyData.Set(StringComparer.Ordinal,
+            ".ttf", ".ttc",
+            ".otf", ".otc",
+            ".woff2"
+            );
+
+
+        public static SvgFont GetOrCreate(String family, String style, String weight, params String[] extraFontFolders)
+        {
+            var key = String.Join('\n', family, weight, style);
+            var c = Cache;
+            if (c.TryGetValue(key, out var f))
+                return f;
+            lock (c)
+            {
+                if (c.TryGetValue(key, out f))
+                    return f;
+                var fn = TryGetFontFile(family, style, weight, extraFontFolders);
+                if (fn == null)
+                {
+                    c.TryAdd(key, null);
+                    return null;
+                }
+                var font = GetOrCreate(fn);
+                c.TryAdd(key, font);
+                return font;
+            }
+        }
+
+
         public static SvgFont GetOrCreate(String filename)
         {
             var d = new FileInfo(filename);
@@ -85,6 +151,28 @@ namespace SysWeaver.Media
             }
         }
 
+
+        public static void AddFontPath(String folder)
+            => Paths.IncValue(folder);
+
+        public static void RemoveFontPath(String folder)
+            => Paths.DecValue(folder);
+
+        static readonly ConcurrentCount<String> Paths = new ConcurrentCount<string>(StringComparer.Ordinal);
+
+
+
+
+        public static void ClearCache()
+        {
+            var c = Cache;
+            lock(c)
+            {
+                c.Clear();
+            }
+        }
+
+
         static readonly ConcurrentDictionary<String, SvgFont> Cache = new ConcurrentDictionary<string, SvgFont>(StringComparer.Ordinal);
 
         public override string ToString() => Filename.ToQuoted();
@@ -94,7 +182,7 @@ namespace SysWeaver.Media
         SvgFont(String filename)
         {
             Filename = filename;
-            using (var s = new FileStream(filename, FileMode.Open))
+            using (var s = new FileStream(filename, FileMode.Open, FileAccess.Read))
                 TF = new Typeface(s);
         }
 

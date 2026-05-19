@@ -32,7 +32,7 @@ namespace SysWeaver.Media.Png
 
         public static List<PngChunk> ReadChunks(String pngFile)
         {
-            using var fs = new FileStream(pngFile, FileMode.Open);
+            using var fs = new FileStream(pngFile, FileMode.Open, FileAccess.Read);
             return ReadChunks(fs).ToList();
         }
 

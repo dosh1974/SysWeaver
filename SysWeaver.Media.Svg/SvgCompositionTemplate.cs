@@ -114,7 +114,12 @@ namespace SysWeaver.Media
                 titleE.Value = title;
                 svg.Svg.AddFirst(titleE);
             }
+
+            var folders = new HashSet<String>(StringComparer.Ordinal);
             var bp = BasePath;
+            var bpf = Path.GetFullPath(bp);
+            folders.Add(bpf);
+            folders.Add(Path.Combine(bpf, "Fonts"));
             foreach (var layer in Layers)
             {
                 foreach (var f in layer.Files)
@@ -139,7 +144,10 @@ namespace SysWeaver.Media
                     }
                     else
                     {
-                        var res = await cache.GetResolvedSvgFile(f.NameTemplate, vars, bp, altReader).ConfigureAwait(false);
+                        var filename = f.NameTemplate.Get(k => vars.TryGetValue(k.FastToLower(), out var v) ? v : null);
+                        if (filename[0] != '$')
+                            folders.Add(Path.GetDirectoryName(Path.GetFullPath(Path.Combine(bp, filename))));
+                        var res = await cache.GetResolvedSvgFile(filename, vars, bp, altReader).ConfigureAwait(false);
                         if (res != null)
                         {
                             svg.EmbeddSvg(res, layer.X, layer.Y, layer.Width, layer.Height);
@@ -156,7 +164,18 @@ namespace SysWeaver.Media
                     }
                 }
             }
-            return svg.ToSvgString();
+            foreach (var x in folders)
+                SvgFont.AddFontPath(x);
+            try
+            {
+                svg.RasterizeText();
+                return svg.ToSvgString();
+            }
+            finally
+            {
+                foreach (var x in folders)
+                    SvgFont.RemoveFontPath(x);
+            }
         }
 
 
