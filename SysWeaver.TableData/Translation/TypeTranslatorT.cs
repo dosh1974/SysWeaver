@@ -219,32 +219,40 @@ namespace SysWeaver.Translation
                 {
                     var name = t[i];
                     Expression read = null;
-                    var fi = type.GetField(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                    if (fi != null)
+                    var tt = type;
+                    while (tt != typeof(Object))
                     {
-                        read = Expression.Field(p, fi);
-                    }
-                    else
-                    {
-                        var pi = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                        if (pi != null)
+
+                        var fi = tt.GetField(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
+                        if (fi != null)
                         {
-                            read = Expression.Property(p, pi);
+                            read = Expression.Field(p, fi);
                         }
                         else
                         {
-                            var mi = type.GetMethod(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, Array.Empty<Type>());
-                            if (TypeTranslator.IsValidContextMethod(mi))
+                            var pi = tt.GetProperty(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
+                            if (pi != null)
                             {
-                                read = Expression.Call(p, mi);
+                                read = Expression.Property(p, pi);
                             }
                             else
                             {
-                                mi = type.GetMethod(name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic, [type]);
+                                var mi = tt.GetMethod(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy, Array.Empty<Type>());
                                 if (TypeTranslator.IsValidContextMethod(mi))
-                                    read = Expression.Call(mi, p);
+                                {
+                                    read = Expression.Call(p, mi);
+                                }
+                                else
+                                {
+                                    mi = tt.GetMethod(name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy, [type]);
+                                    if (TypeTranslator.IsValidContextMethod(mi))
+                                        read = Expression.Call(mi, p);
+                                }
                             }
                         }
+                        if (read != null)
+                            break;
+                        tt = tt.BaseType;
                     }
                     if (read == null)
                         throw new Exception(String.Concat(
