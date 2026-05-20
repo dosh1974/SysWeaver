@@ -117,7 +117,7 @@ namespace SysWeaver.Media
                 var ta = t.Attribute("text-anchor")?.Value ?? "start";
                 var x = ToX(t.Attribute("x")?.Value);
                 var y = ToY(t.Attribute("y")?.Value);
-                var maxWidth = ToX(t.Attribute("max-width")?.Value);
+                var maxWidth = ToX(t.Attribute("textLength")?.Value);
                 var maxHeight = ToY(t.Attribute("max-height")?.Value);
                 var verticalAlign = t.Attribute("vertical-align")?.Value ?? "baseline";
                 var maxScaleUp = ToV(t.Attribute("max-scale-up")?.Value ?? "1", 1.0);
@@ -194,10 +194,11 @@ namespace SysWeaver.Media
 
             "x", "y",
             "text-anchor",
-            "max-width",
+            "textLength",
             "max-height",
             "max-scale-up",
-            "vertical-align"
+            "vertical-align",
+            "lengthAdjust"
             );
 
 
@@ -823,12 +824,15 @@ namespace SysWeaver.Media
             }
         }
 
-        public XElement Image(String url, double x, double y, double width, double height, bool moveDefsEtc = true)
+
+        static readonly String[] GravImageTexts = ["Min", "Mid", "Max"];
+
+        public XElement Image(String url, double x, double y, double width, double height, bool moveDefsEtc = true, SvgCanvasSizing size = SvgCanvasSizing.Fit, SvgCanvasGravity gravityHorizontal = SvgCanvasGravity.Center, SvgCanvasGravity gravityVertical = SvgCanvasGravity.Center)
         {
             if (!String.IsNullOrEmpty(url))
             {
                 if (url[0] == '<')
-                    return EmbeddSvg(url, x, y, width, height, moveDefsEtc);
+                    return EmbeddSvg(url, x, y, width, height, moveDefsEtc, size, gravityHorizontal, gravityVertical);
                 if ((url.FastIndexOf("://") < 0) && (!url.FastStartsWith("data:")) && FileExists(url))
                 {
                     var mime = MimeTypeMap.GetMimeType(url.Substring(url.LastIndexOf('.') + 1));
@@ -845,6 +849,20 @@ namespace SysWeaver.Media
                 e.SetAttributeValue("width", width);
             if (height > 0)
                 e.SetAttributeValue("height", height);
+            var g = GravImageTexts;
+            switch (size)
+            {
+                case SvgCanvasSizing.Stretch:
+                    e.SetAttributeValue("preserveAspectRatio", "none");
+                    break;
+                case SvgCanvasSizing.Fit:
+                    if ((gravityHorizontal != SvgCanvasGravity.Center) || (gravityVertical != SvgCanvasGravity.Center))
+                        e.SetAttributeValue("preserveAspectRatio", String.Concat('x', g[(int)gravityHorizontal], 'Y', g[(int)gravityVertical], " meet"));
+                    break;
+                case SvgCanvasSizing.Fill:
+                    e.SetAttributeValue("preserveAspectRatio", String.Concat('x', g[(int)gravityHorizontal], 'Y', g[(int)gravityVertical], " slice"));
+                    break;
+            }
             if (!String.IsNullOrEmpty(url))
                 e.SetAttributeValue("href", url);
             return AddElement(e, null, null, 0);
@@ -857,18 +875,48 @@ namespace SysWeaver.Media
         static readonly IReadOnlySet<String> MoveElements = ReadOnlyData.Set(StringComparer.Ordinal,
             "filter", "style"
         );
-        public XElement EmbeddSvg(String svg, double x, double y, double width, double height, bool moveDefsEtc = true)
+
+        public XElement EmbeddSvg(String svg, double x, double y, double width, double height, bool moveDefsEtc = true, SvgCanvasSizing size = SvgCanvasSizing.Fit, SvgCanvasGravity gravityHorizontal = SvgCanvasGravity.Center, SvgCanvasGravity gravityVertical = SvgCanvasGravity.Center)
+            => EmbeddSvg(SvgCanvas.Create(svg), x, y, width, height, moveDefsEtc, size, gravityHorizontal, gravityVertical);
+
+        public XElement EmbeddSvg(SvgCanvas other, double x, double y, double width, double height, bool moveDefsEtc = true, SvgCanvasSizing size = SvgCanvasSizing.Fit, SvgCanvasGravity gravityHorizontal = SvgCanvasGravity.Center, SvgCanvasGravity gravityVertical = SvgCanvasGravity.Center)
         {
-            var other = SvgCanvas.Create(svg);
             var scaleX = width / other.Width;
             var scaleY = height / other.Height;
+            switch (size)
+            {
+                case SvgCanvasSizing.Fit:
+                    if (scaleX < scaleY)
+                    {
+                        scaleY = scaleX;
+                        y += (height - other.Height * scaleY) * ((int)gravityVertical * 0.5);
+                    }
+                    else
+                    {
+                        scaleX = scaleY;
+                        x += (width - other.Width * scaleX) * ((int)gravityHorizontal * 0.5);
+                    }
+                    break;
+                case SvgCanvasSizing.Fill:
+                    if (scaleX > scaleY)
+                    {
+                        scaleY = scaleX;
+                        y += (height - other.Height * scaleY) * ((int)gravityVertical * 0.5);
+                    }
+                    else
+                    {
+                        scaleX = scaleY;
+                        x += (width - other.Width * scaleX) * ((int)gravityHorizontal * 0.5);
+                    }
+                    break;
+            }
             var o = other.Svg;
             var ignore = IgnoreAttributes;
             if (moveDefsEtc)
             {
                 var defs = o.Elements(SvgCanvasTools.Namespace + "defs").ToList();
                 foreach (var od in defs)
-                    foreach (var odc in od.Elements())
+                    foreach (var odc in od.Elements().ToList())
                     {
                         odc.Remove();
                         AddDef(odc);
@@ -968,5 +1016,18 @@ namespace SysWeaver.Media
 
     }
 
+    public enum SvgCanvasSizing
+    {
+        Fit,
+        Fill,
+        Stretch,
+    }
+
+    public enum SvgCanvasGravity
+    {
+        Start,
+        Center,
+        End,
+    }
 
 }
