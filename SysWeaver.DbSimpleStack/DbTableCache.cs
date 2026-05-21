@@ -225,20 +225,8 @@ namespace SysWeaver.Db
             if ((os != null) || (osa != null))
             {
                 using var __ = PerfMon.Track(String.Concat(PerfNamePrefix, nameof(SyncNow), ".Events"));
-                try
-                {
-                    os?.Invoke(newVal);
-                }
-                catch
-                {
-                }
-                try
-                {
-                    await osa.RaiseEvents(newVal).ConfigureAwait(false);
-                }
-                catch
-                {
-                }
+                os.RaiseEvents(newVal);
+                await osa.RaiseEvents(newVal).ConfigureAwait(false);
             }
         }
 

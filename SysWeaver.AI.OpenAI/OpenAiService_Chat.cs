@@ -921,7 +921,7 @@ namespace SysWeaver.AI
         /// <summary>
         /// Callback with usage stats, args are: the request, model, number of input tokens, number of output tokens
         /// </summary>
-        public event Func<HttpServerRequest, String, long, long, Task> OnUse;
+        public event Func<HttpServerRequest, String, long, long, ValueTask> OnUse;
 
 
         static IReadOnlyDictionary<String, String> ImageExtensions = ReadOnlyData.Dictionary<String, String>(StringComparer.Ordinal,
@@ -1193,7 +1193,7 @@ namespace SysWeaver.AI
 
                             },
                             debug, from,
-                            (model, inputCount, outputCount) => OnUse.RaiseEvents(request, model, inputCount, outputCount)
+                            async (model, inputCount, outputCount) => await OnUse.RaiseEvents(request, model, inputCount, outputCount).ConfigureAwait(false)
                         ).ConfigureAwait(false);
                         lock (m)
                         {

@@ -921,9 +921,9 @@ class CanvasChart {
                         ax.ticks.color = bc;
                     }
                 }
-                Limit(data);
             }
 
+            Limit(data);
 
 
             data.options.onClick = (e, els) => {

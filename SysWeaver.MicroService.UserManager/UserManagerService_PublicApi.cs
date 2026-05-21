@@ -174,13 +174,7 @@ namespace SysWeaver.MicroService
             }
             context.Server.PushMessageUser(MakeGuid(id), new PushMessage("reload"));
             context.Server.CloseSession(context.Session);
-            try
-            {
-                await RaiseOnUserDeleted(id, name).ConfigureAwait(false);
-            }
-            catch
-            {
-            }
+            await RaiseOnUserDeleted(id, name).ConfigureAwait(false);
             return name;
         }
 

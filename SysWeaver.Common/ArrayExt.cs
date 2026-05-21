@@ -789,6 +789,76 @@ namespace SysWeaver
             return t;
         }
 
+        /// <summary>
+        /// In-place stable sort using 4n bytes of memory (stackallocated if less than 4kb)
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list">List</param>
+        /// <param name="fn">Compare function with indices and values</param>
+        public static void StableSort<T>(this IList<T> list, Func<T, int, T, int, int> fn)
+        {
+            if (list == null)
+                return;
+            var count = list.Count;
+            if (count <= 1)
+                return;
+            Span<int> temp = count <= 1024 ? stackalloc int[count] : GC.AllocateUninitializedArray<int>(count).AsSpan();
+            for (int i = 0; i < count; ++i)
+                temp[i] = i;
+            temp.Sort((a, b) =>
+            {
+                var c = fn(list[a], a, list[b], b);
+                return c == 0 ? a.CompareTo(b) : c;
+            });
+            for (int i = 0; i < count; ++ i)
+            {
+                var t = temp[i];
+                if (t == i)
+                    continue;
+                var tv = list[t];
+                list[t] = list[i];
+                list[i] = tv;
+                temp[i] = temp[t];
+                temp[t] = t;
+                --i;
+            }
+        }
+
+        /// <summary>
+        /// In-place stable sort using 4n bytes of memory (stackallocated if less than 4kb)
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list">List</param>
+        /// <param name="fn">Compare function with values</param>
+        public static void StableSort<T>(this IList<T> list, Func<T, T, int> fn)
+        {
+            if (list == null)
+                return;
+            var count = list.Count;
+            if (count <= 1)
+                return;
+            Span<int> temp = count <= 1024 ? stackalloc int[count] : GC.AllocateUninitializedArray<int>(count).AsSpan();
+            for (int i = 0; i < count; ++i)
+                temp[i] = i;
+            temp.Sort((a, b) =>
+            {
+                var c = fn(list[a], list[b]);
+                return c == 0 ? a.CompareTo(b) : c;
+            });
+            for (int i = 0; i < count; ++i)
+            {
+                var t = temp[i];
+                if (t == i)
+                    continue;
+                var tv = list[t];
+                list[t] = list[i];
+                list[i] = tv;
+                temp[i] = temp[t];
+                temp[t] = t;
+                --i;
+            }
+        }
+
 
     }
 

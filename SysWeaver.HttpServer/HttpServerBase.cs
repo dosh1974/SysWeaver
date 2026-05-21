@@ -271,22 +271,8 @@ namespace SysWeaver.Net
             }
             Interlocked.Increment(ref SessionUserCount);
             u.Sessions.TryAdd(session, true);
-            try
-            {
-                OnLogin?.Invoke(session);
-            }
-            catch (Exception ex)
-            {
-                LoginErrors.OnException(ex);
-            }
-            try
-            {
-                await OnLoginAsync.RaiseEvents(session).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                LoginErrors.OnException(ex);
-            }
+            OnLogin.RaiseEvents(LoginErrors.OnException, session);
+            await OnLoginAsync.RaiseEvents(LoginErrors.OnException, session).ConfigureAwait(false);
         }
 
         readonly ExceptionTracker SessionStartErrors = new ExceptionTracker();

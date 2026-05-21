@@ -335,67 +335,684 @@ namespace SysWeaver
         }
 
 
-        public static Task RaiseEvents(this Func<Task> eventHandlers)
+        #region Async events
+
+        public static IEnumerable<Stats> GetEventExceptionStats() => EventExceptions.GetStats(nameof(TaskExt), "EventExceptions.");
+
+        static readonly ExceptionTracker EventExceptions = new ExceptionTracker();
+
+        static readonly Action<Exception> OnEventException = ex => EventExceptions.OnException(ex);
+
+        #region Async
+
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <returns></returns>
+        public static ValueTask RaiseEvents(this Func<Task> eventHandlers)
+            => RaiseEvents(eventHandlers, OnEventException);
+
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="a0">Action argument 0</param>
+        /// <returns></returns>
+        public static ValueTask RaiseEvents<A0>(this Func<A0, Task> eventHandlers, A0 a0)
+            => RaiseEvents(eventHandlers, OnEventException, a0);
+
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <returns></returns>
+        public static ValueTask RaiseEvents<A0, A1>(this Func<A0, A1, Task> eventHandlers, A0 a0, A1 a1)
+            => RaiseEvents(eventHandlers, OnEventException, a0, a1);
+
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <param name="a2">Action argument 2</param>
+        /// <returns></returns>
+        public static ValueTask RaiseEvents<A0, A1, A2>(this Func<A0, A1, A2, Task> eventHandlers, A0 a0, A1 a1, A2 a2)
+            => RaiseEvents(eventHandlers, OnEventException, a0, a1, a2);
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <param name="a2">Action argument 2</param>
+        /// <param name="a3">Action argument 3</param>
+        /// <returns></returns>
+        public static ValueTask RaiseEvents<A0, A1, A2, A3>(this Func<A0, A1, A2, A3, Task> eventHandlers, A0 a0, A1 a1, A2 a2, A3 a3)
+            => RaiseEvents(eventHandlers, OnEventException, a0, a1, a2, a3);
+
+
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception, must be thread safe!</param>
+        /// <returns></returns>
+        public static async ValueTask RaiseEvents(this Func<Task> eventHandlers, Action<Exception> onException)
         {
             if (eventHandlers == null)
-                return Task.CompletedTask;
+                return;
             Delegate[] l = eventHandlers.GetInvocationList();
             var lc = l.Length;
-            var tasks = new Task[lc];
+            if (lc <= 0)
+                return;
+            onException = onException ?? OnEventException;
+            var tasks = new ValueTask[lc];
             for (int i = 0; i < lc; i++)
-                tasks[i] = ((Func<Task>)l[i])();
-            return Task.WhenAll(tasks);
+            {
+                async ValueTask Fn()
+                {
+                    try
+                    {
+                        await ((Func<Task>)l[i])().ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        onException(e);
+                    }
+                }
+                tasks[i] = Fn();
+            }
+            await WhenAll(tasks).ConfigureAwait(false);
         }
 
-        public static Task RaiseEvents<A0>(this Func<A0, Task> eventHandlers, A0 a0)
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception, must be thread safe!</param>
+        /// <param name="a0">Action argument 0</param>
+        /// <returns></returns>
+        public static async ValueTask RaiseEvents<A0>(this Func<A0, Task> eventHandlers, Action<Exception> onException, A0 a0)
         {
             if (eventHandlers == null)
-                return Task.CompletedTask;
+                return;
             Delegate[] l = eventHandlers.GetInvocationList();
             var lc = l.Length;
-            var tasks = new Task[lc];
+            if (lc <= 0)
+                return;
+            onException = onException ?? OnEventException;
+            var tasks = new ValueTask[lc];
             for (int i = 0; i < lc; i++)
-                tasks[i] = ((Func<A0, Task>)l[i])(a0);
-            return Task.WhenAll(tasks);
+            {
+                async ValueTask Fn()
+                {
+                    try
+                    {
+                        await ((Func<A0, Task>)l[i])(a0).ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        onException(e);
+                    }
+                }
+                tasks[i] = Fn();
+            }
+            await WhenAll(tasks).ConfigureAwait(false);
         }
 
-        public static Task RaiseEvents<A0, A1>(this Func<A0, A1, Task> eventHandlers, A0 a0, A1 a1)
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception, must be thread safe!</param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <returns></returns>
+        public static async ValueTask RaiseEvents<A0, A1>(this Func<A0, A1, Task> eventHandlers, Action<Exception> onException, A0 a0, A1 a1)
         {
             if (eventHandlers == null)
-                return Task.CompletedTask;
+                return;
             Delegate[] l = eventHandlers.GetInvocationList();
             var lc = l.Length;
-            var tasks = new Task[lc];
+            if (lc <= 0)
+                return;
+            onException = onException ?? OnEventException;
+            var tasks = new ValueTask[lc];
             for (int i = 0; i < lc; i++)
-                tasks[i] = ((Func<A0, A1, Task>)l[i])(a0, a1);
-            return Task.WhenAll(tasks);
+            {
+                async ValueTask Fn()
+                {
+                    try
+                    {
+                        await ((Func<A0, A1, Task>)l[i])(a0, a1).ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        onException(e);
+                    }
+                }
+                tasks[i] = Fn();
+            }
+            await WhenAll(tasks).ConfigureAwait(false);
         }
 
-        public static Task RaiseEvents<A0, A1, A2>(this Func<A0, A1, A2, Task> eventHandlers, A0 a0, A1 a1, A2 a2)
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception, must be thread safe!</param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <param name="a2">Action argument 2</param>
+        /// <returns></returns>
+        public static async ValueTask RaiseEvents<A0, A1, A2>(this Func<A0, A1, A2, Task> eventHandlers, Action<Exception> onException, A0 a0, A1 a1, A2 a2)
         {
             if (eventHandlers == null)
-                return Task.CompletedTask;
+                return;
             Delegate[] l = eventHandlers.GetInvocationList();
             var lc = l.Length;
-            var tasks = new Task[lc];
+            if (lc <= 0)
+                return;
+            onException = onException ?? OnEventException;
+            var tasks = new ValueTask[lc];
             for (int i = 0; i < lc; i++)
-                tasks[i] = ((Func<A0, A1, A2, Task>)l[i])(a0, a1, a2);
-            return Task.WhenAll(tasks);
+            {
+                async ValueTask Fn()
+                {
+                    try
+                    {
+                        await ((Func<A0, A1, A2, Task>)l[i])(a0, a1, a2).ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        onException(e);
+                    }
+                }
+                tasks[i] = Fn();
+            }
+            await WhenAll(tasks).ConfigureAwait(false);
         }
 
-        public static Task RaiseEvents<A0, A1, A2, A3>(this Func<A0, A1, A2, A3, Task> eventHandlers, A0 a0, A1 a1, A2 a2, A3 a3)
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception, must be thread safe!</param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <param name="a2">Action argument 2</param>
+        /// <param name="a3">Action argument 3</param>
+        /// <returns></returns>
+        public static async ValueTask RaiseEvents<A0, A1, A2, A3>(this Func<A0, A1, A2, A3, Task> eventHandlers, Action<Exception> onException, A0 a0, A1 a1, A2 a2, A3 a3)
         {
             if (eventHandlers == null)
-                return Task.CompletedTask;
+                return;
             Delegate[] l = eventHandlers.GetInvocationList();
             var lc = l.Length;
-            var tasks = new Task[lc];
+            if (lc <= 0)
+                return;
+            onException = onException ?? OnEventException;
+            var tasks = new ValueTask[lc];
             for (int i = 0; i < lc; i++)
-                tasks[i] = ((Func<A0, A1, A2, A3, Task>)l[i])(a0, a1, a2, a3);
-            return Task.WhenAll(tasks);
+            {
+                async ValueTask Fn()
+                {
+                    try
+                    {
+                        await ((Func<A0, A1, A2, A3, Task>)l[i])(a0, a1, a2, a3).ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        onException(e);
+                    }
+                }
+                tasks[i] = Fn();
+            }
+            await WhenAll(tasks).ConfigureAwait(false);
         }
 
+        #endregion//Async
 
+        #region AsyncValue
+
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <returns></returns>
+        public static ValueTask RaiseEvents(this Func<ValueTask> eventHandlers)
+            => RaiseEvents(eventHandlers, OnEventException);
+
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="a0">Action argument 0</param>
+        /// <returns></returns>
+        public static ValueTask RaiseEvents<A0>(this Func<A0, ValueTask> eventHandlers, A0 a0)
+            => RaiseEvents(eventHandlers, OnEventException, a0);
+
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <returns></returns>
+        public static ValueTask RaiseEvents<A0, A1>(this Func<A0, A1, ValueTask> eventHandlers, A0 a0, A1 a1)
+            => RaiseEvents(eventHandlers, OnEventException, a0, a1);
+
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <param name="a2">Action argument 2</param>
+        /// <returns></returns>
+        public static ValueTask RaiseEvents<A0, A1, A2>(this Func<A0, A1, A2, ValueTask> eventHandlers, A0 a0, A1 a1, A2 a2)
+            => RaiseEvents(eventHandlers, OnEventException, a0, a1, a2);
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <param name="a2">Action argument 2</param>
+        /// <param name="a3">Action argument 3</param>
+        /// <returns></returns>
+        public static ValueTask RaiseEvents<A0, A1, A2, A3>(this Func<A0, A1, A2, A3, ValueTask> eventHandlers, A0 a0, A1 a1, A2 a2, A3 a3)
+            => RaiseEvents(eventHandlers, OnEventException, a0, a1, a2, a3);
+
+
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception, must be thread safe!</param>
+        /// <returns></returns>
+        public static async ValueTask RaiseEvents(this Func<ValueTask> eventHandlers, Action<Exception> onException)
+        {
+            if (eventHandlers == null)
+                return;
+            Delegate[] l = eventHandlers.GetInvocationList();
+            var lc = l.Length;
+            if (lc <= 0)
+                return;
+            onException = onException ?? OnEventException;
+            var tasks = new ValueTask[lc];
+            for (int i = 0; i < lc; i++)
+            {
+                async ValueTask Fn()
+                {
+                    try
+                    {
+                        await ((Func<ValueTask>)l[i])().ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        onException(e);
+                    }
+                }
+                tasks[i] = Fn();
+            }
+            await WhenAll(tasks).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception, must be thread safe!</param>
+        /// <param name="a0">Action argument 0</param>
+        /// <returns></returns>
+        public static async ValueTask RaiseEvents<A0>(this Func<A0, ValueTask> eventHandlers, Action<Exception> onException, A0 a0)
+        {
+            if (eventHandlers == null)
+                return;
+            Delegate[] l = eventHandlers.GetInvocationList();
+            var lc = l.Length;
+            if (lc <= 0)
+                return;
+            onException = onException ?? OnEventException;
+            var tasks = new ValueTask[lc];
+            for (int i = 0; i < lc; i++)
+            {
+                async ValueTask Fn()
+                {
+                    try
+                    {
+                        await ((Func<A0, ValueTask>)l[i])(a0).ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        onException(e);
+                    }
+                }
+                tasks[i] = Fn();
+            }
+            await WhenAll(tasks).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception, must be thread safe!</param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <returns></returns>
+        public static async ValueTask RaiseEvents<A0, A1>(this Func<A0, A1, ValueTask> eventHandlers, Action<Exception> onException, A0 a0, A1 a1)
+        {
+            if (eventHandlers == null)
+                return;
+            Delegate[] l = eventHandlers.GetInvocationList();
+            var lc = l.Length;
+            if (lc <= 0)
+                return;
+            onException = onException ?? OnEventException;
+            var tasks = new ValueTask[lc];
+            for (int i = 0; i < lc; i++)
+            {
+                async ValueTask Fn()
+                {
+                    try
+                    {
+                        await ((Func<A0, A1, ValueTask>)l[i])(a0, a1).ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        onException(e);
+                    }
+                }
+                tasks[i] = Fn();
+            }
+            await WhenAll(tasks).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception, must be thread safe!</param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <param name="a2">Action argument 2</param>
+        /// <returns></returns>
+        public static async ValueTask RaiseEvents<A0, A1, A2>(this Func<A0, A1, A2, ValueTask> eventHandlers, Action<Exception> onException, A0 a0, A1 a1, A2 a2)
+        {
+            if (eventHandlers == null)
+                return;
+            Delegate[] l = eventHandlers.GetInvocationList();
+            var lc = l.Length;
+            if (lc <= 0)
+                return;
+            onException = onException ?? OnEventException;
+            var tasks = new ValueTask[lc];
+            for (int i = 0; i < lc; i++)
+            {
+                async ValueTask Fn()
+                {
+                    try
+                    {
+                        await ((Func<A0, A1, A2, ValueTask>)l[i])(a0, a1, a2).ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        onException(e);
+                    }
+                }
+                tasks[i] = Fn();
+            }
+            await WhenAll(tasks).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Raise all async events in paralell without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception, must be thread safe!</param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <param name="a2">Action argument 2</param>
+        /// <param name="a3">Action argument 3</param>
+        /// <returns></returns>
+        public static async ValueTask RaiseEvents<A0, A1, A2, A3>(this Func<A0, A1, A2, A3, ValueTask> eventHandlers, Action<Exception> onException, A0 a0, A1 a1, A2 a2, A3 a3)
+        {
+            if (eventHandlers == null)
+                return;
+            Delegate[] l = eventHandlers.GetInvocationList();
+            var lc = l.Length;
+            if (lc <= 0)
+                return;
+            onException = onException ?? OnEventException;
+            var tasks = new ValueTask[lc];
+            for (int i = 0; i < lc; i++)
+            {
+                async ValueTask Fn()
+                {
+                    try
+                    {
+                        await ((Func<A0, A1, A2, A3, ValueTask>)l[i])(a0, a1, a2, a3).ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        onException(e);
+                    }
+                }
+                tasks[i] = Fn();
+            }
+            await WhenAll(tasks).ConfigureAwait(false);
+        }
+
+        #endregion// AsyncValue
+
+        #region Sync
+
+        /// <summary>
+        /// Raise all events without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        public static void RaiseEvents(this Action eventHandlers)
+            => RaiseEvents(eventHandlers, OnEventException);
+
+
+        /// <summary>
+        /// Raise all events without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="a0">Action argument 0</param>
+        public static void RaiseEvents<A0>(this Action<A0> eventHandlers, A0 a0)
+            => RaiseEvents(eventHandlers, OnEventException, a0);
+
+
+        /// <summary>
+        /// Raise all events without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        public static void RaiseEvents<A0, A1>(this Action<A0, A1> eventHandlers, A0 a0, A1 a1)
+            => RaiseEvents(eventHandlers, OnEventException, a0, a1);
+
+
+        /// <summary>
+        /// Raise all events without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <param name="a2">Action argument 2</param>
+        public static void RaiseEvents<A0, A1, A2>(this Action<A0, A1, A2> eventHandlers, A0 a0, A1 a1, A2 a2)
+            => RaiseEvents(eventHandlers, OnEventException, a0, a1, a2);
+
+
+        /// <summary>
+        /// Raise all events without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <param name="a2">Action argument 2</param>
+        /// <param name="a3">Action argument 3</param>
+        public static void RaiseEvents<A0, A1, A2, A3>(this Action<A0, A1, A2, A3> eventHandlers, A0 a0, A1 a1, A2 a2, A3 a3)
+            => RaiseEvents(eventHandlers, OnEventException, a0, a1, a2, a3);
+
+
+        /// <summary>
+        /// Raise all events without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception</param>
+        public static void RaiseEvents(this Action eventHandlers, Action<Exception> onException)
+        {
+            if (eventHandlers == null)
+                return;
+            onException = onException ?? OnEventException;
+            Delegate[] l = eventHandlers.GetInvocationList();
+            var lc = l.Length;
+            for (int i = 0; i < lc; i++)
+            {
+                try
+                {
+                    ((Action)l[i])();
+                }
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Raise all events without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception</param>
+        /// <param name="a0">Action argument 0</param>
+        public static void RaiseEvents<A0>(this Action<A0> eventHandlers, Action<Exception> onException, A0 a0)
+        {
+            if (eventHandlers == null)
+                return;
+            onException = onException ?? OnEventException;
+            Delegate[] l = eventHandlers.GetInvocationList();
+            var lc = l.Length;
+            for (int i = 0; i < lc; i++)
+            {
+                try
+                {
+                    ((Action<A0>)l[i])(a0);
+                }
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Raise all events without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception</param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        public static void RaiseEvents<A0, A1>(this Action<A0, A1> eventHandlers, Action<Exception> onException, A0 a0, A1 a1)
+        {
+            if (eventHandlers == null)
+                return;
+            onException = onException ?? OnEventException;
+            Delegate[] l = eventHandlers.GetInvocationList();
+            var lc = l.Length;
+            for (int i = 0; i < lc; i++)
+            {
+                try
+                {
+                    ((Action<A0, A1>)l[i])(a0, a1);
+                }
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Raise all events without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception</param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <param name="a2">Action argument 2</param>
+        public static void RaiseEvents<A0, A1, A2>(this Action<A0, A1, A2> eventHandlers, Action<Exception> onException, A0 a0, A1 a1, A2 a2)
+        {
+            if (eventHandlers == null)
+                return;
+            onException = onException ?? OnEventException;
+            Delegate[] l = eventHandlers.GetInvocationList();
+            var lc = l.Length;
+            for (int i = 0; i < lc; i++)
+            {
+                try
+                {
+                    ((Action<A0, A1, A2>)l[i])(a0, a1, a2);
+                }
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Raise all events without throwing
+        /// </summary>
+        /// <param name="eventHandlers"></param>
+        /// <param name="onException">An action to perform on each exception</param>
+        /// <param name="a0">Action argument 0</param>
+        /// <param name="a1">Action argument 1</param>
+        /// <param name="a2">Action argument 2</param>
+        /// <param name="a3">Action argument 3</param>
+        public static void RaiseEvents<A0, A1, A2, A3>(this Action<A0, A1, A2, A3> eventHandlers, Action<Exception> onException, A0 a0, A1 a1, A2 a2, A3 a3)
+        {
+            if (eventHandlers == null)
+                return;
+            onException = onException ?? OnEventException;
+            Delegate[] l = eventHandlers.GetInvocationList();
+            var lc = l.Length;
+            for (int i = 0; i < lc; i++)
+            {
+                try
+                {
+                    ((Action<A0, A1, A2, A3>)l[i])(a0, a1, a2, a3);
+                }
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+            }
+        }
+
+        #endregion Sync
+
+        #endregion Async events
 
 
         /// <summary>

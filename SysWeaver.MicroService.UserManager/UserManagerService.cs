@@ -733,13 +733,7 @@ namespace SysWeaver.MicroService
                 await DeleteAction(c, token, DbAction.CreateUser, context).ConfigureAwait(false);
                 await tr.CommitAsync().ConfigureAwait(false);
             }
-            try
-            {
-                await RaiseOnUserCreated(id, userName).ConfigureAwait(false);
-            }
-            catch
-            {
-            }
+            await RaiseOnUserCreated(id, userName).ConfigureAwait(false);
             if (login)
             {
                 s.SetAuth(auth);

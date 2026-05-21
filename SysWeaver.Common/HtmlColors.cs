@@ -290,6 +290,33 @@ namespace SysWeaver
         }
 
 
+
+        public static void HtmlToHsv(out double h, out double s, out double v, out double a, String htmlColor)
+        {
+            const double toN = (1.0 / 255.0);
+            var x = HtmlColors.ParseHtmlColor(htmlColor, out var r, out var g, out var b, out a);
+            ColorTools.RgbToHsv(out h, out s, out v, toN * r, toN * g, toN * b);
+        }
+
+        public static String HsvToHtml(double h, double s, double v, double a = 1.0)
+        {
+            ColorTools.HsvToRgb(out var r, out var g, out var b, h, s, v);
+            r *= 255.0;
+            g *= 255.0;
+            b *= 255.0;
+            r += 0.5;
+            g += 0.5;
+            b += 0.5;
+            return MakeHtmlColor((int)r, (int)g, (int)b, a);
+        }
+
+        public static String AdjustLightness(String color, double adjust = 1.0)
+        {
+            HtmlToHsv(out var h, out var s, out var v, out var a , color);
+            return HsvToHtml(h, s, v * adjust, a);
+        }
+
+
         static readonly char[] Hex = "0123456789abcdef".ToCharArray();
 
 
