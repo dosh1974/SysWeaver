@@ -72,6 +72,23 @@ namespace SysWeaver.MicroService
         [OpenAiOptional]
         public bool? borderSkipped = false;
 
+
+
+
+        /// <summary>
+        /// Percent (0-1) of the available width each bar should be within the category width. 1.0 will take the whole category width and put the bars right next to each other. 
+        /// </summary>
+        [OpenAiOptional]
+        public double? barPercentage;
+
+        /// <summary>
+        /// Percent (0-1) of the available width each category should be within the sample width.
+        /// </summary>
+        [OpenAiOptional]
+        public double? categoryPercentage;
+
+        #region Line chart lines
+
         /// <summary>
         /// For line charts only.
         /// Instead of continous smooth lines binding the data points, the lines can be stepped. 
@@ -94,22 +111,96 @@ namespace SysWeaver.MicroService
         /// Bezier curve tension of the line. Set to 0 to draw straightlines. This option is ignored if monotone cubic interpolation is used.
         /// </summary>
         [OpenAiOptional]
-        public double tension;
-
-
-        /// <summary>
-        /// Percent (0-1) of the available width each bar should be within the category width. 1.0 will take the whole category width and put the bars right next to each other. 
-        /// </summary>
-        [OpenAiOptional]
-        public double? barPercentage;
+        public double? tension;
 
         /// <summary>
-        /// Percent (0-1) of the available width each category should be within the sample width.
+        /// How and if to fill area in a line chart
         /// </summary>
         [OpenAiOptional]
-        public double? categoryPercentage;
-        
+        public ChartJsLineFillOptions fill;
+
+        #endregion Line chart lines
+
+        #region Line chart points
+
+        /// <summary>
+        /// Point radius, default 3.
+        /// </summary>
+        [OpenAiOptional]
+        public double? radius;
+
+        /// <summary>
+        /// Point style, default: 'circle'.
+        /// Valid:
+        ///    "circle"
+        ///    "cross"
+        ///    "crossRot"
+        ///    "dash"
+        ///    "line"
+        ///    "rect"
+        ///    "rectRounded"
+        ///    "rectRot"
+        ///    "star"
+        ///    "triangle"
+        /// </summary>
+        [OpenAiOptional]
+        public String pointStyle;
+
+        /// <summary>
+        /// Point rotation (in degrees), defaul: 0
+        /// </summary>
+        [OpenAiOptional]
+        public double? rotation;
+
+        /// <summary>
+        /// Extra radius added to point radius for hit detection, default: 1
+        /// </summary>
+        [OpenAiIgnore]
+        public double? hitRadius;
+
+        /// <summary>
+        /// Point radius when hovered, default: 4
+        /// </summary>
+        [OpenAiOptional]
+        public double? hoverRadius;
+
+        /// <summary>
+        /// Stroke width when hovered, default: 1
+        /// </summary>
+        [OpenAiOptional]
+        public double? hoverBorderWidth;
+
+        #endregion//Line chart points
+
+
     }
+
+
+    public sealed class ChartJsLineFillOptions
+    {
+        /// <summary>
+        /// How to fill the area under the line.
+        /// Valid:
+        /// "origin"
+        /// "start"
+        /// "end"
+        /// </summary>
+        [OpenAiOptional]
+        public String target;
+
+        /// <summary>
+        /// If no color is set, the default color will be the background color of the chart.
+        /// </summary>
+        [OpenAiOptional]
+        public string above;
+
+        /// <summary>
+        /// If no color is set, the default color will be the background color of the chart.
+        /// </summary>
+        [OpenAiOptional]
+        public string below;
+    }
+
 
 
 }

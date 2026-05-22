@@ -30,6 +30,10 @@ namespace SysWeaver.MicroService
         /// </summary>
         [OpenAiIgnore]
         public bool? parsing;
+
+
+
+
     }
 
 

@@ -74,6 +74,8 @@ class CanvasChartOptions {
     Transparent = false;
     WaitFirst = true;
     ValueLabel = null;
+    DisableOrderMenu = false;
+    DisableColorMenu = false;
 }
 
 class CanvasChart {
@@ -370,16 +372,16 @@ class CanvasChart {
         }
 
 
-        function resolveColor(data, v, si, vi) {
+        function resolveColor(v) {
             if (Array.isArray(v)) {
                 const vl = v.length;
                 if (vl <= 0)
                     return "red";
                 if (vl === 1)
-                    return resolveColor(data, v[0], si);
+                    return resolveColor(v[0]);
                 let haveFn = false;
                 for (let i = 0; i < vl; ++i) {
-                    const rc = resolveColor(data, v[i], si, i);
+                    const rc = resolveColor(v[i]);
                     v[i] = rc;
                     haveFn |= typeof rc !== "string";
                 }
@@ -440,25 +442,42 @@ class CanvasChart {
                 if (rl > 0) {
                     if (rl > 1)
                         removeO.sort((a, b) => b - a);
-                    const labels = dd.labels;
-                    if (labels && (labels.length >= valCount))
-                        for (let rc = 0; rc < rl; ++ rc)
-                            labels.splice(removeO[rc], 1);
+
+                    function fixArray(dsv) {
+                        if (!dsv)
+                            return;
+                        if (dsv.length < valCount)
+                            return;
+                        for (let rc = 0; rc < rl; ++rc)
+                            dsv.splice(removeO[rc], 1);
+                    }
+
+                    function fixCommon(ds) {
+                        fixArray(ds.backgroundColor);
+                        fixArray(ds.borderColor);
+                        const f = ds.fill;
+                        if (f) {
+                            fixArray(f.above);
+                            fixArray(f.below);
+                        }
+                    }
+
+                    fixArray(dd.labels);
                     for (let dsi = 0; dsi < dsl; ++dsi) {
                         const ds = datasets[dsi];
-                        let dsv = ds.data;
-                        if (dsv && (dsv.length >= valCount))
-                            for (let rc = 0; rc < rl; ++rc)
-                                dsv.splice(removeO[rc], 1);
-                        dsv = ds.backgroundColor
-                        if (dsv && (dsv.length >= valCount))
-                            for (let rc = 0; rc < rl; ++rc)
-                                dsv.splice(removeO[rc], 1);
-                        dsv = ds.borderColor
-                        if (dsv && (dsv.length >= valCount))
-                            for (let rc = 0; rc < rl; ++rc)
-                                dsv.splice(removeO[rc], 1);
+                        fixArray(ds.data);
+                        fixCommon(ds);
                     }
+                    if (data.options) {
+                        const els = data.options.elements;
+                        if (els) {
+                            fixCommon(els.point);
+                            fixCommon(els.line);
+                            fixCommon(els.bar);
+                            fixCommon(els.arc);
+                        }
+                    }
+
                 }
             }
         }
@@ -479,22 +498,42 @@ class CanvasChart {
                     }
                 }
                 if (valCount > maxCount) {
+
                     const del = valCount - maxCount;
-                    const labels = dd.labels;
-                    if (labels && (labels.length >= valCount))
-                        labels.splice(maxCount, del);
+                    function fixArray(dsv) {
+                        if (!dsv)
+                            return;
+                        if (dsv.length < valCount)
+                            return;
+                        dsv.splice(maxCount, del);
+                    }
+
+                    function fixCommon(ds) {
+                        fixArray(ds.backgroundColor);
+                        fixArray(ds.borderColor);
+                        const f = ds.fill;
+                        if (f) {
+                            fixArray(f.above);
+                            fixArray(f.below);
+                        }
+                    }
+
+                    fixArray(dd.labels);
                     for (let dsi = 0; dsi < dsl; ++dsi) {
                         const ds = datasets[dsi];
-                        let dsv = ds.data;
-                        if (dsv && (dsv.length >= valCount))
-                            dsv.splice(maxCount, del);
-                        dsv = ds.backgroundColor
-                        if (dsv && (dsv.length >= valCount))
-                            dsv.splice(maxCount, del);
-                        dsv = ds.borderColor
-                        if (dsv && (dsv.length >= valCount))
-                            dsv.splice(maxCount, del);
+                        fixArray(ds.data);
+                        fixCommon(ds);
                     }
+                    if (data.options) {
+                        const els = data.options.elements;
+                        if (els) {
+                            fixCommon(els.point);
+                            fixCommon(els.line);
+                            fixCommon(els.bar);
+                            fixCommon(els.arc);
+                        }
+                    }
+
                 }
             }
         }
@@ -854,14 +893,28 @@ class CanvasChart {
 
 
             } else {
-
+                function resolve(ds) {
+                    if (!ds)
+                        return;
+                    ds.borderColor = resolveColor(ds.borderColor);
+                    ds.backgroundColor = resolveColor(ds.backgroundColor);
+                    const f = ds.fill;
+                    if (f) {
+                        f.above = resolveColor(f.above);
+                        f.below = resolveColor(f.below);
+                    }
+                }
                 const dd = data.data;
                 const dss = dd.datasets;
                 const seriesCount = dss.length;
-                for (let si = 0; si < seriesCount; ++si) {
-                    const ds = dss[si];
-                    ds.borderColor = resolveColor(data, ds.borderColor, si);
-                    ds.backgroundColor = resolveColor(data, ds.backgroundColor, si);
+                for (let si = 0; si < seriesCount; ++si)
+                    resolve(dss[si]);
+                const els = data.options.elements;
+                if (els) {
+                    resolve(els.point);
+                    resolve(els.line);
+                    resolve(els.bar);
+                    resolve(els.arc);
                 }
             }
 
@@ -989,6 +1042,7 @@ class CanvasChart {
             //canvas.height = oh;
             main = new Chart(canvas, data);
             main.Transparent = true;
+            main.Data = data;
             main.update();
             if (!allowAnimation)
                 setTimeout(restore, 10);
@@ -1315,70 +1369,69 @@ class CanvasChart {
                         }
                     }
                     //  Sort menu
-
-                    const orderMenu = WebMenuItem.From({
-                        Name: "Order",
-                        IconClass: "IconOrder",
-                        Title: "Options for modifying the order of the data",
-                        Children: [],
-                    });
-                    menu.Items.push(orderMenu);
-                    menuDest = orderMenu.Children;
-                    {
-                        const isSelected = (forcedOrder === 0)
-                        menuDest.push(WebMenuItem.From({
-                            Name: "Original",
-                            Title: isSelected ? "Ordered in the original order" : "Use the original order",
-                            IconClass: "IconOrderOriginal" + (isSelected ? "Sel" : ""),
-                            Flags: isSelected ? checkedReadonly : 0,
-                            Data: () => SetOrder(close, 0),
-                        }));
+                    if (!(chartOptions.DisableOrderMenu || data.DisableOrderMenu)) {
+                        const orderMenu = WebMenuItem.From({
+                            Name: "Order",
+                            IconClass: "IconOrder",
+                            Title: "Options for modifying the order of the data",
+                            Children: [],
+                        });
+                        menu.Items.push(orderMenu);
+                        menuDest = orderMenu.Children;
+                        {
+                            const isSelected = (forcedOrder === 0)
+                            menuDest.push(WebMenuItem.From({
+                                Name: "Original",
+                                Title: isSelected ? "Ordered in the original order" : "Use the original order",
+                                IconClass: "IconOrderOriginal" + (isSelected ? "Sel" : ""),
+                                Flags: isSelected ? checkedReadonly : 0,
+                                Data: () => SetOrder(close, 0),
+                            }));
+                        }
+                        const desc = forcedOrder < 0;
+                        const oindex = desc ? -forcedOrder : forcedOrder;
+                        {
+                            const number = 1;
+                            const isSelected = (oindex === number)
+                            const isDesc = desc && isSelected;
+                            const descText = isDesc ? "Descending" : "Ascending";
+                            const idescText = isDesc ? "ascending" : "descending";
+                            menuDest.push(WebMenuItem.From({
+                                Name: "Labels",
+                                Title: isSelected
+                                    ?
+                                    ("Ordered by labels in " + descText.toLowerCase() + " order.\nSelect to order by labels in " + idescText + " order")
+                                    :
+                                    ("Order by labels in " + descText.toLowerCase() + " order"),
+                                IconClass: "IconOrder" + descText + (isSelected ? "Sel" : ""),
+                                Flags: isSelected ? checked : 0,
+                                Data: () => SetOrder(close, isSelected ? (isDesc ? number : -number) : number),
+                            }));
+                        }
+                        const dss = data.data.datasets;
+                        const dssl = dss.length;
+                        for (let i = 0; i < dssl; ++i) {
+                            const ds = dss[i];
+                            const number = i + 2;
+                            const isSelected = (oindex === number)
+                            const isDesc = desc && isSelected;
+                            const descText = isDesc ? "Descending" : "Ascending";
+                            const idescText = isDesc ? "ascending" : "descending";
+                            const name = ds.label ?? ("Series " + (i + 1));
+                            menuDest.push(WebMenuItem.From({
+                                Name: name,
+                                Title: isSelected
+                                    ?
+                                    ("Ordered by values from \"" + name + "\" in " + descText.toLowerCase() + " order.\nSelect to order by values from \"" + name + "\" in " + idescText + " order")
+                                    :
+                                    ("Order by values from \"" + name + "\" in " + descText.toLowerCase() + " order"),
+                                IconClass: "IconOrder" + descText + (isSelected ? "Sel" : ""),
+                                Flags: isSelected ? checked : 0,
+                                Data: () => SetOrder(close, isSelected ? (isDesc ? number : -number) : number),
+                            }));
+                        }
                     }
-                    const desc = forcedOrder < 0;
-                    const oindex = desc ? -forcedOrder : forcedOrder;
-                    {
-                        const number = 1;
-                        const isSelected = (oindex === number)
-                        const isDesc = desc && isSelected;
-                        const descText = isDesc ? "Descending" : "Ascending";
-                        const idescText = isDesc ? "ascending" : "descending";
-                        menuDest.push(WebMenuItem.From({
-                            Name: "Labels",
-                            Title: isSelected
-                                ?
-                                ("Ordered by labels in " + descText.toLowerCase() + " order.\nSelect to order by labels in " + idescText + " order")
-                                :
-                                ("Order by labels in " + descText.toLowerCase() + " order"),
-                            IconClass: "IconOrder" + descText + (isSelected ? "Sel" : ""),
-                            Flags: isSelected ? checked : 0,
-                            Data: () => SetOrder(close, isSelected ? (isDesc ? number : -number) : number),
-                        }));
-                    }
-                    const dss = data.data.datasets;
-                    const dssl = dss.length;
-                    for (let i = 0; i < dssl; ++i) {
-                        const ds = dss[i];
-                        const number = i + 2;
-                        const isSelected = (oindex === number)
-                        const isDesc = desc && isSelected;
-                        const descText = isDesc ? "Descending" : "Ascending";
-                        const idescText = isDesc ? "ascending" : "descending";
-                        const name = ds.label ?? ("Series " + (i + 1));
-                        menuDest.push(WebMenuItem.From({
-                            Name: name,
-                            Title: isSelected
-                                ?
-                                ("Ordered by values from \"" + name + "\" in " + descText.toLowerCase() + " order.\nSelect to order by values from \"" + name + "\" in " + idescText + " order")
-                                :
-                                ("Order by values from \"" + name + "\" in " + descText.toLowerCase() + " order"),
-                            IconClass: "IconOrder" + descText + (isSelected ? "Sel" : ""),
-                            Flags: isSelected ? checked : 0,
-                            Data: () => SetOrder(close, isSelected ? (isDesc ? number : -number) : number),
-                        }));
-                    }
-
                     //  Color menu
-
                     const colorMenu = WebMenuItem.From({
                         Name: "Color",
                         IconClass: "IconColors",
@@ -1413,115 +1466,117 @@ class CanvasChart {
                         },
                     }));
 
-                    menuDest.push(WebMenuItem.From(
-                        {
-                            Id: "-",
-                            Name: "Data",
-                            Title: "Coloring of the data",
+                    if (!(chartOptions.DisableColorMenu || data.DisableColorMenu)) {
+
+                        menuDest.push(WebMenuItem.From(
+                            {
+                                Id: "-",
+                                Name: "Data",
+                                Title: "Coloring of the data",
+                            }));
+
+
+                        menuDest.push(WebMenuItem.From({
+                            Name: "Original",
+                            Title: "Use the original colors  (key 'o')",
+                            IconClass: "IconColorOriginal",
+                            Flags: forcedColor === null ? checkedReadonly : 0,
+                            Data: () => SetChartColor(close, null),
                         }));
 
 
-                    menuDest.push(WebMenuItem.From({
-                        Name: "Original",
-                        Title: "Use the original colors  (key 'o')",
-                        IconClass: "IconColorOriginal",
-                        Flags: forcedColor === null ? checkedReadonly : 0,
-                        Data: () => SetChartColor(close, null),
-                    }));
-
-
-                    menuDest.push(WebMenuItem.From({
-                        Name: "Label hash",
-                        Title: "Assign a color based on the text in the label, same text will always have the same color (key 'l')",
-                        IconClass: "IconColor" + colorLabelText,
-                        Flags: forcedColor === colorLabelText ? checkedReadonly : 0,
-                        Data: () => SetChartColor(close, colorLabelText),
-                    }));
-
-
-                    menuDest.push(WebMenuItem.From({
-                        Name: "Random value gradient",
-                        Title: "The values will be colored according to a random hue gradient (key 'g')",
-                        IconClass: "IconColor" + colorRandomValueGradient,
-                        Flags: forcedColor === colorRandomValueGradient ? checked : 0,
-                        Data: () => SetChartColor(close, colorRandomValueGradient),
-                    }));
-                    menuDest.push(WebMenuItem.From({
-                        Name: "Random series gradient",
-                        Title: "The series will be colored according to a random hue gradient (key 's')",
-                        IconClass: "IconColor" + colorRandomSeriesGradient,
-                        Flags: forcedColor === colorRandomSeriesGradient ? checked : 0,
-                        Data: () => SetChartColor(close, colorRandomSeriesGradient),
-                    }));
-
-                    menuDest.push(WebMenuItem.From({
-                        Name: "Random magnitude gradient",
-                        Title: "The values will be colored according to the magnitude of the value using a random hue gradient (key 'm')",
-                        IconClass: "IconColor" + colorRandomMagnitudeGradient,
-                        Flags: forcedColor === colorRandomMagnitudeGradient ? checked : 0,
-                        Data: () => SetChartColor(close, colorRandomMagnitudeGradient),
-                    }));
-
-                    const valueMenu = WebMenuItem.From({
-                        Name: "Value gradients",
-                        IconClass: "IconColors",
-                        Title: "Fixed gradients for labels (each value get it's own color)",
-                        Children: [],
-                    });
-
-                    menuDest.push(valueMenu);
-                    const valueDest = valueMenu.Children;
-
-                    const seriesMenu = WebMenuItem.From({
-                        Name: "Series gradients",
-                        IconClass: "IconColors",
-                        Title: "Fixed gradients for series (each serie get it's own color)",
-                        Children: [],
-                    });
-                    menuDest.push(seriesMenu);
-                    const seriesDest = seriesMenu.Children;
-
-
-                    const magnitudeMenu = WebMenuItem.From({
-                        Name: "Magnitude gradients",
-                        IconClass: "IconColors",
-                        Title: "Fixed gradients for value magntidues (a gradient based on the value magnitude)",
-                        Children: [],
-                    });
-                    menuDest.push(magnitudeMenu);
-                    const magnitudeDest = magnitudeMenu.Children;
-                    const colorNames = CanvasChart.FixedColors;
-                    for (let i = 0; i < 12; ++i) {
-                        const cname1 = colorNames[i];
-                        const cname2 = colorNames[(i + 2) % 12];
-                        const cname = cname1 + " - " + cname2;
-                        const n1 = "FixedValue" + i;
-                        const n2 = "FixedSeries" + i;
-                        const n3 = "FixedMag" + i;
-                        const ic = "IconColorGradient" + i;
-                        valueDest.push(WebMenuItem.From({
-                            Name: cname,
-                            Title: "The values will be colored using a " + cname1 + " to " + cname2 + " gradient",
-                            IconClass: ic,
-                            Flags: forcedColor === n1 ? checkedReadonly : 0,
-                            Data: () => SetChartColor(close, n1),
+                        menuDest.push(WebMenuItem.From({
+                            Name: "Label hash",
+                            Title: "Assign a color based on the text in the label, same text will always have the same color (key 'l')",
+                            IconClass: "IconColor" + colorLabelText,
+                            Flags: forcedColor === colorLabelText ? checkedReadonly : 0,
+                            Data: () => SetChartColor(close, colorLabelText),
                         }));
-                        seriesDest.push(WebMenuItem.From({
-                            Name: cname,
-                            Title: "The series will be colored using a " + cname1 + " to " + cname2 + " gradient",
-                            IconClass: ic,
-                            Flags: forcedColor === n2 ? checkedReadonly : 0,
-                            Data: () => SetChartColor(close, n2),
+
+
+                        menuDest.push(WebMenuItem.From({
+                            Name: "Random value gradient",
+                            Title: "The values will be colored according to a random hue gradient (key 'g')",
+                            IconClass: "IconColor" + colorRandomValueGradient,
+                            Flags: forcedColor === colorRandomValueGradient ? checked : 0,
+                            Data: () => SetChartColor(close, colorRandomValueGradient),
                         }));
-                        magnitudeDest.push(WebMenuItem.From({
-                            Name: cname,
-                            Title: "The values will be colored according to the magnitude of the value using a " + cname1 + " to " + cname2 + " gradient",
-                            IconClass: ic,
-                            Flags: forcedColor === n3 ? checkedReadonly : 0,
-                            Data: () => SetChartColor(close, n3),
+                        menuDest.push(WebMenuItem.From({
+                            Name: "Random series gradient",
+                            Title: "The series will be colored according to a random hue gradient (key 's')",
+                            IconClass: "IconColor" + colorRandomSeriesGradient,
+                            Flags: forcedColor === colorRandomSeriesGradient ? checked : 0,
+                            Data: () => SetChartColor(close, colorRandomSeriesGradient),
                         }));
+
+                        menuDest.push(WebMenuItem.From({
+                            Name: "Random magnitude gradient",
+                            Title: "The values will be colored according to the magnitude of the value using a random hue gradient (key 'm')",
+                            IconClass: "IconColor" + colorRandomMagnitudeGradient,
+                            Flags: forcedColor === colorRandomMagnitudeGradient ? checked : 0,
+                            Data: () => SetChartColor(close, colorRandomMagnitudeGradient),
+                        }));
+
+                        const valueMenu = WebMenuItem.From({
+                            Name: "Value gradients",
+                            IconClass: "IconColors",
+                            Title: "Fixed gradients for labels (each value get it's own color)",
+                            Children: [],
+                        });
+
+                        menuDest.push(valueMenu);
+                        const valueDest = valueMenu.Children;
+
+                        const seriesMenu = WebMenuItem.From({
+                            Name: "Series gradients",
+                            IconClass: "IconColors",
+                            Title: "Fixed gradients for series (each serie get it's own color)",
+                            Children: [],
+                        });
+                        menuDest.push(seriesMenu);
+                        const seriesDest = seriesMenu.Children;
+
+
+                        const magnitudeMenu = WebMenuItem.From({
+                            Name: "Magnitude gradients",
+                            IconClass: "IconColors",
+                            Title: "Fixed gradients for value magntidues (a gradient based on the value magnitude)",
+                            Children: [],
+                        });
+                        menuDest.push(magnitudeMenu);
+                        const magnitudeDest = magnitudeMenu.Children;
+                        const colorNames = CanvasChart.FixedColors;
+                        for (let i = 0; i < 12; ++i) {
+                            const cname1 = colorNames[i];
+                            const cname2 = colorNames[(i + 2) % 12];
+                            const cname = cname1 + " - " + cname2;
+                            const n1 = "FixedValue" + i;
+                            const n2 = "FixedSeries" + i;
+                            const n3 = "FixedMag" + i;
+                            const ic = "IconColorGradient" + i;
+                            valueDest.push(WebMenuItem.From({
+                                Name: cname,
+                                Title: "The values will be colored using a " + cname1 + " to " + cname2 + " gradient",
+                                IconClass: ic,
+                                Flags: forcedColor === n1 ? checkedReadonly : 0,
+                                Data: () => SetChartColor(close, n1),
+                            }));
+                            seriesDest.push(WebMenuItem.From({
+                                Name: cname,
+                                Title: "The series will be colored using a " + cname1 + " to " + cname2 + " gradient",
+                                IconClass: ic,
+                                Flags: forcedColor === n2 ? checkedReadonly : 0,
+                                Data: () => SetChartColor(close, n2),
+                            }));
+                            magnitudeDest.push(WebMenuItem.From({
+                                Name: cname,
+                                Title: "The values will be colored according to the magnitude of the value using a " + cname1 + " to " + cname2 + " gradient",
+                                IconClass: ic,
+                                Flags: forcedColor === n3 ? checkedReadonly : 0,
+                                Data: () => SetChartColor(close, n3),
+                            }));
+                        }
                     }
-
                     //  Export menu
                     const exportMenu = WebMenuItem.From({
                         Name: "Export",
@@ -1670,16 +1725,18 @@ class CanvasChart {
 
             toElement.onkeydown = async ev => {
                 console.log("Key: " + ev.key);
-                if (ev.key === "o")
-                    SetChartColor(null, null);
-                if (ev.key === "g")
-                    SetChartColor(null, colorRandomValueGradient);
-                if (ev.key === "s")
-                    SetChartColor(null, colorRandomSeriesGradient);
-                if (ev.key === "m")
-                    SetChartColor(null, colorRandomMagnitudeGradient);
-                if (ev.key === "l")
-                    SetChartColor(null, colorLabelText);
+                if (!(chartOptions.DisableColorMenu || main?.Data?.DisableColorMenu)) {
+                    if (ev.key === "o")
+                        SetChartColor(null, null);
+                    if (ev.key === "g")
+                        SetChartColor(null, colorRandomValueGradient);
+                    if (ev.key === "s")
+                        SetChartColor(null, colorRandomSeriesGradient);
+                    if (ev.key === "m")
+                        SetChartColor(null, colorRandomMagnitudeGradient);
+                    if (ev.key === "l")
+                        SetChartColor(null, colorLabelText);
+                }
                 if (ev.key === "t") {
                     forceColorLabels ^= true;
                     RebuildChart();
@@ -1688,41 +1745,43 @@ class CanvasChart {
                     forceColorValues ^= true;
                     RebuildChart();
                 }
-                if (ev.key === " ") {
+                if (!(chartOptions.DisableOrderMenu || main?.Data?.DisableOrderMenu)) {
+                    if (ev.key === " ") {
 
-                    if (forcedOrder === 0) {
-                        forcedOrder = 1;
-                    } else {
-                        let desc = forcedOrder < 0;
-                        if (desc)
-                            forcedOrder = -forcedOrder;
-                        if (desc)
-                            ++forcedOrder;
-                        desc ^= true;
-                        if (forcedOrder > (main.data.datasets.length + 1)) {
-                            forcedOrder = 0;
+                        if (forcedOrder === 0) {
+                            forcedOrder = 1;
                         } else {
+                            let desc = forcedOrder < 0;
                             if (desc)
                                 forcedOrder = -forcedOrder;
+                            if (desc)
+                                ++forcedOrder;
+                            desc ^= true;
+                            if (forcedOrder > (main.data.datasets.length + 1)) {
+                                forcedOrder = 0;
+                            } else {
+                                if (desc)
+                                    forcedOrder = -forcedOrder;
+                            }
                         }
-                    }
-                    const dur = 1500;
-                    if (forcedOrder === 0)
-                        Info("Using original order", dur, true);
-                    else {
-                        const dd = main.data;
-                        const ds = main.data.datasets;
-                        const isDesc = forcedOrder < 0;
-                        const otype = isDesc ? -forcedOrder : forcedOrder;
-                        if (otype === 1) {
+                        const dur = 1500;
+                        if (forcedOrder === 0)
+                            Info("Using original order", dur, true);
+                        else {
+                            const dd = main.data;
+                            const ds = main.data.datasets;
+                            const isDesc = forcedOrder < 0;
+                            const otype = isDesc ? -forcedOrder : forcedOrder;
+                            if (otype === 1) {
 
-                            Info(isDesc ? "Ordered by label name in reverse" : "Ordered by label name", dur, true);
-                        } else {
-                            const label = ds[otype - 2].label;
-                            Info("Ordered by " + label + " value " + (isDesc ? " from high to low" : " from low to high"), dur, true);
+                                Info(isDesc ? "Ordered by label name in reverse" : "Ordered by label name", dur, true);
+                            } else {
+                                const label = ds[otype - 2].label;
+                                Info("Ordered by " + label + " value " + (isDesc ? " from high to low" : " from low to high"), dur, true);
+                            }
                         }
+                        SetOrder(null, forcedOrder);
                     }
-                    SetOrder(null, forcedOrder);
                 }
             };
 
@@ -1869,6 +1928,17 @@ class CanvasChart {
         def.scales.radialLinear.ticks.callback = ValueFormatter;
         def.scales.time.ticks.callback = ValueFormatter;
         def.scales.timeseries.ticks.callback = ValueFormatter;
+
+        def.scales.timeseries.ticks.callback = ValueFormatter;
+
+        def.scales.category.ticks.callback = function (value, index, ticks) {
+            value = this.getLabelForValue(value);
+            const i = value.indexOf('\n');
+            if (i >= 0)
+                value = value.substring(0, i).trim();
+            return value;
+        };
+
         def.plugins.tooltip.callbacks.label = context => {
             let label = context.dataset.label || '';
             if (label)
@@ -2128,6 +2198,7 @@ class CanvasChart {
                         refreshRate = newRate;
                     if (refreshRate < 500)
                         refreshRate = 500;
+                    main.Data = data;
                 }
             }
             catch (ex) {
@@ -2287,6 +2358,11 @@ async function chartMain() {
         const o = new CanvasChartOptions();
         if (ps.get("m") === "false")
             o.DisableMenu = true;
+        if (ps.get("mo") === "false")
+            o.DisableOrderMenu = true;
+        if (ps.get("mc") === "false")
+            o.DisableColorMenu = true;
+
         o.OnServerData = config => {
             let val = ps.get("type");
             if (val != null)

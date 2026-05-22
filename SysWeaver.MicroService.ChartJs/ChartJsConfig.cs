@@ -95,6 +95,17 @@ namespace SysWeaver.MicroService
         [OpenAiOptional]
         public int ValueLabel;
 
+        /// <summary>
+        /// True to disable ability to order the data
+        /// </summary>
+        [OpenAiIgnore]
+        public bool? DisableOrderMenu;
+
+        /// <summary>
+        /// True to disable ability to colorize the data
+        /// </summary>
+        [OpenAiIgnore]
+        public bool? DisableColorMenu;
 
     }
 

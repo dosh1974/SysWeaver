@@ -23,15 +23,26 @@ namespace SysWeaver.MicroService
         [OpenAiOptional]
         public ChartJsDataLabels datalabels;
 
-
         /// <summary>
         /// Shadows
         /// </summary>
         [OpenAiOptional]
         public ChartJsShadow shadow;
+        /// <summary>
+        /// Shadows
+        /// </summary>
+        [OpenAiOptional]
+        public ChartJsTooltip tooltip;
 
     }
 
+    public sealed class ChartJsTooltip
+    {
+        /// <summary>
+        /// Are on-canvas tooltips enabled?
+        /// </summary>
+        public bool? enabled;
+    }
 
     public sealed class ChartJsShadow
     {
