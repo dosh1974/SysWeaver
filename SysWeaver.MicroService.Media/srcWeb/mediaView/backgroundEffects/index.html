@@ -69,10 +69,12 @@
 
             console.log(url);
             const c = document.createElement("iframe");
+            ParseTools.MessageProxy(c);
             c.setAttribute("frameborder", "0");
             c.setAttribute("allowtransparency", "true");
             c.src = url;
             document.body.appendChild(c);
+
         }
     </script>
     <style>

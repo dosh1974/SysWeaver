@@ -100,6 +100,7 @@
 
             console.log(url);
             const c = document.createElement("iframe");
+            ParseTools.MessageProxy(c);
             c.src = url;
             document.body.appendChild(c);
         }

@@ -39,6 +39,20 @@
         return val;
     }
 
+
+    static MessageProxy(iframe) {
+        const p = window.parent;
+        window.onmessage = e => {
+            if (e.source === window)
+                return;
+            const w = iframe.contentWindow;
+            if (!w)
+                return;
+             (e.source === w ? p : w).postMessage(e.data, e.origin);
+        }
+    }
+
+
     static SetToObject(obj, key, val, onNotFound, logPrefix) {
         logPrefix = logPrefix ?? "";
         try {

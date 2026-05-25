@@ -1,4 +1,5 @@
-﻿class MediaPlayerParamsEffect {
+﻿
+class MediaPlayerParamsEffect {
     Width = 1920;
     Height = 1080;
     Speed = 1;
@@ -124,14 +125,10 @@ class MediaPlayerEffect {
         return tw.document.body;
     }
 
-    constructor(url, params, createTextureFn) {
+    InitGL() {
         const t = this;
-        const cp = new MediaPlayerParamsEffect();
-        if (params)
-            Object.assign(cp, params);
-        params = cp;
-        t.Params = params;
-        const e = document.createElement("canvas");
+        const params = t.Params;
+        const e = t.Element;
         const glp = {
             antialias: params.AntiAlias,
             depth: false,
@@ -150,17 +147,10 @@ class MediaPlayerEffect {
         if (!gl)
             throw new Error("Can't initiate WebGL!");
         t.GL = gl;
-
         gl.getExtension("OES_standard_derivatives");
         gl.getExtension("EXT_shader_texture_lod");
-        
-
-        const pos = gl.createBuffer(); 
+        const pos = gl.createBuffer();
         t.Pos = pos;
-        t.ResumeTime = 0;
-        t.CurrentTime = 0;
-        t.Rendered = false;
-        t.Program = null;
         gl.bindBuffer(gl.ARRAY_BUFFER, pos);
         const positions = [
             -1, 1,
@@ -168,22 +158,9 @@ class MediaPlayerEffect {
             -1, -3,
         ];
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+        const createTextureFn = t.CreateTextureFn;
         if (createTextureFn)
             t.Texture = createTextureFn(gl);
-        const w = params.Width ? params.Width : 1280;
-        const h = params.Height ? params.Height : (w * 9 / 16);
-        e.style.width = w + "px";
-        e.style.height = h + "px";
-        t.HaveVisual = true;
-        this.CanPlay = true;
-        t.Url = url;
-        t.Source = url;
-        t.CurrentPosition = 0;
-        MediaPlayerTools.InitBase(this, e, params);
-        t.Width = w;
-        t.Height = h;
-        t.CompilationTime = -1;
-        t.ResetCounters();
         const ext = gl.getExtension("EXT_disjoint_timer_query");
         if (ext) {
             t.Query =
@@ -193,6 +170,36 @@ class MediaPlayerEffect {
                 IsQ: false,
             };
         }
+    }
+
+    constructor(url, params, createTextureFn) {
+        const t = this;
+        const cp = new MediaPlayerParamsEffect();
+        if (params)
+            Object.assign(cp, params);
+        params = cp;
+        const e = document.createElement("canvas");
+        t.Params = params;
+        t.CreateTextureFn = createTextureFn;
+        t.ResumeTime = 0;
+        t.CurrentTime = 0;
+        t.Rendered = false;
+        t.Program = null;
+        const w = params.Width ? params.Width : 1280;
+        const h = params.Height ? params.Height : (w * 9 / 16);
+        e.style.width = w + "px";
+        e.style.height = h + "px";
+        t.HaveVisual = true;
+        t.CanPlay = true;
+        t.Url = url;
+        t.Source = url;
+        t.CurrentPosition = 0;
+        MediaPlayerTools.InitBase(t, e, params);
+        t.Width = w;
+        t.Height = h;
+        t.CompilationTime = -1;
+        t.ResetCounters();
+
         t.ApplyClip();
     }
 
@@ -205,6 +212,28 @@ class MediaPlayerEffect {
         }
     }
 
+    ReleaseGL() {
+
+        
+        const t = this;
+        if (t.ResizeObserver)
+            t.ResizeObserver.unobserve(t.Element);
+        t.ResizeObserver = null;
+        const gl = t.GL;
+        if (!gl)
+            return;
+        t.GL = null;
+        if (t.Texture)
+            t.Texture.Dispose();
+        t.Texture = null;
+        if (t.Program)
+            t.Program.Dispose();
+        t.Program = null;
+        if (t.Pos)
+            gl.deleteBuffer(t.Pos);
+        t.Pos = null;
+    }
+
     async OnDispose() {
         const t = this;
         await t.Pause();
@@ -212,14 +241,7 @@ class MediaPlayerEffect {
             await delay(1);
         if (t.Element.parentNode)
             t.Element.remove();
-        if (t.Texture)
-            t.Texture.Dispose();
-        if (t.Program)
-            t.Program.Dispose();
-        const gl = t.GL;
-        gl.deleteBuffer(t.Pos);
-
-
+        t.ReleaseGL();
     }
 
     ResetCounters() {
@@ -261,6 +283,13 @@ class MediaPlayerEffect {
         return () => { };
     }
 
+    DebugLoseContext() {
+        const gl = this.GL;
+        if (!gl)
+            return;
+        gl.getExtension("WEBGL_lose_context").loseContext();
+        console.warn("Forcefully lost webgl context!");
+    }
 
     async Compile(abortCheckFn) {
         const t = this;
@@ -338,31 +367,19 @@ class MediaPlayerEffect {
         return true;
     }
 
-    async Cache(keepHidden) {
+
+    async Create() {
+
         const t = this;
         const e = t.Element;
-        const c = t.Url;
-        const gl = t.GL;
         const props = t.Params;
-        let src;
-        const r = new Request(c, {
-            method: "GET",
-            mode: "cors",
-            cache: "default",
-        });
-        const res = await fetch(r);
-        //const contentType = res.headers.get('Content-Type');
-        if (res.status != 200) {
-            console.warn("Failed to load effect \"" + c + "\"");
-            return false;
-        }
-        t.Etag = res.headers.get("etag");
-        //const contentType = res.headers.get('Content-Type');
+        const c = t.Url;
 
+        t.InitGL();
 
-        src = await res.text();
+        const gl = t.GL;
 
-        const programData = new EffectProgramData(gl, src, c);
+        const programData = new EffectProgramData(gl, t.Src, c);
         const p = t.Params;
         t.ProgramData = programData;
 
@@ -433,10 +450,10 @@ class MediaPlayerEffect {
         if (IsAttached(t.Element))
             MediaPlayerEffect.render(t);
 
-        new ResizeObserver(() =>
-        {
+        t.ResizeObserver = new ResizeObserver(() => {
             t.GetRender()();
-        }).observe(e);
+        }); 
+        t.ResizeObserver.observe(e);
 
         t.ScrollElement = MediaPlayerEffect.GetElementFromId(props.ScrollId);
         const mouseElement = MediaPlayerEffect.GetElementFromId(props.MouseId);
@@ -444,6 +461,34 @@ class MediaPlayerEffect {
             t.MouseX = ev.offsetX;
             t.MouseY = ev.offsetY;
         });
+
+    }
+
+
+    async Cache(keepHidden) {
+        const t = this;
+        const c = t.Url;
+        let src;
+        const r = new Request(c, {
+            method: "GET",
+            mode: "cors",
+            cache: "default",
+        });
+        const res = await fetch(r);
+        //const contentType = res.headers.get('Content-Type');
+        if (res.status != 200) {
+            console.warn("Failed to load effect \"" + c + "\"");
+            return false;
+        }
+        t.Etag = res.headers.get("etag");
+        //const contentType = res.headers.get('Content-Type');
+
+
+        t.Src = await res.text();
+
+
+        await t.Create();
+
         return MediaPlayerTools.OnCacheComplete(this, keepHidden);
     }
 
@@ -651,11 +696,26 @@ class MediaPlayerEffect {
         }
     }
 
+    async Validate() {
+        const t = this;
+        const gl = t.GL;
+        if (gl && (!gl.isContextLost()))
+            return;
+        const e = t.Element;
+        t.ReleaseGL();
+        const ne = e.cloneNode();
+        if (e.parentNode)
+            e.parentNode.replaceChild(ne, e);
+        t.Element = ne;
+        await t.Create();
+    }
+
 
     async Play() {
         const t = this;
         if (!t.Paused)
             return;
+        await t.Validate();
         t.Paused = false;
         t.ResumeTime = t.CurrentPosition;
         delete t.RenderTime;
@@ -689,6 +749,7 @@ class MediaPlayerEffect {
         while (t.IsAnimating)
             await delay(1);
         t.CurrentPosition = 0;
+        await t.Validate();
         MediaPlayerEffect.render(t);
     }
 
@@ -703,6 +764,7 @@ class MediaPlayerEffect {
         if (t.Paused) {
             t.CurrentPosition = time;
             t.Rendered = false;
+            await t.Validate();
             MediaPlayerEffect.render(t);
         } else {
             t.ResumeTime = (time - t.CurrentPosition);

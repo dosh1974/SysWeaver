@@ -180,7 +180,7 @@ async function mediaCreatePlayer(target, type, data, props, noControls, before, 
                     ms.borderBottom = cb + col;
                 else
                     ms.borderBottom = null;
-                player.Element.style.clipPath = null;
+                playerE.clipPath = null;
             }
         }
         overlayS.transform = playerE.transform;
@@ -959,6 +959,33 @@ function mediaGetTypeFromUrl(url) {
     return -1;
 }
 
+function SetupMediaMessages(obj) {
+    const m = new Map();
+    m.set("MediaPlay", v => obj.Play());
+    m.set("MediaPause", v => obj.Pause());
+    m.set("MediaStop", v => obj.Stop());
+    m.set("MediaOnce", v => obj.Once());
+    m.set("MediaLoop", v => obj.Loop());
+    m.set("MediaMute", v => obj.Mute());
+    m.set("MediaUnMute", v => obj.UnMute());
+    m.set("MediaSetVolume", v => obj.SetVolume(v.Volume ?? v.Value ?? 0.0));
+    m.set("MediaSeek", v => obj.Seek(v.Time ?? v.Position ?? v.Value ?? 0.0));
+    m.set("MediaDebugLoseContext", v => obj.DebugLoseContext());
+    window.onmessage = ev => {
+        const data = ev.data;
+        if (!data)
+            return;
+        const t = data.Type;
+        if (!t)
+            return;
+        const fn = m.get(t);
+        if (!fn)
+            return;
+        //console.warn(t + " @ " + obj.Url);
+        fn(data);
+    };
+}
+
 async function mediaViewMain() {
     const target = document.body;
     try {
@@ -1277,6 +1304,7 @@ async function mediaPreviewMain() {
             }
             await player.Play();
             await player.Show();
+            SetupMediaMessages(player);
         }
         catch (e) {
             if (shost)
@@ -1298,11 +1326,14 @@ async function mediaPreviewMain() {
             let fps = tot > 0 ? (1000.0 * count / tot) : 0;
             await shost.doIt(player.Duration ?? 0, fps, null);
         }
+
     }
     catch (e) {
         target.innerText = "Generic failure.\n" + e;
         return;
     }
+    
+
     PageLoaded();
 }
 

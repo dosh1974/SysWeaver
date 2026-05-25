@@ -2410,7 +2410,7 @@ function ReloadAll(flushCache, clearHash)
         location.reload();
 }
 
-function PostAll(name, data) {
+function PostAll(name, data, targetOrigin) {
     if (!data) {
         data = {
             Type: name,
@@ -2420,8 +2420,9 @@ function PostAll(name, data) {
     }
     const wt = window.opener ?? window.top;
     if (wt) {
+        targetOrigin = targetOrigin ?? "*";
         try {
-            wt.postMessage(data);
+            wt.postMessage(data, targetOrigin);
         }
         catch
         {
@@ -2439,6 +2440,7 @@ function PostTop(name, data, targetOrigin) {
     }
     const wt = window.top;
     if (wt) {
+        targetOrigin = targetOrigin ?? "*";
         try {
             wt.postMessage(data, targetOrigin);
         }
@@ -2448,6 +2450,25 @@ function PostTop(name, data, targetOrigin) {
     }
 }
 
+function PostParent(name, data, targetOrigin) {
+    if (!data) {
+        data = {
+            Type: name,
+        };
+    } else {
+        data.Type = name;
+    }
+    const p = window.parent;
+    const wt = p === window ? window.opener : p;
+    if (wt) {
+        targetOrigin = targetOrigin ?? "*";
+        try {
+            wt.postMessage(data, targetOrigin);
+        }
+        catch {
+        }
+    }
+}
 /**
  * Open an url
  * @param {string} l The url to open
@@ -5663,6 +5684,7 @@ function StickToBottom(element, stickByDefault, onBottom, onFree, onTop, instant
 }
 
 function PageLoaded() {
+    PostParent("PageLoaded");
     PostTop("LoaderRemoved", null, "*");
 }
 
