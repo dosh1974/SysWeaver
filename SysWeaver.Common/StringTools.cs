@@ -1424,7 +1424,7 @@ namespace SysWeaver
         {
             if (data.Length <= 0)
                 return Array.Empty<String>();
-            var s = (encoding ?? Encoding.UTF8).GetString(data);
+            var s = encoding.GetStringWithoutBom(data);
             var opt = StringSplitOptions.None;
             if (trim)
                 opt |= StringSplitOptions.TrimEntries;

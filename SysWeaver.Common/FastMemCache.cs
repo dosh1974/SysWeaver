@@ -22,7 +22,7 @@ namespace SysWeaver
     /// <typeparam name="V">The type of the value</typeparam>
     public sealed class FastMemCache<K, V> : IMemCache<K, V>
     {
-        
+
         /// <summary>
         /// Creates a cache that removes it's items after the specified duration (after last request)
         /// </summary>
@@ -42,6 +42,7 @@ namespace SysWeaver
                 Locks = new ConcurrentDictionary<K, int>(comparer);
             }
         }
+
 
 
         /// <summary>
@@ -1727,5 +1728,7 @@ namespace SysWeaver
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     }
+
+
 
 }
