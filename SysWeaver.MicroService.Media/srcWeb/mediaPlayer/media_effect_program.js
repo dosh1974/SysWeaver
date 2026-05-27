@@ -38,7 +38,7 @@ class EffectProgramData {
         if (pcompile) {
             t.waitCompilation = async function (shader, abortCheckFn) {
                 for (; ;) {
-                    await delay(5);
+                    await MediaPlayerTools.delay(5);
                     if (abortCheckFn())
                         return true;
                     if (gl.getShaderParameter(shader, pcompile.COMPLETION_STATUS_KHR))
@@ -49,7 +49,7 @@ class EffectProgramData {
 
             t.waitLinking = async function (prog, abortCheckFn) {
                 for (; ;) {
-                    await delay(5);
+                    await MediaPlayerTools.delay(5);
                     if (abortCheckFn())
                         return true;
                     if (gl.getProgramParameter(prog, pcompile.COMPLETION_STATUS_KHR))
@@ -105,6 +105,19 @@ class EffectProgramData {
             if ((ch >= '0') && (ch <= '9'))
                 return true;
             return false;
+        }
+
+        function isLetter(c) {
+            if (c.toUpperCase() != c.toLowerCase())
+                return true;
+            if (c.charCodeAt(0) < 128)
+                return false;
+            try {
+                eval("function " + c + "(){}");
+                return true;
+            } catch {
+                return false;
+            }
         }
 
         /** Check in an identifier exists */

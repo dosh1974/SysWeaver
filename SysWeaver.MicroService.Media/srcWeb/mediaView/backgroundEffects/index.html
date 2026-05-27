@@ -1,8 +1,11 @@
 ﻿<!doctype html>
 <html>
 <head>
-    <script src="../parseTools.js"></script>
-    <script>
+    <script defer src="../parseTools.js"></script>
+    <script defer src="../../mediaPlayer/media_player_tools.js"></script>
+    <script defer src="../../mediaPlayer/media_effect_program.js"></script>
+    <script defer src="../../mediaPlayer/media_player_effect.js"></script>
+    <script defer>
         /*
             Parameters (basic):
                 Effect = 	The effect to show
@@ -48,7 +51,7 @@
             };
             let effect = p.get("Effect") ?? "SmoothBands";
             if (!effect.endsWith(".glsl"))
-                effect = "backgroundEffects/" + effect + ".glsl";
+                effect += ".glsl";
 
             //  Load parameters
             const subP = effect.indexOf('://') < 0 ? "../" : "";
@@ -62,6 +65,31 @@
             //  Fix parameters
             props.FxProps = fxParams;
 
+
+
+            //  Media player
+            const player = new MediaPlayerEffect(effect, props);
+            document.body.appendChild(player.Element);
+
+            await player.Cache(true);
+            function updateSize() {
+                return MediaPlayerTools.UpdateSize(document.body, player);
+            }
+            new ResizeObserver(updateSize).observe(document.body);
+
+            await player.Play();
+            await player.Show();
+            MediaPlayerTools.SetupMediaMessages(player);
+            MediaPlayerTools.PostPageLoaded();
+
+
+/*
+
+
+
+
+
+
             //  Build url
             url = '../MediaPreview.html?transparent=true&link=' + effect + '&type=4&props=' + encodeURIComponent(JSON.stringify(props));
             if (p.has("ShaderDebug") && (p.get("ShaderDebug") === "true"))
@@ -74,13 +102,14 @@
             c.setAttribute("allowtransparency", "true");
             c.src = url;
             document.body.appendChild(c);
-
+            */
         }
     </script>
     <style>
         :root {
             color-scheme: normal !important;
         }
+
         html, body {
             background: none transparent !important;
             margin: 0;
@@ -90,13 +119,17 @@
             overflow: hidden;
         }
 
-        iframe {
+        body > * {
+            pointer-events: none;
+        }
+
+/*        iframe {
             border: none;
             width: 100%;
             height: 100%;
             pointer-events: none;
             color-scheme: normal;
-        }
+        }*/
     </style>
 </head>
 <body onload="main()">

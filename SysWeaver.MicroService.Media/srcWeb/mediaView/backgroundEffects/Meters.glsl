@@ -134,12 +134,13 @@ vec2 GetBarIntensity(vec2 relPos, float barIndex, float time)
 {
 	float p = PpNoise(vec2(barIndex + time * ScrollSpeed, time * TransformSpeed)) * (1.0 - MinHeight) + MinHeight;
 	float height = p * iResolution.y;
-
+	float barWidth = max(BarWidth, - BarWidth * iResolution.x);
 	
-	vec2 extent = vec2(BarWidth * BarFill * 0.5 - BarWidth * BarFill * 0.5 * Radius, height * 0.5 - (BarWidth * BarFill * 0.5 * Radius));
+	
+	vec2 extent = vec2(barWidth * BarFill * 0.5 - barWidth * BarFill * 0.5 * Radius, height * 0.5 - (barWidth * BarFill * 0.5 * Radius));
 
-	vec2 center = vec2(BarWidth * 0.5, height * (0.5 - Attach) + iResolution.y * Attach);
-	float i = clamp((BarWidth * BarFill * 0.5 * Radius) - BoxDistance(center, extent, relPos), 0.0, 1.0);
+	vec2 center = vec2(barWidth * 0.5, height * (0.5 - Attach) + iResolution.y * Attach);
+	float i = clamp((barWidth * BarFill * 0.5 * Radius) - BoxDistance(center, extent, relPos), 0.0, 1.0);
 
 
 	float baseY = (center.y - height * 0.5);
@@ -153,7 +154,9 @@ vec2 GetBarIntensity(vec2 relPos, float barIndex, float time)
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {    
 	vec2 uv = fragCoord / iResolution.xy;
-	float bg = fragCoord.x * (1.0 / BarWidth);
+	float barWidth = max(BarWidth, - BarWidth * iResolution.x);
+
+	float bg = fragCoord.x * (1.0 / barWidth);
 	float ry = -uv.y;
 	float dBar = fract(bg);
 	float barIndex = floor(0.5 + bg - dBar);
@@ -165,7 +168,7 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 	float deltaOpacity = (1.0 - MinBarOpacity) / float(BarDepth - 1);
 	float deltaTime = DeltaTime;
 	barIndex *= Frequency;
-	vec2 rPos = vec2(dBar * BarWidth, fragCoord.y);
+	vec2 rPos = vec2(dBar * barWidth, fragCoord.y);
 	for (int i = 0; i < BarDepth; ++ i)
 	{
 		vec2 p = GetBarIntensity(rPos, barIndex, time);

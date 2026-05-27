@@ -16,7 +16,7 @@ async function mediaCreatePlayer(target, type, data, props, noControls, before, 
     p.appendChild(cache);
 
     
-    const player = MediaPlayer.Create(type, data, props);
+    const player = await MediaPlayer.Create(type, data, props);
     if (!player) {
         Fail("No supported player found for type " + type, 100000);
         p.remove();
@@ -959,32 +959,7 @@ function mediaGetTypeFromUrl(url) {
     return -1;
 }
 
-function SetupMediaMessages(obj) {
-    const m = new Map();
-    m.set("MediaPlay", v => obj.Play());
-    m.set("MediaPause", v => obj.Pause());
-    m.set("MediaStop", v => obj.Stop());
-    m.set("MediaOnce", v => obj.Once());
-    m.set("MediaLoop", v => obj.Loop());
-    m.set("MediaMute", v => obj.Mute());
-    m.set("MediaUnMute", v => obj.UnMute());
-    m.set("MediaSetVolume", v => obj.SetVolume(v.Volume ?? v.Value ?? 0.0));
-    m.set("MediaSeek", v => obj.Seek(v.Time ?? v.Position ?? v.Value ?? 0.0));
-    m.set("MediaDebugLoseContext", v => obj.DebugLoseContext());
-    window.onmessage = ev => {
-        const data = ev.data;
-        if (!data)
-            return;
-        const t = data.Type;
-        if (!t)
-            return;
-        const fn = m.get(t);
-        if (!fn)
-            return;
-        //console.warn(t + " @ " + obj.Url);
-        fn(data);
-    };
-}
+
 
 async function mediaViewMain() {
     const target = document.body;
@@ -1248,7 +1223,7 @@ async function mediaPreviewMain() {
             });
         }
 
-        const player = MediaPlayer.Create(type, data, props);
+        const player = await MediaPlayer.Create(type, data, props);
         const e = player.Element;
         e.draggable = false;
         const es = e.style;
@@ -1259,7 +1234,7 @@ async function mediaPreviewMain() {
             const ph = player.Height;
             const adapt = !!player.Params.AdaptiveSize;
             function updateSize() {
-                return MediaPlayer.UpdateSize(target, player, fill);
+                return MediaPlayerTools.UpdateSize(target, player, fill);
             }
             new ResizeObserver(updateSize).observe(target);
             if (pos > 0)
@@ -1279,7 +1254,7 @@ async function mediaPreviewMain() {
                     target.addEventListener("click", onInteraction);
                 }
             }
-            await delay(50);
+            await MediaPlayerTools.delay(50);
             const clippedSize = updateSize();
             if (shost) {
                 if (adapt) {
@@ -1290,7 +1265,7 @@ async function mediaPreviewMain() {
                             await waitEvent(window, "resize", async () => {
                                 await shost.setSize(aw, window.innerHeight);
                             }, 1000);
-                            await delay(200);
+                            await MediaPlayerTools.delay(200);
                         }
                     }
                 } else {
@@ -1298,13 +1273,13 @@ async function mediaPreviewMain() {
                         await waitEvent(window, "resize", async () => {
                             await shost.setSize(clippedSize[0], clippedSize[1]);
                         }, 1000);
-                        await delay(200);
+                        await MediaPlayerTools.delay(200);
                     }
                 }
             }
             await player.Play();
             await player.Show();
-            SetupMediaMessages(player);
+            MediaPlayerTools.SetupMediaMessages(player);
         }
         catch (e) {
             if (shost)
@@ -1312,17 +1287,17 @@ async function mediaPreviewMain() {
             Fail(e);
         }
         if (shost) {
-            await delay(200);
+            await MediaPlayerTools.delay(200);
             if (typeof player.ResetCounters !== "undefined") {
                 player.ResetCounters();
-                await delay(600);
+                await MediaPlayerTools.delay(600);
             }
             const tot = player.TotalTime ?? 0;
             const count = player.MeasureCount ?? 0;
             await player.Pause();
-            await delay(200);
+            await MediaPlayerTools.delay(200);
             await player.Seek(pos);
-            await delay(200);
+            await MediaPlayerTools.delay(200);
             let fps = tot > 0 ? (1000.0 * count / tot) : 0;
             await shost.doIt(player.Duration ?? 0, fps, null);
         }

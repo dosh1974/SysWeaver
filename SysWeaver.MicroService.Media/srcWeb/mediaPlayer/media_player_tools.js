@@ -254,7 +254,8 @@ class MediaPlayerTools {
     static async CanUnMute() {
         if (MediaPlayerTools.HaveTested)
             return MediaPlayerTools.Result;
-
+        if (typeof MediaPlayerAudio !== "function")
+            return false;
         const e = document.createElement("audio");
         let res = false;
         if (await MediaPlayerAudio.LoadAudio(e, "data:audio/mpeg;base64,/+MYxAAAAANIAUAAAASEEB/jwOFM/0MM/90b/+RhST//w4NFwOjf///PZu////9lns5GFDv//l9GlUIEEIAAAgIg8Ir/JGq3/+MYxDsLIj5QMYcoAP0dv9HIjUcH//yYSg+CIbkGP//8w0bLVjUP///3Z0x5QCAv/yLjwtGKTEFNRTMuOTeqqqqqqqqqqqqq/+MYxEkNmdJkUYc4AKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")) {
@@ -285,10 +286,30 @@ class MediaPlayerTools {
         return res;
     }
 
+    static IsAttached(el) {
 
+        while (el) {
+            if (el === document.body)
+                return true;
+            el = el.parentElement;
+        }
+        return false;
+    }
+
+    static PostPageLoaded() {
+        const p = window.parent;
+        const wt = p === window ? window.opener : p;
+        if (wt) {
+            try {
+                wt.postMessage({ Type: "PageLoaded" }, "*");
+            }
+            catch {
+            }
+        }
+    }
 
     static MustBeAttached(e) {
-        if (IsAttached(e))
+        if (MediaPlayerTools.IsAttached(e))
             return () => { };
         const es = e.style;
         const op = es.position;
@@ -306,6 +327,114 @@ class MediaPlayerTools {
         };
     }
 
+    static delay(msToWait) {
+        return new Promise(resolve => setTimeout(resolve, msToWait));
+    }
+
+    static waitEvent2(element, eventName1, eventName2, fn, timeout) {
+        return new Promise(resolve => {
+            let timeoutT = null;
+            const end = ev => {
+                if (timeoutT)
+                    clearTimeout(timeoutT);
+                timeoutT = null;
+                element.removeEventListener(eventName2, end);
+                element.removeEventListener(eventName1, end);
+                resolve(ev);
+            };
+            const timeoutFn = (timeout && (timeout > 0)) ? () => end(null) : null;
+            element.addEventListener(eventName1, end);
+            element.addEventListener(eventName2, end);
+            if (fn)
+                fn(element);
+            if (timeoutFn)
+                timeoutT = setTimeout(timeoutFn, timeout);
+        });
+    }
+
+
+    static SetupMediaMessages(obj) {
+        const m = new Map();
+        m.set("MediaPlay", v => obj.Play());
+        m.set("MediaPause", v => obj.Pause());
+        m.set("MediaStop", v => obj.Stop());
+        m.set("MediaOnce", v => obj.Once());
+        m.set("MediaLoop", v => obj.Loop());
+        m.set("MediaMute", v => obj.Mute());
+        m.set("MediaUnMute", v => obj.UnMute());
+        m.set("MediaSetVolume", v => obj.SetVolume(v.Volume ?? v.Value ?? 0.0));
+        m.set("MediaSeek", v => obj.Seek(v.Time ?? v.Position ?? v.Value ?? 0.0));
+        m.set("MediaDebugLoseContext", v => obj.DebugLoseContext());
+        function h(ev) {
+            const data = ev.data;
+            if (!data)
+                return;
+            const t = data.Type;
+            if (!t)
+                return;
+            const fn = m.get(t);
+            if (!fn)
+                return;
+            //console.warn(t + " @ " + obj.Url);
+            fn(data);
+        }
+
+        window.addEventListener("message", h);
+        return () => window.removeEventListener("message", h);
+    }
+
+    static UpdateSize(target, player, fill, alignX, alignY) {
+
+        if (!player)
+            return;
+        if (typeof alignX === "undefined")
+            alignX = 0.5;
+        if (typeof alignY === "undefined")
+            alignY = 0.5;
+        const fit = !fill;
+
+        const rect = target.getBoundingClientRect();
+        const props = player.Params;
+        const ow = player.Width;
+        const oh = player.Height;
+        const useClip = player.UseClip;
+        const adapt = props.AdaptiveSize;
+
+        const crw = (useClip ? player.ClipWidth : ow) ?? ow;
+        const crh = (useClip ? player.ClipHeight : oh) ?? oh;
+        if ((crw <= 0) || (crh <= 0))
+            return [0, 0];
+
+        const crx = (useClip ? player.ClipX : 0) ?? 0;
+        const cry = (useClip ? player.ClipY : 0) ?? 0;
+
+        const cw = rect.width;
+        const ch = rect.height;
+
+        const e = player.Element;
+        const playerE = e.style;
+        if (adapt) {
+            playerE.transform = null;
+            playerE.transformOrigin = null;
+            playerE.width = cw + "px";
+            playerE.height = ch + "px";
+        } else {
+            playerE.width = ow + "px";
+            playerE.height = oh + "px";
+
+            const scaleX = cw / crw;
+            const scaleY = ch / crh;
+            const scale = fit ? (scaleX < scaleY ? scaleX : scaleY) : (scaleX > scaleY ? scaleX : scaleY);
+
+            const dx = (cw - (scale * (crw + crx * 2))) * alignX;
+            const dy = (ch - (scale * (crh + cry * 2))) * alignY;
+            const tr = "scale(" + scale + ") translate(" + (dx / scale) + "px, " + (dy / scale) + "px)";
+            playerE.transformOrigin = "left top";
+            playerE.transform = tr;
+        }
+        return [crw, crh];
+
+    }
 
 }
 

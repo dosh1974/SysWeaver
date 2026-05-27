@@ -65,7 +65,7 @@ class MediaPlayerEffect {
             await effect.Play();
             if (effect.Query) {
                 while (effect.AvgDrawTimeMs <= 0)
-                    await delay(1);
+                    await MediaPlayerTools.delay(1);
             }
             const avgDrawTimeMs = effect.AvgDrawTimeMs;
             await effect.Stop();
@@ -238,7 +238,7 @@ class MediaPlayerEffect {
         const t = this;
         await t.Pause();
         while (t.IsAnimating)
-            await delay(1);
+            await MediaPlayerTools.delay(1);
         if (t.Element.parentNode)
             t.Element.remove();
         t.ReleaseGL();
@@ -277,7 +277,7 @@ class MediaPlayerEffect {
         if ((!t.IsAnimating) || params.Static)
             return () => {
                 t.Rendered = false;
-                if (IsAttached(t.Element))
+                if (MediaPlayerTools.IsAttached(t.Element))
                     MediaPlayerEffect.render(t);
             }
         return () => { };
@@ -447,7 +447,7 @@ class MediaPlayerEffect {
 
         t.Cached = true;
 
-        if (IsAttached(t.Element))
+        if (MediaPlayerTools.IsAttached(t.Element))
             MediaPlayerEffect.render(t);
 
         t.ResizeObserver = new ResizeObserver(() => {
@@ -747,7 +747,7 @@ class MediaPlayerEffect {
             return;
         t.Paused = true;
         while (t.IsAnimating)
-            await delay(1);
+            await MediaPlayerTools.delay(1);
         t.CurrentPosition = 0;
         await t.Validate();
         MediaPlayerEffect.render(t);
@@ -795,7 +795,7 @@ class MediaPlayerImageTexture {
         const gl = t.GL;
         const texture = t.Texture;
         const image = new Image();
-        const res = await waitEvent2(image, "load", "error", () => image.src = t.Url);
+        const res = await MediaPlayerTools.waitEvent2(image, "load", "error", () => image.src = t.Url);
         if (res.type == "error")
             return false;
         t.Image = image;

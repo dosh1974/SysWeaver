@@ -1,8 +1,11 @@
 ﻿<!doctype html>
 <html>
 <head>
-    <script src="../parseTools.js"></script>
-    <script>
+    <script defer src="../parseTools.js"></script>
+    <script defer src="../../mediaPlayer/media_player_tools.js"></script>
+    <script defer src="../../mediaPlayer/media_effect_program.js"></script>
+    <script defer src="../../mediaPlayer/media_player_effect.js"></script>
+    <script defer>
         /*
             Parameters (basic):
                 image = 	Image url.
@@ -60,21 +63,21 @@
 
             };
 
-            const image = p.get("Image") ?? "../logo.png";
+            const image = p.get("Image") ?? "../../logo.png";
 
             let effect = p.get("Effect") ?? "DistortedTv";
             if (!effect.endsWith(".glsl"))
-                effect = "imageEffects/" + effect + ".glsl";
+                effect += ".glsl";
 
-            //  Load parametersRain
-            const subP = effect.indexOf('://') < 0 ? "../" : "";
+            //  Load effect parameters
+            const subP = "";// effect.indexOf('://') < 0 ? "../" : "";
             await ParseTools.FileToObject(subP + effect.substring(0, effect.lastIndexOf('.')) + ".json", props, (k, v) =>
                 ParseTools.SetToObject(ep, k, v, (k1, v1) =>
                     fxParams[k1] = ParseTools.DecodeObject(v1)));
 
 
-            //  Load parameters
-            const subP2 = image.indexOf('://') < 0 ? "../" : "";
+            //  Load image parameters
+            const subP2 = "";// image.indexOf('://') < 0 ? "../" : "";
             await ParseTools.FileToObject(subP2 + image.substring(0, image.lastIndexOf('.')) + ".json", props, (k, v) =>
                 ParseTools.SetToObject(ep, k, v, (k1, v1) =>
                     fxParams[k1] = ParseTools.DecodeObject(v1)));
@@ -93,6 +96,24 @@
             if (props.EffectSizeFromImage)
                 ep.AdaptiveSize = false;
 
+            //  Media player
+
+            const player = new MediaPlayerEffect(effect, props.EffectParams, gl => new MediaPlayerImageTexture(gl, props, image));
+            document.body.appendChild(player.Element);
+            await player.Cache(true);
+
+            function updateSize() {
+                return MediaPlayerTools.UpdateSize(document.body, player);
+            }
+            new ResizeObserver(updateSize).observe(document.body);
+
+            await player.Play();
+            await player.Show();
+            MediaPlayerTools.SetupMediaMessages(player);
+            MediaPlayerTools.PostPageLoaded();
+
+/*
+
             //  Build url
             url = '../MediaPreview.html?transparent=true&link=' + image + '&type=0&props=' + encodeURIComponent(JSON.stringify(props));
             if (p.has("ShaderDebug") && (p.get("ShaderDebug") === "true"))
@@ -103,6 +124,7 @@
             ParseTools.MessageProxy(c);
             c.src = url;
             document.body.appendChild(c);
+            */
         }
     </script>
     <style>
@@ -119,6 +141,10 @@
             height: 100%;
             overflow: hidden;
         }
+
+            body > * {
+                pointer-events: none;
+            }
 
         iframe {
             border: none;
