@@ -135,8 +135,9 @@ namespace SysWeaver.Geometry
         /// <param name="maxDist">The maximum distance to search for, zero or less for unlimited radius</param>
         /// <param name="maxCount">The maximum number of nodes to return, if zero or less all nodes are returned (that satisfy other constraints such as maxDist and the keep function)</param>
         /// <param name="validateNode">Optional custom function that is executed to determine if a node should be included or not (useful for filtering), see ValidateNodeDelagate for details</param>
+        /// <param name="minCount">The minimum number of nodes to return, this may force the return of nodes outside of the max distance</param>
         /// <returns>The nodes found</returns>
-        public Tuple<TDimension[], TNode>[] Search(TDimension[] searchPoint, int maxCount = 0, double maxDist = 0, Func<TDimension[], TDimension[], double, TNode, bool> validateNode = null)
+        public Tuple<TDimension[], TNode>[] Search(TDimension[] searchPoint, int maxCount = 0, double maxDist = 0, Func<TDimension[], TDimension[], double, TNode, bool> validateNode = null, int minCount = 0)
         {
             var state = new State(searchPoint,
                 maxCount <= 0 ?
@@ -144,7 +145,8 @@ namespace SysWeaver.Geometry
                     :
                     new BoundedPriorityList<int, double>(maxCount, true),
                 maxDist <= 0 ? double.MaxValue : (maxDist * maxDist),  
-                validateNode);
+                validateNode,
+                minCount);
             SearchForNearestNeighbors(ref state, HyperRect<TDimension>.Infinite(this.Dimensions, this.MaxValue, this.MinValue));
             return state.nearestNeighbors.ToResultSet(this);
         }
@@ -245,13 +247,15 @@ namespace SysWeaver.Geometry
             public readonly BoundedPriorityList<int, double> nearestNeighbors;
             public readonly double maxSearchRadiusSquared;
             public readonly Func<TDimension[], TDimension[], double, TNode, bool> keep;
+            public readonly int MinCount;
 
-            public State(TDimension[] target, BoundedPriorityList<int, double> nearestNeighbors, double maxSearchRadiusSquared, Func<TDimension[], TDimension[], double, TNode, bool> keep)
+            public State(TDimension[] target, BoundedPriorityList<int, double> nearestNeighbors, double maxSearchRadiusSquared, Func<TDimension[], TDimension[], double, TNode, bool> keep, int minCount)
             {
                 this.target = target;
                 this.nearestNeighbors = nearestNeighbors;
                 this.maxSearchRadiusSquared = maxSearchRadiusSquared;
                 this.keep = keep ?? KeepAll;
+                this.MinCount = minCount;
             }
         }
 
@@ -303,7 +307,7 @@ namespace SysWeaver.Geometry
             var closestPointInFurtherRect = furtherRect.GetClosestPoint(target);
             var distanceSquaredToTarget = this.Metric(closestPointInFurtherRect, target);
             var maxSearchRadiusSquared = state.maxSearchRadiusSquared;
-            if (distanceSquaredToTarget.CompareTo(maxSearchRadiusSquared) <= 0)
+            if ((distanceSquaredToTarget.CompareTo(maxSearchRadiusSquared) <= 0) || (state.nearestNeighbors.Count < state.MinCount))
             {
                 if (state.nearestNeighbors.IsFull)
                 {
@@ -329,7 +333,7 @@ namespace SysWeaver.Geometry
             // Try to add the current node to our nearest neighbors list
             var dataPoint = this.InternalPointArray[nodeIndex];
             distanceSquaredToTarget = this.Metric(dataPoint, target);
-            if (distanceSquaredToTarget.CompareTo(maxSearchRadiusSquared) <= 0)
+            if ((distanceSquaredToTarget.CompareTo(maxSearchRadiusSquared) <= 0) || (state.nearestNeighbors.Count < state.MinCount))
             {
                 if (state.keep(target, dataPoint, distanceSquaredToTarget, this.InternalNodeArray[nodeIndex]))
                     state.nearestNeighbors.Add(nodeIndex, distanceSquaredToTarget);

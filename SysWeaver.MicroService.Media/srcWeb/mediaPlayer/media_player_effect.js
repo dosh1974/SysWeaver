@@ -609,6 +609,15 @@ class MediaPlayerEffect {
             //time = 0;
         }
         t.Rendered = true;
+        if (!t.Element.checkVisibility(
+            {
+                opacityProperty: true,
+                visibilityProperty: true,
+            })) {
+            return;
+        }
+        //console.log("Render: " + t.Url + " @ " + time);
+
         const gl = t.GL;
         gl.viewport(0, 0, w, h);
         t.UniformTime(time * p.Speed);
