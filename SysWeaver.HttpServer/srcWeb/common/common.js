@@ -18,7 +18,12 @@ function hackerThemeAnimate(time) {
  * Use this function to select what text literals should be translated (automatically if enabled etc).
  * If the last argument is a string literal and it's not used in the format string, it is used as the translation context.
  * The text is translated on the server before serving the .js file (and the call may be removed if there are no parameters but the translation context parameter).
- * @param {String} format Must be a constant string (string literal). Can optionally use parameters such as: "Hello {0}! Haven't seen you since {1}." etc, that will be replcaed with the supplied paramaters.
+ * @param {String} format Must be a constant string (string literal). 
+ * Can optionally use parameters such as: "Hello {0}! Haven't seen you since {1}." etc, that will be replaced with the supplied paramaters.
+ * Argument numbers can be prefixed to perform certain operations.
+ * {_0} = Makes the first argument lower-cased.
+ * {^0} = Makes the first argument upper-cased.
+ * {$0} = Makes the first argument lower-cased, unless it's at position 0 in the format template string (start of the string).
  * If the last argument is a string literal and it's not used in the format string, it is used as the translation context.
  * @returns {String} The formatted (translated) string.
  */
@@ -32,8 +37,13 @@ function _T(format) {
  * If the last argument is a string literal and it's not used in the format string, it is used as the translation context.
  * The text is translated on the server before serving the .js file (and the call may be removed if there are no parameters but the translation context parameter).
  * The translated text will be made safe for use in HTML.
- * @param {String} format Must be a constant string (string literal). Can optionally use parameters such as: "Hello {0}! Haven't seen you since {1}." etc, that will be replcaed with the supplied paramaters.
+ * @param {String} format Must be a constant string (string literal). 
+ * Can optionally use parameters such as: "Hello {0}! Haven't seen you since {1}." etc, that will be replcaed with the supplied paramaters.
  * If the last argument is a string literal and it's not used in the format string, it is used as the translation context.
+ * Argument numbers can be prefixed to perform certain operations.
+ * {_0} = Makes the first argument lower-cased.
+ * {^0} = Makes the first argument upper-cased.
+ * {$0} = Makes the first argument lower-cased, unless it's at position 0 in the format template string (start of the string).
  * @returns {String} The formatted (translated) string, made safe to use in html.
  */
 function _TH(format) {
@@ -46,7 +56,12 @@ function _TH(format) {
  * Use this function to select what text literals should be translated (automatically if enabled etc).
  * Use this if no parameters are required or if NO parameter replacements should be done.
  * The text is translated on the server before serving the .js file and the call will be removed.
- * @param {String} text Must be a constant string (string literal). Can optionally use parameters such as: "Hello {0}! Haven't seen you since {1}." etc - they will not be replaced.
+ * @param {String} text Must be a constant string (string literal). 
+ * Can optionally use parameters such as: "Hello {0}! Haven't seen you since {1}." etc - they will not be replaced.
+ * Argument numbers can be prefixed to perform certain operations.
+ * {_0} = Makes the first argument lower-cased.
+ * {^0} = Makes the first argument upper-cased.
+ * {$0} = Makes the first argument lower-cased, unless it's at position 0 in the format template string (start of the string).
  * @param {String} translationContext Optionally give some more context to the translation service, will be removed service side.
  * @returns {String} The (translated) string.
  */
@@ -60,9 +75,14 @@ function _TF(text, translationContext) {
  * Use this if no parameters are required or if NO parameter replacements should be done.
  * The text is translated on the server before serving the .js file and the call will be removed.
  * The translated text will be made safe for use in HTML.
- * @param {String} text Must be a constant string (string literal). Can optionally use parameters such as: "Hello {0}! Haven't seen you since {1}." etc - they will not be replaced.
+ * @param {String} text Must be a constant string (string literal). 
+ * Can optionally use parameters such as: "Hello {0}! Haven't seen you since {1}." etc - they will not be replaced.
+ * Argument numbers can be prefixed to perform certain operations.
+ * {_0} = Makes the first argument lower-cased.
+ * {^0} = Makes the first argument upper-cased.
+ * {$0} = Makes the first argument lower-cased, unless it's at position 0 in the format template string (start of the string).
  * @param {String} translationContext Optionally give some more context to the translation service, will be removed service side.
- * @returns {String} The (translated) string, made safe to use in html.
+ * @returns {String} The (translated) string, made safe to use in html (arguments are NOT made safe).
  */
 function _TFH(text, translationContext) {
     return text;
@@ -3483,6 +3503,27 @@ const CurrencyFormatOptions = Object.freeze({
     Default: 3 | 8,
 });
 
+
+/**
+ * Wrap a stringFormat argument in a html element (typically a span), ex: "John Doe" => <span>John Doe</span>
+ * @param {any} argValue The value to wrap
+ * @param {string} elementClass Optional class(es) to add to the element that wraps the argument.
+ * @param {string} elementType Optional element type name to use, defaults to "span".
+ * @returns {string} HTML with the argument value wrapped in a html element
+ */
+function ArgAsHtml(argValue, elementClass, elementType) {
+    if (typeof argValue === "undefined")
+        return undefined;
+    const v = "" + argValue;
+    return (number, fmt, index) => {
+        const e = document.createElement(elementType ?? "b");
+        if (elementClass)
+            e.setAttribute("class", elementClass);
+        e.innerText = fmt ? fmt(v, index) : v;
+        return e.outerHTML;
+    }
+}
+
 class ValueFormat {
 
 
@@ -3727,37 +3768,42 @@ class ValueFormat {
         return pluralSuffix + count;
     }
     */
+
+    static FormatMaps = function () {
+        const m = new Map();
+        m.set('_', (val, index) => val.toLowerCase());
+        m.set('^', (val, index) => val.toUpperCase());
+        m.set('$', (val, index) => index <= 0 ? val : val.toLowerCase());
+        return m;
+    }();
+
+    /**
+     * Performs a string format with variables.
+     * @param {string} format The format template string, arguments can be referenced using {0}, {1} ... {n}.
+     * Argument numbers can be prefixed to perform certain operations.
+     * {_0} = Makes the first argument lower-cased.
+     * {^0} = Makes the first argument upper-cased.
+     * {$0} = Makes the first argument lower-cased, unless it's at position 0 in the format template string (start of the string).
+     * @param {any} args Any number of arguments.
+     * @returns {string} The formatted string.
+     */
     static stringFormatArgs = function (format, args) {
         if (!format)
             return undefined;
-        const upperArgs = [];
-        const lowerArgs = [];
-        return format.replace(/{[_^]?(\d+)}/g, function (match, number) {
-            if (match[1] == '_') {
-                const val = args[number];
-                if (typeof val === 'undefined')
-                    return match;
-                let lv = lowerArgs[number];
-                if (!lv) {
-                    lv = ("" + val).toLowerCase();
-                    lowerArgs[number] = lv;
-                }
-                return lv;
-            }
-            if (match[1] == '^') {
-                const val = args[number];
-                if (typeof val === 'undefined')
-                    return match;
-                let lv = upperArgs[number];
-                if (!lv) {
-                    lv = ("" + val).toUpperCase();
-                    upperArgs[number] = lv;
-                }
-                return lv;
-            }
-            const val = args[number];
-            if (typeof val === 'undefined')
+        const maps = ValueFormat.FormatMaps;
+        return format.replace(/{[_^$]?(\d+)}/g, function (match, number, index) {
+            let val = args[number];
+            const vt = typeof val;
+            if (vt === 'undefined')
                 return match;
+            let fmt = maps.get(match.charAt(1));
+            if (vt === 'function') {
+                val = val(number, fmt, index);
+                fmt = null;
+            }
+            val = "" + val;
+            if (fmt)
+                val = fmt(val, index);
             return val;
         });
     };
