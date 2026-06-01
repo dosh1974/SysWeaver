@@ -1,4 +1,4 @@
-using SysWeaver.Compression;
+﻿using SysWeaver.Compression;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,7 +25,7 @@ namespace SysWeaver.Net
             Uri = uri;
             Location = location;
             Mime = mime;
-            AllowTemplates = mime.FastEndsWith("UTF-8");
+            AllowTemplates = mime?.FastEndsWith("UTF-8") ?? false;
             ClientCacheDuration = clientCacheDuration;
             RequestCacheDuration = requestCacheDuration;
             Compression = compression;

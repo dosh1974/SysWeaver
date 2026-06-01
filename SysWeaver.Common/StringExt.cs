@@ -12,6 +12,7 @@ namespace SysWeaver
     {
 
         static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
+        static readonly CompareInfo Ci = CultureInfo.InvariantCulture.CompareInfo;
 
         /// <summary>
         /// Make an culture invariant lower case version of a string
@@ -19,7 +20,7 @@ namespace SysWeaver
         /// <param name="str">The string to transform into a culture invariant lower case</param>
         /// <returns>Culture invariant lower case string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String FastToLower(this String str) => str == null ? null : Ti.ToLower(str);
+        public static String FastToLower(this String str) => Ti.ToLower(str);
 
         /// <summary>
         /// Make an culture invariant upper case version of a string
@@ -27,7 +28,7 @@ namespace SysWeaver
         /// <param name="str">The string to transform into a culture invariant upper case</param>
         /// <returns>Culture invariant upper case string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String FastToUpper(this String str) => str == null ? null : Ti.ToUpper(str);
+        public static String FastToUpper(this String str) => Ti.ToUpper(str);
 
         /// <summary>
         /// A fast case sensitive, invariant culture starts with method
@@ -35,18 +36,17 @@ namespace SysWeaver
         /// <param name="str"></param>
         /// <param name="value"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastStartsWith(this String str, String value)
         {
-            if (value == null)
+            /*if (value == null)
                 return str == null;
             if (str == null)
-                return false;
+                return false;*/
             var vl = value.Length;
-            if (vl == 0)
-                return true;
-            if (str.Length < vl)
+            if (vl > str.Length)
                 return false;
-            return str.AsSpan(0, vl).SequenceEqual(value.AsSpan());
+            return str.AsSpan(0, value.Length).SequenceEqual(value.AsSpan());
         }
 
         /// <summary>
@@ -56,15 +56,14 @@ namespace SysWeaver
         /// <param name="value"></param>
         /// <param name="atOffset"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastStartsWith(this String str, String value, int atOffset)
         {
-            if (value == null)
+            /*if (value == null)
                 return str == null;
             if (str == null)
-                return false;
+                return false;*/
             var vl = value.Length;
-            if (vl == 0)
-                return true;
             if ((str.Length - atOffset) < vl)
                 return false;
             return str.AsSpan(atOffset, vl).SequenceEqual(value.AsSpan());
@@ -76,21 +75,17 @@ namespace SysWeaver
         /// <param name="str"></param>
         /// <param name="value"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastEndsWith(this String str, String value)
-        {
-            if (value == null)
-                return str == null;
-            if (str == null)
-                return false;
+            => str.EndsWith(value, StringComparison.Ordinal);
+/*        {
             var vl = value.Length;
-            if (vl == 0)
-                return true;
             var sl = str.Length;
-            if (sl < vl)
+            if (vl > sl)
                 return false;
             return str.AsSpan(sl - vl, vl).SequenceEqual(value.AsSpan());
         }
-
+*/
 
 
         /// <summary>
@@ -113,8 +108,10 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int FastIndexOf(this String str, String value, int startPos)
         {
-            var t = str.AsSpan().Slice(startPos).IndexOf(value.AsSpan());
-            return t < 0 ? t : (t + startPos);
+            var t = str.AsSpan(startPos).IndexOf(value.AsSpan());
+            if (t >= 0)
+                t += startPos;
+            return t;
         }
 
 
@@ -137,7 +134,7 @@ namespace SysWeaver
         /// <returns>-1 if not found or the position where the string was found</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int FastLastIndexOf(this String str, String value, int startPos)
-            => str.AsSpan().Slice(0, startPos).LastIndexOf(value.AsSpan());
+            => str.AsSpan(0, startPos).LastIndexOf(value.AsSpan());
 
         /// <summary>
         /// A fast case sensitive, invariant culture equals with method
@@ -148,11 +145,11 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastEquals(this String str, String value)
         {
-            if (value == null)
+/*            if (value == null)
                 return str == null;
             if (str == null)
                 return false;
-            return str.AsSpan().SequenceEqual(value.AsSpan());
+*/            return str.AsSpan().SequenceEqual(value.AsSpan());
         }
 
 
@@ -167,18 +164,17 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastSubEquals(this String str, int strStart, int strLen, String value)
         {
-            if (value == null)
+/*            if (value == null)
                 return str == null;
             if (str == null)
                 return false;
-            var len = value.Length;
+*/            var len = value.Length;
             if (len != strLen)
                 return false;
-            var ss = str.AsSpan();
             var ml = strStart + len;
-            if (ss.Length < ml)
+            if (str.Length < ml)
                 return false;
-            return ss.Slice(strStart, len).SequenceEqual(value.AsSpan());
+            return str.AsSpan(strStart, len).SequenceEqual(value.AsSpan());
         }
 
 
@@ -192,16 +188,15 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastSubEquals(this String str, int strStart, String value)
         {
-            if (value == null)
+/*            if (value == null)
                 return str == null;
             if (str == null)
                 return false;
-            var len = value.Length;
-            var ss = str.AsSpan();
+*/            var len = value.Length;
             var ml = strStart + len;
-            if (ss.Length != ml)
+            if (str.Length != ml)
                 return false;
-            return ss.Slice(strStart, len).SequenceEqual(value.AsSpan());
+            return str.AsSpan(strStart, len).SequenceEqual(value.AsSpan());
         }
 
 
@@ -431,17 +426,16 @@ namespace SysWeaver
         {
             if (text == null)
                 return text;
-            var sp = text.AsSpan();
-            var tl = sp.Length;
+            var tl = text.Length;
             if (tl < 2)
                 return text;
-            var c = sp[0];
+            var c = text[0];
             if (c != '"')
                 if (c != '\'')
                     return text;
-            if (sp[tl - 1] != c)
+            if (text[tl - 1] != c)
                 return text;
-            return new string(sp.Slice(1, tl - 2));
+            return new string(text.AsSpan(1, tl - 2));
         }
 
 
