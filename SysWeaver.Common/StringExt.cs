@@ -144,14 +144,17 @@ namespace SysWeaver
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastEquals(this String str, String value)
-        {
+            => String.Equals(str, value, StringComparison.Ordinal);
+
+//        {
 /*            if (value == null)
                 return str == null;
             if (str == null)
                 return false;
-*/            return str.AsSpan().SequenceEqual(value.AsSpan());
+*/ 
+/*return str.AsSpan().SequenceEqual(value.AsSpan());
         }
-
+*/
 
         /// <summary>
         /// A fast case sensitive, invariant culture equals with method
