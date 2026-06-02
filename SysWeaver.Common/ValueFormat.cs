@@ -3,11 +3,48 @@
 namespace SysWeaver
 {
 
+    public enum DateTimeLevels
+    {
+        Us,
+        Ms,
+        Seconds,
+        Minute,
+        Hour,
+        Day,
+        Month,
+        Year,
+        Default = Seconds,
+    }
+
     /// <summary>
     /// Fast and advanced value formatting
     /// </summary>
     public static class ValueFormat
     {
+        static readonly String[] DateTimeFormats = [
+            "yyyy-MM-dd HH:mm:ss,ffffff", " µs",
+            "yyyy-MM-dd HH:mm:ss,fff", " ms",
+            "yyyy-MM-dd HH:mm:ss", "",
+            "yyyy-MM-dd HH:mm", "",
+            "yyyy-MM-dd HH", "h",
+            "yyyy-MM-dd", "",
+            "yyyy-MM", "",
+            "yyyy", "",
+            ];
+
+        /// <summary>
+        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+        /// </summary>
+        /// <param name="value">The value</param>
+        /// <param name="level">The level to show</param>
+        /// <returns>A string of the format: OptionalPad + Prefix + ValueStr + Suffix</returns>
+        public static String ToValueString(this DateTime value, DateTimeLevels level = DateTimeLevels.Default)
+        {
+            int i = (int)level;
+            var d = DateTimeFormats;
+            i += i;
+            return value.ToString(d[i]) + d[i + 1];
+        }
 
         /// <summary>
         /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
