@@ -199,8 +199,18 @@ class MediaPlayerEffect {
         t.Height = h;
         t.CompilationTime = -1;
         t.ResetCounters();
-
         t.ApplyClip();
+		t.IsDarkMode = MediaPlayerTools.IsDarkMode();
+		t.DarkModeChanged = isDark => 
+		{
+			t.IsDarkMode = isDark;
+			if (params.Static)
+			{
+				t.Rendered = false;
+				MediaPlayerEffect.render(t);
+			}
+		};
+		MediaPlayerTools.AddDarkModeChangeEvent(t.DarkModeChanged);
     }
 
     ApplyClip(p) {
@@ -212,9 +222,11 @@ class MediaPlayerEffect {
         }
     }
 
-    ReleaseGL() {
+	CustomX = 0;
+	CustomY = 0;
+	CustomZ = 0;
 
-        
+    ReleaseGL() {
         const t = this;
         if (t.ResizeObserver)
             t.ResizeObserver.unobserve(t.Element);
@@ -239,6 +251,7 @@ class MediaPlayerEffect {
         await t.Pause();
         while (t.IsAnimating)
             await MediaPlayerTools.delay(1);
+		MediaPlayerTools.RemoveDarkModeChangeEvent(t.DarkModeChanged);
         if (t.Element.parentNode)
             t.Element.remove();
         t.ReleaseGL();
@@ -343,6 +356,10 @@ class MediaPlayerEffect {
         if (sc)
             t.UniformScroll = (x, y, rx, ry) => gl.uniform4f(sc, x, y, rx, ry);
 
+        const cd = gl.getUniformLocation(p, "customDark");
+        t.UniformCustomDark = (x, y, z, isDarkMode) => { };
+        if (cd)
+            t.UniformCustomDark = (x, y, z, isDarkMode) => gl.uniform4f(cd, x, y, z, isDarkMode);
 
         const tex = t.Texture;
         if (tex) {
@@ -639,11 +656,10 @@ class MediaPlayerEffect {
         }
         t.UniformScroll(scrollX, scrollY, scrollRX, scrollRY);
         t.UniformMouse(t.MouseX, t.MouseY);
-        //t.UniformTimeDelta
         t.UniformFrameIndex(t.FrameIndex);
+        t.UniformCustomDark(t.CustomX, t.CustomY, t.CustomZ, t.IsDarkMode ? 1.0 : 0.0);
         ++t.FrameIndex;
-        t.UniformDate(new Date());
-
+		
         if (t.ApplyTextue) {
             t.ApplyTextue = false;
             const tex = t.Texture;
@@ -664,6 +680,7 @@ class MediaPlayerEffect {
             }
         }
 
+        t.UniformDate(new Date());
         const draw = () => {
             gl.drawArrays(gl.TRIANGLES, 0, 3);
 

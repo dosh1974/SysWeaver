@@ -97,6 +97,61 @@ class MediaPlayerTools {
         //i.ApplyClip();
 
     }
+	
+	
+	static IsDarkMode()
+	{
+		const w = window.top;
+		const c = w.getComputedStyle(w.document.body);
+		return c.getPropertyValue("color-scheme") === "dark";
+	}
+
+	static AddDarkModeChangeEvent(fn)
+	{
+		const m = MediaPlayerTools.DarkModeEventsMap;
+		if (m.size > 0)
+		{
+			if (m.get(fn))
+				return false;
+			m.set(fn, true);
+			return true;
+		}
+		m.set(fn, true);
+		let current = MediaPlayerTools.IsDarkMode();
+		function onChangeCheck()
+		{
+			const n = MediaPlayerTools.IsDarkMode();
+			if (n !== current)
+			{
+				current = n;
+				m.forEach((v, k) => {
+					try
+					{
+						k(n);
+					}
+					catch
+					{
+					}
+				});
+			}
+			if (m.size > 0)
+				window.requestAnimationFrame(onChangeCheck);
+		}
+		window.requestAnimationFrame(onChangeCheck);
+		return true;
+	}
+	
+	static RemoveDarkModeChangeEvent(fn)
+	{
+		const m = MediaPlayerTools.DarkModeEventsMap;
+		if (!m.get(fn))
+			return false;
+		m.delete(fn);
+		return true;
+	}
+	
+	
+	static DarkModeEventsMap = new Map();
 
     static ComputeClip(i, params) {
         const ow = i.Width;
