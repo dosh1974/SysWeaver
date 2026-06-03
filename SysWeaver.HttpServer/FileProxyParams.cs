@@ -10,7 +10,7 @@ namespace SysWeaver.Net
         public String WebRoot;
 
         /// <summary>
-        /// The remove folder to serve
+        /// The remote folder to serve
         /// </summary>
         public String SourceRoot;
 

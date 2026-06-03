@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -18,7 +18,7 @@ namespace SysWeaver.Remote.Connection
         public static readonly MethodInfo SbToString = typeof(StringBuilder).GetMethod(nameof(StringBuilder.ToString), []);
 
         public static readonly MethodInfo ToStringMethod = typeof(Object).GetMethod(nameof(Object.ToString), []);
-        public static readonly MethodInfo EscapeMethod = typeof(Uri).GetMethod(nameof(Uri.EscapeDataString));
+        public static readonly MethodInfo EscapeMethod = typeof(Uri).GetMethod(nameof(Uri.EscapeDataString), [typeof(string)]);
 
         public static Expression Secure(Expression ex) => Expression.Call(EscapeMethod, ex);
 
