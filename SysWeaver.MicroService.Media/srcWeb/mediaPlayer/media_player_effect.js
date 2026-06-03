@@ -20,6 +20,8 @@ class MediaPlayerParamsEffect {
     ImageSize = false;
     ShowVars = false;
     FxProps = null;
+	ForceMode = null;
+	DarkModeSwitch = 200;
 }
 
 class MediaPlayerEffect {
@@ -200,17 +202,27 @@ class MediaPlayerEffect {
         t.CompilationTime = -1;
         t.ResetCounters();
         t.ApplyClip();
-		t.IsDarkMode = MediaPlayerTools.IsDarkMode();
-		t.DarkModeChanged = isDark => 
+		if (params.ForceMode)
 		{
-			t.IsDarkMode = isDark;
-			if (params.Static)
+			t.IsDarkMode = params.ForceMode === "dark";
+		}else {
+			t.IsDarkMode = MediaPlayerTools.IsDarkMode();
+			const smooth = ((!params.Static) && (typeof Smoothness === "object") && (params.DarkModeSwitch > 0)) ? new SmoothBool(null, t.IsDarkMode, params.DarkModeSwitch, Smoothness.Smooth) : null;
+			t.SmoothDark = smooth;
+			t.DarkModeChanged = isDark => 
 			{
-				t.Rendered = false;
-				MediaPlayerEffect.render(t);
-			}
-		};
-		MediaPlayerTools.AddDarkModeChangeEvent(t.DarkModeChanged);
+				t.IsDarkMode = isDark;
+				if (params.Static)
+				{
+					t.Rendered = false;
+					MediaPlayerEffect.render(t);
+				}
+				if (smooth)
+					smooth.Update(null, isDark);
+			};
+			MediaPlayerTools.AddDarkModeChangeEvent(t.DarkModeChanged);
+		}
+
     }
 
     ApplyClip(p) {
@@ -657,7 +669,8 @@ class MediaPlayerEffect {
         t.UniformScroll(scrollX, scrollY, scrollRX, scrollRY);
         t.UniformMouse(t.MouseX, t.MouseY);
         t.UniformFrameIndex(t.FrameIndex);
-        t.UniformCustomDark(t.CustomX, t.CustomY, t.CustomZ, t.IsDarkMode ? 1.0 : 0.0);
+		const darkMode = t.SmoothDark ? t.SmoothDark.ValueAt() : (t.IsDarkMode ? 1.0 : 0.0);
+        t.UniformCustomDark(t.CustomX, t.CustomY, t.CustomZ, darkMode);
         ++t.FrameIndex;
 		
         if (t.ApplyTextue) {
