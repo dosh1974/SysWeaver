@@ -420,6 +420,13 @@ class MediaPlayerTools {
         m.set("MediaSetVolume", v => obj.SetVolume(v.Volume ?? v.Value ?? 0.0));
         m.set("MediaSeek", v => obj.Seek(v.Time ?? v.Position ?? v.Value ?? 0.0));
         m.set("MediaDebugLoseContext", v => obj.DebugLoseContext());
+        if (typeof obj.CustomX === "object")
+            m.set("MediaCustomX", v => obj.CustomX.Set(v.Value));
+        if (typeof obj.CustomY === "object")
+            m.set("MediaCustomY", v => obj.CustomY.Set(v.Value));
+        if (typeof obj.CustomZ === "object")
+            m.set("MediaCustomZ", v => obj.CustomZ.Set(v.Value));
+
         function h(ev) {
             const data = ev.data;
             if (!data)

@@ -21,7 +21,13 @@ class MediaPlayerParamsEffect {
     ShowVars = false;
     FxProps = null;
 	ForceMode = null;
-	DarkModeSwitch = 200;
+    DarkModeSwitch = 200;
+    CustomX = 0;
+    CustomY = 0;
+    CustomZ = 0;
+    CustomAnimX = null;
+    CustomAnimY = null;
+    CustomAnimZ = null;
 }
 
 class MediaPlayerEffect {
@@ -222,8 +228,87 @@ class MediaPlayerEffect {
 			};
 			MediaPlayerTools.AddDarkModeChangeEvent(t.DarkModeChanged);
 		}
-
+		t.CustomX = MediaPlayerEffect.GetAnimFn(params.CustomAnimX, params.CustomX);
+		t.CustomY = MediaPlayerEffect.GetAnimFn(params.CustomAnimY, params.CustomY);
+		t.CustomZ = MediaPlayerEffect.GetAnimFn(params.CustomAnimZ, params.CustomZ);
     }
+	
+	static GetAnimFn(f, v)
+	{
+		if (!v)
+			v = 0;
+		if (!f)
+		{
+			let val = v;
+			const Get = () => val;
+			const Set = nv => val = nv;
+			return { Get, Set };
+        }
+        if (typeof f === "function") {
+
+            const Get = f;
+            const Set = nv => { };
+            return { Get, Set };
+        }
+		const c = f.split(',');
+		const cl = c.length;
+		if (c[0] === "SmoothBool")
+		{
+			const delay = cl > 1 ? parseFloat(c[1]) : 200;
+			const sm = cl > 2 ? parseInt(c[2]) : Smoothness.Normal;
+			const anim = new SmoothBool(null, v !== 0, delay, sm);
+			const Get = () => anim.ValueAt();
+			const Set = nv => anim.Update(null, nv !== 0);
+			return { Get, Set };
+		}
+		if (c[0] === "SmoothValue")
+		{
+			const delay = cl > 1 ? parseFloat(c[1]) : 200;
+			const anim = new SmoothValue(null, v, delay);
+			const Get = () => anim.ValueAt();
+			const Set = nv => anim.Update(null, nv);
+			return { Get, Set };
+		}
+        if (c[0] === "Spring") {
+            const frequency = cl > 1 ? parseFloat(c[1]) : 7;
+            const initialLength = cl > 2 ? parseFloat(c[2]) : 100;
+            const decay = cl > 3 ? parseFloat(c[3]) : 90;
+            const snap = cl > 4 ? parseFloat(c[4]) : 0.01;
+            let mag = v;
+            let startTime = performance.now();
+            const anim = new SpringAnimation(frequency, initialLength, decay, snap);
+            const Get = () => anim.ValueAt(performance.now() - startTime) * mag;
+            const Set = nv => {
+                mag = nv;
+                startTime = performance.now();
+            };
+            return { Get, Set };
+        }
+        if (c[0] === "Bounce") {
+            const initialVelocity = cl > 1 ? parseFloat(c[1]) : 5;
+            const gravity = cl > 2 ? parseFloat(c[2]) : 10;
+            const restitution = cl > 3 ? parseFloat(c[3]) : 0.8;
+            const restVelocity = cl > 4 ? parseFloat(c[4]) : 0.1;
+            const normalize = cl > 5 ? (c[5] === "true") : true;
+            const startAtPeak = cl > 6 ? (c[6] === "true") : false;
+            let mag = v;
+            let startTime = performance.now();
+            const anim = new BounceAnimation(initialVelocity, gravity, restitution, restVelocity, normalize, startAtPeak);
+            const Get = () => anim.ValueAt(performance.now() - startTime) * mag;
+            const Set = nv => {
+                mag = nv;
+                startTime = performance.now();
+            };
+            return { Get, Set };
+        }
+		{
+			let val = v;
+			const Get = () => val;
+			const Set = nv => val = nv;
+			return { Get, Set };
+		}
+	}
+	
 
     ApplyClip(p) {
         const t = this;
@@ -670,7 +755,10 @@ class MediaPlayerEffect {
         t.UniformMouse(t.MouseX, t.MouseY);
         t.UniformFrameIndex(t.FrameIndex);
 		const darkMode = t.SmoothDark ? t.SmoothDark.ValueAt() : (t.IsDarkMode ? 1.0 : 0.0);
-        t.UniformCustomDark(t.CustomX, t.CustomY, t.CustomZ, darkMode);
+		const customX = t.CustomX.Get();
+		const customY = t.CustomY.Get();
+		const customZ = t.CustomZ.Get();
+        t.UniformCustomDark(customX, customY, customZ, darkMode);
         ++t.FrameIndex;
 		
         if (t.ApplyTextue) {
