@@ -794,8 +794,6 @@ class BounceMotion {
 	}
 }
 
-
-
 /** Represent a bounce motion */
 class BounceAnimation {
 
