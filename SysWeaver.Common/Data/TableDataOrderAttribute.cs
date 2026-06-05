@@ -15,6 +15,17 @@ namespace SysWeaver.Data
 
 
 
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public sealed class TableDataIncludeAttribute : Attribute
+    {
+        public TableDataIncludeAttribute(bool include = true)
+        {
+            Include = include;
+        }
+
+        public readonly bool Include;
+    }
+
 
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataSearchAttribute : Attribute
