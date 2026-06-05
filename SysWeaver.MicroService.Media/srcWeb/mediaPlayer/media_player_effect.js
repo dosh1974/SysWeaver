@@ -240,7 +240,7 @@ class MediaPlayerEffect {
 		let n = this.CustomX;
 		if (a)
 		{
-			const sv = a.StartValue;
+			const sv = m.Start;
 			n = MediaPlayerEffect.GetAnimFn(a, typeof sv === "number" ? sv : v);
 			this.CustomX = n;
 		}
@@ -254,7 +254,7 @@ class MediaPlayerEffect {
 		let n = this.CustomY;
 		if (a)
 		{
-			const sv = a.StartValue;
+			const sv = m.Start;
 			n = MediaPlayerEffect.GetAnimFn(a, typeof sv === "number" ? sv : v);
 			this.CustomY = n;
 		}
@@ -268,7 +268,7 @@ class MediaPlayerEffect {
 		let n = this.CustomZ;
 		if (a)
 		{
-			const sv = a.StartValue;
+			const sv = m.Start;
 			n = MediaPlayerEffect.GetAnimFn(a, typeof sv === "number" ? sv : v);
 			this.CustomZ = n;
 		}
