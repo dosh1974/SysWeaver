@@ -233,6 +233,49 @@ class MediaPlayerEffect {
 		t.CustomZ = MediaPlayerEffect.GetAnimFn(params.CustomAnimZ, params.CustomZ);
     }
 	
+	SetCustomX(m)
+	{
+		const v = m.Value;
+		const a = m.Anim;
+		let n = this.CustomX;
+		if (a)
+		{
+			const sv = a.StartValue;
+			n = MediaPlayerEffect.GetAnimFn(a, typeof sv === "number" ? sv : v);
+			this.CustomX = n;
+		}
+		n.Set(v);
+	}
+	
+	SetCustomY(m)
+	{
+		const v = m.Value;
+		const a = m.Anim;
+		let n = this.CustomY;
+		if (a)
+		{
+			const sv = a.StartValue;
+			n = MediaPlayerEffect.GetAnimFn(a, typeof sv === "number" ? sv : v);
+			this.CustomY = n;
+		}
+		n.Set(v);
+	}
+	
+	SetCustomZ(m)
+	{
+		const v = m.Value;
+		const a = m.Anim;
+		let n = this.CustomZ;
+		if (a)
+		{
+			const sv = a.StartValue;
+			n = MediaPlayerEffect.GetAnimFn(a, typeof sv === "number" ? sv : v);
+			this.CustomZ = n;
+		}
+		n.Set(v);
+	}
+
+	
 	static GetAnimFn(f, v)
 	{
 		if (!v)
