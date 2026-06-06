@@ -1981,6 +1981,8 @@ function getNumberAttribute(element, attribute, defValue) {
 }
 
 function doHandleSrc(e) {
+    if (typeof e.hasAttribute !== "function")
+        return false;
     if (e.hasAttribute("data-sw-fade"))
         return true;
     if (e.hasAttribute("data-sw-fadein"))
@@ -2013,7 +2015,7 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay) {
         e.setAttribute("draggable", "false");
     //  Setup fade
     if (typeof fadeIn === "undefined")
-        fadeIn = getNumberAttribute(e, "data-sw-fadein", 3150);
+        fadeIn = getNumberAttribute(e, "data-sw-fadein", 150);
     if (typeof fadeDelay === "undefined")
         fadeDelay = getNumberAttribute(e, "data-sw-fadedelay", 0);
     const useEvent = isIFrame && e.hasAttribute("data-sw-useevent");
@@ -6645,39 +6647,31 @@ async function SysWeaverInit() {
 
     //  Setup smooth img / iframe loading changing
 
-    const allImg = document.getElementsByTagName("img");
-    for (let i = 0, max = allImg.length; i < max; i++) {
-        const e = allImg[i];
-        if (doHandleSrc(e))
-            fixElementWithSrc(e);
+    function onSmooth(root, fn) {
+        if (doHandleSrc(root))
+            fn(root);
+        if (typeof root.getElementsByTagName !== "function")
+            return;
+        const allImg = root.getElementsByTagName("img");
+        for (let i = 0, max = allImg.length; i < max; i++) {
+            const e = allImg[i];
+            if (doHandleSrc(e))
+                fn(e);
+        }
+        const allIframe = root.getElementsByTagName("iframe");
+        for (let i = 0, max = allIframe.length; i < max; i++) {
+            const e = allIframe[i];
+            if (doHandleSrc(e))
+                fn(e);
+        }
     }
-    const allIframe = document.getElementsByTagName("iframe");
-    for (let i = 0, max = allIframe.length; i < max; i++) {
-        const e = allIframe[i];
-        if (doHandleSrc(e))
-            fixElementWithSrc(e);
-    }
-    const mapSrcMap = new Map();
-    mapSrcMap.set("IFRAME", true);
-    mapSrcMap.set("IMG", true);
+    onSmooth(document, fixElementWithSrc);
     new MutationObserver(changes => {
         changes.forEach(change => {
-            change.addedNodes.forEach(node => {
-                if (mapSrcMap.get(node.tagName))
-                {
-                    if (doHandleSrc(node))
-                        fixElementWithSrc(node);
-                }
-            });
-            change.removedNodes.forEach(node => {
-                if (mapSrcMap.get(node.tagName))
-                {
-                    if (doHandleSrc(node))
-                        cleanElementWithSrc(node);
-                }
-            });
+            change.addedNodes.forEach(node => onSmooth(node, fixElementWithSrc));
+            change.removedNodes.forEach(node => onSmooth(node, cleanElementWithSrc));
         });
-    }).observe(document.body, {
+    }).observe(document, {
         subtree: true,
         childList: true,
     });
