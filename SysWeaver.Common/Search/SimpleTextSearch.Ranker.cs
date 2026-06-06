@@ -28,9 +28,10 @@ namespace SysWeaver.Search
                 double score = 0;
                 for (int t = 0; t < tl; ++t)
                 {
-                    var tt = texts[t].FastToLower();
+                    var tt = texts[t];
                     if (String.IsNullOrEmpty(tt))
                         continue;
+                    tt = tt.FastToLower();
                     var text = tt.AsSpan();
                     var ttl = text.Length;
                     int prev = 0;

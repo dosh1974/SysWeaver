@@ -1962,36 +1962,150 @@ function isValidEmail(s)
     return true;
 }
 
+
 /**
- * Set up event handlers on a html element to monitor src changes, will set opacity to 0 on the element when loading.
- * Warning: The opacity value of the element will be overridden.. do not use!
- * @param {HTMLElement} e The html element, typically an img or iframe.
+ * Read an attribute value as a number, return a default if non-existent or malformed
+ * @param {HTMLElement} element The element to read from
+ * @param {string} attribute The attribute to read
+ * @param {number} defValue The default value to use
+ * @returns {number} The default value or attribute value
+ */
+function getNumberAttribute(element, attribute, defValue) {
+    let v = element.getAttribute(attribute);
+    if (!v)
+        return defValue ?? 0;
+    v = parseFloat(v);
+    if ((v > 0) || (v === 0))
+        return v;
+    return defValue ?? 0;
+}
+
+function doHandleSrc(e) {
+    if (e.hasAttribute("data-sw-fade"))
+        return true;
+    if (e.hasAttribute("data-sw-fadein"))
+        return true;
+    if (e.hasAttribute("data-sw-useevent"))
+        return true;
+    return false;
+}
+
+/**
+ * Set up event handlers on a html element to monitor src changes, will set the visibility to hidden and opacity to 0 on the element when loading.
+ * Warning: The opacity and visibility value of the element will be overridden.. do not use them on the element, use a parent element!
+ * @param {HTMLElement} element The html element, typically an img or iframe.
  * @param {boolean} showError If true and the img loading fails, the typical error img is shown
+ * @param {number} fadeIn Optional fade in duration in ms.
+ * @param {number} fadeDelay Optional fade delay in duration in ms.
  * @returns {HTMLElement} The element
  */
-function fixElementWithSrc(e, showError) {
+function fixElementWithSrc(element, showError, fadeIn, fadeDelay) {
+    const e = element;
     if (!e)
         return null;
-    if (e.SrcObs)
+    //  Prevents setting up more than once
+    if (typeof e.FadeIn === "number")
         return e;
-    e.setAttribute("draggable", "false");
-    e.style.opacity = 0;
-    e.addEventListener("load", InternalSrcElementOnLoad);
-    if (showError)
-        e.addEventListener("error", InternalSrcElementOnError);
+    const isImg = element.tagName === "IMG";
+    const isIFrame = element.tagName === "IFRAME";
+    //  Disable dragging
+    if (isImg)
+        e.setAttribute("draggable", "false");
+    //  Setup fade
+    if (typeof fadeIn === "undefined")
+        fadeIn = getNumberAttribute(e, "data-sw-fadein", 3150);
+    if (typeof fadeDelay === "undefined")
+        fadeDelay = getNumberAttribute(e, "data-sw-fadedelay", 0);
+    const useEvent = isIFrame && e.hasAttribute("data-sw-useevent");
+    e.FadeIn = (fadeIn && fadeIn > 0) ? fadeIn : 0;
+    e.FadeDelay = (fadeDelay && fadeDelay > 0) ? fadeDelay : 0;
+    const s = e.style;
+    const msgHandler = ev => {
+        const d = ev.data;
+        if (!d)
+            return;
+        if (d.Type !== "PageLoaded")
+            return;
+        InternalSrcElementOnLoad({ target: e });
+    };
+    const startListen = () => {
+        if (useEvent) 
+            window.addEventListener("message", msgHandler);
+        else
+            e.addEventListener("load", InternalSrcElementOnLoad);
+        if (showError)
+            e.addEventListener("error", InternalSrcElementOnError);
+    }
+    e.StopListen = () => {
+        const a = e.AnimReq;
+        if (a) {
+            cancelAnimationFrame(a);
+            delete e.AnimReq;
+        }
+        window.removeEventListener("message", msgHandler);
+        e.removeEventListener("error", InternalSrcElementOnError);
+        e.removeEventListener("load", InternalSrcElementOnLoad);
+    }
+
+
+
+//  Setup a mutation observer to detect changes to the sts attribute
     try {
         const o = new MutationObserver(changes => {
             changes.forEach(change => {
-                if (change.attributeName.includes('src'))
-                    e.style.opacity = 0;
+                e.StopListen();
+                s.visibility = "hidden";
+                s.opacity = 0;
+                startListen();
             });
         });
-        o.observe(e, { attributes: true });
+        o.observe(e,
+            {
+                attributes: true,
+                attributeFilter: ['src'],
+            });
         e.SrcObs = o;
     }
     catch (x) {
         console.log(x);
     }
+    if (e.src) {
+        //  Src already set
+        if (isImg) {
+            if (e.complete) {
+                //  Image already loaded or failed
+                if (e.style.opacity <= 0) {
+                    // It had the opacity set to 0, so we need to show it
+                    if (e.naturalWidth > 0) {
+                        // Image was loaded successfully, show it
+                        InternalSrcElementOnLoad({ target: e });
+                    }
+                    else {
+                        // Image failed, show it (if enabled)
+                        if (showError)
+                            InternalSrcElementOnError({ target: e });
+                    }
+                }
+                return;
+            }
+        }
+        if (isIFrame) {
+            if (e.contentWindow.document.readyState === "complete") {
+                // Iframe completed
+                if (e.style.opacity <= 0) {
+                    // It had the opacity set to 0, so we need to show it, how to detect error?
+                    InternalSrcElementOnLoad({ target: e });
+                }
+                return;
+            }
+        }
+        //  Is loading, setup events
+        startListen();
+        return e;
+    }
+    // Is loading or src empty, set opacity to 0
+    s.visibility = "hidden";
+    s.opacity = 0;
     return e;
 }
 
@@ -2002,24 +2116,58 @@ function fixElementWithSrc(e, showError) {
  */
 function cleanElementWithSrc(e) {
     if (!e)
-        return null;
-    const o = e.SrcObs;
-    if (o) {
-        o.disconnect();
-        delete e.SrcObs;
-    }
-    e.removeEventListener("error", InternalSrcElementOnError);
-    e.removeEventListener("load", InternalSrcElementOnLoad);
+        return e;
+    if (typeof e.FadeIn !== "number")
+        return e;
+    delete e.FadeIn;
+    delete e.FadeDelay;
+    e.StopListen();
     return e;
+}
+
+function InternalSrcElementOnEvent(ev) {
+
 }
 
 function InternalSrcElementOnLoad(ev)
 {
-    ev.target.style.opacity = null;
+    const e = ev.target;
+    e.StopListen();
+    const f = e.FadeIn;
+    const d = e.FadeDelay;
+    const s = e.style;
+    if (f > 0) {
+        let start = -1;
+        function anim(t) {
+            if (start < 0)
+                start = t + d;
+            t -= start;
+            t /= f;
+            if (t > 0) {
+                s.visibility = null;
+                if (t >= 1) {
+                    s.opacity = null;
+                    delete e.AnimReq;
+                    return;
+                }
+                s.opacity = t;
+            }
+            e.AnimReq = requestAnimationFrame(anim);
+        }
+        e.AnimReq = requestAnimationFrame(anim);
+    } else {
+        s.opacity = null;
+        s.visibility = null;
+    }
 }
 
 function InternalSrcElementOnError(ev) {
-    ev.target.style.opacity = null;
+    const e = ev.target;
+    const s = e.style;
+    s.opacity = null;
+    s.visibility = null;
+    e.removeEventListener("error", InternalSrcElementOnError);
+    e.removeEventListener("load", InternalSrcElementOnLoad);
 }
 
 /**
@@ -2027,29 +2175,32 @@ function InternalSrcElementOnError(ev) {
  * Warning: The opacity value of the element will be overridden.. do not use!
  * @param {string} tagName Name of the tag type: "img", "iframe" etc.
  * @param {boolean} showError If true and the img loading fails, the typical error img is shown
+ * @param {number} fadeIn Optional fade in duration in ms.
  * @returns {HTMLElement} The element
  */
-function createElementWithSrc(tagName, showError) {
-    return fixElementWithSrc(document.createElement(tagName), showError);
+function createElementWithSrc(tagName, showError, fadeIn) {
+    return fixElementWithSrc(document.createElement(tagName), showError, fadeIn);
 }
 
 /**
  * Creates an iframe that is hidden when loading.
  * Warning: The opacity value of the element will be overridden.. do not use!
+ * @param {number} fadeIn Optional fade in duration in ms.
  * @returns {HTMLIFrameElement} The iframe element
  */
-function createIFrame() {
-    return createElementWithSrc("iframe");
+function createIFrame(fadeIn) {
+    return createElementWithSrc("iframe", false, fadeIn);
 }
 
 /**
  * Creates an img tag that is hidden when loading.
  * Warning: The opacity value of the element will be overridden.. do not use!
  * @param {boolean} showError If true and the img loading fails, the typical error img is shown
+ * @param {number} fadeIn Optional fade in duration in ms.
  * @returns {HTMLImageElement} The img element
  */
-function createImg(showError) {
-    return createElementWithSrc("img", showError);
+function createImg(showError, fadeIn) {
+    return createElementWithSrc("img", showError, fadeIn);
 }
 
 
@@ -5835,7 +5986,9 @@ function UnblockTab(element) {
  * @returns {function(boolean):void} A function that when executed removes the loading overlay, if the argument is true, no events ('LoaderRemoved
  */
 function AddLoading(page, text, opaque, useIcon) {
-
+    const ps = getUrlParams();
+    if (ps.has("noloader"))
+        return PageLoaded;
     if (!page)
         page = document.body;
     const scroll = {
@@ -5882,7 +6035,7 @@ function AddLoading(page, text, opaque, useIcon) {
             UnblockTab(le);
             le.remove();
             if (!noEvents) {
-                PostTop("LoaderRemoved", null, "*");
+                PageLoaded();
                 InterOp.Post("WindowLoaded");
                 if ((scroll.left > 0) || (scroll.top > 0)) {
                     //console.log("Scroll target: " + scroll.left + ", " + scroll.top);
@@ -6478,12 +6631,57 @@ function SysWeaverIgnoreUserChanges() {
  * - Server push messaging
  *      Handle reload on user login/sign out
  *      Server messages
+ * - Glitch free loading of images and iframes
+ *      Add "data-sw-fade" attribute on the element to enable smooth loading.
+ *      ..or set "data-sw-fadein"="500" to enable and set the fade duration (in ms).
+ *      For iframe's, optionally add "data-sw-useevent" to wait for the "PageLoaded" event instead of using the "load" event.
+ *      Optionally add "data-sw-fadedelay"="200" to add a delay (in ms) before fading in.
  * @returns
  */
 async function SysWeaverInit() {
     if (window.HaveSysWeaverInit)
         return;
     window.HaveSysWeaverInit = true;
+
+    //  Setup smooth img / iframe loading changing
+
+    const allImg = document.getElementsByTagName("img");
+    for (let i = 0, max = allImg.length; i < max; i++) {
+        const e = allImg[i];
+        if (doHandleSrc(e))
+            fixElementWithSrc(e);
+    }
+    const allIframe = document.getElementsByTagName("iframe");
+    for (let i = 0, max = allIframe.length; i < max; i++) {
+        const e = allIframe[i];
+        if (doHandleSrc(e))
+            fixElementWithSrc(e);
+    }
+    const mapSrcMap = new Map();
+    mapSrcMap.set("IFRAME", true);
+    mapSrcMap.set("IMG", true);
+    new MutationObserver(changes => {
+        changes.forEach(change => {
+            change.addedNodes.forEach(node => {
+                if (mapSrcMap.get(node.tagName))
+                {
+                    if (doHandleSrc(node))
+                        fixElementWithSrc(node);
+                }
+            });
+            change.removedNodes.forEach(node => {
+                if (mapSrcMap.get(node.tagName))
+                {
+                    if (doHandleSrc(node))
+                        cleanElementWithSrc(node);
+                }
+            });
+        });
+    }).observe(document.body, {
+        subtree: true,
+        childList: true,
+    });
+
     window.String.prototype.replaceAll || (window.String.prototype.replaceAll = function (e, t) {
         if (e instanceof RegExp && !e.global) throw new TypeError("String.prototype.replaceAll called with a non-global RegExp argument");
         return e instanceof RegExp ? this.replace(e, t) : this.split(e).join(t);
