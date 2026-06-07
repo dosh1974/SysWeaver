@@ -1980,6 +1980,23 @@ function getNumberAttribute(element, attribute, defValue) {
     return defValue ?? 0;
 }
 
+/**
+ * Read an attribute value as a number, return a default if non-existent or malformed
+ * @param {HTMLElement} element The element to read from
+ * @param {string} attribute The attribute to read
+ * @param {integer} defValue The default value to use
+ * @returns {number} The default value or attribute value
+ */
+function getIntegerAttribute(element, attribute, defValue) {
+    let v = element.getAttribute(attribute);
+    if (!v)
+        return defValue ?? 0;
+    v = parseInt(v);
+    if ((v > 0) || (v === 0))
+        return v;
+    return defValue ?? 0;
+}
+
 function doHandleSrc(e) {
     if (typeof e.hasAttribute !== "function")
         return false;
@@ -1999,9 +2016,11 @@ function doHandleSrc(e) {
  * @param {boolean} showError If true and the img loading fails, the typical error img is shown
  * @param {number} fadeIn Optional fade in duration in ms.
  * @param {number} fadeDelay Optional fade delay in duration in ms.
+ * @param {string} fadeChannel Optional fade channel information "Name;DelayMs".
+ * @param {integer} fadeParent Optionally animate parent element instead, this is the number of parents to step up (0 = default = none)
  * @returns {HTMLElement} The element
  */
-function fixElementWithSrc(element, showError, fadeIn, fadeDelay) {
+function fixElementWithSrc(element, showError, fadeIn, fadeDelay, fadeChannel, fadeParent) {
     const e = element;
     if (!e)
         return null;
@@ -2018,10 +2037,51 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay) {
         fadeIn = getNumberAttribute(e, "data-sw-fadein", 150);
     if (typeof fadeDelay === "undefined")
         fadeDelay = getNumberAttribute(e, "data-sw-fadedelay", 0);
+    if (typeof fadeChannel === "undefined")
+        fadeChannel = e.getAttribute("data-sw-fadechannel");
+    if (typeof fadeParent === "undefined")
+        fadeParent = getIntegerAttribute(e, "data-sw-fadeparent", 0);
     const useEvent = isIFrame && e.hasAttribute("data-sw-useevent");
     e.FadeIn = (fadeIn && fadeIn > 0) ? fadeIn : 0;
     e.FadeDelay = (fadeDelay && fadeDelay > 0) ? fadeDelay : 0;
-    const s = e.style;
+    e.FadeInCount = 0;
+    if (fadeChannel) {
+        const cp = fadeChannel.split(',');
+        const cn = cp[0].trim();
+        const cd = cp.length > 1 ? parseFloat(cp[1].trim()) : 100;
+        if (cd > 0) {
+            let channels = window.FadeChannels;
+            if (!channels) {
+                channels = new Map();
+                window.FadeChannels = channels;
+            }
+            let cdata = channels.get(cn);
+            if (!cdata) {
+                cdata = {
+                    Name: cn,
+                    Count: 0,
+                    StartTime: 0,
+                    Delay: cd,
+                    FirstElement: e,
+                    Index: 0,
+                    Delayed: [],
+                    ItemCount: 0,
+
+                };
+                channels.set(cn, cdata);
+            }
+            const itemIndex = cdata.Index;
+            cdata.Index += 1;
+            cdata.ItemCount += 1;
+            e.FadeChannel = cdata;
+            e.FadeChannelIndex = itemIndex;
+        }
+    }
+    let se = e;
+    for (let i = 0; i < fadeParent; ++i)
+        se = se.parentElement;
+    const s = se.style;
+    e.FadeStyle = s;
     const msgHandler = ev => {
         const d = ev.data;
         if (!d)
@@ -2076,7 +2136,7 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay) {
         if (isImg) {
             if (e.complete) {
                 //  Image already loaded or failed
-                if (e.style.opacity <= 0) {
+                if ((s.opacity <= 0) || (s.visibility === "hidden"))  {
                     // It had the opacity set to 0, so we need to show it
                     if (e.naturalWidth > 0) {
                         // Image was loaded successfully, show it
@@ -2094,7 +2154,7 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay) {
         if (isIFrame) {
             if (e.contentWindow.document.readyState === "complete") {
                 // Iframe completed
-                if (e.style.opacity <= 0) {
+                if ((s.opacity <= 0) || (s.visibility === "hidden")) {
                     // It had the opacity set to 0, so we need to show it, how to detect error?
                     InternalSrcElementOnLoad({ target: e });
                 }
@@ -2121,9 +2181,21 @@ function cleanElementWithSrc(e) {
         return e;
     if (typeof e.FadeIn !== "number")
         return e;
+    e.StopListen();
     delete e.FadeIn;
     delete e.FadeDelay;
-    e.StopListen();
+    delete e.FadeChannelIndex;
+    const ch = e.FadeChannel;
+    delete e.FadeChannel;
+    if (ch) {
+        const nc = ch.ItemCount - 1;
+        ch.ItemCount = nc;
+        if (nc <= 0) {
+            window.FadeChannels.delete(ch.Name);
+            if (window.FadeChannels.size <= 0)
+                delete window.FadeChannels
+        }
+    }
     return e;
 }
 
@@ -2135,24 +2207,74 @@ function InternalSrcElementOnLoad(ev)
 {
     const e = ev.target;
     e.StopListen();
+    const s = e.FadeStyle;
     const f = e.FadeIn;
-    const d = e.FadeDelay;
-    const s = e.style;
+    const ac = e.FadeInCount + 1;
+    e.FadeInCount = ac;
     if (f > 0) {
+        //  Start delay
+        let d = e.FadeDelay;
+        const ch = e.FadeChannel;
+        if (ch) {
+/*
+                cdata = {
+                    Count: 1,
+                    StartTime: 0,
+                    Delay: cd,
+                    FirstElement: e,
+                    Index: 0,
+                    Delayed: []
+                };
+
+*/
+            if (e === ch.FirstElement) {
+            //  First element, just use the regular delay and start right away
+                ch.StartTime = performance.now();
+                ch.Count = ac;
+            //  Execute any delayed animations
+                const d = ch.Delayed;
+                const dl = d.length;
+                for (let i = 0; i < dl; ++i)
+                    InternalSrcElementOnLoad({ target: d[i] });
+                ch.Delayed = [];
+            } else {
+                //  Check if first item have started
+                if (ac !== ch.Count) {
+                    //  Have to wait (until first have started)
+                    e.FadeInCount = ac - 1;
+                    ch.Delayed.push(e);
+                    return;
+                }
+                d += (ch.Delay * e.FadeChannelIndex);
+                d -= (performance.now() - ch.StartTime);
+                if (d < 0)
+                    d = 0;
+            }
+        }
+
+        //  Reveal anim
         let start = -1;
+
+        function smooth(t) {
+            return t * t * t * (t * (t * 6 - 15) + 10);
+        }
+
         function anim(t) {
             if (start < 0)
                 start = t + d;
             t -= start;
             t /= f;
             if (t > 0) {
-                s.visibility = null;
                 if (t >= 1) {
                     s.opacity = null;
+                    s.transform = null;
                     delete e.AnimReq;
                     return;
                 }
-                s.opacity = t;
+                s.opacity = smooth(t);
+                //s.transform = "scale(" + smooth(t) + ")";
+                //s.transform = "translateY(" + smooth(1.0 - t) * 300 + "px)";
+                s.visibility = null;
             }
             e.AnimReq = requestAnimationFrame(anim);
         }
@@ -2165,6 +2287,7 @@ function InternalSrcElementOnLoad(ev)
 
 function InternalSrcElementOnError(ev) {
     const e = ev.target;
+    e.StopListen();
     const s = e.style;
     s.opacity = null;
     s.visibility = null;
