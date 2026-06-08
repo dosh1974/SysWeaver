@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <RootNamespace>SysWeaver.HttpTransformer</RootNamespace>
+    <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.HttpServer\SysWeaver.HttpServer.csproj" />
+    <ProjectReference Include="..\SysWeaver.Minifier.Svg\SysWeaver.Minifier.Svg.csproj" />
+  </ItemGroup>
+  
+</Project>
