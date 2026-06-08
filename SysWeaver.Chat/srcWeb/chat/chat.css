@@ -42,6 +42,12 @@ SysWeaver-Chat {
     overflow: hidden;
 }
 
+    SysWeaver-Chat.NoBackground {
+        background: none transparent;
+        box-shadow: none !important;
+        max-width: 100% !important;
+    }
+
 SysWeaver-ChatMain {
     font-size: 125%;
     display: block;
@@ -324,7 +330,7 @@ SysWeaver-ChatContent {
     cursor: text;
     max-height: 60vh;
     /*white-space: pre-wrap;*/
-}
+    }
 
     SysWeaver-ChatContent:focus
     {
