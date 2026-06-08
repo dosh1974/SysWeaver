@@ -344,15 +344,14 @@ namespace SysWeaver.Minifier
 
 
             Bitmap bref = null;
-#if DEBUG
             try
             {
-                bref = GetValidationRef(xdoc);
+                if (opt.BitmapValidation)
+                    bref = GetValidationRef(xdoc);
             }
             catch
             {
             }
-#endif//DEBUG
             using (bref)
             {
                 HashSet<String> namespaces = new HashSet<string>();

@@ -135,6 +135,13 @@
         /// </summary>
         public int MaxDecimals = -1;
 
+
+#if DEBUG
+        public bool BitmapValidation = true;
+#else//DEBUG
+        public bool BitmapValidation;
+#endif//DEBUG
+
     }
 
 

@@ -10,18 +10,6 @@ using SysWeaver.Net;
 
 namespace SysWeaver.HttpTransformer
 {
-    public class SvgTransformerParams : CachedTransformerParams
-    {
-        public bool BuildDirect = true;
-
-        public SvgMinifierParams Svg = GetDefault();
-
-
-        public static SvgMinifierParams GetDefault() => new SvgMinifierParams
-        {
-            MaxDecimals = 1,
-        };
-    }
 
     public class SvgTransformer : CachedTransformer, ICachedTransformer
     {
