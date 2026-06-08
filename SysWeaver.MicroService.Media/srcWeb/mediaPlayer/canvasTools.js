@@ -24,6 +24,12 @@ class TextStyle {
     /** {string} The css font to use */
     Font = 'bold 128px Verdana';
 
+    /** {string} Optional url to the font to use */
+    FontUrl;
+
+    /** {string} Name of the font loaded from the url, should match the facename in Font */
+    FontUrlName;
+
     /** {number} Additional spacing between each glyph */
     LetterSpacing = 0;
 

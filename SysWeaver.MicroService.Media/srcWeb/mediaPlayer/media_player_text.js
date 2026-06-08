@@ -40,6 +40,11 @@ class MediaPlayerText {
 
         const t = this;
         const p = t.Params;
+        if (p.FontUrl) {
+            const ff = new FontFace(p.FontUrlName, "url('" + p.FontUrl + "')");
+            await ff.load();
+            document.fonts.add(ff);
+        }
         let c;
         if (p.CollageSeparator) {
             const texts = t.Url.split(p.CollageSeparator);
@@ -200,6 +205,11 @@ class MediaPlayerTextTexture {
         const gl = t.GL;
         const texture = t.Texture;
         const p = t.Params;
+        if (p.FontUrl) {
+            const ff = new FontFace(p.FontUrlName, "url('" + p.FontUrl + "')");
+            await ff.load();
+            document.fonts.add(ff);
+        }
         let image;
         if (p.CollageSeparator) {
             const texts = t.Url.split(p.CollageSeparator);

@@ -31,6 +31,11 @@ class TextEffect {
     static async CreateTextEffect(effectName, text, textStyle, effectParams) {
         effectName = effectName ?? "Rain";
         textStyle = textStyle ?? new TextStyle();
+        if (textStyle.FontUrl) {
+            const ff = new FontFace(textStyle.FontUrlName, "url('" + textStyle.FontUrl + "')");
+            await ff.load();
+            document.fonts.add(ff);
+        }
         effectParams = effectParams ?? new MediaPlayerParamsEffect();
         effectParams.Transparent = true;
         const url = await CanvasTools.CreateTextImageUrl(text, textStyle);
@@ -58,6 +63,11 @@ class TextEffect {
         effectName = effectName ?? "ScrollUp";
         counterParams = counterParams ?? new CounterEffectParams();
         textStyle = textStyle ?? new TextStyle();
+        if (textStyle.FontUrl) {
+            const ff = new FontFace(textStyle.FontUrlName, "url('" + textStyle.FontUrl + "')");
+            await ff.load();
+            document.fonts.add(ff);
+        }
         effectParams = effectParams ?? new MediaPlayerParamsEffect();
         if (!effectParams.FxProps)
             effectParams.FxProps = {};
