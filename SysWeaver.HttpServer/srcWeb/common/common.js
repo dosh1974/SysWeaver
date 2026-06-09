@@ -2112,7 +2112,7 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay, fadeChannel, f
 
 
 
-//  Setup a mutation observer to detect changes to the sts attribute
+//  Setup a mutation observer to detect changes to the src attribute
     try {
         const o = new MutationObserver(changes => {
             changes.forEach(change => {
@@ -6795,8 +6795,22 @@ async function SysWeaverInit() {
         return;
     window.HaveSysWeaverInit = true;
 
-    //  Setup smooth img / iframe loading changing
+    const id = InterOp.Id;
+    const ps = getUrlParams();
 
+    const setTheme = ps.get('settheme');
+    const useTheme = ps.get('usetheme');
+    const css = ps.get('css');
+    if (css)
+        includeCss(null, css); // Start async without waiting
+    if (setTheme)
+        localStorage.setItem("SysWeaver.Theme", setTheme);
+    if (useTheme)
+        window.UseTheme = useTheme;
+    applyTheme();  // Start async without waiting
+
+
+    //  Setup smooth img / iframe loading changing
     function onSmooth(root, fn) {
         if (doHandleSrc(root))
             fn(root);
@@ -6846,7 +6860,6 @@ async function SysWeaverInit() {
 
 
 //  Handle mobile detection (and enforced override via url or local storage and parent window)
-    const ps = getUrlParams();
     let mob = ps.get("mobile");
     if (mob === null)
         mob = localStorage.getItem("SysWeaver.Mobile");
@@ -6871,6 +6884,10 @@ async function SysWeaverInit() {
     function onSizeChange() {
         const ww = window.innerWidth;
         const wh = window.innerHeight;
+        if ((ww === window.SwWidth) && (wh === window.SwHeight))
+            return;
+        window.SwWidth = ww;
+        window.SwHeight = wh;
         const swp = ww <= wh;
         const swn = ww <= 600;
         const wp = isChild ? window.parent.Portrait : swp;
@@ -7082,7 +7099,6 @@ async function SysWeaverInit() {
     });
     //document.addEventListener("scrollend", saveScroll);
     b.addEventListener("beforeunload ", saveScroll);
-    const id = InterOp.Id;
     const logPrefix = "SysWeaver: "
     //const childLogPrefix = "SysWeaver [" + id + "]: ";
     const wtop = window.top;
@@ -7208,10 +7224,7 @@ async function SysWeaverInit() {
         ReloadAll(true, true);
     }
 
-
     const map = new Map();
-    const setTheme = ps.get('settheme');
-    const useTheme = ps.get('usetheme');
 
     //  All windows
     map.set("Theme.Changed", async msg => {
@@ -7591,14 +7604,6 @@ async function SysWeaverInit() {
     });
     */
 
-    const css = ps.get('css');
-    if (css)
-        await includeCss(null, css);
-    if (setTheme)
-        localStorage.setItem("SysWeaver.Theme", setTheme);
-    if (useTheme)
-        window.UseTheme = useTheme;
-    await applyTheme();
 
 }
 

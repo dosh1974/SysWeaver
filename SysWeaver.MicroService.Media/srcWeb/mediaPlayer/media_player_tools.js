@@ -116,28 +116,42 @@ class MediaPlayerTools {
 			m.set(fn, true);
 			return true;
 		}
-		m.set(fn, true);
-		let current = MediaPlayerTools.IsDarkMode();
-		function onChangeCheck()
-		{
-			const n = MediaPlayerTools.IsDarkMode();
-			if (n !== current)
-			{
-				current = n;
-				m.forEach((v, k) => {
-					try
-					{
-						k(n);
-					}
-					catch
-					{
-					}
-				});
-			}
-			if (m.size > 0)
-				window.requestAnimationFrame(onChangeCheck);
-		}
-		window.requestAnimationFrame(onChangeCheck);
+        m.set(fn, true);
+        let current = MediaPlayerTools.IsDarkMode();
+
+        function onChange() {
+            const n = MediaPlayerTools.IsDarkMode();
+            if (n === current)
+                return;
+            current = n;
+            m.forEach((v, k) => {
+                try {
+                    k(n);
+                }
+                catch {
+                }
+            });
+        }
+
+        const op = {
+            attributes: true,
+            attributeFilter: ['style', 'class'],
+        };
+
+
+        const w = window.top;
+
+        const od = new MutationObserver(onChange);
+        const ob = new MutationObserver(onChange);
+        od.observe(w.document.documentElement, op);
+        ob.observe(w.document.body, op);
+
+        MediaPlayerTools.DarkModeClear = () => {
+            ob.disconnect();
+            od.disconnect();
+            delete MediaPlayerTools.DarkModeClear;
+        };
+
 		return true;
 	}
 	
@@ -146,7 +160,12 @@ class MediaPlayerTools {
 		const m = MediaPlayerTools.DarkModeEventsMap;
 		if (!m.get(fn))
 			return false;
-		m.delete(fn);
+        m.delete(fn);
+        if (m.size > 0)
+            return true;
+        const c = MediaPlayerTools.DarkModeClear;
+        if (c)
+            c();
 		return true;
 	}
 	
