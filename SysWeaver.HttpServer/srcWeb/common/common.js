@@ -2069,6 +2069,7 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay, fadeChannel, f
 
                 };
                 channels.set(cn, cdata);
+                console.log("SmoothAnim: Added channel: " + cn);
             }
             const itemIndex = cdata.Index;
             cdata.Index += 1;
@@ -2140,23 +2141,43 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay, fadeChannel, f
                     // It had the opacity set to 0, so we need to show it
                     if (e.naturalWidth > 0) {
                         // Image was loaded successfully, show it
-                        InternalSrcElementOnLoad({ target: e });
+                        if (fadeDelay > 0)
+                            InternalSrcElementOnLoad({ target: e });
+                        else {
+                            s.visibility = null;
+                            s.opacity = null;
+                            removeFadeChannel(e);
+                        }
                     }
                     else {
                         // Image failed, show it (if enabled)
-                        if (showError)
-                            InternalSrcElementOnError({ target: e });
+                        if (showError) {
+                            if (fadeDelay > 0)
+                                InternalSrcElementOnError({ target: e });
+                            else {
+                                s.visibility = null;
+                                s.opacity = null;
+                                removeFadeChannel(e);
+                            }
+                        }
+
                     }
                 }
                 return;
             }
         }
-        if (isIFrame) {
+        if (isIFrame && (!useEvent)) {
             if (e.contentWindow.document.readyState === "complete") {
                 // Iframe completed
                 if ((s.opacity <= 0) || (s.visibility === "hidden")) {
                     // It had the opacity set to 0, so we need to show it, how to detect error?
-                    InternalSrcElementOnLoad({ target: e });
+                    if (fadeDelay > 0)
+                        InternalSrcElementOnLoad({ target: e });
+                    else {
+                        s.visibility = null;
+                        s.opacity = null;
+                        removeFadeChannel(e);
+                    }
                 }
                 return;
             }
@@ -2169,6 +2190,25 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay, fadeChannel, f
     s.visibility = "hidden";
     s.opacity = 0;
     return e;
+}
+
+function removeFadeChannel(e) {
+    delete e.FadeChannelIndex;
+    const ch = e.FadeChannel;
+    delete e.FadeChannel;
+    if (ch) {
+        const nc = ch.ItemCount - 1;
+        ch.ItemCount = nc;
+        if (nc <= 0) {
+            window.FadeChannels.delete(ch.Name);
+            console.log("SmoothAnim: Removed channel: " + ch.Name);
+            if (window.FadeChannels.size <= 0) {
+                delete window.FadeChannels;
+                console.log("SmoothAnim: All channels completed!");
+            }
+        }
+    }
+
 }
 
 /**
@@ -2184,18 +2224,11 @@ function cleanElementWithSrc(e) {
     e.StopListen();
     delete e.FadeIn;
     delete e.FadeDelay;
-    delete e.FadeChannelIndex;
-    const ch = e.FadeChannel;
-    delete e.FadeChannel;
-    if (ch) {
-        const nc = ch.ItemCount - 1;
-        ch.ItemCount = nc;
-        if (nc <= 0) {
-            window.FadeChannels.delete(ch.Name);
-            if (window.FadeChannels.size <= 0)
-                delete window.FadeChannels
-        }
-    }
+    removeFadeChannel(e);
+    const s = e.FadeStyle;
+    s.visibility = "hidden";
+    s.opacity = 0;
+    delete e.FadeStyle;
     return e;
 }
 
@@ -2210,23 +2243,13 @@ function InternalSrcElementOnLoad(ev)
     const s = e.FadeStyle;
     const f = e.FadeIn;
     const ac = e.FadeInCount + 1;
+    let d = e.FadeDelay;
     e.FadeInCount = ac;
-    if (f > 0) {
+    if (f > 0)
+    {
         //  Start delay
-        let d = e.FadeDelay;
         const ch = e.FadeChannel;
         if (ch) {
-/*
-                cdata = {
-                    Count: 1,
-                    StartTime: 0,
-                    Delay: cd,
-                    FirstElement: e,
-                    Index: 0,
-                    Delayed: []
-                };
-
-*/
             if (e === ch.FirstElement) {
             //  First element, just use the regular delay and start right away
                 ch.StartTime = performance.now();
@@ -2247,9 +2270,8 @@ function InternalSrcElementOnLoad(ev)
                 }
                 d += (ch.Delay * e.FadeChannelIndex);
                 d -= (performance.now() - ch.StartTime);
-                if (d < 0)
-                    d = 0;
             }
+            removeFadeChannel(e);
         }
 
         //  Reveal anim
@@ -2259,6 +2281,10 @@ function InternalSrcElementOnLoad(ev)
             return t * t * t * (t * (t * 6 - 15) + 10);
         }
 
+        if (d < 0)
+            d = 0;
+        s.opacity = 0;
+        s.visibility = null;
         function anim(t) {
             if (start < 0)
                 start = t + d;
@@ -2266,8 +2292,9 @@ function InternalSrcElementOnLoad(ev)
             t /= f;
             if (t > 0) {
                 if (t >= 1) {
+                    s.visibility = null;
                     s.opacity = null;
-                    s.transform = null;
+                    //s.transform = null;
                     delete e.AnimReq;
                     return;
                 }
