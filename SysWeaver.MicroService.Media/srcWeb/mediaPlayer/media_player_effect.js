@@ -720,11 +720,9 @@ class MediaPlayerEffect {
         if (dpi <= 0.25)
             dpi = 0.25;
         let dpiS = p.DpiScale;
-        dpi *= dpiS;
-        if (p.DpiAdjust && (!p.Static)) {
-            dpi *= MediaPlayerEffect.DpiScale;
+        if (p.DpiAdjust && (!p.Static))
             dpiS *= MediaPlayerEffect.DpiScale;
-        }
+        dpi *= dpiS;
         const adaptive = p.AdaptiveSize;
         let w = Math.round(adaptive ? (e.clientWidth * dpi) : (p.Width * dpiS)) | 0;
         let h = Math.round(adaptive ? (e.clientHeight * dpi) : (p.Height * dpiS)) | 0;
@@ -789,13 +787,13 @@ class MediaPlayerEffect {
         if (scrollElement) {
             const x = scrollElement.scrollLeft;
             const y = scrollElement.scrollTop;
-            scrollX = x;
-            scrollY = y;
+            scrollX = x * dpi;
+            scrollY = y * dpi;
             scrollRX = x / Math.abs(1.0, scrollElement.scrollWidth);
             scrollRY = y / Math.abs(1.0, scrollElement.scrollHeight);
         }
         t.UniformScroll(scrollX, scrollY, scrollRX, scrollRY);
-        t.UniformMouse(t.MouseX, t.MouseY);
+        t.UniformMouse(t.MouseX * dpi, t.MouseY * dpi);
         t.UniformFrameIndex(t.FrameIndex);
 		const darkMode = t.SmoothDark ? t.SmoothDark.ValueAt() : (t.IsDarkMode ? 1.0 : 0.0);
 		const customX = t.CustomX.Get();
