@@ -420,7 +420,7 @@ class SessionManager
                                     if (step >= updateDelay) {
                                         window.SysWeaverServerTimeOffset = offset;
                                         InterOp.Post(timeOffset, { O: offset });
-                                        console.log("Server time adjustment changed to: " + offset + " ms (latency: " + latency + " ms)");
+                                        //console.log("Server time adjustment changed to: " + offset + " ms (latency: " + latency + " ms)");
                                         return;
                                     }
                                     const offs = (doffset * step) / updateDelay + dstart;
