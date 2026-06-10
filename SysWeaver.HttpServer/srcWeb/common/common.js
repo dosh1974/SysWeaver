@@ -2069,7 +2069,7 @@ function fixElementWithSrc(element, showError, fadeIn, fadeDelay, fadeChannel, f
 
                 };
                 channels.set(cn, cdata);
-                console.log("SmoothAnim: Added channel: " + cn);
+                //console.log("SmoothAnim: Added channel: " + cn);
             }
             const itemIndex = cdata.Index;
             cdata.Index += 1;
@@ -2201,10 +2201,10 @@ function removeFadeChannel(e) {
         ch.ItemCount = nc;
         if (nc <= 0) {
             window.FadeChannels.delete(ch.Name);
-            console.log("SmoothAnim: Removed channel: " + ch.Name);
+            //console.log("SmoothAnim: Removed channel: " + ch.Name);
             if (window.FadeChannels.size <= 0) {
                 delete window.FadeChannels;
-                console.log("SmoothAnim: All channels completed!");
+                //console.log("SmoothAnim: All channels completed!");
             }
         }
     }

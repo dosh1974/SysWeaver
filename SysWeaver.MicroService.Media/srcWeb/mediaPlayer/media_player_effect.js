@@ -17,6 +17,7 @@ class MediaPlayerParamsEffect {
     AntiAlias = false;
     ScrollId = null;
     MouseId = null;
+    MouseEnable = false;
     ImageSize = false;
     ShowVars = false;
     FxProps = null;
@@ -187,6 +188,7 @@ class MediaPlayerEffect {
             Object.assign(cp, params);
         params = cp;
         const e = document.createElement("canvas");
+        e.This = t;
         t.Params = params;
         t.CreateTextureFn = createTextureFn;
         t.ResumeTime = 0;
@@ -395,6 +397,10 @@ class MediaPlayerEffect {
         if (t.Element.parentNode)
             t.Element.remove();
         t.ReleaseGL();
+        const rml = t.RemoveMouseListener;
+        if (rml)
+            rml();
+        t.RemoveMouseListener = null;
     }
 
     ResetCounters() {
@@ -608,18 +614,29 @@ class MediaPlayerEffect {
             MediaPlayerEffect.render(t);
 
         t.ResizeObserver = new ResizeObserver(() => {
+            t.ClientWidth = e.clientWidth;
+            t.ClientHeight = e.clientHeight;
             t.GetRender()();
         }); 
         t.ResizeObserver.observe(e);
+        t.ClientWidth = e.clientWidth;
+        t.ClientHeight = e.clientHeight;
 
         t.ScrollElement = MediaPlayerEffect.GetElementFromId(props.ScrollId);
-        const mouseElement = MediaPlayerEffect.GetElementFromId(props.MouseId);
-        mouseElement.addEventListener("mousemove", ev => {
-            t.MouseX = ev.offsetX;
-            t.MouseY = ev.offsetY;
-        });
+
+        if (props.MouseId || props.MouseEnable) {
+
+            const mouseElement = MediaPlayerEffect.GetElementFromId(props.MouseId);
+            function OnMouseMove(ev) {
+                t.MouseX = ev.clientX;
+                t.MouseY = ev.clientY;
+            }
+            mouseElement.addEventListener("mousemove", OnMouseMove);
+            t.RemoveMouseListener = () => mouseElement.removeEventListener("mousemove", OnMouseMove);
+        }
 
     }
+
 
 
     async Cache(keepHidden) {
@@ -724,8 +741,8 @@ class MediaPlayerEffect {
             dpiS *= MediaPlayerEffect.DpiScale;
         dpi *= dpiS;
         const adaptive = p.AdaptiveSize;
-        let w = Math.round(adaptive ? (e.clientWidth * dpi) : (p.Width * dpiS)) | 0;
-        let h = Math.round(adaptive ? (e.clientHeight * dpi) : (p.Height * dpiS)) | 0;
+        let w = Math.round(adaptive ? (t.ClientWidth * dpi) : (p.Width * dpiS)) | 0;
+        let h = Math.round(adaptive ? (t.ClientHeight * dpi) : (p.Height * dpiS)) | 0;
         if (p.LimitSize) {
             const max = Math.max(p.Width, p.Height);
             const min = Math.min(p.Width, p.Height);
