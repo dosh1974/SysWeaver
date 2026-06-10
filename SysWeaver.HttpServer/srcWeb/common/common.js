@@ -6494,7 +6494,7 @@ function TrackElement(mouseEventOrElement, targetElement, margin) {
     const updatePos = ev => {
         if (ev && obs) {
             if (!IsAttached(targetElement)) {
-                document.removeEventListener("scroll", updatePos);
+                document.removeEventListener("scroll", OnScrollFn);
                 obs.unobserve(targetElement);
                 obs.unobserve(b);
                 obs.unobserve(elmentToTrack);
@@ -6528,7 +6528,14 @@ function TrackElement(mouseEventOrElement, targetElement, margin) {
     obs.observe(elmentToTrack);
     obs.observe(b);
     obs.observe(targetElement);
-    document.addEventListener("scroll", updatePos);
+    let scrollFn = null;
+    function OnScrollFn() {
+        if (scrollFn)
+            cancelAnimationFrame(scrollFn);
+        scrollFn = requestAnimationFrame(updatePos);
+
+    }
+    document.addEventListener("scroll", OnScrollFn);
     updatePos();
 }
 
@@ -7068,20 +7075,21 @@ async function SysWeaverInit() {
     b.addEventListener("keydown", onInteraction);
     b.addEventListener("touchstart", onInteraction);
     function saveScroll() {
-        if (!isProcessingScroll) {
+/*        if (!isProcessingScroll) {
             isProcessingScroll = true;
             window.requestAnimationFrame(() => {
-                UpdateHistoryState(state => {
+*/                UpdateHistoryState(state => {
                     state.ScrollX = window.scrollX;
                     state.ScrollY = window.scrollY;
                     return true;
                 });
-                isProcessingScroll = false;
+/*                isProcessingScroll = false;
             });
         }
+*/
     }
 
-
+    /*
     b.addEventListener("scroll", () =>
     {
         let s = window.ScrollCounter;
@@ -7097,6 +7105,7 @@ async function SysWeaverInit() {
             saveScroll();
         }
     });
+    */
     //document.addEventListener("scrollend", saveScroll);
     b.addEventListener("beforeunload ", saveScroll);
     const logPrefix = "SysWeaver: "
