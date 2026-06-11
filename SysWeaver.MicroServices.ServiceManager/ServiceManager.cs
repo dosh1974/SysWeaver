@@ -1,4 +1,4 @@
-using SysWeaver.Compression;
+﻿using SysWeaver.Compression;
 using SysWeaver.Data;
 using SysWeaver.Net;
 using SysWeaver.Remote;
@@ -1403,6 +1403,8 @@ namespace SysWeaver.MicroService
             const String sys = nameof(ServiceManager);
             yield return new Stats(sys, nameof(Monitor.LockContentionCount), Monitor.LockContentionCount, "The number of times there was contention when trying to take the monitor's lock");
             foreach (var x in EnvInfo.GetStats())
+                yield return x;
+            foreach (var x in MovingAverage.GetGlobalStats())
                 yield return x;
             foreach (var x in TaskExt.GetEventExceptionStats())
                 yield return x;

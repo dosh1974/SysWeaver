@@ -1116,9 +1116,11 @@ namespace SysWeaver.Net
 #endif//DEBUG
 
 
+        readonly MovingAverage RequestStats = new MovingAverage(TimeSpan.FromSeconds(15));
 
         public async ValueTask Handle(HttpServerRequest data)
         {
+            RequestStats.Add(data.ReqContentLength);
             var rateLimiter = ServerLimits;
             if ((rateLimiter != null) && (await rateLimiter.IsOverTheLimit().ConfigureAwait(false)))
             {
@@ -2605,6 +2607,8 @@ namespace SysWeaver.Net
             foreach (var e in LogoutErrors.GetStats(sys, "OnLogout."))
                 yield return e;
             foreach (var e in TransformExceptions.GetStats(sys, "Transform."))
+                yield return e;
+            foreach (var e in RequestStats.GetStats(sys, "", "Requests per second", "Input bytes per request"))
                 yield return e;
             var total = Interlocked.Read(ref CacheTotal);
             var hit = Interlocked.Read(ref CacheHit);

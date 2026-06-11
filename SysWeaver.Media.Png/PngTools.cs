@@ -59,8 +59,7 @@ namespace SysWeaver.Media.Png
                 var pos = pngFile.Position;
                 var endPos = pos += length;
                 var data = new Byte[length];
-                if (r.Read(data, 0, (int)length) != (int)length)
-                    throw new IOException("Invalid PNG stream, not enough data to read hunk!");
+                r.ReadExactly(data);
                 if (pngFile.Position != endPos)
                     throw new IOException("Invalid PNG stream, declared chunk size doesn't match the parsed chunk size!");
                 uint crc = r.ReadUInt32();
@@ -316,31 +315,41 @@ namespace SysWeaver.Media.Png
             pngFile.Write(Header, 0, 8);
             Byte[] w = new byte[4];
             foreach (var c in chunks)
-            {
-                var data = c.Data;
-                var len = data.Length;
-                var d = (uint)len;
-                w[0] = (Byte)(d >> 24);
-                w[1] = (Byte)(d >> 16);
-                w[2] = (Byte)(d >> 8);
-                w[3] = (Byte)(d >> 0);
-                pngFile.Write(w, 0, 4);
-                d = c.Id;
-                w[0] = (Byte)(d >> 24);
-                w[1] = (Byte)(d >> 16);
-                w[2] = (Byte)(d >> 8);
-                w[3] = (Byte)(d >> 0);
-                pngFile.Write(w, 0, 4);
-                if (len > 0)
-                    pngFile.Write(data, 0, len);
-                var crc = CalcCrc32(w, 0);
-                d = CalcCrc32(data, crc);
-                w[0] = (Byte)(d >> 24);
-                w[1] = (Byte)(d >> 16);
-                w[2] = (Byte)(d >> 8);
-                w[3] = (Byte)(d >> 0);
-                pngFile.Write(w, 0, 4);
-            }
+                WriteChunk(pngFile, c);
+        }
+
+
+        /// <summary>
+        /// Helper method to write a new png file (as bytes) from some png chunks
+        /// </summary>
+        /// <param name="pngFile">The destination stream</param>
+        /// <param name="c">Chunk</param>
+        public static void WriteChunk(Stream pngFile, PngChunk c)
+        {
+            Span<Byte> w = stackalloc Byte[4];
+            var data = c.Data;
+            var len = data.Length;
+            var d = (uint)len;
+            w[0] = (Byte)(d >> 24);
+            w[1] = (Byte)(d >> 16);
+            w[2] = (Byte)(d >> 8);
+            w[3] = (Byte)(d >> 0);
+            pngFile.Write(w);
+            d = c.Id;
+            w[0] = (Byte)(d >> 24);
+            w[1] = (Byte)(d >> 16);
+            w[2] = (Byte)(d >> 8);
+            w[3] = (Byte)(d >> 0);
+            pngFile.Write(w);
+            if (len > 0)
+                pngFile.Write(data, 0, len);
+            var crc = CalcCrc32(w, 0);
+            d = CalcCrc32(data, crc);
+            w[0] = (Byte)(d >> 24);
+            w[1] = (Byte)(d >> 16);
+            w[2] = (Byte)(d >> 8);
+            w[3] = (Byte)(d >> 0);
+            pngFile.Write(w);
         }
 
         /// <summary>
@@ -349,13 +358,14 @@ namespace SysWeaver.Media.Png
         /// <param name="width">The png image width</param>
         /// <param name="height">The png image height</param>
         /// <param name="pngFile">The stream containg the png image</param>
+        /// <param name="leaveOpen">True to leave the stream open</param>
         /// <returns>The bytes in Blue, Green, Red, Alpha order</returns>
-        public static Byte[] DecodeArgb(out int width, out int height, Stream pngFile)
+        public static Byte[] DecodeArgb(out int width, out int height, Stream pngFile, bool leaveOpen = false)
         {
             width = 0;
             height = 0;
             var image = new Image();
-            using var r = EndianAwareBinaryReader.OpenBigEndian(pngFile, Encoding.UTF8);
+            using var r = EndianAwareBinaryReader.OpenBigEndian(pngFile, Encoding.UTF8, leaveOpen);
             //  Validate header
             for (int i = 0; i < 8; ++i)
             {
@@ -594,6 +604,47 @@ namespace SysWeaver.Media.Png
 
         static readonly ReadOnlyMemory<Byte> ZLibStreamHeader = new Byte[] { 0x78, 0x9c };
 
+        /*
+        public static void WritePngImage(Stream o, int width, int height, Byte[] bgraData)
+        {
+            var d = new Byte[PngImageInfo.SizeIDAT];
+
+
+            var img = new Image
+            {
+                Width = width,
+                Height = height,
+                ChannelCount = 4,
+                BitDepth = 8,
+                ColorType = 6,
+                CompressionMethod = 1,
+                FilterMethod = 4,
+                InterlaceMethodMethod = 0,
+                ImageData = bgraData,
+            };
+            FilterPaeth(img);
+            var d = img.
+
+
+            WriteChunk(o, img.ToChunk());
+            
+
+
+            var ihdr = new PngImageInfo
+            {
+                Width = width,
+                Height = height,
+                ChannelCount = 4,
+                BitDepth = 8,
+                ColorType = 6,
+                CompressionMethod = 1,
+                FilterMethod = 4,
+                InterlaceMethodMethod = 0,
+            }.ToChunk();
+            
+
+        }
+*/
         public static Memory<Byte> GetCompressed(ReadOnlySpan<Byte> data)
         {
             var c = CalcAdler32(data);
@@ -787,7 +838,7 @@ namespace SysWeaver.Media.Png
             if (first)
                 image.ImageData = new Byte[r.BaseStream.Length - r.BaseStream.Position];
             int size = (int)chunkLength;
-            r.Read(image.ImageData, image.ImageDataOffset, size);
+            r.ReadExactly(image.ImageData.AsSpan(image.ImageDataOffset, size));
             image.ImageDataOffset += size;
             return true;
         }
@@ -814,9 +865,7 @@ namespace SysWeaver.Media.Png
                     if (filter < 0)
                         break;
                     //  Decompress
-                    var read = g.Read(image.UncompressedScanline, image.PixelBytes, image.Pitch);
-                    if (read != image.Pitch)
-                        throw new IOException("Invalid PNG stream, the pitch of the decoded scan line doesn't match the width specified in the header!");
+                    g.ReadExactly(image.UncompressedScanline, image.PixelBytes, image.Pitch);
                     //  Filter
                     if ((filter >= 0) && (filter <= Filters.Length))
                         Filters[filter](image);
