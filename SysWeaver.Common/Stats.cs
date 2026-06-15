@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using SysWeaver.Data;
 
@@ -52,6 +52,24 @@ namespace SysWeaver
         [AutoTranslateContext("This is the description for some statistics with the name \"{0}\"", nameof(Name))]
         [AutoTranslateContext("It is part of a system named \"{0}\"", nameof(System))]
         public String Description;
+
+
+        public static List<Stats> SafeGetStats(Func<IEnumerable<Stats>> s)
+        {
+            List<Stats> ss = new List<Stats>();
+            try
+            {
+                var stats = s();
+                foreach (var x in stats)
+                    ss.Add(x);
+            }
+            catch
+            {
+
+            }
+            return ss;
+        }
+
     }
 
     /// <summary>

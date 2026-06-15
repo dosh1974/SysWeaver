@@ -107,7 +107,7 @@ namespace SysWeaver.MicroService
                     }
                 }
             }
-            //AddMessage("Platform: " + PlatformTools.Current.Name, MessageLevels.Debug);
+            AddMessage("Platform tools: " + PlatformTools.Current.Name);
             PruneTask = new PeriodicTask(Prune, 2000);
         }
 
@@ -1394,6 +1394,9 @@ namespace SysWeaver.MicroService
         readonly ConcurrentDictionary<IPerfMonitored, int> HavePerfMonitor = new();
 
 
+        
+
+
         /// <summary>
         /// Return all stats
         /// </summary>
@@ -1402,22 +1405,22 @@ namespace SysWeaver.MicroService
         {
             const String sys = nameof(ServiceManager);
             yield return new Stats(sys, nameof(Monitor.LockContentionCount), Monitor.LockContentionCount, "The number of times there was contention when trying to take the monitor's lock");
-            foreach (var x in EnvInfo.GetStats())
+            foreach (var x in Stats.SafeGetStats(() => EnvInfo.GetStats()))
+               yield return x;
+            foreach (var x in Stats.SafeGetStats(() => MovingAverage.GetGlobalStats()))
                 yield return x;
-            foreach (var x in MovingAverage.GetGlobalStats())
-                yield return x;
-            foreach (var x in TaskExt.GetEventExceptionStats())
+            foreach (var x in Stats.SafeGetStats(() => TaskExt.GetEventExceptionStats()))
                 yield return x;
             foreach (var s in HaveStats.Keys)
             {
-                foreach (var x in s.GetStats())
+                foreach (var x in Stats.SafeGetStats(() => s.GetStats()))
                     yield return x;
             }
-            foreach (var x in FileExs.GetStats(sys, "FileExs."))
+            foreach (var x in Stats.SafeGetStats(() => FileExs.GetStats(sys, "FileExs.")))
                 yield return x;
-            foreach (var x in PlatformTools.Current.GetStats())
+            foreach (var x in Stats.SafeGetStats(() => PlatformTools.Current.GetStats()))
                 yield return x;
-            foreach (var x in Scheduler.TaskExceptions.GetStats(sys, "SchedulerEx."))
+            foreach (var x in Stats.SafeGetStats(() => Scheduler.TaskExceptions.GetStats(sys, "SchedulerEx.")))
                 yield return x;
         }
 
