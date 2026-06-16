@@ -39,6 +39,30 @@ namespace SysWeaver.Data
         }
     }
 
+
+
+
+    /// <summary>
+    /// Format valus as a web color
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public class TableDataWebColorAttribute : TableDataRawFormatAttribute
+    {
+        /// <summary>
+        /// A web color.
+        /// </summary>
+        /// <param name="titleFormat">
+        /// {0} = This value. 
+        /// {1} = Next value (must exist). 
+        /// </param>
+        public TableDataWebColorAttribute(String titleFormat = null) 
+            
+            : base(TableDataFormats.WebColor, titleFormat)
+        {
+        }
+    }
+
+
 }
 
 

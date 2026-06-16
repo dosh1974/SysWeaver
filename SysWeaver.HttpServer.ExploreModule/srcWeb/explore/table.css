@@ -441,6 +441,22 @@ html.SwSelfNarrow {
                 color: var(--ThemeAcc1);
             }
 
+        .DataTable td.ValueFormatWebColor {
+            font-family: var(--ThemeFontMono);
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            vertical-align: middle;
+            user-select: text;
+            color: #000;
+        }
+
+
+            .DataTable td.ValueFormatWebColor.False {
+                color: #fff;
+            }
+
+
         .DataTable td.ValueFormatJson {
             user-select: text;
             padding-top: 0;

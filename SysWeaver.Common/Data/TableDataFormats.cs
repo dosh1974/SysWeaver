@@ -157,6 +157,11 @@ namespace SysWeaver.Data
         /// </summary>
         Uptime,
 
+        /// <summary>
+        /// Format a string value as a web color
+        /// </summary>
+        WebColor,
+
     }
 
 

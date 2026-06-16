@@ -133,8 +133,6 @@ async function applyTheme() {
 
     console.log("Theme: Applying theme \"" + themeOrg + "\"");
 
-
-
     const ss = document.documentElement.style;
     const fix = function (name) {
         const hexVal = getComputedStyle(document.documentElement, null).getPropertyValue(name);
@@ -171,6 +169,11 @@ async function applyTheme() {
     fix("--ThemeAcc2");
 
     de["Theme"] = themeOrg;
+    const c = window.getComputedStyle(document.body);
+    const isd = c.getPropertyValue("color-scheme") === "dark";
+    de["IsDarkMode"] = isd;
+    window["IsDarkMode"] = isd;
+
     Animator.Remove(de["ThemeAnim"]);
     const f = window[theme + "ThemeAnimate"];
     if (f) {
@@ -3827,6 +3830,22 @@ function ArgAsHtml(argValue, elementClass, elementType) {
     }
 }
 
+
+function GetRgbColor(colorKeyword)
+{
+    let el = window.DivGetRgbColor;
+    if (!el) {
+        el = document.createElement('div');
+        el.style.display = "none";
+        window.DivGetRgbColor = el;
+    }
+    el.style.color = colorKeyword;
+    document.body.appendChild(el);
+    const rgbValue = window.getComputedStyle(el).color;
+    el.remove();
+    return rgbValue;
+}
+
 class ValueFormat {
 
 
@@ -4240,6 +4259,9 @@ class ValueFormat {
         return true;
     }
 
+
+
+
     static updateHtml = function (el, html, title, flash) {
         html = (typeof html === 'undefined') || (html === null) ? '' : ('' + html);
         if (title) {
@@ -4275,6 +4297,9 @@ class ValueFormat {
             clearInterval(u);
             el.Updater = null;
         }
+        const cs = el.style;
+        cs.color = null;
+        cs.backgroundColor = null;
         el.textContent = "error";
         const cl = el.classList;
         cl.remove("Right");
@@ -4368,6 +4393,49 @@ class ValueFormat {
     static joinNonEmpty(delim, ...args) {
         return args.filter(Boolean).join(delim ?? '\n');
     }
+
+
+
+    static updateWebColor(el, value, formats, nextValue, flash, type, onRefresh) {
+        if (!value) {
+            ValueFormat.updateFormat(el, "");
+            ValueFormat.updateText(el, "", "", false);
+            return;
+        }
+        ValueFormat.updateFormat(el, "WebColor");
+        const text = "" + value;
+        el.style.backgroundColor = text;
+        //  Get title (and copy func)
+        let title = ValueFormat.stringFormat(formats[1] ?? "", text, nextValue);
+        if (!title)
+            title = "";
+        let rgb = GetRgbColor(text);
+        rgb = rgb.substring(rgb.indexOf('(') + 1);
+        rgb = rgb.substring(0, rgb.lastIndexOf(')'));
+        rgb = rgb.split(',');
+        const r = parseInt(rgb[0].trim());
+        const g = parseInt(rgb[1].trim());
+        const b = parseInt(rgb[2].trim());
+        const a = rgb.length > 3 ? parseInt(rgb[3].trim()) : 255;
+
+
+
+        let isDark = (0.2989 * r + 0.5870 * g + 0.1140 * b) < 128;
+        if (isDark)
+            el.classList.add("False");
+        else
+            el.classList.remove("False");
+        if (title)
+            title += "\n\n";
+        title += _TF("Red", "Prefix for a tool tip value, displaying the red part of a RGB color") + ": " + r + "\n";
+        title += _TF("Green", "Prefix for a tool tip value, displaying the green part of a RGB color") + ": " + g + "\n";
+        title += _TF("Blue", "Prefix for a tool tip value, displaying the blue part of a RGB color") + ": " + b + "\n";
+        title += _TF("Alpha", "Prefix for a tool tip value, displaying the alpha part of a RGBA color") + ": " + a + " (" + ValueFormat.toString(a / 255.0, -3) + ")\n";
+        title += "\n" + ValueFormat.copyOnClick(el, text);
+        ValueFormat.updateText(el, text, title, flash);
+        return true;
+    }
+
 
     static updateDefault(el, value, formats, nextValue, flash, type, onRefresh) {
 
@@ -5377,6 +5445,7 @@ class ValueFormat {
         ["Text", ValueFormat.updateLongText],
         ["MD", ValueFormat.updateMarkDown],
         ["Uptime", ValueFormat.updateDateTimeLive],
+        ["WebColor", ValueFormat.updateWebColor],
     ]);
 
     static update = function (el, type, value, flash, format, nextValue, onRefresh) {
