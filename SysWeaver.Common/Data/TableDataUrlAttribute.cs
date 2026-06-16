@@ -51,13 +51,18 @@ namespace SysWeaver.Data
         /// <summary>
         /// A web color.
         /// </summary>
-        /// <param name="titleFormat">
+        /// <param name="valueFormat">How to format the value.
         /// {0} = This value. 
         /// {1} = Next value (must exist). 
         /// </param>
-        public TableDataWebColorAttribute(String titleFormat = null) 
+        /// <param name="titleFormat">How to format the title
+        /// {0} = This value. 
+        /// {1} = Next value (must exist). 
+        /// {2} = Formatted value.
+        /// </param>
+        public TableDataWebColorAttribute(String valueFormat = "{0}", String titleFormat = null) 
             
-            : base(TableDataFormats.WebColor, titleFormat)
+            : base(TableDataFormats.WebColor, valueFormat ?? "{0}", titleFormat)
         {
         }
     }

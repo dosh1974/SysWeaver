@@ -4403,10 +4403,10 @@ class ValueFormat {
             return;
         }
         ValueFormat.updateFormat(el, "WebColor");
-        const text = "" + value;
+        const text = ValueFormat.stringFormat(formats[1] ?? "{0}", value, nextValue);
         el.style.backgroundColor = text;
-        //  Get title (and copy func)
-        let title = ValueFormat.stringFormat(formats[1] ?? "", text, nextValue);
+        //  Get title 
+        let title = ValueFormat.stringFormat(formats[2] ?? "", value, nextValue, text);
         if (!title)
             title = "";
         let rgb = GetRgbColor(text);
