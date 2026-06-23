@@ -46,7 +46,7 @@ namespace SysWeaver.HttpTransformer
                 try
                 {
                     var enc = Encoding.UTF8;
-                    var d = enc.GetString(data.Span);
+                    var d = enc.GetStringWithoutBom(data.Span);
                     d = SvgMinifier.Optimize(d, null, SvgOpts);
                     if (d == null)
                         return null;
