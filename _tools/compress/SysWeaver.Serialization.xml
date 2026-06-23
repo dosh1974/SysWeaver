@@ -61,12 +61,12 @@
         </member>
         <member name="P:SysWeaver.Serialization.SerManager.ExtensionHandlers">
             <summary>
-            Get a dictionary with all handlers for all suported "file extensions"
+            Get all handlers for all suported "file extensions"
             </summary>
         </member>
         <member name="P:SysWeaver.Serialization.SerManager.TextExtensionHandlers">
             <summary>
-            Get a dictionary with all handlers for all suported "file extensions" that serialize to text
+            Get all suported "file extensions" that serialize to text
             </summary>
         </member>
         <member name="M:SysWeaver.Serialization.SerManager.Get(System.String)">
@@ -135,6 +135,35 @@
             </summary>
             <param name="typeName">The name of the type to find</param>
             <returns>The type or null if it can't be found</returns>
+        </member>
+        <member name="M:SysWeaver.SerExtensions.ToJsonString``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Create a json string from an object
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="value"></param>
+            <param name="options"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.SerExtensions.ToJsonData``1(``0,SysWeaver.Serialization.SerializerOptions)">
+            <summary>
+            Create a json data blob from an object
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SerExtensions.FromJsonData``1(System.ReadOnlyMemory{System.Byte})">
+            <summary>
+            Create an object from some json data
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SerExtensions.FromJsonData``1(System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Create an object from some json data
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SerExtensions.FromJsonData``1(System.Byte[])">
+            <summary>
+            Create an object from some json data
+            </summary>
         </member>
     </members>
 </doc>

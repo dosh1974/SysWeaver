@@ -122,12 +122,25 @@
             Set to true if the response data is localized (different pending on the specified language)
             </summary>
         </member>
+        <member name="F:SysWeaver.MicroService.WebApiRawAttribute.PreCompressedWith">
+            <summary>
+            The compression method used on the returned data
+            </summary>
+        </member>
         <member name="M:SysWeaver.MicroService.WebApiRawAttribute.#ctor(System.String,System.Boolean,System.Boolean)">
             <summary>
             The method must returns some readonly memory, and in that case the function should be treated as raw data (i.e no serialization will happen).
             </summary>
             <param name="mime">The mimetype of the raw output data</param>
             <param name="disableCompression">True to automatically detect if compression should happen, else the default behaviour is used</param>
+            <param name="isTranslated">Set to true if the response data is localized (different pending on the specified language)</param>
+        </member>
+        <member name="M:SysWeaver.MicroService.WebApiRawAttribute.#ctor(System.String,System.String,System.Boolean)">
+            <summary>
+            The method must returns some readonly memory, and in that case the function should be treated as raw data (i.e no serialization will happen).
+            </summary>
+            <param name="mime">The mimetype of the raw output data</param>
+            <param name="preCompressedWith">The compression method used on the returned data</param>
             <param name="isTranslated">Set to true if the response data is localized (different pending on the specified language)</param>
         </member>
         <member name="T:SysWeaver.MicroService.WebApiRawTextAttribute">
