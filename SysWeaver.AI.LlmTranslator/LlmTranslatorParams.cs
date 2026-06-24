@@ -38,5 +38,18 @@ namespace SysWeaver.AI
         /// Number of times to retry a LLM translation request before giving up
         /// </summary>
         public int RetryCount = 10;
+
+
+        /// <summary>
+        /// If true, all languages are considered valid
+        /// </summary>
+        public bool AllowAllLanguages;
+
+
+        /// <summary>
+        /// A list of languages to forcefully add to the supported languages
+        /// </summary>
+        public String[] ForcedLanguages;
+
     }
 }

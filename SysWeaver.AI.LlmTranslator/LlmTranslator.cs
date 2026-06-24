@@ -28,27 +28,36 @@ namespace SysWeaver.AI
             Models[0] = p.LowModel;
             Models[1] = p.MediumModel;
             Models[2] = p.HighModel;
-            if (p.ForceLanguagesOnLoad)
+            ForcedLanguages = p.ForcedLanguages;
+            if (p.AllowAllLanguages)
             {
-                manager.AddMessage("Fetching supported languages");
-                TryGetLanguagesNow(true).RunAsync();
-                manager.AddMessage("Fetched supported languages");
-
+                AllowAllLanguages();
             }
             else
             {
-                if (p.GetLanguagesOnLoad)
+                if (p.ForceLanguagesOnLoad)
                 {
-                    manager.AddMessage("Loading/Fetching supported languages");
-                    TryGetLanguagesNow().RunAsync();
-                    manager.AddMessage("Loaded/Fetched supported languages");
+                    manager.AddMessage("Fetching supported languages");
+                    TryGetLanguagesNow(true).RunAsync();
+                    manager.AddMessage("Fetched supported languages");
 
+                }
+                else
+                {
+                    if (p.GetLanguagesOnLoad)
+                    {
+                        manager.AddMessage("Loading/Fetching supported languages");
+                        TryGetLanguagesNow().RunAsync();
+                        manager.AddMessage("Loaded/Fetched supported languages");
+
+                    }
                 }
             }
         }
 
         readonly OpenAiService Llm;
         readonly String[] Models = new string[3];
+        readonly String[] ForcedLanguages;
 
 
 
@@ -181,9 +190,34 @@ namespace SysWeaver.AI
         }
 
 
-        static readonly Char[] SplitOn = "\n\r ".ToCharArray();
-        
-        async Task TryGetLanguagesNow(bool forceRenew = false)
+        static readonly Char[] SplitOn = "\n\r,;:\t ".ToCharArray();
+
+        /// <summary>
+        /// Forcefully refresh the supported languages list
+        /// </summary>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.DevAdminOps)]
+        public Task<String> UpdateLanguageList(bool allowAll = false)
+        {
+            if (allowAll)
+            {
+                AllowAllLanguages();
+                return Task.FromResult("All languages are allowed!");
+            }
+            return TryGetLanguagesNow(true);
+        }
+
+        void AllowAllLanguages()
+        {
+            Interlocked.Exchange(ref Languages, new SupLang(new SupLangSave
+            {
+                Updated = DateTime.UtcNow,
+                ValidList = IsoLanguage.Languages.SelectMany(x => new String[] { x.Iso639_2, x.Iso639_1 }).ToArray()
+            }));
+        }
+
+        async Task<String> TryGetLanguagesNow(bool forceRenew = false)
         {
             const int modelIndex = 1; // Low, Med, High
             try
@@ -191,65 +225,75 @@ namespace SysWeaver.AI
                 var model = Models[modelIndex];
                 string storeKey = "LLmTranslator.Lang." + model;
                 var current = await KeyValueStore.AllShared.TryGetAsync<SupLangSave>(storeKey).ConfigureAwait(false);
+                String res = "Used cached languages";
                 if ((current == null) || forceRenew || ((DateTime.UtcNow - current.Updated) > TimeSpan.FromDays(30)))
                 {
-                    String[] tt = null;
+                    var s = new HashSet<String>(400, StringComparer.Ordinal);
+                    void AddLang(String lang)
+                    {
+                        lang = lang?.Trim();
+                        if (String.IsNullOrEmpty(lang))
+                            return;
+                        var lc = IsoLanguage.TryGet(out var c, lang);
+                        if (lc != null)
+                        {
+                            if (c == null)
+                                s.Add(lc.Iso639_1);
+                            else
+                                s.Add(String.Concat(lc.Iso639_1, '-', c.Iso3166a2));
+                        }
+                        else
+                        {
+                            lc = IsoLanguage.TryGetName(lang);
+                            if (lc != null)
+                                s.Add(lc.Iso639_1);
+                            else
+                            {
+                                s.Add(lang);
+                            }
+                        }
+                    }
                     DateTime updated = DateTime.UtcNow;
                     try
                     {
                         var q = Llm.CreateQuerySession(model);
-                        var res = await q.Query(GetLanguagesPrompt, null, CountTokensTasks[modelIndex]).ConfigureAwait(false);
+                        res = await q.Query(GetLanguagesPrompt, null, CountTokensTasks[modelIndex]).ConfigureAwait(false);
                         if (!res.FastStartsWith("Error:"))
                         {
-                            tt = res.Split(SplitOn, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                            var tt = res.Split(SplitOn, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
                             var l = tt.Length;
-                            var s = new HashSet<String>(l, StringComparer.Ordinal);
                             for (int i = 0; i < l; ++i)
-                            {
-                                var lang = tt[i];
-                                var lc = IsoLanguage.TryGet(out var c, lang);
-                                if (lc != null)
-                                {
-                                    if (c == null)
-                                        s.Add(lc.Iso639_1);
-                                    else
-                                        s.Add(String.Concat(lc.Iso639_1, '-', c.Iso3166a2));
-                                }
-                                else
-                                {
-                                    lc = IsoLanguage.TryGetName(lang);
-                                    if (lc != null)
-                                        s.Add(lc.Iso639_1);
-                                    else
-                                    {
-                                        s.Add(lang);
-                                    }
-                                }
-
-                            }
-                            tt = s.OrderBy(x => x).ToArray();
+                                AddLang(tt[i]);
                             updated = DateTime.UtcNow;
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                    }
-                    if (tt == null)
-                    {
-                        tt = IsoLanguage.Common;
+                        res = "Exception: " + ex;
                         updated = DateTime.UtcNow.AddDays(-100);
                     }
+                    var f = ForcedLanguages;
+                    if (f != null)
+                    {
+                        foreach (var fl in f)
+                            AddLang(fl);
+                    }
+                    foreach (var fl in IsoLanguage.Common)
+                        AddLang(fl);
+                    var tl = s.OrderBy(x => x).ToArray();
                     current = new SupLangSave
                     {
                         Updated = updated,
-                        ValidList = tt,
+                        ValidList = tl,
                     };
                     await KeyValueStore.AllShared.SetAsync(storeKey, current).ConfigureAwait(false);
                 }
                 Interlocked.Exchange(ref Languages, new SupLang(current));
+                return res;
             }
-            catch
+            catch (Exception ex)
             {
+                return "Exception: " + ex;
             }
         }
 
@@ -497,10 +541,8 @@ You MUST respect this and use exactly 2 equal signs, a space, then TEXT or MD, a
 
         const String GetLanguagesPrompt = @"
 List all languages that you understand.
-Respond using plain text with one language per row.
 Output the language LCID (locale code), not the name.
 An example: en, en-US, en-GB, es, es-MX, es-ES, sv, sv-FI, pt and pt-BR.
-Make sure to only output each language once.
 Output only this list, no explanation or anything else.
 Make sure to output ALL languages that you grasp, not just a few common.
 Important! NEVER output ANYTHING but the locale codes, comma separated.

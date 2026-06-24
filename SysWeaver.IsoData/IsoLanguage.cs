@@ -386,9 +386,11 @@ namespace SysWeaver.IsoData
             List<String> common = new List<string>(languages.Count);
             foreach (var c in languages)
             {
-                if (!speakers.ContainsKey(c.Iso639_1))
-                    if (!speakers.ContainsKey(c.Iso639_2))
+                if (!speakers.TryGetValue(c.Iso639_1, out var count))
+                    if (!speakers.TryGetValue(c.Iso639_2, out count))
                         continue;
+                if (count < 10_000_000)
+                    continue;
                 var cc = c.Comment?.FastToLower();
                 if (cc != null)
                 {
