@@ -4,7 +4,7 @@
         <name>SysWeaver.Compression</name>
     </assembly>
     <members>
-        <member name="M:SysWeaver.Compression.AsmResExt.FindResource(System.Reflection.Assembly,System.String@)">
+        <member name="M:SysWeaver.AsmResExt.FindResource(System.Reflection.Assembly,System.String@)">
             <summary>
             Given an uncompressed resource name, find the compressed version (if any) and modify to the true resource name
             </summary>
@@ -12,7 +12,7 @@
             <param name="uncompressedName">The name of the resource, if a compressed version is found it's modified to that resource</param>
             <returns>The compression type or null</returns>
         </member>
-        <member name="M:SysWeaver.Compression.AsmResExt.GetResourceCompression(System.Reflection.Assembly,System.String@)">
+        <member name="M:SysWeaver.AsmResExt.GetResourceCompression(System.Reflection.Assembly,System.String@)">
             <summary>
             Determine the compression method used in a resource based on it's extension
             </summary>
@@ -20,7 +20,7 @@
             <param name="compressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
             <returns>The compression type or null</returns>
         </member>
-        <member name="M:SysWeaver.Compression.AsmResExt.GetUncompressedResourceData(System.Reflection.Assembly,System.String@)">
+        <member name="M:SysWeaver.AsmResExt.GetUncompressedResourceData(System.Reflection.Assembly,System.String@)">
             <summary>
             Get the data of an embedded resource, if it's compressed it will be decompressed
             </summary>
@@ -28,7 +28,7 @@
             <param name="compressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
             <returns>The uncompressed data of the resource</returns>
         </member>
-        <member name="M:SysWeaver.Compression.AsmResExt.GetUncompressedResourceData(System.Reflection.Assembly,System.String)">
+        <member name="M:SysWeaver.AsmResExt.GetUncompressedResourceData(System.Reflection.Assembly,System.String)">
             <summary>
             Get the data of an embedded resource, if it's compressed it will be decompressed
             </summary>
@@ -36,7 +36,7 @@
             <param name="uncompressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
             <returns>The uncompressed data of the resource</returns>
         </member>
-        <member name="M:SysWeaver.Compression.AsmResExt.GetResourceData(System.Reflection.Assembly,System.String)">
+        <member name="M:SysWeaver.AsmResExt.GetResourceData(System.Reflection.Assembly,System.String)">
             <summary>
             Get the data of an embedded resource
             </summary>
@@ -44,7 +44,7 @@
             <param name="name">The name of the resource</param>
             <returns>The data of the resource</returns>
         </member>
-        <member name="M:SysWeaver.Compression.AsmResExt.GetResourceDataBytes(System.Reflection.Assembly,System.String)">
+        <member name="M:SysWeaver.AsmResExt.GetResourceDataBytes(System.Reflection.Assembly,System.String)">
             <summary>
             Get the data of an embedded resource as a byte array
             </summary>
@@ -52,7 +52,7 @@
             <param name="name">The name of the resource</param>
             <returns>The data of the resource</returns>
         </member>
-        <member name="M:SysWeaver.Compression.AsmResExt.GetUncompressedResourceData(System.Type,System.String)">
+        <member name="M:SysWeaver.AsmResExt.GetUncompressedResourceData(System.Type,System.String)">
             <summary>
             Get the data of an embedded resource, if it's compressed it will be decompressed
             </summary>
@@ -60,13 +60,66 @@
             <param name="uncompressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
             <returns>The uncompressed data of the resource</returns>
         </member>
-        <member name="M:SysWeaver.Compression.AsmResExt.GetUncompressedResourceDataBytes(System.Type,System.String)">
+        <member name="M:SysWeaver.AsmResExt.GetUncompressedResourceDataBytes(System.Type,System.String)">
             <summary>
             Get the data of an embedded resource, if it's compressed it will be decompressed
             </summary>
             <param name="asmType">A type in the assembly that contain the resource</param>
             <param name="uncompressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
             <returns>The uncompressed data of the resource</returns>
+        </member>
+        <member name="T:SysWeaver.AsmResExt.UnmanagedMemoryManager`1">
+            <summary>
+            A MemoryManager over a raw pointer
+            </summary>
+            <remarks>The pointer is assumed to be fully unmanaged, or externally pinned - no attempt will be made to pin this data</remarks>
+        </member>
+        <member name="M:SysWeaver.AsmResExt.UnmanagedMemoryManager`1.#ctor(System.Span{`0})">
+            <summary>
+            Create a new UnmanagedMemoryManager instance at the given pointer and size
+            </summary>
+            <remarks>It is assumed that the span provided is already unmanaged or externally pinned</remarks>
+        </member>
+        <member name="M:SysWeaver.AsmResExt.UnmanagedMemoryManager`1.#ctor(System.ReadOnlySpan{`0})">
+            <summary>
+            Create a new UnmanagedMemoryManager instance at the given pointer and size
+            </summary>
+            <remarks>It is assumed that the span provided is already unmanaged or externally pinned</remarks>
+        </member>
+        <member name="M:SysWeaver.AsmResExt.UnmanagedMemoryManager`1.#ctor(`0*,System.Int32)">
+            <summary>
+            Create a new UnmanagedMemoryManager instance at the given pointer and size
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AsmResExt.UnmanagedMemoryManager`1.#ctor(System.IntPtr,System.Int32)">
+            <summary>
+            Create a new UnmanagedMemoryManager instance at the given pointer and size
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AsmResExt.UnmanagedMemoryManager`1.GetSpan">
+            <summary>
+            Obtains a span that represents the region
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AsmResExt.UnmanagedMemoryManager`1.Pin(System.Int32)">
+            <summary>
+            Provides access to a pointer that represents the data (note: no actual pin occurs)
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AsmResExt.UnmanagedMemoryManager`1.Unpin">
+            <summary>
+            Has no effect
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AsmResExt.UnmanagedMemoryManager`1.Dispose(System.Boolean)">
+            <summary>
+            Releases all resources associated with this object
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AsmResExt.UnmanagedMemoryManager`1.ReadOnlyMemory">
+            <summary>
+            Get some readonly memory
+            </summary>
         </member>
         <member name="T:SysWeaver.Compression.CompBrotliNET">
             <summary>
@@ -79,6 +132,21 @@
             </summary>
         </member>
         <member name="F:SysWeaver.Compression.CompBrotliNET.Instance">
+            <summary>
+            The instance of the compressor
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Compression.CompBrotliNETNew">
+            <summary>
+            A compression type that uses brotli for compression
+            </summary>
+        </member>
+        <member name="M:SysWeaver.Compression.CompBrotliNETNew.Register">
+            <summary>
+            Call once to register this compression type to the compression manager
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Compression.CompBrotliNETNew.Instance">
             <summary>
             The instance of the compressor
             </summary>
@@ -113,31 +181,34 @@
             Use for offline builds etc
             </summary>
         </member>
-        <member name="M:SysWeaver.Compression.CompExt.GetCompressed(SysWeaver.Compression.ICompEncoder,System.ReadOnlySpan{System.Byte},SysWeaver.Compression.CompEncoderLevels)">
+        <member name="M:SysWeaver.Compression.CompExt.GetCompressed(SysWeaver.Compression.ICompEncoder,System.ReadOnlySpan{System.Byte},SysWeaver.Compression.CompEncoderLevels,System.Boolean)">
             <summary>
             Get compressed data
             </summary>
             <param name="c">The compression encoder</param>
             <param name="from">The memory to read uncompressed data from</param>
             <param name="level">The compression level to use</param>
+            <param name="trim">The returned memory is trimnmed, this is useful for long living object to reduce memory usage</param>
             <returns>The compressed data</returns>
         </member>
-        <member name="M:SysWeaver.Compression.CompExt.GetCompressed(SysWeaver.Compression.ICompEncoder,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+        <member name="M:SysWeaver.Compression.CompExt.GetCompressed(SysWeaver.Compression.ICompEncoder,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels,System.Boolean)">
             <summary>
             Get compressed data
             </summary>
             <param name="c">The compression encoder</param>
             <param name="from">The stream to read the uncompressed data from</param>
             <param name="level">The compression level to use</param>
+            <param name="trim">The returned memory is trimnmed, this is useful for long living object to reduce memory usage</param>
             <returns>The compressed data</returns>
         </member>
-        <member name="M:SysWeaver.Compression.CompExt.GetCompressedAsync(SysWeaver.Compression.ICompEncoder,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels)">
+        <member name="M:SysWeaver.Compression.CompExt.GetCompressedAsync(SysWeaver.Compression.ICompEncoder,System.IO.Stream,SysWeaver.Compression.CompEncoderLevels,System.Boolean)">
             <summary>
             Get compressed data
             </summary>
             <param name="c">The compression encoder</param>
             <param name="from">The stream to read the uncompressed data from</param>
             <param name="level">The compression level to use</param>
+            <param name="trim">The returned memory is trimnmed, this is useful for long living object to reduce memory usage</param>
             <returns>The compressed data</returns>
         </member>
         <member name="M:SysWeaver.Compression.CompExt.GetDecompressed(SysWeaver.Compression.ICompDecoder,System.ReadOnlySpan{System.Byte})">
@@ -163,6 +234,48 @@
             <param name="c">The compression decoder</param>
             <param name="from">The stream to read the compressed data from</param>
             <returns>The decompressed data</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GetUnmanagedDecompressed(SysWeaver.Compression.ICompDecoder,System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Get compressed data
+            </summary>
+            <param name="c">The compression decoder</param>
+            <param name="from">The memory to read compressed data from</param>
+            <returns>The decompressed data</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GetUnmanagedDecompressed(SysWeaver.Compression.ICompDecoder,System.IO.Stream)">
+            <summary>
+            Get compressed data
+            </summary>
+            <param name="c">The compression decoder</param>
+            <param name="from">The stream to read the compressed data from</param>
+            <returns>The decompressed data</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompExt.GetUnmanagedDecompressedAsync(SysWeaver.Compression.ICompDecoder,System.IO.Stream)">
+            <summary>
+            Get compressed data
+            </summary>
+            <param name="c">The compression decoder</param>
+            <param name="from">The stream to read the compressed data from</param>
+            <returns>The decompressed data</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompFile.TryGetAllText(System.String,System.Text.Encoding)">
+            <summary>
+            Read the text from a file on disc, optionally compressed
+            </summary>
+            <param name="filename">The filename without any compression extension</param>
+            <param name="encoding">Optional text encoding, UTF8 assumed by default</param>
+            <returns>The string content or null if file doesn't exist</returns>
+        </member>
+        <member name="M:SysWeaver.Compression.CompFile.TryGetNonCommentLines(System.String,System.Text.Encoding,System.Boolean)">
+            <summary>
+            Read the non-empty, non-comment lines of text from a file on disc, optionally compressed.
+            Ccomments are lines that start with a '#'.
+            </summary>
+            <param name="filename">The filename without any compression extension</param>
+            <param name="encoding">Optional text encoding, UTF8 assumed by default</param>
+            <param name="trimComment">If true, everything on a line after a '#' will be trimmed (treated as a comment)</param>
+            <returns>The non-empty, non-comment lines or null if file doesn't exist</returns>
         </member>
         <member name="T:SysWeaver.Compression.CompGZipNET">
             <summary>
@@ -208,12 +321,12 @@
         </member>
         <member name="P:SysWeaver.Compression.CompManager.HttpCodeHandlers">
             <summary>
-            Get a dictionary with all handlers for all suported http codes
+            Get all handlers for all suported http codes
             </summary>
         </member>
         <member name="P:SysWeaver.Compression.CompManager.ExtensionHandlers">
             <summary>
-            Get a dictionary with all handlers for all suported file extensions
+            Get all handlers for all suported file extensions
             </summary>
         </member>
         <member name="M:SysWeaver.Compression.CompManager.GetFromHttp(System.String)">

@@ -414,6 +414,13 @@
             <param name="key">The key to lock on (MD5 checksum of the string is what's actually being used to allow for any text here)</param>
             <returns>A lock object, dispose to unlock</returns>
         </member>
+        <member name="M:SysWeaver.SystemLock.IsLocked(System.String)">
+            <summary>
+            Check for a lock
+            </summary>
+            <param name="key">The key to lock on (MD5 checksum of the string is what's actually being used to allow for any text here)</param>
+            <returns>True if the lock is taken else false</returns>
+        </member>
         <member name="M:SysWeaver.SystemLock.TryGet(System.String,System.IDisposable@)">
             <summary>
             Try to get the lock
