@@ -12,7 +12,9 @@ namespace SysWeaver.MicroService
 
         String Name { get; }
 
-        Task Send(UserManagerComOps ops, ManagedLanguageMessages lang, String target, Dictionary<String, String> vars, String system);
+        Task Send(UserManagerComOps ops, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system);
+
+        Task Send(String message, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system, params ManagedLanguageMessages[] fallbacks);
 
         bool CleanAndValidate(ref String target);
 

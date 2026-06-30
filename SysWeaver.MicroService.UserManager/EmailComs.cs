@@ -77,10 +77,10 @@ namespace SysWeaver.MicroService
             return am.ValidateEmailAddress(target, false);
         }
 
-        public Task Send(UserManagerComOps ops, ManagedLanguageMessages lang, String target, Dictionary<String, String> vars, String system)
+        public Task Send(UserManagerComOps ops, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system)
         {
-            bool haveLang = lang != null;
-            var m = haveLang ? lang.GetMail(ops) : Messages[(int)ops];
+            bool haveLang = messages != null;
+            var m = haveLang ? messages.GetMail(ops) : Messages[(int)ops];
             if (m == null)
                 throw new Exception("Undefined mail message " + ops);
             var wl = WhiteListPrefixes;
@@ -96,11 +96,11 @@ namespace SysWeaver.MicroService
                         break;
                 }
                 if (!ok)
-                    throw new Exception("Email address is not part of the whitselist!");
+                    throw new Exception("Email address is not part of the whitelist!");
             }
             var isHtml = m.IsHtml;
-            var mHeader = (haveLang ? lang.GetMail("*Header") : Header);
-            var mFooter = (haveLang ? lang.GetMail("*Footer") : Footer);
+            var mHeader = (haveLang ? messages.GetMail("*Header") : Header);
+            var mFooter = (haveLang ? messages.GetMail("*Footer") : Footer);
             String header = "";
             if ((mHeader != null) && (isHtml == mHeader.IsHtml))
                 mHeader.GetMessage(out var _, out header, vars);
@@ -112,6 +112,58 @@ namespace SysWeaver.MicroService
             m.GetMessage(out var subject, out var body, vars);
             return Email.Send(target, subject, body, m.IsHtml);
         }
+
+
+
+        public Task Send(String message, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system, params ManagedLanguageMessages[] fallbacks)
+        {
+            ManagedMailMessage get(String mm)
+            {
+                var m = messages?.GetMail(mm);
+                if (m != null)
+                    return m;
+                foreach (var x in fallbacks)
+                {
+                    m = x.GetMail(mm);
+                    if (m != null)
+                        return m;
+                }
+                return null;
+            }
+
+            var m = get(message);
+            if (m == null)
+                throw new Exception("Undefined mail message " + message);
+            var wl = WhiteListPrefixes;
+            if (wl != null)
+            {
+                bool ok = false;
+                var wll = wl.Length;
+                var tl = target.FastToLower();
+                for (int i = 0; i < wll; ++i)
+                {
+                    ok = tl.FastEndsWith(wl[i]);
+                    if (ok)
+                        break;
+                }
+                if (!ok)
+                    throw new Exception("Email address is not part of the whitelist!");
+            }
+            var isHtml = m.IsHtml;
+            var mHeader = get("*Header") ?? Header;
+            var mFooter = get("*Footer") ?? Footer;
+            String header = "";
+            if ((mHeader != null) && (isHtml == mHeader.IsHtml))
+                mHeader.GetMessage(out var _, out header, vars);
+            String footer = "";
+            if ((mFooter != null) && (isHtml == mFooter.IsHtml))
+                mFooter.GetMessage(out var _, out footer, vars);
+            vars["[Header]"] = header;
+            vars["[Footer]"] = footer;
+            m.GetMessage(out var subject, out var body, vars);
+            return Email.Send(target, subject, body, m.IsHtml);
+        }
+
 
         readonly IEmailService Email;
         readonly ManagedMailMessage[] Messages = new ManagedMailMessage[(int)UserManagerComOps.Count];

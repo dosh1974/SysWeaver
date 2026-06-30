@@ -60,16 +60,44 @@ namespace SysWeaver.MicroService
         }
 
 
-        public Task Send(UserManagerComOps ops, ManagedLanguageMessages lang, String target, Dictionary<String, String> vars, String system)
+        public Task Send(UserManagerComOps ops, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system)
         {
-            bool haveLang = lang != null;
-            var m = haveLang ? lang.GetText(ops) : Messages[(int)ops];
+            bool haveLang = messages != null;
+            var m = haveLang ? messages.GetText(ops) : Messages[(int)ops];
             if (m == null)
                 throw new Exception("Undefined text message " + ops);
             PhonePrefix.GetValidatedPhoneNumber(out var name, out var isoCountry, out var pre, out var num, target);
             target = String.Join(' ', pre, num);
-            var header = (haveLang ? lang.GetText("*Header") : Header)?.GetMessage(vars) ?? "";
-            var footer = (haveLang ? lang.GetText("*Footer") : Footer)?.GetMessage(vars) ?? "";
+            var header = (haveLang ? messages.GetText("*Header") : Header)?.GetMessage(vars) ?? "";
+            var footer = (haveLang ? messages.GetText("*Footer") : Footer)?.GetMessage(vars) ?? "";
+            vars["[Header]"] = header;
+            vars["[Footer]"] = footer;
+            var body = m.GetMessage(vars);
+            return TextSender.Send(target, body, system);
+        }
+
+        public Task Send(String message, ManagedLanguageMessages messages, String target, Dictionary<String, String> vars, String system, params ManagedLanguageMessages[] fallbacks)
+        {
+            ManagedTextMessage get(String mm)
+            {
+                var m = messages?.GetText(mm);
+                if (m != null)
+                    return m;
+                foreach (var x in fallbacks)
+                {
+                    m = x.GetText(mm);
+                    if (m != null)
+                        return m;
+                }
+                return null;
+            }
+            var m = get(message);
+            if (m == null)
+                throw new Exception("Undefined text message " + message);
+            PhonePrefix.GetValidatedPhoneNumber(out var name, out var isoCountry, out var pre, out var num, target);
+            target = String.Join(' ', pre, num);
+            var header = (get("*Header") ?? Header)?.GetMessage(vars) ?? "";
+            var footer = (get("*Footer") ?? Footer)?.GetMessage(vars) ?? "";
             vars["[Header]"] = header;
             vars["[Footer]"] = footer;
             var body = m.GetMessage(vars);

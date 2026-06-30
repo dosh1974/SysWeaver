@@ -337,8 +337,6 @@ namespace SysWeaver.MicroService
                 await db.InitTable<DbUserDataString>(c).ConfigureAwait(false);
             }
         }
-
-  
         public Dictionary<String, String> GetMessageParams(HttpServerRequest context, params String[] add)
         {
             var cols = HashColors.AppColors;
@@ -376,9 +374,7 @@ namespace SysWeaver.MicroService
                     d[add[i]] = add[i + 1];
             }
             return d;
-
         }
-
 
 
         async Task SendOne(List<String> sentTo, UserManagerComOps message, ManagedLanguageMessages lang, String target, IUserManagerComs coms, Dictionary<String, String> vars)
@@ -388,6 +384,12 @@ namespace SysWeaver.MicroService
                 sentTo.Add(target);
         }
 
+        async Task SendOne(List<String> sentTo, String message, ManagedLanguageMessages messages, String target, IUserManagerComs coms, Dictionary<String, String> vars, params ManagedLanguageMessages[] fallbacks)
+        {
+            await coms.Send(message, messages, target, vars, TextSystemString, fallbacks).ConfigureAwait(false);
+            lock (sentTo)
+                sentTo.Add(target);
+        }
 
         /// <summary>
         /// Get a communication method for a given target
@@ -402,6 +404,56 @@ namespace SysWeaver.MicroService
                     return com;
             }
             return null;
+        }
+
+
+        /// <summary>
+        /// Send a message to a user's registered emails and phone numbers
+        /// </summary>
+        /// <param name="userId">The user id</param>
+        /// <param name="message">The message key to send (key into the messages)</param>
+        /// <param name="messages">The localized messages</param>
+        /// <param name="getVars">A function that should return any message vars</param>
+        /// <returns>The email and phone numbers that the message was sent to</returns>
+        /// <exception cref="UserDoNotExistException"></exception>
+        /// <exception cref="UserHaveNoComs"></exception>
+        public async Task<String[]> SendUserMessage(long userId, String message, ManagedLanguageMessages messages, Func<String, IUserManagerComs, Dictionary<String, String>> getVars)
+        {
+            var user = await TryGetUser(userId).ConfigureAwait(false);
+            if (user == null)
+                throw new UserDoNotExistException(userId.ToString());
+            var userName = user.NickName ?? user.UserName;
+            List<String> targets;
+            using (var c = await Db.GetAsync().ConfigureAwait(false))
+                targets = await GetUserComTargets(c, userId).ConfigureAwait(false);
+            if (targets.Count <= 0)
+                throw new UserHaveNoComs();
+            var commonVars = GetMessageParams(null, "[UserName]", userName);
+            var lang = await GetLang(messages.Language).ConfigureAwait(false);
+            var l = targets.Count;
+            List<String> sentTo = new List<string>(l);
+            List<Task> tasks = new List<Task>(l);
+            var coms = Coms;
+            var cl = coms.Length;
+            for (int i = 0; i < l; ++i)
+            {
+                var target = targets[i];
+                for (int j = 0; j < cl; ++j)
+                {
+                    var com = coms[j];
+                    if (!com.CleanAndValidate(ref target))
+                        continue;
+                    var vars = getVars(target, com);
+                    if (vars == null)
+                        vars = new Dictionary<string, string>(StringComparer.Ordinal);
+                    foreach (var x in commonVars)
+                        vars.TryAdd(x.Key, x.Value);
+                    tasks.Add(SendOne(sentTo, message, messages, target, com, vars, lang));
+                    break;
+                }
+            }
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+            return sentTo.ToArray();
         }
 
 
