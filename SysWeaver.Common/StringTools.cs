@@ -657,6 +657,40 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Make a string ascii, by removing diacritics, use a substitution table or replacement of non-ascii.
+        /// </summary>
+        /// <param name="s">The string to replace chars in</param>
+        /// <param name="subsituteUnknownWith">Unknown non-ascii chars will be replaced by this</param>
+        /// <returns>The original string if all ascii, or a string with replace values</returns>
+        public static String MakeAscii(this String s, Char subsituteUnknownWith = ' ')
+        {
+            if (String.IsNullOrEmpty(s))
+                return s;
+            s = s.RemoveDiacritics();
+            var l = s.Length;
+            Span<Char> local = stackalloc Char[l];
+            bool mod = false;
+            var toA = ToAscii;
+            for (int i = 0; i < l; ++i)
+            {
+                var c = s[i];
+                if (c >= 128)
+                {
+                    c = toA.TryGetValue(c, out var c2) ? c2 : subsituteUnknownWith;
+                    mod = true;
+                }
+                local[i] = c;
+            }
+            return mod ? new String(local) : s;
+        }
+
+        static readonly IReadOnlyDictionary<Char, Char> ToAscii = new Dictionary<Char, Char>()
+        {
+            {  '✕', 'x' },
+            {  '×', 'x' },
+        }.Freeze();
+
 
         /// <summary>
         /// Check if a string is a valid "identifier", only 'a'-'z' and numbers is accepeted (no number at the first position)
@@ -1262,6 +1296,26 @@ namespace SysWeaver
             if (p < 0)
                 return value;
             return value.Substring(p + 1);
+        }
+
+
+        /// <summary>
+        /// Get the text before the last character.
+        /// Example:
+        /// var before = "www.example.com".BeforeLast('.');
+        /// before = "www.example";
+        /// </summary>
+        /// <param name="value">The value to process</param>
+        /// <param name="split">The character to split</param>
+        /// <returns>null if the value is null, else the part before the last occurence of the split char (if the split char isn't found, the original string is returned)</returns>
+        public static String BeforeLast(this String value, Char split)
+        {
+            if (String.IsNullOrEmpty(value))
+                return value;
+            var p = value.LastIndexOf(split);
+            if (p < 0)
+                return value;
+            return value.Substring(0, p);        
         }
 
         struct SecureCount

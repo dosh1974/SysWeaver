@@ -303,6 +303,19 @@ namespace SysWeaver
             return d.ToFrozenDictionary(comparer);
         }
 
+        /// <summary>
+        /// Create an optimized dictionary from a single entry
+        /// </summary>
+        /// <typeparam name="K"></typeparam>
+        /// <typeparam name="V"></typeparam>
+        /// <param name="key"></param>
+        /// <param name="value"></param>
+        /// <param name="comp"></param>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static IReadOnlyDictionary<K, V> Single<K, V>(K key, V value, IEqualityComparer<K> comp = null)
+            => new SingleReadonlyDictionary<K, V>(key, value, comp ?? EqualityComparer<K>.Default);
+
 
         /// <summary>
         /// Create a frozen version of a set
@@ -452,6 +465,7 @@ namespace SysWeaver
             return t.Freeze();
         }
 
+
     }
 
 
@@ -499,6 +513,8 @@ namespace SysWeaver
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+
     }
 
 
