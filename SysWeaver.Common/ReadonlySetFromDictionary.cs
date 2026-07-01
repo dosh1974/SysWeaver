@@ -1,9 +1,8 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Numerics;
@@ -12,11 +11,13 @@ using System.Runtime.CompilerServices;
 
 namespace SysWeaver
 {
+
     /// <summary>
     /// Dictionary extensions
     /// </summary>
     public static class DictionaryExt
     {
+
         struct Inst<K, V> : IReadOnlySet<K>
         {
             public Inst(IReadOnlyDictionary<K, V> d)
@@ -317,69 +318,6 @@ namespace SysWeaver
             => new SingleReadonlyDictionary<K, V>(key, value, comp ?? EqualityComparer<K>.Default);
 
 
-        /// <summary>
-        /// Create a frozen version of a set
-        /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <param name="d"></param>
-        /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static IReadOnlySet<K> Freeze<K>(this HashSet<K> d)
-            => Freeze<K>(d, d.Comparer);
-
-        /// <summary>
-        /// Create a frozen version of a set
-        /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <param name="d"></param>
-        /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static IReadOnlySet<K> Freeze<K>(this IReadOnlySet<K> d)
-            => Freeze<K>(d, d.GetComparer());
-
-        /// <summary>
-        /// Create a frozen version of a set
-        /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <param name="d"></param>
-        /// <param name="comparer"></param>
-        /// <returns></returns>
-        public static IReadOnlySet<K> Freeze<K>(this IReadOnlySet<K> d, IEqualityComparer<K> comparer)
-        {
-            if (d == null)
-                return null;
-            if (comparer == null)
-                throw new Exception("Must specify a comparer!");
-            var l = d.Count;
-            if (l <= 0)
-                return EmptyReadonlySet<K>.Default;
-            if (l == 1)
-            {
-                if ((d as SingleReadonlySet<K>)?.Comp == comparer)
-                    return d;
-                var f = d.First();
-                return new SingleReadonlySet<K>(f, comparer);
-            }
-            if ((d as FrozenSet<K>)?.Comparer == comparer)
-                return d;
-            return d.ToFrozenSet(comparer);
-        }
-
-        public static IEqualityComparer<T> GetComparer<T>(this IReadOnlySet<T> set)
-        {
-            var a = set as FrozenSet<T>;
-            if (a != null)
-                return a.Comparer;
-            var b = set as IHaveComparere<T>;
-            if (b != null)
-                return b.Comp;
-            var c = set as HashSet<T>;
-            if (c != null)
-                return c.Comparer;
-            if (set == null)
-                return EqualityComparer<T>.Default;
-            throw new Exception("No comparer could be found!");
-        }
 
         public static IEqualityComparer<K> GetComparer<K, V>(this IReadOnlyDictionary<K, V> dict)
         {
@@ -400,72 +338,9 @@ namespace SysWeaver
     }
 
 
-    public static class ReadOnlySet<T>
-    {
-        public static readonly IReadOnlySet<T> Empty = EmptyReadonlySet<T>.Default;
-    }
-
     public static class ReadOnlyDictionary<K, V>
     {
         public static readonly IReadOnlyDictionary<K, V> Empty = EmptyReadonlyDictionary<K, V>.Default;
-    }
-
-    public static class ReadOnlyData
-    {
-
-        public static IReadOnlySet<T> EmptySet<T>() => EmptyReadonlySet<T>.Default;
-        public static IReadOnlyDictionary<K, V> EmptyDictionary<K, V>() => EmptyReadonlyDictionary<K, V>.Default;
-
-        public static IReadOnlySet<T> Set<T>(IEqualityComparer<T> comparer, IEnumerable<T> data)
-        {
-            var t = comparer == null ? new HashSet<T>(data) : new HashSet<T>(data, comparer);
-            return t.Freeze(comparer);
-        }
-
-        public static IReadOnlySet<T> Set<T>(IEnumerable<T> data)
-        {
-            var t = new HashSet<T>(data);
-            return t.Freeze();
-        }
-
-        public static IReadOnlySet<T> Set<T>(IEqualityComparer<T> comparer, params T[] data)
-        {
-            var t = comparer == null ? new HashSet<T>(data) : new HashSet<T>(data, comparer);
-            return t.Freeze(comparer);
-        }
-
-        public static IReadOnlySet<T> Set<T>(params T[] data)
-        {
-            var t = new HashSet<T>(data);
-            return t.Freeze();
-        }
-
-
-        public static IReadOnlyDictionary<K, V> Dictionary<K, V>(IEqualityComparer<K> comparer, IEnumerable<KeyValuePair<K, V>> data)
-        {
-            var t = comparer == null ? new Dictionary<K, V>(data) : new Dictionary<K, V>(data, comparer);
-            return t.Freeze(comparer);
-        }
-
-        public static IReadOnlyDictionary<K, V> Dictionary<K, V>(IEnumerable<KeyValuePair<K, V>> data)
-        {
-            var t = new Dictionary<K, V>(data);
-            return t.Freeze();
-        }
-
-        public static IReadOnlyDictionary<K, V> Dictionary<K, V>(IEqualityComparer<K> comparer, params KeyValuePair<K, V>[] data)
-        {
-            var t = comparer == null ? new Dictionary<K, V>(data) : new Dictionary<K, V>(data, comparer);
-            return t.Freeze(comparer);
-        }
-
-        public static IReadOnlyDictionary<K, V> Dictionary<K, V>(params KeyValuePair<K, V>[] data)
-        {
-            var t = new Dictionary<K, V>(data);
-            return t.Freeze();
-        }
-
-
     }
 
 
@@ -573,121 +448,6 @@ namespace SysWeaver
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
-
-    sealed class EmptyReadonlySet<K> : IReadOnlySet<K>, IHaveComparere<K>
-    {
-
-        public static readonly EmptyReadonlySet<K> Default = new(EqualityComparer<K>.Default);
-
-        EmptyReadonlySet(IEqualityComparer<K> comparer)
-        {
-            Comp = comparer;
-        }
-
-        static readonly IEnumerable<K> EmptyK = Enumerable.Empty<K>();
-
-        public IEqualityComparer<K> Comp { get; init; }
-
-        public int Count => 0;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Contains(K key) => false;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public IEnumerator<K> GetEnumerator() => EmptyK.GetEnumerator();
-
-        public bool IsProperSubsetOf(IEnumerable<K> other)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool IsProperSupersetOf(IEnumerable<K> other)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool IsSubsetOf(IEnumerable<K> other)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool IsSupersetOf(IEnumerable<K> other)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool Overlaps(IEnumerable<K> other)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool SetEquals(IEnumerable<K> other)
-        {
-            return !other.GetEnumerator().MoveNext();
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-    }
-
-    sealed class SingleReadonlySet<K> : IReadOnlySet<K>, IHaveComparere<K>
-    {
-        public SingleReadonlySet(K key, IEqualityComparer<K> comp)
-        {
-            Key = key;
-            Comp = comp;
-            Ke = [key];
-        }
-
-        readonly K Key;
-        readonly IEnumerable<K> Ke;
-
-        public IEqualityComparer<K> Comp { get; init; }
-
-        public int Count => 1;
-
-        public bool Contains(K key)
-            => Comp.Equals(key, Key);
-
-        public IEnumerator<K> GetEnumerator() => Ke.GetEnumerator();
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-        public bool IsProperSubsetOf(IEnumerable<K> other)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool IsProperSupersetOf(IEnumerable<K> other)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool IsSubsetOf(IEnumerable<K> other)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool IsSupersetOf(IEnumerable<K> other)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool Overlaps(IEnumerable<K> other)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool SetEquals(IEnumerable<K> other)
-        {
-            var e = other.GetEnumerator();
-            if (!e.MoveNext())
-                return false;
-            if (!Comp.Equals(Key, e.Current))
-                return false;
-            return !e.MoveNext();
-        }
-    }
 
 
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace SysWeaver
@@ -61,6 +61,17 @@ namespace SysWeaver
 
     public class ManagedMailMessage
     {
+        public ManagedMailMessage()
+        {
+        }
+
+        public ManagedMailMessage(IReadOnlySet<String> vars)
+        {
+            Vars = vars.Freeze();
+        }
+
+        public readonly IReadOnlySet<String> Vars;
+
         public override string ToString() => Subject;
         
         /// <summary>
@@ -105,11 +116,14 @@ namespace SysWeaver
                 t = TempSubject;
                 if (t != null)
                     return t;
-                t = ManagedTools.GetTemplate(Subject, IsHtml ? ManagedVars.HtmlVars : ManagedVars.TextVars, GetType(), () => TempSubject = null);
+                t = ManagedTools.GetTemplate(Subject, AllVars, GetType(), () => TempSubject = null);
                 TempSubject = t;
                 return t;
             }
         }
+
+        IReadOnlySet<String> AllVars => (IsHtml ? ManagedVars.HtmlVars : ManagedVars.TextVars).Merge(true, Vars);
+
 
         /// <summary>
         /// Get the text template for the body
@@ -125,7 +139,7 @@ namespace SysWeaver
                 t = TempBody;
                 if (t != null)
                     return t;
-                t = ManagedTools.GetTemplate(Body, IsHtml ? ManagedVars.HtmlVars : ManagedVars.TextVars, GetType(), () => TempBody = null);
+                t = ManagedTools.GetTemplate(Body, AllVars, GetType(), () => TempBody = null);
                 TempBody = t;
                 return t;
             }

@@ -900,6 +900,25 @@ namespace SysWeaver.MicroService
         public TableData ProcessInfoTable(TableDataRequest r)
             => TableDataTools.Get(r, 5000, Processes.Values.Select(x => x.Metrics).Where(x => x != null));
 
+
+        /// <summary>
+        /// Kill a specific process
+        /// </summary>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebApiAudit(AuditGroup)]
+        public bool KillProcess(int pid, HttpServerRequest context)
+        {
+            Process h = Process.GetProcessById((int)pid);
+            if (h == null)
+                throw new Exception("Couldn't find a process with id " + pid);
+            h.Kill(true);
+            context.Session.InvalidateCache();
+            context.Server.InvalidateCache();
+            return true;
+        }
+
         SmProcess ValidateProcess(long processId)
         {
             if (!Processes.TryGetValue(processId, out var i))
@@ -1786,6 +1805,7 @@ namespace SysWeaver.MicroService
 
         #endregion//Verbs
 
+
         /// <summary>
         /// Kill the service process
         /// </summary>
@@ -1809,7 +1829,9 @@ namespace SysWeaver.MicroService
                 return null;
             try
             {
-                await RunCommand(exe.ToQuoted() + " stop").ConfigureAwait(false);
+                int timeout = 30000;
+                var task = RunCommand(exe.ToQuoted() + " stop").AsTask();
+                await Task.WhenAny(task, Task.Delay(timeout));
                 try
                 {
                     h = Process.GetProcessById((int)pid);

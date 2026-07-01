@@ -120,6 +120,8 @@ namespace SysWeaver.Net
 
         public bool RemoveFolder(FileHttpServerModuleFolder folder)
         {
+            if (folder == null)
+                return false;
             var df = folder.DiscFolder ?? "web";
             var di = new DirectoryInfo(df);
             df = di.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);

@@ -29,17 +29,39 @@ namespace SysWeaver
                 return text;
             try
             {
+                var l = text.Length;
+                int start;
+                for (start = 0; start < l; ++ start)
+                {
+                    if (!Char.IsWhiteSpace(text[start]))
+                        break;
+                }
+                if (start >= l)
+                    return text;
+                int end = l;
+                while (end > 0)
+                {
+                    --end;
+                    if (!Char.IsWhiteSpace(text[end]))
+                    {
+                        ++end;
+                        break;
+                    }
+                }
                 var newText = await translator.TranslateOne(new TranslateRequest
                 {
                     Context = context,
                     From = from,
                     To = to,
-                    Text = text,
+                    Text = text.Substring(start, end - start),
                     Effort = effort,
                     Retention = retention,
                     ContentType = contentType,
                 }).ConfigureAwait(false);
-                return newText ?? text;
+                if (newText == null)
+                    return text;
+                newText = String.Concat(text.Substring(0, start), newText, text.Substring(end));
+                return newText;
             }
             catch
             {
@@ -58,20 +80,20 @@ namespace SysWeaver
         {
             var h = text.IsHtml;
             var body = text.GetBody().Template;
-            var x = new ManagedMailMessage
+            var x = new ManagedMailMessage(text.Vars)
             {
                 IsHtml = h,
-                Subject = await tr.TranslateSafe(text.GetSubject().Template, to, defLang, "This is an email subject line").ConfigureAwait(false),
-                Body = await(h ? tr.TranslateSafeHtml(body, to, defLang, "This is an email body") : tr.TranslateSafe(body, to, defLang, "This is the email body")).ConfigureAwait(false),
+                Subject = await tr.TranslateSafe(text.GetSubject().Template, to, defLang, "This is an email subject line. Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".").ConfigureAwait(false),
+                Body = await(h ? tr.TranslateSafeHtml(body, to, defLang, "This is an email body. Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".") : tr.TranslateSafe(body, to, defLang, "This is the email body. Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".")).ConfigureAwait(false),
             };
             dest[key] = x;
         }
 
         static async Task DoSMS(ConcurrentDictionary<string, ManagedTextMessage> dest, String key, ITranslator tr, String defLang, String to, ManagedTextMessage text)
         {
-            var x = new ManagedTextMessage
+            var x = new ManagedTextMessage(text.Vars)
             {
-                Body = await tr.TranslateSafe(text.GetBody().Template, to, defLang, "This is the text of a SMS, keep short").ConfigureAwait(false),
+                Body = await tr.TranslateSafe(text.GetBody().Template, to, defLang, "This is the text of a SMS, keep short. Text between [ and ] are variables and should not be translated, examples: \"[Amount]\", \"[_Site]\" and \"[#Root]\".").ConfigureAwait(false),
             };
             dest[key] = x;
         }

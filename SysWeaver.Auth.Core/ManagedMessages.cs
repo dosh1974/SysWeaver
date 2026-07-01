@@ -9,6 +9,7 @@ namespace SysWeaver
 {
     public sealed class ManagedMessages
     {
+
         /// <summary>
         /// Holds a bunch of messages, localized, text and mail templates
         /// </summary>
@@ -25,7 +26,29 @@ namespace SysWeaver
         /// If the name starts with a '*', the data is optional (will return empty strings if not found)</param>
         /// <exception cref="Exception"></exception>
         public ManagedMessages(String sourceFolder, String defaultLang, bool htmlMail, params String[] names)
+            : this(sourceFolder, defaultLang, htmlMail, null, names)
         {
+        }
+        /// <summary>
+        /// Holds a bunch of messages, localized, text and mail templates
+        /// </summary>
+        /// <param name="sourceFolder">The folder where the source files are, should have a subfolder for each language, folder name should match the language iso, ex: "en-US", "en-GB", "es-MX", "es-ES", "de", "sv".
+        /// Can use a "*" to define a subfolder pattern, ex: "C:\locale\*\UserManager".</param>
+        /// <param name="defaultLang">The default language if the supplied language isn't found</param>
+        /// <param name="vars">Set of optional variables, example: "[Amount]"</param>
+        /// <param name="htmlMail">True if the folder contain html mail templates.
+        /// If true files are named: "[Name]Mail.html" (body) and "[Name]Mail.txt" (subject)".
+        /// If false files are named: "[Name]MailBody.txt" (body) and "[Name]Mail.txt" (subject)".
+        /// Where [Name] is any of the supplies names.
+        /// </param>
+        /// <param name="names">The names/keys of messages.
+        /// Text (SMS/message) files are names as "[Name]Text.txt", mail fails are named as specified in the htmlMail parameter.
+        /// If the name starts with a '*', the data is optional (will return empty strings if not found)</param>
+        /// <exception cref="Exception"></exception>
+        public ManagedMessages(String sourceFolder, String defaultLang, bool htmlMail, IReadOnlySet<String> vars, params String[] names)
+        {
+            vars = vars.Freeze();
+            Vars = vars;
             var languages = new ConcurrentDictionary<String, ManagedLanguageMessages>(StringComparer.Ordinal);
             sourceFolder = sourceFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, Path.VolumeSeparatorChar);
             var i = sourceFolder.IndexOf('*');
@@ -48,13 +71,13 @@ namespace SysWeaver
                     bool isOptional = name.StartsWith("*");
                     var n = isOptional ? name.Substring(1) : name;
 
-                    var mm = new ManagedMailMessage
+                    var mm = new ManagedMailMessage(vars)
                     {
                         Body = Path.Combine(f, n + (htmlMail ? "Mail.html" : "MailBody.txt")),
                         Subject = Path.Combine(f, n + "Mail.txt"),
                         IsHtml = htmlMail,
                     };
-                    var tm = new ManagedTextMessage
+                    var tm = new ManagedTextMessage(vars)
                     {
                         Body = Path.Combine(f, n + "Text.txt"),
                     };
@@ -110,6 +133,8 @@ namespace SysWeaver
             Default = def == null ? null : new ManagedLanguageMessages(def);
             Languages = languages;
         }
+
+        public readonly IReadOnlySet<String> Vars;
 
         public override string ToString() => String.Concat("Default: ", Default, ", languages: ", Languages.Count);
 

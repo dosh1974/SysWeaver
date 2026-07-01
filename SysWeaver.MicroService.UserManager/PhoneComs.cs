@@ -117,7 +117,7 @@ namespace SysWeaver.MicroService
     /// </summary>
     sealed class UmManagedTextMessage : ManagedTextMessage
     {
-        public UmManagedTextMessage(String body) : base(body)
+        public UmManagedTextMessage(String body, IReadOnlySet<String> vars = null) : base(body, vars)
         {
         }
     }

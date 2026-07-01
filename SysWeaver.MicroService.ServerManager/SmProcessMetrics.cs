@@ -130,6 +130,19 @@ namespace SysWeaver.MicroService
         /// Filename of the main module
         /// </summary>
         public String MainFilename;
+
+
+        /// <summary>
+        /// Actions to perform on the process
+        /// </summary>
+        [TableDataActions(
+    "Kill",
+    "Click to kill the process",
+    "../ServerManager/KillProcess?{0}",
+    "../icons/skull.svg"
+    )]
+        [TableDataOrder(100)]
+        public long Actions => Id; 
     }
 
 }

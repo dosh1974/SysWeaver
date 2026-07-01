@@ -35,22 +35,28 @@ namespace SysWeaver
                 t = TempBody;
                 if (t != null)
                     return t;
-                t = ManagedTools.GetTemplate(Body, ManagedVars.TextVars, GetType(), () => TempBody = null);
+                t = ManagedTools.GetTemplate(Body, AllVars, GetType(), () => TempBody = null);
                 TempBody = t;
                 return t;
             }
         }
 
+        IReadOnlySet<String> AllVars => ManagedVars.TextVars.Merge(true, Vars);
+
+
         volatile TextTemplate TempBody;
-        public ManagedTextMessage()
+        public ManagedTextMessage(IReadOnlySet<String> vars)
         {
+            Vars = vars.Freeze();
         }
 
-        public ManagedTextMessage(String body)
+        public ManagedTextMessage(String body, IReadOnlySet<String> vars)
         {
             Body = body;
-            TempBody = null;
+            Vars = vars.Freeze();
         }
+
+        public readonly IReadOnlySet<String> Vars;
 
     }
 

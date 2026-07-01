@@ -56,6 +56,8 @@ namespace SysWeaver
             Mails = mails;
         }
 
+        
+
         internal ManagedLanguageMessages(ManagedLanguageMessages copy, bool isFallback = true)
         {
             IsFallback = isFallback;
