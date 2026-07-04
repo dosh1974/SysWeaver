@@ -39,13 +39,23 @@ namespace SysWeaver.Net
                 {
                     case PlatformID.Win32NT:
 
+                        bool isNew = false;
                         try
                         {
-                            cert.Install();
+                            isNew = cert.Install();
                         }
                         catch (Exception ex)
                         {
                             msg?.AddMessage(logPrefix + "Failed to install certificate " + hash.ToQuoted(), ex, MessageLevels.Warning);
+                        }
+                        if (isNew)
+                        {
+                            string removeArgs = "http delete sslcert " + bind;
+                            msg?.AddMessage(logPrefix + "Running command: \"netsh " + removeArgs + "\"", MessageLevels.Debug);
+                            ExternalProcess.Run("netsh", removeArgs, (text, wrn) =>
+                            {
+                                msg?.AddMessage(logPrefix + "[RemoveCert] " + text, wrn ? MessageLevels.Warning : MessageLevels.Debug);
+                            });
                         }
                         string updateArgs = "http update sslcert " + bind + " certhash=" + hash + " appid=" + EnvInfo.AppGuid;
                         msg?.AddMessage(logPrefix + "Running command: \"netsh " + updateArgs + "\"", MessageLevels.Debug);

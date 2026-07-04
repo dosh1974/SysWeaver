@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -15,7 +15,7 @@ namespace SysWeaver.Auth
     /// A simple authorizer
     /// </summary>
     [WebMenuPath(null, "Debug/SimpleAuth", "Authorizer", "Options and helpers for the basic authorizer", "icons/protect.svg")]
-    [WebMenuEmbedded(null, "Debug/SimpleAuth/GenPwd", "Generate password hash", "auth/PwdGen.html", "Generate password hashes to be used for the simple authorizer", "IconLock", 0, "debug,ops")]
+    [WebMenuEmbedded(null, "Debug/SimpleAuth/GenPwd", "Generate password hash", "auth/index.html", "Generate password hashes to be used for the simple authorizer", "IconLock", 0, "debug,ops")]
     [WebMenuEmbedded(null, "Debug/SimpleAuth/KeyMan", "API-key management", "auth/KeyMan.html", "Manage API-keys", "IconKey", 0, "", false, nameof(CanManageKeys))]
     public sealed class SimpleAuthorizer : AuthorizerBase, IDisposable, IRunTimeWebApiAuth
     {
@@ -329,7 +329,6 @@ namespace SysWeaver.Auth
         /// <param name="user">The name of the user</param>
         /// <returns></returns>
         [WebApi("debug/simpleAuth/{0}")]
-        [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(30)]
         [WebApiRequestCache(30)]
         [WebApiCompression("br:Best, deflate:Best, gzip:Best")]
@@ -420,7 +419,6 @@ namespace SysWeaver.Auth
         /// </summary>
         /// <returns>The password policy</returns>
         [WebApi("debug/simpleAuth/{0}")]
-        [WebApiAuth(Roles.Ops)]
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
         public PasswordPolicy GetPasswordPolicy()

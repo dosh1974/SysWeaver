@@ -6,6 +6,7 @@ async function getUserSalt(user) {
     const apiPrefix = "../Api/debug/simpleAuth/";
     return await sendRequest(apiPrefix + "GetAuthSalt", user);
 }
+
 async function getPasswordPolicy() {
 
     const apiPrefix = "../Api/debug/simpleAuth/";

@@ -182,18 +182,35 @@ namespace SysWeaver.Security
         }
 
 
+        /// <summary>
+        /// Install a certificates (if it's not already installed)
+        /// </summary>
+        /// <param name="cert">The certificate to check/install</param>
+        /// <returns>True if the cert was installed (was new)</returns>
         public static bool Install(this X509Certificate2 cert)
         {
+            bool isNew = false;
             using (var store = new X509Store(StoreName.My, StoreLocation.LocalMachine))
             {
                 store.Open(OpenFlags.ReadWrite);
-                if (store.Certificates.Find(X509FindType.FindByThumbprint, cert.Thumbprint, false).Count <= 0)
+                var certs = store.Certificates.Find(X509FindType.FindByThumbprint, cert.Thumbprint, false).ToList();
+                int count = certs.Count;
+                foreach (var c in certs)
                 {
+                    if ((c.NotBefore != cert.NotBefore) || (c.NotAfter != cert.NotAfter))
+                    {
+                        store.Remove(c);
+                        --count;
+                    }
+                }
+                if (count <= 0)
+                {
+                    isNew = true;
                     store.Add(cert);
                 }
                 store.Close();
             }
-            return true;
+            return isNew;
         }
 
 

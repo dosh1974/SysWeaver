@@ -9,10 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-	<PackageReference Include="AutoMapper" Version="16.1.1" />
+	<PackageReference Include="AutoMapper" Version="16.2.0" />
 	<PackageReference Include="FastText.Native.Linux" Version="1.0.115" />
 	<PackageReference Include="FastText.Native.Windows" Version="1.0.115" />
-	<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+	<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
 
 
   </ItemGroup>
