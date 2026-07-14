@@ -65,7 +65,7 @@ namespace SysWeaver
 
         static WindowsPlatformTools()
         {
-            var c = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+            var c = new PerformanceCounter("Processor Information", "% Processor Time", "_Total");
             CpuCounter = c;
             c.NextValue();
             Thread.Sleep(10);

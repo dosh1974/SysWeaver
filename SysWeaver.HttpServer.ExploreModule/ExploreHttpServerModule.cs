@@ -1,4 +1,4 @@
-using SysWeaver.Auth;
+﻿using SysWeaver.Auth;
 using SysWeaver.Compression;
 using SysWeaver.Data;
 using SysWeaver.MicroService;
@@ -240,7 +240,7 @@ namespace SysWeaver.Net.ExploreModule
             var server = req.Server;
             var icons = TableDataTools.SortAndFilter(r, server.EnumEndPoints(path)
                 .Where(
-                    x => x.Mime.FastStartsWith("image/"))
+                    x => x.Mime?.FastStartsWith("image/") ?? false)
                 .Select(
                     x => new IconInfo(x))
                 ).ToArray();

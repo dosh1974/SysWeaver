@@ -1405,20 +1405,20 @@ namespace SysWeaver.MicroService
         {
             const String sys = nameof(ServiceManager);
             yield return new Stats(sys, nameof(Monitor.LockContentionCount), Monitor.LockContentionCount, "The number of times there was contention when trying to take the monitor's lock");
-            foreach (var x in Stats.SafeGetStats(() => EnvInfo.GetStats()))
+            foreach (var x in Stats.SafeGetStats(EnvInfo.GetStats))
                yield return x;
-            foreach (var x in Stats.SafeGetStats(() => MovingAverage.GetGlobalStats()))
+            foreach (var x in Stats.SafeGetStats(MovingAverage.GetGlobalStats))
                 yield return x;
-            foreach (var x in Stats.SafeGetStats(() => TaskExt.GetEventExceptionStats()))
+            foreach (var x in Stats.SafeGetStats(TaskExt.GetEventExceptionStats))
                 yield return x;
             foreach (var s in HaveStats.Keys)
             {
-                foreach (var x in Stats.SafeGetStats(() => s.GetStats()))
+                foreach (var x in Stats.SafeGetStats(s.GetStats))
                     yield return x;
             }
             foreach (var x in Stats.SafeGetStats(() => FileExs.GetStats(sys, "FileExs.")))
                 yield return x;
-            foreach (var x in Stats.SafeGetStats(() => PlatformTools.Current.GetStats()))
+            foreach (var x in Stats.SafeGetStats(PlatformTools.Current.GetStats))
                 yield return x;
             foreach (var x in Stats.SafeGetStats(() => Scheduler.TaskExceptions.GetStats(sys, "SchedulerEx.")))
                 yield return x;

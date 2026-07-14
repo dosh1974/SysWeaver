@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Text;
 
 using SysWeaver.Inspection.Implementation;
+using SysWeaver.IO;
 
 
 namespace SysWeaver.Inspection
