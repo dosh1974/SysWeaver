@@ -9,57 +9,94 @@ namespace SysWeaver.Data
         public delegate String Formatter(Object value, Object nextValue, TableDataColumn col);
         public delegate String SpecialFormatter(Formatter fmt, Object value, Object nextValue, TableDataColumn col);
 
+        static readonly String NumberFmt = TableDataFormats.Number.ToString();
+
+        static readonly IReadOnlyDictionary<String, int> DoFormats = new Dictionary<String, int>(StringComparer.Ordinal)
+        {
+            {  TableDataFormats.Default.ToString(), 1 },
+            {  TableDataFormats.Number.ToString(), 2 },
+        }.Freeze();
+
+        public static String GetIndexed(String[] vars, int index, String def)
+        {
+            if (index >= vars.Length)
+                return def;
+            var v = vars[index];
+            return v ?? def;
+        }
+
+        static String ApplyTextFormat(String s, Object nextValue, TableDataColumn col)
+        {
+            if (String.IsNullOrEmpty(s))
+                return s;
+            if (col == null)
+                return s.Replace(' ', (Char)0xa0);
+            var f = col.Format;
+            if (f == null)
+                return s.Replace(' ', (Char)0xa0);
+            var p = f.Split(";");
+            if (!DoFormats.TryGetValue(p[0], out var fi))
+                return s.Replace(' ', (Char)0xa0);
+            var fmt = GetIndexed(p, fi, "{0}");
+            if (fmt.FastEquals("{0}"))
+                return s.Replace(' ', (Char)0xa0);
+            return String.Format(fmt, s, nextValue).Replace(' ', (Char)0xa0);
+        }
+
+        static int GetDecimals(TableDataColumn col)
+        {
+            if (col == null)
+                return 3;
+            var f = col.Format;
+            if (f == null)
+                return 3;
+            var p = f.Split(";");
+            if (!p[0].FastEquals(NumberFmt))
+                return 3;
+            var countText = GetIndexed(p, 1, "3");
+            return int.TryParse(countText, out var count) ? count : 3;
+        }
 
         static readonly Formatter ObjToString = (data, nextData, col) =>
         {
             if (data == null)
                 return "";
-            return data.ToString();
+            return ApplyTextFormat(data.ToString(), nextData, col);
         };
-        /*
-        static readonly Formatter DefToString = (data, nextData, col) =>
-        {
-            if (data == null)
-                return "";
-            var type = data.GetType();
-            if (DefToStrings.TryGetValue(type.FullName, out var fn))
-                return fn(data, nextData, col);
-            return data.ToString();
-        };
-        */
+
         static readonly Formatter SingleToString = (data, nextData, col) =>
         {
             if (data == null)
                 return "";
-            return Convert.ToSingle(data).ToValueString(3);
+            return ApplyTextFormat(Convert.ToSingle(data).ToValueString(GetDecimals(col)), nextData, col);
         };
 
         static readonly Formatter DoubleToString = (data, nextData, col) =>
         {
             if (data == null)
                 return "";
-            return Convert.ToDouble(data).ToValueString(3);
+            return ApplyTextFormat(Convert.ToDouble(data).ToValueString(GetDecimals(col)), nextData, col);
         };
 
         static readonly Formatter DecimalToString = (data, nextData, col) =>
         {
             if (data == null)
                 return "";
-            return Convert.ToDecimal(data).ToValueString(3);
+            return ApplyTextFormat(Convert.ToDecimal(data).ToValueString(GetDecimals(col)), nextData, col);
         };
 
         static readonly Formatter SByteToString = (data, nextData, col) =>
         {
             if (data == null)
                 return "";
-            return ((Int32)Convert.ToSByte(data)).ToValueString();
+            return ApplyTextFormat(((Int32)Convert.ToSByte(data)).ToValueString(), nextData, col);
         };
 
         static readonly Formatter Int16ToString = (data, nextData, col) =>
         {
             if (data == null)
                 return "";
-            return ((Int32)Convert.ToInt16(data)).ToValueString();
+            return ApplyTextFormat(((Int32)Convert.ToInt16(data)).ToValueString(), nextData, col);
         };
 
 
@@ -67,28 +104,28 @@ namespace SysWeaver.Data
         {
             if (data == null)
                 return "";
-            return Convert.ToInt32(data).ToValueString();
+            return ApplyTextFormat(Convert.ToInt32(data).ToValueString(), nextData, col);
         };
 
         static readonly Formatter Int64ToString = (data, nextData, col) =>
         {
             if (data == null)
                 return "";
-            return Convert.ToInt64(data).ToValueString();
+            return ApplyTextFormat(Convert.ToInt64(data).ToValueString(), nextData, col);
         };
 
         static readonly Formatter ByteToString = (data, nextData, col) =>
         {
             if (data == null)
                 return "";
-            return ((UInt32)Convert.ToByte(data)).ToValueString();
+            return ApplyTextFormat(((UInt32)Convert.ToByte(data)).ToValueString(), nextData, col);
         };
 
         static readonly Formatter UInt16ToString = (data, nextData, col) =>
         {
             if (data == null)
                 return "";
-            return ((UInt32)Convert.ToUInt16(data)).ToValueString();
+            return ApplyTextFormat(((UInt32)Convert.ToUInt16(data)).ToValueString(), nextData, col);
         };
 
 
@@ -96,14 +133,14 @@ namespace SysWeaver.Data
         {
             if (data == null)
                 return "";
-            return Convert.ToUInt32(data).ToValueString();
+            return ApplyTextFormat(Convert.ToUInt32(data).ToValueString(), nextData, col);
         };
 
         static readonly Formatter UInt64ToString = (data, nextData, col) =>
         {
             if (data == null)
                 return "";
-            return Convert.ToUInt64(data).ToValueString();
+            return ApplyTextFormat(Convert.ToUInt64(data).ToValueString(), nextData, col);
         };
 
 

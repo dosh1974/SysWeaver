@@ -45,6 +45,7 @@ namespace SysWeaver.Data
                 '`',
                 '*',
                 '_',
+                '&',
                 '{',
                 '}',
                 '[',
@@ -54,14 +55,15 @@ namespace SysWeaver.Data
                 '(',
                 ')',
                 '#',
-//                '+',
-//                '-',
-//                '.',
+                '$',
+                //                '+',
+                //                '-',
+                //                '.',
                 '!',
                 '|'
             );
 
-        public static String EscapeMD(String text)
+        public static String EscapeMD(String text, bool nbsp = false)
         {
             if (String.IsNullOrEmpty(text))
                 return "";
@@ -82,19 +84,12 @@ namespace SysWeaver.Data
                 t[o] = c;
                 ++o;
             }
-            if (o == l)
-                return text;
-            return new string(t.Slice(0, o));
+            if (o != l)
+                text = new string(t.Slice(0, o));
+            if (nbsp)
+                text = text.Replace(' ', (Char)0xa0);
+            return text;
         }
-
-        static String GetIndexed(String[] vars, int index, String def)
-        {
-            if (index >= vars.Length)
-                return def;
-            var v = vars[index];
-            return v ?? def;
-        }
-
 
         static String FormatUrl(TableDataExporterTools.Formatter f, Object value, Object nextValue, TableDataColumn col)
         {
@@ -103,8 +98,8 @@ namespace SysWeaver.Data
             // Url;{0};{1}/README.md;Click to open "{3}".
             var valueText = f(value, nextValue, col);
             var t = col.Format.Split(';');
-            var text = String.Format(GetIndexed(t, 1, "{0}"), valueText, nextValue);
-            var link = String.Format(GetIndexed(t, 2, "{2}"), value, nextValue, text);
+            var text = String.Format(TableDataExporterTools.GetIndexed(t, 1, "{0}"), valueText, nextValue);
+            var link = String.Format(TableDataExporterTools.GetIndexed(t, 2, "{2}"), value, nextValue, text);
             if (String.IsNullOrEmpty(link))
                 return text;
             switch (link[0])
@@ -120,7 +115,7 @@ namespace SysWeaver.Data
                     link = link.Substring(1);
                     break;
             }
-            var title = String.Format(GetIndexed(t, 3, "Click to open \"{3}\"."), value, nextValue, text, link);
+            var title = String.Format(TableDataExporterTools.GetIndexed(t, 3, "Click to open \"{3}\"."), value, nextValue, text, link);
             if (!String.IsNullOrEmpty(title))
                 return String.Concat((Char)1, '[', EscapeMD(text), "](", EscapeMD(link), " \"", EscapeMD(title).Replace("\"", "\\\""), "\")");
             return String.Concat((Char)1, '[', EscapeMD(text), "](", EscapeMD(link), ')');
@@ -204,7 +199,7 @@ namespace SysWeaver.Data
 
             //  Title
             if (!String.IsNullOrEmpty(tableData.Title))
-                sb.Append(linePrefix).Append(TitlePrefix).Append(EscapeMD(tableData.Title)).AppendLine("  ");
+                sb.Append(linePrefix).Append(TitlePrefix).Append(EscapeMD(tableData.Title, true)).AppendLine("  ");
 
             //  Headers
             sb.Append(linePrefix);
@@ -212,7 +207,7 @@ namespace SysWeaver.Data
             {
                 if (hide.Contains(i))
                     continue;
-                var title = String.Concat(hs, EscapeMD(colTitles[t]), hs);
+                var title = String.Concat(hs, EscapeMD(colTitles[t], true), hs);
                 ++t;
                 var mxLen = Math.Max(colWidths[i], title.Length);
                 colWidths[i] = mxLen;
