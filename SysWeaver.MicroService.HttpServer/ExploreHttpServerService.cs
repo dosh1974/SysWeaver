@@ -9,6 +9,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using SysWeaver.Serialization;
 using System.Web;
+using System.Linq.Expressions;
+using System.Reflection;
 
 namespace SysWeaver.MicroService
 {
@@ -147,6 +149,64 @@ namespace SysWeaver.MicroService
             return exporter.Export(export.Data, request, opt);
         }
 
+
+
+
+        static readonly ConcurrentDictionary<Type, Func<IDeserializer, ReadOnlyMemory<Byte>, TableData>> TableCreators = new();
+        static readonly ParameterExpression ExpParamDeser = Expression.Parameter(typeof(IDeserializer), "ser");
+        static readonly ParameterExpression ExpParamData = Expression.Parameter(typeof(ReadOnlyMemory<Byte>), "data");
+        static readonly MethodInfo MiSerCreate = typeof(IDeserializer).GetMethods().First(mi => mi.Name.FastEquals(nameof(IDeserializer.Create)) && mi.GetParameters().FirstOrDefault()?.ParameterType == typeof(ReadOnlyMemory<Byte>));
+        static readonly MethodInfo MiToTableData = typeof(TableDataTools).GetMethod(nameof(TableDataTools.ToTableData));
+
+        static Func<IDeserializer, ReadOnlyMemory<Byte>, TableData> GetTableCreator(Type type)
+        {
+            var tcs = TableCreators;
+            if (tcs.TryGetValue(type, out var tc))
+                return tc;
+            var rt = type;
+            if (rt.IsGenericType)
+            {
+                var bt = rt.GetGenericTypeDefinition();
+                if ((bt == typeof(Task<>)) || (bt == typeof(ValueTask<>)))
+                    rt = rt.GetGenericArguments()[0];
+            }
+            var serType = rt;
+            var td = typeof(TableData);
+            if (td.IsAssignableFrom(rt))
+            {
+                Expression prog = Expression.Call(ExpParamDeser, MiSerCreate.MakeGenericMethod(serType), ExpParamData);
+                if (prog.Type != td)
+                    prog = Expression.Convert(prog, td);
+                tc = Expression.Lambda<Func<IDeserializer, ReadOnlyMemory<Byte>, TableData>>(prog, ExpParamDeser, ExpParamData).Compile();
+                tcs[type] = tc;
+                return tc;
+            }
+            else {
+                for (; ; )
+                {
+                    if (rt.IsGenericType)
+                    {
+                        var ga = rt.GetGenericArguments();
+                        if (ga.Length == 1)
+                        {
+                            if (typeof(TypedTableData<>).MakeGenericType(ga).IsAssignableFrom(serType))
+                            {
+                                Expression prog = Expression.Call(ExpParamDeser, MiSerCreate.MakeGenericMethod(serType), ExpParamData);
+                                prog = Expression.Call(MiToTableData.MakeGenericMethod(ga[0]), prog);
+                                tc = Expression.Lambda<Func<IDeserializer, ReadOnlyMemory<Byte>, TableData>>(prog, ExpParamDeser, ExpParamData).Compile();
+                                tcs[type] = tc;
+                                return tc;
+                            }
+                        }
+                    }
+                    rt = rt.BaseType;
+                    if ((rt == null) || (rt == typeof(Object)))
+                        throw new Exception("Don't know how to convert data of type \"" + serType.FullName + "\" to table data: \"" + typeof(TableData).FullName + "\"");
+                }
+            }
+        }
+
+
         /// <summary>
         /// Export some table data using a specified exporter
         /// </summary>
@@ -179,7 +239,7 @@ namespace SysWeaver.MicroService
             r.Row = 0;
             var input = ser.Serialize(r);
             var output = await ep.InvokeAsync(request, input).ConfigureAwait(false);
-            var tableData = ser.Create<TableData>(output);
+            TableData tableData = GetTableCreator(ep.MethodInfo.ReturnType)(ser, output);
             return await exporter.Export(tableData, request, export.Options).ConfigureAwait(false);
         }
 

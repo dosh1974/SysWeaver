@@ -4,6 +4,11 @@
         <meta charset="utf-8" />
         <title>${#Title}</title>
         <style>
+            body {
+                font-family: Tahoma, Verdana;
+                font-size: 125%;
+            }
+
             table, td, th {
                 border: 1px solid rgba(0,0,0,0.25);
                 border-collapse: collapse;
@@ -15,6 +20,27 @@
                 font-weight: bold;
                 text-align: left;
             }
+
+            a {
+                text-decoration: none;
+                color: inherit;
+                font-style: italic;
+                transition: box-shadow linear 0.1s;
+            }
+
+                a:visited {
+                    color: inherit;
+                }
+
+                a:hover {
+                    box-shadow: 0 -2px 0 #00f inset, 0 2px 0 #00f;
+                }
+
+                a:focus {
+                    outline: none;
+                    box-shadow: 0 -2px 0 #00f inset, 0 2px 0 #00f;
+                }
+
 
             td {
                 padding: 3px 0.5em;

@@ -3,6 +3,7 @@ using System.Text;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
+using System.Web;
 
 
 namespace SysWeaver.Data
@@ -97,6 +98,63 @@ namespace SysWeaver.Data
             { typeof(Boolean).FullName, "b" },
         }.Freeze();
 
+        static String GetIndexed(String[] vars, int index, String def)
+        {
+            if (index >= vars.Length)
+                return def;
+            var v = vars[index];
+            return v ?? def;
+        }
+
+        static String FormatUrl(TableDataExporterTools.Formatter f, Object value, Object nextValue, TableDataColumn col)
+        {
+            if (value == null)
+                return "";
+            // Url;{0};{1}/README.md;Click to open "{3}".
+            var valueText = f(value, nextValue, col);
+            var t = col.Format.Split(';');
+            var text = String.Format(GetIndexed(t, 1, "{0}"), valueText, nextValue);
+            var link = String.Format(GetIndexed(t, 2, "{2}"), value, nextValue, text);
+            if (String.IsNullOrEmpty(link))
+                return text;
+            switch (link[0])
+            {
+                case '*':
+                case '^':
+                case '-':
+                    if (link.IndexOf("://") < 0)
+                        return text;
+                    link = link.Substring(1);
+                    break;
+                case '+':
+                    link = link.Substring(1);
+                    break;
+            }
+            var title = String.Format(GetIndexed(t, 3, "Click to open \"{3}\"."), value, nextValue, text, link);
+            if (!String.IsNullOrEmpty(title))
+                return String.Concat((Char)1,
+                    "<a href=\"",
+                    HttpUtility.HtmlAttributeEncode(link),
+                    "\" title=\"",
+                    HttpUtility.HtmlAttributeEncode(title),
+                    "\">",
+                    HttpUtility.HtmlEncode(text),
+                    "</a>"
+                    );
+            return String.Concat((Char)1,
+                "<a href=\"",
+                HttpUtility.HtmlAttributeEncode(link),
+                "\">",
+                HttpUtility.HtmlEncode(text),
+                "</a>"
+                );
+        }
+
+        static readonly IReadOnlyDictionary<String, TableDataExporterTools.SpecialFormatter> Formatters = new Dictionary<String, TableDataExporterTools.SpecialFormatter>(StringComparer.Ordinal)
+        {
+            { "Url", FormatUrl }
+
+        }.Freeze();
 
         public Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
         {
@@ -117,7 +175,7 @@ namespace SysWeaver.Data
                 for (int i = 0; i < coll; ++i)
                 {
                     var col = cols[i];
-                    var colFmt = TableDataExporterTools.Get(col.Type, col.Format);
+                    var colFmt = TableDataExporterTools.Get(col.Type, col.Format, Formatters);
                     colToStrings.Add(colFmt);
                     dc.TryGetValue(col.Type, out var cl);
                     classes.Add(cl ?? "");
@@ -166,8 +224,10 @@ namespace SysWeaver.Data
                                     (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);
                                 var cl = x < colMax ? classes[x] : "";
                                 var valueText = fmt(value, nextValue, cols == null ? null : cols[x]);
+                                var isFormatted = (!String.IsNullOrEmpty(valueText)) && (valueText[0] == 1);
                                 vals["Title"] = value?.ToString() ?? "";
-                                vals["Text"] = valueText ?? "";
+                                vals["Text"] = isFormatted ? "" : (valueText ?? "");
+                                vals["TextFmt"] = isFormatted ? valueText.Substring(1) : "";
                                 vals["Class"] = (rightAlign ? "r " : "") + cl ?? "";
                                 rowBuilder.Append(Cell.Get(vals));
                             }

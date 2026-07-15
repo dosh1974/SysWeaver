@@ -32,7 +32,7 @@ namespace SysWeaver.Data
 
         public String Icon => "IconFileMD";
 
-        public double Order => 9000;
+        public double Order => 1000;
 
         public const String ColHeaderStyle = "**";
         public const String TitlePrefix = "### ";
@@ -105,6 +105,21 @@ namespace SysWeaver.Data
             var t = col.Format.Split(';');
             var text = String.Format(GetIndexed(t, 1, "{0}"), valueText, nextValue);
             var link = String.Format(GetIndexed(t, 2, "{2}"), value, nextValue, text);
+            if (String.IsNullOrEmpty(link))
+                return text;
+            switch (link[0])
+            {
+                case '*':
+                case '^':
+                case '-':
+                    if (link.IndexOf("://") < 0)
+                        return text;
+                    link = link.Substring(1);
+                    break;
+                case '+':
+                    link = link.Substring(1);
+                    break;
+            }
             var title = String.Format(GetIndexed(t, 3, "Click to open \"{3}\"."), value, nextValue, text, link);
             if (!String.IsNullOrEmpty(title))
                 return String.Concat((Char)1, '[', EscapeMD(text), "](", EscapeMD(link), " \"", EscapeMD(title).Replace("\"", "\\\""), "\")");
