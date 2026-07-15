@@ -1,4 +1,4 @@
-using SysWeaver.Data;
+﻿using SysWeaver.Data;
 using SysWeaver.Net;
 using SysWeaver.Net.ExploreModule;
 using SysWeaver.Net.IconModule;
@@ -36,6 +36,7 @@ namespace SysWeaver.MicroService
                 CsvTableDataExporter.Tab,
                 CsvTableDataExporter.SemiColon,
                 HtmlTableDataExporter.Simple,
+                MarkDownTableDataExporter.Instance,
             };
             var ser = SerManager.Get("json");
             if (ser != null)

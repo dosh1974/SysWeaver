@@ -22,6 +22,7 @@
     <Exec Command="..\_tools\compress\Compress.exe -Methods br -OptimizeWebFiles false .\srcData\*+ .\data" />
     <ItemGroup>
       <EmbeddedResource Include="data\**\*.br" Visible="false" />
+      <EmbeddedResource Include="data\**\*.md" Visible="false" />
     </ItemGroup>
   </Target>
 

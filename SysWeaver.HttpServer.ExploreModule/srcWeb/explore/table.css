@@ -734,6 +734,11 @@ html.SwSelfNarrow {
         background-image: url("../icons/ext/html.svg");
     }
 
+    .IconFileMD {
+        background-color: transparent !important;
+        background-image: url("../icons/ext/md.svg");
+    }
+
     .IconFileJson {
         background-color: transparent !important;
         background-image: url("../icons/ext/json.svg");

@@ -24,6 +24,16 @@ namespace SysWeaver
         /// The ISO-4217 currency code
         /// </summary>
         public String Currency;
+
+        public Amount()
+        {
+        }
+
+        public Amount(Decimal value, String currencyCode)
+        {
+            Value = value;
+            Currency = currencyCode;
+        }
     }
 
 }

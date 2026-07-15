@@ -71,58 +71,21 @@ namespace SysWeaver.Data
         public bool RequireUser => false;
 
 
-        public static readonly Func<Object, String> DefToString = data =>
-        {
-            if (data == null)
-                return "";
-            return data.ToString();
-        };
-
-        public static readonly Func<Object, String> SingleToString = data =>
-        {
-            if (data == null)
-                return "";
-
-            return Convert.ToSingle(data).ToString(CultureInfo.InvariantCulture);
-        };
-
-        public static readonly Func<Object, String> DoubleToString = data =>
-        {
-            if (data == null)
-                return "";
-            return Convert.ToDouble(data).ToString(CultureInfo.InvariantCulture);
-        };
-
-        public static readonly Func<Object, String> DecimalToString = data =>
-        {
-            if (data == null)
-                return "";
-            return Convert.ToDecimal(data).ToString(CultureInfo.InvariantCulture);
-        };
-
-        public static readonly IReadOnlyDictionary<String, Func<Object, String>> DefToStrings = new Dictionary<String, Func<Object, String>>(StringComparer.Ordinal)
-        {
-            { typeof(Single).FullName, SingleToString },
-            { typeof(Double).FullName, DoubleToString },
-            { typeof(Decimal).FullName, DecimalToString },
-        }.Freeze();
-
-
         public static readonly IReadOnlyDictionary<String, String> Classes = new Dictionary<String, String>(StringComparer.Ordinal)
         {
-            { typeof(Single).FullName, "r m n" },
-            { typeof(Double).FullName, "r m n" },
-            { typeof(Decimal).FullName, "r m n" },
+            { typeof(Single).FullName, "m n" },
+            { typeof(Double).FullName, "m n" },
+            { typeof(Decimal).FullName, "m n" },
 
-            { typeof(SByte).FullName, "r m n" },
-            { typeof(Int16).FullName, "r m n" },
-            { typeof(Int32).FullName, "r m n" },
-            { typeof(Int64).FullName, "r m n" },
+            { typeof(SByte).FullName, "m n" },
+            { typeof(Int16).FullName, "m n" },
+            { typeof(Int32).FullName, "m n" },
+            { typeof(Int64).FullName, "m n" },
 
-            { typeof(Byte).FullName, "r m n" },
-            { typeof(UInt16).FullName, "r m n" },
-            { typeof(UInt32).FullName, "r m n" },
-            { typeof(UInt64).FullName, "r m n" },
+            { typeof(Byte).FullName, "m n" },
+            { typeof(UInt16).FullName, "m n" },
+            { typeof(UInt32).FullName, "m n" },
+            { typeof(UInt64).FullName, "m n" },
 
             { typeof(DateTime).FullName, "m t" },
             { typeof(TimeSpan).FullName, "m t" },
@@ -139,13 +102,11 @@ namespace SysWeaver.Data
         {
             options = options ?? new TableDataExportOptions();
             StringBuilder rowsBuilder = new StringBuilder();
-            List<Func<Object, String>> colToStrings = new List<Func<object, string>>();
+            List<ValueTuple<TableDataExporterTools.Formatter, bool>> colToStrings = new();
             List<String> classes = new List<string>();
 
             HashSet<int> hide = new HashSet<int>();
             Dictionary<String, String> vals = new Dictionary<string, string>(StringComparer.Ordinal);
-            var def = DefToString;
-            var d = DefToStrings;
             var dc = Classes;
             var cols = tableData.Cols;
             var headers = !options.NoHeaders;
@@ -156,8 +117,8 @@ namespace SysWeaver.Data
                 for (int i = 0; i < coll; ++i)
                 {
                     var col = cols[i];
-                    d.TryGetValue(col.Type, out var fn);
-                    colToStrings.Add(fn ?? def);
+                    var colFmt = TableDataExporterTools.Get(col.Type, col.Format);
+                    colToStrings.Add(colFmt);
                     dc.TryGetValue(col.Type, out var cl);
                     classes.Add(cl ?? "");
                     if ((col.Props & TableDataColumnProps.Hide) != 0)
@@ -169,7 +130,7 @@ namespace SysWeaver.Data
                     {
                         vals["Title"] = col.Desc;
                         vals["Text"] = col.Title;
-                        vals["Class"] = (cl ?? "").Replace("m", "").Trim();
+                        vals["Class"] = (colFmt.Item2 ? "r " : "") + (cl ?? "").Replace("m", "").Trim();
                         rowBuilder.Append(Header.Get(vals));
                     }
                 }
@@ -197,13 +158,17 @@ namespace SysWeaver.Data
                             {
                                 if (hide.Contains(x))
                                     continue;
-                                var raw = t[x];
-                                var fn = x < colMax ? colToStrings[x] : def;
+                                var ni = x + 1;
+                                var value = t[x];
+                                var nextValue = ni < tl ? t[ni] : null;
+                                var (fmt, rightAlign) = x < colMax ? colToStrings[x] : (null, false);
+                                if (fmt == null)
+                                    (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);
                                 var cl = x < colMax ? classes[x] : "";
-                                var fmt = fn(raw);
-                                vals["Title"] = raw?.ToString() ?? "";
-                                vals["Text"] = fmt ?? "";
-                                vals["Class"] = cl ?? "";
+                                var valueText = fmt(value, nextValue, cols == null ? null : cols[x]);
+                                vals["Title"] = value?.ToString() ?? "";
+                                vals["Text"] = valueText ?? "";
+                                vals["Class"] = (rightAlign ? "r " : "") + cl ?? "";
                                 rowBuilder.Append(Cell.Get(vals));
                             }
                             vals["Cells"] = rowBuilder.ToString().TrimEnd();
@@ -219,6 +184,5 @@ namespace SysWeaver.Data
             return Task.FromResult(new MemoryFile(name + ".html", Mimes.HtmlText, Encoding.UTF8.GetBytes(text)));
         }
     }
-
 
 }

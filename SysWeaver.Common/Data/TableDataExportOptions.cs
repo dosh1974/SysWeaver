@@ -18,6 +18,11 @@ namespace SysWeaver.Data
         /// True to output in portrait mode
         /// </summary>
         public bool Portrait;
+
+        /// <summary>
+        /// Custom string (can mean different thing for different exporters)
+        /// </summary>
+        public String Custom;
     }
 
 
