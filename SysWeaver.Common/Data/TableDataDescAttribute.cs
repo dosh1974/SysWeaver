@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace SysWeaver.Data
 {
@@ -13,6 +13,20 @@ namespace SysWeaver.Data
             Value = value;
         }
         public readonly String Value;
+    }
+
+
+    /// <summary>
+    /// Put on a member to indicate that values may be word wrapped when rendering (this is just a hint to the renderer)
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+    public sealed class TableDataWordWrapAttribute : Attribute
+    {
+        public TableDataWordWrapAttribute(bool wordWrap = true)
+        {
+            WordWrap = wordWrap;
+        }
+        public readonly bool WordWrap;
     }
 
 

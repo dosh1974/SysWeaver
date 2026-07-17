@@ -22,6 +22,7 @@ namespace SysWeaver.Data
         /// <summary>
         /// Optional documentation
         /// </summary>
+        [TableDataWordWrap]
         public String Description;
     }
 

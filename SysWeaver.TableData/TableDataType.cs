@@ -505,6 +505,10 @@ namespace SysWeaver.Data
             var fa = x.GetCustomAttribute<TableDataRawFormatAttribute>();
             if (fa != null)
                 format = fa.Value;
+
+
+            var ww = x.GetCustomAttribute<TableDataWordWrapAttribute>()?.WordWrap ?? false;  
+
             colTypes.Add(mt);
             members.Add(x, cols.Count);
             cols.Add(new TableDataColumn
@@ -519,6 +523,7 @@ namespace SysWeaver.Data
                     | (sortRev ? TableDataColumnProps.SortedDesc : 0)
                     | (hide ? TableDataColumnProps.Hide : 0)
                     | (isReadOnly ? TableDataColumnProps.IsReadOnly : 0)
+                    | (ww ? TableDataColumnProps.WordWrap : 0)
                     | TableDataColumnProps.Filter
                     | TableDataColumnProps.TextFilter
                     | TableDataColumnProps.OrderFilter

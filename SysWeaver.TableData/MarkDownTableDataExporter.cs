@@ -34,7 +34,7 @@ namespace SysWeaver.Data
 
         public double Order => 1000;
 
-        public const String ColHeaderStyle = "**";
+        public const String ColHeaderStyle = "***";
         public const String TitlePrefix = "### ";
 
         public bool RequireUser => false;
@@ -86,12 +86,14 @@ namespace SysWeaver.Data
             var cols = tableData.Cols;
             var hs = options.NoHeaders ? "" : ColHeaderStyle;
             List<String> colTitles = new List<string>();
+            bool[] colNbsps;
             int coll;
             //  Get column titles, functions and son
             if (cols != null)
             {
                 //  With meta data
                 coll = cols.Length;
+                colNbsps = new bool[coll];
                 for (int i = 0; i < coll; ++i)
                 {
                     var col = cols[i];
@@ -105,17 +107,20 @@ namespace SysWeaver.Data
                     if (String.IsNullOrEmpty(title))
                         title = (colTitles.Count + 1).ToString();
                     colTitles.Add(title);
+                    colNbsps[i] = (col.Props & TableDataColumnProps.WordWrap) == 0;
                 }
             }
             else
             {
                 //  Without meta data
                 coll = tableData.Rows.FirstOrDefault()?.Values?.Length ?? 0;
+                colNbsps = new bool[coll];
                 for (int i = 0; i < coll; ++i)
                 {
                     colToStrings.Add((null, false));
                     var title = (colTitles.Count + 1).ToString();
                     colTitles.Add(title);
+                    colNbsps[i] = true;
                 }
             }
 
@@ -134,7 +139,7 @@ namespace SysWeaver.Data
                     var (fmt, rightAlign) = colToStrings[i];
                     if (fmt == null)
                         (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);
-                    var valueText = StringTools.EscapeMD(fmt(value, nextValue, cols == null ? null : cols[i])).Replace("\r", "").Replace("\n", "<br>");
+                    var valueText = StringTools.EscapeMD(fmt(value, nextValue, cols == null ? null : cols[i]), colNbsps[i]).Replace("\r", "").Replace("\n", "<br>");
 
                     var strLen = valueText.Length;
                     if (strLen > colWidths[i])
@@ -194,7 +199,7 @@ namespace SysWeaver.Data
                     var (fmt, rightAlign) = colToStrings[i];
                     if (fmt == null)
                         (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);
-                    var valueText = StringTools.EscapeMD(fmt(value, nextValue, cols == null ? null : cols[i])).Replace("\r", "").Replace("\n", "<br>");
+                    var valueText = StringTools.EscapeMD(fmt(value, nextValue, cols == null ? null : cols[i]), colNbsps[i]).Replace("\r", "").Replace("\n", "<br>");
 
                     var mxLen = colWidths[i];
                     sb.Append("| ").Append(rightAlign ? valueText.PadLeft(mxLen) : valueText.PadRight(mxLen)).Append(' ');

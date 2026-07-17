@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace SysWeaver.Data
 {
@@ -93,6 +93,12 @@ namespace SysWeaver.Data
         /// Is a read only value
         /// </summary>
         IsReadOnly = 4096,
+
+        /// <summary>
+        /// Allow automatic word wrapping (hint)
+        /// </summary>
+        WordWrap = 8192,
+
 
         //  Computed
         AnyFilters = Filter | TextFilter | OrderFilter,

@@ -1601,6 +1601,8 @@ namespace SysWeaver
                 text = new string(t.Slice(0, o));
             if (nbsp)
                 text = text.Replace(' ', (Char)0xa0);
+            else
+                text = text.Replace((Char)0xa0, ' ');
             return text;
         }
 

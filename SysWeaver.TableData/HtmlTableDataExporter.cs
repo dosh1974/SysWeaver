@@ -219,10 +219,11 @@ namespace SysWeaver.Data
                                 var cl = x < colMax ? classes[x] : "";
                                 var valueText = fmt(value, nextValue, cols == null ? null : cols[x]);
                                 var isFormatted = (!String.IsNullOrEmpty(valueText)) && (valueText[0] == 1);
+                                var wordWrap = cols != null && ((cols[x].Props & TableDataColumnProps.WordWrap) != 0);
                                 vals["Title"] = value?.ToString() ?? "";
                                 vals["Text"] = isFormatted ? "" : (valueText ?? "");
                                 vals["TextFmt"] = isFormatted ? valueText.Substring(1) : "";
-                                vals["Class"] = (rightAlign ? "r " : "") + cl ?? "";
+                                vals["Class"] = (rightAlign ? "r " : "") + (wordWrap ? "w " : "") + cl ?? "";
                                 rowBuilder.Append(Cell.Get(vals));
                             }
                             vals["Cells"] = rowBuilder.ToString().TrimEnd();
