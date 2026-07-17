@@ -1545,6 +1545,66 @@ namespace SysWeaver
         static readonly SpanAction<Char, ReadOnlySpan<Char>> CreateCountAction = CreateCount;
 
 
+
+        static readonly IReadOnlySet<Char> EscapeChars = ReadOnlyData.Set(
+                '\\',
+                '`',
+                '*',
+                '_',
+                '&',
+                '{',
+                '}',
+                '[',
+                ']',
+                '<',
+                '>',
+                '(',
+                ')',
+                '#',
+                '$',
+                //                '+',
+                //                '-',
+                //                '.',
+                '!',
+                '|'
+            );
+
+        /// <summary>
+        /// Escape some text to work inside mark down.
+        /// Doesn't escape +, - and . 
+        /// </summary>
+        /// <param name="text">The text to escape</param>
+        /// <param name="nbsp">If true, any spaces are converted to non breaking spaces to prevent word wrapping</param>
+        /// <returns>Escaped text</returns>
+        public static String EscapeMD(String text, bool nbsp = false)
+        {
+            if (String.IsNullOrEmpty(text))
+                return "";
+            if (text[0] == (Char)1)
+                return text.Substring(1);
+            var l = text.Length;
+            Span<Char> t = stackalloc Char[l * 2];
+            int o = 0;
+            var e = EscapeChars;
+            for (int i = 0; i < l; ++i)
+            {
+                var c = text[i];
+                if (e.Contains(c))
+                {
+                    t[o] = '\\';
+                    ++o;
+                }
+                t[o] = c;
+                ++o;
+            }
+            if (o != l)
+                text = new string(t.Slice(0, o));
+            if (nbsp)
+                text = text.Replace(' ', (Char)0xa0);
+            return text;
+        }
+
+
     }
 
 

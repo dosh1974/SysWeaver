@@ -39,58 +39,6 @@ namespace SysWeaver.Data
 
         public bool RequireUser => false;
 
-
-        static readonly IReadOnlySet<Char> EscapeChars = ReadOnlyData.Set(
-                '\\',
-                '`',
-                '*',
-                '_',
-                '&',
-                '{',
-                '}',
-                '[',
-                ']',
-                '<',
-                '>',
-                '(',
-                ')',
-                '#',
-                '$',
-                //                '+',
-                //                '-',
-                //                '.',
-                '!',
-                '|'
-            );
-
-        public static String EscapeMD(String text, bool nbsp = false)
-        {
-            if (String.IsNullOrEmpty(text))
-                return "";
-            if (text[0] == (Char)1)
-                return text.Substring(1);
-            var l = text.Length;
-            Span<Char> t = stackalloc Char[l * 2];
-            int o = 0;
-            var e = EscapeChars;
-            for (int i = 0; i < l; ++ i)
-            {
-                var c = text[i];
-                if (e.Contains(c))
-                {
-                    t[o] = '\\';
-                    ++o;
-                }
-                t[o] = c;
-                ++o;
-            }
-            if (o != l)
-                text = new string(t.Slice(0, o));
-            if (nbsp)
-                text = text.Replace(' ', (Char)0xa0);
-            return text;
-        }
-
         static String FormatUrl(TableDataExporterTools.Formatter f, Object value, Object nextValue, TableDataColumn col)
         {
             if (value == null)
@@ -117,8 +65,8 @@ namespace SysWeaver.Data
             }
             var title = String.Format(TableDataExporterTools.GetIndexed(t, 3, "Click to open \"{3}\"."), value, nextValue, text, link);
             if (!String.IsNullOrEmpty(title))
-                return String.Concat((Char)1, '[', EscapeMD(text), "](", EscapeMD(link), " \"", EscapeMD(title).Replace("\"", "\\\""), "\")");
-            return String.Concat((Char)1, '[', EscapeMD(text), "](", EscapeMD(link), ')');
+                return String.Concat((Char)1, '[', StringTools.EscapeMD(text), "](", StringTools.EscapeMD(link), " \"", StringTools.EscapeMD(title).Replace("\"", "\\\""), "\")");
+            return String.Concat((Char)1, '[', StringTools.EscapeMD(text), "](", StringTools.EscapeMD(link), ')');
         }
 
         static readonly IReadOnlyDictionary<String, TableDataExporterTools.SpecialFormatter> Formatters = new Dictionary<String, TableDataExporterTools.SpecialFormatter>(StringComparer.Ordinal)
@@ -127,18 +75,19 @@ namespace SysWeaver.Data
 
         }.Freeze();
 
-        public Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
+
+        public String GetMarkDownText(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
         {
-        //  Measure and get data
+            //  Measure and get data
             options = options ?? new TableDataExportOptions();
             String linePrefix = options?.Custom ?? "";
-            List<ValueTuple<TableDataExporterTools.Formatter, bool>> colToStrings = new ();
+            List<ValueTuple<TableDataExporterTools.Formatter, bool>> colToStrings = new();
             HashSet<int> hide = new HashSet<int>();
             var cols = tableData.Cols;
             var hs = options.NoHeaders ? "" : ColHeaderStyle;
             List<String> colTitles = new List<string>();
             int coll;
-        //  Get column titles, functions and son
+            //  Get column titles, functions and son
             if (cols != null)
             {
                 //  With meta data
@@ -185,8 +134,8 @@ namespace SysWeaver.Data
                     var (fmt, rightAlign) = colToStrings[i];
                     if (fmt == null)
                         (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);
-                    var valueText = EscapeMD(fmt(value, nextValue, cols == null ? null : cols[i]));
-                    
+                    var valueText = StringTools.EscapeMD(fmt(value, nextValue, cols == null ? null : cols[i])).Replace("\r", "").Replace("\n", "<br>");
+
                     var strLen = valueText.Length;
                     if (strLen > colWidths[i])
                         colWidths[i] = strLen;
@@ -199,7 +148,7 @@ namespace SysWeaver.Data
 
             //  Title
             if (!String.IsNullOrEmpty(tableData.Title))
-                sb.Append(linePrefix).Append(TitlePrefix).Append(EscapeMD(tableData.Title, true)).AppendLine("  ");
+                sb.Append(linePrefix).Append(TitlePrefix).Append(StringTools.EscapeMD(tableData.Title, true)).AppendLine("  ");
 
             //  Headers
             sb.Append(linePrefix);
@@ -207,7 +156,7 @@ namespace SysWeaver.Data
             {
                 if (hide.Contains(i))
                     continue;
-                var title = String.Concat(hs, EscapeMD(colTitles[t], true), hs);
+                var title = String.Concat(hs, StringTools.EscapeMD(colTitles[t], true), hs);
                 ++t;
                 var mxLen = Math.Max(colWidths[i], title.Length);
                 colWidths[i] = mxLen;
@@ -245,16 +194,20 @@ namespace SysWeaver.Data
                     var (fmt, rightAlign) = colToStrings[i];
                     if (fmt == null)
                         (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);
-                    var valueText = EscapeMD(fmt(value, nextValue, cols == null ? null : cols[i]));
+                    var valueText = StringTools.EscapeMD(fmt(value, nextValue, cols == null ? null : cols[i])).Replace("\r", "").Replace("\n", "<br>");
 
                     var mxLen = colWidths[i];
                     sb.Append("| ").Append(rightAlign ? valueText.PadLeft(mxLen) : valueText.PadRight(mxLen)).Append(' ');
                 }
                 sb.AppendLine("|");
             }
+            return sb.ToString();
+        }
 
-            //  Save
-            var text = sb.ToString();
+        public Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
+        {
+            options = options ?? new TableDataExportOptions();
+            var text = GetMarkDownText(tableData, context, options);
             var name = String.IsNullOrEmpty(options.Filename) ? "Table" : options.Filename;
             return Task.FromResult(new MemoryFile(name + ".md", Mimes.MarkdownText, Encoding.UTF8.GetBytes(text)));
         }
