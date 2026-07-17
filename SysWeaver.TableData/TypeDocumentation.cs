@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using SysWeaver.Docs;
 
@@ -230,12 +231,73 @@ namespace SysWeaver.Data
             return types.ToArray();
         }
 
+        static IReadOnlySet<Type> IsSigned = ReadOnlyData.Set(
+            typeof(SByte),
+            typeof(Int16),
+            typeof(Int32),
+            typeof(Int64)
+            );
+
         static void InternalMakeFn(List<TypeTable> types, HashSet<Type> seen, Type type, Func<Type, bool> makeTableFn, Func<MemberInfo, bool> includeMemberFn)
         {
             if (!seen.Add(type))
                 return;
             if (!makeTableFn(type))
                 return;
+
+            var desc = type.XmlDoc()?.Summary;
+            if (type.IsEnum)
+            {
+                bool isFlags = type.GetCustomAttribute<FlagsAttribute>() != null;
+                var ut = type.GetEnumUnderlyingType();
+                var isSigned = IsSigned.Contains(ut);
+                var names = Enum.GetNames(type);
+                var values = Enum.GetValues(type);
+                var l = names.Length;
+                String[] strVal = new string[l];
+                int ml = 0;
+                for (int i = 0; i < l; ++ i)
+                {
+                    String ss;
+                    if (isSigned)
+                    {
+                        Int64 v = (Int64)Convert.ChangeType(values.GetValue(i), typeof(Int64));
+                        ss = isFlags ? ((UInt64)v).ToString("x") : v.ToValueString();
+                    }
+                    else
+                    {
+                        UInt64 v = (UInt64)Convert.ChangeType(values.GetValue(i), typeof(UInt64));
+                        ss = isFlags ? v.ToString("x") : v.ToValueString();
+                    }
+                    strVal[i] = ss;
+                    ml = Math.Max(ml, ss.Length);
+                }
+                Char pad = isFlags ? '0' : ' ';
+                for (int i = 0; i < l; ++i)
+                    strVal[i] = (isFlags ? "0x" : "") + strVal[i].PadLeft(ml, pad);
+                var typeSuf = " : " + ut.Name;
+
+                TypeTableMember[] m = new TypeTableMember[l];
+                for (int i = 0; i < l; ++ i)
+                {
+                    var name = names[i];
+                    m[i] = new TypeTableMember
+                    {
+                        Name = name,
+                        Type = strVal[i] + typeSuf,
+                        Description = type.XmlDocEnum(name)?.Summary
+                    };
+                }
+                types.Add(new TypeTable
+                {
+                    TypeName = (isFlags ? "enum flags " : "enum ") + type.Name,
+                    Description = desc,
+                    Members = m,
+                });
+                return;
+            }
+
+
             List<Type> add = new List<Type>();
             HashSet<Type> added = new HashSet<Type>();
 
@@ -246,7 +308,6 @@ namespace SysWeaver.Data
                         add.Add(t);
             };
 
-
             if (type.IsAbstract || type.IsInterface)
             {
                 List<TypeTable> impl = new List<TypeTable>();
@@ -256,6 +317,7 @@ namespace SysWeaver.Data
                 types.Add(new TypeTable
                 {
                     TypeName = type.Name,
+                    Description = desc,
                     Implementations = impl.ToArray(),
                 });
             }
@@ -277,6 +339,7 @@ namespace SysWeaver.Data
                 types.Add(new TypeTable
                 {
                     TypeName = type.Name,
+                    Description = desc,
                     Members = members.ToArray(),
                 });
             }
