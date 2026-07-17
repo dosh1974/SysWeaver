@@ -78,7 +78,31 @@ namespace SysWeaver.Excel
         /// </summary>
         public static bool HaveLicense { get; private set; }
 
-        public static void SetLicense(ApiKeyParams p = null)
+
+        /// <summary>
+        /// Set the license from a file or the actual api key
+        /// </summary>
+        /// <param name="fileOrApiKey">Filename or api key</param>
+        /// <param name="isFile">True it the first parameter is a file, else false</param>
+        public static void SetLicense(String fileOrApiKey = @"$(KeyFolder)\GemBox.Spreadsheet.txt", bool isFile = true)
+            => SetLicense(new ApiKeyParams
+            {
+                CredFile = isFile ? fileOrApiKey : null,
+                ApiKey = isFile ? null : fileOrApiKey,
+            });
+
+
+        /// <summary>
+        /// Set the livense to the free limited license
+        /// </summary>
+        public static void SetFreeLicense()
+            => SetLicense((ApiKeyParams)null);
+
+        /// <summary>
+        /// Set the license, have to be called once before using GemBox
+        /// </summary>
+        /// <param name="p">Paramaters, if null the free limited license</param>
+        public static void SetLicense(ApiKeyParams p)
         {
             if (DidInit)
                 return;
