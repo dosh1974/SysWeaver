@@ -33,6 +33,15 @@ namespace SysWeaver.Serialization
         readonly ITextSerializerType DeSerializer = NewtonsoftJsonSerializer.Instance;
         readonly ITextSerializerType Serializer = SysWeaverJsonSerializer.Instance;
 
+        /// <summary>
+        /// Convert an object to json text with nice formatting, specifically for byte array's.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="obj"></param>
+        /// <returns></returns>
+        public static String ToFormattedJson<T>(T obj)
+            => NewtonsoftJsonSerializer.ToFormattedJson(obj);
+
         public T Create<T>(ReadOnlyMemory<byte> data) => DeSerializer.Create<T>(data);
         public T Create<T>(ReadOnlySpan<byte> data) => DeSerializer.Create<T>(data);
 

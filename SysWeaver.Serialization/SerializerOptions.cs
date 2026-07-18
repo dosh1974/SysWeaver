@@ -1,4 +1,4 @@
-namespace SysWeaver.Serialization
+﻿namespace SysWeaver.Serialization
 {
     public enum SerializerOptions
     {

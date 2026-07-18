@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using System;
 using System.IO;
 using System.Text;
@@ -6,6 +6,8 @@ using SysWeaver.Serialization.NewtonsoftJson;
 
 namespace SysWeaver.Serialization
 {
+
+
     public sealed class NewtonsoftJsonSerializer : ITextSerializerType
     {
         public string Name => "Newtonsoft.Json";
@@ -33,6 +35,10 @@ namespace SysWeaver.Serialization
         /// Call once to register this serializer type to the serializer manager
         /// </summary>
         public static void Register() => SerManager.AddType(Instance);
+
+
+
+
 
 
         static readonly JsonSerializerSettings[] Formats =
@@ -65,18 +71,53 @@ namespace SysWeaver.Serialization
         };
 
         public ReadOnlyMemory<byte> Serialize<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
-        {
-            var s = Formats[(int)options];
-            var st = JsonConvert.SerializeObject(obj, s);
-            return st.ToUTF8();
-        }
+            => ToString(obj).ToUTF8();
 
-        public unsafe T Create<T>(ReadOnlySpan<byte> data)
+
+        static Func<Action<PooledJsonSerializer>, PooledJsonSerializer> DeserCreate = d =>
         {
-            var ser = new JsonSerializer();
+            var ser = new PooledJsonSerializer(d);
             ser.ObjectCreationHandling = ObjectCreationHandling.Replace;
             ser.TypeNameHandling = TypeNameHandling.Auto;
             ser.SerializationBinder = SerializationBinder.Instance;
+            return ser;
+        };
+
+        static readonly LimitedObjectPool<PooledJsonSerializer> DeSerPool = new(DeserCreate, 128);
+
+
+
+        static Func<Action<PooledJsonSerializer>, PooledJsonSerializer> SerCreate = d =>
+        {
+            var ser = new PooledJsonSerializer(d);
+            ser.Formatting = Formatting.Indented;
+            ser.TypeNameHandling = TypeNameHandling.All;
+            ser.ContractResolver = MemberResolver.Instance;
+            ser.Converters.Add(JsonByteArrayConverter.Instance);
+            return ser;
+        };
+
+        static readonly LimitedObjectPool<PooledJsonSerializer> FormattedSerPool = new(SerCreate, 16);
+
+  
+
+        static JsonSerializerSettings GetByteArraySer()
+        {
+            var s = new JsonSerializerSettings
+            {
+                Formatting = Formatting.Indented,
+                TypeNameHandling = TypeNameHandling.All,
+                ContractResolver = MemberResolver.Instance,
+            };
+            s.Converters.Add(new JsonByteArrayConverter());
+            return s;
+        }
+
+
+
+        public unsafe T Create<T>(ReadOnlySpan<byte> data)
+        {
+            using var ser = DeSerPool.Get();
             fixed (byte* bp = data)
             {
                 using var ms = new UnmanagedMemoryStream(bp, data.Length);
@@ -88,10 +129,7 @@ namespace SysWeaver.Serialization
 
         public unsafe T Create<T>(ReadOnlyMemory<byte> data)
         {
-            var ser = new JsonSerializer();
-            ser.ObjectCreationHandling = ObjectCreationHandling.Replace;
-            ser.TypeNameHandling = TypeNameHandling.Auto;
-            ser.SerializationBinder = SerializationBinder.Instance;
+            using var ser = DeSerPool.Get();
             fixed (byte* bp = data.Span)
             {
                 using var ms = new UnmanagedMemoryStream(bp, data.Length);
@@ -101,17 +139,27 @@ namespace SysWeaver.Serialization
             }
         }
 
+        /// <summary>
+        /// Convert an object to json text with nice formatting, specifically for byte array's.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="obj"></param>
+        /// <returns></returns>
+        public static String ToFormattedJson<T>(T obj)
+        {
+            using var ser = FormattedSerPool.Get();
+            using var sw = new StringWriter();
+            using var t = new ExtendedJsonTextWriter(sw);
+            ser.Serialize(t, obj);
+            return sw.ToString();
+        }
+
 
         public string ToString<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
-        {
-            var s = Formats[(int)options];
-            return JsonConvert.SerializeObject(obj, s);
-        }
+            => JsonConvert.SerializeObject(obj, Formats[(int)options]);
 
         public T FromString<T>(ReadOnlySpan<char> text)
-        {
-            return JsonConvert.DeserializeObject<T>(new String(text), DeserFormats);
-        }
+            => JsonConvert.DeserializeObject<T>(new String(text), DeserFormats);
 
         public T FromString<T>(String text)
         {

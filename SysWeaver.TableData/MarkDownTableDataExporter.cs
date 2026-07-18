@@ -65,8 +65,8 @@ namespace SysWeaver.Data
             }
             var title = String.Format(TableDataExporterTools.GetIndexed(t, 3, "Click to open \"{3}\"."), value, nextValue, text, link);
             if (!String.IsNullOrEmpty(title))
-                return String.Concat((Char)1, '[', StringTools.EscapeMD(text), "](", StringTools.EscapeMD(link), " \"", StringTools.EscapeMD(title).Replace("\"", "\\\""), "\")");
-            return String.Concat((Char)1, '[', StringTools.EscapeMD(text), "](", StringTools.EscapeMD(link), ')');
+                return String.Concat((Char)1, '[', StringTools.EscapeMD(text, true), "](", StringTools.EscapeMD(link), " \"", StringTools.EscapeMD(title).Replace("\"", "\\\""), "\")");
+            return String.Concat((Char)1, '[', StringTools.EscapeMD(text, true), "](", StringTools.EscapeMD(link), ')');
         }
 
         static readonly IReadOnlyDictionary<String, TableDataExporterTools.SpecialFormatter> Formatters = new Dictionary<String, TableDataExporterTools.SpecialFormatter>(StringComparer.Ordinal)
