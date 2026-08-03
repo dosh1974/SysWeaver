@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Reflection.Metadata;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,11 +28,19 @@ namespace SysWeaver.Net
                 throw new Exception("Web root may not be empty!");
             if (String.IsNullOrEmpty(sourceRoot))
                 throw new Exception("Source root may not be empty!");
+            if (root.FastIndexOf("://") >= 0)
+            {
+                root = root.TrimEnd('/') + '/';
+                ForPrefix = root;
+            }
+            else
+            {
+                WebRootLen = root.Length;
+            }
             Name = String.Concat("FileProxy ", root, " => ", sourceRoot);
-            WebRootLen = root.Length;
             SourceRoot = sourceRoot;
             PerfMon = new PerfMonitor(Name);
-            if (!root.FastEquals("/"))
+            if ((ForPrefix == null) && (!root.FastEquals("/")))
                 OnlyForPrefixes = [root];
             if (p.GetUserPassword(out var user, out var password, false))
             {
@@ -65,6 +74,7 @@ namespace SysWeaver.Net
                 Client.Dispose();
         }
 
+        readonly String ForPrefix;
         readonly bool OwnClient;
         readonly HttpClient Client;
 
@@ -90,6 +100,12 @@ namespace SysWeaver.Net
             using var __ = PerfMon.Track(nameof(HandleAsync));
             if (!(context.Session?.IsValid(Auth) ?? true))
                 throw new UserNotAllowedException();
+            var fp = ForPrefix;
+            if (fp != null)
+            {
+                if (!context.Prefix.FastEquals(fp))
+                    return null;
+            }
             var u = context.LocalUrl;
             var req = SourceRoot + u.Substring(WebRootLen);
             var p = context.QueryStringStart;

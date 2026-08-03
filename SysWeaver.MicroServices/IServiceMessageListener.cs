@@ -14,5 +14,4 @@ namespace SysWeaver.MicroService
         Task OnServiceMessage(String key, Object data);
     }
 
-
 }

@@ -264,7 +264,7 @@ namespace SysWeaver.MicroService
         /// <exception cref="Exception"></exception>
         public ServiceInfo Register(Object instance, String instanceName = null, bool giveOwnershipToTheServiceManager = true, Type paramType = null)
         {
-            var info = new ServiceInfo(instance, instanceName ?? "", giveOwnershipToTheServiceManager, paramType);
+            var info = new ServiceInfo(instance, instanceName ?? (instance as IHaveDefaultInstanceName)?.DefaultInstanceName ?? "", giveOwnershipToTheServiceManager, paramType);
             if (!Instances.TryAdd(instance, info))
                 throw new Exception("An instance may only be registered once!");
             AddMessage(String.Join(" Registering instance of type ", Tag, ServiceName(instance, info, true)), MessageLevels.Debug);

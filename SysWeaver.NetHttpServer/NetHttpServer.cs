@@ -83,11 +83,21 @@ namespace SysWeaver.Net
                         throw new Exception(Prefix + "No certificate providers supplied!");
                     if (certName == "*")
                     {
-                        var ff = certProviders.FirstOrDefault();
-                        cp = ff.Value;
-                        if (cp == null)
-                            throw new Exception(Prefix + "No certificate provider found, disable certificates or add a certificate provider!");
-                        certName = ff.Key;
+                        certName = pre;
+                        var pi = certName.FastIndexOf("://");
+                        if (pi >= 0)
+                            certName = certName.Substring(pi + 3);
+                        pi = certName.LastIndexOf(':');
+                        if (pi >= 0)
+                            certName = certName.Substring(0, pi);
+                        if (!certProviders.TryGetValue(certName, out cp))
+                        {
+                            var ff = certProviders.FirstOrDefault();
+                            cp = ff.Value;
+                            if (cp == null)
+                                throw new Exception(Prefix + "No certificate provider found, disable certificates or add a certificate provider!");
+                            certName = ff.Key;
+                        }
                     }
                     else
                     {

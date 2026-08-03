@@ -1,4 +1,7 @@
-﻿using System;
+﻿using Certes;
+using Certes.Acme;
+using Certes.Acme.Resource;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -8,16 +11,14 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Certes;
-using Certes.Acme;
-using Certes.Acme.Resource;
+using SysWeaver.MicroService;
 using SysWeaver.Net;
 
 namespace SysWeaver.Security
 {
 
 
-    public sealed class AcmeCertificateProvider : ICertificateProvider, IHttpServerModule
+    public sealed class AcmeCertificateProvider : ICertificateProvider, IHttpServerModule, IHaveDefaultInstanceName
     {
 
         const String Prefix = "[ACME] ";
@@ -141,6 +142,9 @@ namespace SysWeaver.Security
             Mail = email;
             msg?.AddMessage(Prefix + "Using API at " + authUrl.ToString().ToQuoted());
         }
+
+        public string DefaultInstanceName => Names[0];
+
 
         readonly String[] ImportCertFiles;
         readonly String Mail;
@@ -587,6 +591,7 @@ namespace SysWeaver.Security
         static readonly int CdLength = ChallengeDir.Length;
 
         public String[] OnlyForPrefixes { get; } = [ChallengeDir];
+
 
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
