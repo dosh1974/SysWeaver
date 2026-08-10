@@ -74,6 +74,6 @@ namespace SysWeaver.Data
         /// <summary>
         /// Absolute root path for external information
         /// </summary>
-        public const String ExternalInfoRoot = "https://ext.sysweaver.com/";
+        public const String ExternalInfoRoot = "https://link.sysweaver.com/" + ExternalInfoPath;
     }
 }
