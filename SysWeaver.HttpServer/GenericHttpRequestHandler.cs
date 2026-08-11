@@ -32,6 +32,16 @@ namespace SysWeaver.Net
             Data = data;
         }
 
+
+        /// <summary>
+        /// Create a generic http request handler
+        /// </summary>
+        /// <param name="statusCode">The status code to return</param>
+        public GenericHttpRequestHandler(int statusCode)
+        {
+            StatusCode = statusCode;
+        }
+
         readonly int StatusCode;
         readonly String Mime;
         readonly ReadOnlyMemory<Byte> Data;
