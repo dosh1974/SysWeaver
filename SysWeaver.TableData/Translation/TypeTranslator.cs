@@ -161,6 +161,8 @@ namespace SysWeaver.Translation
 
 #if DEBUG
 
+#pragma warning disable CS0168
+
         static String Fmt(String x, Object[] p)
         {
             try
@@ -172,6 +174,8 @@ namespace SysWeaver.Translation
                 return x;
             }
         }
+
+#pragma warning restore CS0168
 
         internal static readonly MethodInfo StringFmt = typeof(TypeTranslator).GetMethod(nameof(TypeTranslator.Fmt), BindingFlags.Static | BindingFlags.NonPublic, [typeof(String), typeof(Object[])]);
 

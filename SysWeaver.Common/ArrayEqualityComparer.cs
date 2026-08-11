@@ -28,6 +28,11 @@ namespace SysWeaver
                 {
                     var xx = x[i];
                     var yy = y[i];
+                    if (xx == null)
+                        if (yy != null)
+                            return false;
+                    if (yy == null)
+                        return false;
                     if (!cmp.Equals(xx, yy))
                         return false;
                 }
@@ -45,7 +50,8 @@ namespace SysWeaver
                 {
                     h *= 70001;
                     var o = obj[i];
-                    h += cmp.GetHashCode(o);
+                    if (o != null)
+                        h += cmp.GetHashCode(o);
                 }
                 return h;
             }

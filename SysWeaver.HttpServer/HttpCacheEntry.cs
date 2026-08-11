@@ -14,7 +14,7 @@ namespace SysWeaver.Net
         //public readonly HttpServerRequest Res;
         public readonly ReadOnlyMemory<Byte> Data;
         public readonly IReadOnlyList<KeyValuePair<String, IReadOnlyList<String>>> Headers;
-        public readonly String ETag;
+        //public readonly String ETag;
 
         public HttpCacheEntry(long lastUsed, long etag, HttpServerRequest res, ReadOnlyMemory<byte> data, String localUrl)
         {
