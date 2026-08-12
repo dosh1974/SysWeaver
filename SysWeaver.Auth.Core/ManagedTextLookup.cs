@@ -90,7 +90,7 @@ namespace SysWeaver
                     var kv = l.IndexOf(':');
                     if (kv < 0)
                         continue;
-                    var key = l.Substring(0, kv).TrimEnd().FastToLower();
+                    var key = l.Substring(0, kv).FastTrimEndToLower();
                     var value = l.Substring(kv + 1).Replace("\\n", "\n").TrimStart();
                     map[key] = new TextTemplate(value, ManagedVars.TextVars, true);
                 }

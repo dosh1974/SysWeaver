@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -14,21 +15,334 @@ namespace SysWeaver
         static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
         static readonly CompareInfo Ci = CultureInfo.InvariantCulture.CompareInfo;
 
+        #region FastToLower
+
         /// <summary>
-        /// Make an culture invariant lower case version of a string
+        /// Make a culture invariant lower case version of a substring
+        /// </summary>
+        /// <param name="str">The string to transform into a culture invariant lower case</param>
+        /// <param name="startIndex">The index of the first character to convert</param>
+        /// <param name="length">The number of characters to convert</param>
+        /// <returns>Culture invariant lower case string</returns>
+        public static String FastToLower(this String str, int startIndex, int length = -1)
+        {
+            var s = str.AsSpan(startIndex);
+            var sl = s.Length;
+            if (length < 0)
+                length = sl;
+            if ((startIndex == 0) && (length == sl))
+                return Ti.ToLower(str);
+            return String.Create(length, s, LowerCasedSubString);
+        }
+
+        static readonly SpanAction<Char, ReadOnlySpan<Char>> LowerCasedSubString = (str, source) =>
+        {
+            var l = str.Length;
+            var ti = Ti;
+            for (int i = 0; i < l; ++i)
+                str[i] = ti.ToLower(source[i]);
+        };
+
+        /// <summary>
+        /// Make a trimmed culture invariant lower case version of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a trimmed culture invariant lower case</param>
+        /// <returns>A trimmed culture invariant lower cased string</returns>
+        public static String FastTrimToLower(this String str)
+        {
+            var s = str.AsSpan();
+            var sl = s.Length;
+            int ss = 0;
+            int ee = sl;
+            while ((ss < ee) && Char.IsWhiteSpace(s[ss]))
+                ++ ss;
+            if (ss >= ee)
+                return String.Empty;
+            while ((ee > ss) && Char.IsWhiteSpace(s[ee - 1]))
+                -- ee;
+            if ((ss == 0) && (ee == sl))
+                return Ti.ToLower(str);
+            return String.Create(ee - ss, s.Slice(ss), LowerCasedSubString);
+        }
+
+        /// <summary>
+        /// Make a trimmed (at start) culture invariant lower case version of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a trimmed (at start) culture invariant lower case</param>
+        /// <returns>A trimmed (at start) culture invariant lower cased string</returns>
+        public static String FastTrimStartToLower(this String str)
+        {
+            var s = str.AsSpan();
+            int ss = 0;
+            int ee = s.Length;
+            while ((ss < ee) && Char.IsWhiteSpace(s[ss]))
+                ++ss;
+            if (ss >= ee)
+                return String.Empty;
+            if (ss == 0)
+                return Ti.ToLower(str);
+            return String.Create(ee - ss, s.Slice(ss), LowerCasedSubString);
+        }
+
+        /// <summary>
+        /// Make a trimmed (at end) culture invariant lower case version of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a trimmed (at end) culture invariant lower case</param>
+        /// <returns>A trimmed (at end) culture invariant lower cased string</returns>
+        public static String FastTrimEndToLower(this String str)
+        {
+            var s = str.AsSpan();
+            var sl = s.Length;
+            var ee = sl;
+            while ((ee > 0) && Char.IsWhiteSpace(s[ee - 1]))
+                --ee;
+            if (ee <= 0)
+                return String.Empty;
+            if (ee == sl)
+                return Ti.ToLower(str);
+            return String.Create(ee, s, LowerCasedSubString);
+        }
+
+
+
+        /// <summary>
+        /// Make a trimmed culture invariant lower case version of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a trimmed culture invariant lower case</param>
+        /// <param name="trimChar">The character to trim</param>
+        /// <returns>A trimmed culture invariant lower cased string</returns>
+        public static String FastTrimToLower(this String str, Char trimChar)
+        {
+            var s = str.AsSpan();
+            var sl = s.Length;
+            int ss = 0;
+            var ee = sl;
+            while ((ss < ee) && (s[ss] == trimChar))
+                ++ss;
+            if (ss >= ee)
+                return String.Empty;
+            while ((ee > ss) && (s[ee - 1] == trimChar))
+                --ee;
+            if ((ss == 0) && (ee == sl))
+                return Ti.ToLower(str);
+            return String.Create(ee - ss, s.Slice(ss), LowerCasedSubString);
+        }
+
+        /// <summary>
+        /// Make a trimmed (at start) culture invariant lower case version of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a trimmed (at start) culture invariant lower case</param>
+        /// <param name="trimChar">The character to trim</param>
+        /// <returns>A trimmed (at start) culture invariant lower cased string</returns>
+        public static String FastTrimStartToLower(this String str, Char trimChar)
+        {
+            var s = str.AsSpan();
+            int ss = 0;
+            var ee = s.Length;
+            while ((ss < ee) && (s[ss] == trimChar))
+                ++ss;
+            if (ss >= ee)
+                return String.Empty;
+            if (ss == 0)
+                return Ti.ToLower(str);
+            return String.Create(ee - ss, s.Slice(ss), LowerCasedSubString);
+        }
+
+        /// <summary>
+        /// Make a trimmed (at end) culture invariant lower case version of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a trimmed (at end) culture invariant lower case</param>
+        /// <param name="trimChar">The character to trim</param>
+        /// <returns>A trimmed (at end) culture invariant lower cased string</returns>
+        public static String FastTrimEndToLower(this String str, Char trimChar)
+        {
+            var s = str.AsSpan();
+            var sl = s.Length;
+            var ee = sl;
+            while ((ee > 0) && (s[ee - 1] == trimChar))
+                --ee;
+            if (ee <= 0)
+                return String.Empty;
+            if (ee == sl)
+                return Ti.ToLower(str);
+            return String.Create(ee, s, LowerCasedSubString);
+        }
+
+        /// <summary>
+        /// Make a culture invariant lower case version of a string
         /// </summary>
         /// <param name="str">The string to transform into a culture invariant lower case</param>
         /// <returns>Culture invariant lower case string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String FastToLower(this String str) => Ti.ToLower(str);
+        public static String FastToLower(this String str)
+            => Ti.ToLower(str);
+
+        #endregion//FastToLower
+
+
+        #region FastToUpper
 
         /// <summary>
-        /// Make an culture invariant upper case version of a string
+        /// Make a culture invariant upper case version of a substring
+        /// </summary>
+        /// <param name="str">The string to transform into a culture invariant upper case</param>
+        /// <param name="startIndex">The index of the first character to convert</param>
+        /// <param name="length">The number of characters to convert</param>
+        /// <returns>Culture invariant upper case string</returns>
+        public static String FastToUpper(this String str, int startIndex, int length = -1)
+        {
+            var s = str.AsSpan(startIndex);
+            var sl = s.Length;
+            if (length < 0)
+                length = sl;
+            if ((startIndex == 0) && (length == sl))
+                return Ti.ToUpper(str);
+            return String.Create(length, s, UpperCasedSubString);
+        }
+
+        static readonly SpanAction<Char, ReadOnlySpan<Char>> UpperCasedSubString = (str, source) =>
+        {
+            var l = str.Length;
+            var ti = Ti;
+            for (int i = 0; i < l; ++i)
+                str[i] = ti.ToUpper(source[i]);
+        };
+
+        /// <summary>
+        /// Make a trimmed culture invariant upper case version of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a trimmed culture invariant upper case</param>
+        /// <returns>A trimmed culture invariant upper cased string</returns>
+        public static String FastTrimToUpper(this String str)
+        {
+            var s = str.AsSpan();
+            var sl = s.Length;
+            int ss = 0;
+            int ee = sl;
+            while ((ss < ee) && Char.IsWhiteSpace(s[ss]))
+                ++ss;
+            if (ss >= ee)
+                return String.Empty;
+            while ((ee > ss) && Char.IsWhiteSpace(s[ee - 1]))
+                --ee;
+            if ((ss == 0) && (ee == sl))
+                return Ti.ToUpper(str);
+            return String.Create(ee - ss, s.Slice(ss), UpperCasedSubString);
+        }
+
+        /// <summary>
+        /// Make a trimmed (at start) culture invariant upper case version of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a trimmed (at start) culture invariant upper case</param>
+        /// <returns>A trimmed (at start) culture invariant upper cased string</returns>
+        public static String FastTrimStartToUpper(this String str)
+        {
+            var s = str.AsSpan();
+            int ss = 0;
+            int ee = s.Length;
+            while ((ss < ee) && Char.IsWhiteSpace(s[ss]))
+                ++ss;
+            if (ss >= ee)
+                return String.Empty;
+            if (ss == 0)
+                return Ti.ToUpper(str);
+            return String.Create(ee - ss, s.Slice(ss), UpperCasedSubString);
+        }
+
+        /// <summary>
+        /// Make a trimmed (at end) culture invariant upper case version of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a trimmed (at end) culture invariant upper case</param>
+        /// <returns>A trimmed (at end) culture invariant upper cased string</returns>
+        public static String FastTrimEndToUpper(this String str)
+        {
+            var s = str.AsSpan();
+            var sl = s.Length;
+            var ee = sl;
+            while ((ee > 0) && Char.IsWhiteSpace(s[ee - 1]))
+                --ee;
+            if (ee <= 0)
+                return String.Empty;
+            if (ee == sl)
+                return Ti.ToUpper(str);
+            return String.Create(ee, s, UpperCasedSubString);
+        }
+
+
+
+        /// <summary>
+        /// Make a trimmed culture invariant upper case version of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a trimmed culture invariant upper case</param>
+        /// <param name="trimChar">The character to trim</param>
+        /// <returns>A trimmed culture invariant upper cased string</returns>
+        public static String FastTrimToUpper(this String str, Char trimChar)
+        {
+            var s = str.AsSpan();
+            var sl = s.Length;
+            int ss = 0;
+            var ee = sl;
+            while ((ss < ee) && (s[ss] == trimChar))
+                ++ss;
+            if (ss >= ee)
+                return String.Empty;
+            while ((ee > ss) && (s[ee - 1] == trimChar))
+                --ee;
+            if ((ss == 0) && (ee == sl))
+                return Ti.ToUpper(str);
+            return String.Create(ee - ss, s.Slice(ss), UpperCasedSubString);
+        }
+
+        /// <summary>
+        /// Make a trimmed (at start) culture invariant upper case version of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a trimmed (at start) culture invariant upper case</param>
+        /// <param name="trimChar">The character to trim</param>
+        /// <returns>A trimmed (at start) culture invariant upper cased string</returns>
+        public static String FastTrimStartToUpper(this String str, Char trimChar)
+        {
+            var s = str.AsSpan();
+            int ss = 0;
+            var ee = s.Length;
+            while ((ss < ee) && (s[ss] == trimChar))
+                ++ss;
+            if (ss >= ee)
+                return String.Empty;
+            if (ss == 0)
+                return Ti.ToUpper(str);
+            return String.Create(ee - ss, s.Slice(ss), UpperCasedSubString);
+        }
+
+        /// <summary>
+        /// Make a trimmed (at end) culture invariant upper case version of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a trimmed (at end) culture invariant upper case</param>
+        /// <param name="trimChar">The character to trim</param>
+        /// <returns>A trimmed (at end) culture invariant upper cased string</returns>
+        public static String FastTrimEndToUpper(this String str, Char trimChar)
+        {
+            var s = str.AsSpan();
+            var sl = s.Length;
+            var ee = sl;
+            while ((ee > 0) && (s[ee - 1] == trimChar))
+                --ee;
+            if (ee <= 0)
+                return String.Empty;
+            if (ee == sl)
+                return Ti.ToUpper(str);
+            return String.Create(ee, s, UpperCasedSubString);
+        }
+
+        /// <summary>
+        /// Make a culture invariant upper case version of a string
         /// </summary>
         /// <param name="str">The string to transform into a culture invariant upper case</param>
         /// <returns>Culture invariant upper case string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String FastToUpper(this String str) => Ti.ToUpper(str);
+        public static String FastToUpper(this String str)
+            => Ti.ToUpper(str);
+
+        #endregion//FastToUpper
 
         /// <summary>
         /// A fast case sensitive, invariant culture starts with method

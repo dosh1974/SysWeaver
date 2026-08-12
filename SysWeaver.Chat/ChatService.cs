@@ -271,7 +271,7 @@ namespace SysWeaver.Chat
             providerChatId = null;
             if (i <= 0)
                 return false;
-            var pid = chatId.Substring(0, i).FastToLower();
+            var pid = chatId.FastToLower(0, i);
             if (!Providers.TryGetValue(pid, out controller))
                 return false;
             providerChatId = chatId.Substring(i + 1);

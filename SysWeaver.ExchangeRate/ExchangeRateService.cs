@@ -29,8 +29,8 @@ namespace SysWeaver.ExchangeRate
                 var r = kv.Split('=');
                 if (r.Length != 2)
                     throw new ArgumentException("Must contain a Key=Value pair, found " + x.ToQuoted(), nameof(p.OldToNewRateMap));
-                var k = r[0].Trim().FastToUpper();
-                var v = r[1].Trim().FastToUpper();
+                var k = r[0].FastTrimToUpper();
+                var v = r[1].FastTrimToUpper();
                 if (k.Length <= 0)
                     throw new ArgumentException("Must contain a Key=Value pair, found " + x.ToQuoted(), nameof(p.OldToNewRateMap));
                 if (v.Length <= 0)

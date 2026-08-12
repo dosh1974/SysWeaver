@@ -895,7 +895,7 @@ namespace SysWeaver.Net
                     var deser = iop.DefaultInput;
                     if (!String.IsNullOrEmpty(ct))
                     {
-                        ct = ct.Trim().FastToLower();
+                        ct = ct.FastTrimToLower();
                         if (!iop.InputSerializers.TryGetValue(ct, out deser))
                             ThrowSerializer(ct);
                     }

@@ -61,7 +61,7 @@ namespace SysWeaver
             lock (Lock)
             {
                 var d = Data;
-                if (!d.TryAdd(ext.TrimStart('.').FastToLower(), fn))
+                if (!d.TryAdd(ext.FastTrimStartToLower('.'), fn))
                     return false;
                 RoData = d.Freeze();
             }
@@ -78,7 +78,7 @@ namespace SysWeaver
             lock (Lock)
             {
                 var d = Data;
-                if (!d.TryRemove(ext.TrimStart('.').FastToLower(), out var fn))
+                if (!d.TryRemove(ext.FastTrimStartToLower('.'), out var fn))
                     return false;
                 RoData = d.Freeze();
             }

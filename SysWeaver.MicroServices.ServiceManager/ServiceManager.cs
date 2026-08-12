@@ -1726,7 +1726,7 @@ namespace SysWeaver.MicroService
         /// </param>
         /// <returns>True if extension was added</returns>
         public bool TryAddExtensionEditor(String extension, String url)
-            => Editors.TryAdd(extension.FastToLower().TrimStart('.'), url);
+            => Editors.TryAdd(extension.FastTrimStartToLower('.'), url);
 
 
         /// <summary>
@@ -1740,7 +1740,7 @@ namespace SysWeaver.MicroService
         /// </param>
         /// <returns>True if extension was removed</returns>
         public bool TryRemoveExtensionEditor(String extension, out String url)
-            => Editors.TryRemove(extension.FastToLower().TrimStart('.'), out url);
+            => Editors.TryRemove(extension.FastTrimStartToLower('.'), out url);
 
         /// <summary>
         /// Get an editor url fro a file extension
@@ -1756,7 +1756,7 @@ namespace SysWeaver.MicroService
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
         public String GetExtensionEditorFormat(String extension)
-            => Editors.TryGetValue(extension.FastToLower().TrimStart('.'), out var url) ? url : null;
+            => Editors.TryGetValue(extension.FastTrimStartToLower('.'), out var url) ? url : null;
 
         /// <summary>
         /// Get the extension editor url
@@ -1816,7 +1816,7 @@ namespace SysWeaver.MicroService
         /// </param>
         /// <returns>True if extension was added</returns>
         public bool TryAddExtensionViewer(String extension, String url)
-            => Viewers.TryAdd(extension.FastToLower().TrimStart('.'), url);
+            => Viewers.TryAdd(extension.FastTrimStartToLower('.'), url);
 
 
         /// <summary>
@@ -1830,7 +1830,7 @@ namespace SysWeaver.MicroService
         /// </param>
         /// <returns>True if extension was removed</returns>
         public bool TryRemoveExtensionViewer(String extension, out String url)
-            => Viewers.TryRemove(extension.FastToLower().TrimStart('.'), out url);
+            => Viewers.TryRemove(extension.FastTrimStartToLower('.'), out url);
 
         /// <summary>
         /// Get an viewer url fro a file extension
@@ -1846,7 +1846,7 @@ namespace SysWeaver.MicroService
         [WebApiClientCacheStatic]
         [WebApiRequestCacheStatic]
         public String GetExtensionViewerFormat(String extension)
-            => Viewers.TryGetValue(extension.FastToLower().TrimStart('.'), out var url) ? url : null;
+            => Viewers.TryGetValue(extension.FastTrimStartToLower('.'), out var url) ? url : null;
 
         /// <summary>
         /// Get the extension viewer url
@@ -1878,7 +1878,7 @@ namespace SysWeaver.MicroService
             var i = ext.LastIndexOf('.');
             if (i < 0)
                 return null;
-            ext = ext.Substring(i + 1).FastToLower();
+            ext = ext.FastToLower(i + 1);
             var x = GetExtensionViewer(ext, read);
             if (x != null)
                 return x;

@@ -119,23 +119,18 @@ namespace SysWeaver
             return str;
         }
 
-        static void CreateFirstUpper(Span<Char> str, String c)
+        static readonly SpanAction<Char, String> CreateFirstUpperAction = (str, c) =>
         {
             str[0] = Char.ToUpper(c[0]);
             c.AsSpan().Slice(1).CopyTo(str.Slice(1));
-        }
+        };  
 
-        static readonly SpanAction<Char, String> CreateFirstUpperAction = CreateFirstUpper;
-
-        static void CreateFirstLower(Span<Char> str, String c)
+        
+        static readonly SpanAction<Char, String> CreateFirstLowerAction = (str, c) =>
         {
             str[0] = Char.ToLower(c[0]);
             c.AsSpan().Slice(1).CopyTo(str.Slice(1));
-        }
-
-        static readonly SpanAction<Char, String> CreateFirstLowerAction = CreateFirstLower;
-
-
+        };
 
         /// <summary>
         /// Make sure that the first character is an uppercase letter (if it's a letter).
@@ -1257,10 +1252,10 @@ namespace SysWeaver
                 if (trimOuter)
                 {
                     while (start < end && char.IsWhiteSpace(*start))
-                        start++;
+                        ++start;
 
                     while (end > start && char.IsWhiteSpace(*(end - 1)))
-                        end--;
+                        --end;
 
                     if (start >= end)
                         return string.Empty;
@@ -1276,7 +1271,7 @@ namespace SysWeaver
                 if (trimInner)
                 {
                     while (splitPos > start && char.IsWhiteSpace(*(splitPos - 1)))
-                        splitPos--;
+                        --splitPos;
                 }
                 int leftLength = (int)(splitPos - start);
 
@@ -1347,12 +1342,9 @@ namespace SysWeaver
             bool trimOuter,
             bool trimInner = true)
         {
+            right = null;
             if (string.IsNullOrEmpty(value))
-            {
-                right = null;
                 return value;
-            }
-
             fixed (char* p = value)
             {
                 char* start = p;
@@ -1361,26 +1353,20 @@ namespace SysWeaver
                 if (trimOuter)
                 {
                     while (start < end && char.IsWhiteSpace(*start))
-                        start++;
+                        ++start;
 
                     while (end > start && char.IsWhiteSpace(*(end - 1)))
-                        end--;
+                        --end;
 
                     if (start >= end)
-                    {
-                        right = null;
                         return string.Empty;
-                    }
                 }
 
                 int activeLength = (int)(end - start);
 
                 int splitOffset = new ReadOnlySpan<char>((void*)start, activeLength).IndexOf(split);
                 if (splitOffset < 0)
-                {
-                    right = null;
                     return value;
-                }
 
                 char* splitPos = start + splitOffset;
                 char* rightStart = splitPos + 1;
@@ -1388,10 +1374,10 @@ namespace SysWeaver
                 if (trimInner)
                 {
                     while (rightStart < end && char.IsWhiteSpace(*rightStart))
-                        rightStart++;
+                        ++rightStart;
 
                     while (splitPos > start && char.IsWhiteSpace(*(splitPos - 1)))
-                        splitPos--;
+                        --splitPos;
                 }
 
                 int leftLength = (int)(splitPos - start);
@@ -1534,7 +1520,7 @@ namespace SysWeaver
             public String Add;
         }
 
-        static void SecureEndWithCount(Span<Char> str, SecureCount c)
+        static readonly SpanAction<Char, SecureCount> SecureEndWithCountAction = (str, c) =>
         {
             var s = c.Str;
             var k = c.Keep;
@@ -1544,9 +1530,9 @@ namespace SysWeaver
             var l = str.Length;
             for (; i < l; ++i)
                 str[i] = '*';
-        }
+        };
 
-        static void SecureEndWithStr(Span<Char> str, SecureStr c)
+        static readonly SpanAction<Char, SecureStr> SecureEndWithStrAction = (str, c) =>
         {
             var l = str.Length;
             var s = c.Str;
@@ -1557,15 +1543,9 @@ namespace SysWeaver
                 str[i] = s[i];
             for (; i < l; ++i)
                 str[i] = a[i - k];
-        }
+        };
 
-        static readonly SpanAction<Char, SecureCount> SecureEndWithCountAction = SecureEndWithCount;
-
-        static readonly SpanAction<Char, SecureStr> SecureEndWithStrAction = SecureEndWithStr;
-
-
-
-        static void SecureStartWithCount(Span<Char> str, SecureCount c)
+        static readonly SpanAction<Char, SecureCount> SecureStartWithCountAction = (str, c) =>
         {
             var l = str.Length;
             var s = c.Str;
@@ -1576,9 +1556,9 @@ namespace SysWeaver
                 str[i] = '*';
             for (; i < l; ++i)
                 str[i] = s[i];
-        }
+        };
 
-        static void SecureStartWithStr(Span<Char> str, SecureStr c)
+        static readonly SpanAction<Char, SecureStr> SecureStartWithStrAction = (str, c) =>
         {
             var l = str.Length;
             var s = c.Str;
@@ -1590,11 +1570,8 @@ namespace SysWeaver
                 str[i] = a[i];
             for (; i < l; ++i)
                 str[i] = a[i + k];
-        }
+        };
 
-        static readonly SpanAction<Char, SecureCount> SecureStartWithCountAction = SecureStartWithCount;
-
-        static readonly SpanAction<Char, SecureStr> SecureStartWithStrAction = SecureStartWithStr;
 
 
         /// <summary>
@@ -1622,14 +1599,14 @@ namespace SysWeaver
                     Str = value,
                     Keep = l - keep,
                 };
-                return String.Create(l, sc, SecureEndWithCount);
+                return String.Create(l, sc, SecureEndWithCountAction);
             }
             var sa = new SecureStr
             {
                 Str = value,
                 Add = suffix,
             };
-            return String.Create(keep + suffix.Length, sa, SecureEndWithStr);
+            return String.Create(keep + suffix.Length, sa, SecureEndWithStrAction);
 
 
 
@@ -1660,14 +1637,14 @@ namespace SysWeaver
                     Str = value,
                     Keep = l - keep,
                 };
-                return String.Create(l, sc, SecureStartWithCount);
+                return String.Create(l, sc, SecureStartWithCountAction);
             }
             var sa = new SecureStr
             {
                 Str = value,
                 Add = prefix,
             };
-            return String.Create(keep + prefix.Length, sa, SecureStartWithStr);
+            return String.Create(keep + prefix.Length, sa, SecureStartWithStrAction);
         }
 
         /// <summary>
@@ -1733,21 +1710,20 @@ namespace SysWeaver
         public static String Create(String part, int count)
             => String.Create(part.Length * count, part, CreateCountAction);
 
-        static void CreateCount(Span<Char> str, ReadOnlySpan<Char> c)
+        static readonly SpanAction<Char, ReadOnlySpan<Char>> CreateCountAction = (str, c) =>
         {
             var il = c.Length;
             var ol = str.Length;
-            for (int o = 0, i = 0; o < ol; ++ o)
+            for (int o = 0, i = 0; o < ol; ++o)
             {
                 str[o] = c[i];
                 ++i;
                 if (i >= il)
                     i = 0;
             }
-        }
+        };
 
-        static readonly SpanAction<Char, ReadOnlySpan<Char>> CreateCountAction = CreateCount;
-
+        
 
 
         static readonly IReadOnlySet<Char> EscapeChars = ReadOnlyData.Set(

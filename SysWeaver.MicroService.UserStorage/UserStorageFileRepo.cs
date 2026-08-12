@@ -32,14 +32,14 @@ namespace SysWeaver.MicroService
                 l = p.Blacklist?.Trim();
                 if (!String.IsNullOrEmpty(l))
                 {
-                    Blacklist = new HashSet<String>(l.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => x.TrimStart('.').FastToLower()), StringComparer.Ordinal).Freeze();
-                    IsValidExt = f => !Blacklist.Contains(f.GetExtension().TrimStart('.').FastToLower());
+                    Blacklist = new HashSet<String>(l.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => x.FastTrimStartToLower('.')), StringComparer.Ordinal).Freeze();
+                    IsValidExt = f => !Blacklist.Contains(f.GetExtension().FastTrimStartToLower('.'));
                 }
             }
             else
             {
-                Whitelist = new HashSet<String>(l.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => x.TrimStart('.').FastToLower()), StringComparer.Ordinal).Freeze();
-                IsValidExt = f => Whitelist.Contains(f.GetExtension().TrimStart('.').FastToLower());
+                Whitelist = new HashSet<String>(l.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(x => x.FastTrimStartToLower('.')), StringComparer.Ordinal).Freeze();
+                IsValidExt = f => Whitelist.Contains(f.GetExtension().FastTrimStartToLower('.'));
             }
             MaxSize = p.MaxFileSize;
             AllowMultiple = p.AllowMultiple;

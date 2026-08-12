@@ -25,7 +25,7 @@ namespace SysWeaver.Media
         {
             if (String.IsNullOrEmpty(fileExtension))
                 return MediaTypes.None;
-            return FileTypes.TryGetValue(fileExtension.TrimStart('.').FastToLower(), out var x) ? x : MediaTypes.None;
+            return FileTypes.TryGetValue(fileExtension.FastTrimStartToLower('.'), out var x) ? x : MediaTypes.None;
         }
 
         static readonly IReadOnlyDictionary<String, MediaTypes> FileTypes = new Dictionary<string, MediaTypes>(StringComparer.Ordinal)

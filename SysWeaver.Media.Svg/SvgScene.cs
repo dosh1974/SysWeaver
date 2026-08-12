@@ -315,8 +315,8 @@ namespace SysWeaver.Media
             color = color ?? new HashColors(name, seed);
             var t = new String(name.Where(x => Char.IsUpper(x)).Take(3).ToArray());
             if (t.Length <= 0)
-                t = name.Length > 0 ? name.Substring(0, 1).FastToUpper() : "?";
-            t = t.Substring(0, 1) + t.Substring(1).FastToLower();
+                t = name.Length > 0 ? name.FastToUpper(0, 1) : "?";
+            t = t.Substring(0, 1) + t.FastToLower(1);
             var rng = new Random(color.Seed);
             switch (rng.Next(4))
             {

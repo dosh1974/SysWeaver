@@ -48,7 +48,7 @@ namespace SysWeaver.MicroService
                     var temp = new HashSet<String>(StringComparer.Ordinal);
                     foreach (var t in r.Tokens)
                     {
-                        var tt = t?.Trim()?.FastToLower();
+                        var tt = t?.FastTrimToLower();
                         if (tt == null)
                             continue;
                         if (a.Contains(tt))

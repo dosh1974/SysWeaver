@@ -12,8 +12,8 @@ namespace SysWeaver.Auth
         public static DataBlob Get(String serType = "json", String compType = "br", CompEncoderLevels level = CompEncoderLevels.Balanced)
         {
             var b = Blobs;
-            serType = serType.TrimStart('.').FastToLower();
-            compType = compType.TrimStart('.').FastToLower();
+            serType = serType.FastTrimStartToLower('.');
+            compType = compType.FastTrimStartToLower('.');
             var key = String.Join('|', serType, compType, (int)level);
             if (b.TryGetValue(key, out var bl))
                 return bl;

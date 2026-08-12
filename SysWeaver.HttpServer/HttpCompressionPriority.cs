@@ -80,7 +80,7 @@ namespace SysWeaver.Net
             foreach (var x in m)
             {
                 var kv = x.Split(":");
-                var e = kv[0].Trim().FastToLower();
+                var e = kv[0].FastTrimToLower();
                 var c = CompManager.GetFromHttp(e);
                 if (c == null)
                     continue;
@@ -120,7 +120,7 @@ namespace SysWeaver.Net
                 return Empty;
             HashSet<String> sup = new(StringComparer.Ordinal);
             foreach (var x in d)
-                sup.Add(x.Split(';')[0].Trim().FastToLower());
+                sup.Add(x.Split(';')[0].FastTrimToLower());
             cs = sup.Freeze();
             s[supported] = cs;
             return cs;

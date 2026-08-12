@@ -94,7 +94,7 @@ namespace SysWeaver.IsoData
         /// </summary>
         /// <param name="name">The name of the language</param>
         /// <returns>Information about the language if it's known, or null if it's unknown</returns>
-        public static IsoLanguage TryGetName(String name) => NameToInfo.TryGetValue((name ?? "").Split('-')[0].Trim().FastToLower(), out var i) ? i : null;
+        public static IsoLanguage TryGetName(String name) => NameToInfo.TryGetValue((name ?? "").Split('-')[0].FastTrimToLower(), out var i) ? i : null;
 
 
         /// <summary>
@@ -359,7 +359,7 @@ namespace SysWeaver.IsoData
                 bool first = true;
                 foreach (var x in c.Languages.Split(','))
                 {
-                    var key = x.Trim().FastToLower();
+                    var key = x.FastTrimToLower();
                     if (!cmap.TryGetValue(key, out var l))
                     {
                         l = new List<Tuple<IsoCountry, decimal>>();

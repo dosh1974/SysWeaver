@@ -1008,7 +1008,7 @@ namespace SysWeaver.MicroService
                         foreach (var x in t)
                         {
                             var line = x;
-                            var key = line.SplitFirst(':', out var value).TrimEnd().FastToLower();
+                            var key = line.SplitFirst(':', out var value).FastTrimEndToLower();
                             if (mp.TryGetValue(key, out var fnx))
                             {
                                 try

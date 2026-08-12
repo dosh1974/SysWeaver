@@ -717,7 +717,7 @@ namespace SysWeaver.MicroService
             var nickName = GetNick(userName, email);
             var salt = u.Salt;
             var tokens = u.Tokens;
-            var tokenSet = tokens == null ? null : new HashSet<String>(tokens.Select(x => x.Trim().FastToLower()), StringComparer.Ordinal);
+            var tokenSet = tokens == null ? null : new HashSet<String>(tokens.Select(x => x.FastTrimToLower()), StringComparer.Ordinal);
             long id;
             Authorization auth;
             using (var c = await Db.GetAsync().ConfigureAwait(false))
@@ -859,7 +859,7 @@ namespace SysWeaver.MicroService
                 }
                 if (tokens != null)
                 {
-                    var ts = new HashSet<String>(tokens.Select(x => x?.Trim()?.FastToLower()).Where(x => !String.IsNullOrEmpty(x)), StringComparer.Ordinal);
+                    var ts = new HashSet<String>(tokens.Select(x => x?.FastTrimToLower()).Where(x => !String.IsNullOrEmpty(x)), StringComparer.Ordinal);
                     foreach (var t in ts)
                         await c.InsertAsync<DbToken>(new DbToken { UserId = id, Token = t }).ConfigureAwait(false);
                 }

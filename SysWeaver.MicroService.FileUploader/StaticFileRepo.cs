@@ -147,7 +147,7 @@ namespace SysWeaver.MicroService
                     var h = new HashSet<string>();
                     ValidExtensions = h;
                     foreach (var f in e)
-                        h.Add(f.Trim().TrimStart('.').FastToLower());
+                        h.Add(f.Trim().FastTrimStartToLower('.'));
                 }
                 var p = DestPath;
                 String[] folders;
@@ -387,7 +387,7 @@ namespace SysWeaver.MicroService
                 if (e != null)
                 {
                     var extP = f.Name.LastIndexOf('.');
-                    var ext = extP < 0 ? "" : f.Name.Substring(extP + 1).FastToLower();
+                    var ext = extP < 0 ? "" : f.Name.FastToLower(extP + 1);
                     if (!e.Contains(ext))
                     {
                         s[i] = FileRepoTools.RefuseExtension;

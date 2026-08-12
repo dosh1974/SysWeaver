@@ -1215,7 +1215,7 @@ namespace SysWeaver.Net
 
                 //  Get template and prevent caching for dynamic templates 
                 var extPos = localUrl.LastIndexOf('.');
-                var ext = extPos < 0 ? "" : localUrl.Substring(extPos + 1).FastToLower();
+                var ext = extPos < 0 ? "" : localUrl.FastToLower(extPos + 1);
 
                 //  Auto translation based on file extensions (todo: use mime instead?)
                 LanguageTemplate.ExtBuilders.TryGetValue(ext, out var langTemplateBuilder);
@@ -2516,7 +2516,7 @@ namespace SysWeaver.Net
                 var end = CharPtrTools.IndexOfAny(HostEnd, start, urlEnd);
                 if (end == null)
                     end = urlEnd;
-                var hostName = Ti.ToLower(url.Substring(0, (int)(end - urlStart)));
+                var hostName = url.FastToLower(0, (int)(end - urlStart));
                 if (!Hosts.TryGetValue(hostName, out var host))
                     host = CreateHost(hostName, url);
                 prefix = host.Name;
@@ -2557,7 +2557,7 @@ namespace SysWeaver.Net
             else
                 end += start;
             
-            var hostName = url.Substring(start, end - start).FastToLower();
+            var hostName = url.FastToLower(start, end - start);
             if (!Hosts.TryGetValue(hostName, out var host))
                 host = CreateHost(hostName);
             prefix = host.Prefix ?? host.Prefixes.StartsWithAny(url);

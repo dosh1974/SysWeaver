@@ -180,7 +180,7 @@ namespace SysWeaver.Auth
                 return null;
             var t = new HashSet<String>(StringComparer.Ordinal);
             foreach (var x in tokens.Split(','))
-                t.Add(x.Trim().FastToLower());
+                t.Add(x.FastTrimToLower());
             return t.ToArray();
         }
 

@@ -83,7 +83,7 @@ namespace SysWeaver.Net.IconModule
                 var comp = asm.GetResourceCompression(ref orgName);
                 if (!orgName.EndsWith(".svg", StringComparison.Ordinal))
                     continue;
-                var r = orgName.Substring(n, orgName.Length - n - 4).FastToLower();
+                var r = orgName.FastToLower(n, orgName.Length - n - 4);
                 if (isDynamic.Contains(r))
                 {
                     orgName = x;
@@ -329,14 +329,14 @@ namespace SysWeaver.Net.IconModule
             var ep = l.LastIndexOf('.');
             if (ep < 0)
                 return null;
-            var ext = l.Substring(ep + 1).FastToLower();
+            var ext = l.FastToLower(ep + 1);
             if (ext != "svg")
                 return null;
             var c = ExtPrefix;
             if (l.StartsWith(c, StringComparison.Ordinal))
             {
                 var cl = c.Length;
-                var dataExt = l.Substring(cl, l.Length - cl - 4).FastToLower();
+                var dataExt = l.FastToLower(cl, l.Length - cl - 4);
                 var icon = GetFromExt(dataExt);
                 Add(l, icon);
                 return data.Handler(context);
@@ -345,7 +345,7 @@ namespace SysWeaver.Net.IconModule
             if (l.StartsWith(c, StringComparison.Ordinal))
             {
                 var cl = c.Length;
-                var mime = l.Substring(cl, l.Length - cl - 4).FastToLower();
+                var mime = l.FastToLower(cl, l.Length - cl - 4);
                 var icon = GetFromMime(mime);
                 Add(l, icon);
                 return data.Handler(context);

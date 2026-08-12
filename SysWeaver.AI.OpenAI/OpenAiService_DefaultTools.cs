@@ -78,7 +78,7 @@ namespace SysWeaver.AI
         [OpenAiTool("📁")]
         String GetFileExtensionIcon(String fileExtension, HttpServerRequest request)
         {
-            return "../icons/ext/" + fileExtension.TrimStart('.').FastToLower() + ".svg";
+            return "../icons/ext/" + fileExtension.FastTrimStartToLower('.') + ".svg";
         }
 
         /// <summary>

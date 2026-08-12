@@ -23,7 +23,7 @@ namespace SysWeaver.MicroService
             if (wll > 0)
             {
                 for (int i = 0; i < wll; ++i)
-                    wl[i] = wl[i].Trim().FastToLower();
+                    wl[i] = wl[i].FastTrimToLower();
                 WhiteListPrefixes = wl;
             }
 

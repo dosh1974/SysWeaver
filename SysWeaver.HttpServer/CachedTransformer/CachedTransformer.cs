@@ -125,7 +125,7 @@ namespace SysWeaver.HttpTransformer
 
         protected bool Add(String fileExtension, ICachedTransformer transformHandler)
         {
-            return MimeHandlers.TryAdd(fileExtension.TrimStart('.').FastToLower(), transformHandler);
+            return MimeHandlers.TryAdd(fileExtension.FastTrimStartToLower('.'), transformHandler);
         }
 
         readonly SemiFrozenDictionary<String, ICachedTransformer> MimeHandlers = new SemiFrozenDictionary<string, ICachedTransformer>(StringComparer.Ordinal);

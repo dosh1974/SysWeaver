@@ -243,7 +243,7 @@ namespace SysWeaver.Net
                 i = text.IndexOf(',', i);
                 if (i < 0)
                     throw new Exception(String.Concat("Don't know how to handle binary data \"", text.LimitLength(20), '"'));
-                var ext = text.Substring(2, i - 2).FastToLower();
+                var ext = text.FastToLower(2, i - 2);
                 if (!InputSerializers.TryGetValue(ext, out ser))
                     throw new Exception(String.Concat("Can't find an enabled serializer named \"", ext, '"'));
                 ++i;

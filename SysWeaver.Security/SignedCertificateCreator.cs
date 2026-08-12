@@ -177,7 +177,7 @@ namespace SysWeaver.Security
             foreach (var s in cert.Subject.Split(','))
             {
                 var t = s.IndexOf('=');
-                var key = s.Substring(0, t).Trim().FastToLower();
+                var key = s.Substring(0, t).FastTrimToLower();
                 vals.Add(key, s.Substring(t + 1).Trim());
             }
             bool Test(String value, params String[] keys)

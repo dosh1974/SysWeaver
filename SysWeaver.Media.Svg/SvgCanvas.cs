@@ -775,7 +775,7 @@ namespace SysWeaver.Media
             for (int i = 1; i < tl; ++ i)
             {
                 var name = t[i - 1];
-                name = name.Substring(name.LastIndexOfAny(FindCssNameStart) + 1).FastToLower();
+                name = name.FastToLower(name.LastIndexOfAny(FindCssNameStart) + 1);
                 var css = t[i];
                 var csse = css.LastIndexOf('}');
                 if (csse >= 0)
