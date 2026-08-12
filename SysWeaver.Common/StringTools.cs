@@ -1205,6 +1205,227 @@ namespace SysWeaver
 
 
         /// <summary>
+        /// Split a string into two parts (keeping the left part) on the first occurance of a char.
+        /// Example:
+        /// "name@example.com".SplitFirst('@') => "name"
+        /// </summary>
+        /// <param name="value">The value to split into two parts</param>
+        /// <param name="split">The character to split</param>
+        /// <param name="trimOuter">If true, the string is trimmed before splitting</param>
+        /// <param name="trimInner">If true, the resulting value is trimmed on the end and the right string (if available) is trimmed on the start</param>
+        /// <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned), semantically the same as value.Split(split)[0]</returns>
+        /*public static String SplitFirst(this String value, Char split, bool trimOuter, bool trimInner = true)
+        {
+            if (String.IsNullOrEmpty(value))
+                return value;
+            int start = 0;
+            var end = value.Length;
+            if (trimOuter)
+            {
+                while ((start < end) && Char.IsWhiteSpace(value[start]))
+                    ++start;
+                while ((end > start) && Char.IsWhiteSpace(value[end - 1]))
+                    --end;
+                if (start >= end)
+                    return String.Empty;
+            }
+            var p = value.IndexOf(split, start);
+            if (p < 0)
+                return value;
+            if (trimInner)
+            {
+                while ((p > start) && Char.IsWhiteSpace(value[p - 1]))
+                    --p;
+            }
+            return value.Substring(start, p);
+        }
+        */
+
+        public static unsafe string SplitFirst(
+            this string value,
+            char split,
+            bool trimOuter,
+            bool trimInner = true)
+        {
+            if (string.IsNullOrEmpty(value))
+                return value;
+            fixed (char* p = value)
+            {
+                char* start = p;
+                char* end = p + value.Length;
+
+                if (trimOuter)
+                {
+                    while (start < end && char.IsWhiteSpace(*start))
+                        start++;
+
+                    while (end > start && char.IsWhiteSpace(*(end - 1)))
+                        end--;
+
+                    if (start >= end)
+                        return string.Empty;
+                }
+
+                int activeLength = (int)(end - start);
+
+                int splitOffset = new ReadOnlySpan<char>((void*)start, activeLength).IndexOf(split);
+                if (splitOffset < 0)
+                    return value;
+
+                char* splitPos = start + splitOffset;
+                if (trimInner)
+                {
+                    while (splitPos > start && char.IsWhiteSpace(*(splitPos - 1)))
+                        splitPos--;
+                }
+                int leftLength = (int)(splitPos - start);
+
+                return leftLength <= 0
+                    ? string.Empty
+                    : new string(start, 0, leftLength);
+            }
+        }
+
+
+        /// <summary>
+        /// Split a string into two parts on the first occurance of a char.
+        /// Example:
+        /// var left = "name@example.com".SplitFirst('@', out var right);
+        /// left = "name";
+        /// right = "example.com";
+        /// </summary>
+        /// <param name="value">The value to split into two parts</param>
+        /// <param name="split">The character to split</param>
+        /// <param name="right">The right part, null if the split char isn't found</param>
+        /// <param name="trimOuter">If true, the string is trimmed before splitting</param>
+        /// <param name="trimInner">If true, the resulting value is trimmed on the end and the right string (if available) is trimmed on the start</param>
+        /// <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned)</returns>
+        /*
+        public static String SplitFirst(this String value, Char split, out String right, bool trimOuter, bool trimInner = true)
+        {
+            if (String.IsNullOrEmpty(value))
+            {
+                right = null;
+                return value;
+            }
+            int start = 0;
+            var end = value.Length;
+            if (trimOuter)
+            {
+                while ((start < end) && Char.IsWhiteSpace(value[start]))
+                    ++start;
+                while ((end > start) && Char.IsWhiteSpace(value[end - 1]))
+                    --end;
+                if (start >= end)
+                {
+                    right = null;
+                    return String.Empty;
+                }
+            }
+            var p = value.IndexOf(split, start);
+            if (p < 0)
+            {
+                right = null;
+                return value;
+            }
+            var rs = p + 1;
+            if (trimInner)
+            {
+                while ((rs < end) && Char.IsWhiteSpace(value[rs]))
+                    ++rs;
+                while ((p > start) && Char.IsWhiteSpace(value[p - 1]))
+                    --p;
+            }
+            right = value.Substring(rs, end - rs);
+            return value.Substring(start, p);
+        }
+        */
+        public static unsafe string SplitFirst(
+            this string value,
+            char split,
+            out string right,
+            bool trimOuter,
+            bool trimInner = true)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                right = null;
+                return value;
+            }
+
+            fixed (char* p = value)
+            {
+                char* start = p;
+                char* end = p + value.Length;
+
+                if (trimOuter)
+                {
+                    while (start < end && char.IsWhiteSpace(*start))
+                        start++;
+
+                    while (end > start && char.IsWhiteSpace(*(end - 1)))
+                        end--;
+
+                    if (start >= end)
+                    {
+                        right = null;
+                        return string.Empty;
+                    }
+                }
+
+                int activeLength = (int)(end - start);
+
+                int splitOffset = new ReadOnlySpan<char>((void*)start, activeLength).IndexOf(split);
+                if (splitOffset < 0)
+                {
+                    right = null;
+                    return value;
+                }
+
+                char* splitPos = start + splitOffset;
+                char* rightStart = splitPos + 1;
+
+                if (trimInner)
+                {
+                    while (rightStart < end && char.IsWhiteSpace(*rightStart))
+                        rightStart++;
+
+                    while (splitPos > start && char.IsWhiteSpace(*(splitPos - 1)))
+                        splitPos--;
+                }
+
+                int leftLength = (int)(splitPos - start);
+                int rightLength = (int)(end - rightStart);
+
+                right = rightLength <= 0
+                    ? string.Empty
+                    : new string(rightStart, 0, rightLength);
+
+                return leftLength <= 0
+                    ? string.Empty
+                    : new string(start, 0, leftLength);
+            }
+        }
+
+        /// <summary>
+        /// Split a string into two parts (keeping the left part) on the first occurance of a char.
+        /// Example:
+        /// "name@example.com".SplitFirst('@') => "name"
+        /// </summary>
+        /// <param name="value">The value to split into two parts</param>
+        /// <param name="split">The character to split</param>
+        /// <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned), semantically the same as value.Split(split)[0]</returns>
+        public static String SplitFirst(this String value, Char split)
+        {
+            if (String.IsNullOrEmpty(value))
+                return value;
+            var p = value.IndexOf(split);
+            if (p < 0)
+                return value;
+            return value.Substring(0, p);
+        }
+
+        /// <summary>
         /// Split a string into two parts on the first occurance of a char.
         /// Example:
         /// var left = "name@example.com".SplitFirst('@', out var right);
@@ -1261,23 +1482,6 @@ namespace SysWeaver
             return value.Substring(p + 1);
         }
 
-        /// <summary>
-        /// Split a string into two parts (keeping the left part) on the first occurance of a char.
-        /// Example:
-        /// "name@example.com".SplitFirst('@') => "name"
-        /// </summary>
-        /// <param name="value">The value to split into two parts</param>
-        /// <param name="split">The character to split</param>
-        /// <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned), semantically the same as value.Split(split)[0]</returns>
-        public static String SplitFirst(this String value, Char split)
-        {
-            if (String.IsNullOrEmpty(value))
-                return value;
-            var p = value.IndexOf(split);
-            if (p < 0)
-                return value;
-            return value.Substring(0, p);
-        }
 
         /// <summary>
         /// Split a string into two parts on the last occurance of a char.

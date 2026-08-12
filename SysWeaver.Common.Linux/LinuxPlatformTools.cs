@@ -30,12 +30,11 @@ namespace SysWeaver
                         {
                             if (line[0] == '#')
                                 continue;
-                            var tl = line.SplitFirst('#');
-                            tl = tl.SplitFirst('=', out var value);
+                            var tl = line.SplitFirst('#', true);
+                            tl = tl.SplitFirst('=', out var value, false);
                             if (value == null)
                                 continue;
-                            tl = tl.TrimEnd();
-                            value = value.Trim().RemoveQuotes();
+                            value = value.RemoveQuotes();
                             d[tl.FastToLower()] = value;
                         }
                     }

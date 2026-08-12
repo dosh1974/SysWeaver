@@ -1206,7 +1206,7 @@ namespace SysWeaver.Net
                 if (auth != null)
                     if (await HandleAuth(auth, data, session, localUrl, url, isHead).ConfigureAwait(false))
                         return;
-                using var __ = PerfMon.Track((nameof(Handle) + ".") + t.Name);
+                using var __ = PerfMon.Track(String.Concat(nameof(Handle), ".", t.Name));
                 var etag = t.GetEtag(out bool useAsync, data);
                 var ee = data.Etag;
                 if (ee != null)
@@ -1292,12 +1292,17 @@ namespace SysWeaver.Net
                     {
                         key = String.Concat(key, '\n', data.GetType().Name);
                         Interlocked.Increment(ref CacheTotal);
-                        cacheKey = 
-                            useLanguageCache && haveTranslator
-                            ?
-                            String.Join('\n', key, data.AcceptEncoding, data.Method, lang)
-                            :
-                            String.Join('\n', key, data.AcceptEncoding, data.Method);
+                        // Optimize cache key construction to reduce allocations
+                        var accept = data.AcceptEncoding;
+                        var method = data.Method;
+                        if (useLanguageCache && haveTranslator)
+                        {
+                            cacheKey = String.Concat(key, '\n', accept, '\n', method, '\n', lang);
+                        }
+                        else
+                        {
+                            cacheKey = String.Concat(key, '\n', accept, '\n', method);
+                        }
                         if (cache.TryGetValue(cacheKey, out var ce))
                         {
                             if (nowT < ce.Expires)
@@ -1341,7 +1346,7 @@ namespace SysWeaver.Net
                     if ((mime != null) && (etag != null))
                     {
                         var trans = Transformers;
-                        var mimeFirst = mime.SplitFirst(';').Trim();
+                        var mimeFirst = mime.SplitFirst(';', true);
                         if (trans.TryGetValue(mimeFirst, out var chain) || trans.TryGetValue(ext, out chain))
                         {
                             if (!data.Url.FastSubEquals(qs, "raw"))
@@ -1533,50 +1538,8 @@ namespace SysWeaver.Net
                     long skip = 0;
                     long limit = -1;
                     if (range != null)
-                    {
-                        range = range.Trim();
-                        var rangeTemp = range.Split('=');
-                        if (rangeTemp.Length == 2)
-                        {
-                            var rangeT = rangeTemp[0].TrimEnd().FastToLower();
-                            if (rangeT.FastEquals("bytes"))
-                            {
-                                rangeTemp = rangeTemp[1].TrimStart().Split('-');
-                                if (long.TryParse(rangeTemp[0].TrimEnd(), out var rangeStart))
-                                {
-                                    if (rangeStart >= 0)
-                                    {
-                                        if (rangeTemp.Length > 1)
-                                        {
-                                            var rtemp = rangeTemp[1].TrimStart();
-                                            if (rtemp.Length > 0)
-                                            {
-                                                if (long.TryParse(rtemp, out var rangeEnd))
-                                                {
-                                                    var rangeLen = rangeEnd - rangeStart + 1;
-                                                    if (rangeLen >= 0)
-                                                    {
-                                                        haveRange = true;
-                                                        skip = rangeStart;
-                                                        limit = rangeLen;
-                                                    }
-                                                }
-                                            }
-                                            else
-                                            {
-                                                haveRange = true;
-                                                skip = rangeStart;
-                                            }
-                                        }
-                                        else
-                                        {
-                                            haveRange = true;
-                                            skip = rangeStart;
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    { 
+                        haveRange = ParseRange(range, ref skip, ref limit);
                         if (!haveRange)
                         {
                             data.SetResHeader("Accept-Ranges", "bytes");
@@ -1756,6 +1719,38 @@ namespace SysWeaver.Net
             {
                 await OnException(ex, data).ConfigureAwait(false);
             }
+        }
+
+
+        static bool ParseRange(String range, ref long skip, ref long limit)
+        {
+            var key = range.SplitFirst('=', out var value, true);
+            if (value == null)
+                return false;
+            var rangeT = key.FastToLower();
+            if (!rangeT.FastEquals("bytes"))
+                return false;
+            var start = value.SplitFirst('-', out var end, false);
+            if (!long.TryParse(start, out var rangeStart))
+                return false;
+            if (rangeStart < 0)
+                return false;
+            if (end != null)
+            {
+                if (end.Length > 0)
+                {
+                    if (!long.TryParse(end, out var rangeEnd))
+                        return false;
+                    var rangeLen = rangeEnd - rangeStart + 1;
+                    if (rangeLen < 0)
+                        return false;
+                    skip = rangeStart;
+                    limit = rangeLen;
+                    return true;
+                }
+            }
+            skip = rangeStart;
+            return true;
         }
 
         async ValueTask OnException(Exception ex, HttpServerRequest data)
@@ -2225,7 +2220,7 @@ namespace SysWeaver.Net
                     HashSet<String> tested = new(ll, StringComparer.Ordinal);
                     for (int i = 0; i < ll; ++i)
                     {
-                        var testCode = langs[i].SplitFirst(';').TrimEnd();
+                        var testCode = langs[i].SplitFirst(';', false);
                         if (!tested.Add(testCode))
                             continue;
                         if (langSet.Contains(testCode))
@@ -2900,7 +2895,7 @@ namespace SysWeaver.Net
             var li = IsoLanguage.TryGetName(iso);
             if (li == null)
                 return new LanguageInfo(iso, iso, iso, iso, null);
-            var name = li.Name.SplitFirst(',').TrimEnd();
+            var name = li.Name.SplitFirst(',', false);
             var com = li.Comment;
             if (tr == null)
                 return new LanguageInfo(iso, name, name, name, com);
