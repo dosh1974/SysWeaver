@@ -28,12 +28,15 @@ namespace SysWeaver.Net
                     msg?.AddMessage(logPrefix + "Can't bind certificate to non-https prefix " + listenerPrefix.ToQuoted(), MessageLevels.Warning);
                     return true;
                 }
-                String bind =
-                    uri.Host == "localhost"
-                    ?
-                        ("ipport=0.0.0.0:" + uri.Port)
-                    :
-                        ("hostnameport=" + uri.Host + ":" + uri.Port + " certstorename=MY");
+                String bind;
+                if (uri.Host.FastEquals("localhost"))
+                {
+                    bind = "ipport=0.0.0.0:" + uri.Port;
+                }else
+                {
+                    bind = "hostnameport=" + uri.Host + ":" + uri.Port;
+                }
+                const string store = " certstorename=MY";
                 var pid = Environment.OSVersion.Platform;
                 switch (pid)
                 {
@@ -57,7 +60,7 @@ namespace SysWeaver.Net
                                 msg?.AddMessage(logPrefix + "[RemoveCert] " + text, wrn ? MessageLevels.Warning : MessageLevels.Debug);
                             });
                         }
-                        string updateArgs = "http update sslcert " + bind + " certhash=" + hash + " appid=" + EnvInfo.AppGuid;
+                        string updateArgs = "http update sslcert " + bind + store + " certhash=" + hash + " appid=" + EnvInfo.AppGuid;
                         msg?.AddMessage(logPrefix + "Running command: \"netsh " + updateArgs + "\"", MessageLevels.Debug);
                         var r = ExternalProcess.Run("netsh", updateArgs, (text, wrn) =>
                         {
@@ -65,7 +68,7 @@ namespace SysWeaver.Net
                         });
                         if (r != 0)
                         {
-                            string addArgs = "http add sslcert " + bind + " certhash=" + hash + " appid=" + EnvInfo.AppGuid;
+                            string addArgs = "http add sslcert " + bind + store + " certhash=" + hash + " appid=" + EnvInfo.AppGuid;
                             msg?.AddMessage(logPrefix + "Running command: \"netsh " + addArgs + "\"", MessageLevels.Debug);
                             r = ExternalProcess.Run("netsh", addArgs, (text, wrn) =>
                             {

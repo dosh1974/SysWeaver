@@ -25,6 +25,11 @@ namespace SysWeaver.MicroService
     /// </summary>
     public class ServiceManager : MessageHost, IDisposable, IPerfMonitored
     {
+        /// <summary>
+        /// Actions to perform when the service manager have been created
+        /// </summary>
+        public event Action OnCreated;
+
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(ServiceManager));
 
         public override string ToString() => nameof(ServiceManager);
@@ -109,6 +114,7 @@ namespace SysWeaver.MicroService
             }
             AddMessage("Platform tools: " + PlatformTools.Current.Name);
             PruneTask = new PeriodicTask(Prune, 2000);
+            OnCreated.RaiseEvents();
         }
 
         public ConfigEntry[] ReadManifest(String file = null)
@@ -283,7 +289,7 @@ namespace SysWeaver.MicroService
                 AddHaveStats(instance as IHaveStats);
             }
             AddMessage(String.Join(" Registered instance of type ", Tag, ServiceName(instance, info)));
-            OnServiceAdded?.Invoke(instance, info);
+            OnServiceAdded.RaiseEvents(instance, info);
             return info;
         }
 
@@ -719,7 +725,7 @@ namespace SysWeaver.MicroService
             var type = instance.GetType();
             RemoveType(type, instance);
             AddMessage(String.Join(" Unregistered instance of type ", Tag, ServiceName(instance, info)));
-            OnServiceRemoved?.Invoke(instance, info);
+            OnServiceRemoved.RaiseEvents(instance, info);
             return info;
         }
 

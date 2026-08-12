@@ -350,7 +350,7 @@ namespace SysWeaver.Net
                 {
                     var c = await l.GetContextAsync().ConfigureAwait(false);
                     Interlocked.Increment(ref ReqCounter);
-                    TaskExt.StartNewAsyncChain(() => HandleRequest(c).ConfigureAwait(false));
+                    TaskExt.StartNewAsyncChain(HandleRequest(c).ConfigureAwait(false));
                     continue;
                 }
                 catch (Exception ex)

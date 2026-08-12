@@ -1,5 +1,8 @@
+using Microsoft.VisualBasic;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
@@ -27,7 +30,22 @@ namespace SysWeaver
         /// </summary>
         /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void StartNewAsyncChain(Func<Task> task) => Task.Run(() => task().ConfigureAwait(false)).ConfigureAwait(false);
+        public static void StartNewAsyncChain(Func<Task> task) => Task.Run(task).ConfigureAwait(false);
+
+        /// <summary>
+        /// Start a new async task (new thread / new chain)
+        /// </summary>
+        /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void StartNewAsyncChain(this Func<ConfiguredValueTaskAwaitable> task) => Task.Run(task).ConfigureAwait(false);
+
+        /// <summary>
+        /// Start a new async task (new thread / new chain)
+        /// </summary>
+        /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void StartNewAsyncChain(this Func<ValueTask> task) => Task.Run(task).ConfigureAwait(false);
+
 
 
         /// <summary>
@@ -35,14 +53,28 @@ namespace SysWeaver
         /// </summary>
         /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void StartNewAsyncChain(Func<ConfiguredValueTaskAwaitable> task) => Task.Run(task).ConfigureAwait(false);
+        public static void StartNewAsyncChain(ConfiguredTaskAwaitable task) => Task.Run(() => task).ConfigureAwait(false);
 
         /// <summary>
         /// Start a new async task (new thread / new chain)
         /// </summary>
         /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void StartNewAsyncChain(Func<ValueTask> task) => Task.Run(() => task().ConfigureAwait(false)).ConfigureAwait(false);
+        public static void StartNewAsyncChain(Task task) => Task.Run(() => task.ConfigureAwait(false)).ConfigureAwait(false);
+
+        /// <summary>
+        /// Start a new async task (new thread / new chain)
+        /// </summary>
+        /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void StartNewAsyncChain(this ConfiguredValueTaskAwaitable task) => Task.Run(() => task).ConfigureAwait(false);
+
+        /// <summary>
+        /// Start a new async task (new thread / new chain)
+        /// </summary>
+        /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void StartNewAsyncChain(this ValueTask task) => Task.Run(() => task.ConfigureAwait(false)).ConfigureAwait(false);
 
 
 
@@ -224,7 +256,8 @@ namespace SysWeaver
         /// <param name="delayInMs">The delay in milli seconds</param>
         public static void RunDelayed(Action func, int delayInMs)
         {
-            Timer t = null;
+            StartNewAsyncChain(() => Task.Delay(delayInMs).ContinueWith(x => func()));
+/*            Timer t = null;
             t = new Timer(state =>
             {
                 try
@@ -235,7 +268,7 @@ namespace SysWeaver
                 {
                 }
                 t.Dispose();
-            }, null, delayInMs, Timeout.Infinite);
+            }, null, delayInMs, Timeout.Infinite);*/
         }
 
 
@@ -246,12 +279,13 @@ namespace SysWeaver
         /// <param name="delayInMs">The delay in milli seconds</param>
         public static void RunDelayed(Task task, int delayInMs)
         {
-            Timer t = null;
+            StartNewAsyncChain(() => Task.Delay(delayInMs).ContinueWith(x => task));
+/*            Timer t = null;
             t = new Timer(state =>
             {
                 task.RunAsync();
                 t.Dispose();
-            }, null, delayInMs, Timeout.Infinite);
+            }, null, delayInMs, Timeout.Infinite);*/
         }
 
 
@@ -351,6 +385,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="eventHandlers"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask RaiseEvents(this Func<Task> eventHandlers)
             => RaiseEvents(eventHandlers, OnEventException);
 
@@ -361,6 +396,7 @@ namespace SysWeaver
         /// <param name="eventHandlers"></param>
         /// <param name="a0">Action argument 0</param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask RaiseEvents<A0>(this Func<A0, Task> eventHandlers, A0 a0)
             => RaiseEvents(eventHandlers, OnEventException, a0);
 
@@ -372,6 +408,7 @@ namespace SysWeaver
         /// <param name="a0">Action argument 0</param>
         /// <param name="a1">Action argument 1</param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask RaiseEvents<A0, A1>(this Func<A0, A1, Task> eventHandlers, A0 a0, A1 a1)
             => RaiseEvents(eventHandlers, OnEventException, a0, a1);
 
@@ -384,6 +421,7 @@ namespace SysWeaver
         /// <param name="a1">Action argument 1</param>
         /// <param name="a2">Action argument 2</param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask RaiseEvents<A0, A1, A2>(this Func<A0, A1, A2, Task> eventHandlers, A0 a0, A1 a1, A2 a2)
             => RaiseEvents(eventHandlers, OnEventException, a0, a1, a2);
 
@@ -396,6 +434,7 @@ namespace SysWeaver
         /// <param name="a2">Action argument 2</param>
         /// <param name="a3">Action argument 3</param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask RaiseEvents<A0, A1, A2, A3>(this Func<A0, A1, A2, A3, Task> eventHandlers, A0 a0, A1 a1, A2 a2, A3 a3)
             => RaiseEvents(eventHandlers, OnEventException, a0, a1, a2, a3);
 
@@ -415,24 +454,44 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
-            onException = onException ?? OnEventException;
-            var tasks = new ValueTask[lc];
-            for (int i = 0; i < lc; i++)
+            if (lc == 1)
             {
-                async ValueTask Fn()
+                try
                 {
-                    try
-                    {
-                        await ((Func<Task>)l[i])().ConfigureAwait(false);
-                    }
-                    catch (Exception e)
-                    {
-                        onException(e);
-                    }
+                    await ((Func<Task>)l[0])().ConfigureAwait(false);
                 }
-                tasks[i] = Fn();
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+                return;
             }
-            await WhenAll(tasks).ConfigureAwait(false);
+            onException = onException ?? OnEventException;
+            var tasks = ArrayPool<ValueTask>.Shared.Rent(lc);
+            try
+            {
+                for (int i = 0; i < lc; i++)
+                {
+                    var del = (Func<Task>)l[i];
+                    async ValueTask Fn()
+                    {
+                        try
+                        {
+                            await del().ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            onException(e);
+                        }
+                    }
+                    tasks[i] = Fn();
+                }
+                await WhenAll(tasks, lc).ConfigureAwait(false);
+            }
+            finally
+            {
+                ArrayPool<ValueTask>.Shared.Return(tasks);
+            }
         }
 
         /// <summary>
@@ -450,24 +509,44 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
-            onException = onException ?? OnEventException;
-            var tasks = new ValueTask[lc];
-            for (int i = 0; i < lc; i++)
+            if (lc == 1)
             {
-                async ValueTask Fn()
+                try
                 {
-                    try
-                    {
-                        await ((Func<A0, Task>)l[i])(a0).ConfigureAwait(false);
-                    }
-                    catch (Exception e)
-                    {
-                        onException(e);
-                    }
+                    await ((Func<A0, Task>)l[0])(a0).ConfigureAwait(false);
                 }
-                tasks[i] = Fn();
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+                return;
             }
-            await WhenAll(tasks).ConfigureAwait(false);
+            onException = onException ?? OnEventException;
+            var tasks = ArrayPool<ValueTask>.Shared.Rent(lc);
+            try
+            {
+                for (int i = 0; i < lc; i++)
+                {
+                    var del = (Func<A0, Task>)l[i];
+                    async ValueTask Fn()
+                    {
+                        try
+                        {
+                            await del(a0).ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            onException(e);
+                        }
+                    }
+                    tasks[i] = Fn();
+                }
+                await WhenAll(tasks, lc).ConfigureAwait(false);
+            }
+            finally
+            {
+                ArrayPool<ValueTask>.Shared.Return(tasks);
+            }
         }
 
         /// <summary>
@@ -486,25 +565,46 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
-            onException = onException ?? OnEventException;
-            var tasks = new ValueTask[lc];
-            for (int i = 0; i < lc; i++)
+            if (lc == 1)
             {
-                async ValueTask Fn()
+                try
                 {
-                    try
-                    {
-                        await ((Func<A0, A1, Task>)l[i])(a0, a1).ConfigureAwait(false);
-                    }
-                    catch (Exception e)
-                    {
-                        onException(e);
-                    }
+                    await ((Func<A0, A1, Task>)l[0])(a0, a1).ConfigureAwait(false);
                 }
-                tasks[i] = Fn();
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+                return;
             }
-            await WhenAll(tasks).ConfigureAwait(false);
+            onException = onException ?? OnEventException;
+            var tasks = ArrayPool<ValueTask>.Shared.Rent(lc);
+            try
+            {
+                for (int i = 0; i < lc; i++)
+                {
+                    var del = (Func<A0, A1, Task>)l[i];
+                    async ValueTask Fn()
+                    {
+                        try
+                        {
+                            await del(a0, a1).ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            onException(e);
+                        }
+                    }
+                    tasks[i] = Fn();
+                }
+                await WhenAll(tasks, lc).ConfigureAwait(false);
+            }
+            finally
+            {
+                ArrayPool<ValueTask>.Shared.Return(tasks);
+            }
         }
+
 
         /// <summary>
         /// Raise all async events in paralell without throwing
@@ -523,25 +623,46 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
-            onException = onException ?? OnEventException;
-            var tasks = new ValueTask[lc];
-            for (int i = 0; i < lc; i++)
+            if (lc == 1)
             {
-                async ValueTask Fn()
+                try
                 {
-                    try
-                    {
-                        await ((Func<A0, A1, A2, Task>)l[i])(a0, a1, a2).ConfigureAwait(false);
-                    }
-                    catch (Exception e)
-                    {
-                        onException(e);
-                    }
+                    await ((Func<A0, A1, A2, Task>)l[0])(a0, a1, a2).ConfigureAwait(false);
                 }
-                tasks[i] = Fn();
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+                return;
             }
-            await WhenAll(tasks).ConfigureAwait(false);
+            onException = onException ?? OnEventException;
+            var tasks = ArrayPool<ValueTask>.Shared.Rent(lc);
+            try
+            {
+                for (int i = 0; i < lc; i++)
+                {
+                    var del = (Func<A0, A1, A2, Task>)l[i];
+                    async ValueTask Fn()
+                    {
+                        try
+                        {
+                            await del(a0, a1, a2).ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            onException(e);
+                        }
+                    }
+                    tasks[i] = Fn();
+                }
+                await WhenAll(tasks, lc).ConfigureAwait(false);
+            }
+            finally
+            {
+                ArrayPool<ValueTask>.Shared.Return(tasks);
+            }
         }
+
 
         /// <summary>
         /// Raise all async events in paralell without throwing
@@ -561,25 +682,46 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
-            onException = onException ?? OnEventException;
-            var tasks = new ValueTask[lc];
-            for (int i = 0; i < lc; i++)
+            if (lc == 1)
             {
-                async ValueTask Fn()
+                try
                 {
-                    try
-                    {
-                        await ((Func<A0, A1, A2, A3, Task>)l[i])(a0, a1, a2, a3).ConfigureAwait(false);
-                    }
-                    catch (Exception e)
-                    {
-                        onException(e);
-                    }
+                    await ((Func<A0, A1, A2, A3, Task>)l[0])(a0, a1, a2, a3).ConfigureAwait(false);
                 }
-                tasks[i] = Fn();
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+                return;
             }
-            await WhenAll(tasks).ConfigureAwait(false);
+            onException = onException ?? OnEventException;
+            var tasks = ArrayPool<ValueTask>.Shared.Rent(lc);
+            try
+            {
+                for (int i = 0; i < lc; i++)
+                {
+                    var del = (Func<A0, A1, A2, A3, Task>)l[i];
+                    async ValueTask Fn()
+                    {
+                        try
+                        {
+                            await del(a0, a1, a2, a3).ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            onException(e);
+                        }
+                    }
+                    tasks[i] = Fn();
+                }
+                await WhenAll(tasks, lc).ConfigureAwait(false);
+            }
+            finally
+            {
+                ArrayPool<ValueTask>.Shared.Return(tasks);
+            }
         }
+
 
         #endregion//Async
 
@@ -591,6 +733,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="eventHandlers"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask RaiseEvents(this Func<ValueTask> eventHandlers)
             => RaiseEvents(eventHandlers, OnEventException);
 
@@ -601,6 +744,7 @@ namespace SysWeaver
         /// <param name="eventHandlers"></param>
         /// <param name="a0">Action argument 0</param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask RaiseEvents<A0>(this Func<A0, ValueTask> eventHandlers, A0 a0)
             => RaiseEvents(eventHandlers, OnEventException, a0);
 
@@ -612,6 +756,7 @@ namespace SysWeaver
         /// <param name="a0">Action argument 0</param>
         /// <param name="a1">Action argument 1</param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask RaiseEvents<A0, A1>(this Func<A0, A1, ValueTask> eventHandlers, A0 a0, A1 a1)
             => RaiseEvents(eventHandlers, OnEventException, a0, a1);
 
@@ -624,6 +769,7 @@ namespace SysWeaver
         /// <param name="a1">Action argument 1</param>
         /// <param name="a2">Action argument 2</param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask RaiseEvents<A0, A1, A2>(this Func<A0, A1, A2, ValueTask> eventHandlers, A0 a0, A1 a1, A2 a2)
             => RaiseEvents(eventHandlers, OnEventException, a0, a1, a2);
 
@@ -636,6 +782,7 @@ namespace SysWeaver
         /// <param name="a2">Action argument 2</param>
         /// <param name="a3">Action argument 3</param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ValueTask RaiseEvents<A0, A1, A2, A3>(this Func<A0, A1, A2, A3, ValueTask> eventHandlers, A0 a0, A1 a1, A2 a2, A3 a3)
             => RaiseEvents(eventHandlers, OnEventException, a0, a1, a2, a3);
 
@@ -655,24 +802,44 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
-            onException = onException ?? OnEventException;
-            var tasks = new ValueTask[lc];
-            for (int i = 0; i < lc; i++)
+            if (lc == 1)
             {
-                async ValueTask Fn()
+                try
                 {
-                    try
-                    {
-                        await ((Func<ValueTask>)l[i])().ConfigureAwait(false);
-                    }
-                    catch (Exception e)
-                    {
-                        onException(e);
-                    }
+                    await ((Func<ValueTask>)l[0])().ConfigureAwait(false);
                 }
-                tasks[i] = Fn();
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+                return;
             }
-            await WhenAll(tasks).ConfigureAwait(false);
+            onException = onException ?? OnEventException;
+            var tasks = ArrayPool<ValueTask>.Shared.Rent(lc);
+            try
+            {
+                for (int i = 0; i < lc; i++)
+                {
+                    var del = (Func<ValueTask>)l[i];
+                    async ValueTask Fn()
+                    {
+                        try
+                        {
+                            await del().ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            onException(e);
+                        }
+                    }
+                    tasks[i] = Fn();
+                }
+                await WhenAll(tasks, lc).ConfigureAwait(false);
+            }
+            finally
+            {
+                ArrayPool<ValueTask>.Shared.Return(tasks);
+            }
         }
 
         /// <summary>
@@ -690,24 +857,44 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
-            onException = onException ?? OnEventException;
-            var tasks = new ValueTask[lc];
-            for (int i = 0; i < lc; i++)
+            if (lc == 1)
             {
-                async ValueTask Fn()
+                try
                 {
-                    try
-                    {
-                        await ((Func<A0, ValueTask>)l[i])(a0).ConfigureAwait(false);
-                    }
-                    catch (Exception e)
-                    {
-                        onException(e);
-                    }
+                    await ((Func<A0, ValueTask>)l[0])(a0).ConfigureAwait(false);
                 }
-                tasks[i] = Fn();
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+                return;
             }
-            await WhenAll(tasks).ConfigureAwait(false);
+            onException = onException ?? OnEventException;
+            var tasks = ArrayPool<ValueTask>.Shared.Rent(lc);
+            try
+            {
+                for (int i = 0; i < lc; i++)
+                {
+                    var del = (Func<A0, ValueTask>)l[i];
+                    async ValueTask Fn()
+                    {
+                        try
+                        {
+                            await del(a0).ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            onException(e);
+                        }
+                    }
+                    tasks[i] = Fn();
+                }
+                await WhenAll(tasks, lc).ConfigureAwait(false);
+            }
+            finally
+            {
+                ArrayPool<ValueTask>.Shared.Return(tasks);
+            }
         }
 
         /// <summary>
@@ -726,24 +913,44 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
-            onException = onException ?? OnEventException;
-            var tasks = new ValueTask[lc];
-            for (int i = 0; i < lc; i++)
+            if (lc == 1)
             {
-                async ValueTask Fn()
+                try
                 {
-                    try
-                    {
-                        await ((Func<A0, A1, ValueTask>)l[i])(a0, a1).ConfigureAwait(false);
-                    }
-                    catch (Exception e)
-                    {
-                        onException(e);
-                    }
+                    await ((Func<A0, A1, ValueTask>)l[0])(a0, a1).ConfigureAwait(false);
                 }
-                tasks[i] = Fn();
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+                return;
             }
-            await WhenAll(tasks).ConfigureAwait(false);
+            onException = onException ?? OnEventException;
+            var tasks = ArrayPool<ValueTask>.Shared.Rent(lc);
+            try
+            {
+                for (int i = 0; i < lc; i++)
+                {
+                    var del = (Func<A0, A1, ValueTask>)l[i];
+                    async ValueTask Fn()
+                    {
+                        try
+                        {
+                            await del(a0, a1).ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            onException(e);
+                        }
+                    }
+                    tasks[i] = Fn();
+                }
+                await WhenAll(tasks, lc).ConfigureAwait(false);
+            }
+            finally
+            {
+                ArrayPool<ValueTask>.Shared.Return(tasks);
+            }
         }
 
         /// <summary>
@@ -763,24 +970,44 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
-            onException = onException ?? OnEventException;
-            var tasks = new ValueTask[lc];
-            for (int i = 0; i < lc; i++)
+            if (lc == 1)
             {
-                async ValueTask Fn()
+                try
                 {
-                    try
-                    {
-                        await ((Func<A0, A1, A2, ValueTask>)l[i])(a0, a1, a2).ConfigureAwait(false);
-                    }
-                    catch (Exception e)
-                    {
-                        onException(e);
-                    }
+                    await ((Func<A0, A1, A2, ValueTask>)l[0])(a0, a1, a2).ConfigureAwait(false);
                 }
-                tasks[i] = Fn();
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+                return;
             }
-            await WhenAll(tasks).ConfigureAwait(false);
+            onException = onException ?? OnEventException;
+            var tasks = ArrayPool<ValueTask>.Shared.Rent(lc);
+            try
+            {
+                for (int i = 0; i < lc; i++)
+                {
+                    var del = (Func<A0, A1, A2, ValueTask>)l[i];
+                    async ValueTask Fn()
+                    {
+                        try
+                        {
+                            await del(a0, a1, a2).ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            onException(e);
+                        }
+                    }
+                    tasks[i] = Fn();
+                }
+                await WhenAll(tasks, lc).ConfigureAwait(false);
+            }
+            finally
+            {
+                ArrayPool<ValueTask>.Shared.Return(tasks);
+            }
         }
 
         /// <summary>
@@ -801,24 +1028,44 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
-            onException = onException ?? OnEventException;
-            var tasks = new ValueTask[lc];
-            for (int i = 0; i < lc; i++)
+            if (lc == 1)
             {
-                async ValueTask Fn()
+                try
                 {
-                    try
-                    {
-                        await ((Func<A0, A1, A2, A3, ValueTask>)l[i])(a0, a1, a2, a3).ConfigureAwait(false);
-                    }
-                    catch (Exception e)
-                    {
-                        onException(e);
-                    }
+                    await ((Func<A0, A1, A2, A3, ValueTask>)l[0])(a0, a1, a2, a3).ConfigureAwait(false);
                 }
-                tasks[i] = Fn();
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+                return;
             }
-            await WhenAll(tasks).ConfigureAwait(false);
+            onException = onException ?? OnEventException;
+            var tasks = ArrayPool<ValueTask>.Shared.Rent(lc);
+            try
+            {
+                for (int i = 0; i < lc; i++)
+                {
+                    var del = (Func<A0, A1, A2, A3, ValueTask>)l[i];
+                    async ValueTask Fn()
+                    {
+                        try
+                        {
+                            await del(a0, a1, a2, a3).ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            onException(e);
+                        }
+                    }
+                    tasks[i] = Fn();
+                }
+                await WhenAll(tasks, lc).ConfigureAwait(false);
+            }
+            finally
+            {
+                ArrayPool<ValueTask>.Shared.Return(tasks);
+            }
         }
 
         #endregion// AsyncValue
@@ -829,6 +1076,7 @@ namespace SysWeaver
         /// Raise all events without throwing
         /// </summary>
         /// <param name="eventHandlers"></param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void RaiseEvents(this Action eventHandlers)
             => RaiseEvents(eventHandlers, OnEventException);
 
@@ -838,6 +1086,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="eventHandlers"></param>
         /// <param name="a0">Action argument 0</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void RaiseEvents<A0>(this Action<A0> eventHandlers, A0 a0)
             => RaiseEvents(eventHandlers, OnEventException, a0);
 
@@ -848,6 +1097,7 @@ namespace SysWeaver
         /// <param name="eventHandlers"></param>
         /// <param name="a0">Action argument 0</param>
         /// <param name="a1">Action argument 1</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void RaiseEvents<A0, A1>(this Action<A0, A1> eventHandlers, A0 a0, A1 a1)
             => RaiseEvents(eventHandlers, OnEventException, a0, a1);
 
@@ -859,6 +1109,7 @@ namespace SysWeaver
         /// <param name="a0">Action argument 0</param>
         /// <param name="a1">Action argument 1</param>
         /// <param name="a2">Action argument 2</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void RaiseEvents<A0, A1, A2>(this Action<A0, A1, A2> eventHandlers, A0 a0, A1 a1, A2 a2)
             => RaiseEvents(eventHandlers, OnEventException, a0, a1, a2);
 
@@ -871,6 +1122,7 @@ namespace SysWeaver
         /// <param name="a1">Action argument 1</param>
         /// <param name="a2">Action argument 2</param>
         /// <param name="a3">Action argument 3</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void RaiseEvents<A0, A1, A2, A3>(this Action<A0, A1, A2, A3> eventHandlers, A0 a0, A1 a1, A2 a2, A3 a3)
             => RaiseEvents(eventHandlers, OnEventException, a0, a1, a2, a3);
 
@@ -1133,14 +1385,13 @@ namespace SysWeaver
 
 
 
-        /////////////////
-        ///
 
 
         /// <summary>
         /// Creates a task that will complete when all of the supplied tasks have completed.
         /// </summary>
         /// <param name="tasks">The tasks to wait on for completion.</param>
+        /// <param name="count">The number of tasks to wait for, less than zero will wait for all tasks in the array</param>
         /// <returns>A task that represents the completion of all of the supplied tasks.</returns>
         /// <remarks>
         /// <para>
@@ -1165,13 +1416,17 @@ namespace SysWeaver
         /// The <paramref name="tasks"/> array contained a null task.
         /// </exception>
         public static async ValueTask WhenAll(
-            IReadOnlyList<ValueTask> tasks)
+            IReadOnlyList<ValueTask> tasks, int count = -1)
         {
             ArgumentNullException.ThrowIfNull(tasks);
-            var tl = tasks.Count;
+            var tl = count >= 0 ? count : tasks.Count;
             if (tl <= 0)
                 return;
-
+            if (tl == 1)
+            {
+                await tasks[0].ConfigureAwait(false);
+                return;
+            }
             // We don't allocate the list if no task throws
             List<Exception> exceptions = null;
             for (var i = 0; i < tl; i++)
@@ -1181,12 +1436,13 @@ namespace SysWeaver
                 }
                 catch (Exception ex)
                 {
-                    exceptions ??= new(tl);
+                    exceptions ??= new(tl - i);
                     exceptions.Add(ex);
                 }
             if (exceptions != null)
                 throw new AggregateException(exceptions);
         }
+
 
         /// <summary>
         /// Creates a task that will complete when all of the supplied tasks have completed.
