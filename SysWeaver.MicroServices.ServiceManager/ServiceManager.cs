@@ -16,6 +16,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Auth;
+using System.Runtime.InteropServices;
 
 namespace SysWeaver.MicroService
 {
@@ -71,11 +72,24 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Run as  a command line application
         /// </summary>
-        /// <param name="runBeforeRegister"></param>
-        /// <param name="restartFn"></param>
+        /// <param name="name">Optional application name</param>
+        /// <param name="runBeforeRegister">Optional method to call before registering services</param>
         /// <returns></returns>
-        public static async ValueTask Run(Action<ServiceManager> runBeforeRegister = null, Action<ServiceManager> restartFn = null)
+        public static async ValueTask Run(String name = null, Action<ServiceManager> runBeforeRegister = null)
         {
+            Console.WriteLine();
+            SysWeaverLogo.Draw();
+            name = name ?? EnvInfo.AppName;
+            if (!String.IsNullOrEmpty(name))
+            {
+                Console.WriteLine();
+                Console.Write("This is the ");
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.Write(name);
+                Console.ResetColor();
+                Console.WriteLine(" application.");
+            }
+            Console.WriteLine();
             var a = new AsyncSignal();
             ServiceManager s = null;
             void Msg(String t)
@@ -101,12 +115,30 @@ namespace SysWeaver.MicroService
                 Msg("Application break requested");
                 a.Raise();
             };
-            using (var sm = new ServiceManager(true, runBeforeRegister, restartFn))
+            void onAbort(PosixSignalContext sig)
+            {
+                sig.Cancel = true;
+                if (a.IsRaised)
+                    return;
+                Msg("Got Posix signal " + sig.Signal);
+                a.Raise();
+            }
+
+            using (PosixSignalRegistration.Create(PosixSignal.SIGINT, onAbort))
+            using (PosixSignalRegistration.Create(PosixSignal.SIGHUP, onAbort))
+            using (PosixSignalRegistration.Create(PosixSignal.SIGQUIT, onAbort))
+            using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, onAbort))
+
+            using (var sm = new ServiceManager(true, runBeforeRegister))
             {
                 s = sm;
                 await a.Wait().ConfigureAwait(false);
                 s = null;
             }
+            Console.ResetColor();
+            Console.WriteLine("All services disposed.");
+            Console.WriteLine();
+            SysWeaverLogo.RenderAvGradient();
         }
 
         public ServiceManager(bool registerFromManifestFile = true, Action<ServiceManager> runBeforeRegister = null, Action<ServiceManager> restartFn = null) : base()
