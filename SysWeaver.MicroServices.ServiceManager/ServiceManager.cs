@@ -68,6 +68,46 @@ namespace SysWeaver.MicroService
 
         public readonly DateTime ConfigLastWriteTimeUtc;
 
+        /// <summary>
+        /// Run as  a command line application
+        /// </summary>
+        /// <param name="runBeforeRegister"></param>
+        /// <param name="restartFn"></param>
+        /// <returns></returns>
+        public static async ValueTask Run(Action<ServiceManager> runBeforeRegister = null, Action<ServiceManager> restartFn = null)
+        {
+            var a = new AsyncSignal();
+            ServiceManager s = null;
+            void Msg(String t)
+            {
+                if (s == null)
+                    Console.WriteLine(t);
+                else
+                    s.AddMessage(t, MessageLevels.Warning);
+            }
+
+            AppDomain.CurrentDomain.ProcessExit += (sender, e) =>
+            {
+                if (a.IsRaised)
+                    return;
+                Msg("ProcessExit requested");
+                a.Raise();
+            };
+            Console.CancelKeyPress += (sender, e) =>
+            {
+                e.Cancel = true;
+                if (a.IsRaised)
+                    return;
+                Msg("Application break requested");
+                a.Raise();
+            };
+            using (var sm = new ServiceManager(true, runBeforeRegister, restartFn))
+            {
+                s = sm;
+                await a.Wait().ConfigureAwait(false);
+                s = null;
+            }
+        }
 
         public ServiceManager(bool registerFromManifestFile = true, Action<ServiceManager> runBeforeRegister = null, Action<ServiceManager> restartFn = null) : base()
         {
