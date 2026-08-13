@@ -14,19 +14,32 @@ namespace SysWeaver.Compression
         const int MaxCompressOverHead = 32;
         const int InititalGuess = 1024;
 
+        const int MaxStackAlloc = 8192;
+
         /// <summary>
         /// Get compressed data
         /// </summary>
         /// <param name="c">The compression encoder</param>
         /// <param name="from">The memory to read uncompressed data from</param>
         /// <param name="level">The compression level to use</param>
-        /// <param name="trim">The returned memory is trimnmed, this is useful for long living object to reduce memory usage</param>
+        /// <param name="trim">The returned memory is trimmed, this is useful for long living object to reduce memory usage</param>
         /// <returns>The compressed data</returns>
         public static Memory<Byte> GetCompressed(this ICompEncoder c, ReadOnlySpan<Byte> from, CompEncoderLevels level, bool trim = false)
         {
-            var mem = ArrayPoolStream.Rent(from.Length + MaxCompressOverHead);
-            var s = c.Compress(from, mem, level);
-            return GetMem(mem, s, trim);
+            var size = from.Length + MaxCompressOverHead;
+            if (size <= MaxStackAlloc)
+            {
+                Span<Byte> mem = stackalloc Byte[size];
+                var s = c.Compress(from, mem, level);
+                var d = GC.AllocateUninitializedArray<Byte>(s);
+                mem[..s].CopyTo(d.AsSpan());
+                return d;
+            }
+            else {
+                var mem = ArrayPoolStream.Rent(size);
+                var s = c.Compress(from, mem, level);
+                return GetMem(mem, s, trim);
+            }
 
         }
 
@@ -36,27 +49,42 @@ namespace SysWeaver.Compression
         /// <param name="c">The compression encoder</param>
         /// <param name="from">The stream to read the uncompressed data from</param>
         /// <param name="level">The compression level to use</param>
-        /// <param name="trim">The returned memory is trimnmed, this is useful for long living object to reduce memory usage</param>
+        /// <param name="trim">The returned memory is trimmed, this is useful for long living object to reduce memory usage</param>
         /// <returns>The compressed data</returns>
         public static Memory<Byte> GetCompressed(this ICompEncoder c, Stream from, CompEncoderLevels level, bool trim = false)
         {
-            Byte[] mem = null;
+            int size = 0;
             try
             {
                 if (from.CanSeek)
-                    mem = ArrayPoolStream.Rent((int)from.Length + MaxCompressOverHead);
+                    size = (int)from.Length + MaxCompressOverHead;
             }
             catch
             {
             }
-            if (mem != null)
+            if (size > 0)
             {
-                var s = c.Compress(from, mem, level);
-                return GetMem(mem, s, trim);
+                if (size <= MaxStackAlloc)
+                {
+                    Span<Byte> mem = stackalloc Byte[size];
+                    var s = c.Compress(from, mem, level);
+                    var d = GC.AllocateUninitializedArray<Byte>(s);
+                    mem[..s].CopyTo(d.AsSpan());
+                    return d;
+                }
+                else
+                {
+                    var mem = ArrayPoolStream.Rent(size);
+                    var s = c.Compress(from, mem, level);
+                    return GetMem(mem, s, trim);
+                }
             }
-            using var ms = new ArrayPoolStream(InititalGuess);
-            c.Compress(from, ms, level);
-            return GetMem(ms, trim);
+            else
+            {
+                using var ms = new ArrayPoolStream(InititalGuess);
+                c.Compress(from, ms, level);
+                return GetMem(ms, trim);
+            }
         }
 
         /// <summary>
@@ -65,7 +93,7 @@ namespace SysWeaver.Compression
         /// <param name="c">The compression encoder</param>
         /// <param name="from">The stream to read the uncompressed data from</param>
         /// <param name="level">The compression level to use</param>
-        /// <param name="trim">The returned memory is trimnmed, this is useful for long living object to reduce memory usage</param>
+        /// <param name="trim">The returned memory is trimmed, this is useful for long living object to reduce memory usage</param>
         /// <returns>The compressed data</returns>
         public static async ValueTask<Memory<Byte>> GetCompressedAsync(this ICompEncoder c, Stream from, CompEncoderLevels level, bool trim = false)
         {
@@ -103,8 +131,6 @@ namespace SysWeaver.Compression
             len <<= 3;
             return len < 65536 ? 65536 : len;
         }
-
-
 
         /// <summary>
         /// Get compressed data

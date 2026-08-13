@@ -8,6 +8,8 @@ using System.Buffers;
 using System.Collections.Frozen;
 
 using CompStream = System.IO.Compression.BrotliStream;
+using Decoder = System.IO.Compression.BrotliDecoder;
+using Encoder = System.IO.Compression.BrotliEncoder;
 
 
 using System.Threading.Tasks;
@@ -179,13 +181,11 @@ namespace SysWeaver.Compression
 
         public int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level)
         {
-            using var t = new BrotliEncoder(Quality[(int)level], EncoderWindow);
-            var ret = t.Compress(from, to, out var consumed, out var written, true);
 #if DEBUG
-            if (ret != OperationStatus.Done)
-                throw new Exception("Failed to compress: " + ret);
-            if (consumed != from.Length)
-                throw new Exception("Consumed length " + consumed + " is not eqaul to input length " + from.Length);
+            if (!Encoder.TryCompress(from, to, out var written, Quality[(int)level], EncoderWindow))
+                throw new Exception("Failed to compress!");
+#else//DEBUG
+            Encoder.TryCompress(from, to, out var written, Quality[(int)level], EncoderWindow);
 #endif//DEBUG
             return written;
         }
@@ -339,14 +339,8 @@ namespace SysWeaver.Compression
 
         public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to)
         {
-            using var dec = new BrotliDecoder();
-            var ret = dec.Decompress(from, to, out var consumed, out var written);
-            if (ret != OperationStatus.Done)
-                throw new Exception("Failed to decompress: " + ret);
-#if DEBUG
-            if (consumed != from.Length)
-                throw new Exception("Failed to decompressm consumed " + consumed + " bytes from the source of " + from.Length + " bytes!");
-#endif//DEBUG
+            if (!Decoder.TryDecompress(from, to, out var written))
+                throw new Exception("Failed to decompress!");
             return written;
         }
 

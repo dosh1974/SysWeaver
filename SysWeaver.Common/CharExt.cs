@@ -3,6 +3,8 @@ using System.Globalization;
 
 namespace SysWeaver
 {
+
+
     public static class CharExt
     {
 

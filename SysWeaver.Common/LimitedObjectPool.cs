@@ -135,4 +135,8 @@ namespace SysWeaver
         readonly Func<Action<T>, T> Creator;
         readonly Action<T> Disposer;
     }
+
+
+
+
 }

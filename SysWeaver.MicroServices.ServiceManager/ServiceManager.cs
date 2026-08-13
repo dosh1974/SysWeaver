@@ -77,117 +77,145 @@ namespace SysWeaver.MicroService
         /// <returns></returns>
         public static async ValueTask Run(String name = null, Action<ServiceManager> runBeforeRegister = null)
         {
-            Console.WriteLine();
-            SysWeaverLogo.Draw();
-            name = name ?? EnvInfo.AppName;
-            if (!String.IsNullOrEmpty(name))
-            {
-                Console.WriteLine();
-                Console.Write("This is the ");
-                Console.ForegroundColor = ConsoleColor.White;
-                Console.Write(name);
-                Console.ResetColor();
-                Console.WriteLine(" application.");
-            }
-            Console.WriteLine();
+            var setProgress = ConsoleTools.SetProgress;
             var a = new AsyncSignal();
-            ServiceManager s = null;
-            void Msg(String t)
+            try
             {
-                if (s == null)
-                    Console.WriteLine(t);
-                else
-                    s.AddMessage(t, MessageLevels.Warning);
-            }
+                setProgress(ConsoleProgressDisplays.Indeterminate, 0);
+                Console.WriteLine();
+                SysWeaverLogo.Draw();
+                name = name ?? EnvInfo.AppName;
+                if (!String.IsNullOrEmpty(name))
+                {
+                    Console.WriteLine();
+                    Console.Write("This is the ");
+                    Console.ForegroundColor = ConsoleColor.White;
+                    Console.Write(name);
+                    Console.ResetColor();
+                    Console.WriteLine(" application.");
+                }
+                Console.WriteLine();
+                ServiceManager s = null;
+                void Msg(String t)
+                {
+                    if (s == null)
+                        Console.WriteLine(t);
+                    else
+                        s.AddMessage(t, MessageLevels.Warning);
+                }
 
-            AppDomain.CurrentDomain.ProcessExit += (sender, e) =>
-            {
-                if (a.IsRaised)
-                    return;
-                Msg("ProcessExit requested");
-                a.Raise();
-            };
-            Console.CancelKeyPress += (sender, e) =>
-            {
-                e.Cancel = true;
-                if (a.IsRaised)
-                    return;
-                Msg("Application break requested");
-                a.Raise();
-            };
-            void onAbort(PosixSignalContext sig)
-            {
-                sig.Cancel = true;
-                if (a.IsRaised)
-                    return;
-                Msg("Got Posix signal " + sig.Signal);
-                a.Raise();
-            }
+                AppDomain.CurrentDomain.ProcessExit += (sender, e) =>
+                {
+                    if (a.IsRaised)
+                        return;
+                    Msg("ProcessExit requested");
+                    a.Raise();
+                };
+                Console.CancelKeyPress += (sender, e) =>
+                {
+                    e.Cancel = true;
+                    if (a.IsRaised)
+                        return;
+                    Msg("Application break requested");
+                    a.Raise();
+                };
+                void onAbort(PosixSignalContext sig)
+                {
+                    sig.Cancel = true;
+                    if (a.IsRaised)
+                        return;
+                    Msg("Got Posix signal " + sig.Signal);
+                    a.Raise();
+                }
 
-            using (PosixSignalRegistration.Create(PosixSignal.SIGINT, onAbort))
-            using (PosixSignalRegistration.Create(PosixSignal.SIGHUP, onAbort))
-            using (PosixSignalRegistration.Create(PosixSignal.SIGQUIT, onAbort))
-            using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, onAbort))
+                using (PosixSignalRegistration.Create(PosixSignal.SIGINT, onAbort))
+                using (PosixSignalRegistration.Create(PosixSignal.SIGHUP, onAbort))
+                using (PosixSignalRegistration.Create(PosixSignal.SIGQUIT, onAbort))
+                using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, onAbort))
 
-            using (var sm = new ServiceManager(true, runBeforeRegister))
-            {
-                s = sm;
-                await a.Wait().ConfigureAwait(false);
-                s = null;
+                using (var sm = new ServiceManager(true, runBeforeRegister))
+                {
+                    s = sm;
+                    setProgress(ConsoleProgressDisplays.Disabled, 0);
+                    await a.Wait().ConfigureAwait(false);
+                    s = null;
+                }
+                setProgress(ConsoleProgressDisplays.Disabled, 0);
             }
-            Console.ResetColor();
-            Console.WriteLine("All services disposed.");
-            Console.WriteLine();
-            SysWeaverLogo.RenderAvGradient();
+            catch
+            {
+                a.Raise();
+                setProgress(ConsoleProgressDisplays.Error, 100);
+            }
+            finally
+            {
+                Console.ResetColor();
+                Console.WriteLine("All services disposed.");
+                Console.WriteLine();
+                SysWeaverLogo.RenderAvGradient();
+                Console.ResetColor();
+            }
         }
 
         public ServiceManager(bool registerFromManifestFile = true, Action<ServiceManager> runBeforeRegister = null, Action<ServiceManager> restartFn = null) : base()
         {
             using var perfMon = PerfMon.Track("Constructor");
-
-            HostRestart = restartFn;
-            if (Debugger.IsAttached)
+            try
             {
+                ShowProgress = registerFromManifestFile;
+                HostRestart = restartFn;
+                if (Debugger.IsAttached)
+                {
 #if DEBUG
-                var mh = DebugMessageHandler.GetSync(Message.TextStyles.Debug);
+                    var mh = DebugMessageHandler.GetSync(Message.TextStyles.Debug);
 #else////DEBUG
                 var mh = DebugMessageHandler.GetAsync(Message.TextStyles.Verbose);
 #endif//DEBUG
-                //DisposeOnExit.Push(mh);
-                //AddHandler(mh);
-                Register(mh);
-            }
-            if (EnvInfo.HaveConsole)
-            {
+                    //DisposeOnExit.Push(mh);
+                    //AddHandler(mh);
+                    Register(mh);
+                }
+                if (ConsoleTools.IsConsoleAvailable)
+                {
 #if DEBUG
-                var mh = ConsoleMessageHandler.GetSync(ConsoleMessageHandler.Styles.Debug);
+                    var mh = ConsoleMessageHandler.GetSync(ConsoleMessageHandler.Styles.Debug);
 #else//DEBUG
                 var mh = ConsoleMessageHandler.GetAsync(ConsoleMessageHandler.Styles.Verbose);
 #endif//DEBUG
-                //DisposeOnExit.Push(mh);
-                //AddHandler(mh);
-                Register(mh);
-            }
-            AppDomain.CurrentDomain.UnhandledException += UnhandledException;
-            runBeforeRegister?.Invoke(this);
-            if (registerFromManifestFile)
-            {
-                var fn = GetManifestFileName();
-                if (fn != null)
+                    //DisposeOnExit.Push(mh);
+                    //AddHandler(mh);
+                    Register(mh);
+                }
+                AppDomain.CurrentDomain.UnhandledException += UnhandledException;
+                runBeforeRegister?.Invoke(this);
+                if (registerFromManifestFile)
                 {
-                    var fi = new FileInfo(fn);
-                    if (fi.Exists)
+                    var fn = GetManifestFileName();
+                    if (fn != null)
                     {
-                        ConfigLastWriteTimeUtc = fi.LastWriteTimeUtc;
-                        ManifestFileName = fn;
-                        RegisterManifestFile(fn);
+                        var fi = new FileInfo(fn);
+                        if (fi.Exists)
+                        {
+                            ConfigLastWriteTimeUtc = fi.LastWriteTimeUtc;
+                            ManifestFileName = fn;
+                            RegisterManifestFile(fn, true, ShowProgress);
+                            if (ShowProgress)
+                                ConsoleTools.SetProgress(ConsoleProgressDisplays.Indeterminate, 0);
+                        }
                     }
                 }
+                AddMessage("Platform tools: " + PlatformTools.Current.Name);
+                PruneTask = new PeriodicTask(Prune, 2000);
+                OnCreated.RaiseEvents();
             }
-            AddMessage("Platform tools: " + PlatformTools.Current.Name);
-            PruneTask = new PeriodicTask(Prune, 2000);
-            OnCreated.RaiseEvents();
+            catch
+            {
+                Dispose();
+                throw;
+            }
         }
+
+        readonly bool ShowProgress;
 
         public ConfigEntry[] ReadManifest(String file = null)
         {
@@ -264,13 +292,18 @@ namespace SysWeaver.MicroService
 
         public void Dispose()
         {
+            var setProgress = ConsoleTools.SetProgress;
             Interlocked.Exchange(ref PruneTask, null)?.Dispose();
             AddMessage(Tag + " Unregistering and disposing owned services:");
             using (Tab())
             {
                 var k = Instances.OrderByDescending(x => x.Value.Order).Select(x => x.Key).ToList();
+                var kl = k.Count + 1;
+                var p = kl;
                 foreach (var i in k)
                 {
+                    --p;
+                    setProgress(ConsoleProgressDisplays.Normal, (100 * p) / kl);
                     if (!Instances.ContainsKey(i))
                         continue;
                     ServiceInfo info = null;
@@ -296,6 +329,7 @@ namespace SysWeaver.MicroService
                     }
                 }
             }
+            setProgress(ConsoleProgressDisplays.Indeterminate, 0);
             AddMessage(Tag + " Disposing internals");
             using (Tab())
             {
@@ -704,7 +738,7 @@ namespace SysWeaver.MicroService
         /// <param name="manifest"></param>
         /// <param name="filename"></param>
         /// <param name="trackPerf"></param>
-        public void RegisterManifest(String manifest, String filename = null, bool trackPerf = true)
+        public void RegisterManifest(String manifest, String filename = null, bool trackPerf = true, bool showProgress = false)
         {
             using var perfMon = (trackPerf && !String.IsNullOrEmpty(filename)) ? PerfMon.Track("Register." + Path.GetFileName(filename)) : null;
             ServiceManifest[] mf;
@@ -720,10 +754,16 @@ namespace SysWeaver.MicroService
                     AddMessage(String.Concat(Tag, " Failed to parse manifest file ", filename.ToFilename()), ex);
                 throw;
             }
+            var l = mf.Length + 1;
+            var s = ConsoleTools.SetProgress;
+            int p = 0;
             foreach (var m in mf)
             {
+                ++p;
+                s(ConsoleProgressDisplays.Normal, (p * 100) / l);
                 RegisterManifest(m);
             }
+            s(ConsoleProgressDisplays.Normal, 100);
         }
 
 
@@ -734,7 +774,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="file">The name of the file</param>
         /// <param name="trackPerf"></param>
-        public void RegisterManifestFile(String file, bool trackPerf = true)
+        public void RegisterManifestFile(String file, bool trackPerf = true, bool showProgress = false)
         {
             using var perfMon = trackPerf ? PerfMon.Track("Register." + Path.GetFileName(file)) : null;
             AddMessage(Tag + " Registering services from file \"" + file + "\":");

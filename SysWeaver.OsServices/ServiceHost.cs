@@ -205,6 +205,7 @@ namespace SysWeaver.OsServices
                 Console.WriteLine("Invalid user name!");
                 Console.WriteLine("Must be atleast one character!");
                 Console.ResetColor();
+                ConsoleTools.SetProgress(ConsoleProgressDisplays.Error, 100);
                 Environment.Exit(0);
                 return 0;
             }
@@ -216,6 +217,7 @@ namespace SysWeaver.OsServices
                 Console.WriteLine(pe);
                 Console.WriteLine(AuthTools.PasswordRules);
                 Console.ResetColor();
+                ConsoleTools.SetProgress(ConsoleProgressDisplays.Error, 100);
                 Environment.Exit(0);
                 return 0;
             }
@@ -228,6 +230,7 @@ namespace SysWeaver.OsServices
             Console.ForegroundColor = ConsoleColor.White;
             Console.WriteLine(AuthTools.ComputeSimplePasswordHash(user, password));
             Console.ResetColor();
+            ConsoleTools.SetProgress(ConsoleProgressDisplays.Disabled, 0);
             Environment.Exit(1);
             return 1;
         }
@@ -637,8 +640,10 @@ namespace SysWeaver.OsServices
         /// <exception cref="NotImplementedException"></exception>
         public static int Run(ServiceParams p = null, Action<ServiceManager> onStart = null)
         {
+            var setProgress = ConsoleTools.SetProgress;
             try
             {
+                setProgress(ConsoleProgressDisplays.Indeterminate, 0);
                 p = p ?? new ServiceParams();
                 var name = p.Name;
                 if (String.IsNullOrEmpty(name))
@@ -683,6 +688,7 @@ namespace SysWeaver.OsServices
                             }
                             catch (Exception ex)
                             {
+                                setProgress(ConsoleProgressDisplays.Error, 100);
                                 Console.ForegroundColor = ConsoleColor.Yellow;
                                 Console.WriteLine("Failed to create service manager instance for type: \"" + dtype.FullName + "\", exception: " + ex);
                                 Console.ResetColor();
@@ -690,12 +696,14 @@ namespace SysWeaver.OsServices
                         }
                         else
                         {
+                            setProgress(ConsoleProgressDisplays.Error, 100);
                             Console.ForegroundColor = ConsoleColor.Yellow;
                             Console.WriteLine("Service manager type \"" + dtype.FullName + "\" doesn't implement the expected \"" + typeof(IServiceHostFactory).FullName + "\" interface!");
                             Console.ResetColor();
                         }
                     }else
                     {
+                        setProgress(ConsoleProgressDisplays.Error, 100);
                         Console.ForegroundColor = ConsoleColor.Yellow;
                         Console.WriteLine("The type: \"" + dname + "\" can't be found!");
                         Console.ResetColor();
@@ -703,6 +711,7 @@ namespace SysWeaver.OsServices
                 }
                 catch (Exception ex)
                 {
+                    setProgress(ConsoleProgressDisplays.Error, 100);
                     Console.ForegroundColor = ConsoleColor.Yellow;
                     Console.WriteLine("Failed to load service manager type: \"" + dname + "\", exception: " + ex);
                     Console.ResetColor();
@@ -713,7 +722,7 @@ namespace SysWeaver.OsServices
                 var al = args.Length;
                 if (al <= 1)
                 {
-                    if (EnvInfo.HaveConsole)
+                    if (ConsoleTools.IsConsoleAvailable)
                         verb = ServiceVerbs.Help;
                     else
                         verb = ServiceVerbs.Start;
@@ -722,6 +731,7 @@ namespace SysWeaver.OsServices
                 {
                     if (!Verbs.TryGetValue(args[1].FastToLower(), out verb))
                     {
+                        setProgress(ConsoleProgressDisplays.Error, 100);
                         Console.WriteLine("Invalid command: " + Environment.CommandLine.ToQuoted());
                         return Usage(p, ServiceResponse.InvalidCommad, serviceManager);
                     }
@@ -729,6 +739,7 @@ namespace SysWeaver.OsServices
                     expectedCount += 2;
                     if (al != expectedCount)
                     {
+                        setProgress(ConsoleProgressDisplays.Error, 100);
                         Console.WriteLine("Invalid command: " + Environment.CommandLine.ToQuoted());
                         return Usage(p, ServiceResponse.ToManyArgs, serviceManager);
                     }
@@ -737,6 +748,7 @@ namespace SysWeaver.OsServices
                 {
                     if (RequireServiceHost.Contains(verb))
                     {
+                        setProgress(ConsoleProgressDisplays.Error, 100);
                         Header(p, serviceManager);
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine();
@@ -768,9 +780,10 @@ namespace SysWeaver.OsServices
                         break;
                     case ServiceVerbs.Hash:
                         Hash(p, serviceManager, args[2], args[3]);
+                        setProgress(ConsoleProgressDisplays.Disabled, 0);
                         return (int)ServiceResponse.Ok;
-
                     case ServiceVerbs.Help:
+                        setProgress(ConsoleProgressDisplays.Disabled, 0);
                         Usage(p, 0, serviceManager);
                         return (int)ServiceResponse.Ok;
                     case ServiceVerbs.Execute:
@@ -819,11 +832,11 @@ namespace SysWeaver.OsServices
                                 Console.WriteLine("..cancelled!");
                                 Console.WriteLine("'Esc' pressed, shutting down.");
                                 Console.ResetColor();
+                                setProgress(ConsoleProgressDisplays.Disabled, 0);
                                 return 0;
                             }
 
                         }
-
                         header = null;
                         onResponse = null;
                         forceElevation = p.NeedToRunElevated;
@@ -841,11 +854,11 @@ namespace SysWeaver.OsServices
                                 Console.WriteLine("All services disposed.");
                                 Console.WriteLine();
                                 SysWeaverLogo.RenderAvGradient();
+                                setProgress(ConsoleProgressDisplays.Disabled, 0);
                                 if (restart)
                                     DoRestart(verb);
                                 Environment.Exit((int)ServiceResponse.Ok);
                             }
-
 
                             int didAbort = 0;
                             void Restart(ServiceManager sm)
@@ -863,106 +876,113 @@ namespace SysWeaver.OsServices
                             }
                             if (p.AutoRecover)
                                 WatchFaultyManifest(() => DoRestart(verb));
-                            using (var manager = new ServiceManager(true, sm =>
+                            try
                             {
-                                sm.AcceptMessageAbove = verb == ServiceVerbs.Debug ? MessageLevels.All : MessageLevels.Debug;
-                            }, Restart))
-                            {
-                                onStart?.Invoke(manager);
-                                Console.ForegroundColor = ConsoleColor.Cyan;
-                                manager.AddMessage("Press 'Esc' to exit.");
-                                Console.ResetColor();
-                                bool consoleAlive = true;
-
-                                Action<PosixSignalContext> onAbort = c =>
+                                using (var manager = new ServiceManager(true, sm =>
                                 {
-                                    if (Interlocked.CompareExchange(ref didAbort, 1, 0) != 0)
-                                        return;
-                                    if (consoleAlive)
-                                    {
-                                        using (var s = Console.OpenStandardInput())
-                                            s.Write([27, 10, 13]);
-                                    }
-                                    c.Cancel = true;
-                                    Console.ForegroundColor = ConsoleColor.Yellow;
-                                    manager.AddMessage("Got " + c.Signal + ", shutting down.");
+                                    sm.AcceptMessageAbove = verb == ServiceVerbs.Debug ? MessageLevels.All : MessageLevels.Debug;
+                                }, Restart))
+                                {
+                                    onStart?.Invoke(manager);
+                                    Console.ForegroundColor = ConsoleColor.Cyan;
+                                    manager.AddMessage("Press 'Esc' to exit.");
+                                    setProgress(ConsoleProgressDisplays.Disabled, 0);
                                     Console.ResetColor();
-                                    Shutdown(manager);
-                                };
+                                    bool consoleAlive = true;
 
-
-                                void onPauseKey()
-                                {
-                                    if (manager.IsPaused)
+                                    Action<PosixSignalContext> onAbort = c =>
                                     {
-                                        manager.AddMessage("'Space' pressed, resuming");
-                                        manager.Resume();
-                                    }
-                                    else
-                                    {
+                                        if (Interlocked.CompareExchange(ref didAbort, 1, 0) != 0)
+                                            return;
+                                        if (consoleAlive)
+                                        {
+                                            using (var s = Console.OpenStandardInput())
+                                                s.Write([27, 10, 13]);
+                                        }
+                                        c.Cancel = true;
                                         Console.ForegroundColor = ConsoleColor.Yellow;
-                                        manager.AddMessage("'Space' pressed, pausing");
+                                        manager.AddMessage("Got " + c.Signal + ", shutting down.");
                                         Console.ResetColor();
-                                        manager.Pause();
-                                        Console.ForegroundColor = ConsoleColor.Cyan;
-                                        manager.AddMessage("Press 'Space' to resume");
-                                        Console.ResetColor();
-                                    }
-                                }
+                                        Shutdown(manager);
+                                    };
 
-                                Console.CancelKeyPress += (o, s) =>
-                                {
-                                    consoleAlive = false;
-                                    onAbort(new PosixSignalContext(PosixSignal.SIGINT));
-                                };
 
-                                AppDomain.CurrentDomain.ProcessExit += (o, s) =>
-                                {
-                                    onAbort(new PosixSignalContext(PosixSignal.SIGQUIT));
-                                };
-
-                                
-
-                                using (PosixSignalRegistration.Create(PosixSignal.SIGINT, onAbort))
-                                using (PosixSignalRegistration.Create(PosixSignal.SIGHUP, onAbort))
-                                using (PosixSignalRegistration.Create(PosixSignal.SIGQUIT, onAbort))
-                                using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, onAbort))
-                                {
-                                    if (Console.IsInputRedirected)
+                                    void onPauseKey()
                                     {
-                                        for (; ; )
+                                        if (manager.IsPaused)
                                         {
-                                            var c = Console.Read();
-                                            if ((c == 27) || (c < 0))
-                                                break;
-                                            if (c == 32)
-                                                onPauseKey();
+                                            manager.AddMessage("'Space' pressed, resuming");
+                                            manager.Resume();
+                                        }
+                                        else
+                                        {
+                                            Console.ForegroundColor = ConsoleColor.Yellow;
+                                            manager.AddMessage("'Space' pressed, pausing");
+                                            Console.ResetColor();
+                                            manager.Pause();
+                                            Console.ForegroundColor = ConsoleColor.Cyan;
+                                            manager.AddMessage("Press 'Space' to resume");
+                                            Console.ResetColor();
                                         }
                                     }
-                                    else
+
+                                    Console.CancelKeyPress += (o, s) =>
                                     {
-                                        for (; ; )
+                                        consoleAlive = false;
+                                        onAbort(new PosixSignalContext(PosixSignal.SIGINT));
+                                    };
+
+                                    AppDomain.CurrentDomain.ProcessExit += (o, s) =>
+                                    {
+                                        onAbort(new PosixSignalContext(PosixSignal.SIGQUIT));
+                                    };
+
+
+
+                                    using (PosixSignalRegistration.Create(PosixSignal.SIGINT, onAbort))
+                                    using (PosixSignalRegistration.Create(PosixSignal.SIGHUP, onAbort))
+                                    using (PosixSignalRegistration.Create(PosixSignal.SIGQUIT, onAbort))
+                                    using (PosixSignalRegistration.Create(PosixSignal.SIGTERM, onAbort))
+                                    {
+                                        if (Console.IsInputRedirected)
                                         {
-                                            var c = Console.ReadKey(true).Key;
-                                            if (c == ConsoleKey.Escape)
-                                                break;
-                                            if (c == ConsoleKey.Spacebar)
-                                                onPauseKey();
+                                            for (; ; )
+                                            {
+                                                var c = Console.Read();
+                                                if ((c == 27) || (c < 0))
+                                                    break;
+                                                if (c == 32)
+                                                    onPauseKey();
+                                            }
+                                        }
+                                        else
+                                        {
+                                            for (; ; )
+                                            {
+                                                var c = Console.ReadKey(true).Key;
+                                                if (c == ConsoleKey.Escape)
+                                                    break;
+                                                if (c == ConsoleKey.Spacebar)
+                                                    onPauseKey();
+                                            }
                                         }
                                     }
+                                    if (Interlocked.CompareExchange(ref didAbort, 1, 0) != 0)
+                                        Thread.Sleep(60000);
+                                    Console.ForegroundColor = ConsoleColor.Yellow;
+                                    manager.AddMessage("'Esc' pressed, shutting down.");
+                                    Console.ResetColor();
                                 }
-                                if (Interlocked.CompareExchange(ref didAbort, 1, 0) != 0)
-                                    Thread.Sleep(60000);
-                                Console.ForegroundColor = ConsoleColor.Yellow;
-                                manager.AddMessage("'Esc' pressed, shutting down.");
-                                Console.ResetColor();
                             }
-                            Console.ResetColor();
-                            Console.WriteLine("All services disposed.");
-                            Console.WriteLine();
-                            SysWeaverLogo.RenderAvGradient();
-                            if (restart)
-                                DoRestart(verb);
+                            finally
+                            {
+                                Console.ResetColor();
+                                Console.WriteLine("All services disposed.");
+                                Console.WriteLine();
+                                SysWeaverLogo.RenderAvGradient();
+                                if (restart)
+                                    DoRestart(verb);
+                            }
                             return (int)ServiceResponse.Ok;
                         };
                         break;
@@ -1025,9 +1045,13 @@ namespace SysWeaver.OsServices
                     }
                 }
                 onResponse?.Invoke(c);
+                setProgress(ConsoleProgressDisplays.Disabled, 0);
                 return c;
-
-
+            }
+            catch
+            {
+                setProgress(ConsoleProgressDisplays.Error, 100);
+                return (int)ServiceResponse.GenericError;
             }
             finally
             {

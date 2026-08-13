@@ -23,14 +23,6 @@ namespace SysWeaver
     public static class EnvInfo
     {
 
-
-        /// <summary>
-        /// True if the process is running with a console window
-        /// </summary>
-        public static readonly bool HaveConsole = Console.LargestWindowWidth > 0;
-
-
-
         static String GetHostExecutable()
         {
             var t = Process.GetCurrentProcess()?.MainModule?.FileName;
