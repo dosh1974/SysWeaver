@@ -3027,13 +3027,16 @@ namespace SysWeaver.Net
             var firewallRules = FirewallRules;
             if (firewallRules != null)
             {
-                var msg = Msg;
-                msg?.AddMessage(Prefix + "Deleting firewall rules");
-                using (msg?.Tab())
+                if (firewallRules.Count > 0)
                 {
-                    var firewallHandler = FirewallHandler;
-                    while (firewallRules.TryPop(out var rule))
-                        firewallHandler.Remove(rule, msg, Prefix);
+                    var msg = Msg;
+                    msg?.AddMessage(Prefix + "Deleting firewall rules");
+                    using (msg?.Tab())
+                    {
+                        var firewallHandler = FirewallHandler;
+                        while (firewallRules.TryPop(out var rule))
+                            firewallHandler.Remove(rule, msg, Prefix);
+                    }
                 }
             }
             Interlocked.Exchange(ref SvgFaviconBitmapRenderer, null)?.Dispose();
