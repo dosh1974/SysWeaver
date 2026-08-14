@@ -23,6 +23,39 @@ namespace SysWeaver
         public static readonly Action<ConsoleProgressDisplays, int> SetProgress;
 
 
+        public static ConsoleColor ForegroundColor
+        {
+            get => IsAnsiConsoleAvailable ? InternalForegroundColor : Console.ForegroundColor;
+            set
+            {
+                InternalForegroundColor = value;
+                if (IsAnsiConsoleAvailable)
+                    Console.ForegroundColor = value;
+            }
+        }
+        static ConsoleColor InternalForegroundColor = ConsoleColor.White;
+
+
+        public static ConsoleColor BackgroundColor
+        {
+            get => IsAnsiConsoleAvailable ? InternalBackgroundColor : Console.BackgroundColor;
+            set
+            {
+                InternalBackgroundColor = value;
+                if (IsAnsiConsoleAvailable)
+                    Console.BackgroundColor = value;
+            }
+        }
+        static ConsoleColor InternalBackgroundColor = ConsoleColor.Black;
+
+
+        public static void ResetColor()
+        {
+            InternalBackgroundColor = ConsoleColor.Black;
+            InternalForegroundColor = ConsoleColor.White;
+            if (IsAnsiConsoleAvailable)
+                Console.ResetColor();
+        }
 
         static ConsoleTools()
         {
@@ -62,23 +95,21 @@ namespace SysWeaver
 
         static bool SupportsAnsi()
         {
-            // 1. Om utmatningen är omdirigerad (t.ex. till en fil) ska ANSI döljas
             if (Console.IsOutputRedirected)
                 return false;
 
-            // 2. Följ industristandarden NO_COLOR (https://no-color.org)
             if (Environment.GetEnvironmentVariable("NO_COLOR") != null)
                 return false;
 
-            // 3. Plattformsspecifik logik
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 return CheckAndEnableWindowsAnsi();
             }
             else
             {
-                // Unix/Linux/macOS använder nästan alltid ANSI, såvida inte TERM=dumb
-                string? term = Environment.GetEnvironmentVariable("TERM");
+                if (Environment.ProcessId == 1) // Running inside docker container or similar, no terminal available
+                    return false;
+                var term = Environment.GetEnvironmentVariable("TERM");
                 return term != null && term.ToLower() != "dumb";
             }
         }

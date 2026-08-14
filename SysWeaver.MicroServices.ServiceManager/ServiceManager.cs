@@ -89,9 +89,9 @@ namespace SysWeaver.MicroService
                 {
                     Console.WriteLine();
                     Console.Write("This is the ");
-                    Console.ForegroundColor = ConsoleColor.White;
+                    ConsoleTools.ForegroundColor = ConsoleColor.White;
                     Console.Write(name);
-                    Console.ResetColor();
+                    ConsoleTools.ResetColor();
                     Console.WriteLine(" application.");
                 }
                 Console.WriteLine();
@@ -149,11 +149,11 @@ namespace SysWeaver.MicroService
             }
             finally
             {
-                Console.ResetColor();
+                ConsoleTools.ResetColor();
                 Console.WriteLine("All services disposed.");
                 Console.WriteLine();
                 SysWeaverLogo.RenderAvGradient();
-                Console.ResetColor();
+                ConsoleTools.ResetColor();
             }
         }
 

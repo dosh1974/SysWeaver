@@ -83,7 +83,7 @@ namespace SysWeaver
         public static void RenderColor(String[] text, String[] color, IReadOnlyDictionary<Char, ConsoleColor> palette, String tab = "")
         {
             var h = text.Length;
-            var orgc = Console.ForegroundColor;
+            var orgc = ConsoleTools.ForegroundColor;
             for (int y = 0; y < h; ++y)
             {
                 Console.Write(tab);
@@ -104,21 +104,21 @@ namespace SysWeaver
                         current = col;
                         continue;
                     }
-                    Console.ForegroundColor = current;
+                    ConsoleTools.ForegroundColor = current;
                     Console.Write(t.Substring(s, e - s));
                     s = e;
                     current = col;
                 }
                 if (e != s)
                 {
-                    Console.ForegroundColor = current;
+                    ConsoleTools.ForegroundColor = current;
                     Console.WriteLine(t.Substring(s, e - s));
                 }
                 else
                 {
                     Console.WriteLine();
                 }
-                Console.ForegroundColor = orgc;
+                ConsoleTools.ForegroundColor = orgc;
             }
         }
 
@@ -193,7 +193,6 @@ namespace SysWeaver
         {
             StringBuilder stringBuilder = new StringBuilder();
             var h = text.Length;
-            var orgc = Console.ForegroundColor;
             var beginOpen = "<" + tag + " style='color:";
             var endOpen  = "'>";
             var close = "</" + tag + ">";

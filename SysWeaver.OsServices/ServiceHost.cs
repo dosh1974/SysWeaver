@@ -87,33 +87,33 @@ namespace SysWeaver.OsServices
             if (p.Name == p.DisplayName)
             {
                 Console.Write("This is the ");
-                Console.ForegroundColor = ConsoleColor.White;
+                ConsoleTools.ForegroundColor = ConsoleColor.White;
                 Console.Write(p.Name);
-                Console.ResetColor();
+                ConsoleTools.ResetColor();
                 Console.Write(" service");
             }else
             {
-                Console.ForegroundColor = ConsoleColor.Magenta;
+                ConsoleTools.ForegroundColor = ConsoleColor.Magenta;
                 Console.Write(p.DisplayName);
-                Console.ResetColor();
+                ConsoleTools.ResetColor();
                 Console.Write(" [");
-                Console.ForegroundColor = ConsoleColor.White;
+                ConsoleTools.ForegroundColor = ConsoleColor.White;
                 Console.Write(p.Name);
-                Console.ResetColor();
+                ConsoleTools.ResetColor();
                 Console.Write(" service]");
             }
             var desc = p.Description;
             if (!String.IsNullOrEmpty(desc))
             {
                 Console.WriteLine(":");
-                Console.ForegroundColor = ConsoleColor.DarkYellow;
+                ConsoleTools.ForegroundColor = ConsoleColor.DarkYellow;
                 Console.WriteLine(desc);
-                Console.ResetColor();
+                ConsoleTools.ResetColor();
             }
             else
             {
                 Console.WriteLine(".");
-                Console.ResetColor();
+                ConsoleTools.ResetColor();
             }
             if (serviceHost != null)
             {
@@ -134,9 +134,9 @@ namespace SysWeaver.OsServices
                 return false;
             Header(p, serviceHost);
             Console.WriteLine();
-            Console.ForegroundColor = ConsoleColor.Cyan;
+            ConsoleTools.ForegroundColor = ConsoleColor.Cyan;
             Console.Write(action);
-            Console.ResetColor();
+            ConsoleTools.ResetColor();
             return true;
         }
 
@@ -154,24 +154,24 @@ namespace SysWeaver.OsServices
                 }
             }
             Console.WriteLine();
-            Console.ForegroundColor = ConsoleColor.Gray;
+            ConsoleTools.ForegroundColor = ConsoleColor.Gray;
             Console.Write("Use: ");
-            Console.ForegroundColor = ConsoleColor.White;
+            ConsoleTools.ForegroundColor = ConsoleColor.White;
             Console.Write(Path.GetFileName(EnvInfo.Executable).ToQuoted());
-            Console.ForegroundColor = ConsoleColor.Yellow;
+            ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine(" [Command]");
             Console.Write("[Command]");
-            Console.ForegroundColor = ConsoleColor.Gray;
+            ConsoleTools.ForegroundColor = ConsoleColor.Gray;
             Console.WriteLine(" is one of the following:");
             void item(string cmd, string text)
             {
-                Console.ForegroundColor = ConsoleColor.Yellow;
+                ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                 Console.Write("  " + cmd);
                 var space = new String(' ', Math.Max(0, 12 - cmd.Length));
                 Console.Write(space);
-                Console.ForegroundColor = ConsoleColor.Gray;
+                ConsoleTools.ForegroundColor = ConsoleColor.Gray;
                 Console.Write(" = ");
-                Console.ForegroundColor = ConsoleColor.White;
+                ConsoleTools.ForegroundColor = ConsoleColor.White;
                 Console.WriteLine(text);
             }
             item("help", "this text.");
@@ -187,7 +187,7 @@ namespace SysWeaver.OsServices
             item("execute", "run as a command line program.");
             item("debug", "run as a command line program with more verbose output.");
             item("hash [user] [password]", "compute and display a simple password hash.");
-            Console.ResetColor();
+            ConsoleTools.ResetColor();
             var ci = (int)i;
             Environment.Exit(ci);
             return ci;
@@ -201,10 +201,10 @@ namespace SysWeaver.OsServices
             password = password?.Trim();
             if (String.IsNullOrEmpty(user))
             {
-                Console.ForegroundColor = ConsoleColor.Red;
+                ConsoleTools.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine("Invalid user name!");
                 Console.WriteLine("Must be atleast one character!");
-                Console.ResetColor();
+                ConsoleTools.ResetColor();
                 ConsoleTools.SetProgress(ConsoleProgressDisplays.Error, 100);
                 Environment.Exit(0);
                 return 0;
@@ -212,24 +212,24 @@ namespace SysWeaver.OsServices
             var pe = AuthTools.ValidatePassword(password);
             if (pe != null)
             {
-                Console.ForegroundColor = ConsoleColor.Red;
+                ConsoleTools.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine("Invalid password!");
                 Console.WriteLine(pe);
                 Console.WriteLine(AuthTools.PasswordRules);
-                Console.ResetColor();
+                ConsoleTools.ResetColor();
                 ConsoleTools.SetProgress(ConsoleProgressDisplays.Error, 100);
                 Environment.Exit(0);
                 return 0;
             }
-            Console.ForegroundColor = ConsoleColor.Gray;
+            ConsoleTools.ForegroundColor = ConsoleColor.Gray;
             Console.Write("Hash: ");
-            Console.ForegroundColor = ConsoleColor.Yellow;
+            ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
             Console.Write(user);
-            Console.ForegroundColor = ConsoleColor.Gray;
+            ConsoleTools.ForegroundColor = ConsoleColor.Gray;
             Console.Write(":");
-            Console.ForegroundColor = ConsoleColor.White;
+            ConsoleTools.ForegroundColor = ConsoleColor.White;
             Console.WriteLine(AuthTools.ComputeSimplePasswordHash(user, password));
-            Console.ResetColor();
+            ConsoleTools.ResetColor();
             ConsoleTools.SetProgress(ConsoleProgressDisplays.Disabled, 0);
             Environment.Exit(1);
             return 1;
@@ -239,19 +239,19 @@ namespace SysWeaver.OsServices
         {
             ServiceResponse r = (ServiceResponse)code;
             if (r <= 0)
-                Console.ForegroundColor = ConsoleColor.Red;
+                ConsoleTools.ForegroundColor = ConsoleColor.Red;
             else
-                Console.ForegroundColor = ConsoleColor.Green;
+                ConsoleTools.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine(r.Text());
-            Console.ResetColor();
+            ConsoleTools.ResetColor();
         }
 
         static void WriteStatus(int code)
         {
             ServiceStatus r = (ServiceStatus)code;
-            Console.ForegroundColor = ConsoleColor.Yellow;
+            ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine(r.Text());
-            Console.ResetColor();
+            ConsoleTools.ResetColor();
         }
 
         static int Reinstall(IServiceHost serviceManager)
@@ -689,32 +689,32 @@ namespace SysWeaver.OsServices
                             catch (Exception ex)
                             {
                                 setProgress(ConsoleProgressDisplays.Error, 100);
-                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                                 Console.WriteLine("Failed to create service manager instance for type: \"" + dtype.FullName + "\", exception: " + ex);
-                                Console.ResetColor();
+                                ConsoleTools.ResetColor();
                             }
                         }
                         else
                         {
                             setProgress(ConsoleProgressDisplays.Error, 100);
-                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                             Console.WriteLine("Service manager type \"" + dtype.FullName + "\" doesn't implement the expected \"" + typeof(IServiceHostFactory).FullName + "\" interface!");
-                            Console.ResetColor();
+                            ConsoleTools.ResetColor();
                         }
                     }else
                     {
                         setProgress(ConsoleProgressDisplays.Error, 100);
-                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                         Console.WriteLine("The type: \"" + dname + "\" can't be found!");
-                        Console.ResetColor();
+                        ConsoleTools.ResetColor();
                     }
                 }
                 catch (Exception ex)
                 {
                     setProgress(ConsoleProgressDisplays.Error, 100);
-                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                     Console.WriteLine("Failed to load service manager type: \"" + dname + "\", exception: " + ex);
-                    Console.ResetColor();
+                    ConsoleTools.ResetColor();
                 }
 
                 ServiceVerbs verb = ServiceVerbs.None;
@@ -750,11 +750,11 @@ namespace SysWeaver.OsServices
                     {
                         setProgress(ConsoleProgressDisplays.Error, 100);
                         Header(p, serviceManager);
-                        Console.ForegroundColor = ConsoleColor.Red;
+                        ConsoleTools.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine();
                         Console.WriteLine("Couldn't find a service system for this OS (" + Environment.OSVersion.Platform + ").");
                         Console.WriteLine("Expected a " + nameof(IServiceHostFactory).ToQuoted() + " type implementation named " + dname.ToQuoted());
-                        Console.ResetColor();
+                        ConsoleTools.ResetColor();
                         return (int)ServiceResponse.UnhandledOs;
                     }
                 }
@@ -797,41 +797,41 @@ namespace SysWeaver.OsServices
                             var l = procs.Length;
                             if (l <= 0)
                             {
-                                Console.ForegroundColor = ConsoleColor.Red;
+                                ConsoleTools.ForegroundColor = ConsoleColor.Red;
                                 Console.WriteLine("No process named " + procName.ToQuoted() + " found?!");
-                                Console.ResetColor();
+                                ConsoleTools.ResetColor();
                                 break;
                             }
                             if (l == 1)
                             {
                                 if (i > 0)
                                 {
-                                    Console.ForegroundColor = ConsoleColor.Green;
+                                    ConsoleTools.ForegroundColor = ConsoleColor.Green;
                                     Console.WriteLine(".done!");
-                                    Console.ResetColor();
+                                    ConsoleTools.ResetColor();
                                 }
                                 break;
                             }
                             if (i == 0)
                             {
-                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                                 Console.Write("Multiple processes named " + procName.ToQuoted() + " found, waiting for other process to close..");
-                                Console.ResetColor();
+                                ConsoleTools.ResetColor();
                             }
                             Thread.Sleep(10);
                             if (DateTime.UtcNow > giveUpAt)
                             {
-                                Console.ForegroundColor = ConsoleColor.Red;
+                                ConsoleTools.ForegroundColor = ConsoleColor.Red;
                                 Console.WriteLine(".gave up after " + timeOutSeconds + " seconds!");
-                                Console.ResetColor();
+                                ConsoleTools.ResetColor();
                                 break;
                             }
                             if (Console.KeyAvailable && (Console.ReadKey(true).Key == ConsoleKey.Escape))
                             {
-                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                                 Console.WriteLine("..cancelled!");
                                 Console.WriteLine("'Esc' pressed, shutting down.");
-                                Console.ResetColor();
+                                ConsoleTools.ResetColor();
                                 setProgress(ConsoleProgressDisplays.Disabled, 0);
                                 return 0;
                             }
@@ -850,7 +850,7 @@ namespace SysWeaver.OsServices
                             void Shutdown(ServiceManager manager)
                             {
                                 manager.Dispose();
-                                Console.ResetColor();
+                                ConsoleTools.ResetColor();
                                 Console.WriteLine("All services disposed.");
                                 Console.WriteLine();
                                 SysWeaverLogo.RenderAvGradient();
@@ -865,12 +865,12 @@ namespace SysWeaver.OsServices
                             {
                                 if (Interlocked.CompareExchange(ref didAbort, 1, 0) != 0)
                                     return;
-                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                                 if (sm == null)
                                     Console.WriteLine("Restart process requested.");
                                 else
                                     sm.AddMessage("Restart process requested.");
-                                Console.ResetColor();
+                                ConsoleTools.ResetColor();
                                 restart = true;
                                 Shutdown(sm);
                             }
@@ -884,10 +884,10 @@ namespace SysWeaver.OsServices
                                 }, Restart))
                                 {
                                     onStart?.Invoke(manager);
-                                    Console.ForegroundColor = ConsoleColor.Cyan;
+                                    ConsoleTools.ForegroundColor = ConsoleColor.Cyan;
                                     manager.AddMessage("Press 'Esc' to exit.");
                                     setProgress(ConsoleProgressDisplays.Disabled, 0);
-                                    Console.ResetColor();
+                                    ConsoleTools.ResetColor();
                                     bool consoleAlive = true;
 
                                     Action<PosixSignalContext> onAbort = c =>
@@ -900,9 +900,9 @@ namespace SysWeaver.OsServices
                                                 s.Write([27, 10, 13]);
                                         }
                                         c.Cancel = true;
-                                        Console.ForegroundColor = ConsoleColor.Yellow;
+                                        ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                                         manager.AddMessage("Got " + c.Signal + ", shutting down.");
-                                        Console.ResetColor();
+                                        ConsoleTools.ResetColor();
                                         Shutdown(manager);
                                     };
 
@@ -916,13 +916,13 @@ namespace SysWeaver.OsServices
                                         }
                                         else
                                         {
-                                            Console.ForegroundColor = ConsoleColor.Yellow;
+                                            ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                                             manager.AddMessage("'Space' pressed, pausing");
-                                            Console.ResetColor();
+                                            ConsoleTools.ResetColor();
                                             manager.Pause();
-                                            Console.ForegroundColor = ConsoleColor.Cyan;
+                                            ConsoleTools.ForegroundColor = ConsoleColor.Cyan;
                                             manager.AddMessage("Press 'Space' to resume");
-                                            Console.ResetColor();
+                                            ConsoleTools.ResetColor();
                                         }
                                     }
 
@@ -969,14 +969,14 @@ namespace SysWeaver.OsServices
                                     }
                                     if (Interlocked.CompareExchange(ref didAbort, 1, 0) != 0)
                                         Thread.Sleep(60000);
-                                    Console.ForegroundColor = ConsoleColor.Yellow;
+                                    ConsoleTools.ForegroundColor = ConsoleColor.Yellow;
                                     manager.AddMessage("'Esc' pressed, shutting down.");
-                                    Console.ResetColor();
+                                    ConsoleTools.ResetColor();
                                 }
                             }
                             finally
                             {
-                                Console.ResetColor();
+                                ConsoleTools.ResetColor();
                                 Console.WriteLine("All services disposed.");
                                 Console.WriteLine();
                                 SysWeaverLogo.RenderAvGradient();
@@ -1055,7 +1055,7 @@ namespace SysWeaver.OsServices
             }
             finally
             {
-                Console.ResetColor();
+                ConsoleTools.ResetColor();
             }
         }
 

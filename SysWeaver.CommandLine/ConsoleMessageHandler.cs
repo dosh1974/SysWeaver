@@ -60,6 +60,7 @@ namespace SysWeaver
 
         ConsoleMessageHandler(Styles style, bool monoChrome, Modes mode) : base(mode)
         {
+            monoChrome |= !ConsoleTools.IsAnsiConsoleAvailable;
             Style = style;
             Monochrome = monoChrome;
             DefaultForeground = Console.ForegroundColor;
@@ -68,7 +69,7 @@ namespace SysWeaver
         public override void Dispose()
         {
             base.Dispose();
-            Console.ResetColor();
+            ConsoleTools.ResetColor();
         }
 
 

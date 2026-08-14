@@ -17,41 +17,13 @@ namespace SysWeaver
         /// </summary>
         public static void Draw(ConsoleColor bright = ConsoleColor.Green, ConsoleColor dark = ConsoleColor.DarkGreen, ConsoleColor poweredBy = ConsoleColor.Cyan)
         {
-            var oldC = Console.ForegroundColor;
-            Console.ForegroundColor = poweredBy;
+            var oldC = ConsoleTools.ForegroundColor;
+            ConsoleTools.ForegroundColor = poweredBy;
             Console.WriteLine("                                   Powered by");
             Console.WriteLine();
             RenderLogo(bright, dark);
-            Console.ForegroundColor = oldC;
-
-            /*
-            var a = Arts;
-            var l = a.Length;
-            var oldC = Console.ForegroundColor;
-            var cols = Colors;
-            var colSize = cols.Length;
-            for (int i = 0; i < l; ++i)
-            {
-                Console.ForegroundColor = cols[i];
-                Console.WriteLine(a[i]);
-            }
-            Console.ForegroundColor = oldC; 
-            */
+            ConsoleTools.ForegroundColor = oldC;
         }
-
-        /*
-
-
-        /// <summary>
-        /// Draw the logo as monochrome (using the current color)
-        /// </summary>
-        public static void DrawMono()
-        {
-            foreach (var l in Arts)
-                Console.WriteLine(l);
-        }
-
-        */
 
         static readonly ConsoleColor[] Colors =
         [
