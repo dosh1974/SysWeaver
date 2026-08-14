@@ -2,6 +2,7 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -764,6 +765,36 @@ namespace SysWeaver.Net
         readonly ConcurrentDictionary<String, ValueTuple<int, String>> Redirects = new (StringComparer.Ordinal);
         StringTree RedirectTree = new StringTree();
 
+
+        static async ValueTask<IHttpRequestHandler> CheckModule(IReadOnlyList<IHttpServerModule> modules, HttpServerRequest data, IHttpServerModule ignoreThis)
+        {
+            var moduleLen = modules.Count;
+            for (int mi = 0; mi < moduleLen; ++mi)
+            {
+                var module = modules[mi];
+                if (module == ignoreThis)
+                    continue;
+                var a = module.AsyncHandler;
+                IHttpRequestHandler t;
+                if (a != null)
+                {
+                    t = await a(data).ConfigureAwait(false);
+                }
+                else
+                {
+                    t = module.Handler(data);
+                }
+                if (t != null)
+                    return t;
+            }
+            return null;
+
+        }
+
+        static readonly Func<IReadOnlyList<IHttpServerModule>, HttpServerRequest, IHttpServerModule, ValueTask<IHttpRequestHandler>> CheckModuleAsync = CheckModule;
+
+
+
         async ValueTask<IHttpRequestHandler> GetHandler(HttpServerRequest data, IHttpServerModule ignoreThis = null)
         {
             var pm = PerfMon;
@@ -773,6 +804,10 @@ namespace SysWeaver.Net
             if (prefixes != null)
             {
                 var local = data.LocalUrl;
+/*                var t = await prefixes.EnumPrefixesOf(local, CheckModuleAsync, data, ignoreThis).ConfigureAwait(false);
+                if (t != null)
+                    return t;
+*/
                 var prefixModules = prefixes.PrefixesOf(local);
                 var prefixModuleLen = prefixModules.Count;
                 for (int pmi = 0; pmi < prefixModuleLen; ++ pmi)
@@ -784,7 +819,7 @@ namespace SysWeaver.Net
                         var module = modules[mi];
                         if (module == ignoreThis)
                             continue;
-                        using var __ = pm.Track(n + module.Name);
+                        //using var __ = pm.Track(n + module.Name);
                         IHttpRequestHandler t;
                         var a = module.AsyncHandler;
                         if (a != null)
@@ -807,7 +842,7 @@ namespace SysWeaver.Net
                 var module = orderedMods[mi];
                 if (module == ignoreThis)
                     continue;
-                using var __ = pm.Track(n + module.Name);
+//                using var __ = pm.Track(n + module.Name);
                 IHttpRequestHandler t;
                 var a = module.AsyncHandler;
                 if (a != null)
@@ -2504,7 +2539,14 @@ namespace SysWeaver.Net
 
         public unsafe HttpServerHostInfo GetHost(out String prefix, out int queryStart, out bool didIndex, ref String url)
         {
-            url = HttpUtility.UrlDecode(url);
+#if DEBUG
+            var xxx = HttpUtility.UrlDecode(url);
+#endif//DEBUG
+            //url = HttpUtility.UrlDecode(url);
+            url = HttpServerTools.UrlDecode(url);
+#if DEBUG
+            Debug.Assert(xxx.FastEquals(url));
+#endif//DEBUG
             didIndex = false;
             var urlSpan = url.AsSpan();
             var urlLen = urlSpan.Length;

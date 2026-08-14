@@ -1,6 +1,9 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Data.SqlTypes;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -415,10 +418,327 @@ namespace SysWeaver.Net
         }
 
 
+        // Cached delegate: allocated once per type load, not per UrlDecode call.
+        static readonly SpanAction<char, string> s_urlDecodeAction = UrlDecodeToSpan;
+
+        /// <summary>
+        /// Allocation-free, except for the final string created by string.Create.
+        /// Mimics HttpUtility.UrlDecode(string) using UTF-8 percent-decoding.
+        /// </summary>
+        public static string UrlDecode(string value)
+        {
+            if (value is null)
+                return null;
+
+            if (value.Length == 0)
+                return value;
+
+            // ------------------------------------------------------------------
+            // First pass:
+            // Dry run. No destination span. Only counts the decoded UTF-16 length
+            // and determines whether any decoding is actually needed.
+            // ------------------------------------------------------------------
+            var counter = new Utf8UrlDecoder(Span<char>.Empty, dryRun: true);
+            bool needsDecoding = false;
+
+            Process(value, ref counter, ref needsDecoding);
+
+            int decodedLength = counter.Length;
+
+            if (!needsDecoding)
+            {
+                Debug.Assert(decodedLength == value.Length);
+                return value;
+            }
+
+            // ------------------------------------------------------------------
+            // Second pass:
+            // Allocate only the resulting string and decode into its span.
+            // ------------------------------------------------------------------
+            return string.Create(decodedLength, value, s_urlDecodeAction);
+        }
+
+        static void UrlDecodeToSpan(Span<char> destination, string source)
+        {
+            var writer = new Utf8UrlDecoder(destination, dryRun: false);
+            bool unused = false;
+
+            Process(source, ref writer, ref unused);
+
+            Debug.Assert(writer.Length == destination.Length);
+        }
+
+        static void Process(string source, ref Utf8UrlDecoder decoder, ref bool needsDecoding)
+        {
+            int i = 0;
+            int length = source.Length;
+
+            while (i < length)
+            {
+                char c = source[i];
+
+                // HttpUtility.UrlDecode decodes '+' to space.
+                if (c == '+')
+                {
+                    needsDecoding = true;
+                    decoder.AddByte((byte)' ');
+                    i++;
+                    continue;
+                }
+
+                if (c == '%')
+                {
+                    // ------------------------------------------------------------
+                    // Legacy %uXXXX support.
+                    // Remove this block if you only want strict RFC 3986 %XX.
+                    // ------------------------------------------------------------
+                    if (i + 6 <= length)
+                    {
+                        char maybeU = source[i + 1];
+
+                        if (maybeU == 'u' || maybeU == 'U')
+                        {
+                            int h1 = HexToInt(source[i + 2]);
+                            int h2 = HexToInt(source[i + 3]);
+                            int h3 = HexToInt(source[i + 4]);
+                            int h4 = HexToInt(source[i + 5]);
+
+                            if (h1 >= 0 && h2 >= 0 && h3 >= 0 && h4 >= 0)
+                            {
+                                needsDecoding = true;
+
+                                int codeUnit = (h1 << 12) | (h2 << 8) | (h3 << 4) | h4;
+                                decoder.AddUtf16CodeUnit((char)codeUnit);
+
+                                i += 6;
+                                continue;
+                            }
+                        }
+                    }
+
+                    // ------------------------------------------------------------
+                    // Normal %XX percent-encoding.
+                    // ------------------------------------------------------------
+                    if (i + 3 <= length)
+                    {
+                        int hi = HexToInt(source[i + 1]);
+                        int lo = HexToInt(source[i + 2]);
+
+                        if (hi >= 0 && lo >= 0)
+                        {
+                            needsDecoding = true;
+
+                            byte b = (byte)((hi << 4) | lo);
+                            decoder.AddByte(b);
+
+                            i += 3;
+                            continue;
+                        }
+                    }
+
+                    // Invalid percent escape: keep the '%' literally and continue
+                    // with the next character, similar to HttpUtility.UrlDecode.
+                    decoder.AddByte((byte)'%');
+                    i++;
+                    continue;
+                }
+
+                if (c < 0x80)
+                {
+                    // ASCII characters are treated as decoded bytes.
+                    decoder.AddByte((byte)c);
+                }
+                else
+                {
+                    // Non-ASCII literal UTF-16 code units are passed through,
+                    // after flushing any incomplete UTF-8 percent-encoded sequence.
+                    decoder.AddUtf16CodeUnit(c);
+                }
+
+                i++;
+            }
+
+            decoder.Flush();
+        }
+
+        static int HexToInt(char c)
+        {
+            if ((uint)(c - '0') <= 9u)
+                return c - '0';
+
+            if ((uint)(c - 'a') <= 5u)
+                return c - 'a' + 10;
+
+            if ((uint)(c - 'A') <= 5u)
+                return c - 'A' + 10;
+
+            return -1;
+        }
+
+        /// <summary>
+        /// Incremental UTF-8 decoder/output writer.
+        /// In dry-run mode it only counts UTF-16 chars.
+        /// In write mode it writes into the destination span.
+        /// </summary>
+        ref struct Utf8UrlDecoder
+        {
+            readonly Span<char> _output;
+            readonly bool _dryRun;
+
+            // In dry-run mode: number of UTF-16 chars that would be produced.
+            // In write mode: current write index.
+            int _pos;
+
+            // UTF-8 sequence state.
+            int _remaining;
+            uint _value;
+            uint _minimum;
+
+            public Utf8UrlDecoder(Span<char> output, bool dryRun)
+            {
+                _output = output;
+                _dryRun = dryRun;
+                _pos = 0;
+
+                _remaining = 0;
+                _value = 0;
+                _minimum = 0;
+            }
+
+            public int Length => _pos;
+
+            public void AddByte(byte b)
+            {
+                while (true)
+                {
+                    if (_remaining == 0)
+                    {
+                        if (b < 0x80)
+                        {
+                            EmitScalar(b);
+                            return;
+                        }
+
+                        if ((b & 0xE0) == 0xC0)
+                        {
+                            StartSequence(totalBytes: 2, initialValue: (uint)(b & 0x1F), minimumValue: 0x80u);
+                            return;
+                        }
+
+                        if ((b & 0xF0) == 0xE0)
+                        {
+                            StartSequence(totalBytes: 3, initialValue: (uint)(b & 0x0F), minimumValue: 0x800u);
+                            return;
+                        }
+
+                        if ((b & 0xF8) == 0xF0)
+                        {
+                            StartSequence(totalBytes: 4, initialValue: (uint)(b & 0x07), minimumValue: 0x10000u);
+                            return;
+                        }
+
+                        // Invalid lead byte.
+                        EmitReplacement();
+                        return;
+                    }
+
+                    if ((b & 0xC0) != 0x80)
+                    {
+                        // Invalid continuation byte.
+                        // Replace the partial sequence, then retry current byte as a new lead byte.
+                        EmitReplacement();
+                        Reset();
+                        continue;
+                    }
+
+                    _value = (_value << 6) | (uint)(b & 0x3F);
+                    _remaining--;
+
+                    if (_remaining != 0)
+                        return;
+
+                    uint scalar = _value;
+                    uint minimum = _minimum;
+                    Reset();
+
+                    // Reject overlong sequences, UTF-16 surrogates, and out-of-range scalars.
+                    if (scalar < minimum || scalar > 0x10FFFFu || (scalar >= 0xD800u && scalar <= 0xDFFFu))
+                    {
+                        EmitReplacement();
+                    }
+                    else
+                    {
+                        EmitScalar(scalar);
+                    }
+
+                    return;
+                }
+            }
+
+            public void AddUtf16CodeUnit(char c)
+            {
+                Flush();
+                EmitChar(c);
+            }
+
+            public void Flush()
+            {
+                if (_remaining != 0)
+                {
+                    EmitReplacement();
+                    Reset();
+                }
+            }
+
+            void StartSequence(int totalBytes, uint initialValue, uint minimumValue)
+            {
+                _remaining = totalBytes - 1;
+                _value = initialValue;
+                _minimum = minimumValue;
+            }
+
+            void Reset()
+            {
+                _remaining = 0;
+                _value = 0;
+                _minimum = 0;
+            }
+
+            void EmitScalar(uint scalar)
+            {
+                if (scalar <= 0xFFFFu)
+                {
+                    EmitChar((char)scalar);
+                    return;
+                }
+
+                // Supplementary Unicode scalar: emit UTF-16 surrogate pair.
+                uint v = scalar - 0x10000u;
+
+                EmitChar((char)(0xD800u + (v >> 10)));
+                EmitChar((char)(0xDC00u + (v & 0x3FFu)));
+            }
+
+            void EmitReplacement() => EmitChar('\uFFFD');
+
+            void EmitChar(char c)
+            {
+                if (!_dryRun)
+                {
+                    Debug.Assert((uint)_pos < (uint)_output.Length);
+                    _output[_pos] = c;
+                }
+
+                _pos++;
+            }
+        }
+    
 
 
 
-    }
+
+
+}
 
 
 

@@ -179,7 +179,7 @@ namespace SysWeaver
 
         public void Dispose()
         {
-            TaskExt.StartNewAsyncChain(End);
+            TaskExt.StartNewAsyncChain(() => End().ConfigureAwait(false));
         }
 
 

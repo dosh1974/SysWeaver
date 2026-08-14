@@ -18,67 +18,34 @@ namespace SysWeaver
         /// </summary>
         public static readonly ValueTask CompValTask = default;
 
-        /// <summary>
-        /// Start a new async task (new thread / new chain)
-        /// </summary>
-        /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void StartNewAsyncChain(Func<ConfiguredTaskAwaitable> task) => Task.Run(task).ConfigureAwait(false);
 
         /// <summary>
         /// Start a new async task (new thread / new chain)
         /// </summary>
         /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void StartNewAsyncChain(Func<Task> task) => Task.Run(task).ConfigureAwait(false);
+        public static void StartNewAsyncChain(Func<ConfiguredTaskAwaitable> task) => Task.Run(task);
 
         /// <summary>
         /// Start a new async task (new thread / new chain)
         /// </summary>
         /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void StartNewAsyncChain(this Func<ConfiguredValueTaskAwaitable> task) => Task.Run(task).ConfigureAwait(false);
+        public static void StartNewAsyncChain(Func<Task> task) => Task.Run(task);
 
         /// <summary>
         /// Start a new async task (new thread / new chain)
         /// </summary>
         /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void StartNewAsyncChain(this Func<ValueTask> task) => Task.Run(task).ConfigureAwait(false);
-
-
+        public static void StartNewAsyncChain(this Func<ConfiguredValueTaskAwaitable> task) => Task.Run(task);
 
         /// <summary>
         /// Start a new async task (new thread / new chain)
         /// </summary>
         /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void StartNewAsyncChain(ConfiguredTaskAwaitable task) => Task.Run(() => task).ConfigureAwait(false);
-
-        /// <summary>
-        /// Start a new async task (new thread / new chain)
-        /// </summary>
-        /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void StartNewAsyncChain(Task task) => Task.Run(() => task.ConfigureAwait(false)).ConfigureAwait(false);
-
-        /// <summary>
-        /// Start a new async task (new thread / new chain)
-        /// </summary>
-        /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void StartNewAsyncChain(this ConfiguredValueTaskAwaitable task) => Task.Run(() => task).ConfigureAwait(false);
-
-        /// <summary>
-        /// Start a new async task (new thread / new chain)
-        /// </summary>
-        /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void StartNewAsyncChain(this ValueTask task) => Task.Run(() => task.ConfigureAwait(false)).ConfigureAwait(false);
-
-
-
-
+        public static void StartNewAsyncChain(this Func<ValueTask> task) => Task.Run(task);
 
         /// <summary>
         /// Run a task in a new thread / chain, then wait for the task to complete and return it's value
@@ -256,7 +223,7 @@ namespace SysWeaver
         /// <param name="delayInMs">The delay in milli seconds</param>
         public static void RunDelayed(Action func, int delayInMs)
         {
-            StartNewAsyncChain(() => Task.Delay(delayInMs).ContinueWith(x => func()));
+            StartNewAsyncChain(() => Task.Delay(delayInMs).ContinueWith(x => func()).ConfigureAwait(false));
 /*            Timer t = null;
             t = new Timer(state =>
             {
@@ -288,7 +255,15 @@ namespace SysWeaver
             }, null, delayInMs, Timeout.Infinite);*/
         }
 
-
+        /// <summary>
+        /// Execute a task after some fixed duration
+        /// </summary>
+        /// <param name="task">The task to execute</param>
+        /// <param name="delayInMs">The delay in milli seconds</param>
+        public static void RunDelayed(ValueTask task, int delayInMs)
+        {
+            StartNewAsyncChain(() => Task.Delay(delayInMs).ContinueWith(x => task));
+        }
 
 
 

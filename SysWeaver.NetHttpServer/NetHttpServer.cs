@@ -350,7 +350,7 @@ namespace SysWeaver.Net
                 {
                     var c = await l.GetContextAsync().ConfigureAwait(false);
                     Interlocked.Increment(ref ReqCounter);
-                    TaskExt.StartNewAsyncChain(HandleRequest(c).ConfigureAwait(false));
+                    TaskExt.StartNewAsyncChain(() => HandleRequest(c).ConfigureAwait(false));
                     continue;
                 }
                 catch (Exception ex)
@@ -412,73 +412,76 @@ namespace SysWeaver.Net
         /// <returns></returns>
         async ValueTask HandleRequest(HttpListenerContext c)
         {
-            using (PerfMon.Track(nameof(HandleRequest)))
+            using var _ = PerfMon.Track(nameof(HandleRequest));
+            String url = "";
+            HttpListenerResponse res = null;
+            try
             {
-                var res = c.Response;
-                String url = "";
-                try
+                res = c.Response;
+                var req = c.Request;
+                if (IsPaused)
                 {
-                    var req = c.Request;
-                    if (IsPaused)
-                    {
-                        await HandlePaused(req, res).ConfigureAwait(false);
-                        return;
-                    }
-                    url = req.Url.AbsoluteUri;
-                    var host = GetHost(out var prefix, out var queryStart, out var didIndex, ref url);
-                    if (prefix == null)
-                    {
-                        await Handle404(req, res).ConfigureAwait(false);
-                        return;
-                    }
-                    using var data = new NetHttpServerRequest(c, url, prefix, this, host, queryStart, didIndex);
-                    data.SetResHeader("Server", "");
-                    await Handle(data).ConfigureAwait(false);
+                    await HandlePaused(req, res).ConfigureAwait(false);
+                    return;
                 }
-                catch (HttpListenerException ex)
+                url = req.Url.AbsoluteUri;
+                var host = GetHost(out var prefix, out var queryStart, out var didIndex, ref url);
+                if (prefix == null)
                 {
-                    ListenerExceptions.OnException(ex);
+                    await Handle404(req, res).ConfigureAwait(false);
+                    return;
                 }
-                catch (Exception ex)
-                {
-                    RequestExceptions.OnException(ex);
+                using var data = new NetHttpServerRequest(c, url, prefix, this, host, queryStart, didIndex);
+                data.SetResHeader("Server", "");
+                await Handle(data).ConfigureAwait(false);
+            }
+            catch (HttpListenerException ex)
+            {
+                ListenerExceptions.OnException(ex);
+            }
+            catch (Exception ex)
+            {
+                RequestExceptions.OnException(ex);
 #if DEBUG
                     Msg?.AddMessage(Prefix + "Request failed!", ex, MessageLevels.Debug);
 #endif//DEBUG
-                    try
-                    {
-                        res.StatusCode = 500;
-                    }
-                    catch
-                    {
-                    }
-                }
-                finally
+                try
                 {
-                    try
+                    if (res != null)
+                        res.StatusCode = 500;
+                }
+                catch
+                {
+                }
+            }
+            finally
+            {
+                try
+                {
+                    if (res != null)
                     {
                         res.OutputStream.Close();
                         //res.Headers["Server"] = "";
                         res.Close();
                     }
-                    catch (Exception ex)
-                    {
-                        RequestExceptions.OnException(ex);
+                }
+                catch (Exception ex)
+                {
+                    RequestExceptions.OnException(ex);
 #if DEBUG
                         Msg?.AddMessage(Prefix + "Closing the response for \"" + url + "\" failed!", ex, MessageLevels.Debug);
 #endif//DEBUG
-                    }
-                    if (Interlocked.Decrement(ref ReqCounter) == 0)
+                }
+                if (Interlocked.Decrement(ref ReqCounter) == 0)
+                {
+                    if (IsPaused)
                     {
-                        if (IsPaused)
+                        lock (Listener)
                         {
-                            lock (Listener)
+                            if (IsPaused)
                             {
-                                if (IsPaused)
-                                {
-                                    if (IsListening != null)
-                                        Stop();
-                                }
+                                if (IsListening != null)
+                                    Stop();
                             }
                         }
                     }

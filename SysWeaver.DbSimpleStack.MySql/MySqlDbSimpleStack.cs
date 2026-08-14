@@ -223,7 +223,7 @@ namespace SysWeaver.Db
             }
             int maxInMem = (writerCount + 1) << 3;
             for (int i = 0; i < writerCount; ++i)
-                TaskExt.StartNewAsyncChain(() => Processor());
+                TaskExt.StartNewAsyncChain(() => Processor().ConfigureAwait(false));
             using var con = await source.GetAsync().ConfigureAwait(false);
             using var reader = await con.ExecuteReaderAsync(selState).ConfigureAwait(false);
             List<T> batch = new List<T>();

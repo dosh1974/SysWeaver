@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace SysWeaver
 {
@@ -176,11 +177,11 @@ namespace SysWeaver
         /// <param name="text">The text to match against the strings in the tree</param>
         /// <param name="start">An optional start offset</param>
         /// <returns>A list of matches, ordered by name</returns>
-        public List<IReadOnlyList<T>> PrefixesOf(String text, int start = 0)
+        public IReadOnlyList<IReadOnlyList<T>> PrefixesOf(String text, int start = 0)
         {
             FrozenStringTreeList<T> node = this;
             int len = text.Length;
-            List<IReadOnlyList<T>> found = new();
+            List<IReadOnlyList<T>> found = null;
             if (node.Leaf == LeafList)
             {
                 while (start < len)
@@ -188,7 +189,7 @@ namespace SysWeaver
                     var val = node.Leaf;
                     if (val != null)
                         if (val.Count > 0)
-                            found.Add(val);
+                            (found = found ?? new()).Add(val);
                     var nodes = node.Nodes;
                     node = null;
                     var c = text[start];
@@ -206,7 +207,7 @@ namespace SysWeaver
                 {
                     var val = node.Leaf;
                     if (val != null)
-                        found.Add(val);
+                        (found = found ?? new()).Add(val);
                     var nodes = node.Nodes;
                     node = null;
                     var c = text[start];
@@ -222,10 +223,84 @@ namespace SysWeaver
                 var val = node.Leaf;
                 if (val != null)
                     if (val.Count > 0)
-                        found.Add(val);
+                        (found = found ?? new()).Add(val);
             }
-            return found;
+            return found ?? EmptyList;
         }
+
+
+
+        /// <summary>
+        /// Find all matching strings (in the tree), that matches the text
+        /// </summary>
+        /// <param name="text">The text to match against the strings in the tree</param>
+        /// <param name="fn">Async task to execute for every match, return a value to stop enumeration</param>
+        /// <param name="start">An optional start offset</param>
+        /// <param name="a0">Arg0</param>
+        /// <param name="a1">Arg1</param>
+        /// <returns>A list of matches, ordered by name</returns>
+        public async ValueTask<E> EnumPrefixesOf<E, A0, A1>(String text, Func<IReadOnlyList<T>, A0, A1, ValueTask<E>> fn, A0 a0, A1 a1, int start = 0) where E : class
+        {
+            FrozenStringTreeList<T> node = this;
+            int len = text.Length;
+            if (node.Leaf == LeafList)
+            {
+                while (start < len)
+                {
+                    var val = node.Leaf;
+                    if ((val != null) && (val.Count > 0))
+                    {
+                        var rv = await fn(val, a0, a1).ConfigureAwait(true);
+                        if (rv != null)
+                            return rv;
+                    }
+                    var nodes = node.Nodes;
+                    node = null;
+                    var c = text[start];
+                    if (nodes == null)
+                        break;
+                    c = c.FastToUpper();
+                    ++start;
+                    if (!nodes.TryGetValue(c, out node))
+                        break;
+                }
+            }
+            else
+            {
+                while (start < len)
+                {
+                    var val = node.Leaf;
+                    if ((val != null) && (val.Count > 0))
+                    {
+                        var rv = await fn(val, a0, a1).ConfigureAwait(true);
+                        if (rv != null)
+                            return rv;
+                    }
+                    var nodes = node.Nodes;
+                    node = null;
+                    var c = text[start];
+                    if (nodes == null)
+                        break;
+                    ++start;
+                    if (!nodes.TryGetValue(c, out node))
+                        break;
+                }
+            }
+            if (node != null)
+            {
+                var val = node.Leaf;
+                if ((val != null) && (val.Count > 0))
+                {
+                    var rv = await fn(val, a0, a1).ConfigureAwait(true);
+                    if (rv != null)
+                        return rv;
+                }
+            }
+            return null;
+        }
+
+
+        static readonly List<IReadOnlyList<T>> EmptyList = new ();
 
         /// <summary>
         /// Get all string contained in the string tree, ordered by key
