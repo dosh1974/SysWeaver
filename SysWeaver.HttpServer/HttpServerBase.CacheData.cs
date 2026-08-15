@@ -25,7 +25,7 @@ namespace SysWeaver.Net
                 LocalUrl = s.LocalUrl;
                 LastUsed = new DateTime(Interlocked.Read(ref s.LastUsed), DateTimeKind.Utc);
                 Expires = new DateTime(s.Expires, DateTimeKind.Utc);
-                Size = s.Data.Length;
+                Size = s.Length;
             }   
 
             /// <summary>

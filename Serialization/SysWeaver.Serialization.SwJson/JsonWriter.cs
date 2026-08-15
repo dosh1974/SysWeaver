@@ -81,13 +81,20 @@ namespace SysWeaver.Serialization.SwJson
         /// <returns>The number of bytes written to the buffer</returns>
         public static int ToJsonBytes<T>(ref Byte[] dest, T value, int destOffset = 0, bool typeIsOptional = true)
         {
-            using var w = new BufferWriter(dest, destOffset)
+            var w = new BufferWriter(dest, destOffset)
             {
                 TypeIsOptional = typeIsOptional,
             };
-            InternalMaybeBoxed(w, value);
-            dest = w.GetBuffer();
-            return w.Position;
+            try
+            {
+                InternalMaybeBoxed(ref w, value);
+                dest = w.GetBuffer();
+                return w.Position;
+            }
+            finally
+            {
+                w.Dispose();
+            }
         }
 
         /// <summary>
@@ -103,15 +110,22 @@ namespace SysWeaver.Serialization.SwJson
             Byte[] temp = null;
             if (dest == null)
                 temp = dest = ArrayPoolStream.Rent(4096);
-            using var w = new BufferWriter(dest)
+            var w = new BufferWriter(dest)
             {
                 TypeIsOptional = typeIsOptional,
             };
-            InternalMaybeBoxed(w, value);
-            var d = w.Data;
-            if (d != temp)
-                ArrayPoolStream.Return(temp);
-            return new Memory<byte>(d, 0, w.Offset);
+            try
+            {
+                InternalMaybeBoxed(ref w, value);
+                var d = w.GetBuffer();
+                if (d != temp)
+                    ArrayPoolStream.Return(temp);
+                return new Memory<byte>(d, 0, w.Offset);
+            }
+            finally
+            {
+                w.Dispose();
+            }
         }
 
         /// <summary>
@@ -126,10 +140,19 @@ namespace SysWeaver.Serialization.SwJson
             var temp = ArrayPoolStream.Rent(4096);
             try
             {
-                using var w = new BufferWriter(temp);
-                w.TypeIsOptional = typeIsOptional;
-                InternalMaybeBoxed(w, value);
-                return Encoding.UTF8.GetString(w.GetBuffer(), 0, w.Offset);
+                var w = new BufferWriter(temp)
+                {
+                    TypeIsOptional = typeIsOptional
+                };
+                try
+                {
+                    InternalMaybeBoxed(ref w, value);
+                    return Encoding.UTF8.GetString(w.GetBuffer(), 0, w.Offset);
+                }
+                finally
+                {
+                    w.Dispose();
+                }
             }
             finally
             {
@@ -142,51 +165,56 @@ namespace SysWeaver.Serialization.SwJson
 
         #region Build
 
-        static void Internal<T>(BufferWriter w, T value) => CacheT<T>.Writer(w, value);
+        static void Internal<T>(ref BufferWriter w, T value) => CacheT<T>.Writer(ref w, value);
 
-        static void InternalMaybeNull<T>(BufferWriter w, T value)
+        static void InternalMaybeNull<T>(ref BufferWriter w, T value)
         {
             if (value == null)
             {
-                WriteNull(w);
+                WriteNull(ref w);
                 return;
             }
-            CacheT<T>.Writer(w, value);
+            CacheT<T>.Writer(ref w, value);
         }
 
-        static void InternalMaybeBoxed<T>(BufferWriter w, T value)
+        static void InternalMaybeBoxed<T>(ref BufferWriter w, T value)
         {
             var expectedType = typeof(T);
             var actualType = value?.GetType();
             bool needType = (expectedType != actualType);
             if (needType) // Boxed or null, slow path
             {
-                InternalBoxed<T>(w, value, actualType);
+                InternalBoxed<T>(ref w, value, actualType);
                 return;
             }
-            CacheT<T>.Writer(w, value);
+            CacheT<T>.Writer(ref w, value);
         }
 
-        static void InternalBoxed<T>(BufferWriter w, T value, Type actualType)
+        static void InternalBoxed<T>(ref BufferWriter w, T value, Type actualType)
         {
             if (actualType == null)
             {
-                WriteNull(w);
+                WriteNull(ref w);
                 return;
             }
             if (!Writers.TryGetValue(actualType, out var writer))
                 writer = AddWriter(actualType);
             if (w.TypeIsOptional)
-                writer.WriteOptionalTyped(w, value);
+                writer.WriteOptionalTyped(ref w, value);
             else
-                writer.WriteTyped(w, value);
+                writer.WriteTyped(ref w, value);
         }
+
+
+        public delegate void WriterDel(ref BufferWriter w, Object o);
 
         static class CacheT<T>
         {
+            public delegate void WriterDelT(ref BufferWriter w, T o);
+
             static readonly Type Tp = typeof(T);
             public static readonly TypeInfo Info = AddWriter(Tp);
-            public static readonly Action<BufferWriter, Object> Writer = Info.Write;
+            public static readonly WriterDel Writer = Info.Write;
         }
 
 
@@ -275,10 +303,12 @@ namespace SysWeaver.Serialization.SwJson
         static readonly Byte[] TextObjectEnd = [ObjectEnd];
         static readonly Byte[] TextSepComma = [SepComma];
 
-        static readonly ParameterExpression WriterExp = Expression.Parameter(typeof(BufferWriter), "w");
+        static readonly Type BufferWriterType = typeof(BufferWriter);
+        static readonly Type RefBufferWriterType = BufferWriterType.MakeByRefType();
+
+        static readonly ParameterExpression WriterExp = Expression.Parameter(RefBufferWriterType, "w");
         static readonly ParameterExpression WriterObject = Expression.Parameter(typeof(Object), "value");
 
-        static readonly Type BufferWriterType = typeof(BufferWriter);
         static readonly Type JsonWriterType = typeof(JsonWriter);
 
         static readonly MethodInfo MethodBufferWriterEnsure = Helper.SafeGetMethod(BufferWriterType, nameof(BufferWriter.Ensure));
@@ -299,14 +329,16 @@ namespace SysWeaver.Serialization.SwJson
         static readonly MethodInfo MethodInternalKeyValueEnum = Helper.SafeGetMethod(JsonWriterType, nameof(InternalKeyValueEnum), BindingFlags.NonPublic| BindingFlags.Static);
 
 
-        static readonly MethodInfo MethodInvoke = Helper.SafeGetMethod(typeof(Action<BufferWriter, Object>), nameof(Action<BufferWriter, Object>.Invoke), BindingFlags.Instance | BindingFlags.Public, null, [BufferWriterType, typeof(Object)], null);
+        static readonly MethodInfo MethodInvoke = Helper.SafeGetMethod(typeof(WriterDel), nameof(WriterDel.Invoke), BindingFlags.Instance | BindingFlags.Public, null, [RefBufferWriterType, typeof(Object)], null);
 
         static readonly MethodInfo MethodMoveNext = Helper.SafeGetMethod(typeof(IEnumerator), nameof(IEnumerator.MoveNext), BindingFlags.Instance | BindingFlags.Public);
 
 
-        static Expression MakeExpressionActionInternalT<T>() => Expression.Constant(new Action<BufferWriter, T>(Internal<T>));
-        static Expression MakeExpressionActionInternalMaybeBoxedT<T>() => Expression.Constant(new Action<BufferWriter, T>(InternalMaybeBoxed<T>));
-        static Expression MakeExpressionActionInternalMaybeNullT<T>() => Expression.Constant(new Action<BufferWriter, T>(InternalMaybeNull<T>));
+
+
+        static Expression MakeExpressionActionInternalT<T>() => Expression.Constant(new CacheT<T>.WriterDelT(Internal<T>));
+        static Expression MakeExpressionActionInternalMaybeBoxedT<T>() => Expression.Constant(new CacheT<T>.WriterDelT(InternalMaybeBoxed<T>));
+        static Expression MakeExpressionActionInternalMaybeNullT<T>() => Expression.Constant(new CacheT<T>.WriterDelT(InternalMaybeNull<T>));
 
         static readonly MethodInfo MethodMakeExpressionActionInternalT = Helper.SafeGetMethod(JsonWriterType, nameof(MakeExpressionActionInternalT), BindingFlags.NonPublic | BindingFlags.Static);
         static readonly MethodInfo MethodMakeExpressionActionInternalMaybeBoxedT = Helper.SafeGetMethod(JsonWriterType, nameof(MakeExpressionActionInternalMaybeBoxedT), BindingFlags.NonPublic | BindingFlags.Static);
@@ -356,8 +388,10 @@ namespace SysWeaver.Serialization.SwJson
 
         static readonly Expression[] CachedBytes = Enumerable.Range(0, 256).Select(x => Expression.Assign(WriteDataAtOffsetExp, Expression.Constant((Byte)x))).ToArray();
 
-        static readonly Action<BufferWriter> BooleanTrue = GetWriteConstant(Encoding.UTF8.GetBytes("true"));
-        static readonly Action<BufferWriter> BooleanFalse = GetWriteConstant(Encoding.UTF8.GetBytes("false"));
+        public delegate void WriterConstDel(ref BufferWriter w);
+
+        static readonly WriterConstDel BooleanTrue = GetWriteConstant(Encoding.UTF8.GetBytes("true"));
+        static readonly WriterConstDel BooleanFalse = GetWriteConstant(Encoding.UTF8.GetBytes("false"));
 
         static Expression GetWriteByteExpr(Byte c)
         {
@@ -412,14 +446,14 @@ namespace SysWeaver.Serialization.SwJson
 
 
         static readonly Byte[] NullData = Encoding.UTF8.GetBytes("null");
-        static readonly Action<BufferWriter, Object> NullWriter = GetWriteConstantBufferEnsuredActionObject(NullData);
+        static readonly WriterDel NullWriter = GetWriteConstantBufferEnsuredActionObject(NullData);
         static readonly TypeInfo NullTypeInfo = new TypeInfo(NullWriter, NullWriter);
 
-        static readonly Action<BufferWriter> WriteNull = GetWriteConstantBufferEnsuredAction(NullData);
-        static readonly Action<BufferWriter> WriteEmptyObject = GetWriteConstantBufferEnsuredAction(Encoding.UTF8.GetBytes("{}"));
+        static readonly WriterConstDel WriteNull = GetWriteConstantBufferEnsuredAction(NullData);
+        static readonly WriterDel WriteEmptyObject = GetWriteConstantBufferEnsuredActionObject(Encoding.UTF8.GetBytes("{}"));
 
 
-        static readonly Action<BufferWriter> WriteTypenameByteArray = GetWriteConstantBufferEnsuredAction(TypenameByteArray);
+        static readonly WriterConstDel WriteTypenameByteArray = GetWriteConstantBufferEnsuredAction(TypenameByteArray);
 
 
         //  TODO: Cache?
@@ -616,12 +650,12 @@ namespace SysWeaver.Serialization.SwJson
                         program.Add(Expression.Call(mi, writer, Expression.Convert(WriterObject, ct), kmi, vmi, Expression.Constant(DictionaryKeysWithQuote.Contains(kt))));
                         program.Add(WriteObjectEndExp);
                         var finalUntyped = CreateProgramBlock(program);
-                        var cbUntyped = Expression.Lambda<Action<BufferWriter, Object>>(finalUntyped, writer, WriterObject).Compile();
+                        var cbUntyped = Expression.Lambda<WriterDel>(finalUntyped, writer, WriterObject).Compile();
                         var temp = Append(TextObjectBegin, Append(GetTypeJson(type), TextSepComma));
                         program[0] = Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(temp.Length + 64));
                         program[1] = GetWriteConstantBufferExp(temp);
                         var finalTyped = CreateProgramBlock(program);
-                        var cbTyped = Expression.Lambda<Action<BufferWriter, Object>>(finalTyped, writer, WriterObject).Compile();
+                        var cbTyped = Expression.Lambda<WriterDel>(finalTyped, writer, WriterObject).Compile();
                         ti = new TypeInfo(cbUntyped, cbTyped);
                     }
                 }
@@ -700,8 +734,8 @@ namespace SysWeaver.Serialization.SwJson
                     program.Add(WriteObjectEndExp);
 
                     var finalTyped = CreateProgramBlock(program, pes);
-                    var cbUntyped = Expression.Lambda<Action<BufferWriter, Object>>(finalUntyped, writer, WriterObject).Compile();
-                    var cbTyped = Expression.Lambda<Action<BufferWriter, Object>>(finalTyped, writer, WriterObject).Compile();
+                    var cbUntyped = Expression.Lambda<WriterDel>(finalUntyped, writer, WriterObject).Compile();
+                    var cbTyped = Expression.Lambda<WriterDel>(finalTyped, writer, WriterObject).Compile();
                     ti = new TypeInfo(cbUntyped, cbTyped);
                 }
                 if (type.IsEnum)
@@ -754,8 +788,8 @@ namespace SysWeaver.Serialization.SwJson
                             ],
                             pa);
 
-                        var cbUnyped = Expression.Lambda<Action<BufferWriter, Object>>(c, writer, op).Compile();
-                        var cbTyped = Expression.Lambda<Action<BufferWriter, Object>>(c2, writer, op).Compile();
+                        var cbUnyped = Expression.Lambda<WriterDel>(c, writer, op).Compile();
+                        var cbTyped = Expression.Lambda<WriterDel>(c2, writer, op).Compile();
                         ti = new TypeInfo(cbUnyped, cbTyped);
                     }
                 }
@@ -842,8 +876,8 @@ namespace SysWeaver.Serialization.SwJson
                     {
                         var temp = Append(GetTypeJson(type), TextObjectEnd);
                         var final = Expression.Block(Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(temp.Length + 64)), GetWriteConstantBufferExp(temp));
-                        var t = Expression.Lambda<Action<BufferWriter, Object>>(final, writer, WriterObject).Compile();
-                        ti = new TypeInfo(EmptyObject, t);
+                        var t = Expression.Lambda<WriterDel>(final, writer, WriterObject).Compile();
+                        ti = new TypeInfo(WriteEmptyObject, t);
                     }
                     else
                     {
@@ -856,7 +890,7 @@ namespace SysWeaver.Serialization.SwJson
                             program[2] = GetWriteConstantBufferExp(temp);
                             var aobj = obj.AsEnumerable();
                             var finalUntyped = CreateProgramBlock(program, aobj, canOpt ? ReadDataExp : null);
-                            var cbUntyped = Expression.Lambda<Action<BufferWriter, Object>>(finalUntyped, writer, WriterObject).Compile();
+                            var cbUntyped = Expression.Lambda<WriterDel>(finalUntyped, writer, WriterObject).Compile();
                             if (type.IsArray || (type.GetInterfaces().FirstOrDefault(t => t.IsGenericType && (t.GetGenericTypeDefinition() == typeof(ICollection<>))) != null))
                             {
                                 firstName = type == typeof(Byte[]) ? TextValue : TextValues;
@@ -872,7 +906,7 @@ namespace SysWeaver.Serialization.SwJson
 
 
                             var finalTyped = CreateProgramBlock(program, aobj, canOpt ? ReadDataExp : null);
-                            var cbTyped = Expression.Lambda<Action<BufferWriter, Object>>(finalTyped, writer, WriterObject).Compile();
+                            var cbTyped = Expression.Lambda<WriterDel>(finalTyped, writer, WriterObject).Compile();
                             //                        ti = new TypeInfo(simpleSize, cbUntyped, cbTyped);
                             ti = new TypeInfo(cbUntyped, cbTyped);
                         }
@@ -894,16 +928,13 @@ namespace SysWeaver.Serialization.SwJson
             }
         }
 
-        static readonly Action<BufferWriter, Object> EmptyObject = (w, o) => WriteEmptyObject(w);
-
-
         static Byte[] GetNumberBytes(int i) => Encoding.UTF8.GetBytes(i.ToString());
 
 
         const int NumberCacheSize = 100;
 
 
-        static Action<BufferWriter> GetWriteConstant(Byte[] data)
+        static WriterConstDel GetWriteConstant(Byte[] data)
         {
             var l = data.Length;
             Expression[] code = GC.AllocateUninitializedArray<Expression>(3 + l + l);
@@ -919,7 +950,7 @@ namespace SysWeaver.Serialization.SwJson
             }
             code[d] = WriteOffsetExp;
             var exp = Expression.Block([ParamData, ParamOffset], code);
-            return Expression.Lambda<Action<BufferWriter>>(exp, WriterExp).Compile();
+            return Expression.Lambda<WriterConstDel>(exp, WriterExp).Compile();
         }
 
 
@@ -962,27 +993,27 @@ namespace SysWeaver.Serialization.SwJson
             return Expression.Block([d, o], program);
         }
 
-        static Action<BufferWriter> GetWriteConstantBufferEnsuredAction(Byte[] buffer)
+        static WriterConstDel GetWriteConstantBufferEnsuredAction(Byte[] buffer)
         {
             var w = WriterExp;
             var e = GetWriteConstantBufferExp(buffer, true);
-            return Expression.Lambda<Action<BufferWriter>>(e, w).Compile();
+            return Expression.Lambda<WriterConstDel>(e, w).Compile();
         }
 
-        static Action<BufferWriter, Object> GetWriteConstantBufferEnsuredActionObject(Byte[] buffer)
+        static WriterDel GetWriteConstantBufferEnsuredActionObject(Byte[] buffer)
         {
             var w = WriterExp;
             var e = Expression.Block(
                 Expression.Call(w, MethodBufferWriterEnsure, GetInt32Exp(buffer.Length + 64)),
                 GetWriteConstantBufferExp(buffer));
-            return Expression.Lambda<Action<BufferWriter, Object>>(e, w, WriterObject).Compile();
+            return Expression.Lambda<WriterDel>(e, w, WriterObject).Compile();
         }
 
         #endregion//Build
 
         #region Runtime
 
-        static readonly Action<BufferWriter>[] NumberWriterCache = Enumerable.Range(0, NumberCacheSize + 1).Select(x => GetWriteConstant(Encoding.UTF8.GetBytes(x.ToString()))).ToArray();
+        static readonly WriterConstDel[] NumberWriterCache = Enumerable.Range(0, NumberCacheSize + 1).Select(x => GetWriteConstant(Encoding.UTF8.GetBytes(x.ToString()))).ToArray();
         //static readonly Byte[][] NumberCache = Enumerable.Range(0, NumberCacheSize + 1).Select(x => Encoding.UTF8.GetBytes(x.ToString())).ToArray();
 
         static readonly Byte[] Base64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".Select(x => (Byte)x).ToArray();
@@ -1115,7 +1146,7 @@ namespace SysWeaver.Serialization.SwJson
         }
 
 
-        static void InternalList(BufferWriter w, Type actualType, IList values)
+        static void InternalList(ref BufferWriter w, Type actualType, IList values)
         {
             var l = values.Count;
             if (l <= 0)
@@ -1130,16 +1161,16 @@ namespace SysWeaver.Serialization.SwJson
                 if (needComma)
                     w.Write(SepComma);
                 needComma = true;
-                writer.Write(w, value);
+                writer.Write(ref w, value);
             }
         }
 
-        static void InternalEnum(BufferWriter w, Type actualType, IEnumerable values)
+        static void InternalEnum(ref BufferWriter w, Type actualType, IEnumerable values)
         {
             var valList = values as IList;
             if (valList != null)
             {
-                InternalList(w, actualType, valList);
+                InternalList(ref w, actualType, valList);
                 return;
             }
             bool needComma = false;
@@ -1151,12 +1182,12 @@ namespace SysWeaver.Serialization.SwJson
                 if (needComma)
                     w.Write(SepComma);
                 needComma = true;
-                writer.Write(w, value);
+                writer.Write(ref w, value);
             }
         }
 
 
-        static void InternalMaybeNullList(BufferWriter w, Type actualType, IList values)
+        static void InternalMaybeNullList(ref BufferWriter w, Type actualType, IList values)
         {
             var l = values.Count;
             if (l <= 0)
@@ -1174,20 +1205,20 @@ namespace SysWeaver.Serialization.SwJson
                 needComma = true;
                 if (value == null)
                 {
-                    wn(w);
+                    wn(ref w);
                     continue;
                 }
-                writer.Write(w, value);
+                writer.Write(ref w, value);
             }
         }
 
 
-        static void InternalMaybeNullEnum(BufferWriter w, Type actualType, IEnumerable values)
+        static void InternalMaybeNullEnum(ref BufferWriter w, Type actualType, IEnumerable values)
         {
             var valList = values as IList;
             if (valList != null)
             {
-                InternalMaybeNullList(w, actualType, valList);
+                InternalMaybeNullList(ref w, actualType, valList);
                 return;
             }
             bool needComma = false;
@@ -1202,14 +1233,14 @@ namespace SysWeaver.Serialization.SwJson
                 needComma = true;
                 if (value == null)
                 {
-                    wn(w);
+                    wn(ref w);
                     continue;
                 }
-                writer.Write(w, value);
+                writer.Write(ref w, value);
             }
         }
 
-        static void InternalMaybeBoxedList(BufferWriter w, Type expectedType, IList values)
+        static void InternalMaybeBoxedList(ref BufferWriter w, Type expectedType, IList values)
         {
             var l = values.Count;
             if (l <= 0)
@@ -1229,33 +1260,33 @@ namespace SysWeaver.Serialization.SwJson
                 needComma = true;
                 if (value == null)
                 {
-                    wn(w);
+                    wn(ref w);
                     continue;
                 }
                 var actualType = value.GetType();
                 if (expectedType == actualType)
                 {
-                    defWriter.Write(w, value);
+                    defWriter.Write(ref w, value);
                     continue;
                 }
                 if (!writers.TryGetValue(actualType, out var writer))
                     writer = AddWriter(actualType);
                 if (w.TypeIsOptional)
                 {
-                    writer.WriteOptionalTyped(w, value);
+                    writer.WriteOptionalTyped(ref w, value);
                     continue;
                 }
-                writer.WriteTyped(w, value);
+                writer.WriteTyped(ref w, value);
             }
 
         }
 
-        static void InternalMaybeBoxedEnum(BufferWriter w, Type expectedType, IEnumerable values)
+        static void InternalMaybeBoxedEnum(ref BufferWriter w, Type expectedType, IEnumerable values)
         {
             var valList = values as IList;
             if (valList != null)
             {
-                InternalMaybeBoxedList(w, expectedType, valList);
+                InternalMaybeBoxedList(ref w, expectedType, valList);
                 return;
             }
             var writers = Writers;
@@ -1271,27 +1302,27 @@ namespace SysWeaver.Serialization.SwJson
                 needComma = true;
                 if (value == null)
                 {
-                    wn(w);
+                    wn(ref w);
                     continue;
                 }
                 var actualType = value.GetType();
                 if (expectedType == actualType)
                 {
-                    defWriter.Write(w, value);
+                    defWriter.Write(ref w, value);
                     continue;
                 }
                 if (!writers.TryGetValue(actualType, out var writer))
                     writer = AddWriter(actualType);
                 if (w.TypeIsOptional)
                 {
-                    writer.WriteOptionalTyped(w, value);
+                    writer.WriteOptionalTyped(ref w, value);
                     continue;
                 }
-                writer.WriteTyped(w, value);
+                writer.WriteTyped(ref w, value);
             }
         }
 
-        static void InternalKeyValueEnum<K, V>(BufferWriter w, IEnumerable<KeyValuePair<K, V>> values, Action<BufferWriter, K> writeKey, Action<BufferWriter, V> writeValue, bool needQuote)
+        static void InternalKeyValueEnum<K, V>(ref BufferWriter w, IEnumerable<KeyValuePair<K, V>> values, CacheT<K>.WriterDelT writeKey, CacheT<V>.WriterDelT writeValue, bool needQuote)
         {
             bool needComma = false;
             if (needQuote)
@@ -1304,9 +1335,9 @@ namespace SysWeaver.Serialization.SwJson
                     else
                         w.Write(SepQuote);
                     needComma = true;
-                    writeKey(w, value.Key);
+                    writeKey(ref w, value.Key);
                     w.Write(SepQuote, SepColon);
-                    writeValue(w, value.Value);
+                    writeValue(ref w, value.Value);
                 }
             }
             else
@@ -1317,19 +1348,19 @@ namespace SysWeaver.Serialization.SwJson
                     if (needComma)
                         w.Write(SepComma);
                     needComma = true;
-                    writeKey(w, value.Key);
+                    writeKey(ref w, value.Key);
                     w.Write(SepColon);
-                    writeValue(w, value.Value);
+                    writeValue(ref w, value.Value);
                 }
             }
         }
 
 
-        static void WriteUInt32(BufferWriter w, UInt32 value)
+        static void WriteUInt32(ref BufferWriter w, UInt32 value)
         {
             if (value <= NumberCacheSize)
             {
-                NumberWriterCache[value](w);
+                NumberWriterCache[value](ref w);
                 return;
             }
             var org = w.DataPtr;
@@ -1348,7 +1379,7 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = (int)(d - org);
         }
 
-        static void WriteInt32(BufferWriter w, Int32 signedValue)
+        static void WriteInt32(ref BufferWriter w, Int32 signedValue)
         {
             var org = w.DataPtr;
             var d = org + w.Offset;
@@ -1362,7 +1393,7 @@ namespace SysWeaver.Serialization.SwJson
             }
             if (value <= NumberCacheSize)
             {
-                NumberWriterCache[value](w);
+                NumberWriterCache[value](ref w);
                 return;
             }
             var start = d;
@@ -1379,7 +1410,7 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = (int)(d - org);
         }
 
-        static void WriteInt64(BufferWriter w, Int64 signedValue)
+        static void WriteInt64(ref BufferWriter w, Int64 signedValue)
         {
             var org = w.DataPtr;
             var d = org + w.Offset;
@@ -1393,7 +1424,7 @@ namespace SysWeaver.Serialization.SwJson
             }
             if (value <= NumberCacheSize)
             {
-                NumberWriterCache[value](w);
+                NumberWriterCache[value](ref w);
                 return;
             }
             var start = d;
@@ -1411,11 +1442,11 @@ namespace SysWeaver.Serialization.SwJson
 
         }
 
-        static void WriteUInt64(BufferWriter w, UInt64 value)
+        static void WriteUInt64(ref BufferWriter w, UInt64 value)
         {
             if (value <= NumberCacheSize)
             {
-                NumberWriterCache[value](w);
+                NumberWriterCache[value](ref w);
                 return;
             }
             var org = w.DataPtr;
@@ -1434,7 +1465,7 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = (int)(d - org);
         }
 
-        static void WriteSingle(BufferWriter w, Single value)
+        static void WriteSingle(ref BufferWriter w, Single value)
         {
             if (Single.IsInteger(value))
             {
@@ -1442,7 +1473,7 @@ namespace SysWeaver.Serialization.SwJson
                 {
                     if (value > Int32.MinValue)
                     {
-                        WriteInt32(w, (Int32)value);
+                        WriteInt32(ref w, (Int32)value);
                         return;
                     }
                 }
@@ -1450,7 +1481,7 @@ namespace SysWeaver.Serialization.SwJson
                 {
                     if (value < UInt32.MaxValue)
                     {
-                        WriteUInt32(w, (UInt32)value);
+                        WriteUInt32(ref w, (UInt32)value);
                         return;
                     }
                 }
@@ -1468,7 +1499,7 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset += size;
         }
 
-        static void WriteDouble(BufferWriter w, Double value)
+        static void WriteDouble(ref BufferWriter w, Double value)
         {
             if (Double.IsInteger(value))
             {
@@ -1476,7 +1507,7 @@ namespace SysWeaver.Serialization.SwJson
                 {
                     if (value > Int64.MinValue)
                     {
-                        WriteInt64(w, (Int64)value);
+                        WriteInt64(ref w, (Int64)value);
                         return;
                     }
                 }
@@ -1484,7 +1515,7 @@ namespace SysWeaver.Serialization.SwJson
                 {
                     if (value < UInt64.MaxValue)
                     {
-                        WriteUInt64(w, (UInt64)value);
+                        WriteUInt64(ref w, (UInt64)value);
                         return;
                     }
 
@@ -1499,7 +1530,7 @@ namespace SysWeaver.Serialization.SwJson
             //w.WriteCharTempAsAscci(size);
         }
 
-        static void WriteDecimal(BufferWriter w, Decimal value)
+        static void WriteDecimal(ref BufferWriter w, Decimal value)
         {
             if (Decimal.IsInteger(value))
             {
@@ -1507,7 +1538,7 @@ namespace SysWeaver.Serialization.SwJson
                 {
                     if (value > Int64.MinValue)
                     {
-                        WriteInt64(w, (Int64)value);
+                        WriteInt64(ref w, (Int64)value);
                         return;
                     }
                 }
@@ -1515,7 +1546,7 @@ namespace SysWeaver.Serialization.SwJson
                 {
                     if (value < UInt64.MaxValue)
                     {
-                        WriteUInt64(w, (UInt64)value);
+                        WriteUInt64(ref w, (UInt64)value);
                         return;
                     }
 
@@ -1568,7 +1599,7 @@ namespace SysWeaver.Serialization.SwJson
             }
         }
 
-        static void WriteTimeSpan(BufferWriter w, TimeSpan value)
+        static void WriteTimeSpan(ref BufferWriter w, TimeSpan value)
         {
             w.Write(SepQuote);
             var dest = w.AsSpan();
@@ -1578,7 +1609,7 @@ namespace SysWeaver.Serialization.SwJson
             w.Write(SepQuote);
         }
 
-        static void WriteDateTime(BufferWriter w, DateTime value)
+        static void WriteDateTime(ref BufferWriter w, DateTime value)
         {
             w.Write(SepQuote);
             var dest = w.AsSpan();
@@ -1588,7 +1619,7 @@ namespace SysWeaver.Serialization.SwJson
             w.Write(SepQuote);
         }
 
-        static void WriteDateOnly(BufferWriter w, DateOnly value)
+        static void WriteDateOnly(ref BufferWriter w, DateOnly value)
         {
             w.Write(SepQuote);
             value.TryFormat(w.AsSpan(), out var size, "o", CultureInfo.InvariantCulture);
@@ -1596,7 +1627,7 @@ namespace SysWeaver.Serialization.SwJson
             w.Write(SepQuote);
         }
 
-        static void WriteTimeOnly(BufferWriter w, TimeOnly value)
+        static void WriteTimeOnly(ref BufferWriter w, TimeOnly value)
         {
             w.Write(SepQuote);
             var dest = w.AsSpan();
@@ -1606,7 +1637,7 @@ namespace SysWeaver.Serialization.SwJson
             w.Write(SepQuote);
         }
 
-        static void WriteDateTimeOffset(BufferWriter w, DateTimeOffset value)
+        static void WriteDateTimeOffset(ref BufferWriter w, DateTimeOffset value)
         {
             w.Write(SepQuote);
             var dest = w.AsSpan();
@@ -1618,7 +1649,7 @@ namespace SysWeaver.Serialization.SwJson
 
         static readonly int GuidLen = Guid.Empty.ToString().Length;
 
-        static void WriteGuid(BufferWriter w, Guid value)
+        static void WriteGuid(ref BufferWriter w, Guid value)
         {
             w.Write(SepQuote);
             value.TryFormat(w.AsSpan(), out var size, "D");
@@ -1626,7 +1657,7 @@ namespace SysWeaver.Serialization.SwJson
             w.Write(SepQuote);
         }
 
-        static void WriteByteArray(BufferWriter w, Byte[] val)
+        static void WriteByteArray(ref BufferWriter w, Byte[] val)
         {
             var org = w.DataPtr;
             var d = org + w.Offset;
@@ -1700,38 +1731,38 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = (int)(d - org);
         }
 
-        static void WriteByteArrayEnsure(BufferWriter w, Object o)
+        static void WriteByteArrayEnsure(ref BufferWriter w, Object o)
         {
             if (o == null)
             {
-                WriteNull(w);
+                WriteNull(ref w);
                 return;
             }
             var b = (Byte[])o;
             var l = b.Length;
             w.Ensure(l + (l >> 1) + 64);
-            WriteByteArray(w, b);
+            WriteByteArray(ref w, b);
         }
 
-        static void WriteByteArrayTypename(BufferWriter w, Object obj)
+        static void WriteByteArrayTypename(ref BufferWriter w, Object obj)
         {
             if (obj == null)
             {
-                WriteNull(w);
+                WriteNull(ref w);
                 return;
             }
             var b = (Byte[])obj;
-            WriteTypenameByteArray(w);
+            WriteTypenameByteArray(ref w);
             var l = b.Length;
             w.Ensure(l + (l >> 1) + 64);
-            WriteByteArray(w, b);
+            WriteByteArray(ref w, b);
             var o = w.Offset;
             w.DataPtr[o] = ObjectEnd;
             ++o;
             w.Offset = o;
         }
 
-        static void WriteChar(BufferWriter w, Char value)
+        static void WriteChar(ref BufferWriter w, Char value)
         {
             w.Ensure(64);
             var org = w.DataPtr;
@@ -1759,13 +1790,13 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = (int)(d - org);
         }
 
-        static void WriteBoolean(BufferWriter w, Boolean value)
+        static void WriteBoolean(ref BufferWriter w, Boolean value)
         {
             w.Ensure(16);
-            (value ? BooleanTrue : BooleanFalse)(w);
+            (value ? BooleanTrue : BooleanFalse)(ref w);
         }
 
-        static void WriteString(BufferWriter w, String value)
+        static void WriteString(ref BufferWriter w, String value)
         {
             var l = value.Length;
             var count = (l << 2) + 64;
@@ -1851,34 +1882,35 @@ namespace SysWeaver.Serialization.SwJson
                 try
                 {
                     String s = null;
-                    Internal(null, s);
-                    InternalMaybeNull(null, s);
+                    BufferWriter w = new BufferWriter(Array.Empty<byte>());
+                    Internal(ref w, s);
+                    InternalMaybeNull(ref w, s);
 
 
-                    WriteBoolean(null, false);
-                    WriteChar(null, 'A');
-                    WriteDateTime(null, DateTime.MinValue);
+                    WriteBoolean(ref w, false);
+                    WriteChar(ref w, 'A');
+                    WriteDateTime(ref w, DateTime.MinValue);
 
 
-                    WriteDateOnly(null, DateOnly.MinValue);
-                    WriteTimeOnly(null, TimeOnly.MinValue);
-                    WriteDateTimeOffset(null, DateTimeOffset.MinValue);
+                    WriteDateOnly(ref w, DateOnly.MinValue);
+                    WriteTimeOnly(ref w, TimeOnly.MinValue);
+                    WriteDateTimeOffset(ref w, DateTimeOffset.MinValue);
 
 
-                    WriteDecimal(null, 0);
-                    WriteDouble(null, 0);
-                    WriteGuid(null, Guid.Empty);
-                    WriteInt32(null, 0);
-                    WriteInt64(null, 0);
-                    WriteSingle(null, 0);
-                    WriteTimeSpan(null, TimeSpan.Zero);
-                    WriteUInt32(null, 0);
-                    WriteUInt64(null, 0);
-                    //WriteNullString(null, s);
-                    InternalEnum(null, null, null);
-                    InternalMaybeNullEnum(null, null, null);
-                    InternalMaybeBoxedEnum(null, null, null);
-                    InternalKeyValueEnum<int, int>(null, null, null, null, false);
+                    WriteDecimal(ref w, 0);
+                    WriteDouble(ref w, 0);
+                    WriteGuid(ref w, Guid.Empty);
+                    WriteInt32(ref w, 0);
+                    WriteInt64(ref w, 0);
+                    WriteSingle(ref w, 0);
+                    WriteTimeSpan(ref w, TimeSpan.Zero);
+                    WriteUInt32(ref w, 0);
+                    WriteUInt64(ref w, 0);
+                    //WriteNullString(ref w, s);
+                    InternalEnum(ref w, null, null);
+                    InternalMaybeNullEnum(ref w, null, null);
+                    InternalMaybeBoxedEnum(ref w, null, null);
+                    InternalKeyValueEnum<int, int>(ref w, null, null, null, false);
                 }
                 catch
                 {
@@ -1919,7 +1951,7 @@ namespace SysWeaver.Serialization.SwJson
                 foreach (var t in customWriters)
                     w.TryAdd(t, new TypeInfo(t, true));
 
-                w.TryAdd(typeof(String), new TypeInfo((b, o) => { WriteString(b, (String)o); }, (b, o) => { WriteString(b, (String)o); }, true));
+                w.TryAdd(typeof(String), new TypeInfo((ref b, o) => { WriteString(ref b, (String)o); }, (ref b, o) => { WriteString(ref b, (String)o); }, true));
                 w.TryAdd(typeof(Byte[]), new TypeInfo(WriteByteArrayEnsure, WriteByteArrayTypename));
 
 
@@ -1929,7 +1961,7 @@ namespace SysWeaver.Serialization.SwJson
 
         sealed class TypeInfo
         {
-            public TypeInfo(Action<BufferWriter, Object> write, Action<BufferWriter, Object> writeTyped, bool typeIsOptional = false)
+            public TypeInfo(WriterDel write, WriterDel writeTyped, bool typeIsOptional = false)
             {
                 Write = write;
                 WriteTyped = writeTyped;
@@ -1967,8 +1999,8 @@ namespace SysWeaver.Serialization.SwJson
                     WriteExp = ep => Expression.Call(mi, w, ep);
                 BoundedSize = boundedSize;
                 ParameterExpression[] pr = [w, ParamObj];
-                var wl = Expression.Lambda<Action<BufferWriter, Object>>(untyped, pr).Compile();
-                var wtl = Expression.Lambda<Action<BufferWriter, Object>>(typed, pr).Compile();
+                var wl = Expression.Lambda<WriterDel>(untyped, pr).Compile();
+                var wtl = Expression.Lambda<WriterDel>(typed, pr).Compile();
                 Write = wl;
                 WriteTyped = wtl;
                 WriteOptionalTyped = typeIsOptional ? wl : wtl;
@@ -1976,9 +2008,9 @@ namespace SysWeaver.Serialization.SwJson
             public readonly Func<Expression, Expression> WriteExp;
             //  The maximum number of bytes required by this type, 0 = Not bounded
             public readonly int BoundedSize;
-            public readonly Action<BufferWriter, Object> WriteTyped;
-            public readonly Action<BufferWriter, Object> Write;
-            public readonly Action<BufferWriter, Object> WriteOptionalTyped;
+            public readonly WriterDel WriteTyped;
+            public readonly WriterDel Write;
+            public readonly WriterDel WriteOptionalTyped;
         }
 
 

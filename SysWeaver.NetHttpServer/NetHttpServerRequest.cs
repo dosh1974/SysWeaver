@@ -117,6 +117,20 @@ namespace SysWeaver.Net
             return r.OutputStream.WriteAsync(data);
         }
 
+        public override void SetResBody(Byte[] data, int offset, int length)
+        {
+            var r = Res;
+            r.ContentLength64 = length;
+            r.OutputStream.Write(data, offset, length);
+        }
+        public override Task SetResBodyAsync(Byte[] data, int offset, int length)
+        {
+            var r = Res;
+            r.ContentLength64 = length;
+            return r.OutputStream.WriteAsync(data, offset, length);
+        }
+
+
         public override void SetResHeader(String header, String value)
             => Res.Headers[header] = value;
 

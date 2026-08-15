@@ -97,12 +97,27 @@ namespace SysWeaver.Net
             r.ContentLength = data.Length;
             r.Body.Write(data);
         }
+
         public override ValueTask SetResBodyAsync(ReadOnlyMemory<Byte> data)
         {
             var r = Res;
             r.ContentLength = data.Length;
             return r.Body.WriteAsync(data);
         }
+
+        public override void SetResBody(Byte[] data, int offset, int length)
+        {
+            var r = Res;
+            r.ContentLength = length;
+            r.Body.Write(data, offset, length);
+        }
+        public override Task SetResBodyAsync(Byte[] data, int offset, int length)
+        {
+            var r = Res;
+            r.ContentLength = length;
+            return r.Body.WriteAsync(data, offset, length);
+        }
+
 
         public override void SetResHeader(String header, String value)
         {

@@ -242,8 +242,25 @@ namespace SysWeaver.Net
         public abstract int GetResStatusCode();
 
         public abstract void SetResHeader(String header, String value);
+        
+        /// <summary>
+        /// Prefer the Byte[] overload if possible, ASP net stream DO not implement the Span and Memory version as of now!
+        /// TODO: Check if .NET11 fixes this! If so revert code that uses workarounds!
+        /// </summary>
+        /// <param name="data"></param>
         public abstract void SetResBody(ReadOnlySpan<Byte> data);
+
+        /// <summary>
+        /// Prefer the Byte[] overload if possible, ASP net stream DO not implement the Span and Memory version as of now!
+        /// TODO: Check if .NET11 fixes this! If so revert code that uses workarounds!
+        /// </summary>
+        /// <param name="data"></param>
+        /// <returns></returns>
         public abstract ValueTask SetResBodyAsync(ReadOnlyMemory<Byte> data);
+
+        public abstract void SetResBody(Byte[] data, int offset, int length);
+        public abstract Task SetResBodyAsync(Byte[] data, int offset, int length);
+
 
         public abstract bool IsDead();
 
@@ -302,6 +319,7 @@ namespace SysWeaver.Net
             var tl = text.Length;
             var al = tl << 2;
             SetResMime(mime);
+            /*
             if (tl < 1024)
             {
                 Span<Byte> tt = stackalloc Byte[al];
@@ -311,13 +329,15 @@ namespace SysWeaver.Net
                     return;
                 }
             }
+            */
             var buf = ArrayPoolStream.Rent(al);
             try
             {
                 var t = buf.AsSpan();
                 if (Encoding.UTF8.TryGetBytes(text, t, out var l))
                 {
-                    SetResBody(t.Slice(0, l));
+                    //SetResBody(t.Slice(0, l));
+                    SetResBody(buf, 0, l);
                     return;
                 }
             }

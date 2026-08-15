@@ -132,6 +132,12 @@ namespace SysWeaver.Net
         public override ValueTask SetResBodyAsync(ReadOnlyMemory<byte> data)
             => (_OutputStream ??= new ArrayPoolStream()).WriteAsync(data);
 
+        public override void SetResBody(Byte[] data, int offset, int length)
+            => (_OutputStream ??= new ArrayPoolStream()).Write(data, offset, length);
+
+        public override Task SetResBodyAsync(Byte[] data, int offset, int length)
+            => (_OutputStream ??= new ArrayPoolStream()).WriteAsync(data, offset, length);
+
         public override void SetResContentLength(long length)
         {
             ResHeaders.Remove("Content-Length");

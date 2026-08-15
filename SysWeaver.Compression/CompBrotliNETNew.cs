@@ -81,10 +81,22 @@ namespace SysWeaver.Compression
                     {
                         Span<Byte> src = stackalloc Byte[(int)len];
                         len = from.Read(src);
-                        Span<Byte> buf = stackalloc Byte[(int)len + MaxOverhead];
+                        var buf = ArrayPoolStream.Rent((int)len + MaxOverhead);
+                        try
+                        {
+                            var bs = buf.AsSpan();
+                            var s = Compress(src[..(int)len], buf, level);
+                            to.Write(buf, 0, s);
+                            return;
+                        }
+                        finally
+                        {
+                            ArrayPoolStream.Return(buf);
+                        }
+/*                        Span<Byte> buf = stackalloc Byte[(int)len + MaxOverhead];
                         var s = Compress(src[..(int)len], buf, level);
                         to.Write(buf[..s]);
-                        return;
+                        return;*/
                     }
 
                     if (len < MaxBuffered)
@@ -100,7 +112,7 @@ namespace SysWeaver.Compression
 
                                 var bs = buf.AsSpan();
                                 var s = Compress(sm, bs, level);
-                                to.Write(bs[..s]);
+                                to.Write(buf, 0, s);
                                 return;
                             }
                             finally
@@ -193,6 +205,7 @@ namespace SysWeaver.Compression
         public void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level)
         {
             var len = from.Length;
+            /*
             if (len < MaxStack)
             {
                 Span<Byte> buf = stackalloc Byte[len + MaxOverhead];
@@ -200,7 +213,7 @@ namespace SysWeaver.Compression
                 to.Write(buf[..s]);
                 return;
             }
-
+            */
             if (len < MaxBuffered)
             {
                 var buf = ArrayPoolStream.Rent(len + MaxOverhead);
@@ -208,7 +221,7 @@ namespace SysWeaver.Compression
                 {
                     var bs = buf.AsSpan();
                     var s = Compress(from, bs, level);
-                    to.Write(bs[..s]);
+                    to.Write(buf, 0, s);
                     return;
                 }
                 finally

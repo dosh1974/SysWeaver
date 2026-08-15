@@ -603,7 +603,7 @@ namespace SysWeaver.Security
                 return null;
             context.SetResMime(HttpServerTools.TextMime);
             context.SetResStatusCode(200);
-            context.SetResBody(token);
+            context.SetResBody(token, 0, token.Length);
             return HttpServerTools.AlreadyHandled;
         }
 

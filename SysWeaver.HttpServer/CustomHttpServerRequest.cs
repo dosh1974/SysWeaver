@@ -75,6 +75,15 @@ namespace SysWeaver.Net
             throw new NotImplementedException();
         }
 
+        public override void SetResBody(Byte[] data, int offset, int length)
+        {
+            throw new NotImplementedException();
+        }
+        public override Task SetResBodyAsync(Byte[] data, int offset, int length)
+        {
+            throw new NotImplementedException();
+        }
+
         public override void SetResContentLength(long length)
         {
             throw new NotImplementedException();

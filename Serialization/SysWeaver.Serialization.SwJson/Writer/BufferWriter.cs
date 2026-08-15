@@ -7,13 +7,9 @@ using System.Runtime.InteropServices;
 namespace SysWeaver.Serialization.SwJson.Writer
 {
 
-    unsafe public sealed class BufferWriter : IDisposable
+    unsafe public ref struct BufferWriter : IDisposable
     {
-        public static readonly Type Type = typeof(BufferWriter);
-
         public bool TypeIsOptional = false;
-
-        //Byte[] Rented;
 
         public BufferWriter(Byte[] initData, int startOffset = 0)
         {
@@ -23,58 +19,13 @@ namespace SysWeaver.Serialization.SwJson.Writer
             DataPtr = (Byte*)PinHandle.AddrOfPinnedObject().ToPointer();
             S = d.Length;
             Offset = startOffset;
-            var a = ArrayPool<Char>.Shared.Rent(128);
-            //var a = GC.AllocateUninitializedArray<Char>(128);
-            TempBuf = a;
-            Temp = a;
         }
 
-        readonly Char[] TempBuf;
-        public readonly Memory<Char> Temp;
-
-        public void WriteCharTempAsAscci(int count)
-        {
-            var t = Temp.Span;
-            var o = Offset;
-            var p = DataPtr + o;
-            for (int i = 0; i < count; ++ i)
-            {
-                var c = (Byte)t[i];
-                *p = c;
-                ++p;
-            }
-            Offset = o + count;
-        }
-        public void WriteCharTempAsAscii(int count, Byte quote)
-        {
-            var t = Temp.Span;
-            var o = Offset;
-            var p = DataPtr + o;
-            *p = quote;
-            ++p;
-            for (int i = 0; i < count; ++i)
-            {
-                var c = (Byte)t[i];
-                *p = c;
-                ++p;
-            }
-            *p = quote;
-            Offset = o + count + 2;
-        }
-
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Dispose()
         {
             PinHandle.Free();
             Data = null;
-
-#if DEBUG
-            ArrayPool<Char>.Shared.Return(TempBuf, true);
-#else//DEBUG
-                ArrayPool<Char>.Shared.Return(TempBuf);
-#endif//DEBUG
-            //if (Rented != null)
-                //ArrayPoolStream.Return(Rented);
-            GC.SuppressFinalize(this);
         }
 
         public GCHandle PinHandle;
@@ -112,7 +63,6 @@ namespace SysWeaver.Serialization.SwJson.Writer
         {
             end += (4096 + 4095);
             end &= ~4095;
-            //var b = ArrayPoolStream.Rent(end);
             var b = GC.AllocateUninitializedArray<Byte>(end);
             var o = Offset;
             if (o > 0)
@@ -121,9 +71,6 @@ namespace SysWeaver.Serialization.SwJson.Writer
             PinHandle.Free();
             PinHandle = GCHandle.Alloc(b, GCHandleType.Pinned);
             DataPtr = (Byte*)PinHandle.AddrOfPinnedObject().ToPointer();
-            //if (Rented != null)
-                //ArrayPoolStream.Return(Rented);
-            //Rented = b;
             S = end;
         }
 
@@ -146,6 +93,7 @@ namespace SysWeaver.Serialization.SwJson.Writer
             Offset = o;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Write(Byte a, Byte b)
         {
             Validate(2);

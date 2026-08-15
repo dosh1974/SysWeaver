@@ -145,7 +145,7 @@ namespace SysWeaver.Net
         /// <param name="r"></param>
         /// <param name="data"></param>
         /// <returns></returns>
-        public static ValueTask SetToRequest(HttpServerRequest r, ProxyData data)
+        public static Task SetToRequest(HttpServerRequest r, ProxyData data)
         {
             var sh = SpecialHeaders;
             foreach (var h in data.Headers.Nullable())
@@ -158,7 +158,7 @@ namespace SysWeaver.Net
             }
             r.SetResStatusCode(data.StatusCode);
             var d = data.Data;
-            return d == null ? TaskExt.CompValTask : r.SetResBodyAsync(d);
+            return d == null ? Task.CompletedTask: r.SetResBodyAsync(d, 0, d.Length);
         }
 
         /// <summary>

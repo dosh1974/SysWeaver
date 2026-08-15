@@ -998,26 +998,37 @@ namespace SysWeaver.Net
                     session.ClientTimeZone = ss[0];
                 }
                 var val = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                Span<Byte> temp = stackalloc byte[128];
-                int i = 0;
-                do
+                var pool = ArrayPool<Byte>.Shared;
+                var tempData = pool.Rent(128);
+                try
                 {
-                    var nv = val / 10;
-                    temp[i] = (Byte)(val - (nv * 10) + '0');
-                    val = nv;
-                    ++i;
-                } while (val != 0);
-                int l = i;
-                int j = 0;
-                while (j < i)
-                {
-                    --i;
-                    var t2 = temp[i];
-                    temp[i] = temp[j];
-                    temp[j] = t2;
-                    ++j;
+                    var temp = tempData.AsSpan();
+                    //Span<Byte> temp = stackalloc byte[128];
+                    int i = 0;
+                    do
+                    {
+                        var nv = val / 10;
+                        temp[i] = (Byte)(val - (nv * 10) + '0');
+                        val = nv;
+                        ++i;
+                    } while (val != 0);
+                    int l = i;
+                    int j = 0;
+                    while (j < i)
+                    {
+                        --i;
+                        var t2 = temp[i];
+                        temp[i] = temp[j];
+                        temp[j] = t2;
+                        ++j;
+                    }
+                    //data.SetResBody(temp.Slice(0, l));
+                    data.SetResBody(tempData, 0, l);
                 }
-                data.SetResBody(temp.Slice(0, l));
+                finally
+                {
+                    pool.Return(tempData);
+                }
             }
             return ValueTask.CompletedTask;
         }
