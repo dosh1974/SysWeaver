@@ -3,7 +3,6 @@ using System.Collections.Generic;
 
 using System.IO;
 using System.IO.Compression;
-using System.Buffers;
 
 using System.Collections.Frozen;
 
@@ -77,52 +76,23 @@ namespace SysWeaver.Compression
                 if (from.CanSeek)
                 {
                     var len = from.Length;
-                    if (len < MaxStack)
+                    if (len < MaxBuffered)
                     {
-                        Span<Byte> src = stackalloc Byte[(int)len];
-                        len = from.Read(src);
-                        var buf = ArrayPoolStream.Rent((int)len + MaxOverhead);
+                        var ilen = (int)len;
+                        var temp= ArrayPoolStream.Rent(ilen * 2 + MaxOverhead);
                         try
                         {
-                            var bs = buf.AsSpan();
-                            var s = Compress(src[..(int)len], buf, level);
-                            to.Write(buf, 0, s);
+                            var s = temp.AsSpan();
+                            var srcSpan = s.Slice(0, ilen);
+                            var destSpan = s.Slice(ilen);
+                            from.ReadExactly(srcSpan);
+                            var destLen = Compress(srcSpan, destSpan, level);
+                            to.Write(temp, ilen, destLen);
                             return;
                         }
                         finally
                         {
-                            ArrayPoolStream.Return(buf);
-                        }
-/*                        Span<Byte> buf = stackalloc Byte[(int)len + MaxOverhead];
-                        var s = Compress(src[..(int)len], buf, level);
-                        to.Write(buf[..s]);
-                        return;*/
-                    }
-
-                    if (len < MaxBuffered)
-                    {
-                        var src = ArrayPoolStream.Rent((int)len);
-                        try
-                        {
-                            len = from.Read(src, 0, (int)len);
-                            var sm = src.AsSpan()[..(int)len];
-                            var buf = ArrayPoolStream.Rent((int)len + MaxOverhead);
-                            try
-                            {
-
-                                var bs = buf.AsSpan();
-                                var s = Compress(sm, bs, level);
-                                to.Write(buf, 0, s);
-                                return;
-                            }
-                            finally
-                            {
-                                ArrayPoolStream.Return(buf);
-                            }
-                        }
-                        finally
-                        {
-                            ArrayPoolStream.Return(src);
+                            ArrayPoolStream.Return(temp);
                         }
                     }
                 }
@@ -141,27 +111,28 @@ namespace SysWeaver.Compression
                 if (from.CanSeek)
                 {
                     var len = from.Length;
+                    var ilen = (int)len;
                     if (len < MaxStack)
                     {
-                        Span<Byte> src = stackalloc Byte[(int)len];
-                        len = from.Read(src);
-                        var s = Compress(src[..(int)len], to, level);
+                        Span<Byte> src = stackalloc Byte[ilen];
+                        from.ReadExactly(src);
+                        var s = Compress(src[..ilen], to, level);
                         return s;
                     }
 
                     if (len < MaxBuffered)
                     {
-                        var src = ArrayPoolStream.Rent((int)len);
+                        var temp = ArrayPoolStream.Rent(ilen);
                         try
                         {
-                            len = from.Read(src, 0, (int)len);
-                            var sm = src.AsSpan()[..(int)len];
+                            var sm = temp.AsSpan()[..ilen];
+                            from.ReadExactly(sm);
                             var s = Compress(sm, to, level);
                             return s;
                         }
                         finally
                         {
-                            ArrayPoolStream.Return(src);
+                            ArrayPoolStream.Return(temp);
                         }
                     }
                 }
@@ -242,28 +213,22 @@ namespace SysWeaver.Compression
                     var len = from.Length;
                     if (len < MaxBuffered)
                     {
-                        var src = ArrayPoolStream.Rent((int)len);
+                        var ilen = (int)len;
+                        var temp = ArrayPoolStream.Rent(ilen * 2 + MaxOverhead);
                         try
                         {
-                            len = await from.ReadAsync(src, 0, (int)len).ConfigureAwait(false);
-                            var sm = src.AsSpan()[..(int)len];
-                            var buf = ArrayPoolStream.Rent((int)len + MaxOverhead);
-                            try
-                            {
-
-                                var bs = buf.AsSpan();
-                                var s = Compress(sm, bs, level);
-                                await to.WriteAsync(buf, 0, s).ConfigureAwait(false);
-                                return;
-                            }
-                            finally
-                            {
-                                ArrayPoolStream.Return(buf);
-                            }
+                            await from.ReadExactlyAsync(temp, 0, ilen).ConfigureAwait(false);
+                            var s = temp.AsSpan();
+                            var srcSpan = s.Slice(0, ilen);
+                            var destSpan = s.Slice(ilen);
+                            var destLen = Compress(srcSpan, destSpan, level);
+                            to.Write(temp, ilen, destLen);
+                            await to.WriteAsync(temp, ilen, destLen).ConfigureAwait(false);
+                            return;
                         }
                         finally
                         {
-                            ArrayPoolStream.Return(src);
+                            ArrayPoolStream.Return(temp);
                         }
                     }
                 }
@@ -285,11 +250,12 @@ namespace SysWeaver.Compression
                     var len = from.Length;
                     if (len < MaxBuffered)
                     {
-                        var src = ArrayPoolStream.Rent((int)len);
+                        var ilen = (int)len;
+                        var src = ArrayPoolStream.Rent(ilen);
                         try
                         {
-                            len = await from.ReadAsync(src, 0, (int)len).ConfigureAwait(false);
-                            var sm = src.AsSpan()[..(int)len];
+                            await from.ReadExactlyAsync(src, 0, ilen).ConfigureAwait(false);
+                            var sm = src.AsSpan()[..ilen];
                             var s = Compress(sm, to.Span, level);
                             return s;
                         }
