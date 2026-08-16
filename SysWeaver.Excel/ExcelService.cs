@@ -84,25 +84,27 @@ namespace SysWeaver.Excel
         /// </summary>
         /// <param name="fileOrApiKey">Filename or api key</param>
         /// <param name="isFile">True it the first parameter is a file, else false</param>
-        public static void SetLicense(String fileOrApiKey = @"$(KeyFolder)\GemBox.Spreadsheet.txt", bool isFile = true)
+        /// <param name="mustExist">If p is non-null and there isn't a valid license, throw an exception, else use the free</param>
+        public static void SetLicense(String fileOrApiKey = @"$(KeyFolder)\GemBox.Spreadsheet.txt", bool isFile = true, bool mustExist = true)
             => SetLicense(new ApiKeyParams
             {
                 CredFile = isFile ? fileOrApiKey : null,
                 ApiKey = isFile ? null : fileOrApiKey,
-            });
+            }, mustExist);
 
 
         /// <summary>
         /// Set the livense to the free limited license
         /// </summary>
         public static void SetFreeLicense()
-            => SetLicense((ApiKeyParams)null);
+            => SetLicense((ApiKeyParams)null, false);
 
         /// <summary>
         /// Set the license, have to be called once before using GemBox
         /// </summary>
         /// <param name="p">Paramaters, if null the free limited license</param>
-        public static void SetLicense(ApiKeyParams p)
+        /// <param name="mustExist">If p is non-null and there isn't a valid license, throw an exception, else use the free</param>
+        public static void SetLicense(ApiKeyParams p, bool mustExist = true)
         {
             if (DidInit)
                 return;
@@ -110,7 +112,7 @@ namespace SysWeaver.Excel
             {
                 if (DidInit)
                     return;
-                var apiKey = p?.GetApiKey(false);
+                var apiKey = p?.GetApiKey(mustExist);
                 if (string.IsNullOrEmpty(apiKey))
                     apiKey = "FREE-LIMITED-KEY";
                 HaveLicense = !apiKey.FastEquals("FREE-LIMITED-KEY");

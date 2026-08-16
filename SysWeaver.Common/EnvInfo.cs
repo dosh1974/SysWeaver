@@ -119,7 +119,7 @@ namespace SysWeaver
         /// <summary>
         /// The friendly OS name
         /// </summary>
-        public static readonly String OsName = PlatformTools.Current.OsFriendlyName;
+        public static String OsName => PlatformTools.Current.OsFriendlyName;
 
         /// <summary>
         /// Version string of OS, ex: "Microsoft Windows NT 10.0.19045.0"
