@@ -623,8 +623,13 @@ namespace SysWeaver.MicroService
                     i.LastTotCpu = time;
                     var fn = i.MainFilename;
                     if (fn != null)
-                        procExes[fn] = i;
-
+                    {
+                        if (!procExes.TryAdd(fn, i))
+                        {
+                            if (p.StartTime < procExes[fn].StartTime)
+                                procExes[fn] = i;
+                        }
+                    }
                     Interlocked.Exchange(ref i.Metrics, m);
                     var nd = new SmServiceData { MemUsage = m.MemUsage, CpuUsage = m.CpuUsage };
                     i.History.Add(nd);
