@@ -35,6 +35,17 @@ namespace SysWeaver.MicroService
         /// So reliable half of this size is available.
         /// </summary>
         public long MaxSize = 2 << 20;
+
+        /// <summary>
+        /// If true, dump stats tables on exit.
+        /// The extension of the file name is removed and then stats names are appended.
+        /// </summary>
+#if DEBUG
+        public bool DumpStatsOnExit = true;
+#else//DEBUG
+        public bool DumpStatsOnExit;
+#endif// DEBUG
+
     }
 
 }

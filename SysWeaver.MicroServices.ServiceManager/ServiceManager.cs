@@ -290,8 +290,13 @@ namespace SysWeaver.MicroService
                 AddMessage("Fatal Unhandled Exception: " + e.ToString(), e.ExceptionObject as Exception);
         }
 
+        ConcurrentDictionary<IHaveStats, Stats[]> SavedStats;
+        ConcurrentDictionary<IPerfMonitored, IPerfEntry[]> SavedPerformance;
+
         public void Dispose()
         {
+            SavedStats = new ConcurrentDictionary<IHaveStats, Stats[]>();
+            SavedPerformance = new ConcurrentDictionary<IPerfMonitored, IPerfEntry[]>();
             var setProgress = ConsoleTools.SetProgress;
             Interlocked.Exchange(ref PruneTask, null)?.Dispose();
             AddMessage(Tag + " Unregistering and disposing owned services:");
@@ -738,6 +743,7 @@ namespace SysWeaver.MicroService
         /// <param name="manifest"></param>
         /// <param name="filename"></param>
         /// <param name="trackPerf"></param>
+        /// <param name="showProgress">If true and running in a supported console, the console header will show the load progress</param>
         public void RegisterManifest(String manifest, String filename = null, bool trackPerf = true, bool showProgress = false)
         {
             using var perfMon = (trackPerf && !String.IsNullOrEmpty(filename)) ? PerfMon.Track("Register." + Path.GetFileName(filename)) : null;
@@ -774,6 +780,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="file">The name of the file</param>
         /// <param name="trackPerf"></param>
+        /// <param name="showProgress">If true and running in a supported console, the console header will show the load progress</param>
         public void RegisterManifestFile(String file, bool trackPerf = true, bool showProgress = false)
         {
             using var perfMon = trackPerf ? PerfMon.Track("Register." + Path.GetFileName(file)) : null;
@@ -1500,26 +1507,111 @@ namespace SysWeaver.MicroService
 
         bool AddHaveStats(IHaveStats h) => h != null && HaveStats.TryAdd(h, 0);
 
-        bool RemoveHaveStats(IHaveStats h) => h != null && HaveStats.TryRemove(h, out var _);
+        bool RemoveHaveStats(IHaveStats h)
+        {
+            if (h == null)
+                return false;
+            if (!HaveStats.TryRemove(h, out var _))
+                return false;
+            var s = SavedStats;
+            if (s == null)
+                return true;
+            try
+            {
+                s[h] = h.GetStats().ToArray();
+            }
+            catch
+            {
+            }
+            return true;
+        }
 
         readonly ConcurrentDictionary<IHaveStats, int> HaveStats = new();
 
 
         bool AddHavePerfMonitor(IPerfMonitored h) => h != null && HavePerfMonitor.TryAdd(h, 0);
 
-        bool RemoveHavePerfMonitor(IPerfMonitored h) => h != null && HavePerfMonitor.TryRemove(h, out var _);
+        bool RemoveHavePerfMonitor(IPerfMonitored h)
+        {
+            if (h == null)
+                return false;
+            if (!HavePerfMonitor.TryRemove(h, out var _))
+                return false;
+            var s = SavedPerformance;
+            if (s == null)
+                return true;
+            try
+            {
+                s[h] = h.PerfMon.ToArray();
+            }
+            catch
+            {
+            }
+            return true;
+        }
+
 
         readonly ConcurrentDictionary<IPerfMonitored, int> HavePerfMonitor = new();
 
 
-        
+        public async ValueTask DumpStats(String baseName)
+        {
+            {
+                var s = SavedStats;
+                if (s != null)
+                {
+                    var ss = s.SelectMany(y => y.Value).Concat(GetStats(false));
+                    var fn = baseName + "_Stats.html";
+                    try
+                    {
+                        AddMessage("Dumping stats to \"" + fn + "\"", MessageLevels.Debug);
+                        var t = TableDataTools.Get(new TableDataRequest
+                        {
+                            MaxRowCount = 10000,
+                        }, ss, "Service Manager Stats");
+                        var f = await HtmlTableDataExporter.Simple.Export(t).ConfigureAwait(false);
+                        await PathExt.EnsureCanWriteFileAsync(fn).ConfigureAwait(false);
+                        await File.WriteAllBytesAsync(fn, f.Data).ConfigureAwait(false);
+                        AddMessage("Dumped stats to \"" + fn + "\"");
+                    }
+                    catch (Exception ex)
+                    {
+                        AddMessage("Failed to dump stats to \"" + fn + "\"", ex, MessageLevels.Warning);
+                    }
+                }
+            }
+            {
+                var s = SavedPerformance;
+                if (s != null)
+                {
+                    var fn = baseName + "_Performance.html";
+                    try
+                    {
+                        var ss = s.SelectMany(y => y.Value).Concat(PerfMon);
+                        AddMessage("Dumping peformance stats to \"" + fn + "\"", MessageLevels.Debug);
+                        var t = TableDataTools.Get(new TableDataRequest
+                        {
+                            MaxRowCount = 10000,
+                        }, ss, "Service Manager Performance Stats");
+                        var f = await HtmlTableDataExporter.Simple.Export(t).ConfigureAwait(false);
+                        await PathExt.EnsureCanWriteFileAsync(fn).ConfigureAwait(false);
+                        await File.WriteAllBytesAsync(fn, f.Data).ConfigureAwait(false);
+                        AddMessage("Dumped peformance stats to \"" + fn + "\"");
+                    }
+                    catch (Exception ex)
+                    {
+                        AddMessage("Failed to dump peformance stats to \"" + fn + "\"", ex, MessageLevels.Warning);
+                    }
+                }
+            }
+        }
 
 
         /// <summary>
         /// Return all stats
         /// </summary>
         /// <returns></returns>
-        public IEnumerable<Stats> GetStats()
+        public IEnumerable<Stats> GetStats(bool includeServices = true)
         {
             const String sys = nameof(ServiceManager);
             yield return new Stats(sys, nameof(Monitor.LockContentionCount), Monitor.LockContentionCount, "The number of times there was contention when trying to take the monitor's lock");
@@ -1529,10 +1621,13 @@ namespace SysWeaver.MicroService
                 yield return x;
             foreach (var x in Stats.SafeGetStats(TaskExt.GetEventExceptionStats))
                 yield return x;
-            foreach (var s in HaveStats.Keys)
+            if (includeServices)
             {
-                foreach (var x in Stats.SafeGetStats(s.GetStats))
-                    yield return x;
+                foreach (var s in HaveStats.Keys)
+                {
+                    foreach (var x in Stats.SafeGetStats(s.GetStats))
+                        yield return x;
+                }
             }
             foreach (var x in Stats.SafeGetStats(() => FileExs.GetStats(sys, "FileExs.")))
                 yield return x;

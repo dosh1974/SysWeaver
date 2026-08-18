@@ -25,7 +25,11 @@ namespace SysWeaver.MicroService
             var h = new FileLogMessageHandler(fn, p.Style, p.Mode, p.MaxSize);
             H = h;
             manager.Register(h, null, false);
+            DumpStatsOnExit = p.DumpStatsOnExit;
         }
+
+
+        readonly bool DumpStatsOnExit;
 
         public override string ToString() => "[Service] " + H;
 
@@ -94,6 +98,17 @@ namespace SysWeaver.MicroService
             var h = Interlocked.Exchange(ref H, null);
             if (h == null)
                 return;
+            if (DumpStatsOnExit)
+            {
+                try
+                {
+                    var baseName = PathExt.StripExtension(h.Filename);
+                    M.DumpStats(baseName).RunAsync();
+                }
+                catch
+                {
+                }
+            }
             h.Dispose();
             M.Unregister(h);
         }
