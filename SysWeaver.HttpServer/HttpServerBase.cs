@@ -799,7 +799,6 @@ namespace SysWeaver.Net
         {
             var pm = PerfMon;
             using var _ = pm.Track(nameof(GetHandler));
-            var n = nameof(GetHandler) + ".";
             var prefixes = PrefixMods;
             if (prefixes != null)
             {

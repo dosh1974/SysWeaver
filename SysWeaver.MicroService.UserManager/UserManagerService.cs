@@ -954,6 +954,8 @@ namespace SysWeaver.MicroService
             using (var c = await Db.GetAsync().ConfigureAwait(false))
             {
                 user = user ?? (await c.FirstOrDefaultAsync<DbUser>(x => x.Id == userId).ConfigureAwait(false));
+                if (user == null)
+                    return null;
                 var mail = await c.FirstOrDefaultAsync<DbEmailAddress>(x => x.UserId == userId).ConfigureAwait(false);
                 var phone = await c.FirstOrDefaultAsync<DbPhoneNumber>(x => x.UserId == userId).ConfigureAwait(false);
                 String[] tokens = null;

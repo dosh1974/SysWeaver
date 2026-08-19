@@ -19,7 +19,8 @@ namespace SysWeaver.Db
     public static class DbDataType<T>
     {
         public static readonly IReadOnlyDictionary<String, String[]> FullTextIndexes;
-        
+
+        public static readonly String DefaultTableName;
 
         static DbDataType()
         {
@@ -46,7 +47,7 @@ namespace SysWeaver.Db
                 }
             }
             var dbType = ModelDefinition<T>.Definition;
-
+            DefaultTableName = dbType.ModelName;
             Dictionary<String, FieldDefinition> fs = new Dictionary<string, FieldDefinition>(StringComparer.Ordinal);
             Dictionary<String, FieldDefinition> propInfos = new Dictionary<string, FieldDefinition>(StringComparer.Ordinal);
             foreach (var f in dbType.FieldDefinitions)
