@@ -54,6 +54,15 @@ namespace SysWeaver.MicroService
         readonly FileHttpServerModule FileModule;
         readonly IFileRepo KeyRepo;
 
+
+        [WebApi]
+        public ValueTask<String> Hello(String name)
+        {
+            if (String.IsNullOrEmpty(name))
+                return ValueTask.FromResult("Hello world!");
+            return ValueTask.FromResult("Hello " + name + "!");
+        }
+
         public ServerManagerService(ServiceManager manager, ServerManagerParams p)
         {
             p = p ?? new ServerManagerParams();

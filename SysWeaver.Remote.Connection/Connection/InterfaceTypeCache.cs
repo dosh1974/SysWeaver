@@ -1,13 +1,16 @@
 ﻿
+using BitFaster.Caching;
+using BitFaster.Caching.Lru;
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Reflection.Emit;
-using System.Collections.Generic;
-using BitFaster.Caching.Lru;
-using BitFaster.Caching;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using static SysWeaver.Remote.Connection.InterfaceTypeConsts;
 
 namespace SysWeaver.Remote.Connection
 {
@@ -69,21 +72,86 @@ namespace SysWeaver.Remote.Connection
         
         const BindingFlags bf = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         
-        public static readonly MethodInfo[] RestTypeMethods = 
+        public enum RetTypes
+        {
+            /// <summary>
+            /// Task'1
+            /// </summary>
+            ReturnTask,
+            /// <summary>
+            /// ValueTask'1
+            /// </summary>
+            ReturnValueTask,
+            /// <summary>
+            /// Task
+            /// </summary>
+            Void,
+            /// <summary>
+            /// ValueTask
+            /// </summary>
+            ValueVoid
+
+        }
+
+        static readonly IReadOnlyDictionary<Type, RetTypes> TypeMaps = new Dictionary<Type, RetTypes>
+        {
+            { typeof(Task), RetTypes.Void },
+            { typeof(ValueTask), RetTypes.ValueVoid },
+            { typeof(Task<>), RetTypes.ReturnTask },
+            { typeof(ValueTask<>), RetTypes.ReturnValueTask },
+        };
+
+        public static RetTypes GetRetType(ref Type t)
+        {
+            var o = t;
+            var c = t;
+            if (t.IsGenericType)
+            {
+                c = t.GetGenericTypeDefinition();
+                t = t.GenericTypeArguments[0];
+            }else
+            {
+                t = typeof(void);
+            }
+            if (!TypeMaps.TryGetValue(c, out var r))
+                throw new Exception("Invalid return type \"" + o.FullName + "\", interface must return a Task or ValueTask!");
+            return r;
+        }
+
+
+        public static readonly MethodInfo[][] RestMethods =
         [
+            [
                 BaseType.GetMethod(nameof(HttpEndPointTypes.Get), bf),
                 BaseType.GetMethod(nameof(HttpEndPointTypes.Post), bf),
                 BaseType.GetMethod(nameof(HttpEndPointTypes.Put), bf),
                 BaseType.GetMethod(nameof(HttpEndPointTypes.Delete), bf),
-        ];
+            ],
 
-        public static readonly MethodInfo[] RestVoidTypeMethods =
-        [
+            [
+                BaseType.GetMethod("Value" + nameof(HttpEndPointTypes.Get), bf),
+                BaseType.GetMethod("Value" + nameof(HttpEndPointTypes.Post), bf),
+                BaseType.GetMethod("Value" + nameof(HttpEndPointTypes.Put), bf),
+                BaseType.GetMethod("Value" + nameof(HttpEndPointTypes.Delete), bf),
+            ],
+
+            [
                 BaseType.GetMethod("Void" + nameof(HttpEndPointTypes.Get), bf),
                 BaseType.GetMethod("Void" + nameof(HttpEndPointTypes.Post), bf),
                 BaseType.GetMethod("Void" + nameof(HttpEndPointTypes.Put), bf),
                 BaseType.GetMethod("Void" + nameof(HttpEndPointTypes.Delete), bf),
+            ],
+
+            [
+                BaseType.GetMethod("ValueVoid" + nameof(HttpEndPointTypes.Get), bf),
+                BaseType.GetMethod("ValueVoid" + nameof(HttpEndPointTypes.Post), bf),
+                BaseType.GetMethod("ValueVoid" + nameof(HttpEndPointTypes.Put), bf),
+                BaseType.GetMethod("ValueVoid" + nameof(HttpEndPointTypes.Delete), bf),
+            ]
         ];
+
+
+
 
     }
 
@@ -141,24 +209,26 @@ namespace SysWeaver.Remote.Connection
             if (prefix.Length > 0)
                 if (!prefix.EndsWith('/'))
                     prefix += "/";
+
+
+
+
+
+            var restMethods = InterfaceTypeConsts.RestMethods; 
+
             foreach (var m in t.GetMembers())
             {
                 if (m.MemberType != MemberTypes.Method)
                     throw new Exception("Only methods are allowed, member \"" + m.Name + "\" in type \"" + t.FullName + "\" is NOT a method!");
                 var mi = m as MethodInfo;
                 var returnType = mi.ReturnType;
-                bool isVoid = mi.ReturnType == voidType;
-                if (!isVoid)
-                {
-                    if (!returnType.IsGenericType)
-                        throw new Exception("Only Task or Task<T> may be returned, method \"" + m.Name + "\" in type \"" + t.FullName + "\" returns \"" + returnType.FullName + "\"");
-                    returnType = returnType.GenericTypeArguments[0];
-                }
+                var callTypes = restMethods[(int)GetRetType(ref returnType)];
                 ++index;
                 var miParams = mi.GetParameters();
                 var parameterTypes = miParams.Select(v => v.ParameterType).ToArray();
                 var parameterCount = parameterTypes.Length;
-                var xt = isVoid ? parameterTypes : [returnType];
+                bool isReturningVoid = returnType == typeof(void);
+                var xt = isReturningVoid ? Array.Empty<Type>() : [returnType];
                 Type[] returnParameterTypes = [..xt, ..parameterTypes];
                 var method = typeBuilder.DefineMethod(mi.Name, MethodAttributes.Public | MethodAttributes.Virtual, mi.ReturnType, parameterTypes);
                 var plen = miParams.Length;
@@ -185,12 +255,12 @@ namespace SysWeaver.Remote.Connection
                 
                 path = prefix + path;
 
-                var metaType = isVoid ? typeof(ApiMeta) : metaTypeT.MakeGenericType(returnType);
+                var metaType = isReturningVoid ? typeof(ApiMeta) : metaTypeT.MakeGenericType(returnType);
                 var metaName = "_M" + index;
                 var metaField = typeBuilder.DefineField(metaName, metaType, FieldAttributes.Private | FieldAttributes.InitOnly);
                 int cacheDuration = -2; // Number of seconds to keep the data
                 int maxCachedItems = -2; // Max number of entries
-                if (!isVoid)
+                if (!isReturningVoid)
                 {
                     cacheDuration = RemoteCacheAttribute.UseConnection;
                     maxCachedItems = RemoteCacheAttribute.UseConnection;
@@ -219,9 +289,6 @@ namespace SysWeaver.Remote.Connection
                 FieldBuilder optField = null;
 
 
-
-                var restTypeMethods = InterfaceTypeConsts.RestTypeMethods;
-                var restVoidTypeMethods = InterfaceTypeConsts.RestVoidTypeMethods;
 
                 //  RestOptions builder, must match constructor
                 if (ser != null || postSer != null || timeOut > 0)
@@ -265,7 +332,7 @@ namespace SysWeaver.Remote.Connection
                                         il.Emit(OpCodes.Ldsfld, optField);
                                     else
                                         il.Emit(OpCodes.Ldnull);
-                                    MethodInfo baseMethod = isVoid ? restVoidTypeMethods[restIndex] : restTypeMethods[restIndex].MakeGenericMethod(returnType);
+                                    MethodInfo baseMethod = isReturningVoid ? callTypes[restIndex] : callTypes[restIndex].MakeGenericMethod(returnType);
                                     il.Emit(OpCodes.Call, baseMethod);
                                 }
                                 break;
@@ -297,7 +364,7 @@ namespace SysWeaver.Remote.Connection
                                             il.Emit(OpCodes.Ldsfld, optField);
                                         else
                                             il.Emit(OpCodes.Ldnull);
-                                        MethodInfo baseMethod = isVoid ? restVoidTypeMethods[restIndex] : restTypeMethods[restIndex].MakeGenericMethod(returnType);
+                                        MethodInfo baseMethod = isReturningVoid ? callTypes[restIndex] : callTypes[restIndex].MakeGenericMethod(returnType);
                                         il.Emit(OpCodes.Call, baseMethod);
                                     }
                                     break;
@@ -313,7 +380,7 @@ namespace SysWeaver.Remote.Connection
                                             il.Emit(OpCodes.Ldsfld, optField);
                                         else
                                             il.Emit(OpCodes.Ldnull);
-                                        MethodInfo baseMethod = isVoid ? restVoidTypeMethods[restIndex].MakeGenericMethod(inputType) : restTypeMethods[restIndex].MakeGenericMethod(returnType, inputType);
+                                        MethodInfo baseMethod = isReturningVoid ? callTypes[restIndex] : callTypes[restIndex].MakeGenericMethod(returnType, inputType);
                                         il.Emit(OpCodes.Call, baseMethod);
                                     }
                                     break;
@@ -401,7 +468,7 @@ namespace SysWeaver.Remote.Connection
                                             il.Emit(OpCodes.Ldsfld, optField);
                                         else
                                             il.Emit(OpCodes.Ldnull);
-                                        MethodInfo baseMethod = isVoid ? restVoidTypeMethods[restIndex] : restTypeMethods[restIndex].MakeGenericMethod(returnType);
+                                        MethodInfo baseMethod = isReturningVoid ? callTypes[restIndex] : callTypes[restIndex].MakeGenericMethod(returnType);
                                         il.Emit(OpCodes.Call, baseMethod);
                                     }
                                     break;
@@ -417,7 +484,7 @@ namespace SysWeaver.Remote.Connection
                                             il.Emit(OpCodes.Ldsfld, optField);
                                         else
                                             il.Emit(OpCodes.Ldnull);
-                                        MethodInfo baseMethod = isVoid ? restVoidTypeMethods[restIndex].MakeGenericMethod(inputType) : restTypeMethods[restIndex].MakeGenericMethod(returnType, inputType);
+                                        MethodInfo baseMethod = isReturningVoid ? callTypes[restIndex] : callTypes[restIndex].MakeGenericMethod(returnType, inputType);
                                         il.Emit(OpCodes.Call, baseMethod);
                                     }
                                     break;

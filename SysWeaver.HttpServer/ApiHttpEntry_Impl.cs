@@ -1683,5 +1683,871 @@ namespace SysWeaver.Net
 
         #endregion//With request context
 
+
+
+
+
+
+
+
+
+        #region ValueTask
+
+        #region One argument
+
+        #region Return value
+
+        sealed class RetGetAsyncValueTaskA1<T, R> : IInvokeApi
+        {
+            public RetGetAsyncValueTaskA1(Func<T, ValueTask<R>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<T, ValueTask<R>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var io = Input_GET<T>(api, request);
+                var track = api.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, io);
+                    var oo = await F(io).ConfigureAwait(false);
+                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return od;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+
+
+
+
+        }
+
+        sealed class RetPostAsyncValueTaskA1<T, R> : IInvokeApi
+        {
+            public RetPostAsyncValueTaskA1(Func<T, ValueTask<R>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<T, ValueTask<R>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var io = await Input_POST<T>(api, request).ConfigureAwait(false);
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, io);
+                    var oo = await F(io).ConfigureAwait(false);
+                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return od;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+          
+        #endregion//Return value
+
+
+        #region Return raw value
+
+        sealed class RawRetGetAsyncValueTaskA1<T> : IInvokeApi
+        {
+            public RawRetGetAsyncValueTaskA1(Func<T, ValueTask<ReadOnlyMemory<Byte>>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<T, ValueTask<ReadOnlyMemory<Byte>>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var io = Input_GET<T>(api, request);
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, io);
+                    var oo = await F(io).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        sealed class RawRetPostAsyncValueTaskA1<T> : IInvokeApi
+        {
+            public RawRetPostAsyncValueTaskA1(Func<T, ValueTask<ReadOnlyMemory<Byte>>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<T, ValueTask<ReadOnlyMemory<Byte>>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var io = await Input_POST<T>(api, request).ConfigureAwait(false);
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, io);
+                    var oo = await F(io).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        #endregion//Return raw value
+
+
+        #region No return
+
+        sealed class GetAsyncValueTaskA1<T> : IInvokeApi
+        {
+            public GetAsyncValueTaskA1(Func<T, ValueTask> f)
+            {
+                F = f;
+
+            }
+            readonly Func<T, ValueTask> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var io = Input_GET<T>(api, request);
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, io);
+                    await F(io).ConfigureAwait(false);
+                    var oo = ReadOnlyMemory<Byte>.Empty;
+                    if (track)
+                        api.OnEnd(trackId, request, api, null);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+
+            }
+        }
+
+        sealed class PostAsyncValueTaskA1<T> : IInvokeApi
+        {
+            public PostAsyncValueTaskA1(Func<T, ValueTask> f)
+            {
+                F = f;
+
+            }
+            readonly Func<T, ValueTask> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var io = await Input_POST<T>(api, request).ConfigureAwait(false);
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, io);
+                    await F(io).ConfigureAwait(false);
+                    var oo = ReadOnlyMemory<Byte>.Empty;
+                    if (track)
+                        api.OnEnd(trackId, request, api, null);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        #endregion//No return
+
+        #endregion//One argument
+
+        #region No argument
+
+        #region Return value
+
+        sealed class RetGetAsyncValueTaskA0<R> : IInvokeApi
+        {
+            public RetGetAsyncValueTaskA0(Func<ValueTask<R>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<ValueTask<R>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, null);
+                    var oo = await F().ConfigureAwait(false);
+                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return od;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        sealed class RetPostAsyncValueTaskA0<R> : IInvokeApi
+        {
+            public RetPostAsyncValueTaskA0(Func<ValueTask<R>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<ValueTask<R>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, null);
+                    var oo = await F().ConfigureAwait(false);
+                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return od;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        #endregion//Return value
+
+        #region Return raw value
+
+        sealed class RawRetGetAsyncValueTaskA0 : IInvokeApi
+        {
+            public RawRetGetAsyncValueTaskA0(Func<ValueTask<ReadOnlyMemory<Byte>>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<ValueTask<ReadOnlyMemory<Byte>>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, null);
+                    var oo = await F().ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        sealed class RawRetPostAsyncValueTaskA0 : IInvokeApi
+        {
+            public RawRetPostAsyncValueTaskA0(Func<ValueTask<ReadOnlyMemory<Byte>>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<ValueTask<ReadOnlyMemory<Byte>>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, null);
+                    var oo = await F().ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        #endregion//Return raw value
+
+        #region No return
+
+        sealed class GetAsyncValueTaskA0 : IInvokeApi
+        {
+            public GetAsyncValueTaskA0(Func<ValueTask> f)
+            {
+                F = f;
+
+            }
+            readonly Func<ValueTask> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, null);
+                    await F().ConfigureAwait(false);
+                    var oo = ReadOnlyMemory<Byte>.Empty;
+                    if (track)
+                        api.OnEnd(trackId, request, api, null);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+
+            }
+        }
+
+        sealed class PostAsyncValueTaskA0 : IInvokeApi
+        {
+            public PostAsyncValueTaskA0(Func<ValueTask> f)
+            {
+                F = f;
+
+            }
+            readonly Func<ValueTask> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, null);
+                    await F().ConfigureAwait(false);
+                    var oo = ReadOnlyMemory<Byte>.Empty;
+                    if (track)
+                        api.OnEnd(trackId, request, api, null);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        #endregion//No return
+
+        #endregion//No argument
+
+        #region With request context
+
+        #region One argument
+
+        #region Return value
+
+        sealed class ContextRetGetAsyncValueTaskA1<T, R> : IInvokeApi
+        {
+            public ContextRetGetAsyncValueTaskA1(Func<T, HttpServerRequest, ValueTask<R>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<T, HttpServerRequest, ValueTask<R>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var io = Input_GET<T>(api, request);
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, io);
+                    var oo = await F(io, request).ConfigureAwait(false);
+                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return od;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+
+            }
+        }
+
+        sealed class ContextRetPostAsyncValueTaskA1<T, R> : IInvokeApi
+        {
+            public ContextRetPostAsyncValueTaskA1(Func<T, HttpServerRequest, ValueTask<R>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<T, HttpServerRequest, ValueTask<R>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var io = await Input_POST<T>(api, request).ConfigureAwait(false);
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, io);
+                    var oo = await F(io, request).ConfigureAwait(false);
+                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return od;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        #endregion//Return value
+
+
+        #region Return raw value
+
+        sealed class RawContextRetGetAsyncValueTaskA1<T> : IInvokeApi
+        {
+            public RawContextRetGetAsyncValueTaskA1(Func<T, HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<T, HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var io = Input_GET<T>(api, request);
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, io);
+                    var oo = await F(io, request).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        sealed class RawContextRetPostAsyncValueTaskA1<T> : IInvokeApi
+        {
+            public RawContextRetPostAsyncValueTaskA1(Func<T, HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<T, HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var io = await Input_POST<T>(api, request).ConfigureAwait(false);
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, io);
+                    var oo = await F(io, request).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        #endregion//Return raw value
+
+
+
+
+
+        #region No return
+
+        sealed class ContextGetAsyncValueTaskA1<T> : IInvokeApi
+        {
+            public ContextGetAsyncValueTaskA1(Func<T, HttpServerRequest, ValueTask> f)
+            {
+                F = f;
+
+            }
+            readonly Func<T, HttpServerRequest, ValueTask> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var io = Input_GET<T>(api, request);
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, io);
+                    await F(io, request).ConfigureAwait(false);
+                    var oo = ReadOnlyMemory<Byte>.Empty;
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+
+            }
+        }
+
+        sealed class ContextPostAsyncValueTaskA1<T> : IInvokeApi
+        {
+            public ContextPostAsyncValueTaskA1(Func<T, HttpServerRequest, ValueTask> f)
+            {
+                F = f;
+
+            }
+            readonly Func<T, HttpServerRequest, ValueTask> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var io = await Input_POST<T>(api, request).ConfigureAwait(false);
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, io);
+                    await F(io, request).ConfigureAwait(false);
+                    var oo = ReadOnlyMemory<Byte>.Empty;
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        #endregion//No return
+
+        #endregion//One argument
+
+        #region No argument
+
+        #region Return value
+
+        sealed class ContextRetGetAsyncValueTaskA0<R> : IInvokeApi
+        {
+            public ContextRetGetAsyncValueTaskA0(Func<HttpServerRequest, ValueTask<R>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<HttpServerRequest, ValueTask<R>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, null);
+                    var oo = await F(request).ConfigureAwait(false);
+                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return od;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        sealed class ContextRetPostAsyncValueTaskA0<R> : IInvokeApi
+        {
+            public ContextRetPostAsyncValueTaskA0(Func<HttpServerRequest, ValueTask<R>> f)
+            {
+                F = f;
+            }
+
+            readonly Func<HttpServerRequest, ValueTask<R>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, null);
+                    var oo = await F(request).ConfigureAwait(false);
+                    var od = await EncodeResult(api, request, oo).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return od;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        #endregion//Return value
+
+        #region Return raw value
+
+        sealed class RawContextRetGetAsyncValueTaskA0 : IInvokeApi
+        {
+            public RawContextRetGetAsyncValueTaskA0(Func<HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> f)
+            {
+                F = f;
+
+            }
+            readonly Func<HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, null);
+                    var oo = await F(request).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        sealed class RawContextRetPostAsyncValueTaskA0 : IInvokeApi
+        {
+            public RawContextRetPostAsyncValueTaskA0(Func<HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> f)
+            {
+                F = f;
+            }
+
+            readonly Func<HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, null);
+                    var oo = await F(request).ConfigureAwait(false);
+                    if (track)
+                        api.OnEnd(trackId, request, api, oo);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        #endregion//Return value
+
+        #region No return
+
+        sealed class ContextGetAsyncValueTaskA0 : IInvokeApi
+        {
+            public ContextGetAsyncValueTaskA0(Func<HttpServerRequest, ValueTask> f)
+            {
+                F = f;
+
+            }
+            readonly Func<HttpServerRequest, ValueTask> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, null);
+                    await F(request).ConfigureAwait(false);
+                    var oo = ReadOnlyMemory<Byte>.Empty;
+                    if (track)
+                        api.OnEnd(trackId, request, api, null);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        sealed class ContextPostAsyncValueTaskA0 : IInvokeApi
+        {
+            public ContextPostAsyncValueTaskA0(Func<HttpServerRequest, ValueTask> f)
+            {
+                F = f;
+
+            }
+            readonly Func<HttpServerRequest, ValueTask> F;
+
+            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            {
+                var track = api?.OnStart != null;
+                var trackId = track ? ApiAudit.GetId() : 0;
+                try
+                {
+                    if (track)
+                        api.OnStart(trackId, request, api, null);
+                    await F(request).ConfigureAwait(false);
+                    var oo = ReadOnlyMemory<Byte>.Empty;
+                    if (track)
+                        api.OnEnd(trackId, request, api, null);
+                    return oo;
+                }
+                catch (Exception ex)
+                {
+                    if (track)
+                        api.OnException(trackId, request, api, ex);
+                    throw;
+                }
+            }
+        }
+
+        #endregion//No return
+
+        #endregion//No argument
+
+        #endregion//With request context
+
+        #endregion//ValueTask
     }
 }

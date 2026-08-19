@@ -133,7 +133,7 @@ namespace SysWeaver.Remote
         readonly ExceptionTracker DeleteFails = new ExceptionTracker();
 
 
-         protected RemoteConnectionBase(RemoteConnection p, Type interfaceType)
+        protected RemoteConnectionBase(RemoteConnection p, Type interfaceType)
         {
             PerfMon = new PerfMonitor(interfaceType.Name + "@" + p.BaseUrl);
             var type = GetType();
@@ -180,7 +180,7 @@ namespace SysWeaver.Remote
             TimeoutInMilliSeconds = timeOut;
             Ser = SerManager.Get(ser);
             PostSer = SerManager.Get(postSer);
-        //  Proxy/Tor
+            //  Proxy/Tor
             var proxy = p.Proxy;
             if (p.UseTor)
             {
@@ -272,7 +272,8 @@ namespace SysWeaver.Remote
 
                     }
                 }
-            }else
+            }
+            else
             {
                 c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", b);
                 auth = ", auth: bearer";
@@ -281,6 +282,10 @@ namespace SysWeaver.Remote
         }
 
         #region Called by the generated class
+
+        #region Return value
+
+        #region AsyncTask
 
         protected async Task<T> Get<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
         {
@@ -406,6 +411,145 @@ namespace SysWeaver.Remote
             }
         }
 
+        #endregion//AsyncTask
+
+
+        #region AsyncValueTask
+
+        protected async ValueTask<T> ValueGet<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
+        {
+            var cache = meta.Cache;
+            if (cache != null)
+            {
+                using (PerfMon.Track("Cache " + meta.Name))
+                {
+                    if (cache.TryGet(url, out var val))
+                        return val;
+                }
+            }
+            using (PerfMon.Track(meta.Name))
+            {
+                var apiUrl = UrlBase + url;
+                try
+                {
+                    T val;
+                    using (var req = new HttpRequestMessage(HttpMethod.Get, apiUrl))
+                        val = await ReadResponse<T>(req, opt, HttpEndPointTypes.Get, null, ReadOnlyMemory<Byte>.Empty).ConfigureAwait(false);
+                    cache?.AddOrUpdate(url, val);
+                    return val;
+                }
+                catch (Exception ex)
+                {
+                    if (ex is HttpResponseException)
+                    {
+                        GetFails.OnException(ex);
+                        throw;
+                    }
+                    ex = new Exception("GET \"" + GetCleanUrl(apiUrl) + "\", failed: " + ex.Message, ex);
+                    GetFails.OnException(ex);
+                    throw ex;
+                }
+            }
+        }
+
+        protected async ValueTask<T> ValueDelete<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
+        {
+            var cache = meta.Cache;
+            if (cache != null)
+            {
+                using (PerfMon.Track("Cache " + meta.Name))
+                {
+                    if (cache.TryGet(url, out var val))
+                        return val;
+                }
+            }
+            using (PerfMon.Track(meta.Name))
+            {
+                var apiUrl = UrlBase + url;
+                try
+                {
+                    T val;
+                    using (var req = new HttpRequestMessage(HttpMethod.Delete, apiUrl))
+                        val = await ReadResponse<T>(req, opt, HttpEndPointTypes.Delete, null, ReadOnlyMemory<Byte>.Empty).ConfigureAwait(false);
+                    cache?.AddOrUpdate(url, val);
+                    return val;
+                }
+                catch (Exception ex)
+                {
+                    if (ex is HttpResponseException)
+                    {
+                        DeleteFails.OnException(ex);
+                        throw;
+                    }
+                    ex = new Exception("DELETE \"" + GetCleanUrl(apiUrl) + "\", failed: " + ex.Message, ex);
+                    DeleteFails.OnException(ex);
+                    throw ex;
+                }
+            }
+        }
+
+        protected async ValueTask<T> ValuePost<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
+        {
+            using (PerfMon.Track(meta.Name))
+            {
+                var apiUrl = UrlBase + url;
+                try
+                {
+                    using var content = CreateContent(out var ser, out var payload, data, opt);
+                    using var req = new HttpRequestMessage(HttpMethod.Post, apiUrl);
+                    req.Content = content;
+                    return await ReadResponse<T>(req, opt, HttpEndPointTypes.Post, ser, payload, content).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    if (ex is HttpResponseException)
+                    {
+                        PostFails.OnException(ex);
+                        throw;
+                    }
+                    ex = new Exception("POST \"" + GetCleanUrl(apiUrl) + "\", failed: " + ex.Message, ex);
+                    PostFails.OnException(ex);
+                    throw ex;
+                }
+            }
+        }
+
+        protected async ValueTask<T> ValuePut<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
+        {
+            using (PerfMon.Track(meta.Name))
+            {
+                var apiUrl = UrlBase + url;
+                try
+                {
+                    using var content = CreateContent(out var ser, out var payload, data, opt);
+                    using var req = new HttpRequestMessage(HttpMethod.Put, apiUrl);
+                    req.Content = content;
+                    return await ReadResponse<T>(req, opt, HttpEndPointTypes.Put, ser, payload, content).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    if (ex is HttpResponseException)
+                    {
+                        PutFails.OnException(ex);
+                        throw;
+                    }
+                    ex = new Exception("PUT \"" + GetCleanUrl(apiUrl) + "\", failed: " + ex.Message, ex);
+                    PutFails.OnException(ex);
+                    throw ex;
+                }
+            }
+        }
+
+        #endregion//AsyncValueTask
+
+        #endregion//Return value
+
+
+
+        #region Void
+
+        #region AsyncTask
+
         protected async Task VoidGet(String url, ApiMeta meta, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -510,6 +654,122 @@ namespace SysWeaver.Remote
             }
         }
 
+        #endregion//AsyncTask
+
+
+
+        #region AsyncValueTask
+
+        protected async ValueTask ValueVoidGet(String url, ApiMeta meta, EndPointOptions opt)
+        {
+            using (PerfMon.Track(meta.Name))
+            {
+                var apiUrl = UrlBase + url;
+                try
+                {
+                    using (var req = new HttpRequestMessage(HttpMethod.Get, apiUrl))
+                        await WaitResponse(req, opt, HttpEndPointTypes.Get, null, ReadOnlyMemory<Byte>.Empty).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    if (ex is HttpResponseException)
+                    {
+                        GetFails.OnException(ex);
+                        throw;
+                    }
+                    ex = new Exception("GET \"" + GetCleanUrl(apiUrl) + "\", failed: " + ex.Message, ex);
+                    GetFails.OnException(ex);
+                    throw ex;
+                }
+            }
+        }
+
+        protected async ValueTask ValueVoidDelete(String url, ApiMeta meta, EndPointOptions opt)
+        {
+            using (PerfMon.Track(meta.Name))
+            {
+                var apiUrl = UrlBase + url;
+                try
+                {
+                    using (var req = new HttpRequestMessage(HttpMethod.Delete, apiUrl))
+                        await WaitResponse(req, opt, HttpEndPointTypes.Get, null, ReadOnlyMemory<Byte>.Empty).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    if (ex is HttpResponseException)
+                    {
+                        DeleteFails.OnException(ex);
+                        throw;
+                    }
+                    ex = new Exception("DELETE \"" + GetCleanUrl(apiUrl) + "\", failed: " + ex.Message, ex);
+                    DeleteFails.OnException(ex);
+                    throw ex;
+                }
+            }
+        }
+
+        protected async ValueTask ValueVoidPost<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
+        {
+            using (PerfMon.Track(meta.Name))
+            {
+                var apiUrl = UrlBase + url;
+                try
+                {
+                    using (var content = CreateContent(out var ser, out var payload, data, opt))
+                    using (var req = new HttpRequestMessage(HttpMethod.Post, apiUrl))
+                    {
+                        req.Content = content;
+                        await WaitResponse(req, opt, HttpEndPointTypes.Post, ser, payload, content).ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (ex is HttpResponseException)
+                    {
+                        PostFails.OnException(ex);
+                        throw;
+                    }
+                    ex = new Exception("POST \"" + GetCleanUrl(apiUrl) + "\", failed: " + ex.Message, ex);
+                    PostFails.OnException(ex);
+                    throw ex;
+                }
+            }
+        }
+
+        protected async ValueTask ValueVoidPut<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
+        {
+            using (PerfMon.Track(meta.Name))
+            {
+                var apiUrl = UrlBase + url;
+                try
+                {
+                    using (var content = CreateContent(out var ser, out var payload, data, opt))
+                    using (var req = new HttpRequestMessage(HttpMethod.Put, apiUrl))
+                    {
+                        req.Content = content;
+                        await WaitResponse(req, opt, HttpEndPointTypes.Put, ser, payload, content).ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (ex is HttpResponseException)
+                    {
+                        PutFails.OnException(ex);
+                        throw;
+                    }
+                    ex = new Exception("PUT \"" + GetCleanUrl(apiUrl) + "\", failed: " + ex.Message, ex);
+                    PutFails.OnException(ex);
+                    throw ex;
+                }
+            }
+        }
+
+        #endregion//AsyncValueTask
+
+
+        #endregion//Void
+
+
         #endregion//Called by the generated class
 
         static T GetAttribute<T>(Type t) where T : Attribute
@@ -542,7 +802,8 @@ namespace SysWeaver.Remote
                 if (e < 0)
                     return "";
                 i = e + 1;
-            } else
+            }
+            else
                 i = 0;
             var q = s.IndexOf('?', i);
             if (q < 0)
@@ -551,7 +812,7 @@ namespace SysWeaver.Remote
         }
 
 
-        async Task<T> ReadResponse<T>(HttpRequestMessage req, EndPointOptions opt, HttpEndPointTypes type, ISerializerType payloadSer, ReadOnlyMemory<Byte> payload, HttpContent content = null)
+        async ValueTask<T> ReadResponse<T>(HttpRequestMessage req, EndPointOptions opt, HttpEndPointTypes type, ISerializerType payloadSer, ReadOnlyMemory<Byte> payload, HttpContent content = null)
         {
             long rid = Interlocked.Increment(ref ReqId);
             var timeout = opt?.TimeOutInMilliSeconds ?? 0;
@@ -618,7 +879,7 @@ namespace SysWeaver.Remote
             }
         }
 
-        async Task WaitResponse(HttpRequestMessage req, EndPointOptions opt, HttpEndPointTypes type, ISerializerType payloadSer, ReadOnlyMemory<Byte> payload, HttpContent content = null)
+        async ValueTask WaitResponse(HttpRequestMessage req, EndPointOptions opt, HttpEndPointTypes type, ISerializerType payloadSer, ReadOnlyMemory<Byte> payload, HttpContent content = null)
         {
             long rid = Interlocked.Increment(ref ReqId);
             var timeout = opt?.TimeOutInMilliSeconds ?? 0;

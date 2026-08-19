@@ -120,7 +120,7 @@ namespace SysWeaver.Net
             //  Determine return type and if it's a task
             ParameterInfo ri = method.ReturnParameter;
             Type retSerType = method.ReturnType;
-            if (NoRetSerTypes.TryGetValue(retSerType, out var isTask))
+            if (NoRetSerTypes.TryGetValue(retSerType, out var callType))
             {
                 retSerType = null;
                 ri = null;
@@ -130,10 +130,10 @@ namespace SysWeaver.Net
             {
                 if (retSerType.IsGenericType)
                 {
-                    if (GenTaskTypes.Contains(retSerType.GetGenericTypeDefinition()))
+                    if (GenTaskTypes.TryGetValue(retSerType.GetGenericTypeDefinition(), out var ct))
                     {
                         taskType = retSerType;
-                        isTask = true;
+                        callType = ct;
                         retSerType = retSerType.GetGenericArguments()[0];
                     }
                 }
@@ -184,43 +184,64 @@ namespace SysWeaver.Net
                 if (retSerType == null)
                 {
                     //  No return data
-                    if (isTask)
+                    switch (callType)
                     {
-                        //  Is async call
-                        if (hasContext)
-                        {
-                            var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, typeof(Task));
-                            var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
-                            getAsync = Activator.CreateInstance(typeof(ContextGetAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                            postAsync = Activator.CreateInstance(typeof(ContextPostAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                        case CallTypes.AsyncTask:
+                            //  Is async call
+                            if (hasContext)
+                            {
+                                var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, typeof(Task));
+                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
+                                getAsync = Activator.CreateInstance(typeof(ContextGetAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(ContextPostAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
 
-                        }
-                        else
-                        {
-                            var ft = typeof(Func<,>).MakeGenericType(serType, typeof(Task));
-                            var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
-                            getAsync = Activator.CreateInstance(typeof(GetAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                            postAsync = Activator.CreateInstance(typeof(PostAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                        }
-                    }
-                    else
-                    {
-                        //  Is sync call
-                        if (hasContext)
-                        {
-                            var ft = typeof(Action<,>).MakeGenericType(serType, contextType);
-                            var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
-                            get = Activator.CreateInstance(typeof(ContextGetA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                            postAsync = Activator.CreateInstance(typeof(ContextPostAsyncA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                            }
+                            else
+                            {
+                                var ft = typeof(Func<,>).MakeGenericType(serType, typeof(Task));
+                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
+                                getAsync = Activator.CreateInstance(typeof(GetAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(PostAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                            }
+                            break;
+                        case CallTypes.AsyncValueTask:
+                            //  Is async call
+                            if (hasContext)
+                            {
+                                var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, typeof(ValueTask));
+                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
+                                getAsync = Activator.CreateInstance(typeof(ContextGetAsyncValueTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(ContextPostAsyncValueTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
 
-                        }
-                        else
-                        {
-                            var ft = typeof(Action<>).MakeGenericType(serType);
-                            var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
-                            get = Activator.CreateInstance(typeof(GetA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                            postAsync = Activator.CreateInstance(typeof(PostAsyncA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                        }
+                            }
+                            else
+                            {
+                                var ft = typeof(Func<,>).MakeGenericType(serType, typeof(ValueTask));
+                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
+                                getAsync = Activator.CreateInstance(typeof(GetAsyncValueTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(PostAsyncValueTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                            }
+                            break;
+                        case CallTypes.Sync:
+                            //  Is sync call
+                            if (hasContext)
+                            {
+                                var ft = typeof(Action<,>).MakeGenericType(serType, contextType);
+                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
+                                get = Activator.CreateInstance(typeof(ContextGetA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(ContextPostAsyncA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+
+                            }
+                            else
+                            {
+                                var ft = typeof(Action<>).MakeGenericType(serType);
+                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
+                                get = Activator.CreateInstance(typeof(GetA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(PostAsyncA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                            }
+                            break;
+                        default:
+                            throw new Exception("Invalid call type!");
                     }
                 }
                 else
@@ -228,86 +249,129 @@ namespace SysWeaver.Net
                     if (rawMime != null)
                     {
                         //  Return raw data
-                        if (isTask)
+                        switch (callType)
                         {
-                            if (taskType == null)
-                                throw new Exception("Internal error!");
-                            //  Is async call
-                            if (hasContext)
-                            {
-                                var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, taskType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
-                                getAsync = Activator.CreateInstance(typeof(RawContextRetGetAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                                postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                            }
-                            else
-                            {
-                                var ft = typeof(Func<,>).MakeGenericType(serType, taskType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
-                                getAsync = Activator.CreateInstance(typeof(RawRetGetAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                                postAsync = Activator.CreateInstance(typeof(RawRetPostAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                            }
+                            case CallTypes.AsyncTask:
+                                if (taskType == null)
+                                    throw new Exception("Internal error!");
+                                //  Is async call
+                                if (hasContext)
+                                {
+                                    var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(RawContextRetGetAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                }
+                                else
+                                {
+                                    var ft = typeof(Func<,>).MakeGenericType(serType, taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(RawRetGetAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RawRetPostAsyncTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                }
+                                break;
+                            case CallTypes.AsyncValueTask:
+                                if (taskType == null)
+                                    throw new Exception("Internal error!");
+                                //  Is async call
+                                if (hasContext)
+                                {
+                                    var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(RawContextRetGetAsyncValueTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncValueTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                }
+                                else
+                                {
+                                    var ft = typeof(Func<,>).MakeGenericType(serType, taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(RawRetGetAsyncValueTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RawRetPostAsyncValueTaskA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                }
+                                break;
+                            case CallTypes.Sync:
+                                //  Is sync call
+                                if (hasContext)
+                                {
+                                    var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, retSerType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
+                                    get = Activator.CreateInstance(typeof(RawContextRetGetA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                }
+                                else
+                                {
+                                    var ft = typeof(Func<,>).MakeGenericType(serType, retSerType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
+                                    get = Activator.CreateInstance(typeof(RawRetGetA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RawRetPostAsyncA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
+                                }
+                                break;
+                            default:
+                                throw new Exception("Invalid call type!");
                         }
-                        else
-                        {
-                            //  Is sync call
-                            if (hasContext)
-                            {
-                                var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, retSerType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
-                                get = Activator.CreateInstance(typeof(RawContextRetGetA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                                postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                            }
-                            else
-                            {
-                                var ft = typeof(Func<,>).MakeGenericType(serType, retSerType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
-                                get = Activator.CreateInstance(typeof(RawRetGetA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                                postAsync = Activator.CreateInstance(typeof(RawRetPostAsyncA1<>).MakeGenericType(serType), lambda) as IInvokeApi;
-                            }
-                        }
-
                     }
                     else
                     {
                         //  Return data
-                        if (isTask)
+                        switch (callType)
                         {
-                            if (taskType == null)
-                                throw new Exception("Internal error!");
-                            //  Is async call
-                            if (hasContext)
-                            {
-                                var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, taskType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
-                                getAsync = Activator.CreateInstance(typeof(ContextRetGetAsyncTaskA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
-                                postAsync = Activator.CreateInstance(typeof(ContextRetPostAsyncTaskA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
-                            }
-                            else
-                            {
-                                var ft = typeof(Func<,>).MakeGenericType(serType, taskType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
-                                getAsync = Activator.CreateInstance(typeof(RetGetAsyncTaskA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
-                                postAsync = Activator.CreateInstance(typeof(RetPostAsyncTaskA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
-                            }
-                        }
-                        else
-                        {
-                            //  Is sync call
-                            if (hasContext)
-                            {
-                                var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, retSerType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
-                                get = Activator.CreateInstance(typeof(ContextRetGetA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
-                                postAsync = Activator.CreateInstance(typeof(ContextRetPostAsyncA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
-                            }
-                            else
-                            {
-                                var ft = typeof(Func<,>).MakeGenericType(serType, retSerType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
-                                get = Activator.CreateInstance(typeof(RetGetA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
-                                postAsync = Activator.CreateInstance(typeof(RetPostAsyncA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
-                            }
+                            case CallTypes.AsyncTask:
+                                if (taskType == null)
+                                    throw new Exception("Internal error!");
+                                //  Is async call
+                                if (hasContext)
+                                {
+                                    var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(ContextRetGetAsyncTaskA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(ContextRetPostAsyncTaskA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
+                                }
+                                else
+                                {
+                                    var ft = typeof(Func<,>).MakeGenericType(serType, taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(RetGetAsyncTaskA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RetPostAsyncTaskA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
+                                }
+                                break;
+                            case CallTypes.AsyncValueTask:
+                                if (taskType == null)
+                                    throw new Exception("Internal error!");
+                                //  Is async call
+                                if (hasContext)
+                                {
+                                    var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(ContextRetGetAsyncValueTaskA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(ContextRetPostAsyncValueTaskA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
+                                }
+                                else
+                                {
+                                    var ft = typeof(Func<,>).MakeGenericType(serType, taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(RetGetAsyncValueTaskA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RetPostAsyncValueTaskA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
+                                }
+                                break;
+                            case CallTypes.Sync:
+                                //  Is sync call
+                                if (hasContext)
+                                {
+                                    var ft = typeof(Func<,,>).MakeGenericType(serType, contextType, retSerType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg, contextParam), arg, contextParam).Compile();
+                                    get = Activator.CreateInstance(typeof(ContextRetGetA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(ContextRetPostAsyncA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
+                                }
+                                else
+                                {
+                                    var ft = typeof(Func<,>).MakeGenericType(serType, retSerType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, arg), arg).Compile();
+                                    get = Activator.CreateInstance(typeof(RetGetA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RetPostAsyncA1<,>).MakeGenericType(serType, retSerType), lambda) as IInvokeApi;
+                                }
+                                break;
+                            default:
+                                throw new Exception("Invalid call type!");
                         }
                     }
                 }
@@ -318,41 +382,61 @@ namespace SysWeaver.Net
                 if (retSerType == null)
                 {
                     //  No return data
-                    if (isTask)
+                    switch (callType)
                     {
-                        //  Is async call
-                        if (hasContext)
-                        {
-                            var ft = typeof(Func<HttpServerRequest, Task>);
-                            var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
-                            getAsync = Activator.CreateInstance(typeof(ContextGetAsyncTaskA0), lambda) as IInvokeApi;
-                            postAsync = Activator.CreateInstance(typeof(ContextPostAsyncTaskA0), lambda) as IInvokeApi;
-                        }
-                        else
-                        {
-                            var ft = typeof(Func<Task>);
-                            var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
-                            getAsync = Activator.CreateInstance(typeof(GetAsyncTaskA0), lambda) as IInvokeApi;
-                            postAsync = Activator.CreateInstance(typeof(PostAsyncTaskA0), lambda) as IInvokeApi;
-                        }
-                    }
-                    else
-                    {
-                        //  Is sync call
-                        if (hasContext)
-                        {
-                            var ft = typeof(Action<HttpServerRequest>);
-                            var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
-                            get = Activator.CreateInstance(typeof(ContextGetA0), lambda) as IInvokeApi;
-                            post = Activator.CreateInstance(typeof(ContextPostA0), lambda) as IInvokeApi;
-                        }
-                        else
-                        {
-                            var ft = typeof(Action);
-                            var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
-                            get = Activator.CreateInstance(typeof(GetA0), lambda) as IInvokeApi;
-                            post = Activator.CreateInstance(typeof(PostA0), lambda) as IInvokeApi;
-                        }
+                        case CallTypes.AsyncTask:
+                            //  Is async call
+                            if (hasContext)
+                            {
+                                var ft = typeof(Func<HttpServerRequest, Task>);
+                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
+                                getAsync = Activator.CreateInstance(typeof(ContextGetAsyncTaskA0), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(ContextPostAsyncTaskA0), lambda) as IInvokeApi;
+                            }
+                            else
+                            {
+                                var ft = typeof(Func<Task>);
+                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
+                                getAsync = Activator.CreateInstance(typeof(GetAsyncTaskA0), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(PostAsyncTaskA0), lambda) as IInvokeApi;
+                            }
+                            break;
+                        case CallTypes.AsyncValueTask:
+                            //  Is async call
+                            if (hasContext)
+                            {
+                                var ft = typeof(Func<HttpServerRequest, ValueTask>);
+                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
+                                getAsync = Activator.CreateInstance(typeof(ContextGetAsyncValueTaskA0), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(ContextPostAsyncValueTaskA0), lambda) as IInvokeApi;
+                            }
+                            else
+                            {
+                                var ft = typeof(Func<ValueTask>);
+                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
+                                getAsync = Activator.CreateInstance(typeof(GetAsyncValueTaskA0), lambda) as IInvokeApi;
+                                postAsync = Activator.CreateInstance(typeof(PostAsyncValueTaskA0), lambda) as IInvokeApi;
+                            }
+                            break;
+                        case CallTypes.Sync:
+                            //  Is sync call
+                            if (hasContext)
+                            {
+                                var ft = typeof(Action<HttpServerRequest>);
+                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
+                                get = Activator.CreateInstance(typeof(ContextGetA0), lambda) as IInvokeApi;
+                                post = Activator.CreateInstance(typeof(ContextPostA0), lambda) as IInvokeApi;
+                            }
+                            else
+                            {
+                                var ft = typeof(Action);
+                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
+                                get = Activator.CreateInstance(typeof(GetA0), lambda) as IInvokeApi;
+                                post = Activator.CreateInstance(typeof(PostA0), lambda) as IInvokeApi;
+                            }
+                            break;
+                        default:
+                            throw new Exception("Invalid call type!");
                     }
                 }
                 else
@@ -360,85 +444,129 @@ namespace SysWeaver.Net
                     if (rawMime != null)
                     {
                         //  Return raw data
-                        if (isTask)
+                        switch (callType)
                         {
-                            if (taskType == null)
-                                throw new Exception("Internal error!");
-                            //  Is async call
-                            if (hasContext)
-                            {
-                                var ft = typeof(Func<,>).MakeGenericType(contextType, taskType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
-                                getAsync = Activator.CreateInstance(typeof(RawContextRetGetAsyncTaskA0), lambda) as IInvokeApi;
-                                postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncTaskA0), lambda) as IInvokeApi;
-                            }
-                            else
-                            {
-                                var ft = typeof(Func<>).MakeGenericType(taskType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
-                                getAsync = Activator.CreateInstance(typeof(RawRetGetAsyncTaskA0), lambda) as IInvokeApi;
-                                postAsync = Activator.CreateInstance(typeof(RawRetPostAsyncTaskA0), lambda) as IInvokeApi;
-                            }
-                        }
-                        else
-                        {
-                            //  Is sync call
-                            if (hasContext)
-                            {
-                                var ft = typeof(Func<,>).MakeGenericType(contextType, retSerType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
-                                get = Activator.CreateInstance(typeof(RawContextRetGetA0), lambda) as IInvokeApi;
-                                post = Activator.CreateInstance(typeof(RawContextRetPostA0), lambda) as IInvokeApi;
-                            }
-                            else
-                            {
-                                var ft = typeof(Func<>).MakeGenericType(retSerType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
-                                get = Activator.CreateInstance(typeof(RawRetGetA0), lambda) as IInvokeApi;
-                                post = Activator.CreateInstance(typeof(RawRetPostA0), lambda) as IInvokeApi;
-                            }
+                            case CallTypes.AsyncTask:
+                                if (taskType == null)
+                                    throw new Exception("Internal error!");
+                                //  Is async call
+                                if (hasContext)
+                                {
+                                    var ft = typeof(Func<,>).MakeGenericType(contextType, taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(RawContextRetGetAsyncTaskA0), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncTaskA0), lambda) as IInvokeApi;
+                                }
+                                else
+                                {
+                                    var ft = typeof(Func<>).MakeGenericType(taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(RawRetGetAsyncTaskA0), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RawRetPostAsyncTaskA0), lambda) as IInvokeApi;
+                                }
+                                break;
+                            case CallTypes.AsyncValueTask:
+                                if (taskType == null)
+                                    throw new Exception("Internal error!");
+                                //  Is async call
+                                if (hasContext)
+                                {
+                                    var ft = typeof(Func<,>).MakeGenericType(contextType, taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(RawContextRetGetAsyncValueTaskA0), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RawContextRetPostAsyncValueTaskA0), lambda) as IInvokeApi;
+                                }
+                                else
+                                {
+                                    var ft = typeof(Func<>).MakeGenericType(taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(RawRetGetAsyncValueTaskA0), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RawRetPostAsyncValueTaskA0), lambda) as IInvokeApi;
+                                }
+                                break;
+                            case CallTypes.Sync:
+                                //  Is sync call
+                                if (hasContext)
+                                {
+                                    var ft = typeof(Func<,>).MakeGenericType(contextType, retSerType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
+                                    get = Activator.CreateInstance(typeof(RawContextRetGetA0), lambda) as IInvokeApi;
+                                    post = Activator.CreateInstance(typeof(RawContextRetPostA0), lambda) as IInvokeApi;
+                                }
+                                else
+                                {
+                                    var ft = typeof(Func<>).MakeGenericType(retSerType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
+                                    get = Activator.CreateInstance(typeof(RawRetGetA0), lambda) as IInvokeApi;
+                                    post = Activator.CreateInstance(typeof(RawRetPostA0), lambda) as IInvokeApi;
+                                }
+                                break;
+                            default:
+                                throw new Exception("Invalid call type!");
                         }
                     }
                     else
                     {
                         //  Return data
-                        if (isTask)
+                        switch (callType)
                         {
-                            if (taskType == null)
-                                throw new Exception("Internal error!");
-                            //  Is async call
-                            if (hasContext)
-                            {
-                                var ft = typeof(Func<,>).MakeGenericType(contextType, taskType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
-                                getAsync = Activator.CreateInstance(typeof(ContextRetGetAsyncTaskA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
-                                postAsync = Activator.CreateInstance(typeof(ContextRetPostAsyncTaskA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
-                            }
-                            else
-                            {
-                                var ft = typeof(Func<>).MakeGenericType(taskType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
-                                getAsync = Activator.CreateInstance(typeof(RetGetAsyncTaskA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
-                                postAsync = Activator.CreateInstance(typeof(RetPostAsyncTaskA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
-                            }
-                        }
-                        else
-                        {
-                            //  Is sync call
-                            if (hasContext)
-                            {
-                                var ft = typeof(Func<,>).MakeGenericType(contextType, retSerType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
-                                get = Activator.CreateInstance(typeof(ContextRetGetA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
-                                post = Activator.CreateInstance(typeof(ContextRetPostA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
-                            }
-                            else
-                            {
-                                var ft = typeof(Func<>).MakeGenericType(retSerType);
-                                var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
-                                get = Activator.CreateInstance(typeof(RetGetA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
-                                post = Activator.CreateInstance(typeof(RetPostA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
-                            }
+                            case CallTypes.AsyncTask:
+                                if (taskType == null)
+                                    throw new Exception("Internal error!");
+                                //  Is async call
+                                if (hasContext)
+                                {
+                                    var ft = typeof(Func<,>).MakeGenericType(contextType, taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(ContextRetGetAsyncTaskA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(ContextRetPostAsyncTaskA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
+                                }
+                                else
+                                {
+                                    var ft = typeof(Func<>).MakeGenericType(taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(RetGetAsyncTaskA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RetPostAsyncTaskA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
+                                }
+                                break;
+                            case CallTypes.AsyncValueTask:
+                                if (taskType == null)
+                                    throw new Exception("Internal error!");
+                                //  Is async call
+                                if (hasContext)
+                                {
+                                    var ft = typeof(Func<,>).MakeGenericType(contextType, taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(ContextRetGetAsyncValueTaskA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(ContextRetPostAsyncValueTaskA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
+                                }
+                                else
+                                {
+                                    var ft = typeof(Func<>).MakeGenericType(taskType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
+                                    getAsync = Activator.CreateInstance(typeof(RetGetAsyncValueTaskA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
+                                    postAsync = Activator.CreateInstance(typeof(RetPostAsyncValueTaskA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
+                                }
+                                break;
+                            case CallTypes.Sync:
+                                //  Is sync call
+                                if (hasContext)
+                                {
+                                    var ft = typeof(Func<,>).MakeGenericType(contextType, retSerType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
+                                    get = Activator.CreateInstance(typeof(ContextRetGetA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
+                                    post = Activator.CreateInstance(typeof(ContextRetPostA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
+                                }
+                                else
+                                {
+                                    var ft = typeof(Func<>).MakeGenericType(retSerType);
+                                    var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
+                                    get = Activator.CreateInstance(typeof(RetGetA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
+                                    post = Activator.CreateInstance(typeof(RetPostA0<>).MakeGenericType(retSerType), lambda) as IInvokeApi;
+                                }
+                                break;
+                            default:
+                                throw new Exception("Invalid call type!");
                         }
                     }
                 }
@@ -811,17 +939,26 @@ namespace SysWeaver.Net
         }
 
 
-        static readonly IReadOnlyDictionary<Type, bool> NoRetSerTypes = new Dictionary<Type, bool>
+        enum CallTypes
         {
-            { typeof(void), false },
-            { typeof(Task), true },
-            { typeof(ValueTask), true },
+            Sync,
+            AsyncTask,
+            AsyncValueTask,
+
+        }
+
+        static readonly IReadOnlyDictionary<Type, CallTypes> NoRetSerTypes = new Dictionary<Type, CallTypes>
+        {
+            { typeof(void), CallTypes.Sync },
+            { typeof(Task), CallTypes.AsyncTask },
+            { typeof(ValueTask), CallTypes.AsyncValueTask },
         }.Freeze();
 
-        static readonly IReadOnlySet<Type> GenTaskTypes = ReadOnlyData.Set(
-            typeof(Task<>),
-            typeof(ValueTask<>)
-        );
+        static readonly IReadOnlyDictionary<Type, CallTypes> GenTaskTypes = new Dictionary<Type, CallTypes>
+        { 
+            { typeof(Task<>), CallTypes.AsyncTask  },
+            { typeof(ValueTask<>), CallTypes.AsyncValueTask },
+        }.Freeze();
 
 
 
