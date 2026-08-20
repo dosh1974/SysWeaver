@@ -23,7 +23,7 @@ namespace SysWeaver
 
         String Prev;
 
-        protected sealed override ValueTask Add(Message message)
+        protected sealed override Task Add(Message message)
         {
             var style = Style;
             var text = message.GetText(style);
@@ -39,7 +39,7 @@ namespace SysWeaver
             return WriteText(text);
         }
 
-        protected abstract ValueTask WriteText(String text);
+        protected abstract Task WriteText(String text);
 
         protected override void OnFlush()
         {

@@ -88,7 +88,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="filename"></param>
         /// <returns></returns>
-        public static async ValueTask<String> UncachedGetHashAsync(String filename)
+        public static async Task<String> UncachedGetHashAsync(String filename)
         {
             var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
             try
@@ -174,7 +174,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="filename">The existing file to get the hash of the content</param>
         /// <returns>A hash string (26 chars) or null if there is some error</returns>
-        public static ValueTask<String> GetHashAsync(String filename)
+        public static Task<String> GetHashAsync(String filename)
         {
             return InternalHashAsync(filename, IsWeb(filename));
         }
@@ -182,7 +182,7 @@ namespace SysWeaver
 
         static readonly FastMemCache<String, String> Cache = new (TimeSpan.FromMinutes(30), StringComparer.Ordinal);
 
-        static async ValueTask<String> InternalHashAsync(String filename, bool isWeb)
+        static async Task<String> InternalHashAsync(String filename, bool isWeb)
         {
             if (!isWeb)
             {
@@ -192,7 +192,7 @@ namespace SysWeaver
                     if (fi.Exists)
                     {
                         var key = await GetCacheKeyAsync(filename, fi).ConfigureAwait(false);
-                        return await Cache.GetOrUpdateValueAsync(key, _ =>
+                        return await Cache.GetOrUpdateAsync(key, _ =>
                             InternalUncachedHashAsync(filename, isWeb)).ConfigureAwait(false);
                     }
                 }
@@ -203,7 +203,7 @@ namespace SysWeaver
             return await InternalUncachedHashAsync(filename, isWeb).ConfigureAwait(false);
         }
 
-        static async ValueTask<String> InternalUncachedHashAsync(String filename, bool isWeb)
+        static async Task<String> InternalUncachedHashAsync(String filename, bool isWeb)
         {
             var keyName = await GetCacheKeyAsync(filename, isWeb).ConfigureAwait(false);
             if (keyName == null)

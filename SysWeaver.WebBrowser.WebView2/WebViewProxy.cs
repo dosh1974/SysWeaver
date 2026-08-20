@@ -94,10 +94,10 @@ namespace SysWeaver.WebBrowser
                     if (P.NotUiThread)
                         return P.Run(() => AddJsObject(name, obj));
                     if (!JsObjects.TryAdd(name, true))
-                        return Task.FromResult(false);
+                        return TaskExt.FalseTask;
                     var core = C.CoreWebView2;
                     core.AddHostObjectToScript(name, obj);
-                    return Task.FromResult(true);
+                    return TaskExt.TrueTask;
                 }
 
                 public Task<bool> RemoveJsObject(String name)
@@ -105,10 +105,10 @@ namespace SysWeaver.WebBrowser
                     if (P.NotUiThread)
                         return P.Run(() => RemoveJsObject(name));
                     if (!JsObjects.TryRemove(name, out var _))
-                        return Task.FromResult(false);
+                        return TaskExt.FalseTask;
                     var core = C.CoreWebView2;
                     core.RemoveHostObjectFromScript(name);
-                    return Task.FromResult(true);
+                    return TaskExt.TrueTask;
                 }
 
                 public Task<bool> Resize(int width, int height, double scale)
@@ -118,7 +118,7 @@ namespace SysWeaver.WebBrowser
                     C.SetBoundsAndZoomFactor(new System.Drawing.Rectangle(0, 0, width, height), scale <= 0 ? 1 : scale);
                     Width = width;
                     Height = height;
-                    return Task.FromResult(true);
+                    return TaskExt.TrueTask;
                 }
 
 

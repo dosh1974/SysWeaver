@@ -256,7 +256,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="data"></param>
         /// <returns></returns>
-        public abstract ValueTask SetResBodyAsync(ReadOnlyMemory<Byte> data);
+        public abstract Task SetResBodyAsync(ReadOnlyMemory<Byte> data);
 
         public abstract void SetResBody(Byte[] data, int offset, int length);
         public abstract Task SetResBodyAsync(Byte[] data, int offset, int length);

@@ -17,7 +17,7 @@ namespace SysWeaver
             Filename = filename;
             DownloadName = Path.GetFileName(filename);
             MaxSize = Math.Max(1 << 10, maxSize);
-            WriteText("== File log started " + DateTime.UtcNow.ToLocalTime().ToString("yy-MM-dd HH:mm:ss") + " ==\n").AsTask().RunAsync();
+            WriteText("== File log started " + DateTime.UtcNow.ToLocalTime().ToString("yy-MM-dd HH:mm:ss") + " ==\n").RunAsync();
         }
 
         public readonly String DownloadName;
@@ -35,7 +35,7 @@ namespace SysWeaver
 
 
 
-        protected override async ValueTask WriteText(string text)
+        protected override async Task WriteText(string text)
         {
             var fn = Filename;
             var l = MaxSize;

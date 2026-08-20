@@ -921,7 +921,7 @@ namespace SysWeaver.AI
         /// <summary>
         /// Callback with usage stats, args are: the request, model, number of input tokens, number of output tokens
         /// </summary>
-        public event Func<HttpServerRequest, String, long, long, ValueTask> OnUse;
+        public event Func<HttpServerRequest, String, long, long, Task> OnUse;
 
 
         static IReadOnlyDictionary<String, String> ImageExtensions = ReadOnlyData.Dictionary<String, String>(StringComparer.Ordinal,
@@ -933,7 +933,7 @@ namespace SysWeaver.AI
             );
 
 
-        async ValueTask<IReadOnlyList<ChatMessageContentPart>> GetData(ChatMessageBody message, HttpServerRequest request)
+        async Task<IReadOnlyList<ChatMessageContentPart>> GetData(ChatMessageBody message, HttpServerRequest request)
         {
             var d = message.Data;
             if (d == null)

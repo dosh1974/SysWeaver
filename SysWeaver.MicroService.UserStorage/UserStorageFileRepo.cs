@@ -14,7 +14,7 @@ namespace SysWeaver.MicroService
             String key, 
             UserStorageUpload p, 
             Func<HttpServerRequest, String, ValueTuple<String, String>> getPaths, 
-            Func<String, ValueTask<long>> getMaxSize,
+            Func<String, Task<long>> getMaxSize,
             Func<String, ValueTuple<FileInfo, ICompType>> getDiscFile
             )
         {
@@ -46,7 +46,7 @@ namespace SysWeaver.MicroService
         }
 
         readonly Func<HttpServerRequest, String, ValueTuple<String, String>> GetPaths;
-        readonly Func<String, ValueTask<long>> GetMaxSize;
+        readonly Func<String, Task<long>> GetMaxSize;
         readonly Func<String, ValueTuple<FileInfo, ICompType>> GetDiscFile;
 
         readonly long MaxSize;
@@ -63,7 +63,7 @@ namespace SysWeaver.MicroService
 
         public string UploadAuth { get; init; }
 
-        public async ValueTask<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r)
+        public async Task<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r)
         {
             var il = info.Length;
             if ((il > 1) && (!AllowMultiple))
@@ -112,14 +112,14 @@ namespace SysWeaver.MicroService
         }
 
 
-        static async ValueTask WriteToFile(Stream s, String dest)
+        static async Task WriteToFile(Stream s, String dest)
         {
             await PathExt.EnsureCanWriteFileAsync(dest).ConfigureAwait(false);
             using var ds = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None);
             await s.CopyToAsync(ds).ConfigureAwait(false);
         }
 
-        public async ValueTask<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
+        public async Task<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
         {
             var storage = await GetMaxSize(r.Session.Auth.Guid).ConfigureAwait(false);
             var maxSize = MaxSize;

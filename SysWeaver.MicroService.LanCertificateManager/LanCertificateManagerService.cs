@@ -32,7 +32,7 @@ namespace SysWeaver.MicroService
         readonly PeriodicTask RetryTask;
 
 
-        async ValueTask<bool> Retry()
+        async Task<bool> Retry()
         {
             foreach (var d in Domains.Values)
             {

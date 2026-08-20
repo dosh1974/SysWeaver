@@ -36,7 +36,7 @@ namespace SysWeaver.MicroService
 
             public string UploadAuth { get; init; }
 
-            async ValueTask<FileUploadResult> CheckFile(FileUploadInfo file)
+            async Task<FileUploadResult> CheckFile(FileUploadInfo file)
             {
                 var dest = Path.Combine(DiscFolder, file.Name);
                 if (File.Exists(dest))
@@ -57,7 +57,7 @@ namespace SysWeaver.MicroService
                 return FileUploadResult.Upload;
             }
 
-            public ValueTask<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r)
+            public Task<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r)
             {
                 if (!IsKey)
                 {
@@ -68,13 +68,13 @@ namespace SysWeaver.MicroService
                     }
                     catch
                     {
-                        return ValueTask.FromResult(ArrayExt.Create(info.Length, FileUploadResult.NotAuthorized));
+                        return Task.FromResult(ArrayExt.Create(info.Length, FileUploadResult.NotAuthorized));
                     }
                 }
-                return info.ConvertAsyncValue(CheckFile);
+                return info.ConvertAsync(CheckFile);
             }
 
-            public async ValueTask<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
+            public async Task<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
             {
                 if (!IsKey)
                 {

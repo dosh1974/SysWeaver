@@ -36,7 +36,7 @@ namespace SysWeaver.HttpTransformer
         /// <param name="data">Data in the request</param>
         /// <param name="entry">Existing data in the cache</param>
         /// <returns></returns>
-        ValueTask<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> data, CachedTransformerEntry entry);
+        Task<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> data, CachedTransformerEntry entry);
 
     }
 

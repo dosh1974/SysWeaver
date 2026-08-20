@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\SwSolidity\Solidity.Common\Solidity.Common.csproj" />
+    <ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
   </ItemGroup>
 
 </Project>

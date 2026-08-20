@@ -239,7 +239,7 @@ namespace SysWeaver
         /// <param name="a0">Arg0</param>
         /// <param name="a1">Arg1</param>
         /// <returns>A list of matches, ordered by name</returns>
-        public async ValueTask<E> EnumPrefixesOf<E, A0, A1>(String text, Func<IReadOnlyList<T>, A0, A1, ValueTask<E>> fn, A0 a0, A1 a1, int start = 0) where E : class
+        public async Task<E> EnumPrefixesOf<E, A0, A1>(String text, Func<IReadOnlyList<T>, A0, A1, Task<E>> fn, A0 a0, A1 a1, int start = 0) where E : class
         {
             FrozenStringTreeList<T> node = this;
             int len = text.Length;

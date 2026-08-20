@@ -44,7 +44,7 @@ namespace SysWeaver.MicroService
             PruneTask = new PeriodicTask(Prune, 60000);
         }
 
-        async ValueTask<bool> Prune()
+        async Task<bool> Prune()
         {
             using (PerfMon.Track(nameof(Prune)))
             {
@@ -246,15 +246,15 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="request">Paramaters</param>
         /// <returns>Translated text</returns>
-        public Task<string> TranslateOne(TranslateRequest request)
+        public ValueTask<string> TranslateOne(TranslateRequest request)
             => TranslateOne(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType, request.ServiceName, request.UserName);
 
-        Task<string> TranslateOne(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType, String serviceName, String userName)
+        ValueTask<string> TranslateOne(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType, String serviceName, String userName)
         {
             if (text.FastStartsWith(TranslationTools.NoTranslatePrefix))
-                return Task.FromResult(text.Substring(TranslationTools.NoTranslatePrefixLength));
+                return ValueTask.FromResult(text.Substring(TranslationTools.NoTranslatePrefixLength));
             if (!text.AnyLetter())
-                return Task.FromResult(text);
+                return ValueTask.FromResult(text);
             var fo = from;
             var translator = T;
             from = GetFrom(from);

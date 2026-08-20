@@ -208,7 +208,7 @@ namespace SysWeaver
             while (tasks.Count > 0)
             {
                 var t = await Task.WhenAny(tasks).ConfigureAwait(false);
-                var ip = t.Result;
+                var ip = t.GetAwaiter().GetResult();
                 //  If any return an IP, don't wait for the rest
                 if (ip != null)
                     return ip;

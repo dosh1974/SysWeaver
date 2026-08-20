@@ -221,8 +221,8 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="request">Paramaters</param>
         /// <returns>Translated text</returns>
-        public Task<string> TranslateOne(TranslateRequest request)
-            => TranslateOne(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
+        public async ValueTask<string> TranslateOne(TranslateRequest request)
+            => await TranslateOne(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType).ConfigureAwait(false);
 
         public async Task<string> TranslateOne(string text, string to, string from, String context, TranslationEffort effort, TranslationCacheRetention retention, TranslationContentTypes contentType)
         {

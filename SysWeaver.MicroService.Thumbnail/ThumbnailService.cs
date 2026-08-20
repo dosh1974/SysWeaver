@@ -159,7 +159,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// An optional async handler
         /// </summary>
-        public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler => async context =>
+        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler => async context =>
         {
             var url = context.LocalUrl;
             //if (!url.FastStartsWith("thumbnail/"))

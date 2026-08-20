@@ -110,11 +110,11 @@ namespace SysWeaver.Net
             r.ContentLength64 = data.Length;
             r.OutputStream.Write(data);
         }
-        public override ValueTask SetResBodyAsync(ReadOnlyMemory<Byte> data)
+        public override async Task SetResBodyAsync(ReadOnlyMemory<Byte> data)
         {
             var r = Res;
             r.ContentLength64 = data.Length;
-            return r.OutputStream.WriteAsync(data);
+            await r.OutputStream.WriteAsync(data).ConfigureAwait(false);
         }
 
         public override void SetResBody(Byte[] data, int offset, int length)

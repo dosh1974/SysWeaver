@@ -16,7 +16,7 @@ namespace SysWeaver.Net
         Object Instance { get; }
         MethodInfo MethodInfo { get; }
         void GetDesc(out Type arg, out Type ret, out String methodDesc, out String argDesc, out String retDesc, out String argName);
-        ValueTask<ReadOnlyMemory<Byte>> InvokeAsync(HttpServerRequest request, ReadOnlyMemory<Byte> data);
+        Task<ReadOnlyMemory<Byte>> InvokeAsync(HttpServerRequest request, ReadOnlyMemory<Byte> data);
 
     }
 

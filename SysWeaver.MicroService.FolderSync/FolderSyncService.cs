@@ -41,7 +41,7 @@ namespace SysWeaver.MicroService
 
         public IReadOnlyList<string> Auth => null;
 
-        public ValueTask<string> GetCacheKey(HttpServerRequest request) => HttpServerTools.NullStringValueTask;
+        public ValueTask<String> GetCacheKey(HttpServerRequest request) => TaskExt.NullStringValueTask;
 
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
@@ -55,7 +55,7 @@ namespace SysWeaver.MicroService
             throw new NotImplementedException();
         }
 
-        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
+        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             if (request.HttpMethod != HttpServerMethods.POST)
                 return FalseValue;
@@ -206,7 +206,7 @@ namespace SysWeaver.MicroService
         HttpServerBase HttpServer;
 
 
-        public async ValueTask<String> AddManagedFolder(FsManagedFolder x)
+        public async Task<String> AddManagedFolder(FsManagedFolder x)
         {
             var folders = ManagedFolders;
             var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
@@ -256,7 +256,7 @@ namespace SysWeaver.MicroService
             return true;
         }
 
-        public async ValueTask<String> AddSharedFolder(FsSharedFolder x)
+        public async Task<String> AddSharedFolder(FsSharedFolder x)
         {
             var folders = SharedFolders;
             var path = Path.GetFullPath(PathTemplate.Resolve(x.DiscFolder));
@@ -305,7 +305,7 @@ namespace SysWeaver.MicroService
         readonly TimeSpan TempRemove;
 
 
-        async ValueTask<bool> Prune()
+        async Task<bool> Prune()
         {
             using var _ = PerfMon.Track(nameof(Prune));
             List<String> toDelete = new List<string>();
@@ -385,7 +385,7 @@ namespace SysWeaver.MicroService
             return true;
         }
 
-        async ValueTask<Exception> TryCompressFolderLog(String folder)
+        async Task<Exception> TryCompressFolderLog(String folder)
         {
             var m = Manager;
             m.AddMessage(String.Concat(LogPrefix, "Compressing: \"", folder, "\""));
@@ -398,7 +398,7 @@ namespace SysWeaver.MicroService
             return ex;
         }
 
-        async ValueTask<ValueTuple<Exception, CdcChunkStats>> TryExpandFolderLog(String compact)
+        async Task<ValueTuple<Exception, CdcChunkStats>> TryExpandFolderLog(String compact)
         {
             Manager.AddMessage(LogPrefix + "Expanding \"" + compact + "\"");
             try
@@ -413,7 +413,7 @@ namespace SysWeaver.MicroService
             }
         }
 
-        async ValueTask<Exception> TryCompressFolder(String folder)
+        async Task<Exception> TryCompressFolder(String folder)
         { 
             try
             {
@@ -466,7 +466,7 @@ namespace SysWeaver.MicroService
 
         const String LogPrefix = "[FolderSync] ";
 
-        async ValueTask<int> RunCommand(String cmd)
+        async Task<int> RunCommand(String cmd)
         {
             var m = Manager;
             m.AddMessage(String.Concat(LogPrefix, "Running command: \"", cmd, "\":"));
@@ -486,7 +486,7 @@ namespace SysWeaver.MicroService
             return -42;
         }
 
-        async ValueTask RunCommands(String[] commands)
+        async Task RunCommands(String[] commands)
         {
             foreach (var cmd in commands)
                 await RunCommand(cmd).ConfigureAwait(false);

@@ -22,7 +22,7 @@ namespace SysWeaver.MicroService
 
         #region Shared folder
 
-        async ValueTask<bool> ScanSharedFolders()
+        async Task<bool> ScanSharedFolders()
         {
             foreach (var x in SharedFolders.Values)
             {
@@ -191,13 +191,13 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="context"></param>
         /// <returns>A stream of chunks as binary data</returns>
-        async ValueTask<ReadOnlyMemory<Byte>> GetChunks(HttpServerRequest context)
+        async Task<ReadOnlyMemory<Byte>> GetChunks(HttpServerRequest context)
         {
             using var _ = PerfMon.Track(nameof(GetChunks));
             var dataMem = await context.InputStream.ReadAllUnmanagedMemoryAsync(false).ConfigureAwait(false);
             var data = dataMem.Memory;
             var props = CdcProps.Default;
-            async ValueTask<ReadOnlyMemory<Byte>> Read(String x = null)
+            async Task<ReadOnlyMemory<Byte>> Read(String x = null)
             {
                 using var __ = PerfMon.Track(nameof(GetChunks) + '.' + nameof(Read));
                 using var ms = new MemoryStream();
@@ -213,7 +213,7 @@ namespace SysWeaver.MicroService
             Span<Byte> hashData = stackalloc Byte[SHA256.HashSizeInBytes];
             SHA256.HashData(data.Span, hashData);
             var hash = hashData.ToHexString();
-            return await ChunkDataListCache.GetOrUpdateValueAsync(hash, Read).ConfigureAwait(false);
+            return await ChunkDataListCache.GetOrUpdateAsync(hash, Read).ConfigureAwait(false);
         }
 
         readonly FastMemCache<String, ReadOnlyMemory<Byte>> ChunkDataListCache = new(TimeSpan.FromMinutes(5), StringComparer.Ordinal);

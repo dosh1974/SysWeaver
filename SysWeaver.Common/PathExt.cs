@@ -278,7 +278,7 @@ namespace SysWeaver
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <returns>Null if the folder exists, else the exception</returns>
-        public static async ValueTask<Exception> EnsureFolderExistAsync(String folder, int retryCount = 10, int delayInMs = 100)
+        public static async Task<Exception> EnsureFolderExistAsync(String folder, int retryCount = 10, int delayInMs = 100)
         {
             try
             {
@@ -316,7 +316,7 @@ namespace SysWeaver
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <returns>Null if the folder exists, else the exception</returns>
-        public static ValueTask<Exception> EnsureCanWriteFileAsync(String filename, int retryCount = 10, int delayInMs = 100) => EnsureFolderExistAsync(Path.GetDirectoryName(filename), retryCount);
+        public static Task<Exception> EnsureCanWriteFileAsync(String filename, int retryCount = 10, int delayInMs = 100) => EnsureFolderExistAsync(Path.GetDirectoryName(filename), retryCount);
 
 
         /// <summary>
@@ -356,7 +356,7 @@ namespace SysWeaver
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <returns>Null if the file doesn't exist anymore, else the exception</returns>
-        public static async ValueTask<Exception> TryDeleteFileAsync(String filename, int retryCount = 10, int delayInMs = 100)
+        public static async Task<Exception> TryDeleteFileAsync(String filename, int retryCount = 10, int delayInMs = 100)
         {
             try
             {
@@ -496,7 +496,7 @@ namespace SysWeaver
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <returns>Null if the file was copied successfully, else the exception</returns>
-        public static async ValueTask<Exception> TryCopyFileAsync(String source, String dest, int retryCount = 10, int delayInMs = 100)
+        public static async Task<Exception> TryCopyFileAsync(String source, String dest, int retryCount = 10, int delayInMs = 100)
         {
             try
             {
@@ -544,7 +544,7 @@ namespace SysWeaver
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <returns>Null if the file was copied successfully, else the exception</returns>
-        public static async ValueTask<Exception> TryMoveFileAsync(String source, String dest, int retryCount = 10, int delayInMs = 100)
+        public static async Task<Exception> TryMoveFileAsync(String source, String dest, int retryCount = 10, int delayInMs = 100)
         {
             try
             {
@@ -597,7 +597,7 @@ namespace SysWeaver
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <returns>Null if the file was compressed successfully, else the exception</returns>
-        public static async ValueTask<Exception> TryGZipFileAsync(String source, String dest, CompressionLevel compressionLevel = CompressionLevel.Optimal, int retryCount = 3, int delayInMs = 100)
+        public static async Task<Exception> TryGZipFileAsync(String source, String dest, CompressionLevel compressionLevel = CompressionLevel.Optimal, int retryCount = 3, int delayInMs = 100)
         {
             try
             {
@@ -669,7 +669,7 @@ namespace SysWeaver
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <returns>Null if the directory doesn't exists, else the exception</returns>
-        public static async ValueTask<Exception> TryDeleteDirectoryAsync(String directory, bool onlyEmpty = true, int retryCount = 10, int delayInMs = 100)
+        public static async Task<Exception> TryDeleteDirectoryAsync(String directory, bool onlyEmpty = true, int retryCount = 10, int delayInMs = 100)
         {
             try
             {
@@ -707,7 +707,7 @@ namespace SysWeaver
         }
 
 
-        static readonly ValueTask<Exception> NullExpectionValueTask = ValueTask.FromResult((Exception)null);
+        static readonly Task<Exception> NullExpectionValueTask = Task.FromResult((Exception)null);
 
         /// <summary>
         /// Clean a directory, decide on a per file and per folder basis if it should be deleted
@@ -720,7 +720,7 @@ namespace SysWeaver
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <returns>Null if the directory doesn't exists, else the exception</returns>
-        public static async ValueTask<Exception> TryCleanDirectoryAsync(String directory, Func<String, bool, bool> doDelete, bool continueOnError = true, int retryCount = 10, int delayInMs = 100)
+        public static async Task<Exception> TryCleanDirectoryAsync(String directory, Func<String, bool, bool> doDelete, bool continueOnError = true, int retryCount = 10, int delayInMs = 100)
         {
             Exception rex = null;
             try
@@ -745,7 +745,7 @@ namespace SysWeaver
                         }
                     }
                     var files = Directory.GetFiles(directory, "*");
-                    var exs = await files.ConvertAsyncValue<String, Exception>(f => doDelete(f, false) ? TryDeleteFileAsync(f, retryCount, delayInMs) : NullExpectionValueTask).ConfigureAwait(false);
+                    var exs = await files.ConvertAsync<String, Exception>(f => doDelete(f, false) ? TryDeleteFileAsync(f, retryCount, delayInMs) : NullExpectionValueTask).ConfigureAwait(false);
                     if (continueOnError)
                     {
                         foreach (var x in exs)
@@ -811,7 +811,7 @@ namespace SysWeaver
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <returns>Null if the clean up was successful, else the first exception</returns>
-        public static async ValueTask<Exception> TryRemoveEmptyFoldersAsync(String directory, bool deleteDirectoryIfEmpty = true, int retryCount = 10, int delayInMs = 100)
+        public static async Task<Exception> TryRemoveEmptyFoldersAsync(String directory, bool deleteDirectoryIfEmpty = true, int retryCount = 10, int delayInMs = 100)
         {
             var dirs = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories);
             Array.Sort(dirs, (a, b) => b.Length - a.Length);
@@ -903,7 +903,7 @@ namespace SysWeaver
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <param name="replaceTo">If replace to is true and a folder named to exists, it will be removed before moving</param>
         /// <returns>An exception if there was an error, null if everything went well</returns>
-        public static async ValueTask<Exception> TryMoveFolderAsync(String from, String to, int retryCount = 10, int delayInMs = 100, bool replaceTo = false)
+        public static async Task<Exception> TryMoveFolderAsync(String from, String to, int retryCount = 10, int delayInMs = 100, bool replaceTo = false)
         {
             try
             {
@@ -955,7 +955,7 @@ namespace SysWeaver
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <param name="replaceTo">If replace to is true and a folder named to exists, it will be removed before copying</param>
         /// <returns>An exception if there was an error, null if everything went well</returns>
-        public static async ValueTask<Exception> TryCopyFolderAsync(String from, String to, int retryCount = 10, int delayInMs = 100, bool replaceTo = false)
+        public static async Task<Exception> TryCopyFolderAsync(String from, String to, int retryCount = 10, int delayInMs = 100, bool replaceTo = false)
         {
             try
             {
@@ -1008,7 +1008,7 @@ namespace SysWeaver
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <param name="replaceBak">If true and the backup folder exist, it will de deleted before swapping</param>
         /// <param name="onBackupCopy">if non null, the existing folder is copied to the backup folder, then this function is executed</param>
-        public static async ValueTask<Exception> TryFolderSwapAsync(String targetFolder, String backupFolder, String newFolder, int retryCount = 10, int delayInMs = 100, bool replaceBak = true, Func<String, ValueTask<Exception>> onBackupCopy = null)
+        public static async Task<Exception> TryFolderSwapAsync(String targetFolder, String backupFolder, String newFolder, int retryCount = 10, int delayInMs = 100, bool replaceBak = true, Func<String, Task<Exception>> onBackupCopy = null)
         {
             Exception ex;
             bool didBak = Directory.Exists(targetFolder);

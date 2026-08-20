@@ -168,11 +168,11 @@ namespace SysWeaver.MicroService
 
 
 
-        ValueTask<bool[]> InitAsync()
-            => TaskExt.WhenAll(UpdateStats(), UpdateMetrics());
+        Task<bool[]> InitAsync()
+            => Task.WhenAll(UpdateStats(), UpdateMetrics());
         
 
-        async ValueTask InternalAddService(ManagedService f)
+        async Task InternalAddService(ManagedService f)
         {
             var p = P;
             var df = f.DiscFolder;
@@ -346,7 +346,7 @@ namespace SysWeaver.MicroService
 
         const String LogPrefix = "[ServerManager] ";
 
-        async ValueTask<Exception> OnNewFolder(String name, String path, Func<String, ValueTask<int>> commandRunner)
+        async Task<Exception> OnNewFolder(String name, String path, Func<String, Task<int>> commandRunner)
         {
             if (!Services.TryGetValue(name.FastToLower(), out var si))
                 return null;
@@ -392,7 +392,7 @@ namespace SysWeaver.MicroService
 
         readonly ExceptionTracker StatusEx = new ExceptionTracker();
 
-        async ValueTask<ServiceStatus> CheckStatus(String exe)
+        async Task<ServiceStatus> CheckStatus(String exe)
         {
             using var _ = PerfMon.Track(nameof(CheckStatus));
             ServiceStatus status = ServiceStatus.Unknown;
@@ -428,7 +428,7 @@ namespace SysWeaver.MicroService
 
         }
 
-        async ValueTask<int> RunCommand(String cmd, bool silent = false)
+        async Task<int> RunCommand(String cmd, bool silent = false)
         {
             if (silent)
             {
@@ -460,7 +460,7 @@ namespace SysWeaver.MicroService
             return -42;
         }
 
-        async ValueTask<Exception> OnServiceActivate(String name, String path, Func<String, ValueTask<int>> commandRunner)
+        async Task<Exception> OnServiceActivate(String name, String path, Func<String, Task<int>> commandRunner)
         {
             var exe = FindServiceExe(path);
             if (exe == null)
@@ -472,7 +472,7 @@ namespace SysWeaver.MicroService
         }
 
 
-        async ValueTask<Exception> OnServiceDeactivate(String name, String path, Func<String, ValueTask<int>> commandRunner)
+        async Task<Exception> OnServiceDeactivate(String name, String path, Func<String, Task<int>> commandRunner)
         {
             var exe = FindServiceExe(path);
             if (exe == null)
@@ -488,7 +488,7 @@ namespace SysWeaver.MicroService
         readonly int MaxUpdateConcurrency = Math.Max(2, (Environment.ProcessorCount + 1) >> 1);
         
         
-        async ValueTask<bool> UpdateStats()
+        async Task<bool> UpdateStats()
         {
             using var _ = PerfMon.Track(nameof(UpdateStats));
             try
@@ -562,7 +562,7 @@ namespace SysWeaver.MicroService
         readonly ConcurrentDictionary<long, int> IgnorePids = new ();
 
 
-        async ValueTask<bool> UpdateMetrics()
+        async Task<bool> UpdateMetrics()
         {
             using var _ = PerfMon.Track(nameof(UpdateMetrics));
             Dictionary<String, SmProcess> procExes = new Dictionary<string, SmProcess>(StringComparer.Ordinal);
@@ -1844,7 +1844,7 @@ namespace SysWeaver.MicroService
             try
             {
                 int timeout = 30000;
-                var task = RunCommand(exe.ToQuoted() + " stop").AsTask();
+                var task = RunCommand(exe.ToQuoted() + " stop");
                 await Task.WhenAny(task, Task.Delay(timeout));
                 try
                 {
@@ -2519,7 +2519,7 @@ namespace SysWeaver.MicroService
         /// <param name="sname"></param>
         /// <param name="bak"></param>
         /// <returns></returns>
-        async ValueTask<bool> DeleteFileWithBackup(String sname, String bak)
+        async Task<bool> DeleteFileWithBackup(String sname, String bak)
         {
             var fi = new FileInfo(sname);
             if (await PathExt.EnsureFolderExistAsync(bak).ConfigureAwait(false) == null)
@@ -2614,7 +2614,7 @@ namespace SysWeaver.MicroService
             return true;
         }
 
-        async ValueTask SaveWithBackup(String dname, String textData, bool isKey = false)
+        async Task SaveWithBackup(String dname, String textData, bool isKey = false)
         {
             if (!File.Exists(dname))
             {
@@ -2672,7 +2672,7 @@ namespace SysWeaver.MicroService
 
         }
 
-        public async ValueTask<ReadOnlyMemory<Byte>> TryReadTextFile(String name)
+        public async Task<ReadOnlyMemory<Byte>> TryReadTextFile(String name)
         {
 
 

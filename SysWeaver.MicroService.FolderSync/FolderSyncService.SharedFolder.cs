@@ -42,7 +42,7 @@ namespace SysWeaver.MicroService
                 };
             }
 
-            public async ValueTask<bool> UpdateFiles()
+            public async Task<bool> UpdateFiles()
             {
                 var files = new ConcurrentDictionary<String, SharedFile>(StringComparer.Ordinal);
                 try

@@ -23,18 +23,18 @@ namespace SysWeaver.Search
             readonly ConcurrentDictionary<T, String[]> Texts;
 
 
-            public ValueTask<bool> TryAdd(T content, params String[] texts)
+            public Task<bool> TryAdd(T content, params String[] texts)
             {
                 texts = texts.Where(x => !String.IsNullOrEmpty(x)).Select(x => x.FastToLower()).ToArray();
                 if (texts.Length <= 0)
-                    return TaskExt.FalseValueTask;
-                return Texts.TryAdd(content, texts) ? TaskExt.TrueValueTask : TaskExt.FalseValueTask;
+                    return TaskExt.FalseTask;
+                return Texts.TryAdd(content, texts) ? TaskExt.TrueTask : TaskExt.FalseTask;
             }
 
-            public ValueTask<bool> TryRemove(T content)
-                => Texts.TryRemove(content, out var _) ? TaskExt.TrueValueTask : TaskExt.FalseValueTask;
+            public Task<bool> TryRemove(T content)
+                => Texts.TryRemove(content, out var _) ? TaskExt.TrueTask : TaskExt.FalseTask;
 
-            public async ValueTask<ValueTuple<T, double>[]> Search(String text, int maxHits = 10, Func<T, ValueTask<bool>> keepResult = null)
+            public async Task<ValueTuple<T, double>[]> Search(String text, int maxHits = 10, Func<T, Task<bool>> keepResult = null)
             {
                 if (maxHits < 1)
                     maxHits = 1;

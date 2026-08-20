@@ -28,12 +28,12 @@ namespace SysWeaver.Media
         public readonly TimeSpan Keep;
 
 
-        public ValueTask<String> GetResolvedSvgFile(TextTemplate nameTemplate, IReadOnlyDictionary<String, String> vars, String basePath = null, Func<String, ValueTask<ReadOnlyMemory<Byte>>> altReader = null, String color = null)
+        public Task<String> GetResolvedSvgFile(TextTemplate nameTemplate, IReadOnlyDictionary<String, String> vars, String basePath = null, Func<String, Task<ReadOnlyMemory<Byte>>> altReader = null, String color = null)
             => GetResolvedSvgFile(nameTemplate.Get(k => vars.TryGetValue(k.FastToLower(), out var v) ? v : null), vars, basePath, altReader, color);
 
-        public async ValueTask<String> GetResolvedSvgFile(String name, IReadOnlyDictionary<String, String> vars, String basePath = null, Func<String, ValueTask<ReadOnlyMemory<Byte>>> altReader = null, String color = null)
+        public async Task<String> GetResolvedSvgFile(String name, IReadOnlyDictionary<String, String> vars, String basePath = null, Func<String, Task<ReadOnlyMemory<Byte>>> altReader = null, String color = null)
         {
-            var svgTemp = await SvgCache.GetOrUpdateValueAsync(name, n => LoadSvgFile(n, basePath, altReader)).ConfigureAwait(false);
+            var svgTemp = await SvgCache.GetOrUpdateAsync(name, n => LoadSvgFile(n, basePath, altReader)).ConfigureAwait(false);
             if (svgTemp == null)
                 return null;
             var cols = color == null ? DefColorValue : GetColorVars(color);
@@ -48,14 +48,14 @@ namespace SysWeaver.Media
             });
         }
 
-        public ValueTask<String> GetBitmapFile(TextTemplate nameTemplate, IReadOnlyDictionary<String, String> vars, String basePath = null, Func<String, ValueTask<ReadOnlyMemory<Byte>>> altReader = null)
+        public ValueTask<String> GetBitmapFile(TextTemplate nameTemplate, IReadOnlyDictionary<String, String> vars, String basePath = null, Func<String, Task<ReadOnlyMemory<Byte>>> altReader = null)
             => GetBitmapFile(nameTemplate.Get(k => vars.TryGetValue(k.FastToLower(), out var v) ? v : null), basePath, altReader);
 
-        public ValueTask<String> GetBitmapFile(String name, String basePath = null, Func<String, ValueTask<ReadOnlyMemory<Byte>>> altReader = null)
-            => BitmapCache.GetOrUpdateValueAsync(name, n => LoadBitmapFile(n, basePath, altReader));
+        public ValueTask<String> GetBitmapFile(String name, String basePath = null, Func<String, Task<ReadOnlyMemory<Byte>>> altReader = null)
+            => BitmapCache.GetOrUpdateAsync(name, n => LoadBitmapFile(n, basePath, altReader));
 
 
-        async ValueTask<TextTemplate> LoadSvgFile(String name, String basePath, Func<String, ValueTask<ReadOnlyMemory<Byte>>> altReader)
+        async Task<TextTemplate> LoadSvgFile(String name, String basePath, Func<String, Task<ReadOnlyMemory<Byte>>> altReader)
         {
             String svg;
             if (name[0] == '$')
@@ -113,7 +113,7 @@ namespace SysWeaver.Media
             { "\"#fff\"", "\"[Col15]\"" },
         }.Freeze();
 
-        async ValueTask<String> LoadBitmapFile(String name, String basePath, Func<String, ValueTask<ReadOnlyMemory<Byte>>> altReader)
+        async Task<String> LoadBitmapFile(String name, String basePath, Func<String, Task<ReadOnlyMemory<Byte>>> altReader)
         {
             var ext = name.Substring(name.LastIndexOf('.'));
             var mime = MimeTypeMap.GetMimeType(ext)?.Item1;

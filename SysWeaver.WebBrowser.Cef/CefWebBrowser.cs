@@ -161,19 +161,19 @@ namespace SysWeaver.WebBrowser
             public Task<bool> AddJsObject(String name, Object obj)
             {
                 if (!JsObjects.TryAdd(name, true))
-                    return Task.FromResult(false);
+                    return TaskExt.FalseTask;
                 var rep = Browser.JavascriptObjectRepository;
                 rep.Register(name, obj);
-                return Task.FromResult(true);
+                return TaskExt.TrueTask;
             }
 
             public Task<bool> RemoveJsObject(String name)
             {
                 if (!JsObjects.TryRemove(name, out var _))
-                    return Task.FromResult(false);
+                    return TaskExt.FalseTask;
                 var rep = Browser.JavascriptObjectRepository;
                 rep.UnRegister(name);
-                return Task.FromResult(true);
+                return TaskExt.TrueTask;
             }
 
             readonly IMessageHost M;

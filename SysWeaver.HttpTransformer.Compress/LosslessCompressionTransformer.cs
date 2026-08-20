@@ -80,7 +80,7 @@ namespace SysWeaver.HttpTransformer
             };
         }
 
-        public async ValueTask<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> inputData, CachedTransformerEntry entry)
+        public async Task<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> inputData, CachedTransformerEntry entry)
         {
             var methods = Methods;
             var exts = MethodsExtensions;

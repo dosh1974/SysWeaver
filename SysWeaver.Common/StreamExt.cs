@@ -68,7 +68,7 @@ namespace SysWeaver
         /// <param name="leaveOpen">True will leave the stream opened, false will close it</param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static async ValueTask<String> ReadAllTextAsync(this Stream stream, Encoding encoding = null, bool leaveOpen = false)
+        public static async Task<String> ReadAllTextAsync(this Stream stream, Encoding encoding = null, bool leaveOpen = false)
         {
             using var mem = await ReadAllUnmanagedMemoryAsync(stream, leaveOpen).ConfigureAwait(false);
             return encoding.GetStringWithoutBom(mem.Memory.Span);
@@ -86,7 +86,7 @@ namespace SysWeaver
         /// <param name="removeEmpty">True to remove empty lines</param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static async ValueTask<String[]> ReadAllLinesAsync(this Stream stream, Encoding encoding = null, bool leaveOpen = false, bool trim = false, bool removeEmpty = false)
+        public static async Task<String[]> ReadAllLinesAsync(this Stream stream, Encoding encoding = null, bool leaveOpen = false, bool trim = false, bool removeEmpty = false)
             => (await ReadAllTextAsync(stream, encoding, leaveOpen).ConfigureAwait(false)).GetLines(trim, removeEmpty);
 
         /// <summary>
@@ -123,7 +123,7 @@ namespace SysWeaver
         }
 
 
-        public static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> ReadAllUnmanagedMemoryAsync(this Stream stream, bool leaveOpen = false)
+        public static async Task<IUnmanagedReadOnlyMemory<Byte>> ReadAllUnmanagedMemoryAsync(this Stream stream, bool leaveOpen = false)
         {
             if (stream is FileStream fs)
                 return await FileReadOnlyMemory.ReadAsync(fs, leaveOpen).ConfigureAwait(false);
@@ -143,7 +143,7 @@ namespace SysWeaver
             return ms.GetMemory();
         }
 
-        public static async ValueTask<ReadOnlyMemory<Byte>> ReadAllReadOnlyMemoryAsync(this Stream stream, bool leaveOpen = false)
+        public static async Task<ReadOnlyMemory<Byte>> ReadAllReadOnlyMemoryAsync(this Stream stream, bool leaveOpen = false)
         {
             if (stream is FileStream fs)
                 return await FileReadOnlyMemory.ReadAllBytesAsync(fs, leaveOpen).ConfigureAwait(false);
@@ -154,7 +154,7 @@ namespace SysWeaver
         }
 
 
-        public static async ValueTask<Memory<Byte>> ReadAllMemoryAsync(this Stream stream, bool leaveOpen = false)
+        public static async Task<Memory<Byte>> ReadAllMemoryAsync(this Stream stream, bool leaveOpen = false)
         {
             if (stream is FileStream fs)
                 return await FileReadOnlyMemory.ReadAllBytesAsync(fs, leaveOpen).ConfigureAwait(false);
@@ -164,7 +164,7 @@ namespace SysWeaver
             return ms.GetBufferMemory();
         }
 
-        public static async ValueTask<Byte[]> ReadAllBytesAsync(this Stream stream, bool leaveOpen = false)
+        public static async Task<Byte[]> ReadAllBytesAsync(this Stream stream, bool leaveOpen = false)
         {
             if (stream is FileStream fs)
                 return await FileReadOnlyMemory.ReadAllBytesAsync(fs, leaveOpen).ConfigureAwait(false);

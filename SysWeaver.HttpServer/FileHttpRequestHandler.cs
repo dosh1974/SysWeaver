@@ -74,7 +74,7 @@ namespace SysWeaver.Net
 
         public IReadOnlyList<String> Auth { get; init; }
 
-        public ValueTask<String> GetCacheKey(HttpServerRequest request) => HttpServerTools.NullStringValueTask;
+        public ValueTask<String> GetCacheKey(HttpServerRequest request) => TaskExt.NullStringValueTask;
 
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
@@ -105,7 +105,7 @@ namespace SysWeaver.Net
             return new HttpRequestData(fs);
         }
 
-        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
+        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
@@ -123,7 +123,7 @@ namespace SysWeaver.Net
         public HttpServerRequest Redirected { get; set; }
 
 
-        public DynamicDataHttpRequestHandler(Tuple<String, bool> mime, Func<HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> getBody, RequestOptions options)
+        public DynamicDataHttpRequestHandler(Tuple<String, bool> mime, Func<HttpServerRequest, Task<ReadOnlyMemory<Byte>>> getBody, RequestOptions options)
         {
             RequestCacheDuration = options.RequestCacheDuration;
             ClientCacheDuration = options.ClientCacheDuration;
@@ -134,7 +134,7 @@ namespace SysWeaver.Net
             IsLocalized = options.IsLocalized;
         }
 
-        readonly Func<HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> GetBody;
+        readonly Func<HttpServerRequest, Task<ReadOnlyMemory<Byte>>> GetBody;
 
 
         readonly String Mime;
@@ -150,7 +150,7 @@ namespace SysWeaver.Net
 
         public IReadOnlyList<String> Auth { get; init; }
 
-        public ValueTask<String> GetCacheKey(HttpServerRequest request) => HttpServerTools.NullStringValueTask;
+        public ValueTask<String> GetCacheKey(HttpServerRequest request) => TaskExt.NullStringValueTask;
 
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
@@ -164,7 +164,7 @@ namespace SysWeaver.Net
             throw new NotImplementedException();
         }
 
-        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
+        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             return new HttpRequestData(await GetBody(request).ConfigureAwait(false));
 

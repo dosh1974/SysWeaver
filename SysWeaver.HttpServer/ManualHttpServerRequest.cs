@@ -129,8 +129,8 @@ namespace SysWeaver.Net
         public override void SetResBody(ReadOnlySpan<byte> data)
             => (_OutputStream ??= new ArrayPoolStream()).Write(data);
 
-        public override ValueTask SetResBodyAsync(ReadOnlyMemory<byte> data)
-            => (_OutputStream ??= new ArrayPoolStream()).WriteAsync(data);
+        public override async Task SetResBodyAsync(ReadOnlyMemory<byte> data)
+            => await (_OutputStream ??= new ArrayPoolStream()).WriteAsync(data).ConfigureAwait(false);
 
         public override void SetResBody(Byte[] data, int offset, int length)
             => (_OutputStream ??= new ArrayPoolStream()).Write(data, offset, length);

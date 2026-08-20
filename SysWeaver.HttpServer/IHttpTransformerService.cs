@@ -6,7 +6,7 @@ namespace SysWeaver.Net
 {
     public interface IHttpTransformerService
     {
-        IEnumerable<KeyValuePair<String, Func<HttpRequestTransformerState, ValueTask<bool>>>> GetTransformers();
+        IEnumerable<KeyValuePair<String, Func<HttpRequestTransformerState, Task<bool>>>> GetTransformers();
     }
 
 

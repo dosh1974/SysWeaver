@@ -81,7 +81,7 @@ namespace SysWeaver.Net
         /// Get the data for a request
         /// </summary>
         /// <returns></returns>
-        ValueTask<HttpRequestData> GetAsync(HttpServerRequest request);
+        Task<HttpRequestData> GetAsync(HttpServerRequest request);
 
         /*
 
@@ -102,7 +102,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="request">The request information</param>
         /// <returns>A data stream</returns>
-        ValueTask<Stream> GetStreamAsync(HttpServerRequest request);
+        Task<Stream> GetStreamAsync(HttpServerRequest request);
 
         /// <summary>
         /// Get the data memory, only call if UseStream is false
@@ -116,7 +116,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="request">The request information</param>
         /// <returns>A data memory</returns>
-        ValueTask<ReadOnlyMemory<Byte>> GetDataAsync(HttpServerRequest request);
+        Task<ReadOnlyMemory<Byte>> GetDataAsync(HttpServerRequest request);
 
 */
         /// <summary>

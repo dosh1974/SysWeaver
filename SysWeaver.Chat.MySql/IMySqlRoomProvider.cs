@@ -10,7 +10,7 @@ namespace SysWeaver.Chat
         /// </summary>
         /// <param name="id">The provided chat id</param>
         /// <returns>Room parameters or null if not available</returns>
-        ValueTask<MySqlChatRoom> GetRoom(String id);
+        Task<MySqlChatRoom> GetRoom(String id);
     }
 
 

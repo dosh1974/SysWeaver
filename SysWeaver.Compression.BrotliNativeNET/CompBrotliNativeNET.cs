@@ -111,21 +111,21 @@ namespace SysWeaver.Compression
             cs.Write(from);
         }
 
-        public async ValueTask CompressAsync(Stream from, Stream to, CompEncoderLevels level)
+        public async Task CompressAsync(Stream from, Stream to, CompEncoderLevels level)
         {
             using var cs = new CompStream(to, CompressionMode.Compress, true);
             cs.SetQuality(Quality[(int)level]);
             await from.CopyToAsync(cs).ConfigureAwait(false);
         }
 
-        public async ValueTask<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level)
+        public async Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level)
         {
             using var ms = to.AsStream();
             await CompressAsync(from, ms, level).ConfigureAwait(false);
             return (int)ms.Position;
         }
 
-        public async ValueTask CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level)
+        public async Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level)
         {
             using var cs = new CompStream(to, CompressionMode.Compress, true);
             cs.SetQuality(Quality[(int)level]);
@@ -176,13 +176,13 @@ namespace SysWeaver.Compression
             }
         }
 
-        public async ValueTask DecompressAsync(Stream from, Stream to)
+        public async Task DecompressAsync(Stream from, Stream to)
         {
             using var cs = new DeCompStream(from, CompressionMode.Decompress, true);
             await cs.CopyToAsync(to).ConfigureAwait(false);
         }
 
-        public async ValueTask<int> DecompressAsync(Stream from, Memory<Byte> to)
+        public async Task<int> DecompressAsync(Stream from, Memory<Byte> to)
         {
             using var cs = new DeCompStream(from, CompressionMode.Decompress, true);
             var size = await cs.ReadAsync(to).ConfigureAwait(false);
@@ -191,7 +191,7 @@ namespace SysWeaver.Compression
             return size;
         }
 
-        public async ValueTask DecompressAsync(ReadOnlyMemory<Byte> from, Stream to)
+        public async Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to)
         {
             using var ms = from.AsStream();
             await DecompressAsync(ms, to).ConfigureAwait(false);

@@ -23,7 +23,7 @@ namespace SysWeaver.Net
         }
 
 
-        public async ValueTask<ReadOnlyMemory<Byte>> ReadAllData()
+        public async Task<ReadOnlyMemory<Byte>> ReadAllData()
         {
             var t = Handler;
             var data = Request;

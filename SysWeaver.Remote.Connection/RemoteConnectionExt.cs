@@ -21,13 +21,14 @@ namespace SysWeaver
         {
             var b = connection as RemoteConnectionBase;
             if (b == null)
-                return Task.FromResult<SysWeaverHttpClientExt.AuthInfo>(null);
+                return TaskExt<SysWeaverHttpClientExt.AuthInfo>.NullTask;
             var client = b.Client;
             var urlbase = b.UrlBase;
             if (!String.IsNullOrEmpty(urlFix))
                 urlbase += urlFix;
             return client.SysWeaverLogin(urlbase, username, password);
         }
+
 
         /// <summary>
         /// Log out the currentgly logged in user
@@ -66,7 +67,7 @@ namespace SysWeaver
         {
             var b = connection as RemoteConnectionBase;
             if (b == null)
-                return Task.FromResult<SysWeaverHttpClientExt.FileInfo[]>(null);
+                return TaskExt<SysWeaverHttpClientExt.FileInfo[]>.NullTask;
             var client = b.Client;
             var urlbase = b.UrlBase;
             if (!String.IsNullOrEmpty(urlFix))
@@ -106,7 +107,7 @@ namespace SysWeaver
         {
             var b = connection as RemoteConnectionBase;
             if (b == null)
-                return Task.FromResult<SysWeaverHttpClientExt.FileInfo[]>(null);
+                return TaskExt<SysWeaverHttpClientExt.FileInfo[]>.NullTask;
             var client = b.Client;
             var urlbase = b.UrlBase;
             if (!String.IsNullOrEmpty(urlFix))

@@ -48,7 +48,7 @@ namespace SysWeaver
         /// <param name="filename">The file to write to (overwites existing)</param>
         /// <param name="memory">The memory to save</param>
         /// <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
-        public static async ValueTask WriteMemoryAsync(String filename, ReadOnlyMemory<Byte> memory, bool ensureWriteTo = false)
+        public static async Task WriteMemoryAsync(String filename, ReadOnlyMemory<Byte> memory, bool ensureWriteTo = false)
         {
             using var s = new FileStream(filename, FileMode.Create, FileAccess.Write);
             var m = Mem.ToMemory(memory.Span);
@@ -72,7 +72,7 @@ namespace SysWeaver
         /// <param name="filename">The file to write to (overwites existing)</param>
         /// <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueTask WriteToFileAsync(this ReadOnlyMemory<Byte> memory, String filename, bool ensureWriteTo = false)
+        public static Task WriteToFileAsync(this ReadOnlyMemory<Byte> memory, String filename, bool ensureWriteTo = false)
             => WriteMemoryAsync(filename, memory, ensureWriteTo);
 
         /// <summary>
@@ -82,7 +82,7 @@ namespace SysWeaver
         /// <param name="filename">The file to write to (overwites existing)</param>
         /// <param name="ensureWriteTo">If true, the function doesn't return until the data have been physically written to disc (or at least it tries to)</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueTask WriteToFileAsync(this Memory<Byte> memory, String filename, bool ensureWriteTo = false)
+        public static Task WriteToFileAsync(this Memory<Byte> memory, String filename, bool ensureWriteTo = false)
             => WriteMemoryAsync(filename, memory, ensureWriteTo);
 
         /// <summary>
@@ -124,7 +124,7 @@ namespace SysWeaver
         /// <param name="filename">Name of the file to read</param>
         /// <returns>Empty on error</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueTask<Byte[]> ReadBytesAsync(String filename)
+        public static Task<Byte[]> ReadBytesAsync(String filename)
             => FileReadOnlyMemory.ReadAllBytesAsync(filename);
 
         /// <summary>
@@ -143,7 +143,7 @@ namespace SysWeaver
         /// <param name="encoding">The text encoding to use, default (null) is UTF8</param>
         /// <returns>Empty on error</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueTask<String> ReadTextAsync(String filename, Encoding encoding = null)
+        public static Task<String> ReadTextAsync(String filename, Encoding encoding = null)
             => new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite).ReadAllTextAsync(encoding);
 
         /// <summary>
@@ -167,7 +167,7 @@ namespace SysWeaver
         /// <param name="removeEmpty">True to remove empty lines</param>
         /// <returns>Empty on error</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueTask<String[]> ReadLinesAsync(String filename, Encoding encoding = null, bool trim = false, bool removeEmpty = false)
+        public static Task<String[]> ReadLinesAsync(String filename, Encoding encoding = null, bool trim = false, bool removeEmpty = false)
             => new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite).ReadAllLinesAsync(encoding, false, trim, removeEmpty);
 
         /// <summary>
@@ -259,7 +259,7 @@ namespace SysWeaver
         /// <param name="filename"></param>
         /// <param name="trimComment">If true, everything on a line after a '#' will be trimmed</param>
         /// <returns></returns>
-        public static async ValueTask<String> ReadNonCommentStringAsync(String filename, bool trimComment = false)
+        public static async Task<String> ReadNonCommentStringAsync(String filename, bool trimComment = false)
         {
             var l = await ReadLinesAsync(filename, null, true, true).ConfigureAwait(false);
             var lc = l.Length;
@@ -281,7 +281,7 @@ namespace SysWeaver
         /// <param name="filename"></param>
         /// <param name="trimComment">If true, everything on a line after a '#' will be trimmed</param>
         /// <returns></returns>
-        public static async ValueTask<String[]> ReadNonCommentLinesAsync(String filename, bool trimComment = false)
+        public static async Task<String[]> ReadNonCommentLinesAsync(String filename, bool trimComment = false)
         {
             var l = await ReadLinesAsync(filename, null, true, true).ConfigureAwait(false);
             var lc = l.Length;
@@ -314,7 +314,7 @@ namespace SysWeaver
         /// <param name="delayInMs">Number of milli seconds to wait between any retries (on error)</param>
         /// <param name="delayInMsNoExisting">Number of milli seconds to wait between any retries (when file deosn't exit)</param>
         /// <returns>Empty on error</returns>
-        public static async ValueTask<Memory<Byte>> TryReadBytesAsync(String filename, int retryCount = 10, int delayInMs = 100, int delayInMsNoExisting = 1)
+        public static async Task<Memory<Byte>> TryReadBytesAsync(String filename, int retryCount = 10, int delayInMs = 100, int delayInMsNoExisting = 1)
         {
             for (; ; )
             {
@@ -347,7 +347,7 @@ namespace SysWeaver
         /// <param name="delayInMs">Number of milli seconds to wait between any retries (on error)</param>
         /// <param name="delayInMsNoExisting">Number of milli seconds to wait between any retries (when file deosn't exit)</param>
         /// <returns>Empty on error</returns>
-        public static async ValueTask<ReadOnlyMemory<Byte>> TryReadMemoryAsync(String filename, int retryCount = 10, int delayInMs = 100, int delayInMsNoExisting = 1)
+        public static async Task<ReadOnlyMemory<Byte>> TryReadMemoryAsync(String filename, int retryCount = 10, int delayInMs = 100, int delayInMsNoExisting = 1)
         {
             for (; ; )
             {

@@ -73,7 +73,7 @@ namespace SysWeaver.MicroService
 
             public readonly ExceptionTracker Exceptions = new();
 
-            public async ValueTask<Exception> TrySyncFolder(FolderSyncer syncer, bool first = false)
+            public async Task<Exception> TrySyncFolder(FolderSyncer syncer, bool first = false)
             {
                 using var _ = await Lock.Lock().ConfigureAwait(false);
                 var m = Manager;
@@ -155,7 +155,7 @@ namespace SysWeaver.MicroService
                 }
             }
 
-            public async ValueTask<Exception> TrySyncFolder()
+            public async Task<Exception> TrySyncFolder()
             {
                 using var syncer = new FolderSyncer(SyncParams);
                 return await TrySyncFolder(syncer).ConfigureAwait(false);
@@ -176,7 +176,7 @@ namespace SysWeaver.MicroService
             }
 
 
-            async ValueTask<bool> UpdateChecker(CancellationToken cs)
+            async Task<bool> UpdateChecker(CancellationToken cs)
             {
                 try
                 {

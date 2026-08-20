@@ -30,7 +30,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public event Func<long, String, Task> OnUserCreatedAsync;
 
-        ValueTask RaiseOnUserCreated(long id, String name)
+        Task RaiseOnUserCreated(long id, String name)
         {
             OnUserCreated.RaiseEvents(id, name);
             return OnUserCreatedAsync.RaiseEvents(id, name);
@@ -46,7 +46,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public event Func<long, String, Task> OnUserDeletedAsync;
 
-        ValueTask RaiseOnUserDeleted(long id, String name)
+        Task RaiseOnUserDeleted(long id, String name)
         {
             OnUserDeleted.RaiseEvents(id, name);
             return OnUserDeletedAsync.RaiseEvents(id, name);
@@ -63,7 +63,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public event Func<long, String, Task> OnEmailAddedAsync;
 
-        ValueTask RaiseOnEmailAdded(long id, String email)
+        Task RaiseOnEmailAdded(long id, String email)
         {
             OnEmailAdded.RaiseEvents(id, email);
             return OnEmailAddedAsync.RaiseEvents(id, email);
@@ -79,7 +79,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public event Func<long, String, Task> OnPhoneAddedAsync;
 
-        ValueTask RaiseOnPhoneAdded(long id, String phone)
+        Task RaiseOnPhoneAdded(long id, String phone)
         {
             OnPhoneAdded.RaiseEvents(id, phone);
             return OnPhoneAddedAsync.RaiseEvents(id, phone);
@@ -95,7 +95,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public event Func<long, String, String, Task> OnEmailChangedAsync;
 
-        ValueTask RaiseOnEmailChanged(long id, String newEmail, String oldEmail)
+        Task RaiseOnEmailChanged(long id, String newEmail, String oldEmail)
         {
             OnEmailChanged.RaiseEvents(id, newEmail, oldEmail);
             return OnEmailChangedAsync.RaiseEvents(id, newEmail, oldEmail);
@@ -111,7 +111,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public event Func<long, String, String, Task> OnPhoneChangedAsync;
 
-        ValueTask RaiseOnPhoneChanged(long id, String newPhone, String oldPhone)
+        Task RaiseOnPhoneChanged(long id, String newPhone, String oldPhone)
         {
             OnPhoneChanged.RaiseEvents(id, newPhone, oldPhone);
             return OnPhoneChangedAsync.RaiseEvents(id, newPhone, oldPhone);
@@ -127,7 +127,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public event Func<long, String, Task> OnEmailRemovedAsync;
 
-        ValueTask RaiseOnEmailRemoved(long id, String email)
+        Task RaiseOnEmailRemoved(long id, String email)
         {
             OnEmailRemoved.RaiseEvents(id, email);
             return OnEmailRemovedAsync.RaiseEvents(id, email);
@@ -143,7 +143,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public event Func<long, String, Task> OnPhoneRemovedAsync;
 
-        ValueTask RaiseOnPhoneRemoved(long id, String phone)
+        Task RaiseOnPhoneRemoved(long id, String phone)
         {
             OnPhoneRemoved.RaiseEvents(id, phone);
             return OnPhoneRemovedAsync.RaiseEvents(id, phone);
@@ -161,7 +161,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public event Func<long, String, Task> OnUserNameChangedAsync;
 
-        ValueTask RaiseOnUserNameChanged(long id, String nickName)
+        Task RaiseOnUserNameChanged(long id, String nickName)
         {
             OnUserNameChanged.RaiseEvents(id, nickName);
             return OnUserNameChangedAsync.RaiseEvents(id, nickName);
@@ -179,7 +179,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public event Func<long, String, Task> OnNickChangedAsync;
 
-        ValueTask RaiseOnNickChanged(long id, String nickName)
+        Task RaiseOnNickChanged(long id, String nickName)
         {
             OnNickChanged.RaiseEvents(id, nickName);
             return OnNickChangedAsync.RaiseEvents(id, nickName);
@@ -196,7 +196,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public event Func<long, String, Task> OnLanguageChangedAsync;
 
-        ValueTask RaiseOnLanguageChanged(long id, String languageCode)
+        Task RaiseOnLanguageChanged(long id, String languageCode)
         {
             OnLanguageChanged.RaiseEvents(id, languageCode);
             return OnLanguageChangedAsync.RaiseEvents(id, languageCode);

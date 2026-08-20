@@ -24,7 +24,7 @@ namespace SysWeaver.MicroService
             var folder = p.DiscFolder;
             AsyncHandler = Handle;
             UseTransparent = p.UseTransparent;
-            Cache = new FastMemCache<int, ValueTask<IHttpRequestHandler>>(TimeSpan.FromSeconds(Math.Max(1, p.CacheSeconds)));
+            Cache = new FastMemCache<int, Task<IHttpRequestHandler>>(TimeSpan.FromSeconds(Math.Max(1, p.CacheSeconds)));
             DiscFolder = folder;
             if (String.IsNullOrEmpty(folder))
             {
@@ -53,10 +53,10 @@ namespace SysWeaver.MicroService
         public String[] OnlyForPrefixes { get; } = ["Avatars/"];
 
 
-        public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
+        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get; init; }
 
 
-        ValueTask<IHttpRequestHandler> Handle(HttpServerRequest context)
+        Task<IHttpRequestHandler> Handle(HttpServerRequest context)
         {
             var lname = context.LocalUrl;
             var e = lname.LastIndexOf('.');
@@ -77,7 +77,7 @@ namespace SysWeaver.MicroService
             return Get(seed);
         }
 
-        static readonly ValueTask<IHttpRequestHandler> NullRet = ValueTask.FromResult<IHttpRequestHandler>(null);
+        static readonly Task<IHttpRequestHandler> NullRet = Task.FromResult<IHttpRequestHandler>(null);
 
 
 
@@ -117,10 +117,10 @@ namespace SysWeaver.MicroService
         /// </summary>
         /// <param name="seed">The seed of the icon to get</param>
         /// <returns>null if no files are found</returns>
-        public ValueTask<IHttpRequestHandler> Get(int seed)
+        public Task<IHttpRequestHandler> Get(int seed)
             => Cache.GetOrUpdate(seed, Generate);
 
-        static readonly ValueTask<IHttpRequestHandler> NullHandler = ValueTask.FromResult<IHttpRequestHandler>(null);
+        static readonly Task<IHttpRequestHandler> NullHandler = Task.FromResult<IHttpRequestHandler>(null);
 
         const int Margin = 14;
 
@@ -159,7 +159,7 @@ namespace SysWeaver.MicroService
 
             ];
 
-        ValueTask<IHttpRequestHandler> Generate(int seed)
+        Task<IHttpRequestHandler> Generate(int seed)
         {
             using var __ = PerfMon.Track(nameof(Generate));
             var files = Files;
@@ -245,16 +245,16 @@ namespace SysWeaver.MicroService
             var cmp = Comp;
             var svgMem = cmp.GetCompressed(svgData.AsSpan(), CompEncoderLevels.Best);
             var svgHandler = new StaticMemoryHttpRequestHandler("icon.svg", "Generated", svgMem, MimeTypeMap.Svg, SvgCompression, 30, 15, null, null, cmp, Auth);
-            return ValueTask.FromResult<IHttpRequestHandler>(svgHandler);
+            return Task.FromResult<IHttpRequestHandler>(svgHandler);
         }
 
         static readonly ICompType Comp = CompManager.GetFromHttp("br");
 
 
 
-        readonly FastMemCache<int, ValueTask<IHttpRequestHandler>> Cache;
+        readonly FastMemCache<int, Task<IHttpRequestHandler>> Cache;
 
-        public ValueTask<IHttpRequestHandler> Get(string userGuid, int size)
+        public Task<IHttpRequestHandler> Get(string userGuid, int size)
         {
             var seed = (int)QuickHash.Hash(userGuid);
             return Get(seed);

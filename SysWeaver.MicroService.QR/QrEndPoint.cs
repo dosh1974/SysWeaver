@@ -81,9 +81,9 @@ namespace SysWeaver.MicroService
         public ICompDecoder Decoder => null;
 
 
-        public ValueTask<String> GetCacheKey(HttpServerRequest request) => HttpServerTools.NullStringValueTask;
+		public ValueTask<String> GetCacheKey(HttpServerRequest request) => TaskExt.NullStringValueTask;
 
-        public string GetEtag(out bool useAsync, HttpServerRequest request)
+		public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             useAsync = false;
             request.SetResMime(Mime);
@@ -122,7 +122,7 @@ namespace SysWeaver.MicroService
             return new HttpRequestData(resData);
         }
 
-        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
+        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }

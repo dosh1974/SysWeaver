@@ -88,7 +88,7 @@ namespace SysWeaver
 
         PeriodicTask PollTask;
 
-        async ValueTask<bool> Poll()
+        async Task<bool> Poll()
         {
             var res = await TryGetNow().ConfigureAwait(false);
             if (res == null)

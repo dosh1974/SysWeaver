@@ -19,7 +19,7 @@ namespace SysWeaver.Net
         /// <param name="userGuid">The hexa decimal user guid</param>
         /// <param name="size">The size (must be one from the Sizes property)</param>
         /// <returns>A request handler if it exist, else null</returns>
-        ValueTask<IHttpRequestHandler> Get(String userGuid, int size);
+        Task<IHttpRequestHandler> Get(String userGuid, int size);
     }
 
 
@@ -38,14 +38,14 @@ namespace SysWeaver.Net
         /// <param name="userGuid">The hexa decimal user guid</param>
         /// <param name="size">The size (must be one from the Sizes property)</param>
         /// <returns>A request handler if it exist, else null</returns>
-        ValueTask<IHttpRequestHandler> Get(String userGuid, int size);
+        Task<IHttpRequestHandler> Get(String userGuid, int size);
 
         /// <summary>
         /// Delete all images for a specific user
         /// </summary>
         /// <param name="userGuid">The hexa decimal user guid</param>
         /// <returns>True if anything was deleted</returns>
-        ValueTask<bool> Delete(String userGuid);
+        Task<bool> Delete(String userGuid);
 
 
     }

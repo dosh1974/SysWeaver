@@ -11,7 +11,7 @@ namespace SysWeaver
 
         static readonly ISerializerType Ser = SerManager.Get("json");
 
-        public static async ValueTask<R> PostJsonRequest<T, R>(this HttpClient client, String url, T data)
+        public static async Task<R> PostJsonRequest<T, R>(this HttpClient client, String url, T data)
         {
             var j = Ser;
             using var c = new ReadOnlyMemoryContent(j.Serialize(data));
@@ -24,7 +24,7 @@ namespace SysWeaver
         }
 
 
-        public static async ValueTask<ReadOnlyMemory<Byte>> PostJsonRequestRaw<T>(this HttpClient client, String url, T data)
+        public static async Task<ReadOnlyMemory<Byte>> PostJsonRequestRaw<T>(this HttpClient client, String url, T data)
         {
             using var c = new ReadOnlyMemoryContent(Ser.Serialize(data));
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json", "utf-8");
@@ -34,7 +34,7 @@ namespace SysWeaver
             return await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
         }
 
-        public static async ValueTask<R> PostJsonRequest<T, R>(this HttpClient client, String url, T data, Func<HttpResponseMessage, ReadOnlyMemory<Byte>, ValueTask> onRaw)
+        public static async Task<R> PostJsonRequest<T, R>(this HttpClient client, String url, T data, Func<HttpResponseMessage, ReadOnlyMemory<Byte>, Task> onRaw)
         {
             var j = Ser;
             using var c = new ReadOnlyMemoryContent(j.Serialize(data));
@@ -48,7 +48,7 @@ namespace SysWeaver
         }
 
 
-        public static async ValueTask<ReadOnlyMemory<Byte>> PostJsonRequestRaw<T>(this HttpClient client, String url, T data, Func<HttpResponseMessage, ReadOnlyMemory<Byte>, ValueTask> onRaw)
+        public static async Task<ReadOnlyMemory<Byte>> PostJsonRequestRaw<T>(this HttpClient client, String url, T data, Func<HttpResponseMessage, ReadOnlyMemory<Byte>, Task> onRaw)
         {
             using var c = new ReadOnlyMemoryContent(Ser.Serialize(data));
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json", "utf-8");
@@ -62,7 +62,7 @@ namespace SysWeaver
 
 
 
-        public static async ValueTask<ReadOnlyMemory<Byte>> PostRawRequestRaw(this HttpClient client, String url, ReadOnlyMemory<Byte> data)
+        public static async Task<ReadOnlyMemory<Byte>> PostRawRequestRaw(this HttpClient client, String url, ReadOnlyMemory<Byte> data)
         {
             using var c = new ReadOnlyMemoryContent(data);
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(MimeTypeMap.Data);
@@ -73,7 +73,7 @@ namespace SysWeaver
             return ret;
         }
 
-        public static async ValueTask<ReadOnlyMemory<Byte>> PostRawRequestRaw(this HttpClient client, String url, ReadOnlyMemory<Byte> data, Func<HttpResponseMessage, ReadOnlyMemory<Byte>, ValueTask> onRaw)
+        public static async Task<ReadOnlyMemory<Byte>> PostRawRequestRaw(this HttpClient client, String url, ReadOnlyMemory<Byte> data, Func<HttpResponseMessage, ReadOnlyMemory<Byte>, Task> onRaw)
         {
             using var c = new ReadOnlyMemoryContent(data);
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(MimeTypeMap.Data);
@@ -86,7 +86,7 @@ namespace SysWeaver
         }
 
 
-        public static async ValueTask PostRawRequestStream(this HttpClient client, String url, ReadOnlyMemory<Byte> data, Func<Stream, long?, ValueTask> onResponse)
+        public static async Task PostRawRequestStream(this HttpClient client, String url, ReadOnlyMemory<Byte> data, Func<Stream, long?, Task> onResponse)
         {
             using var message = new HttpRequestMessage(HttpMethod.Post, url);
             using var c = new ReadOnlyMemoryContent(data);
@@ -100,7 +100,7 @@ namespace SysWeaver
             await onResponse(stream, cc.Headers.ContentLength).ConfigureAwait(false);
         }
 
-        public static async ValueTask<T> PostRawRequest<T>(this HttpClient client, String url, ReadOnlyMemory<Byte> data, Func<HttpResponseMessage, ValueTask<T>> onResponse)
+        public static async Task<T> PostRawRequest<T>(this HttpClient client, String url, ReadOnlyMemory<Byte> data, Func<HttpResponseMessage, Task<T>> onResponse)
         {
             using var c = new ReadOnlyMemoryContent(data);
             c.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(MimeTypeMap.Data);

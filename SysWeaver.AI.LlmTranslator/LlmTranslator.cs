@@ -144,8 +144,8 @@ namespace SysWeaver.AI
         public Task<string[]> TranslateMultiple(TranslateMultipleRequest request)
             => TranslateMultiple(request.Texts, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
 
-        public Task<string> TranslateOne(TranslateRequest request)
-            => TranslateOne(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType);
+        public async ValueTask<string> TranslateOne(TranslateRequest request)
+            => await TranslateOne(request.Text, request.To, request.From, request.Context, request.Effort, request.Retention, request.ContentType).ConfigureAwait(false);
 
         volatile SupLang Languages;
 
@@ -373,7 +373,7 @@ namespace SysWeaver.AI
             var dest = to.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             var count = dest.Length;
             if (count <= 0)
-                return Task.FromResult(Array.Empty<String>());
+                return TaskExt<String>.EmptyArrayTask;
             var textCount = texts.Length;
             return ArrayExt.CreateAsync(textCount * dest.Length, i => TranslateOne(texts[i % textCount], dest[i / textCount], from, context, effort, retention, contentType));
         }

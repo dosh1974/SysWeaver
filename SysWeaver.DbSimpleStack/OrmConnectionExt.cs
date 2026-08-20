@@ -19,7 +19,7 @@ namespace SysWeaver.Db
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
         /// <exception cref="OrmException"></exception>
-        public static ValueTask<int> InsertAsync<T>(this OrmConnection con, T obj, String tableName, CancellationToken cancellationToken = new CancellationToken())
+        public static Task<int> InsertAsync<T>(this OrmConnection con, T obj, String tableName, CancellationToken cancellationToken = new CancellationToken())
             => InsertAsync<int, T>(con, obj, tableName, cancellationToken);
 
         /// <summary>
@@ -33,7 +33,7 @@ namespace SysWeaver.Db
         /// <typeparam name="TKey"></typeparam>
         /// <returns></returns>
         /// <exception cref="OrmException"></exception>
-        public async static ValueTask<TKey> InsertAsync<TKey, T>(this OrmConnection con, T obj, String tableName, CancellationToken cancellationToken = new CancellationToken())
+        public async static Task<TKey> InsertAsync<TKey, T>(this OrmConnection con, T obj, String tableName, CancellationToken cancellationToken = new CancellationToken())
         {
             try
             {

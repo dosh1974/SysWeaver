@@ -61,7 +61,7 @@ namespace SysWeaver.MicroService
             sm.Remove(srcName);
         }
 
-        public async ValueTask<String> AddRemoteFolder(FsRemoteFolder x)
+        public async Task<String> AddRemoteFolder(FsRemoteFolder x)
         {
 
             var folder = GetRemoteFolderDest(x);
@@ -338,7 +338,7 @@ namespace SysWeaver.MicroService
 
         readonly ExceptionTracker PruneErrors = new ExceptionTracker(); 
 
-        async ValueTask PruneRemoteFolders()
+        async Task PruneRemoteFolders()
         {
             using var _ = PerfMon.Track(nameof(PruneRemoteFolders));
             foreach (var x in RemoteFolders.Values)

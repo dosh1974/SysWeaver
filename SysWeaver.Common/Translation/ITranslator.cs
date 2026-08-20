@@ -27,7 +27,7 @@ namespace SysWeaver.Translation
         /// </summary>
         /// <param name="request">Paramaters</param>
         /// <returns>Translated text</returns>
-        Task<string> TranslateOne(TranslateRequest request);
+        ValueTask<string> TranslateOne(TranslateRequest request);
 
         /// <summary>
         /// Return a list of supported source languages

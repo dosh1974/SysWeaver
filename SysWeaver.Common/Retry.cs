@@ -112,21 +112,45 @@ namespace SysWeaver
         /// <param name="op">The operation to perform</param>
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
-        public static async ValueTask OpAsync(Func<ValueTask> op, int retryCount = 10, int delayInMs = 100)
+        public static ValueTask OpAsync(Func<ValueTask> op, int retryCount = 10, int delayInMs = 100)
         {
-            for (; ; )
+            bool needTask = true;
+            ValueTask task = ValueTask.CompletedTask;
+            try
             {
-                try
+                task = op();
+                if (task.IsCompleted)
+                    return task;
+                needTask = false;
+            }
+            catch
+            {
+                --retryCount;
+                if (retryCount <= 0)
+                    throw;
+            }
+            return doIt();
+
+            async ValueTask doIt()
+            { 
+                for (; ; )
                 {
-                    await op().ConfigureAwait(false);
-                    return;
-                }
-                catch
-                {
-                    --retryCount;
-                    if (retryCount <= 0)
-                        throw;
-                    await Task.Delay(delayInMs).ConfigureAwait(false);
+                    try
+                    {
+                        if (needTask)
+                            task = op();
+                        if (!task.IsCompleted)
+                            await task.ConfigureAwait(false);
+                        return;
+                    }
+                    catch
+                    {
+                        --retryCount;
+                        if (retryCount <= 0)
+                            throw;
+                        await Task.Delay(delayInMs).ConfigureAwait(false);
+                    }
+                    needTask = true;
                 }
             }
         }
@@ -137,20 +161,45 @@ namespace SysWeaver
         /// <param name="op">The operation to perform</param>
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
-        public static async ValueTask<R> OpAsync<R>(Func<ValueTask<R>> op, int retryCount = 10, int delayInMs = 100)
+        public static ValueTask<R> OpAsync<R>(Func<ValueTask<R>> op, int retryCount = 10, int delayInMs = 100)
         {
-            for (; ; )
+            bool needTask = true;
+            ValueTask<R> task = ValueTask.FromResult<R>(default);
+            try
             {
-                try
+                task = op();
+                if (task.IsCompleted)
+                    return task;
+                needTask = false;
+            }
+            catch
+            {
+                --retryCount;
+                if (retryCount <= 0)
+                    throw;
+            }
+            return doIt();
+
+            async ValueTask<R> doIt()
+            {
+                for (; ; )
                 {
-                    return await op().ConfigureAwait(false);
-                }
-                catch
-                {
-                    --retryCount;
-                    if (retryCount <= 0)
-                        throw;
-                    await Task.Delay(delayInMs).ConfigureAwait(false);
+                    try
+                    {
+                        if (needTask)
+                            task = op();
+                        if (!task.IsCompleted)
+                            return await task.ConfigureAwait(false);
+                        return task.GetAwaiter().GetResult();
+                    }
+                    catch
+                    {
+                        --retryCount;
+                        if (retryCount <= 0)
+                            throw;
+                        await Task.Delay(delayInMs).ConfigureAwait(false);
+                    }
+                    needTask = true;
                 }
             }
         }

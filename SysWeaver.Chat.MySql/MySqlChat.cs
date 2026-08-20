@@ -64,7 +64,7 @@ namespace SysWeaver.Chat
 
         readonly AsyncLock RoomsLock = new AsyncLock();
 
-        public async ValueTask<bool> InitRoom(MySqlChatRoom room, bool createTable = true)
+        public async Task<bool> InitRoom(MySqlChatRoom room, bool createTable = true)
         {
             var rooms = Rooms;
             var name = room.Name;
@@ -128,7 +128,7 @@ namespace SysWeaver.Chat
                 room.SessionLimiter?.Validate();
             }
 
-            public ValueTask<IDisposable> Lock() => IntLock.Lock();
+            public Task<IDisposable> Lock() => IntLock.Lock();
 
             public AsyncLock IntLock = new AsyncLock();
 
@@ -152,7 +152,7 @@ namespace SysWeaver.Chat
                 return limiter;
             }
 
-            public async ValueTask<bool> CheckTable(DbSimpleStack db, OrmConnection c)
+            public async Task<bool> CheckTable(DbSimpleStack db, OrmConnection c)
             {
                 if (HaveTable)
                     return true;
@@ -173,7 +173,7 @@ namespace SysWeaver.Chat
             public readonly IReadOnlyList<String> PostAuth;
         }
 
-        async ValueTask EnsureRoom(Room r)
+        async Task EnsureRoom(Room r)
         {
             if (r.HaveTable)
                 return;
@@ -188,7 +188,7 @@ namespace SysWeaver.Chat
         readonly List<IMySqlRoomProvider> RoomProviders = new();
 
 
-        async ValueTask<MySqlChatRoom> GetRoomDef(string providerChatId)
+        async Task<MySqlChatRoom> GetRoomDef(string providerChatId)
         {
             IMySqlRoomProvider[] provs;
             lock (RoomProviders)
@@ -202,7 +202,7 @@ namespace SysWeaver.Chat
             return null;
         }
 
-        async ValueTask<Room> GetAuthenticatedRoom(string providerChatId, HttpServerRequest request)
+        async Task<Room> GetAuthenticatedRoom(string providerChatId, HttpServerRequest request)
         {
             if (Controller == null)
                 throw new Exception(nameof(SimpleChatService).ToQuoted() + " is not registered to any " + nameof(ChatService).ToQuoted());
@@ -361,7 +361,7 @@ namespace SysWeaver.Chat
                 Lang = m.Lang,
             };
 
-        async ValueTask<Chat.ChatMessage[]> InternalGetMessages(Room room, String guid, long pivotId, int maxCount)
+        async Task<Chat.ChatMessage[]> InternalGetMessages(Room room, String guid, long pivotId, int maxCount)
         {
             bool reverse = maxCount < 0;
             if (reverse)

@@ -125,7 +125,7 @@ namespace SysWeaver
 
         static readonly object Lock = new object();
 
-        protected override ValueTask Add(Message message)
+        protected override Task Add(Message message)
         {
             Exception e = message.Exception;
             var li = (int)message.Level;
@@ -183,7 +183,7 @@ namespace SysWeaver
                 }
                 SetColor(prevColor);
             }
-            return default;
+            return Task.CompletedTask;
         }
 
         protected override void OnFlush()

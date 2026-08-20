@@ -213,14 +213,13 @@ namespace SysWeaver.Net
 
         readonly FastMemCache<String, IHttpRequestHandler> Cache;
 
-        static readonly ValueTask<IHttpRequestHandler> NoHandler = ValueTask.FromResult((IHttpRequestHandler)null);
 
-        ValueTask<IHttpRequestHandler> InternalCachedHandler(HttpServerRequest context)
+        async Task<IHttpRequestHandler> InternalCachedHandler(HttpServerRequest context)
         {
             if (((ValidMethods >> (int)context.HttpMethod) & 1) == 0)
-                return NoHandler;
+                return null;
             var url = context.LocalUrl;
-            return Cache.GetOrUpdateValueAsync(url, async _ =>
+            return await Cache.GetOrUpdateAsync(url, async _ =>
             {
                 var f = OrderedFolders;
                 if (f == null)
@@ -262,10 +261,10 @@ namespace SysWeaver.Net
                     }
                 }
                 return null;
-            });
+            }).ConfigureAwait(false);
         }
 
-        async ValueTask<IHttpRequestHandler> InternalUncachedHandler(HttpServerRequest context)
+        async Task<IHttpRequestHandler> InternalUncachedHandler(HttpServerRequest context)
         {
             if (((ValidMethods >> (int)context.HttpMethod) & 1) == 0)
                 return null;
@@ -315,7 +314,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// An optional async handler
         /// </summary>
-        public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
+        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get; init; }
 
 
 

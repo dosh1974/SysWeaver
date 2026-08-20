@@ -112,7 +112,7 @@ namespace SysWeaver.MicroService
             ".avif"
         );
 
-        public async ValueTask<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r)
+        public async Task<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r)
         {
             var len = info.Length;
             if (len != 1)
@@ -155,7 +155,7 @@ namespace SysWeaver.MicroService
 
 
 
-        public async ValueTask<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
+        public async Task<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
         {
             var uid = r.Session.Auth.Guid;
             var name = uid.ToHex();
@@ -245,7 +245,7 @@ namespace SysWeaver.MicroService
             var saveExt = SaveExt;
             var hashFile = pathPrefix + ".txt";
             var ex = await PathExt.TryDeleteFileAsync(hashFile).ConfigureAwait(false);
-            var exs = await Sizes.ConvertAsyncValue(size => PathExt.TryDeleteFileAsync(String.Concat(pathPrefix, '_', size, saveExt))).ConfigureAwait(false);
+            var exs = await Sizes.ConvertAsync(size => PathExt.TryDeleteFileAsync(String.Concat(pathPrefix, '_', size, saveExt))).ConfigureAwait(false);
             AuthManager?.InvalidateUserImageCache(uid, r);
             return true;
         }
@@ -255,7 +255,7 @@ namespace SysWeaver.MicroService
 
         public int[] Sizes { get; init; }
 
-        public async ValueTask<bool> Delete(string userGuid)
+        public async Task<bool> Delete(string userGuid)
         {
             var name = userGuid.ToHex();
             var folders = DataFolders;
@@ -271,9 +271,9 @@ namespace SysWeaver.MicroService
 
         readonly IReadOnlyDictionary<int, RequestOptions> SizeOptions;
 
-        static readonly ValueTask<IHttpRequestHandler> NoImage = ValueTask.FromResult<IHttpRequestHandler>(null);
+        static readonly Task<IHttpRequestHandler> NoImage = Task.FromResult<IHttpRequestHandler>(null);
 
-        public ValueTask<IHttpRequestHandler> Get(string userGuid, int size)
+        public Task<IHttpRequestHandler> Get(string userGuid, int size)
         {
             if (!SizeOptions.TryGetValue(size, out var opt))
                 return NoImage;
@@ -286,7 +286,7 @@ namespace SysWeaver.MicroService
             var fi = new FileInfo(fn);
             if (!fi.Exists)
                 return NoImage;
-            return ValueTask.FromResult<IHttpRequestHandler>(new FileHttpRequestHandler(SaveMime, fi, opt, true, null));
+            return Task.FromResult<IHttpRequestHandler>(new FileHttpRequestHandler(SaveMime, fi, opt, true, null));
         }
 
         #endregion//IUserImageHandler

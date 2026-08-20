@@ -76,12 +76,12 @@ namespace SysWeaver.MicroService
 
         readonly ITextSerializerType JsonSer = SerManager.GetText("json");
 
-        public async ValueTask Flush() 
+        public async Task Flush() 
             => await WriteData().ConfigureAwait(false);
 
         readonly AsyncLock WriteLock = new();
 
-        async ValueTask<bool> WriteData()
+        async Task<bool> WriteData()
         {
             using var _ = await WriteLock.Lock().ConfigureAwait(false);
             var q = Calls;

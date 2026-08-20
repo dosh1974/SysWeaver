@@ -349,9 +349,11 @@ namespace SysWeaver.Auth
         public override Task<AuthorizationInfo> FindUserFromGuid(String userGuid)
         {
             if (!AuthGuids.TryGetValue(userGuid, out var data))
-                return Task.FromResult<AuthorizationInfo>(null);
+                return NullFindUserFromGuid;
             return Task.FromResult(new AuthorizationInfo(data));
         }
+
+        static readonly Task<AuthorizationInfo> NullFindUserFromGuid = Task.FromResult<AuthorizationInfo>(null);
 
         /// <summary>
         /// Get information about a user
@@ -361,9 +363,11 @@ namespace SysWeaver.Auth
         public override Task<AuthorizationInfo> FindUser(String userName)
         {
             if (!Auths.TryGetValue(userName.FastToLower(), out var data))
-                return Task.FromResult<AuthorizationInfo>(null);
+                return NullTaskAuthorizationInfo;
             return Task.FromResult(new AuthorizationInfo(data.Item2));
         }
+
+        static readonly Task<AuthorizationInfo> NullTaskAuthorizationInfo = Task.FromResult<AuthorizationInfo>(null);
 
         public override Task<Authorization> BasicAuth(string userName, byte[] hash)
         {

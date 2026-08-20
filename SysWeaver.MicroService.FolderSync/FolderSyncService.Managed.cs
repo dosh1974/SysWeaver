@@ -20,7 +20,7 @@ namespace SysWeaver.MicroService
     {
 
 
-        async ValueTask<Exception> InternalActivate(ManagedFolder folder, String target, String from, HttpServerRequest context)
+        async Task<Exception> InternalActivate(ManagedFolder folder, String target, String from, HttpServerRequest context)
         {
             if (!SystemLock.TryGet("ActLock" + from, out var lck))
                 return new Exception("Folder \"" + from + "\" is in use, try later!");
@@ -194,14 +194,14 @@ namespace SysWeaver.MicroService
         }
 
 
-        ValueTask<bool> CompleteUpdate(Sync sync, String jobId, HttpServerRequest context, bool isError = false)
+        Task<bool> CompleteUpdate(Sync sync, String jobId, HttpServerRequest context, bool isError = false)
         {
             if (!sync.Files.IsEmpty)
-                return TaskExt.TrueValueTask;
+                return TaskExt.TrueTask;
             if (sync.Files.Count > 0)
-                return TaskExt.TrueValueTask;
+                return TaskExt.TrueTask;
             if (Interlocked.CompareExchange(ref sync.DoExit, 1, 0) != 0)
-                return TaskExt.TrueValueTask;
+                return TaskExt.TrueTask;
             return Finalize(jobId, sync, context, isError);
         }
 
@@ -401,7 +401,7 @@ namespace SysWeaver.MicroService
 
 
 
-        async ValueTask<bool> Finalize(String jobId, Sync sync, HttpServerRequest context, bool isError = false)
+        async Task<bool> Finalize(String jobId, Sync sync, HttpServerRequest context, bool isError = false)
         {
             var dest = sync.DestPath;
             var target = sync.Target;
@@ -719,7 +719,7 @@ namespace SysWeaver.MicroService
             File.WriteAllText(manifestName, b.ToString());
         }
 
-        async ValueTask WriteManifest(ManagedFolder ff, ManagedFolderSyncRequest r, String folder, long copyCount, long copySize, long uploadCount, long uploadSize, long networkSize, String user, DateTime start)
+        async Task WriteManifest(ManagedFolder ff, ManagedFolderSyncRequest r, String folder, long copyCount, long copySize, long uploadCount, long uploadSize, long networkSize, String user, DateTime start)
         {
             var end = DateTime.UtcNow;
             var duration = end - start;

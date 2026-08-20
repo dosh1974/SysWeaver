@@ -122,12 +122,12 @@ namespace SysWeaver.Data
                 Title = Title,
             };
 
-        public async ValueTask<TypedTableData<N>> RetypeAsync<N>(Func<T, ValueTask<N>> convert)
+        public async Task<TypedTableData<N>> RetypeAsync<N>(Func<T, Task<N>> convert)
             => new TypedTableData<N>
             {
                 Cc = Cc,
                 RefreshRate = RefreshRate,
-                Rows = await Rows.ConvertAsyncValue(convert).ConfigureAwait(false),
+                Rows = await Rows.ConvertAsync(convert).ConfigureAwait(false),
                 Cols = Cols,
                 RowCount = RowCount,
                 Title = Title,

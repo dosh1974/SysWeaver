@@ -54,10 +54,10 @@ namespace SysWeaver
             return String.Concat("Debug ", Mode, " ", Style);
         }
         
-        protected override ValueTask WriteText(String text)
+        protected override Task WriteText(String text)
         {
             Debug.Write(text);
-            return default;
+            return Task.CompletedTask;
         }
 
         protected override void OnFlush()

@@ -28,7 +28,7 @@ namespace SysWeaver.HttpTransformer
 
         public CachedTransformerBuildStrategies BuildStrategy { get; init; }
 
-        public async ValueTask<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> data, CachedTransformerEntry entry)
+        public async Task<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> data, CachedTransformerEntry entry)
         {
             if (info.State.Handler.Decoder != null)
                 return null;

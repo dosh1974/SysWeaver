@@ -37,9 +37,9 @@ namespace SysWeaver.Chat
 
         public String[] OnlyForPrefixes { get; } = ["chat/file/"];
 
-        public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
+        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get; init; }
 
-        async ValueTask<IHttpRequestHandler> GetChatFile(String l, HttpServerRequest context)
+        async Task<IHttpRequestHandler> GetChatFile(String l, HttpServerRequest context)
         {
             var t = l.Split('/');
             var tl = t.Length;
@@ -721,7 +721,7 @@ namespace SysWeaver.Chat
         [WebApi]
         [WebApiClientCache(1)]
         [WebApiRequestCacheStatic]
-        public Task<LanguageInfo[]> GetInputLanguages(HttpServerRequest context)
+        public ValueTask<LanguageInfo[]> GetInputLanguages(HttpServerRequest context)
         {
             var langs = InputLanguages;
             var server = context.Server;
@@ -734,7 +734,7 @@ namespace SysWeaver.Chat
                 if (l <= 0)
                     return d;
                 cl = context.Session.Language;
-                return await langs.ConvertAsync(l => server.GetLocalizedLanguage(l, cl)).ConfigureAwait(false);
+                return await langs.ConvertAsyncValue(l => server.GetLocalizedLanguage(l, cl)).ConfigureAwait(false);
             });
         }
 

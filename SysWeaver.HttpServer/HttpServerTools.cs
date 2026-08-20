@@ -257,10 +257,7 @@ namespace SysWeaver.Net
 
         public const int MaxRequestCache = 60 * 60 * 24 * 366 * 50;
 
-        public static readonly Task<String> NullStringTask = Task.FromResult<String>(null);
-        public static readonly ValueTask<String> NullStringValueTask = ValueTask.FromResult<String>(null);
-
-        public static readonly Task<IHttpRequestHandler> NullHttpRequestHandlerTask = Task.FromResult<IHttpRequestHandler>(null);
+        public static readonly ValueTask<IHttpRequestHandler> NullHttpRequestHandlerTask = ValueTask.FromResult<IHttpRequestHandler>(null);
         public static readonly ValueTask<IHttpRequestHandler> NullHttpRequestHandlerValueTask = ValueTask.FromResult<IHttpRequestHandler>(null);
 
 
@@ -281,9 +278,9 @@ namespace SysWeaver.Net
             public HttpCompressionPriority Compression => throw new NotImplementedException();
             public ICompDecoder Decoder => throw new NotImplementedException();
             public IReadOnlyList<string> Auth => throw new NotImplementedException();
-            public ValueTask<string> GetCacheKey(HttpServerRequest request) => throw new NotImplementedException();
-            public HttpRequestData Get(HttpServerRequest request) => throw new NotImplementedException();
-            public ValueTask<HttpRequestData> GetAsync(HttpServerRequest request) => throw new NotImplementedException();
+			public ValueTask<String> GetCacheKey(HttpServerRequest request) => TaskExt.NullStringValueTask;
+			public HttpRequestData Get(HttpServerRequest request) => throw new NotImplementedException();
+            public Task<HttpRequestData> GetAsync(HttpServerRequest request) => throw new NotImplementedException();
             public string GetEtag(out bool useAsync, HttpServerRequest request) => throw new NotImplementedException();
 
        

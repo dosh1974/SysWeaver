@@ -70,7 +70,7 @@ namespace SysWeaver.Net
             throw new NotImplementedException();
         }
 
-        public override ValueTask SetResBodyAsync(ReadOnlyMemory<byte> data)
+        public override Task SetResBodyAsync(ReadOnlyMemory<byte> data)
         {
             throw new NotImplementedException();
         }

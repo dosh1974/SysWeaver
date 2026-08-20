@@ -405,14 +405,14 @@ namespace SysWeaver.Net
                             //  Is async call
                             if (hasContext)
                             {
-                                var ft = typeof(Func<HttpServerRequest, ValueTask>);
+                                var ft = typeof(Func<HttpServerRequest, Task>);
                                 var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
                                 getAsync = Activator.CreateInstance(typeof(ContextGetAsyncValueTaskA0), lambda) as IInvokeApi;
                                 postAsync = Activator.CreateInstance(typeof(ContextPostAsyncValueTaskA0), lambda) as IInvokeApi;
                             }
                             else
                             {
-                                var ft = typeof(Func<ValueTask>);
+                                var ft = typeof(Func<Task>);
                                 var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
                                 getAsync = Activator.CreateInstance(typeof(GetAsyncValueTaskA0), lambda) as IInvokeApi;
                                 postAsync = Activator.CreateInstance(typeof(PostAsyncValueTaskA0), lambda) as IInvokeApi;
@@ -847,7 +847,7 @@ namespace SysWeaver.Net
         readonly bool HaveArgs;
 
 
-        public ValueTask<ReadOnlyMemory<Byte>> InvokeAsync(HttpServerRequest request, ReadOnlyMemory<Byte> data)
+        public Task<ReadOnlyMemory<Byte>> InvokeAsync(HttpServerRequest request, ReadOnlyMemory<Byte> data)
         {
             request.Custom = UnmanagedMemory.Create(data);
             return PostAsync.Run(this, request);
@@ -916,7 +916,7 @@ namespace SysWeaver.Net
             throw new NotImplementedException();
         }
 
-        async ValueTask<HttpRequestData> IHttpRequestHandler.GetAsync(HttpServerRequest request)
+        async Task<HttpRequestData> IHttpRequestHandler.GetAsync(HttpServerRequest request)
         {
             if (request.HttpMethod == HttpServerMethods.GET)
             {
@@ -982,7 +982,7 @@ namespace SysWeaver.Net
         static void ThrowSerializer(String ct)
             => throw new Exception(String.Concat("Don't know how to deserialize using \"", ct, '"'));
 
-        static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> Input_POST_Read(ApiHttpEntry api, HttpServerRequest request)
+        static async Task<IUnmanagedReadOnlyMemory<Byte>> Input_POST_Read(ApiHttpEntry api, HttpServerRequest request)
         {
             var s = (int)request.ReqContentLength;
             if (s < 32)
@@ -992,7 +992,7 @@ namespace SysWeaver.Net
             return ms.GetMemory();
         }
 
-        static async ValueTask<T> Input_POST<T>(ApiHttpEntry api, HttpServerRequest request)
+        static async Task<T> Input_POST<T>(ApiHttpEntry api, HttpServerRequest request)
         {
             IUnmanagedReadOnlyMemory<Byte> dataMem = null;
             var c = request.Custom;
@@ -1052,7 +1052,7 @@ namespace SysWeaver.Net
             }
         }
         /*
-        static async ValueTask<ReadOnlyMemory<Byte>> Input_POST(ApiHttpEntry api, HttpServerRequest request, ISerializerType ser)
+        static async Task<ReadOnlyMemory<Byte>> Input_POST(ApiHttpEntry api, HttpServerRequest request, ISerializerType ser)
         {
             var custom = request.Custom;
             if (custom != null)

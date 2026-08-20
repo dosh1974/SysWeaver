@@ -37,9 +37,8 @@ namespace SysWeaver.IpLocation.Caches
             }
         }
 
-        public Task<IpLocation> Get(string ip, Func<string, Task<IpLocation>> getFromSource)
-            => Cache.GetOrUpdateAsync(ip, async s => await DbGet(s, getFromSource).ConfigureAwait(false));
-
+        public ValueTask<IpLocation> Get(string ip, Func<string, Task<IpLocation>> getFromSource)
+            => Cache.GetOrUpdateAsync(ip, DbGet, getFromSource);
 
         async Task<IpLocation> DbGet(string ip, Func<string, Task<IpLocation>> getFromSource)
         {

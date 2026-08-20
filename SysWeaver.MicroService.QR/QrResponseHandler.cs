@@ -38,7 +38,7 @@ namespace SysWeaver.MicroService
 
         public IReadOnlyList<string> Auth { get; init; }
 
-        public ValueTask<String> GetCacheKey(HttpServerRequest request) => HttpServerTools.NullStringValueTask;
+        public ValueTask<String> GetCacheKey(HttpServerRequest request) => TaskExt.NullStringValueTask;
 
 
         public string GetEtag(out bool useAsync, HttpServerRequest request)
@@ -53,7 +53,7 @@ namespace SysWeaver.MicroService
             return Data;
         }
 
-        public ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
+        public Task<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }

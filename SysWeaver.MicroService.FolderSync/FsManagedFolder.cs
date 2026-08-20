@@ -58,7 +58,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         public String PullAuth;
 
-        public delegate ValueTask<Exception> ActivationHandler(String name, String folderDiscPath, Func<String, ValueTask<int>> commandRunner);
+        public delegate Task<Exception> ActivationHandler(String name, String folderDiscPath, Func<String, Task<int>> commandRunner);
 
         public ActivationHandler OnActivateAsync;
         public ActivationHandler OnDeactivateAsync;

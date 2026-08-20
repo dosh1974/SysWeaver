@@ -81,7 +81,7 @@ namespace SysWeaver.HttpTransformer
         readonly ExceptionTracker BuildErrors = new ();
         
 
-        async ValueTask BuildOne(CachedTransformerJob job)
+        async Task BuildOne(CachedTransformerJob job)
         {
             using var ___ = PerfMon.Track("BuildQueued");
             using var _ = await BuildLock.Lock().ConfigureAwait(false);
@@ -108,7 +108,7 @@ namespace SysWeaver.HttpTransformer
             ScheduledJobs.TryRemove(info.CacheKey, out var _);
 }
 
-        async ValueTask<bool> Build()
+        async Task<bool> Build()
         {
             var b = BuildJobs;
             while (b.TryDequeue(out var job))
@@ -130,15 +130,15 @@ namespace SysWeaver.HttpTransformer
 
         readonly SemiFrozenDictionary<String, ICachedTransformer> MimeHandlers = new SemiFrozenDictionary<string, ICachedTransformer>(StringComparer.Ordinal);
 
-        public IEnumerable<KeyValuePair<string, Func<HttpRequestTransformerState, ValueTask<bool>>>> GetTransformers()
-            => MimeHandlers.Select(x => new KeyValuePair<string, Func<HttpRequestTransformerState, ValueTask<bool>>>(x.Key, Handle));
+        public IEnumerable<KeyValuePair<string, Func<HttpRequestTransformerState, Task<bool>>>> GetTransformers()
+            => MimeHandlers.Select(x => new KeyValuePair<string, Func<HttpRequestTransformerState, Task<bool>>>(x.Key, Handle));
 
 
-        async ValueTask<bool> Handle(HttpRequestTransformerState state)
+        async Task<bool> Handle(HttpRequestTransformerState state)
         {
             var data = state.Request;
             var key = String.Join('\n', data.LocalUrl, state.ETag);
-            var c = await Cache.GetOrUpdateValueAsync(key, GetFromCache, state).ConfigureAwait(false);
+            var c = await Cache.GetOrUpdateAsync(key, GetFromCache, state).ConfigureAwait(false);
             var files = c.Files;
             if (files == null)
                 return false;
@@ -196,7 +196,7 @@ namespace SysWeaver.HttpTransformer
             return true;
         }
 
-        async ValueTask<CachedTransformerEntry> GetFromCache(String key, HttpRequestTransformerState state)
+        async Task<CachedTransformerEntry> GetFromCache(String key, HttpRequestTransformerState state)
         {
             var name = HashTools.GetHashString(key);
             var baseName = Path.Combine(Folders.SelectFolder(DataFolders, name), name);
@@ -272,7 +272,7 @@ namespace SysWeaver.HttpTransformer
         long DeletedFiles;
         readonly ExceptionTracker PrunerErrors = new ExceptionTracker();
 
-        async ValueTask<bool> Prune()
+        async Task<bool> Prune()
         {
             using var _ = PerfMon.Track(nameof(Prune));
             var fs = DataFolders;
@@ -334,7 +334,7 @@ namespace SysWeaver.HttpTransformer
         }
 
 
-        public static async ValueTask SaveOrg(String baseName, long orgLength)
+        public static async Task SaveOrg(String baseName, long orgLength)
         {
             var name = baseName + ".org";
             var fi = new FileInfo(name);

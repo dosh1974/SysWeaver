@@ -45,14 +45,13 @@ namespace SysWeaver.Auth
         {
             var t = userGuid.IndexOf(':');
             if (t < 0)
-                return NullTaskFindUserFromGuid;
+                return TaskExt<AuthorizationInfo>.NullTask;
             var pre = userGuid.Substring(0, t);
             if (!GuidPrefixMap.TryGetValue(pre, out var auth))
-                return NullTaskFindUserFromGuid;
+                return TaskExt<AuthorizationInfo>.NullTask;
             return auth.FindUserFromGuid(userGuid);
         }
 
-        static readonly Task<AuthorizationInfo> NullTaskFindUserFromGuid = Task.FromResult((AuthorizationInfo)null);
 
         /// <summary>
         /// Get information about a user

@@ -55,7 +55,7 @@ namespace SysWeaver.Compression
         /// <param name="from">The stream to read the uncompressed data from</param>
         /// <param name="to">The stream to write the compressed data to</param>
         /// <param name="level">The compression level to use</param>
-        ValueTask CompressAsync(Stream from, Stream to, CompEncoderLevels level);
+        Task CompressAsync(Stream from, Stream to, CompEncoderLevels level);
 
 
         /// <summary>
@@ -65,7 +65,7 @@ namespace SysWeaver.Compression
         /// <param name="to">The memory to write the compressed data to</param>
         /// <param name="level">The compression level to use</param>
         /// <returns>The number of compressed bytes written</returns>
-        ValueTask<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level);
+        Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level);
 
 
         /// <summary>
@@ -74,7 +74,7 @@ namespace SysWeaver.Compression
         /// <param name="from">The memory to read uncompressed data from</param>
         /// <param name="to">The stream to write the compressed data to</param>
         /// <param name="level">The compression level to use</param>
-        ValueTask CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level);
+        Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level);
 
         #endregion//Async
 

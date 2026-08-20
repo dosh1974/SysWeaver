@@ -20,7 +20,7 @@ namespace SysWeaver.MicroService
         /// <param name="info">Information about some files</param>
         /// <param name="r">The request context (check for auth etc)</param>
         /// <returns>An array of matching size with the result for each file</returns>
-        ValueTask<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r);
+        Task<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r);
 
         /// <summary>
         /// Upload a single file
@@ -30,7 +30,7 @@ namespace SysWeaver.MicroService
         /// <param name="r">The request context (check for auth etc)</param>
         /// <param name="decoder">The data may be compressed, if so, this is the decoder to use to decompress it</param>
         /// <returns>The result of the operation, typically negative for failures</returns>
-        ValueTask<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder);
+        Task<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder);
 
         /// <summary>
         /// If non-null, the files in these folders (typically where the uploaded files end up) will be accessable 

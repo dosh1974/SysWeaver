@@ -46,7 +46,7 @@ namespace SysWeaver.Net
             OpenStream = openStream;
         }
 
-        public StaticStreamHttpRequestHandler(String uri, String location, long? length, Func<ValueTask<Stream>> openStreamAsync, String mime, HttpCompressionPriority compression, int clientCacheDuration = 5, int requestCacheDuration = 0, DateTime? lastModified = null, String etag = null, ICompDecoder preCompressedFormat = null, IReadOnlyList<String> auth = null, double order = 0)
+        public StaticStreamHttpRequestHandler(String uri, String location, long? length, Func<Task<Stream>> openStreamAsync, String mime, HttpCompressionPriority compression, int clientCacheDuration = 5, int requestCacheDuration = 0, DateTime? lastModified = null, String etag = null, ICompDecoder preCompressedFormat = null, IReadOnlyList<String> auth = null, double order = 0)
         {
             Order = order;
             Uri = uri;
@@ -73,7 +73,7 @@ namespace SysWeaver.Net
         readonly String ETag;
         readonly ValueTask<String> CackeKey;
         readonly Func<Stream> OpenStream;
-        readonly Func<ValueTask<Stream>> OpenStreamAsync;
+        readonly Func<Task<Stream>> OpenStreamAsync;
 
         public int ClientCacheDuration { get; private set; }
         public int RequestCacheDuration { get; private set; }
@@ -94,7 +94,7 @@ namespace SysWeaver.Net
             return new HttpRequestData(OpenStream());
         }
 
-        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
+        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             return new HttpRequestData(await OpenStreamAsync().ConfigureAwait(false));
         }

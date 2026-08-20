@@ -28,7 +28,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="r"></param>
         /// <returns>Returns true if the request was handled</returns>
-        ValueTask<bool> Handle(HttpServerRequest r);
+        Task<bool> Handle(HttpServerRequest r);
     }
 
     public interface IHttpServerModule : IHttpServerBaseModule
@@ -40,7 +40,7 @@ namespace SysWeaver.Net
         /// An optional async handler. If an async handler is present the Handler method is never called.
         /// This value is only read once so it can't be toggled on and off.
         /// </summary>
-        Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get => null; }
+        Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get => null; }
 
 
         /// <summary>

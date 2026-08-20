@@ -385,7 +385,7 @@ namespace SysWeaver.FileDatabase
 
         ConcurrentDictionary<String, bool> CompletedFiles = new ConcurrentDictionary<string, bool>(StringComparer.Ordinal);
 
-        async ValueTask<bool> ProcessUpdates()
+        async Task<bool> ProcessUpdates()
         {
             using var _ = PerfMon.Track(nameof(ProcessUpdates));
             List<Update> toEnque = new List<Update>();

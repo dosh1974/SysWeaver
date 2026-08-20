@@ -159,7 +159,7 @@ namespace SysWeaver.Net
         /// <param name="temp"></param>
         /// <param name="vars"></param>
         /// <returns></returns>
-        async ValueTask<IReadOnlyDictionary<String, String>> GetTranslationVars(String language, LanguageTemplate temp, IReadOnlyDictionary<String, String> vars)
+        async Task<IReadOnlyDictionary<String, String>> GetTranslationVars(String language, LanguageTemplate temp, IReadOnlyDictionary<String, String> vars)
         {
             var v = temp.Vars;
             if (v == null)

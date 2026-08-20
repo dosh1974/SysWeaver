@@ -41,7 +41,7 @@ namespace SysWeaver.Net
         /// Flush pending audit data
         /// </summary>
         /// <returns></returns>
-        ValueTask Flush();
+        Task Flush();
 
     }
 

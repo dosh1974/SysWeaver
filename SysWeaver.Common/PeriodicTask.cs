@@ -40,7 +40,7 @@ namespace SysWeaver
         /// <param name="initialDelay">If runNow is true, delay the first execution using the sleepMs parameter</param>
         public PeriodicTask(Func<Task<bool>> createTask, int sleepMs = 1000, bool runNow = true, bool continueOnException = true, bool initialDelay = false)
         {
-            DoTask = async () => await createTask().ConfigureAwait(false);
+            DoTask = createTask;
             SleepMs = sleepMs;
             CancelToken = Cancel.Token;
             ContinueOnException = continueOnException;
@@ -48,6 +48,7 @@ namespace SysWeaver
                 Start(initialDelay);
         }
 
+        /*
         /// <summary>
         /// Runs a task concurrently periodically with the specfied delay inbetween
         /// </summary>
@@ -65,7 +66,27 @@ namespace SysWeaver
             if (runNow)
                 Start(initialDelay);
         }
+        */
 
+        /// <summary>
+        /// Runs a task concurrently periodically with the specfied delay inbetween, this task can be cancelled
+        /// </summary>
+        /// <param name="createTask">A function that creates the task to run at the given interval, this task should be able to cancle using the canellation token provided</param>
+        /// <param name="sleepMs">Number of milliseconds to to pause between each task execution</param>
+        /// <param name="runNow">Set to true to start immediately</param>
+        /// <param name="continueOnException">If set to true and the task or it's creation casts an exception, continue the periodic execution anyway</param>
+        /// <param name="initialDelay">If runNow is true, delay the first execution using the sleepMs parameter</param>
+        public PeriodicTask(Func<CancellationToken, Task<bool>> createTask, int sleepMs = 1000, bool runNow = true, bool continueOnException = true, bool initialDelay = false)
+        {
+            DoTask = () => createTask(Cancel.Token);
+            SleepMs = sleepMs;
+            CancelToken = Cancel.Token;
+            ContinueOnException = continueOnException;
+            if (runNow)
+                Start(initialDelay);
+        }
+
+        /*
         /// <summary>
         /// Runs a task concurrently periodically with the specfied delay inbetween, this task can be cancelled
         /// </summary>
@@ -83,25 +104,7 @@ namespace SysWeaver
             if (runNow)
                 Start(initialDelay);
         }
-
-
-        /// <summary>
-        /// Runs a task concurrently periodically with the specfied delay inbetween, this task can be cancelled
-        /// </summary>
-        /// <param name="createTask">A function that creates the task to run at the given interval, this task should be able to cancle using the canellation token provided</param>
-        /// <param name="sleepMs">Number of milliseconds to to pause between each task execution</param>
-        /// <param name="runNow">Set to true to start immediately</param>
-        /// <param name="continueOnException">If set to true and the task or it's creation casts an exception, continue the periodic execution anyway</param>
-        /// <param name="initialDelay">If runNow is true, delay the first execution using the sleepMs parameter</param>
-        public PeriodicTask(Func<CancellationToken, ValueTask<bool>> createTask, int sleepMs = 1000, bool runNow = true, bool continueOnException = true, bool initialDelay = false)
-        {
-            DoTask = async () => await createTask(Cancel.Token).ConfigureAwait(false);
-            SleepMs = sleepMs;
-            CancelToken = Cancel.Token;
-            ContinueOnException = continueOnException;
-            if (runNow)
-                Start(initialDelay);
-        }
+        */
 
 
         /// <summary>
@@ -186,7 +189,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="delay">True to wait</param>
         /// <returns></returns>
-        async ValueTask RunTask(bool delay)
+        async Task RunTask(bool delay)
         {
             var ct = CancelToken;
             if (!ct.IsCancellationRequested)
@@ -225,7 +228,7 @@ namespace SysWeaver
             IsTaskRunning = false;
         }
 
-        readonly Func<ValueTask<bool>> DoTask;
+        readonly Func<Task<bool>> DoTask;
         readonly Func<bool> DoFunc;
        
         readonly CancellationTokenSource Cancel = new ();

@@ -515,7 +515,7 @@ namespace SysWeaver.Net
         /// <param name="data">Should be the data that was the argument to the Handler method.</param>
         /// <param name="newUrl">The new url to read data from, only the local part is changed</param>
         /// <returns>A handler if the newUrl can be handled by the server</returns>
-        public async ValueTask<IHttpRequestHandler> InternalRedirect(IHttpServerModule caller, HttpServerRequest data, String newUrl)
+        public async Task<IHttpRequestHandler> InternalRedirect(IHttpServerModule caller, HttpServerRequest data, String newUrl)
         {
 #if DEBUG
             if (caller == null)
@@ -548,7 +548,7 @@ namespace SysWeaver.Net
         /// <param name="data">The request data</param>
         /// <param name="ifNoneMatch">Optionally a last modified string, if this string equals the last modified string, null is returned</param>
         /// <returns>The data and the last modified string</returns>
-        async ValueTask<Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>> InternalRead(IHttpRequestHandler h, HttpServerRequest data, String ifNoneMatch = null)
+        async Task<Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>> InternalRead(IHttpRequestHandler h, HttpServerRequest data, String ifNoneMatch = null)
         {
             var etag = h.GetEtag(out var useAsync, data);
             if (etag.FastEquals(ifNoneMatch))
@@ -625,7 +625,7 @@ namespace SysWeaver.Net
 
 
 
-        async ValueTask<bool> HandleRaw(HttpServerRequest data)
+        async Task<bool> HandleRaw(HttpServerRequest data)
         {
             var pm = PerfMon;
             using var _ = pm.Track(nameof(HandleRaw));
@@ -766,7 +766,7 @@ namespace SysWeaver.Net
         StringTree RedirectTree = new StringTree();
 
 
-        static async ValueTask<IHttpRequestHandler> CheckModule(IReadOnlyList<IHttpServerModule> modules, HttpServerRequest data, IHttpServerModule ignoreThis)
+        static async Task<IHttpRequestHandler> CheckModule(IReadOnlyList<IHttpServerModule> modules, HttpServerRequest data, IHttpServerModule ignoreThis)
         {
             var moduleLen = modules.Count;
             for (int mi = 0; mi < moduleLen; ++mi)
@@ -791,11 +791,11 @@ namespace SysWeaver.Net
 
         }
 
-        static readonly Func<IReadOnlyList<IHttpServerModule>, HttpServerRequest, IHttpServerModule, ValueTask<IHttpRequestHandler>> CheckModuleAsync = CheckModule;
+        static readonly Func<IReadOnlyList<IHttpServerModule>, HttpServerRequest, IHttpServerModule, Task<IHttpRequestHandler>> CheckModuleAsync = CheckModule;
 
 
 
-        async ValueTask<IHttpRequestHandler> GetHandler(HttpServerRequest data, IHttpServerModule ignoreThis = null)
+        async Task<IHttpRequestHandler> GetHandler(HttpServerRequest data, IHttpServerModule ignoreThis = null)
         {
             var pm = PerfMon;
             using var _ = pm.Track(nameof(GetHandler));
@@ -1038,20 +1038,20 @@ namespace SysWeaver.Net
         readonly IReadOnlyDictionary<String, Func<HttpServerRequest, HttpSession, ValueTask<IHttpRequestHandler>>> OptionalEndPoints;
 
 
-        public async ValueTask<String> Get404Text(String language)
+        public async Task<String> Get404Text(String language)
         {
             return await Translator.TranslateSafe("Not Found - The server cannot find the requested resource.", language, "en", "This is the message to display when trying to access a non-existing end point in a web server").ConfigureAwait(false);
 
         }
 
-        async ValueTask Set404(HttpServerRequest data)
+        async Task Set404(HttpServerRequest data)
         {
             data.SetResStatusCode(404);
             if (!data.IsHead)
                 data.SetResText(await Get404Text(data.Language).ConfigureAwait(false));
         }
 
-        async ValueTask Set429(HttpServerRequest data)
+        async Task Set429(HttpServerRequest data)
         {
             data.SetResStatusCode(429);
             if (!data.IsHead)
@@ -1068,7 +1068,7 @@ namespace SysWeaver.Net
         /// <param name="url"></param>
         /// <param name="isHead"></param>
         /// <returns>True if the request have been handled to completion, false if the request is allowed to continue</returns>
-        async ValueTask<bool> HandleAuth(IReadOnlyList<String> auth, HttpServerRequest data, HttpSession session, String localUrl, String url, bool isHead)
+        async Task<bool> HandleAuth(IReadOnlyList<String> auth, HttpServerRequest data, HttpSession session, String localUrl, String url, bool isHead)
         {
             using var _ = PerfMon.Track(nameof(HandleAuth));
             var user = session.Auth;
@@ -1163,25 +1163,37 @@ namespace SysWeaver.Net
 
         readonly MovingAverage RequestStats = new MovingAverage(TimeSpan.FromSeconds(15));
 
-        public async ValueTask Handle(HttpServerRequest data)
+        public async Task Handle(HttpServerRequest data)
         {
             RequestStats.Add(data.ReqContentLength);
             var rateLimiter = ServerLimits;
-            if ((rateLimiter != null) && (await rateLimiter.IsOverTheLimit().ConfigureAwait(false)))
+            if (rateLimiter != null) 
             {
-                await Set429(data).ConfigureAwait(false);
-                return;
+                var rateLimierTask = rateLimiter.IsOverTheLimit();
+                var c = rateLimierTask.IsCompleted;
+                if ((c && rateLimierTask.GetAwaiter().GetResult()) || (!c && await rateLimierTask.ConfigureAwait(false)))
+                {
+                    await Set429(data).ConfigureAwait(false);
+                    return;
+                }
+
             }
             if (HaveRawModules && await HandleRaw(data).ConfigureAwait(false))
                 return;
-            using var session = await GetSession(data).ConfigureAwait(false);
+            var sessionTask = GetSession(data);
+            using var session = sessionTask.IsCompleted ? sessionTask.GetAwaiter().GetResult() : (await sessionTask.ConfigureAwait(false));
             session.IncRequestCounter();
             data.Init(session);
             rateLimiter = session.RateLimiter;
-            if ((rateLimiter != null) && (await rateLimiter.IsOverTheLimit().ConfigureAwait(false)))
+            if (rateLimiter != null)
             {
-                await Set429(data).ConfigureAwait(false);
-                return;
+                var rateLimierTask = rateLimiter.IsOverTheLimit();
+                var c = rateLimierTask.IsCompleted;
+                if ((c && rateLimierTask.GetAwaiter().GetResult()) || (!c && await rateLimierTask.ConfigureAwait(false)))
+                {
+                    await Set429(data).ConfigureAwait(false);
+                    return;
+                }
             }
             if ((ExternalRootUri == null) || (!ExternalRootUriFromRequest))
             {
@@ -1193,7 +1205,9 @@ namespace SysWeaver.Net
             var localUrl = data.LocalUrl;
             if (ForcedEndPoints.TryGetValue(localUrl, out var fep))
             {
-                await fep(data, session).ConfigureAwait(false);
+                var epTask = fep(data, session);
+                if (!epTask.IsCompleted)
+                    await epTask.ConfigureAwait(false);
                 return;
             }
             //  Handle redirects
@@ -1207,7 +1221,10 @@ namespace SysWeaver.Net
             {
                 //  Optional end points (internal end points that can be overridden)
                 if (OptionalEndPoints.TryGetValue(localUrl, out var oep))
-                    t = await oep(data, session).ConfigureAwait(false);
+                {
+                    var epTask = oep(data, session);
+                    t = epTask.IsCompleted ? epTask.GetAwaiter().GetResult() : await epTask.ConfigureAwait(false);
+                }
                 if (t == null)
                 {
                     //  No handler found!
@@ -1222,16 +1239,27 @@ namespace SysWeaver.Net
             data = newData ?? data;
             //  Rate limiting
             rateLimiter = t.ServiceRateLimiter;
-            if ((rateLimiter != null) && (await rateLimiter.IsOverTheLimit().ConfigureAwait(false)))
+            if (rateLimiter != null)
             {
-                await Set429(data).ConfigureAwait(false);
-                return;
+                var rateLimierTask = rateLimiter.IsOverTheLimit();
+                var c = rateLimierTask.IsCompleted;
+                if ((c && rateLimierTask.GetAwaiter().GetResult()) || (!c && await rateLimierTask.ConfigureAwait(false)))
+                {
+                    await Set429(data).ConfigureAwait(false);
+                    return;
+                }
             }
             rateLimiter = t.SessionRateLimiter(session);
-            if ((rateLimiter != null) && (await rateLimiter.IsOverTheLimit().ConfigureAwait(false)))
+            if (rateLimiter != null)
             {
-                await Set429(data).ConfigureAwait(false);
-                return;
+                var rateLimierTask = rateLimiter.IsOverTheLimit();
+                var c = rateLimierTask.IsCompleted;
+                if ((c && rateLimierTask.GetAwaiter().GetResult()) || (!c && await rateLimierTask.ConfigureAwait(false)))
+                {
+                    await Set429(data).ConfigureAwait(false);
+                    return;
+                }
+
             }
 #if DEBUG
             //using var ___ = await DebugLock.Lock().ConfigureAwait(false); // Enabled this line to handle one request at a time
@@ -1377,7 +1405,7 @@ namespace SysWeaver.Net
                     if (isDynamicTemplate)
                         langVars = await GetTranslationVars(lang, langTemplate, vars).ConfigureAwait(false);
                     else
-                        langVars = await langTemplate.LangVars.GetOrUpdateValueAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false);
+                        langVars = await langTemplate.LangVars.GetOrUpdateAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false);
                 }
                 //  Set mime unless it's already set
                 var mime = data.GetResMime();
@@ -1483,7 +1511,7 @@ namespace SysWeaver.Net
                                 {
                                     isDynamicTemplate = IsDynamic(cachedTemplate);
                                     vars = vars ?? GetVars(isDynamicTemplate || isLanguageTemplate, data);
-                                    langVars = langVars ?? (langTemplate == null ? null : await langTemplate.LangVars.GetOrUpdateValueAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false));
+                                    langVars = langVars ?? (langTemplate == null ? null : await langTemplate.LangVars.GetOrUpdateAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false));
                                     dec = null;
                                     textTemplate.Set(cachedTemplate, isDynamicTemplate, etag, langTemplate, lang);
                                     i.ChangeMem(ApplyTemplate(cachedTemplate, vars, langVars));
@@ -1502,7 +1530,7 @@ namespace SysWeaver.Net
                             if (cachedTemplate.HaveVars)
                             {
                                 vars = vars ?? GetVars(isDynamicTemplate || isLanguageTemplate, data);
-                                langVars = langVars ?? (langTemplate == null ? null : await langTemplate.LangVars.GetOrUpdateValueAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false));
+                                langVars = langVars ?? (langTemplate == null ? null : await langTemplate.LangVars.GetOrUpdateAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false));
                                 dec = null;
                                 textTemplate.SetLangLm(etag, lang);
                                 i.ChangeMem(ApplyTemplate(cachedTemplate, vars, langVars));
@@ -1798,7 +1826,7 @@ namespace SysWeaver.Net
             return true;
         }
 
-        async ValueTask OnException(Exception ex, HttpServerRequest data)
+        async Task OnException(Exception ex, HttpServerRequest data)
         {
             var le = ListenerExceptionType;
             if ((le != null) && (le.IsAssignableFrom(ex.GetType())))
@@ -2247,7 +2275,7 @@ namespace SysWeaver.Net
 
         readonly FastMemCache<String, String> AcceptLangCache = new FastMemCache<string, string>(TimeSpan.FromHours(24), StringComparer.Ordinal);
 
-        async ValueTask<String> GetAcceptLang(String lang)
+        async Task<String> GetAcceptLang(String lang)
         {
             var langSet = TargetLanguagesSet;
             if (langSet == null)
@@ -2293,7 +2321,7 @@ namespace SysWeaver.Net
         }
 
         protected ValueTask<String> GetAcceptLanguage(String acceptLanguageValue)
-            => AcceptLangCache.GetOrUpdateValueAsync(String.IsNullOrEmpty(acceptLanguageValue) ? "en" : acceptLanguageValue, GetAcceptLang);
+            => AcceptLangCache.GetOrUpdateAsync(String.IsNullOrEmpty(acceptLanguageValue) ? "en" : acceptLanguageValue, GetAcceptLang);
 
 
         unsafe ReadOnlyMemory<Char> ExtractSessionCookie(String cookieString)
@@ -2322,69 +2350,72 @@ namespace SysWeaver.Net
 
         readonly ConcurrentDictionary<IReadOnlyMemoryKey<Char>, HttpSession> Sessions = new(ReadOnlyMemoryKey.HashStringEqualityComparer);
 
-        async ValueTask<HttpSession> GetSession(HttpServerRequest req)
+        ValueTask<HttpSession> GetSession(HttpServerRequest req)
         {
-            using (PerfMon.Track(nameof(GetSession)))
+            using var _ = PerfMon.Track(nameof(GetSession));
+            var sn = SessionCookieName;
+            if (sn == null)
+                return default;
+            var cookieString = req.GetReqHeader("Cookie");
+            var sessionTokenMemory = ExtractSessionCookie(cookieString);// req.GetReqCookie(sn, cookieString);
+            String sessionToken = null;
+            if (!sessionTokenMemory.IsEmpty)
             {
-                var sn = SessionCookieName;
-                if (sn == null)
-                    return null;
-                var now = DateTime.UtcNow.Ticks;
-                var sessions = Sessions;
-                var cookieString = req.GetReqHeader("Cookie");
-                HttpSession session;
-                var sessionTokenMemory = ExtractSessionCookie(cookieString);// req.GetReqCookie(sn, cookieString);
-                String sessionToken = null;
-                if (!sessionTokenMemory.IsEmpty)
+                if (Sessions.TryGetValue(ReadOnlyMemoryKey.Create(sessionTokenMemory), out var session))
                 {
-                    if (sessions.TryGetValue(ReadOnlyMemoryKey.Create(sessionTokenMemory), out session))
-                    {
-                        session.Touch(now, req);
-                        return session;
-                    }
-                    sessionToken = sessionTokenMemory.ToString();
+                    session.Touch(DateTime.UtcNow.Ticks, req);
+                    return ValueTask.FromResult(session);
                 }
-
-                var ip = req.GetIpAddress();
-                var dn = DeviceIdCookieName;
-                String deviceId = req.GetReqCookie(dn, cookieString);
-                var cookieOpt = CookieOptions;
-                if (deviceId == null)
-                {
-                    Span<Byte> span = stackalloc Byte[16 + 8];
-                    using (var rng = SecureRng.Get())
-                        rng.GetBytes(span[..16]);
-                    BitConverter.TryWriteBytes(span[16..], DateTime.UtcNow.Ticks);
-                    deviceId = Convert.ToBase64String(span);
-                    req.UpdateCookie(HttpServerTools.MakeCookie(dn, deviceId, DateTime.MaxValue, cookieOpt));
-                }
-
-                var ua = req.GetReqHeader("User-Agent") ?? "";
-                var prot = req.ProtocolVersion;
-                var extLife = SessionExtendLifetime;
-                var rateLimiterParams = SessionLimits;
-                do
-                {
-                    sessionToken = GetSessionGuid();
-                    session = new HttpSession(rateLimiterParams, sessionToken, now, extLife, ua, ip, prot, deviceId);
-                    session.LanguageTimeStamp = DateTime.UtcNow;
-                    session.Language = await GetAcceptLanguage(req.GetReqHeader("Accept-Language")).ConfigureAwait(false);
-                    session.OnAuthLogout += RunOnLogout;
-                } while (!sessions.TryAdd(ReadOnlyMemoryKey.Create(sessionToken), session));
-                var exp = new DateTime(now + SessionCookieLifetime, DateTimeKind.Utc);
-                req.UpdateCookie(HttpServerTools.MakeCookie(sn, sessionToken, exp, cookieOpt));
-                try
-                {
-                    OnSessionStart?.Invoke(session);
-                }
-                catch (Exception ex)
-                {
-                    SessionStartErrors.OnException(ex);
-                }
-                Interlocked.Increment(ref CurrentSessionCount);
-                Interlocked.Increment(ref TotalSessionCount);
-                return session;
+                sessionToken = sessionTokenMemory.ToString();
             }
+            return CreateSession(req, cookieString, sessionToken);
+
+        }
+
+
+        async ValueTask<HttpSession> CreateSession(HttpServerRequest req, String cookieString, String sessionToken)
+        {
+            var ip = req.GetIpAddress();
+            var dn = DeviceIdCookieName;
+            String deviceId = req.GetReqCookie(dn, cookieString);
+            var cookieOpt = CookieOptions;
+            if (deviceId == null)
+            {
+                Span<Byte> span = stackalloc Byte[16 + 8];
+                using (var rng = SecureRng.Get())
+                    rng.GetBytes(span[..16]);
+                BitConverter.TryWriteBytes(span[16..], DateTime.UtcNow.Ticks);
+                deviceId = Convert.ToBase64String(span);
+                req.UpdateCookie(HttpServerTools.MakeCookie(dn, deviceId, DateTime.MaxValue, cookieOpt));
+            }
+            var ua = req.GetReqHeader("User-Agent") ?? "";
+            var prot = req.ProtocolVersion;
+            var extLife = SessionExtendLifetime;
+            var rateLimiterParams = SessionLimits;
+            HttpSession session;
+            var now = DateTime.UtcNow.Ticks;
+            var sessions = Sessions;
+            do
+            {
+                sessionToken = GetSessionGuid();
+                session = new HttpSession(rateLimiterParams, sessionToken, now, extLife, ua, ip, prot, deviceId);
+                session.LanguageTimeStamp = DateTime.UtcNow;
+                session.Language = await GetAcceptLanguage(req.GetReqHeader("Accept-Language")).ConfigureAwait(false);
+                session.OnAuthLogout += RunOnLogout;
+            } while (!sessions.TryAdd(ReadOnlyMemoryKey.Create(sessionToken), session));
+            var exp = new DateTime(now + SessionCookieLifetime, DateTimeKind.Utc);
+            req.UpdateCookie(HttpServerTools.MakeCookie(SessionCookieName, sessionToken, exp, cookieOpt));
+            try
+            {
+                OnSessionStart?.Invoke(session);
+            }
+            catch (Exception ex)
+            {
+                SessionStartErrors.OnException(ex);
+            }
+            Interlocked.Increment(ref CurrentSessionCount);
+            Interlocked.Increment(ref TotalSessionCount);
+            return session;
         }
 
         public bool CloseSession(HttpSession session)
@@ -2697,7 +2728,7 @@ namespace SysWeaver.Net
             return true;
         }
 
-        async ValueTask<String> Compress(ICompEncoder encoder, CompEncoderLevels level, HttpRequestData i)
+        async Task<String> Compress(ICompEncoder encoder, CompEncoderLevels level, HttpRequestData i)
         {
             var s = i.Stream;
             if (s != null)
@@ -2717,20 +2748,20 @@ namespace SysWeaver.Net
         }
 
 
-        ValueTask Compress(ICompEncoder encoder, CompEncoderLevels level, HttpRequestData i, Stream output)
+        Task Compress(ICompEncoder encoder, CompEncoderLevels level, HttpRequestData i, Stream output)
         {
             var s = i.Stream;
             return s == null ? encoder.CompressAsync(i.Mem, output, level) : encoder.CompressAsync(s, output, level);
         }
 
 
-        async ValueTask Decompress(ICompDecoder decoder, HttpRequestData i)
+        async Task Decompress(ICompDecoder decoder, HttpRequestData i)
         {
             var s = i.Stream;
             i.ChangeMem(s == null ? decoder.GetDecompressed(i.Mem.Span) : await decoder.GetDecompressedAsync(s).ConfigureAwait(false));
         }
 
-        ValueTask Decompress(ICompDecoder decoder, HttpRequestData i, Stream output)
+        Task Decompress(ICompDecoder decoder, HttpRequestData i, Stream output)
         {
             var s = i.Stream;
             return s == null ? decoder.DecompressAsync(i.Mem, output) : decoder.DecompressAsync(s, output);
@@ -2753,7 +2784,7 @@ namespace SysWeaver.Net
             return t;
         }
 
-        async ValueTask SaveToCache(ConcurrentDictionary<String, HttpCacheEntry> cache, String cacheKey, DateTime expires, long nowT, HttpRequestData i, HttpServerRequest req, String localUrl)
+        async Task SaveToCache(ConcurrentDictionary<String, HttpCacheEntry> cache, String cacheKey, DateTime expires, long nowT, HttpRequestData i, HttpServerRequest req, String localUrl)
         {
             using (PerfMon.Track(nameof(SaveToCache)))
             {
@@ -2916,7 +2947,7 @@ namespace SysWeaver.Net
         [WebApi("application/{0}")]
         [WebApiClientCache(1)]
         [WebApiRequestCacheStatic]
-        public Task<LanguageInfo[]> GetLocalizedLanguages(HttpServerRequest context)
+        public ValueTask<LanguageInfo[]> GetLocalizedLanguages(HttpServerRequest context)
             => LocalizedLanguagesCache.GetOrUpdateAsync(context.Session.Language, async cl =>
                 {
                     var langs = await GetSupportedLanguages().ConfigureAwait(false);
@@ -2925,7 +2956,7 @@ namespace SysWeaver.Net
                     if (langs.Length <= 0)
                         return Array.Empty<LanguageInfo>();
                     cl = context.Session.Language;
-                    var d = await langs.ConvertAsync(lang => GetLocalizedLanguage(lang, cl)).ConfigureAwait(false);
+                    var d = await langs.ConvertAsyncValue(lang => GetLocalizedLanguage(lang, cl)).ConfigureAwait(false);
                     return d;
                 });
 
@@ -2936,7 +2967,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <returns>The list of supported languages.
         /// null = No language support</returns>
-        public Task<LanguageInfo> GetLocalizedLanguage(String info, String toLanguage)
+        public ValueTask<LanguageInfo> GetLocalizedLanguage(String info, String toLanguage)
             => LocalizedLangCache.GetOrUpdateAsync(String.Concat(info, '_', toLanguage), cl =>
                 OneLang(Translator, info, toLanguage)
             );

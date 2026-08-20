@@ -23,7 +23,7 @@ namespace SysWeaver.Auth
         /// <summary>
         /// Return this for failed auths
         /// </summary>
-        protected static readonly Task<Authorization> NoAuth = Task.FromResult((Authorization)null);
+        protected static readonly Task<Authorization> NoAuth = TaskExt<Authorization>.NullTask;
 
         /// <summary>
         /// Get information about a user (from it's guid)

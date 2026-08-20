@@ -18,22 +18,45 @@ namespace SysWeaver
         /// <param name="autoDispose">If true and the value is disposable, the value will be dispose</param>
         public CachedValue(TimeSpan defaultCacheDuration, bool autoDispose = true)
         {
-            WillDispose = autoDispose && typeof(IDisposable).IsAssignableFrom(typeof(T));
+            autoDispose &= typeof(IDisposable).IsAssignableFrom(typeof(T));
             DefaultCacheDuration = defaultCacheDuration;
+            if (autoDispose)
+            {
+                var e = new ExceptionTracker();
+                AutoDisposeErrors = e;
+                WillDispose = true;
+                InternalDispose = val =>
+                    {
+                        try
+                        {
+                            (val as IDisposable)?.Dispose();
+                        }
+                        catch (Exception ex)
+                        {
+                            e.OnException(ex);
+                        }
+                    };
+            }else
+            {
+                InternalDispose = NoDispose;
+            }
         }
+
 
         /// <summary>
         /// Create a value cahce,
         /// </summary>
         /// <param name="autoDispose">If true and the value is disposable, the value will be dispose</param>
-        public CachedValue(bool autoDispose = true)
+        public CachedValue(bool autoDispose = true) : this(TimeSpan.FromMinutes(5), autoDispose)
         {
-            WillDispose = autoDispose && typeof(IDisposable).IsAssignableFrom(typeof(T));
-            DefaultCacheDuration = TimeSpan.FromMinutes(5);
         }
 
         public readonly bool WillDispose;
         public readonly TimeSpan DefaultCacheDuration;
+        public readonly ExceptionTracker AutoDisposeErrors;
+
+
+        readonly Action<T> InternalDispose;
 
         /// <summary>
         /// Get the cached value (update invoked if invalid or non-existing)
@@ -65,7 +88,7 @@ namespace SysWeaver
                 old = Interlocked.Exchange(ref Data, Tuple.Create(DateTime.UtcNow + DefaultCacheDuration, val));
             }
             if (WillDispose && (old != null))
-                (old.Item2 as IDisposable).Dispose();
+                InternalDispose(old.Item2);
             return val;
         }
 
@@ -100,7 +123,7 @@ namespace SysWeaver
                 old = Interlocked.Exchange(ref Data, valD);
             }
             if (WillDispose && (old != null))
-                (old.Item2 as IDisposable).Dispose();
+                InternalDispose(old.Item2);
             return val;
         }
 
@@ -134,7 +157,7 @@ namespace SysWeaver
                 val = valD.Item2;
                 old = Interlocked.Exchange(ref Data, Tuple.Create(valD.Item1, val));
                 if (WillDispose && (old != null))
-                    (old.Item2 as IDisposable).Dispose();
+                    InternalDispose(old.Item2);
             }
             return val;
         }
@@ -145,67 +168,16 @@ namespace SysWeaver
         /// </summary>
         /// <param name="getFn">The function to call to get the original value</param>
         /// <returns>The cached value</returns>
-        public async Task<T> GetOrUpdate(Func<Task<T>> getFn)
+        public ValueTask<T> GetOrUpdate(Func<Task<T>> getFn)
         {
             var d = Data;
             if (d != null)
                 if (DateTime.UtcNow < d.Item1)
                 {
                     Interlocked.Increment(ref HitCount);
-                    return d.Item2;
+                    return ValueTask.FromResult(d.Item2);
                 }
-            Tuple<DateTime, T> old;
-            T val;
-            using (var l = await Lock.Lock().ConfigureAwait(false))
-            {
-                d = Data;
-                if (d != null)
-                    if (DateTime.UtcNow < d.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        return d.Item2;
-                    }
-                Interlocked.Increment(ref MissCount);
-                val = await getFn().ConfigureAwait(false);
-                old = Interlocked.Exchange(ref Data, Tuple.Create(DateTime.UtcNow + DefaultCacheDuration, val));
-            }
-            if (WillDispose && (old != null))
-                (old.Item2 as IDisposable).Dispose();
-            return val;
-        }
-        /// <summary>
-        /// Get the cached value (update invoked if invalid or non-existing)
-        /// </summary>
-        /// <param name="getFn">The function to call to get the original value and the expiration time</param>
-        /// <returns>The cached value</returns>
-        public async Task<T> GetOrUpdate(Func<Task<Tuple<DateTime, T>>> getFn)
-        {
-            var d = Data;
-            if (d != null)
-                if (DateTime.UtcNow < d.Item1)
-                {
-                    Interlocked.Increment(ref HitCount);
-                    return d.Item2;
-                }
-            Tuple<DateTime, T> old;
-            T val;
-            using (var l = await Lock.Lock().ConfigureAwait(false))
-            {
-                d = Data;
-                if (d != null)
-                    if (DateTime.UtcNow < d.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        return d.Item2;
-                    }
-                Interlocked.Increment(ref MissCount);
-                var valD = await getFn().ConfigureAwait(false);
-                val = valD.Item2;
-                old = Interlocked.Exchange(ref Data, valD);
-            }
-            if (WillDispose && (old != null))
-                (old.Item2 as IDisposable).Dispose();
-            return val;
+            return InternalGetOrUpdate(getFn);
         }
 
         /// <summary>
@@ -213,69 +185,56 @@ namespace SysWeaver
         /// </summary>
         /// <param name="getFn">The function to call to get the original value and the expiration time</param>
         /// <returns>The cached value</returns>
-        public async Task<T> GetOrUpdate(Func<Task<ValueTuple<DateTime, T>>> getFn)
+        public ValueTask<T> GetOrUpdate(Func<Task<Tuple<DateTime, T>>> getFn)
         {
             var d = Data;
             if (d != null)
                 if (DateTime.UtcNow < d.Item1)
                 {
                     Interlocked.Increment(ref HitCount);
-                    return d.Item2;
+                    return ValueTask.FromResult(d.Item2);
                 }
-            Tuple<DateTime, T> old;
-            T val;
-            using (var l = await Lock.Lock().ConfigureAwait(false))
-            {
-                d = Data;
-                if (d != null)
-                    if (DateTime.UtcNow < d.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        return d.Item2;
-                    }
-                Interlocked.Increment(ref MissCount);
-                var valD = await getFn().ConfigureAwait(false);
-                val = valD.Item2;
-                old = Interlocked.Exchange(ref Data, Tuple.Create(valD.Item1, val));
-            }
-            if (WillDispose && (old != null))
-                (old.Item2 as IDisposable).Dispose();
-            return val;
+            return InternalGetOrUpdate(getFn);
         }
+
+
+
+        /// <summary>
+        /// Get the cached value (update invoked if invalid or non-existing)
+        /// </summary>
+        /// <param name="getFn">The function to call to get the original value and the expiration time</param>
+        /// <returns>The cached value</returns>
+        public ValueTask<T> GetOrUpdate(Func<Task<ValueTuple<DateTime, T>>> getFn)
+        {
+            var d = Data;
+            if (d != null)
+                if (DateTime.UtcNow < d.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    return ValueTask.FromResult(d.Item2);
+                }
+            return InternalGetOrUpdate(getFn);
+        }
+
 
         /// <summary>
         /// Get the cached value (update invoked if invalid or non-existing)
         /// </summary>
         /// <param name="getFn">The function to call to get the original value</param>
         /// <returns>The cached value</returns>
-        public async ValueTask<T> GetOrUpdateValue(Func<ValueTask<T>> getFn)
+        public ValueTask<T> GetOrUpdateValue(Func<ValueTask<T>> getFn)
         {
             var d = Data;
             if (d != null)
                 if (DateTime.UtcNow < d.Item1)
                 {
                     Interlocked.Increment(ref HitCount);
-                    return d.Item2;
+                    return ValueTask.FromResult(d.Item2);
                 }
-            Tuple<DateTime, T> old;
-            T val;
-            using (var l = await Lock.Lock().ConfigureAwait(false))
-            {
-                d = Data;
-                if (d != null)
-                    if (DateTime.UtcNow < d.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        return d.Item2;
-                    }
-                Interlocked.Increment(ref MissCount);
-                val = await getFn().ConfigureAwait(false);
-                old = Interlocked.Exchange(ref Data, Tuple.Create(DateTime.UtcNow + DefaultCacheDuration, val));
-            }
-            if (WillDispose && (old != null))
-                (old.Item2 as IDisposable).Dispose();
-            return val;
+            return InternalGetOrUpdateValue(getFn);
         }
+
+
 
 
         /// <summary>
@@ -283,70 +242,37 @@ namespace SysWeaver
         /// </summary>
         /// <param name="getFn">The function to call to get the original value and the expiration time</param>
         /// <returns>The cached value</returns>
-        public async ValueTask<T> GetOrUpdateValue(Func<ValueTask<Tuple<DateTime, T>>> getFn)
+        public ValueTask<T> GetOrUpdateValue(Func<ValueTask<Tuple<DateTime, T>>> getFn)
         {
             var d = Data;
             if (d != null)
                 if (DateTime.UtcNow < d.Item1)
                 {
                     Interlocked.Increment(ref HitCount);
-                    return d.Item2;
+                    return ValueTask.FromResult(d.Item2);
                 }
-            Tuple<DateTime, T> old;
-            T val;
-            using (var l = await Lock.Lock().ConfigureAwait(false))
-            {
-                d = Data;
-                if (d != null)
-                    if (DateTime.UtcNow < d.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        return d.Item2;
-                    }
-                Interlocked.Increment(ref MissCount);
-                var valD = await getFn().ConfigureAwait(false);
-                val = valD.Item2;
-                old = Interlocked.Exchange(ref Data, valD);
-            }
-            if (WillDispose && (old != null))
-                (old.Item2 as IDisposable).Dispose();
-            return val;
+            return InternalGetOrUpdateValue(getFn);
         }
+
+
 
         /// <summary>
         /// Get the cached value (update invoked if invalid or non-existing)
         /// </summary>
         /// <param name="getFn">The function to call to get the original value and the expiration time</param>
         /// <returns>The cached value</returns>
-        public async ValueTask<T> GetOrUpdateValue(Func<ValueTask<ValueTuple<DateTime, T>>> getFn)
+        public ValueTask<T> GetOrUpdateValue(Func<ValueTask<ValueTuple<DateTime, T>>> getFn)
         {
             var d = Data;
             if (d != null)
                 if (DateTime.UtcNow < d.Item1)
                 {
                     Interlocked.Increment(ref HitCount);
-                    return d.Item2;
+                    return ValueTask.FromResult(d.Item2);
                 }
-            Tuple<DateTime, T> old;
-            T val;
-            using (var l = await Lock.Lock().ConfigureAwait(false))
-            {
-                d = Data;
-                if (d != null)
-                    if (DateTime.UtcNow < d.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        return d.Item2;
-                    }
-                Interlocked.Increment(ref MissCount);
-                var valD = await getFn().ConfigureAwait(false);
-                val = valD.Item2;
-                old = Interlocked.Exchange(ref Data, Tuple.Create(valD.Item1, val));
-            }
-            if (WillDispose && (old != null))
-                (old.Item2 as IDisposable).Dispose();
-            return val;
+            return InternalGetOrUpdateValue(getFn);
         }
+
 
         /// <summary>
         /// Set a new value
@@ -411,10 +337,6 @@ namespace SysWeaver
             if (WillDispose)
                 Clear();
         }
-
-        volatile Tuple<DateTime, T> Data;
-        readonly AsyncLock Lock = new AsyncLock();
-
 
         /// <summary>
         /// Get some stats for the cache using Stats type
@@ -491,10 +413,188 @@ namespace SysWeaver
             Interlocked.Exchange(ref MissCount, 0);
         }
 
+
+        async ValueTask<T> InternalGetOrUpdate(Func<Task<T>> getFn)
+        {
+            Tuple<DateTime, T> old;
+            T val;
+            using (var l = await Lock.Lock().ConfigureAwait(false))
+            {
+                var d = Data;
+                if (d != null)
+                    if (DateTime.UtcNow < d.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        return d.Item2;
+                    }
+                Interlocked.Increment(ref MissCount);
+                val = await getFn().ConfigureAwait(false);
+                old = Interlocked.Exchange(ref Data, Tuple.Create(DateTime.UtcNow + DefaultCacheDuration, val));
+            }
+            if (WillDispose && (old != null))
+                InternalDispose(old.Item2);
+            return val;
+        }
+
+        async ValueTask<T> InternalGetOrUpdate(Func<Task<Tuple<DateTime, T>>> getFn)
+        {
+            var d = Data;
+            if (d != null)
+                if (DateTime.UtcNow < d.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    return d.Item2;
+                }
+            Tuple<DateTime, T> old;
+            T val;
+            using (var l = await Lock.Lock().ConfigureAwait(false))
+            {
+                d = Data;
+                if (d != null)
+                    if (DateTime.UtcNow < d.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        return d.Item2;
+                    }
+                Interlocked.Increment(ref MissCount);
+                var valD = await getFn().ConfigureAwait(false);
+                val = valD.Item2;
+                old = Interlocked.Exchange(ref Data, valD);
+            }
+            if (WillDispose && (old != null))
+                InternalDispose(old.Item2);
+            return val;
+        }
+
+        async ValueTask<T> InternalGetOrUpdate(Func<Task<ValueTuple<DateTime, T>>> getFn)
+        {
+            var d = Data;
+            if (d != null)
+                if (DateTime.UtcNow < d.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    return d.Item2;
+                }
+            Tuple<DateTime, T> old;
+            T val;
+            using (var l = await Lock.Lock().ConfigureAwait(false))
+            {
+                d = Data;
+                if (d != null)
+                    if (DateTime.UtcNow < d.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        return d.Item2;
+                    }
+                Interlocked.Increment(ref MissCount);
+                var valD = await getFn().ConfigureAwait(false);
+                val = valD.Item2;
+                old = Interlocked.Exchange(ref Data, Tuple.Create(valD.Item1, val));
+            }
+            if (WillDispose && (old != null))
+                InternalDispose(old.Item2);
+            return val;
+        }
+
+        async ValueTask<T> InternalGetOrUpdateValue(Func<ValueTask<T>> getFn)
+        {
+            var d = Data;
+            if (d != null)
+                if (DateTime.UtcNow < d.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    return d.Item2;
+                }
+            Tuple<DateTime, T> old;
+            T val;
+            using (var l = await Lock.Lock().ConfigureAwait(false))
+            {
+                d = Data;
+                if (d != null)
+                    if (DateTime.UtcNow < d.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        return d.Item2;
+                    }
+                Interlocked.Increment(ref MissCount);
+                val = await getFn().ConfigureAwait(false);
+                old = Interlocked.Exchange(ref Data, Tuple.Create(DateTime.UtcNow + DefaultCacheDuration, val));
+            }
+            if (WillDispose && (old != null))
+                InternalDispose(old.Item2);
+            return val;
+        }
+
+        async ValueTask<T> InternalGetOrUpdateValue(Func<ValueTask<Tuple<DateTime, T>>> getFn)
+        {
+            var d = Data;
+            if (d != null)
+                if (DateTime.UtcNow < d.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    return d.Item2;
+                }
+            Tuple<DateTime, T> old;
+            T val;
+            using (var l = await Lock.Lock().ConfigureAwait(false))
+            {
+                d = Data;
+                if (d != null)
+                    if (DateTime.UtcNow < d.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        return d.Item2;
+                    }
+                Interlocked.Increment(ref MissCount);
+                var valD = await getFn().ConfigureAwait(false);
+                val = valD.Item2;
+                old = Interlocked.Exchange(ref Data, valD);
+            }
+            if (WillDispose && (old != null))
+                InternalDispose(old.Item2);
+            return val;
+        }
+
+        async ValueTask<T> InternalGetOrUpdateValue(Func<ValueTask<ValueTuple<DateTime, T>>> getFn)
+        {
+            var d = Data;
+            if (d != null)
+                if (DateTime.UtcNow < d.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    return d.Item2;
+                }
+            Tuple<DateTime, T> old;
+            T val;
+            using (var l = await Lock.Lock().ConfigureAwait(false))
+            {
+                d = Data;
+                if (d != null)
+                    if (DateTime.UtcNow < d.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        return d.Item2;
+                    }
+                Interlocked.Increment(ref MissCount);
+                var valD = await getFn().ConfigureAwait(false);
+                val = valD.Item2;
+                old = Interlocked.Exchange(ref Data, Tuple.Create(valD.Item1, val));
+            }
+            if (WillDispose && (old != null))
+                InternalDispose(old.Item2);
+            return val;
+        }
+
+
+        volatile Tuple<DateTime, T> Data;
+        readonly AsyncLock Lock = new AsyncLock();
+
         long HitCount;
         long SemiHitCount;
         long MissCount;
 
+
+        static readonly Action<T> NoDispose = val => { };
 
 
     }

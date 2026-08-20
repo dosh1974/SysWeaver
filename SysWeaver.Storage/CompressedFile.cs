@@ -38,7 +38,7 @@ namespace SysWeaver
         /// <param name="compType">The compression type</param>
         /// <param name="level">The desired compression level</param>
         /// <returns>A compressed stream</returns>
-        public static async ValueTask<Stream> OpenAsync(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
+        public static async Task<Stream> OpenAsync(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
             => new FileStream(await GetCompFileAsync(file, compType, level).ConfigureAwait(false), FileMode.Open, FileAccess.Read, FileShare.Read);
 
 
@@ -59,7 +59,7 @@ namespace SysWeaver
         /// <param name="compType"></param>
         /// <param name="level"></param>
         /// <returns></returns>
-        public static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> ReadAllBytesAsync(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
+        public static async Task<IUnmanagedReadOnlyMemory<Byte>> ReadAllBytesAsync(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
             => FileReadOnlyMemory.Read(await GetCompFileAsync(file, compType, level).ConfigureAwait(false));
 
         static String GetCompFile(String file, ICompType compType, CompEncoderLevels level)
@@ -88,7 +88,7 @@ namespace SysWeaver
             }, 30, suffix).Filename;
         }
 
-        static async ValueTask<String> GetCompFileAsync(String file, ICompType compType, CompEncoderLevels level)
+        static async Task<String> GetCompFileAsync(String file, ICompType compType, CompEncoderLevels level)
         {
             var fn = new FileInfo(file);
             if (!fn.Exists)

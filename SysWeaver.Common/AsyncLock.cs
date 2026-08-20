@@ -10,14 +10,14 @@ namespace SysWeaver
         /// <summary>
         /// Useful helper when using the coalesce operator ?.
         /// </summary>
-        public static readonly ValueTask<IDisposable> NoLock = new ValueTask<IDisposable>(null);
+        public static readonly Task<IDisposable> NoLock = new Task<IDisposable>(null);
 
 
         /// <summary>
         /// Wait for a lock to be taken
         /// </summary>
         /// <returns>An IDisposable that releases the lock</returns>
-        public async ValueTask<IDisposable> Lock()
+        public async Task<IDisposable> Lock()
         {
             var d = D;
             await d.S.WaitAsync().ConfigureAwait(false);
@@ -29,7 +29,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="waitMilliSeconds">Number of milliseconds to wait at most</param>
         /// <returns>An IDisposable that releases the lock or null if the wait timed-out and no lock is taken</returns>
-        public async ValueTask<IDisposable> Lock(int waitMilliSeconds)
+        public async Task<IDisposable> Lock(int waitMilliSeconds)
         {
             var d = D;
             if (!await d.S.WaitAsync(waitMilliSeconds).ConfigureAwait(false))
@@ -86,7 +86,7 @@ namespace SysWeaver
         /// Wait for all locks to be taken
         /// </summary>
         /// <returns>An IDisposable that releases the locks</returns>
-        public async ValueTask<IDisposable> LockAll()
+        public async Task<IDisposable> LockAll()
         {
             var d = A;
             var c = d.MaxConcurrentAccess;
@@ -115,7 +115,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="waitMilliSeconds">Number of milliseconds to wait at most</param>
         /// <returns>An IDisposable that releases the locks</returns>
-        public async ValueTask<IDisposable> LockAll(int waitMilliSeconds)
+        public async Task<IDisposable> LockAll(int waitMilliSeconds)
         {
             var d = A;
             var c = d.MaxConcurrentAccess;

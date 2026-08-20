@@ -416,7 +416,7 @@ namespace SysWeaver.Remote
 
         #region AsyncValueTask
 
-        protected async ValueTask<T> ValueGet<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
+        protected async Task<T> ValueGet<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
         {
             var cache = meta.Cache;
             if (cache != null)
@@ -452,7 +452,7 @@ namespace SysWeaver.Remote
             }
         }
 
-        protected async ValueTask<T> ValueDelete<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
+        protected async Task<T> ValueDelete<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
         {
             var cache = meta.Cache;
             if (cache != null)
@@ -488,7 +488,7 @@ namespace SysWeaver.Remote
             }
         }
 
-        protected async ValueTask<T> ValuePost<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
+        protected async Task<T> ValuePost<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
             {
@@ -514,7 +514,7 @@ namespace SysWeaver.Remote
             }
         }
 
-        protected async ValueTask<T> ValuePut<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
+        protected async Task<T> ValuePut<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
             {
@@ -660,7 +660,7 @@ namespace SysWeaver.Remote
 
         #region AsyncValueTask
 
-        protected async ValueTask ValueVoidGet(String url, ApiMeta meta, EndPointOptions opt)
+        protected async Task ValueVoidGet(String url, ApiMeta meta, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
             {
@@ -684,7 +684,7 @@ namespace SysWeaver.Remote
             }
         }
 
-        protected async ValueTask ValueVoidDelete(String url, ApiMeta meta, EndPointOptions opt)
+        protected async Task ValueVoidDelete(String url, ApiMeta meta, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
             {
@@ -708,7 +708,7 @@ namespace SysWeaver.Remote
             }
         }
 
-        protected async ValueTask ValueVoidPost<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
+        protected async Task ValueVoidPost<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
             {
@@ -736,7 +736,7 @@ namespace SysWeaver.Remote
             }
         }
 
-        protected async ValueTask ValueVoidPut<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
+        protected async Task ValueVoidPut<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
             {
@@ -812,7 +812,7 @@ namespace SysWeaver.Remote
         }
 
 
-        async ValueTask<T> ReadResponse<T>(HttpRequestMessage req, EndPointOptions opt, HttpEndPointTypes type, ISerializerType payloadSer, ReadOnlyMemory<Byte> payload, HttpContent content = null)
+        async Task<T> ReadResponse<T>(HttpRequestMessage req, EndPointOptions opt, HttpEndPointTypes type, ISerializerType payloadSer, ReadOnlyMemory<Byte> payload, HttpContent content = null)
         {
             long rid = Interlocked.Increment(ref ReqId);
             var timeout = opt?.TimeOutInMilliSeconds ?? 0;
@@ -879,7 +879,7 @@ namespace SysWeaver.Remote
             }
         }
 
-        async ValueTask WaitResponse(HttpRequestMessage req, EndPointOptions opt, HttpEndPointTypes type, ISerializerType payloadSer, ReadOnlyMemory<Byte> payload, HttpContent content = null)
+        async Task WaitResponse(HttpRequestMessage req, EndPointOptions opt, HttpEndPointTypes type, ISerializerType payloadSer, ReadOnlyMemory<Byte> payload, HttpContent content = null)
         {
             long rid = Interlocked.Increment(ref ReqId);
             var timeout = opt?.TimeOutInMilliSeconds ?? 0;

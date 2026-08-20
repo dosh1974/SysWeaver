@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 namespace SysWeaver
 {
 
+
     public static class ArrayExt
     {
 
@@ -136,7 +137,7 @@ namespace SysWeaver
             await Task.WhenAll(tt).ConfigureAwait(false);
             var t = GC.AllocateUninitializedArray<T>(count);
             for (int i = 0; i < count; ++i)
-                t[i] = tt[i].Result;
+                t[i] = tt[i].GetAwaiter().GetResult();
             return t;
         }
 
@@ -155,21 +156,17 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <returns></returns>
-        public static async ValueTask<T[]> CreateAsyncValue<T>(int count, Func<int, ValueTask<T>> getValue, int maxConcurrency = 0)
+        public static ValueTask<T[]> CreateAsyncValue<T>(int count, Func<int, ValueTask<T>> getValue, int maxConcurrency = 0)
         {
             if (count <= 0)
-                return Array.Empty<T>();
+                return TaskExt<T>.EmptyArrayValueTask;
             if (count == 1)
-                return [await getValue(0).ConfigureAwait(false)];
+                return ValueTaskToArray(getValue(0));
             ConcurrencyLimiter.LimitConcurrency(ref getValue, maxConcurrency, count);
             var tt = GC.AllocateUninitializedArray<ValueTask<T>>(count);
             for (int i = 0; i < count; ++i)
                 tt[i] = getValue(i);
-            await TaskExt.WhenAll(tt).ConfigureAwait(false);
-            var t = GC.AllocateUninitializedArray<T>(count);
-            for (int i = 0; i < count; ++i)
-                t[i] = tt[i].Result;
-            return t;
+            return TaskExt.WhenAll(tt);
         }
 
 
@@ -192,9 +189,6 @@ namespace SysWeaver
                 Array.Resize(ref t, i);
             return t;
         }
-
-
-
 
         /// <summary>
         /// Create a new re-ordered array
@@ -338,8 +332,6 @@ namespace SysWeaver
 
 
 
-
-
         public static T[] InsertionSort<T>(this T[] array, Func<T, T, int> compareFn)
         {
             if (array == null)
@@ -361,11 +353,6 @@ namespace SysWeaver
             }
             return array;
         }
-
-
-
-
-
 
         /// <summary>
         /// Convert an array to another element type using a function
@@ -422,7 +409,7 @@ namespace SysWeaver
             await Task.WhenAll(tt).ConfigureAwait(false);
             var t = GC.AllocateUninitializedArray<T>(l);
             for (int i = 0; i < l; ++i)
-                t[i] = tt[i].Result;
+                t[i] = tt[i].GetAwaiter().GetResult();
             return t;
         }
 
@@ -445,28 +432,24 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <returns></returns>
-        public static async ValueTask<T[]> ConvertAsyncValue<E, T>(this IReadOnlyList<E> array, Func<E, ValueTask<T>> func, int maxConcurrency = 0)
+        public static ValueTask<T[]> ConvertAsyncValue<E, T>(this IReadOnlyList<E> array, Func<E, ValueTask<T>> func, int maxConcurrency = 0)
         {
             if (array == null)
-                return null;
+                return default;
             var l = array.Count;
             if (l <= 0)
-                return Array.Empty<T>();
+                return TaskExt<T>.EmptyArrayValueTask;
             if (l == 1)
-                return [await func(array[0]).ConfigureAwait(false)];
+                return ValueTaskToArray(func(array[0]));
             ConcurrencyLimiter.LimitConcurrency(ref func, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<ValueTask<T>>(l);
             for (int i = 0; i < l; ++i)
                 tt[i] = func(array[i]);
-            await TaskExt.WhenAll(tt).ConfigureAwait(false);
-            var t = GC.AllocateUninitializedArray<T>(l);
-            for (int i = 0; i < l; ++i)
-                t[i] = tt[i].Result;
-            return t;
+            return TaskExt.WhenAll(tt);
         }
 
-
-
+        static async ValueTask<T[]> ValueTaskToArray<T>(ValueTask<T> t)
+            => [await t.ConfigureAwait(false)];
 
 
 
@@ -522,11 +505,7 @@ namespace SysWeaver
             var tt = GC.AllocateUninitializedArray<Task<T>>(l);
             for (int i = 0; i < l; ++i)
                 tt[i] = func(array[i], i);
-            await Task.WhenAll(tt).ConfigureAwait(false);
-            var t = GC.AllocateUninitializedArray<T>(l);
-            for (int i = 0; i < l; ++i)
-                t[i] = tt[i].Result;
-            return t;
+            return await Task.WhenAll(tt).ConfigureAwait(false);
         }
 
 
@@ -548,24 +527,20 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <returns></returns>
-        public static async ValueTask<T[]> ConvertAsyncValue<E, T>(this IReadOnlyList<E> array, Func<E, int, ValueTask<T>> func, int maxConcurrency = 0)
+        public static ValueTask<T[]> ConvertAsyncValue<E, T>(this IReadOnlyList<E> array, Func<E, int, ValueTask<T>> func, int maxConcurrency = 0)
         {
             if (array == null)
-                return null;
+                return default;
             var l = array.Count;
             if (l <= 0)
-                return Array.Empty<T>();
+                return TaskExt<T>.EmptyArrayValueTask;
             if (l == 1)
-                return [await func(array[0], 0).ConfigureAwait(false)];
+                return ValueTaskToArray(func(array[0], 0));
             ConcurrencyLimiter.LimitConcurrency(ref func, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<ValueTask<T>>(l);
             for (int i = 0; i < l; ++i)
                 tt[i] = func(array[i], i);
-            await TaskExt.WhenAll(tt).ConfigureAwait(false);
-            var t = GC.AllocateUninitializedArray<T>(l);
-            for (int i = 0; i < l; ++i)
-                t[i] = tt[i].Result;
-            return t;
+            return TaskExt.WhenAll(tt);
         }
 
 
@@ -635,7 +610,7 @@ namespace SysWeaver
             await Task.WhenAll(tt).ConfigureAwait(false);
             var t = GC.AllocateUninitializedArray<T>(l);
             for (i = 0; i < l; ++i)
-                t[i] = tt[i].Result;
+                t[i] = tt[i].GetAwaiter().GetResult();
             return t;
         }
 
@@ -656,17 +631,17 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <returns>An array</returns>
-        public static async ValueTask<T[]> ToArrayValueAsync<K, V, T>(this IReadOnlyDictionary<K, V> dict, Func<K, V, int, ValueTask<T>> func, int maxConcurrency = 0)
+        public static ValueTask<T[]> ToArrayValueAsync<K, V, T>(this IReadOnlyDictionary<K, V> dict, Func<K, V, int, ValueTask<T>> func, int maxConcurrency = 0)
         {
             if (dict == null)
-                return null;
+                return default;
             var l = dict.Count;
             if (l <= 0)
-                return Array.Empty<T>();
+                return TaskExt<T>.EmptyArrayValueTask;
             if (l == 1)
             {
                 var kv = dict.First();
-                return [await func(kv.Key, kv.Value, 0).ConfigureAwait(false)];
+                return ValueTaskToArray(func(kv.Key, kv.Value, 0));
             }
             ConcurrencyLimiter.LimitConcurrency(ref func, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<ValueTask<T>>(l);
@@ -676,11 +651,7 @@ namespace SysWeaver
                 tt[i] = func(kv.Key, kv.Value, i);
                 ++i;
             }
-            await TaskExt.WhenAll(tt).ConfigureAwait(false);
-            var t = GC.AllocateUninitializedArray<T>(l);
-            for (i = 0; i < l; ++i)
-                t[i] = tt[i].Result;
-            return t;
+            return TaskExt.WhenAll(tt);
         }
 
 
@@ -745,7 +716,7 @@ namespace SysWeaver
             await Task.WhenAll(tt).ConfigureAwait(false);
             var t = GC.AllocateUninitializedArray<T>(l);
             for (i = 0; i < l; ++i)
-                t[i] = tt[i].Result;
+                t[i] = tt[i].GetAwaiter().GetResult();
             return t;
         }
 
@@ -765,15 +736,15 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <returns>An array</returns>
-        public static async ValueTask<T[]> ToArrayValueAsync<K, T>(this IReadOnlyCollection<K> col, Func<K, int, ValueTask<T>> func, int maxConcurrency = 0)
+        public static ValueTask<T[]> ToArrayValueAsync<K, T>(this IReadOnlyCollection<K> col, Func<K, int, ValueTask<T>> func, int maxConcurrency = 0)
         {
             if (col == null)
-                return null;
+                return default;
             var l = col.Count;
             if (l <= 0)
-                return Array.Empty<T>();
+                return TaskExt<T>.EmptyArrayValueTask;
             if (l == 1)
-                return [await func(col.First(), 0).ConfigureAwait(false)];
+                return ValueTaskToArray(func(col.First(), 0));
             ConcurrencyLimiter.LimitConcurrency(ref func, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<ValueTask<T>>(l);
             int i = 0;
@@ -782,11 +753,7 @@ namespace SysWeaver
                 tt[i] = func(kv, i);
                 ++i;
             }
-            await TaskExt.WhenAll(tt).ConfigureAwait(false);
-            var t = GC.AllocateUninitializedArray<T>(l);
-            for (i = 0; i < l; ++i)
-                t[i] = tt[i].Result;
-            return t;
+            return TaskExt.WhenAll(tt);
         }
 
         /// <summary>

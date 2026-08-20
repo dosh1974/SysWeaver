@@ -76,7 +76,7 @@ namespace SysWeaver.MicroService
         [WebApi]
         [WebApiClientCache(ClientCache)]
         [WebApiRequestCache(RequestCache, WebApiCaches.Globally)]
-        public Task<string> TranslateOne(TranslateRequest request, HttpServerRequest context)
+        public ValueTask<string> TranslateOne(TranslateRequest request, HttpServerRequest context)
         {
             request.UserName = context.Session.Auth?.Username;
             return T.TranslateOne(request);

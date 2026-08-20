@@ -52,7 +52,7 @@ namespace SysWeaver.MicroService
         readonly ExceptionTracker PruneExceptions = new ExceptionTracker();
         long DelCount;
 
-        async ValueTask<bool> PruneFiles()
+        async Task<bool> PruneFiles()
         {
             var ext = PruneExceptions;
             foreach (var x in Repos)
@@ -291,7 +291,7 @@ namespace SysWeaver.MicroService
         }
 
 
-        internal async ValueTask<FileUploadResult> Upload(HttpServerRequest context, IFileRepo repo)
+        internal async Task<FileUploadResult> Upload(HttpServerRequest context, IFileRepo repo)
         {
             try
             {

@@ -26,7 +26,7 @@ namespace SysWeaver.ReverseProxy
 
 
 
-            public async ValueTask<ReverseProxyResponse> MakeRequest(ReverseProxyRequest r)
+            public async Task<ReverseProxyResponse> MakeRequest(ReverseProxyRequest r)
             {
                 var p = Pending;
                 if (Interlocked.Read(ref Connections) <= 0)

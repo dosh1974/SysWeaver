@@ -387,7 +387,7 @@ namespace SysWeaver.Net
                 Stop();
                 if (!isPaused)
                     Start();
-                return Task.FromResult(true);
+                return TaskExt.TrueTask;
             }
         }
 
@@ -484,7 +484,7 @@ namespace SysWeaver.Net
 
         long ReqCounter;
 
-        async ValueTask HandlePause(HttpRequest req, HttpResponse res)
+        async Task HandlePause(HttpRequest req, HttpResponse res)
         {
             res.StatusCode = 503;
             var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
@@ -492,7 +492,7 @@ namespace SysWeaver.Net
             await WriteResponseString(res, text).ConfigureAwait(false);
         }
 
-        async ValueTask HandleInvalidPrefix(HttpRequest req, HttpResponse res)
+        async Task HandleInvalidPrefix(HttpRequest req, HttpResponse res)
         {
             res.StatusCode = 404;
             var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);

@@ -12,7 +12,7 @@ namespace SysWeaver
     /// </summary>
     public abstract class MessageHandler : IDisposable
     {
-        protected abstract ValueTask Add(Message message);
+        protected abstract Task Add(Message message);
 
         public enum Modes
         {
@@ -35,9 +35,9 @@ namespace SysWeaver
             CurrentTask?.Wait(5000);
         }
 
-        protected static readonly ValueTask CompletedTask = default;
+        protected static readonly Task CompletedTask = default;
 
-        async ValueTask ProcessMessageQueue()
+        async Task ProcessMessageQueue()
         {
             var messages = Messages;
             Message m;

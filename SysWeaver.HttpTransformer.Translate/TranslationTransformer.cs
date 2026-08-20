@@ -55,7 +55,7 @@ namespace SysWeaver.HttpTransformer
             };
         }
 
-        public async ValueTask<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> inputData, CachedTransformerEntry entry)
+        public async Task<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> inputData, CachedTransformerEntry entry)
         {
             var language = info.State.Request.Language;
             if (String.IsNullOrEmpty(language))
@@ -84,7 +84,7 @@ namespace SysWeaver.HttpTransformer
                 var d = new Dictionary<String, String>(vcount, StringComparer.Ordinal);
                 if (tr != null)
                 {
-                    var vals = await vars.ConvertAsync(x => tr.TranslateOne(new TranslateRequest
+                    var vals = await vars.ConvertAsyncValue(x => tr.TranslateOne(new TranslateRequest
                     {
                         From = "en",
                         To = language,

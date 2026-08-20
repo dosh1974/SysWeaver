@@ -69,7 +69,7 @@ namespace SysWeaver.Net
             return new HttpRequestData(Data, true);
         }
 
-        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
+        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }

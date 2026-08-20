@@ -82,7 +82,7 @@ namespace SysWeaver
         }
 
 
-        static async ValueTask WriteHeader(Stream s, long minTime, ReadOnlyMemory<Byte>? fileNames = null)
+        static async Task WriteHeader(Stream s, long minTime, ReadOnlyMemory<Byte>? fileNames = null)
         {
             await s.WriteAsync(FileHeader).ConfigureAwait(false);
             WriteVar(s, (ulong)minTime);
@@ -96,17 +96,17 @@ namespace SysWeaver
             }
         }
 
-        static ValueTask WriteFile(Stream s, FileInfo file, long minTime, Byte[] block, int hashSize)
+        static Task WriteFile(Stream s, FileInfo file, long minTime, Byte[] block, int hashSize)
         {
             WriteVar(s, (ulong)(file.CreationTimeUtc.Ticks - minTime));
             WriteVar(s, (ulong)(file.LastWriteTimeUtc.Ticks - minTime));
             WriteVar(s, (ulong)(file.LastAccessTimeUtc.Ticks - minTime));
             WriteVar(s, (ulong)file.Attributes);
             WriteVar(s, (ulong)(block.LongLength / hashSize));
-            return s.WriteAsync(block);
+            return s.WriteAsync(block, 0, block.Length);
         }
 
-        static async ValueTask<CdcFileHeader> ReadHeader(Stream s)
+        static async Task<CdcFileHeader> ReadHeader(Stream s)
         {
             var temp = GC.AllocateUninitializedArray<Byte>(4);
             await s.ReadExactlyAsync(temp).ConfigureAwait(false);
@@ -124,7 +124,7 @@ namespace SysWeaver
             return new CdcFileHeader(minTime, files);
         }
 
-        static async ValueTask<CdcFileData> ReadFile(Stream s, int hashSize, bool allowFail = false)
+        static async Task<CdcFileData> ReadFile(Stream s, int hashSize, bool allowFail = false)
         {
             ulong cc;
             if (allowFail)
@@ -171,7 +171,7 @@ namespace SysWeaver
         /// <param name="destName">Optional destination filename, default is to name it the same as the file with an added .swcompact extension</param>
         /// <param name="props">The props used</param>
         /// <returns></returns>
-        public static async ValueTask CompactFile(String fileName, String destName = null, CdcProps props = null)
+        public static async Task CompactFile(String fileName, String destName = null, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             destName = destName ?? (fileName + DotFileExt);
@@ -210,7 +210,7 @@ namespace SysWeaver
         /// <param name="destName">Optional destination filename, default is to name it the same as the folder with an added .swcompact extension</param>
         /// <param name="props">The props used</param>
         /// <returns></returns>
-        public static async ValueTask CompactFolder(String folderName, String destName = null, CdcProps props = null)
+        public static async Task CompactFolder(String folderName, String destName = null, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             destName = destName ?? (folderName + DotFileExt);
@@ -232,13 +232,13 @@ namespace SysWeaver
             var headerArray = EncodeFileArray(shortName);
             //  Get file chunks
             var l = CreateLock();
-            async ValueTask<Byte[]> DoOne(FileInfo file)
+            async Task<Byte[]> DoOne(FileInfo file)
             {
                 using var _ = await l.Lock().ConfigureAwait(false);
                 using var i = file.OpenRead();
                 return await Cut(i, false,props).ConfigureAwait(false);
             }
-            var blocks = await files.ConvertAsyncValue(DoOne).ConfigureAwait(false);
+            var blocks = await files.ConvertAsync(DoOne).ConfigureAwait(false);
 
             //  Write file
             var tempName = destName + ".temp";
@@ -268,7 +268,7 @@ namespace SysWeaver
         /// <param name="destName">Optional destination filename, default is to name it the same as the file or folder with an added .swcompact extension</param>
         /// <param name="props">The props used</param>
         /// <returns></returns>
-        public static ValueTask Compact(String path, String destName = null, CdcProps props = null)
+        public static Task Compact(String path, String destName = null, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             return File.Exists(path) ? CompactFile(path, destName, props) : CompactFolder(path, destName, props);
@@ -283,7 +283,7 @@ namespace SysWeaver
         /// <param name="props"></param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        public static async ValueTask WriteChunks(Stream dest, ReadOnlyMemory<Byte> chunkHashes, CdcProps props = null)
+        public static async Task WriteChunks(Stream dest, ReadOnlyMemory<Byte> chunkHashes, CdcProps props = null)
         {
             var sl = chunkHashes.Length;
             props = props ?? CdcProps.Default;
@@ -305,7 +305,7 @@ namespace SysWeaver
         /// <param name="destName">Optional destination name (folder or file), default is the same as fileName excluding the .swcompact extension</param>
         /// <param name="props">The props used</param>
         /// <returns></returns>
-        public static async ValueTask<CdcChunkStats> Expand(String fileName, String destName = null, CdcProps props = null)
+        public static async Task<CdcChunkStats> Expand(String fileName, String destName = null, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             destName = destName ?? PathExt.StripExtension(fileName);
@@ -325,7 +325,7 @@ namespace SysWeaver
             ConcurrentDictionary<String, CdcChunkFileStats> fileData = new(StringComparer.Ordinal);
 
             var l = CreateLock();
-            async ValueTask DoOne(String file, CdcFileData data)
+            async Task DoOne(String file, CdcFileData data)
             {
                 Interlocked.Increment(ref fileCount);
                 using var _ = await l.Lock().ConfigureAwait(false);
@@ -402,7 +402,7 @@ namespace SysWeaver
         /// <param name="destName">Optional destination name (folder or file), default is the same as fileName excluding the .swcompact extension</param>
         /// <param name="props">The props used</param>
         /// <returns>Stats</returns>
-        public static async ValueTask<CdcChunkStats> Recover(String fileName, String destName = null, CdcProps props = null)
+        public static async Task<CdcChunkStats> Recover(String fileName, String destName = null, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             destName = destName ?? PathExt.StripExtension(fileName);
@@ -429,7 +429,7 @@ namespace SysWeaver
             var l = CreateLock();
             var ms = MissingChunk;
 
-            async ValueTask DoOne(String file, CdcFileData data)
+            async Task DoOne(String file, CdcFileData data)
             {
                 Interlocked.Increment(ref fileCount);
                 using var _ = await l.Lock().ConfigureAwait(false);
@@ -522,7 +522,7 @@ namespace SysWeaver
         /// <param name="getExpandedSize">If true, decompress the chunks to get the expanded size.
         /// WARNING! This is much slower!</param>
         /// <returns>Stats</returns>
-        public static async ValueTask<CdcChunkStats> Verify(String fileName, CdcProps props = null, bool touch = false, bool getExpandedSize = false)
+        public static async Task<CdcChunkStats> Verify(String fileName, CdcProps props = null, bool touch = false, bool getExpandedSize = false)
         {
             props = props ?? CdcProps.Default;
             var destName = PathExt.StripExtension(fileName);
@@ -806,7 +806,7 @@ namespace SysWeaver
         /// <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
         /// <param name="props">The props used</param>
         /// <returns>True if the chunk was copied, false if the chunk didn't exist in the storage</returns>
-        public static async ValueTask<bool> TryCopyCompressedChunk(Stream dest, String hashStr, CdcProps props = null)
+        public static async Task<bool> TryCopyCompressedChunk(Stream dest, String hashStr, CdcProps props = null)
         {
             using var s = TryOpenCompressedChunk(hashStr, props);
             if (s == null)
@@ -822,7 +822,7 @@ namespace SysWeaver
         /// <param name="hash">The hash of the chunk as binary data</param>
         /// <param name="props">The props used</param>
         /// <returns>True if the chunk was copied, false if the chunk didn't exist in the storage</returns>
-        public static ValueTask<bool> TryCopyCompressedChunk(Stream dest, ReadOnlySpan<Byte> hash, CdcProps props = null) =>
+        public static Task<bool> TryCopyCompressedChunk(Stream dest, ReadOnlySpan<Byte> hash, CdcProps props = null) =>
             TryCopyCompressedChunk(dest, hash.ToHexString(), props);
 
 
@@ -833,7 +833,7 @@ namespace SysWeaver
         /// <param name="hashStr">The hexadecimal value of the hash for the chunk</param>
         /// <param name="props">The props used</param>
         /// <returns>Zero if the chunk didn't exist in the storage, else the length of the compressed chunk</returns>
-        public static async ValueTask<long> TryDecompressChunk(Stream dest, String hashStr, CdcProps props = null)
+        public static async Task<long> TryDecompressChunk(Stream dest, String hashStr, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             ReadOnlyMemory<Byte> mem;
@@ -865,7 +865,7 @@ namespace SysWeaver
         /// <param name="hash">The hash of the chunk as binary data</param>
         /// <param name="props">The props used</param>
         /// <returns>Zero if the chunk didn't exist in the storage, else the length of the compressed chunk</returns>
-        public static ValueTask<long> TryDecompressChunk(Stream dest, ReadOnlySpan<Byte> hash, CdcProps props = null) =>
+        public static Task<long> TryDecompressChunk(Stream dest, ReadOnlySpan<Byte> hash, CdcProps props = null) =>
             TryDecompressChunk(dest, hash.ToHexString(), props);
 
 
@@ -878,7 +878,7 @@ namespace SysWeaver
             => new AsyncLock(Math.Max(1, Environment.ProcessorCount - 1));
 
 
-        static async ValueTask<CdcFolderStats> InternalFolderStats(String folder, AsyncLock l, bool getUncompressedStats, CdcProps props, DateTime oldIfUnusedSince)
+        static async Task<CdcFolderStats> InternalFolderStats(String folder, AsyncLock l, bool getUncompressedStats, CdcProps props, DateTime oldIfUnusedSince)
         {
             var comp = props.Comp;
             var fileExt = ".bin." + props.CompFileExt;
@@ -931,7 +931,7 @@ namespace SysWeaver
         }
 
 
-        static async ValueTask<CdcPruneStats> InternalPrune(String folder, AsyncLock l, CdcProps props, DateTime oldIfUnusedSince)
+        static async Task<CdcPruneStats> InternalPrune(String folder, AsyncLock l, CdcProps props, DateTime oldIfUnusedSince)
         {
             var fileExt = ".bin." + props.CompFileExt;
 
@@ -979,13 +979,13 @@ namespace SysWeaver
         /// <param name="oldIfUnusedSince">If a chunk haven't been used since this UTC time, it's considered old</param>
         /// <param name="props">The props used</param>
         /// <returns>Array of folder statistics</returns>
-        public static ValueTask<CdcFolderStats[]> GetFolderStats(bool getUncompressedStats = false, DateTime? oldIfUnusedSince = null, CdcProps props = null)
+        public static Task<CdcFolderStats[]> GetFolderStats(bool getUncompressedStats = false, DateTime? oldIfUnusedSince = null, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             var folders = props.ChunkFolders;
             var l = CreateLock();
             var o = oldIfUnusedSince == null ? DateTime.UtcNow.AddDays(-400).ToStartOfDay(12) : (oldIfUnusedSince ?? DateTime.UtcNow).ToStartOfMinute();
-            return folders.ConvertAsyncValue(folder => InternalFolderStats(folder, l, getUncompressedStats, props, o));
+            return folders.ConvertAsync(folder => InternalFolderStats(folder, l, getUncompressedStats, props, o));
         }
 
         /// <summary>
@@ -994,13 +994,13 @@ namespace SysWeaver
         /// <param name="props">The props used</param>
         /// <param name="oldIfUnusedSince">If a chunk haven't been used since this UTC time, it's considered old and will be REMOVED permanently!</param>
         /// <returns>Array of folder statistics</returns>
-        public static ValueTask<CdcPruneStats[]> Prune(DateTime? oldIfUnusedSince = null, CdcProps props = null)
+        public static Task<CdcPruneStats[]> Prune(DateTime? oldIfUnusedSince = null, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             var folders = props.ChunkFolders;
             var l = CreateLock();
             var o = oldIfUnusedSince == null ? DateTime.UtcNow.AddDays(-400).ToStartOfDay(12) : (oldIfUnusedSince ?? DateTime.UtcNow).ToStartOfMinute();
-            return folders.ConvertAsyncValue(folder => InternalPrune(folder, l, props, o));
+            return folders.ConvertAsync(folder => InternalPrune(folder, l, props, o));
         }
 
         /// <summary>
@@ -1024,7 +1024,7 @@ namespace SysWeaver
         /// <param name="data">The data</param>
         /// <param name="props">The props used</param>
         /// <returns>True if the chunk already exist in the storage or if it was saved successfully, false for any failure</returns>
-        public static async ValueTask<bool> TrySaveDataAsChunk(String hashStr, ReadOnlyMemory<Byte> data, CdcProps props = null)
+        public static async Task<bool> TrySaveDataAsChunk(String hashStr, ReadOnlyMemory<Byte> data, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             var fileName = GetFilename(hashStr, props);
@@ -1073,7 +1073,7 @@ namespace SysWeaver
         /// <param name="data">The already compressed chunk data</param>
         /// <param name="props">The props used</param>
         /// <returns>True if the chunk already exist in the storage or if it was saved successfully, false for any failure</returns>
-        static async ValueTask<bool> TrySaveChunk(String hashStr, ReadOnlyMemory<Byte> data, CdcProps props = null)
+        static async Task<bool> TrySaveChunk(String hashStr, ReadOnlyMemory<Byte> data, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
 #if DEBUG
@@ -1126,7 +1126,7 @@ namespace SysWeaver
         /// <param name="data">The data</param>
         /// <param name="props">The props used</param>
         /// <returns>True if the chunk already exist in the storage or if it was saved successfully, false for any failure</returns>
-        public static ValueTask<bool> TrySaveChunk(ReadOnlySpan<Byte> hash, ReadOnlyMemory<Byte> data, CdcProps props = null)
+        public static Task<bool> TrySaveChunk(ReadOnlySpan<Byte> hash, ReadOnlyMemory<Byte> data, CdcProps props = null)
             => TrySaveDataAsChunk(hash.ToHexString(), data, props);
 
         /// <summary>
@@ -1137,7 +1137,7 @@ namespace SysWeaver
         /// <param name="props">The props used</param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        public static async ValueTask CreateChunk(Memory<Byte> hash, ReadOnlyMemory<Byte> data, CdcProps props = null)
+        public static async Task CreateChunk(Memory<Byte> hash, ReadOnlyMemory<Byte> data, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             if (!props.Hash(data.Span, hash.Span, out var _hs))
@@ -1170,7 +1170,7 @@ namespace SysWeaver
         /// <param name="props">The properties, if null the default properties will be used (recommended)</param>
         /// <param name="cache">If true, data is cached</param>
         /// <returns></returns>
-        public static async ValueTask<Byte[]> Cut(String filename, CdcProps props = null, bool cache = true)
+        public static async Task<Byte[]> Cut(String filename, CdcProps props = null, bool cache = true)
         {
             props = props ?? CdcProps.Default;
             if (!cache)
@@ -1199,7 +1199,7 @@ namespace SysWeaver
         /// <param name="preview">If true, no chunk data is created</param>
         /// <param name="props">The properties, if null the default properties will be used (recommended)</param>
         /// <returns></returns>
-        public static async ValueTask<Byte[]> Cut(Stream s, bool preview = false, CdcProps props = null)
+        public static async Task<Byte[]> Cut(Stream s, bool preview = false, CdcProps props = null)
         {
             //  Get parameters
             props = props ?? CdcProps.Default;
@@ -1279,7 +1279,7 @@ namespace SysWeaver
         /// <param name="filename">The file</param>
         /// <param name="props">The properties, if null the default properties will be used (recommended)</param>
         /// <returns></returns>
-        public static async ValueTask Add(String filename, CdcProps props = null)
+        public static async Task Add(String filename, CdcProps props = null)
         {
             using var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
             await Cut(s, false, props).ConfigureAwait(false);
@@ -1292,7 +1292,7 @@ namespace SysWeaver
         /// <param name="chunks">Array of chunk hashes</param>
         /// <param name="props">The properties, if null the default properties will be used (recommended)</param>
         /// <returns>True if all the chunks was found and written to the stream, else false</returns>
-        public static async ValueTask<bool> TryWriteChunkList(Stream destStream, ReadOnlyMemory<byte> chunks, CdcProps props = null)
+        public static async Task<bool> TryWriteChunkList(Stream destStream, ReadOnlyMemory<byte> chunks, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             var hashSize = props.HashSize;
@@ -1312,7 +1312,7 @@ namespace SysWeaver
         }
 
 
-        public static async ValueTask<bool> TryWriteChunkList(Stream destStream, IEnumerable<ReadOnlyMemory<byte>> chunkEnum, CdcProps props = null)
+        public static async Task<bool> TryWriteChunkList(Stream destStream, IEnumerable<ReadOnlyMemory<byte>> chunkEnum, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             var hashSize = props.HashSize;
@@ -1401,7 +1401,7 @@ namespace SysWeaver
         /// <param name="sourceStream"></param>
         /// <param name="props">The properties, if null the default properties will be used (recommended)</param>
         /// <returns>The number of chunks added, or -1 if the function fails to add a chunk</returns>
-        public static async ValueTask<long> AddChunkList(Stream sourceStream, CdcProps props = null)
+        public static async Task<long> AddChunkList(Stream sourceStream, CdcProps props = null)
         {
             props = props ?? CdcProps.Default;
             var hashSize = props.HashSize;

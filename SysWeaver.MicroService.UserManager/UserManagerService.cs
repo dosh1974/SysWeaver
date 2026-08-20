@@ -301,7 +301,7 @@ namespace SysWeaver.MicroService
 
         PeriodicTask PruneTask;
 
-        async ValueTask<bool> Prune()
+        async Task<bool> Prune()
         {
             using (var c = await Db.GetAsync().ConfigureAwait(false))
             {
@@ -594,7 +594,7 @@ namespace SysWeaver.MicroService
         volatile UserStats Stats;
         readonly AsyncLock GetStatsLock = new AsyncLock();
 
-        public async ValueTask<UserStats> GetUserStats()
+        public async Task<UserStats> GetUserStats()
         {
             var now = DateTime.UtcNow;
             var renewDate = now.AddSeconds(-30);

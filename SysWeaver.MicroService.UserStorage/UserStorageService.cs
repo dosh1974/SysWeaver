@@ -167,7 +167,7 @@ namespace SysWeaver.MicroService
         }
 
 
-        async ValueTask<long> GetMaxSize(string userGuid)
+        async Task<long> GetMaxSize(string userGuid)
         {
             var puh = PerUserHandler;
             var defRetention = Retention;
@@ -177,7 +177,7 @@ namespace SysWeaver.MicroService
             return retention.GetMaxDiscBytes(defRetention.DiscQuotaMb);
         }
 
-        async ValueTask<bool> Prune()
+        async Task<bool> Prune()
         {
             using var perf = PerfMon.Track(nameof(Prune));
             StoredFileCache.Prune();
@@ -901,7 +901,7 @@ namespace SysWeaver.MicroService
         /// <param name="context"></param>
         /// <returns>The files and the the user path</returns>
         /// <exception cref="NoUserLoggedInException"></exception>
-        public Task<Tuple<IReadOnlyList<StoredFile>, String>> InternalGetStoredFiles(HttpServerRequest context)
+        public ValueTask<Tuple<IReadOnlyList<StoredFile>, String>> InternalGetStoredFiles(HttpServerRequest context)
         {
             using var _ = PerfMon.Track(nameof(InternalGetStoredFiles));
             var session = context.Session;
@@ -1115,7 +1115,7 @@ namespace SysWeaver.MicroService
         /// <param name="context"></param>
         /// <returns>The urls and the the user path</returns>
         /// <exception cref="NoUserLoggedInException"></exception>
-        public Task<Tuple<IReadOnlyList<StoredUrl>, String>> InternalGetStoredUrls(HttpServerRequest context)
+        public ValueTask<Tuple<IReadOnlyList<StoredUrl>, String>> InternalGetStoredUrls(HttpServerRequest context)
         {
             using var _ = PerfMon.Track(nameof(InternalGetStoredUrls));
             var session = context.Session;

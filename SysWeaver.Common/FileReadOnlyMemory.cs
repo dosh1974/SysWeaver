@@ -28,7 +28,7 @@ namespace SysWeaver
         /// <param name="filename">The name of the file to map</param>
         /// <returns>The content of the file</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueTask<Byte[]> ReadAllBytesAsync(string filename)
+        public static Task<Byte[]> ReadAllBytesAsync(string filename)
             => ReadAllBytesAsync(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
 
 
@@ -52,7 +52,7 @@ namespace SysWeaver
         /// <param name="fileStream">The file stream, must be open for reading</param>
         /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
         /// <returns>The content of the file</returns>
-        public static async ValueTask<Byte[]> ReadAllBytesAsync(FileStream fileStream, bool leaveOpen = false)
+        public static async Task<Byte[]> ReadAllBytesAsync(FileStream fileStream, bool leaveOpen = false)
         {
             using var p = await ReadAsync(fileStream, leaveOpen).ConfigureAwait(false);
             var s = p.Memory.Span;
@@ -90,7 +90,7 @@ namespace SysWeaver
         /// <param name="filename">The name of the file to map</param>
         /// <returns>The content of the file</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ValueTask<IUnmanagedReadOnlyMemory<Byte>> ReadAsync(string filename)
+        public static Task<IUnmanagedReadOnlyMemory<Byte>> ReadAsync(string filename)
             => ReadAsync(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
 
 
@@ -102,7 +102,7 @@ namespace SysWeaver
         /// <param name="fileStream">The file stream, must be open for reading</param>
         /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
         /// <returns>The content of the file</returns>
-        public static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> ReadAsync(FileStream fileStream, bool leaveOpen = false)
+        public static async Task<IUnmanagedReadOnlyMemory<Byte>> ReadAsync(FileStream fileStream, bool leaveOpen = false)
         {
             try
             {

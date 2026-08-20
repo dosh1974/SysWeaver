@@ -435,7 +435,7 @@ namespace SysWeaver
             return data;
         }
 
-        static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> TryLoadBytesAsync(String name)
+        static async Task<IUnmanagedReadOnlyMemory<Byte>> TryLoadBytesAsync(String name)
         {
             var data = await FileReadOnlyMemory.ReadAsync(name).ConfigureAwait(false);
             if (data == null || (!Validate(data.Memory)))

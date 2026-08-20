@@ -16,14 +16,14 @@ namespace SysWeaver.Search
         /// <param name="content"></param>
         /// <param name="texts"></param>
         /// <returns></returns>
-        ValueTask<bool> TryAdd(T content, params String[] texts);
+        Task<bool> TryAdd(T content, params String[] texts);
 
         /// <summary>
         /// Remove content from the searcher
         /// </summary>
         /// <param name="content"></param>
         /// <returns></returns>
-        ValueTask<bool> TryRemove(T content);
+        Task<bool> TryRemove(T content);
 
         /// <summary>
         /// Search for some text
@@ -32,7 +32,7 @@ namespace SysWeaver.Search
         /// <param name="maxHits"></param>
         /// <param name="keepResult"></param>
         /// <returns></returns>
-        ValueTask<ValueTuple<T, double>[]> Search(String text, int maxHits = 10, Func<T, ValueTask<bool>> keepResult = null);
+        Task<ValueTuple<T, double>[]> Search(String text, int maxHits = 10, Func<T, Task<bool>> keepResult = null);
 
     }
 

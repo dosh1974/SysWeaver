@@ -51,7 +51,7 @@ namespace SysWeaver.MicroService
 
             static readonly AsyncLock Lock = new AsyncLock();
 
-            public async ValueTask UpdateCert()
+            public async Task UpdateCert()
             {
                 using var _ = await Lock.Lock().ConfigureAwait(false);
                 try

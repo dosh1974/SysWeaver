@@ -113,7 +113,7 @@ namespace SysWeaver
                     return 0;
                 });
                 t.ConfigureAwait(false);
-                return t.Result;
+                return t.GetAwaiter().GetResult();
             }, validateParams);
         }
 

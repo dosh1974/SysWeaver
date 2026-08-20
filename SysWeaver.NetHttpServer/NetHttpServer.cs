@@ -378,7 +378,7 @@ namespace SysWeaver.Net
             IsListening?.Release();
         }
 
-        async ValueTask WriteResponseString(HttpListenerResponse res, String text, String mime = HttpServerTools.TextMime)
+        async Task WriteResponseString(HttpListenerResponse res, String text, String mime = HttpServerTools.TextMime)
         {
             var e = Encoding.UTF8;
             var data = e.GetBytes(text);
@@ -388,7 +388,7 @@ namespace SysWeaver.Net
         }
 
 
-        async ValueTask HandlePaused(HttpListenerRequest req, HttpListenerResponse res)
+        async Task HandlePaused(HttpListenerRequest req, HttpListenerResponse res)
         {
             res.StatusCode = 503;
             var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
@@ -396,7 +396,7 @@ namespace SysWeaver.Net
             await WriteResponseString(res, text).ConfigureAwait(false);
         }
 
-        async ValueTask Handle404(HttpListenerRequest req, HttpListenerResponse res)
+        async Task Handle404(HttpListenerRequest req, HttpListenerResponse res)
         {
             res.StatusCode = 404;
             var lang = await GetAcceptLanguage(req.Headers["Accept-Language"]).ConfigureAwait(false);
@@ -410,7 +410,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="c"></param>
         /// <returns></returns>
-        async ValueTask HandleRequest(HttpListenerContext c)
+        async Task HandleRequest(HttpListenerContext c)
         {
             using var _ = PerfMon.Track(nameof(HandleRequest));
             String url = "";

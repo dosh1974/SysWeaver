@@ -152,7 +152,7 @@ namespace SysWeaver.Media
         }
 
 
-        public async ValueTask<String> MakeComposite(IReadOnlyDictionary<String, String> vars, String title = null, Func<String, ValueTask<ReadOnlyMemory<Byte>>> altReader = null, SvgCompositionTemplateCache cache = null)
+        public async Task<String> MakeComposite(IReadOnlyDictionary<String, String> vars, String title = null, Func<String, Task<ReadOnlyMemory<Byte>>> altReader = null, SvgCompositionTemplateCache cache = null)
         {
             cache = cache ?? SvgCompositionTemplateCache.Default;
             var svg = new SvgCanvas(Width, Height);

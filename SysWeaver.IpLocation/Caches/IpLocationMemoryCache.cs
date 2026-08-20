@@ -11,10 +11,8 @@ namespace SysWeaver.IpLocation.Caches
             Cache = new FastMemCache<string, IpLocation>(TimeSpan.FromMinutes(Math.Max(1, p.MaxCachedMinutes)), StringComparer.Ordinal);
         }
             
-        public Task<IpLocation> Get(string ip, Func<string, Task<IpLocation>> getFromSource)
-        {
-            return Cache.GetOrUpdateAsync(ip, getFromSource);
-        }
+        public ValueTask<IpLocation> Get(string ip, Func<string, Task<IpLocation>> getFromSource)
+            => Cache.GetOrUpdateAsync(ip, getFromSource);
 
         readonly FastMemCache<String, IpLocation> Cache;
     }

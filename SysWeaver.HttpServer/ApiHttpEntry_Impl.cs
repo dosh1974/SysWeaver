@@ -13,7 +13,7 @@ namespace SysWeaver.Net
 
         readonly ExceptionTracker TransExceptions;
 
-        static async ValueTask<ReadOnlyMemory<Byte>> EncodeResult<T>(ApiHttpEntry api, HttpServerRequest request, T value)
+        static async Task<ReadOnlyMemory<Byte>> EncodeResult<T>(ApiHttpEntry api, HttpServerRequest request, T value)
         {
             var io = api.IoParams;
             if (request == null) 
@@ -46,7 +46,7 @@ namespace SysWeaver.Net
 
         interface IInvokeApi
         {
-            ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request);
+            Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request);
         }
 
         #region One argument
@@ -62,7 +62,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, Task<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api.OnStart != null;
@@ -99,7 +99,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, Task<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -132,7 +132,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -168,7 +168,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -206,7 +206,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, Task<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -238,7 +238,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, Task<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -270,7 +270,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ReadOnlyMemory<Byte>> F;
 
-            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -282,7 +282,7 @@ namespace SysWeaver.Net
                     var oo = F(io);
                     if (track)
                         api.OnEnd(trackId, request, api, oo);
-                    return ValueTask.FromResult(oo);
+                    return Task.FromResult(oo);
                 }
                 catch (Exception ex)
                 {
@@ -302,7 +302,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ReadOnlyMemory<Byte>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -339,7 +339,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, Task> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -373,7 +373,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, Task> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -406,7 +406,7 @@ namespace SysWeaver.Net
             }
             readonly Action<T> F;
 
-            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -419,7 +419,7 @@ namespace SysWeaver.Net
                     var oo = ReadOnlyMemory<Byte>.Empty;
                     if (track)
                         api.OnEnd(trackId, request, api, null);
-                    return ValueTask.FromResult(oo);
+                    return Task.FromResult(oo);
                 }
                 catch (Exception ex)
                 {
@@ -439,7 +439,7 @@ namespace SysWeaver.Net
             }
             readonly Action<T> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -481,7 +481,7 @@ namespace SysWeaver.Net
             }
             readonly Func<Task<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -513,7 +513,7 @@ namespace SysWeaver.Net
             }
             readonly Func<Task<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -545,7 +545,7 @@ namespace SysWeaver.Net
             }
             readonly Func<R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -577,7 +577,7 @@ namespace SysWeaver.Net
             }
             readonly Func<R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -613,7 +613,7 @@ namespace SysWeaver.Net
             }
             readonly Func<Task<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -644,7 +644,7 @@ namespace SysWeaver.Net
             }
             readonly Func<Task<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -675,7 +675,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ReadOnlyMemory<Byte>> F;
 
-            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -686,7 +686,7 @@ namespace SysWeaver.Net
                     var oo = F();
                     if (track)
                         api.OnEnd(trackId, request, api, oo);
-                    return ValueTask.FromResult(oo);
+                    return Task.FromResult(oo);
                 }
                 catch (Exception ex)
                 {
@@ -706,7 +706,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ReadOnlyMemory<Byte>> F;
 
-            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -717,7 +717,7 @@ namespace SysWeaver.Net
                     var oo = F();
                     if (track)
                         api.OnEnd(trackId, request, api, oo);
-                    return ValueTask.FromResult(oo);
+                    return Task.FromResult(oo);
                 }
                 catch (Exception ex)
                 {
@@ -741,7 +741,7 @@ namespace SysWeaver.Net
             }
             readonly Func<Task> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -774,7 +774,7 @@ namespace SysWeaver.Net
             }
             readonly Func<Task> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -806,7 +806,7 @@ namespace SysWeaver.Net
             }
             readonly Action F;
 
-            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -818,7 +818,7 @@ namespace SysWeaver.Net
                     var oo = ReadOnlyMemory<Byte>.Empty;
                     if (track)
                         api.OnEnd(trackId, request, api, null);
-                    return ValueTask.FromResult(oo);
+                    return Task.FromResult(oo);
                 }
                 catch (Exception ex)
                 {
@@ -838,7 +838,7 @@ namespace SysWeaver.Net
             }
             readonly Action F;
 
-            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -850,7 +850,7 @@ namespace SysWeaver.Net
                     var oo = ReadOnlyMemory<Byte>.Empty;
                     if (track)
                         api.OnEnd(trackId, request, api, null);
-                    return ValueTask.FromResult(oo);
+                    return Task.FromResult(oo);
                 }
                 catch (Exception ex)
                 {
@@ -881,7 +881,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, Task<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -915,7 +915,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, Task<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -948,7 +948,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -981,7 +981,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -1019,7 +1019,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, Task<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -1051,7 +1051,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, Task<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -1083,7 +1083,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ReadOnlyMemory<Byte>> F;
 
-            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -1095,7 +1095,7 @@ namespace SysWeaver.Net
                     var oo = F(io, request);
                     if (track)
                         api.OnEnd(trackId, request, api, oo);
-                    return ValueTask.FromResult(oo);
+                    return Task.FromResult(oo);
                 }
                 catch (Exception ex)
                 {
@@ -1115,7 +1115,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ReadOnlyMemory<Byte>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -1155,7 +1155,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, Task> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -1189,7 +1189,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, Task> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -1222,7 +1222,7 @@ namespace SysWeaver.Net
             }
             readonly Action<T, HttpServerRequest> F;
 
-            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -1235,7 +1235,7 @@ namespace SysWeaver.Net
                     var oo = ReadOnlyMemory<Byte>.Empty;
                     if (track)
                         api.OnEnd(trackId, request, api, oo);
-                    return ValueTask.FromResult(oo);
+                    return Task.FromResult(oo);
                 }
                 catch (Exception ex)
                 {
@@ -1255,7 +1255,7 @@ namespace SysWeaver.Net
             }
             readonly Action<T, HttpServerRequest> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -1297,7 +1297,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, Task<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1329,7 +1329,7 @@ namespace SysWeaver.Net
 
             readonly Func<HttpServerRequest, Task<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1361,7 +1361,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1393,7 +1393,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, R> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1429,7 +1429,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, Task<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1460,7 +1460,7 @@ namespace SysWeaver.Net
 
             readonly Func<HttpServerRequest, Task<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1491,7 +1491,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, ReadOnlyMemory<Byte>> F;
 
-            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1502,7 +1502,7 @@ namespace SysWeaver.Net
                     var oo = F(request);
                     if (track)
                         api.OnEnd(trackId, request, api, oo);
-                    return ValueTask.FromResult(oo);
+                    return Task.FromResult(oo);
                 }
                 catch (Exception ex)
                 {
@@ -1522,7 +1522,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, ReadOnlyMemory<Byte>> F;
 
-            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1533,7 +1533,7 @@ namespace SysWeaver.Net
                     var oo = F(request);
                     if (track)
                         api.OnEnd(trackId, request, api, oo);
-                    return ValueTask.FromResult(oo);
+                    return Task.FromResult(oo);
                 }
                 catch (Exception ex)
                 {
@@ -1557,7 +1557,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, Task> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1589,7 +1589,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, Task> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1621,7 +1621,7 @@ namespace SysWeaver.Net
             }
             readonly Action<HttpServerRequest> F;
 
-            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1633,7 +1633,7 @@ namespace SysWeaver.Net
                     var oo = ReadOnlyMemory<Byte>.Empty;
                     if (track)
                         api.OnEnd(trackId, request, api, null);
-                    return ValueTask.FromResult(oo);
+                    return Task.FromResult(oo);
                 }
                 catch (Exception ex)
                 {
@@ -1653,7 +1653,7 @@ namespace SysWeaver.Net
             }
             readonly Action<HttpServerRequest> F;
 
-            public ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1665,7 +1665,7 @@ namespace SysWeaver.Net
                     var oo = ReadOnlyMemory<Byte>.Empty;
                     if (track)
                         api.OnEnd(trackId, request, api, null);
-                    return ValueTask.FromResult(oo);
+                    return Task.FromResult(oo);
                 }
                 catch (Exception ex)
                 {
@@ -1706,7 +1706,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ValueTask<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api.OnStart != null;
@@ -1743,7 +1743,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ValueTask<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -1781,7 +1781,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ValueTask<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -1813,7 +1813,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ValueTask<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -1850,7 +1850,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ValueTask> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -1884,7 +1884,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, ValueTask> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -1925,7 +1925,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ValueTask<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1957,7 +1957,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ValueTask<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -1993,7 +1993,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ValueTask<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -2024,7 +2024,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ValueTask<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -2059,7 +2059,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ValueTask> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -2092,7 +2092,7 @@ namespace SysWeaver.Net
             }
             readonly Func<ValueTask> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -2134,7 +2134,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ValueTask<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -2168,7 +2168,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ValueTask<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -2206,7 +2206,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -2238,7 +2238,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -2278,7 +2278,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ValueTask> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = Input_GET<T>(api, request);
                 var track = api?.OnStart != null;
@@ -2312,7 +2312,7 @@ namespace SysWeaver.Net
             }
             readonly Func<T, HttpServerRequest, ValueTask> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var io = await Input_POST<T>(api, request).ConfigureAwait(false);
                 var track = api?.OnStart != null;
@@ -2353,7 +2353,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, ValueTask<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -2385,7 +2385,7 @@ namespace SysWeaver.Net
 
             readonly Func<HttpServerRequest, ValueTask<R>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -2421,7 +2421,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -2452,7 +2452,7 @@ namespace SysWeaver.Net
 
             readonly Func<HttpServerRequest, ValueTask<ReadOnlyMemory<Byte>>> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -2487,7 +2487,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, ValueTask> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;
@@ -2519,7 +2519,7 @@ namespace SysWeaver.Net
             }
             readonly Func<HttpServerRequest, ValueTask> F;
 
-            public async ValueTask<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
+            public async Task<ReadOnlyMemory<Byte>> Run(ApiHttpEntry api, HttpServerRequest request)
             {
                 var track = api?.OnStart != null;
                 var trackId = track ? ApiAudit.GetId() : 0;

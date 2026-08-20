@@ -83,19 +83,19 @@ namespace SysWeaver.Net
         readonly int WebRootLen;
         readonly String SourceRoot;
 
-        public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
+        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get; init; }
 
         public PerfMonitor PerfMon { get; init;  }
 
         readonly ProxyRequestCache Cache = new ProxyRequestCache();
 
-        async ValueTask<ProxyData> DownstreamRequest(String url, ProxyData data)
+        async Task<ProxyData> DownstreamRequest(String url, ProxyData data)
         {
             using var __ = PerfMon.Track(nameof(DownstreamRequest));
             return await ProxyTools.ProxyRequest(Client, url, data).ConfigureAwait(false);
         }
 
-        async ValueTask<IHttpRequestHandler> HandleAsync(HttpServerRequest context)
+        async Task<IHttpRequestHandler> HandleAsync(HttpServerRequest context)
         {
             using var __ = PerfMon.Track(nameof(HandleAsync));
             if (!(context.Session?.IsValid(Auth) ?? true))

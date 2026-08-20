@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace SysWeaver
 {
+
     public class HttpRateLimiter : RateLimiter
     {
         public HttpRateLimiter(HttpRateLimiterParams p) : base(p)
@@ -17,25 +19,31 @@ namespace SysWeaver
         /// </summary>
         public readonly int MaxQueue;
 
-
         /// <summary>
         /// The maximum time to delay a request
         /// </summary>
         public readonly long MaxWait;
 
+        /// <summary>
+        /// Number of waiting threads now
+        /// </summary>
+        public long Waiting => Interlocked.Read(ref WaitCount);
 
-        int WaitCount;
+
+        long WaitCount;
 
         /// <summary>
         /// Check if we're exceeding the limit, wait if enabled and required
         /// </summary>
         /// <returns>True if the limit is exceeded (return 429)</returns>
-        public async ValueTask<bool> IsOverTheLimit()
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ValueTask<bool> IsOverTheLimit()
+            => IsOverLimit(out var timeToNext) ? InternalIsOverTheLimit(timeToNext) : TaskExt.FalseValueTask;
+
+        async ValueTask<bool> InternalIsOverTheLimit(long timeToNext)
         {
             var maxWait = MaxWait;
             var maxQueue = MaxQueue;
-            if (!IsOverLimit(out var timeToNext))
-                return false;
             var count = Interlocked.Increment(ref WaitCount);
             try
             {

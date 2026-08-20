@@ -176,7 +176,7 @@ namespace SysWeaver.AI
             for (int i = 0; i < tcl; ++i)
             {
                 var tc = tcs[i];
-                var res = tasks[i].Result;
+                var res = tasks[i].GetAwaiter().GetResult();
                 debugMsg?.AddCall(res);
                 var ex = res.Ex;
                 if (ex != null)

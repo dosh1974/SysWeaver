@@ -106,7 +106,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="key">The key to lock on (MD5 checksum of the string is what's actually being used to allow for any text here)</param>
         /// <returns>A lock object, dispose to unlock</returns>
-        public static async ValueTask<IDisposable> GetAsync(String key)
+        public static async Task<IDisposable> GetAsync(String key)
         {
             var name = GetFilename(key);
             for (int errCount = 0; ; )

@@ -10,12 +10,12 @@ namespace SysWeaver.Net
 
         sealed class Transformer
         {
-            public Func<HttpRequestTransformerState, ValueTask<bool>>[] Transformers;
+            public Func<HttpRequestTransformerState, Task<bool>>[] Transformers;
         }
 
         readonly SemiFrozenDictionary<String, Transformer> Transformers = new(StringComparer.Ordinal);
 
-        public void AddTransformer(String fileExtension, Func<HttpRequestTransformerState, ValueTask<bool>> transformer)
+        public void AddTransformer(String fileExtension, Func<HttpRequestTransformerState, Task<bool>> transformer)
         {
             var t = Transformers;
             lock (t)
@@ -29,7 +29,7 @@ namespace SysWeaver.Net
             }
         }
 
-        public bool RemoveTransformer(String fileExtension, Func<HttpRequestTransformerState, ValueTask<bool>> transformer)
+        public bool RemoveTransformer(String fileExtension, Func<HttpRequestTransformerState, Task<bool>> transformer)
         {
             var t = Transformers;
             lock (t)

@@ -77,7 +77,7 @@ namespace SysWeaver
         /// </param>
         /// <param name="task">The task to execute</param>
         /// <returns>An object that can be disposed to prevent execution of the task in the future</returns>
-        public static IDisposable AddValueTask(DateTime when, Func<ValueTask> task)
+        public static IDisposable AddValueTask(DateTime when, Func<Task> task)
         {
             if (when.Kind != DateTimeKind.Utc)
                 when = when.ToUniversalTime();
@@ -113,7 +113,7 @@ namespace SysWeaver
             }
         }
 
-        static async ValueTask<bool> Check()
+        static async Task<bool> Check()
         {
             var now = DateTime.UtcNow.Ticks;
             var e = Entries;

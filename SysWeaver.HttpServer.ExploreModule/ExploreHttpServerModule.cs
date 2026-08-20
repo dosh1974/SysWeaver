@@ -153,7 +153,7 @@ namespace SysWeaver.Net.ExploreModule
         }
 
 
-        public ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
+        public Task<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
@@ -168,7 +168,7 @@ namespace SysWeaver.Net.ExploreModule
 
         public IReadOnlyList<string> Auth { get; private set; }
 
-        public ValueTask<String> GetCacheKey(HttpServerRequest request) => HttpServerTools.NullStringValueTask;
+        public ValueTask<String> GetCacheKey(HttpServerRequest request) => TaskExt.NullStringValueTask;
 
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {

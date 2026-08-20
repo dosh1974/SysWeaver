@@ -116,7 +116,7 @@ namespace SysWeaver.Net
         /// <param name="prefixLength"></param>
         /// <returns></returns>
         /// <exception cref="HttpResponseException"></exception>
-        public static async ValueTask<ProxyData> GetFromRequest(HttpServerRequest r, int? prefixLength = 0)
+        public static async Task<ProxyData> GetFromRequest(HttpServerRequest r, int? prefixLength = 0)
         {
             var m = r.HttpMethod;
             if (m == HttpServerMethods.Other)
@@ -168,7 +168,7 @@ namespace SysWeaver.Net
         /// <param name="url">The url to do the request against</param>
         /// <param name="data">The input data</param>
         /// <returns></returns>
-        public static async ValueTask<ProxyData> ProxyRequest(HttpClient c, String url, ProxyData data)
+        public static async Task<ProxyData> ProxyRequest(HttpClient c, String url, ProxyData data)
         {
             var httpMethod = data.Method;
             var method = new HttpMethod(httpMethod.ToString());

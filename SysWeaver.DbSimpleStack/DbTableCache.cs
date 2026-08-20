@@ -182,7 +182,7 @@ namespace SysWeaver.Db
         volatile DbCachedValues<K, T> InternalValues;
 
        
-        async ValueTask<bool> Update()
+        async Task<bool> Update()
         {
             await SyncNow().ConfigureAwait(false);
             return true;

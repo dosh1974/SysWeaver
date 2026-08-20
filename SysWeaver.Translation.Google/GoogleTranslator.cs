@@ -117,7 +117,7 @@ namespace SysWeaver.Translation
         /// </summary>
         /// <param name="request">Paramaters</param>
         /// <returns>Translated text</returns>
-        public async Task<string> TranslateOne(TranslateRequest request)
+        public async ValueTask<string> TranslateOne(TranslateRequest request)
         {
             var f = ValidateFrom(request.From);
             var t = ValidateToSingle(request.To);
@@ -299,14 +299,14 @@ namespace SysWeaver.Translation
             int lc = to.Length;
             int tc = texts.Length;
             var count = lc * tc;
-            Task<String>[] tasks = new Task<string>[count];
+            ValueTask<String>[] tasks = GC.AllocateUninitializedArray<ValueTask<String>>(count);
             int o = 0;
             for (int t = 0; t < tc; ++t)
             {
                 var text = texts[t];
                 if (text.FastStartsWith(TranslationTools.NoTranslatePrefix))
                 {
-                    var ct = Task.FromResult(text.Substring(TranslationTools.NoTranslatePrefixLength));
+                    var ct = ValueTask.FromResult(text.Substring(TranslationTools.NoTranslatePrefixLength));
                     for (int l = 0; l < lc; ++l)
                     {
                         tasks[o] = ct;
@@ -327,7 +327,7 @@ namespace SysWeaver.Translation
                     }
                     else
                     {
-                        var ct = Task.FromResult(text);
+                        var ct = ValueTask.FromResult(text);
                         for (int l = 0; l < lc; ++l)
                         {
                             tasks[o] = ct;
@@ -336,10 +336,7 @@ namespace SysWeaver.Translation
                     }
                 }
             }
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-            String[] res = GC.AllocateUninitializedArray<String>(count);
-            for (int i = 0; i < count; ++i)
-                res[i] = tasks[i].Result;
+            var res = await TaskExt.WhenAll(tasks).ConfigureAwait(false);
             return res;
         }
 
@@ -473,10 +470,10 @@ namespace SysWeaver.Translation
             return res;
         }
 
-        Task<String> DoOne(String from, String to, String text, TranslationEffort effort, TranslationCacheRetention retention)
+        ValueTask<String> DoOne(String from, String to, String text, TranslationEffort effort, TranslationCacheRetention retention)
         {
             if (from == to)
-                return Task.FromResult(text);
+                return ValueTask.FromResult(text);
             var q = Uri.EscapeDataString(text);
             var url = "https://translate.google.com/m?tl=" + to + "&sl=" + from + "&q=" + q;
             return MemCaches[(int)retention].GetOrUpdateAsync(url, valUrl => InternalOne(valUrl, to, from, text, q));
@@ -555,7 +552,7 @@ namespace SysWeaver.Translation
         const int TorTimeout = 120;
         const int RegTimeout = 30;
 
-        async ValueTask<bool> UpdateSupportedLanguages()
+        async Task<bool> UpdateSupportedLanguages()
         {
             try
             {

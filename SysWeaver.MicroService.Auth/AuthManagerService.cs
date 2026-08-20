@@ -360,7 +360,7 @@ This server supports the following sizes:
         /// <summary>
         /// An optional async handler
         /// </summary>
-        public Func<HttpServerRequest, ValueTask<IHttpRequestHandler>> AsyncHandler { get; init; }
+        public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get; init; }
 
         /// <summary>
         /// Remove a user image from the cache
@@ -430,7 +430,7 @@ This server supports the following sizes:
         /// </summary>
         /// <param name="context">The incoming request</param>
         /// <returns>A handler for the request or null if it can't be handled by this module</returns>
-        async ValueTask<IHttpRequestHandler> GetAsyncHandler(HttpServerRequest context)
+        async Task<IHttpRequestHandler> GetAsyncHandler(HttpServerRequest context)
         {
             var local = context.LocalUrl;
             local = local.Substring(ImageRootLen);

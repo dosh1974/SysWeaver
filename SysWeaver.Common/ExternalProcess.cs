@@ -90,7 +90,7 @@ namespace SysWeaver
         /// <param name="onExit">Optionally called when the process completed or on error, paramaters are: exitCode, exception, duration and the last X stdout/stderr lines of output</param>
         /// <param name="cancelWait">An optional cancellation token</param>
         /// <returns>The process exit code</returns>
-        public static async ValueTask<int> RunAsync(String cmd, String args = null, Action<String, bool> onMessage = null, Action<int, Exception, TimeSpan, IEnumerable<String>> onExit = null, CancellationToken? cancelWait = null )
+        public static async Task<int> RunAsync(String cmd, String args = null, Action<String, bool> onMessage = null, Action<int, Exception, TimeSpan, IEnumerable<String>> onExit = null, CancellationToken? cancelWait = null )
         {
             var start = DateTime.UtcNow;
             LinkedList<String> log = new LinkedList<string>();

@@ -66,9 +66,9 @@ namespace SysWeaver.Net
         /// <param name="req">The request uri (this is what is used as the cache key)</param>
         /// <param name="doRequest">Function that performs a fresh request (as in not being cached)</param>
         /// <returns></returns>
-        public async ValueTask<IHttpRequestHandler> HandleAsync(HttpServerRequest context, String req, Func<String, ProxyData, ValueTask<ProxyData>> doRequest)
+        public async Task<IHttpRequestHandler> HandleAsync(HttpServerRequest context, String req, Func<String, ProxyData, Task<ProxyData>> doRequest)
         {
-            MemCache<String, CacheEntry> cache = null;
+            FastMemCache<String, CacheEntry> cache = null;
             switch (context.HttpMethod)
             {
                 case HttpServerMethods.HEAD:
@@ -83,7 +83,7 @@ namespace SysWeaver.Net
             ProxyData proxyRet = null;
             if (cache != null)
             {
-                var ce = await cache.GetOrUpdateValueAsync(cacheKey, async (_, current) =>
+                var ce = await cache.GetOrUpdateWithExistingAsync(cacheKey, async (_, current) =>
                 {
                     proxyRet = await doRequest(req, reqInput).ConfigureAwait(false);
                     String etag = null;
@@ -158,8 +158,8 @@ namespace SysWeaver.Net
 
         static readonly Func<CacheEntry, DateTime> GetCacheExp = e => e == null ? DateTime.MinValue : new DateTime(Interlocked.Read(ref e.Expires), DateTimeKind.Utc);
 
-        readonly MemCache<String, CacheEntry> GetCache = new(GetCacheExp, StringComparer.Ordinal);
-        readonly MemCache<String, CacheEntry> HeadCache = new(GetCacheExp, StringComparer.Ordinal);
+        readonly FastMemCache<String, CacheEntry> GetCache = new(GetCacheExp, StringComparer.Ordinal);
+        readonly FastMemCache<String, CacheEntry> HeadCache = new(GetCacheExp, StringComparer.Ordinal);
 
     }
 

@@ -171,7 +171,7 @@ namespace SysWeaver.ReverseProxy
             response.StatusCode = statusCode;
         }
 
-        async ValueTask<bool> Connection(CancellationToken cancel)
+        async Task<bool> Connection(CancellationToken cancel)
         {
             if (IsDisposing)
                 return false;

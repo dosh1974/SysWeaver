@@ -343,9 +343,8 @@ namespace SysWeaver.MicroService
         }
 
         protected virtual Task<FileUploadStatus> OnUploaded(FileInfo file, long replacedSize, FileUploadInfo info, HttpServerRequest r, Object context)
-        {
-            return Task.FromResult(FileUploadStatus.None);
-        }
+            => NullTaskFileUploadStatus;
+        static readonly Task<FileUploadStatus> NullTaskFileUploadStatus = Task.FromResult(FileUploadStatus.None);
 
         protected static void EnsureFolder(String path)
         {
@@ -360,7 +359,7 @@ namespace SysWeaver.MicroService
             }
         }
 
-        public async ValueTask<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r)
+        public async Task<FileUploadResult[]> CanFileBeUploaded(FileUploadInfo[] info, HttpServerRequest r)
         {
             Cache();
             var orr = await OnRequest(r, false).ConfigureAwait(false);
@@ -497,7 +496,7 @@ namespace SysWeaver.MicroService
 
         readonly FastMemCache<String, Byte[]> ChunkCache = new FastMemCache<string, byte[]>(TimeSpan.FromMinutes(30), StringComparer.Ordinal);
 
-        public async ValueTask<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
+        public async Task<FileUploadResult> Upload(Stream s, FileUploadInfo file, HttpServerRequest r, ICompDecoder decoder)
         {
             Cache();
             var orr = await OnRequest(r, true).ConfigureAwait(false);

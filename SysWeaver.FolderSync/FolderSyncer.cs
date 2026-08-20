@@ -193,7 +193,7 @@ namespace SysWeaver.FolderSync
         /// <param name="onEvent">An optional callback used to display what's going on</param>
         /// <returns>Sync results</returns>
         /// <exception cref="Exception"></exception>
-        public async ValueTask<FolderSyncResult> PushFolders(String sourceFolders, String destName, bool switchTo = false, bool useCdc = true, Func<String, bool> ignore = null, Action<FolderSyncEvents, String> onEvent = null)
+        public async Task<FolderSyncResult> PushFolders(String sourceFolders, String destName, bool switchTo = false, bool useCdc = true, Func<String, bool> ignore = null, Action<FolderSyncEvents, String> onEvent = null)
         {
             //var props = useCdc ? new CdcProps(folders: [@"D:\Temp\CdcSyncTest"]) : null;
             var props = useCdc ? CdcProps.Default : null;
@@ -407,7 +407,7 @@ namespace SysWeaver.FolderSync
 
                     foreach (var rr in r)
                     {
-                        var xres = rr.Result;
+                        var xres = rr.GetAwaiter().GetResult();
                         if (xres != null)
                             return xres;
                     }
@@ -492,7 +492,7 @@ namespace SysWeaver.FolderSync
         /// </summary>
         /// <param name="destFolder">The folder to get the hash for</param>
         /// <returns>A version string</returns>
-        public static async ValueTask<String> GetPullFolderVersion(String destFolder)
+        public static async Task<String> GetPullFolderVersion(String destFolder)
         {
             var srcFiles = Directory.GetFiles(destFolder, "*", SearchOption.AllDirectories);
             var sfl = destFolder.Length + 1;
@@ -514,7 +514,7 @@ namespace SysWeaver.FolderSync
         /// <param name="srcName"></param>
         /// <param name="version"></param>
         /// <returns></returns>
-        public async ValueTask<bool> CheckPullFolder(String srcName, String version)
+        public async Task<bool> CheckPullFolder(String srcName, String version)
         {
             return await Api.SharedFolderHasChanged(new SharedFolderSyncRequest
             {
@@ -531,7 +531,7 @@ namespace SysWeaver.FolderSync
         /// <param name="srcName"></param>
         /// <param name="version"></param>
         /// <returns></returns>
-        public async ValueTask<bool> WaitPullFolder(String srcName, String version)
+        public async Task<bool> WaitPullFolder(String srcName, String version)
         {
             return await Api.WaitUntilSharedFolderHasChanged(new SharedFolderSyncRequest
             {
@@ -552,7 +552,7 @@ namespace SysWeaver.FolderSync
         /// <param name="onBackupCopy">if non null, the existing folder is copied to the backup folder, then this function is executed</param>
         /// <returns>Sync results</returns>
         /// <exception cref="Exception"></exception>
-        public async ValueTask<FolderPullSyncResult> PullFolder(String srcName, String destFolder, bool switchTo = false, bool useCdc = true, Action<FolderSyncEvents, String> onEvent = null, Func<String, String, ValueTask<Exception>> onBackupCopy = null)
+        public async Task<FolderPullSyncResult> PullFolder(String srcName, String destFolder, bool switchTo = false, bool useCdc = true, Action<FolderSyncEvents, String> onEvent = null, Func<String, String, Task<Exception>> onBackupCopy = null)
         {
             var start = DateTime.UtcNow;
             //var props = useCdc ? new CdcProps(folders: [@"D:\Temp\CdcSyncTest"]) : null;
@@ -694,7 +694,7 @@ namespace SysWeaver.FolderSync
                 var baseUrl = remote.UrlBase;
                 var baseDownloadUrl = String.Concat(baseUrl, "SharedFolders/", srcName, '/');
 
-                async ValueTask<ReadOnlyMemory<Byte>> CacheCdc(String fn)
+                async Task<ReadOnlyMemory<Byte>> CacheCdc(String fn)
                 {
                     var dst = Path.Combine(downloadFolder, fn);
                     if (!File.Exists(dst))
@@ -721,8 +721,8 @@ namespace SysWeaver.FolderSync
                             Folder = srcName,
                             Version = version,
                         });
-                        await TaskExt.WhenAll([syncTask, CacheCdc(fn)]).ConfigureAwait(false);
-                        var chunkHashes = syncTask.Result;
+                        await Task.WhenAll([syncTask, CacheCdc(fn)]).ConfigureAwait(false);
+                        var chunkHashes = syncTask.GetAwaiter().GetResult();
                         var cl = chunkHashes.Length;
                         var hs = props.HashSize;
                         transferBytes = cl;
@@ -822,7 +822,7 @@ namespace SysWeaver.FolderSync
 
         static String V(long value) => value.ToString("### ### ### ### ### ### ### ##0").TrimStart();
 
-        async ValueTask WriteRemoteManifest(String folder, FolderPullSyncResult r, DateTime start)
+        async Task WriteRemoteManifest(String folder, FolderPullSyncResult r, DateTime start)
         {
             var end = DateTime.UtcNow;
             var duration = end - start;

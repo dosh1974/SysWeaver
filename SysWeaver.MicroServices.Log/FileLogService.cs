@@ -135,10 +135,10 @@ namespace SysWeaver.MicroService
                 };
         }
 
-        public ValueTask<ReadOnlyMemory<Byte>> TryReadTextFile(String name)
+        public Task<ReadOnlyMemory<Byte>> TryReadTextFile(String name)
         {
             var h = H;
-            return name.FastEquals(h.DownloadName) ? FileExt.TryReadMemoryAsync(h.Filename) : TaskExt.ReadonlyMemoryValueTask;
+            return name.FastEquals(h.DownloadName) ? FileExt.TryReadMemoryAsync(h.Filename) : TaskExt.ReadonlyMemoryTask;
         }
 
         

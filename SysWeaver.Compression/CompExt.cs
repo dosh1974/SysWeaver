@@ -95,7 +95,7 @@ namespace SysWeaver.Compression
         /// <param name="level">The compression level to use</param>
         /// <param name="trim">The returned memory is trimmed, this is useful for long living object to reduce memory usage</param>
         /// <returns>The compressed data</returns>
-        public static async ValueTask<Memory<Byte>> GetCompressedAsync(this ICompEncoder c, Stream from, CompEncoderLevels level, bool trim = false)
+        public static async Task<Memory<Byte>> GetCompressedAsync(this ICompEncoder c, Stream from, CompEncoderLevels level, bool trim = false)
         {
             Byte[] mem = null;
             try
@@ -172,7 +172,7 @@ namespace SysWeaver.Compression
         /// <param name="c">The compression decoder</param>
         /// <param name="from">The stream to read the compressed data from</param>
         /// <returns>The decompressed data</returns>
-        public static async ValueTask<Memory<Byte>> GetDecompressedAsync(this ICompDecoder c, Stream from)
+        public static async Task<Memory<Byte>> GetDecompressedAsync(this ICompDecoder c, Stream from)
         {
             long l = 0;
             try
@@ -236,7 +236,7 @@ namespace SysWeaver.Compression
         /// <param name="c">The compression decoder</param>
         /// <param name="from">The stream to read the compressed data from</param>
         /// <returns>The decompressed data</returns>
-        public static async ValueTask<IUnmanagedReadOnlyMemory<Byte>> GetUnmanagedDecompressedAsync(this ICompDecoder c, Stream from)
+        public static async Task<IUnmanagedReadOnlyMemory<Byte>> GetUnmanagedDecompressedAsync(this ICompDecoder c, Stream from)
         {
             long l = 0;
             try

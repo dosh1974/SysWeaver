@@ -79,7 +79,7 @@ namespace SysWeaver.Remote.Connection
             /// </summary>
             ReturnTask,
             /// <summary>
-            /// ValueTask'1
+            /// Task'1
             /// </summary>
             ReturnValueTask,
             /// <summary>
@@ -87,7 +87,7 @@ namespace SysWeaver.Remote.Connection
             /// </summary>
             Void,
             /// <summary>
-            /// ValueTask
+            /// Task
             /// </summary>
             ValueVoid
 
@@ -114,7 +114,7 @@ namespace SysWeaver.Remote.Connection
                 t = typeof(void);
             }
             if (!TypeMaps.TryGetValue(c, out var r))
-                throw new Exception("Invalid return type \"" + o.FullName + "\", interface must return a Task or ValueTask!");
+                throw new Exception("Invalid return type \"" + o.FullName + "\", interface must return a Task or Task!");
             return r;
         }
 

@@ -29,7 +29,7 @@ namespace SysWeaver.HttpTransformer
 
         readonly ImageFormat[] Formats;
 
-        async ValueTask<FileHttpRequestHandler> WriteCompressed(CachedTransformer service, String baseName, ReadOnlyMemory<Byte> imageData, ImageFormat format)
+        async Task<FileHttpRequestHandler> WriteCompressed(CachedTransformer service, String baseName, ReadOnlyMemory<Byte> imageData, ImageFormat format)
         {
             String name = String.Concat(baseName, format.Extension, service.CompExt);
             var compType = service.CompType;
@@ -55,7 +55,7 @@ namespace SysWeaver.HttpTransformer
             }
         }
 
-        async ValueTask<FileHttpRequestHandler> BuildOne(CachedTransformer service, String baseName, MagickImage image, ImageFormat format)
+        async Task<FileHttpRequestHandler> BuildOne(CachedTransformer service, String baseName, MagickImage image, ImageFormat format)
         {
             var mime = format.Mime;
             var name = baseName + format.Extension;
@@ -121,7 +121,7 @@ namespace SysWeaver.HttpTransformer
         }
 
 
-        public async ValueTask<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> inputData, CachedTransformerEntry entry)
+        public async Task<FileHttpRequestHandler[]> Build(CachedTransformer service, CachedTransformerFile info, ReadOnlyMemory<byte> inputData, CachedTransformerEntry entry)
         {
             var formats = Formats;
             var fl = formats.Length;

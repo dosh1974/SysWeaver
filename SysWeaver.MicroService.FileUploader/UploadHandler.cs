@@ -34,7 +34,7 @@ namespace SysWeaver.MicroService
             throw new NotImplementedException();
         }
 
-        public async ValueTask<HttpRequestData> GetAsync(HttpServerRequest request)
+        public async Task<HttpRequestData> GetAsync(HttpServerRequest request)
         {
             var res = await Fs.Upload(request, Repo).ConfigureAwait(false);
             return new HttpRequestData(JsonSer.Serialize(res));
@@ -50,7 +50,7 @@ namespace SysWeaver.MicroService
 
         public IReadOnlyList<String> Auth { get; private set; }
 
-        public ValueTask<String> GetCacheKey(HttpServerRequest request) => HttpServerTools.NullStringValueTask;
+        public ValueTask<String> GetCacheKey(HttpServerRequest request) => TaskExt.NullStringValueTask;
 
         public String GetEtag(out bool useAsync, HttpServerRequest request)
         {

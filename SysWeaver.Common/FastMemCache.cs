@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -20,7 +21,7 @@ namespace SysWeaver
     /// </summary>
     /// <typeparam name="K">The type of the key</typeparam>
     /// <typeparam name="V">The type of the value</typeparam>
-    public sealed class FastMemCache<K, V> : IMemCache<K, V>
+    public sealed class FastMemCache<K, V> : IEnumerable<ValueTuple<DateTime, K, V>>
     {
 
         /// <summary>
@@ -29,8 +30,19 @@ namespace SysWeaver
         /// <param name="timeout">The duration to keep items in the cache (after last request)</param>
         /// <param name="comparer">An optional comparer</param>
         public FastMemCache(TimeSpan timeout, IEqualityComparer<K> comparer = null)
+            : this(x => DateTime.UtcNow + timeout, comparer)
         {
-            TimeOut = timeout;
+        }
+
+
+        /// <summary>
+        /// Creates a cache that removes it's items after the specified duration (after last request)
+        /// </summary>
+        /// <param name="getExpirationTimeUtc">A function that gets the expiration time (as UTC) of a value</param>
+        /// <param name="comparer">An optional comparer</param>
+        public FastMemCache(Func<V, DateTime> getExpirationTimeUtc, IEqualityComparer<K> comparer = null)
+        {
+            GetExpirationDate = getExpirationTimeUtc;
             if (comparer == null)
             {
                 C = new ConcurrentDictionary<K, (DateTime, V, Task<V>)>();
@@ -43,8 +55,6 @@ namespace SysWeaver
             }
         }
 
-
-
         /// <summary>
         /// Set a new value
         /// </summary>
@@ -56,7 +66,7 @@ namespace SysWeaver
             Lock(key);
             try
             {
-                var val = ValueTuple.Create(DateTime.UtcNow + TimeOut, value, (Task<V>)null);
+                var val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
                 Q.Enqueue(ValueTuple.Create(val.Item1, key));
             }
@@ -77,7 +87,7 @@ namespace SysWeaver
             Lock(key);
             try
             {
-                var val = ValueTuple.Create(DateTime.UtcNow + TimeOut, value, (Task<V>)null);
+                var val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 if (!c.TryAdd(key, val))
                     return false;
                 Q.Enqueue(ValueTuple.Create(val.Item1, key));
@@ -121,7 +131,7 @@ namespace SysWeaver
         /// <param name="key">Tke key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <returns>The value of the item</returns>
-        public V GetOrUpdate(K key, Func<K, V, V> func)
+        public V GetOrUpdateWithExisting(K key, Func<K, V, V> func)
         {
             var c = C;
             if (c.TryGetValue(key, out var val))
@@ -145,7 +155,8 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
-                val = ValueTuple.Create(DateTime.UtcNow + TimeOut, func(key, val.Item2), (Task<V>)null);
+                var value = func(key, val.Item2);
+                val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
                 Q.Enqueue(ValueTuple.Create(val.Item1, key));
                 return val.Item2;
@@ -164,7 +175,7 @@ namespace SysWeaver
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
         /// <returns>The value of the item</returns>
-        public V GetOrUpdate<A>(K key, Func<K, V, A, V> func, A arg)
+        public V GetOrUpdateWithExisting<A>(K key, Func<K, V, A, V> func, A arg)
         {
             var c = C;
             if (c.TryGetValue(key, out var val))
@@ -188,7 +199,8 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
-                val = ValueTuple.Create(DateTime.UtcNow + TimeOut, func(key, val.Item2, arg), (Task<V>)null);
+                var value = func(key, val.Item2, arg);
+                val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
                 Q.Enqueue(ValueTuple.Create(val.Item1, key));
                 return val.Item2;
@@ -209,7 +221,7 @@ namespace SysWeaver
         /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
         /// <returns>The value of the item</returns>
-        public V GetOrUpdate<A0, A1>(K key, Func<K, V, A0, A1, V> func, A0 arg0, A1 arg1)
+        public V GetOrUpdateWithExisting<A0, A1>(K key, Func<K, V, A0, A1, V> func, A0 arg0, A1 arg1)
         {
             var c = C;
             if (c.TryGetValue(key, out var val))
@@ -233,7 +245,8 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
-                val = ValueTuple.Create(DateTime.UtcNow + TimeOut, func(key, val.Item2, arg0, arg1), (Task<V>)null);
+                var value = func(key, val.Item2, arg0, arg1);
+                val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
                 Q.Enqueue(ValueTuple.Create(val.Item1, key));
                 return val.Item2;
@@ -244,6 +257,100 @@ namespace SysWeaver
             }
         }
 
+
+        #region Task
+
+         /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        public ValueTask<V> GetOrUpdateWithExistingAsync(K key, Func<K, V, Task<V>> func, bool waitUntilReady = true)
+        {
+            if (C.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    if (waitUntilReady)
+                    {
+                        var task = val.Item3;
+                        if ((task != null) && (!task.IsCompleted))
+                            return WaitUntilReady(task);
+                    }
+                    return ValueTask.FromResult(val.Item2);
+                }
+            }
+            return InternalGetOrUpdateAsync(key, func, waitUntilReady);
+        }
+
+ 
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item</returns>
+        public ValueTask<V> GetOrUpdateWithExistingAsync<A>(K key, Func<K, V, A, Task<V>> func, A arg, bool waitUntilReady = true)
+        {
+            if (C.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    if (waitUntilReady)
+                    {
+                        var task = val.Item3;
+                        if ((task != null) && (!task.IsCompleted))
+                            return WaitUntilReady(task);
+                    }
+                    return ValueTask.FromResult(val.Item2);
+                }
+            }
+            return InternalGetOrUpdateAsync(key, func, arg, waitUntilReady);
+        }
+
+
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item</returns>
+        public ValueTask<V> GetOrUpdateWithExistingAsync<A0, A1>(K key, Func<K, V, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
+        {
+            if (C.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    if (waitUntilReady)
+                    {
+                        var task = val.Item3;
+                        if ((task != null) && (!task.IsCompleted))
+                            return WaitUntilReady(task);
+                    }
+                    return ValueTask.FromResult(val.Item2);
+                }
+            }
+            return InternalGetOrUpdateAsync(key, func, arg0, arg1, waitUntilReady);
+        }
+
+
+        #endregion//Task
+
+        #region ValueTask
 
         /// <summary>
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
@@ -253,10 +360,9 @@ namespace SysWeaver
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
         /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
-        public async Task<V> GetOrUpdateAsync(K key, Func<K, V, Task<V>> func, bool waitUntilReady = true)
+        public ValueTask<V> GetOrUpdateWithExistingValueAsync(K key, Func<K, V, ValueTask<V>> func, bool waitUntilReady = true)
         {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
+            if (C.TryGetValue(key, out var val))
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
@@ -264,79 +370,15 @@ namespace SysWeaver
                     if (waitUntilReady)
                     {
                         var task = val.Item3;
-                        if (task != null)
-                            return await task.ConfigureAwait(false);
+                        if ((task != null) && (!task.IsCompleted))
+                            return WaitUntilReady(task);
                     }
-                    return val.Item2;
+                    return ValueTask.FromResult(val.Item2);
                 }
             }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if (task != null)
-                            {
-                                Unlock(key);
-                                return await task.ConfigureAwait(false);
-                            }
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                if (waitUntilReady)
-                {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, val.Item2).ConfigureAwait(false), (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }else
-                {
-                    async Task<V> build()
-                    {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, val.Item2).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
-                    }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.Result;
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default(V);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
+            return InternalGetOrUpdateAsync(key, func, waitUntilReady);
         }
+
 
         /// <summary>
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
@@ -347,10 +389,9 @@ namespace SysWeaver
         /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
         /// <returns>The value of the item</returns>
-        public async Task<V> GetOrUpdateAsync<A>(K key, Func<K, V, A, Task<V>> func, A arg, bool waitUntilReady = true)
+        public ValueTask<V> GetOrUpdateWithExistingValueAsync<A>(K key, Func<K, V, A, ValueTask<V>> func, A arg, bool waitUntilReady = true)
         {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
+            if (C.TryGetValue(key, out var val))
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
@@ -358,367 +399,15 @@ namespace SysWeaver
                     if (waitUntilReady)
                     {
                         var task = val.Item3;
-                        if (task != null)
-                            return await task.ConfigureAwait(false);
+                        if ((task != null) && (!task.IsCompleted))
+                            return WaitUntilReady(task);
                     }
-                    return val.Item2;
+                    return ValueTask.FromResult(val.Item2);
                 }
             }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if (task != null)
-                            {
-                                Unlock(key);
-                                return await task.ConfigureAwait(false);
-                            }
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                if (waitUntilReady)
-                {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, val.Item2, arg).ConfigureAwait(false), (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    async Task<V> build()
-                    {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, val.Item2, arg).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
-                    }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.Result;
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default(V);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
+            return InternalGetOrUpdateAsync(key, func, arg, waitUntilReady);
         }
 
-        /// <summary>
-        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-        /// </summary>
-        /// <param name="key">Tke key</param>
-        /// <param name="func">The delegate used to create a non-existing item</param>
-        /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-        /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item</returns>
-        public async Task<V> GetOrUpdateAsync<A0, A1>(K key, Func<K, V, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
-        {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
-            {
-                if (DateTime.UtcNow < val.Item1)
-                {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
-                    {
-                        var task = val.Item3;
-                        if (task != null)
-                            return await task.ConfigureAwait(false);
-                    }
-                    return val.Item2;
-                }
-            }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if (task != null)
-                            {
-                                Unlock(key);
-                                return await task.ConfigureAwait(false);
-                            }
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                if (waitUntilReady)
-                {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, val.Item2, arg0, arg1).ConfigureAwait(false), (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    async Task<V> build()
-                    {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
-                    }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.Result;
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default(V);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
-
-
-
-        /// <summary>
-        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-        /// </summary>
-        /// <param name="key">Tke key</param>
-        /// <param name="func">The delegate used to create a non-existing item</param>
-        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
-        public async ValueTask<V> GetOrUpdateValueAsync(K key, Func<K, V, ValueTask<V>> func, bool waitUntilReady = true)
-        {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
-            {
-                if (DateTime.UtcNow < val.Item1)
-                {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
-                    {
-                        var task = val.Item3;
-                        if (task != null)
-                            return await task.ConfigureAwait(false);
-                    }
-                    return val.Item2;
-                }
-            }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if (task != null)
-                            {
-                                Unlock(key);
-                                return await task.ConfigureAwait(false);
-                            }
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                if (waitUntilReady)
-                {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, val.Item2).ConfigureAwait(false), (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    async Task<V> build()
-                    {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, val.Item2).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
-                    }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.Result;
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default(V);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
-
-        /// <summary>
-        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-        /// </summary>
-        /// <param name="key">Tke key</param>
-        /// <param name="func">The delegate used to create a non-existing item</param>
-        /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item</returns>
-        public async ValueTask<V> GetOrUpdateValueAsync<A>(K key, Func<K, V, A, ValueTask<V>> func, A arg, bool waitUntilReady = true)
-        {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
-            {
-                if (DateTime.UtcNow < val.Item1)
-                {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
-                    {
-                        var task = val.Item3;
-                        if (task != null)
-                            return await task.ConfigureAwait(false);
-                    }
-                    return val.Item2;
-                }
-            }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if (task != null)
-                            {
-                                Unlock(key);
-                                return await task.ConfigureAwait(false);
-                            }
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                if (waitUntilReady)
-                {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, val.Item2, arg).ConfigureAwait(false), (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    async Task<V> build()
-                    {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, val.Item2, arg).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
-                    }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.Result;
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default(V);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
 
 
         /// <summary>
@@ -731,10 +420,9 @@ namespace SysWeaver
         /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
         /// <returns>The value of the item</returns>
-        public async ValueTask<V> GetOrUpdateValueAsync<A0, A1>(K key, Func<K, V, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
+        public ValueTask<V> GetOrUpdateWithExistingValueAsync<A0, A1>(K key, Func<K, V, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
         {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
+            if (C.TryGetValue(key, out var val))
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
@@ -742,85 +430,23 @@ namespace SysWeaver
                     if (waitUntilReady)
                     {
                         var task = val.Item3;
-                        if (task != null)
-                            return await task.ConfigureAwait(false);
+                        if ((task != null) && (!task.IsCompleted))
+                            return WaitUntilReady(task);
                     }
-                    return val.Item2;
+                    return ValueTask.FromResult(val.Item2);
                 }
             }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if (task != null)
-                            {
-                                Unlock(key);
-                                return await task.ConfigureAwait(false);
-                            }
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                if (waitUntilReady)
-                {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, val.Item2, arg0, arg1).ConfigureAwait(false), (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    async Task<V> build()
-                    {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
-                    }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.Result;
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default(V);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
+            return InternalGetOrUpdateAsync(key, func, arg0, arg1, waitUntilReady);
         }
+
+        #endregion//ValueTask
 
         #endregion//With exising
 
 
         #region Without exising
+
+        #region Sync
 
         /// <summary>
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
@@ -853,7 +479,8 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
-                val = ValueTuple.Create(DateTime.UtcNow + TimeOut, func(key), (Task<V>)null);
+                var value = func(key);
+                val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
                 Q.Enqueue(ValueTuple.Create(val.Item1, key));
                 return val.Item2;
@@ -896,7 +523,8 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
-                val = ValueTuple.Create(DateTime.UtcNow + TimeOut, func(key, arg), (Task<V>)null);
+                var value = func(key, arg);
+                val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
                 Q.Enqueue(ValueTuple.Create(val.Item1, key));
                 return val.Item2;
@@ -941,7 +569,8 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
-                val = ValueTuple.Create(DateTime.UtcNow + TimeOut, func(key, arg0, arg1), (Task<V>)null);
+                var value = func(key, arg0, arg1);
+                val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
                 Q.Enqueue(ValueTuple.Create(val.Item1, key));
                 return val.Item2;
@@ -953,6 +582,10 @@ namespace SysWeaver
         }
 
 
+        #endregion // Sync
+
+        #region Task
+
         /// <summary>
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
@@ -961,10 +594,9 @@ namespace SysWeaver
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
         /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
-        public async Task<V> GetOrUpdateAsync(K key, Func<K, Task<V>> func, bool waitUntilReady = true)
+        public ValueTask<V> GetOrUpdateAsync(K key, Func<K, Task<V>> func, bool waitUntilReady = true)
         {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
+            if (C.TryGetValue(key, out var val))
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
@@ -972,80 +604,15 @@ namespace SysWeaver
                     if (waitUntilReady)
                     {
                         var task = val.Item3;
-                        if (task != null)
-                            return await task.ConfigureAwait(false);
+                        if ((task != null) && (!task.IsCompleted))
+                            return WaitUntilReady(task);
                     }
-                    return val.Item2;
+                    return ValueTask.FromResult(val.Item2);
                 }
             }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if (task != null)
-                            {
-                                Unlock(key);
-                                return await task.ConfigureAwait(false);
-                            }
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                if (waitUntilReady)
-                {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key).ConfigureAwait(false), (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    async Task<V> build()
-                    {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
-                    }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.Result;
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default(V);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
+            return InternalGetOrUpdateAsync(key, func, waitUntilReady);
         }
+
 
         /// <summary>
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
@@ -1056,10 +623,9 @@ namespace SysWeaver
         /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
         /// <returns>The value of the item</returns>
-        public async Task<V> GetOrUpdateAsync<A>(K key, Func<K, A, Task<V>> func, A arg, bool waitUntilReady = true)
+        public ValueTask<V> GetOrUpdateAsync<A>(K key, Func<K, A, Task<V>> func, A arg, bool waitUntilReady = true)
         {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
+            if (C.TryGetValue(key, out var val))
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
@@ -1067,367 +633,15 @@ namespace SysWeaver
                     if (waitUntilReady)
                     {
                         var task = val.Item3;
-                        if (task != null)
-                            return await task.ConfigureAwait(false);
+                        if ((task != null) && (!task.IsCompleted))
+                            return WaitUntilReady(task);
                     }
-                    return val.Item2;
+                    return ValueTask.FromResult(val.Item2);
                 }
             }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if (task != null)
-                            {
-                                Unlock(key);
-                                return await task.ConfigureAwait(false);
-                            }
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                if (waitUntilReady)
-                {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, arg).ConfigureAwait(false), (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    async Task<V> build()
-                    {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, arg).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
-                    }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.Result;
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default(V);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
+            return InternalGetOrUpdateAsync(key, func, arg, waitUntilReady);
         }
 
-        /// <summary>
-        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-        /// </summary>
-        /// <param name="key">Tke key</param>
-        /// <param name="func">The delegate used to create a non-existing item</param>
-        /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-        /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item</returns>
-        public async Task<V> GetOrUpdateAsync<A0, A1>(K key, Func<K, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
-        {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
-            {
-                if (DateTime.UtcNow < val.Item1)
-                {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
-                    {
-                        var task = val.Item3;
-                        if (task != null)
-                            return await task.ConfigureAwait(false);
-                    }
-                    return val.Item2;
-                }
-            }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if (task != null)
-                            {
-                                Unlock(key);
-                                return await task.ConfigureAwait(false);
-                            }
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                if (waitUntilReady)
-                {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, arg0, arg1).ConfigureAwait(false), (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    async Task<V> build()
-                    {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, arg0, arg1).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
-                    }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.Result;
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default(V);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
-
-
-
-        /// <summary>
-        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-        /// </summary>
-        /// <param name="key">Tke key</param>
-        /// <param name="func">The delegate used to create a non-existing item</param>
-        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
-        public async ValueTask<V> GetOrUpdateValueAsync(K key, Func<K, ValueTask<V>> func, bool waitUntilReady = true)
-        {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
-            {
-                if (DateTime.UtcNow < val.Item1)
-                {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
-                    {
-                        var task = val.Item3;
-                        if (task != null)
-                            return await task.ConfigureAwait(false);
-                    }
-                    return val.Item2;
-                }
-            }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if (task != null)
-                            {
-                                Unlock(key);
-                                return await task.ConfigureAwait(false);
-                            }
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                if (waitUntilReady)
-                {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key).ConfigureAwait(false), (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    async Task<V> build()
-                    {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
-                    }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.Result;
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default(V);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
-
-        /// <summary>
-        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-        /// </summary>
-        /// <param name="key">Tke key</param>
-        /// <param name="func">The delegate used to create a non-existing item</param>
-        /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item</returns>
-        public async ValueTask<V> GetOrUpdateValueAsync<A>(K key, Func<K, A, ValueTask<V>> func, A arg, bool waitUntilReady = true)
-        {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
-            {
-                if (DateTime.UtcNow < val.Item1)
-                {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
-                    {
-                        var task = val.Item3;
-                        if (task != null)
-                            return await task.ConfigureAwait(false);
-                    }
-                    return val.Item2;
-                }
-            }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if (task != null)
-                            {
-                                Unlock(key);
-                                return await task.ConfigureAwait(false);
-                            }
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                if (waitUntilReady)
-                {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, arg).ConfigureAwait(false), (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    async Task<V> build()
-                    {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, arg).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
-                    }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.Result;
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default(V);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
 
 
         /// <summary>
@@ -1440,10 +654,9 @@ namespace SysWeaver
         /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
         /// <returns>The value of the item</returns>
-        public async ValueTask<V> GetOrUpdateValueAsync<A0, A1>(K key, Func<K, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
+        public ValueTask<V> GetOrUpdateAsync<A0, A1>(K key, Func<K, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
         {
-            var c = C;
-            if (c.TryGetValue(key, out var val))
+            if (C.TryGetValue(key, out var val))
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
@@ -1451,80 +664,108 @@ namespace SysWeaver
                     if (waitUntilReady)
                     {
                         var task = val.Item3;
-                        if (task != null)
-                            return await task.ConfigureAwait(false);
+                        if ((task != null) && (!task.IsCompleted))
+                            return WaitUntilReady(task);
                     }
-                    return val.Item2;
+                    return ValueTask.FromResult(val.Item2);
                 }
             }
-            Lock(key);
-            try
-            {
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if (task != null)
-                            {
-                                Unlock(key);
-                                return await task.ConfigureAwait(false);
-                            }
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                if (waitUntilReady)
-                {
-                    val = ValueTuple.Create(DateTime.UtcNow + TimeOut, await func(key, arg0, arg1).ConfigureAwait(false), (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    async Task<V> build()
-                    {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, arg0, arg1).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(DateTime.UtcNow + TimeOut, v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
-                    }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.Result;
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default(V);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
+            return InternalGetOrUpdateAsync(key, func, arg0, arg1, waitUntilReady);
         }
+
+
+        #endregion//Task
+
+        #region ValueTask
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        public ValueTask<V> GetOrUpdateValueAsync(K key, Func<K, ValueTask<V>> func, bool waitUntilReady = true)
+        {
+            if (C.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    if (waitUntilReady)
+                    {
+                        var task = val.Item3;
+                        if ((task != null) && (!task.IsCompleted))
+                            return WaitUntilReady(task);
+                    }
+                    return ValueTask.FromResult(val.Item2);
+                }
+            }
+            return InternalGetOrUpdateAsync(key, func, waitUntilReady);
+        }
+
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item</returns>
+        public ValueTask<V> GetOrUpdateValueAsync<A>(K key, Func<K, A, ValueTask<V>> func, A arg, bool waitUntilReady = true)
+        {
+            if (C.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    if (waitUntilReady)
+                    {
+                        var task = val.Item3;
+                        if ((task != null) && (!task.IsCompleted))
+                            return WaitUntilReady(task);
+                    }
+                    return ValueTask.FromResult(val.Item2);
+                }
+            }
+            return InternalGetOrUpdateAsync(key, func, arg, waitUntilReady);
+        }
+
+
+
+        /// <summary>
+        /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
+        /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
+        /// </summary>
+        /// <param name="key">Tke key</param>
+        /// <param name="func">The delegate used to create a non-existing item</param>
+        /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
+        /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
+        /// <returns>The value of the item</returns>
+        public ValueTask<V> GetOrUpdateValueAsync<A0, A1>(K key, Func<K, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
+        {
+            if (C.TryGetValue(key, out var val))
+            {
+                if (DateTime.UtcNow < val.Item1)
+                {
+                    Interlocked.Increment(ref HitCount);
+                    if (waitUntilReady)
+                    {
+                        var task = val.Item3;
+                        if ((task != null) && (!task.IsCompleted))
+                            return WaitUntilReady(task);
+                    }
+                    return ValueTask.FromResult(val.Item2);
+                }
+            }
+            return InternalGetOrUpdateAsync(key, func, arg0, arg1, waitUntilReady);
+        }
+
+        #endregion//ValueTask
 
         #endregion//Without exising
 
@@ -1541,13 +782,23 @@ namespace SysWeaver
             var exp = DateTime.UtcNow;
             if (exp < v.Item1)
                 return;
+            InternalPrune(exp);
+        }
+
+        /// <summary>
+        /// Peform the actual prune, move to own method to make it easiier for the JIT to inline the Prune method (checking for pruning)
+        /// </summary>
+        /// <param name="exp"></param>
+        void InternalPrune(DateTime exp)
+        {
+            var q = Q;
             var c = C;
             var locks = Locks;
             lock (q)
             {
                 for (; ; )
                 {
-                    if (!q.TryPeek(out v))
+                    if (!q.TryPeek(out var v))
                         return;
                     if (exp < v.Item1)
                         return;
@@ -1696,16 +947,904 @@ namespace SysWeaver
             Interlocked.Exchange(ref MissCount, 0);
         }
 
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void Lock(K key)
         {
-            Prune();
             SpinWait.SpinUntil(() => Locks.TryAdd(key, 0));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void Unlock(K key)
         {
             Locks.TryRemove(key, out var _);
+            Prune();
         }
+
+
+        #region Update
+
+        static async ValueTask<V> WaitUntilReady(Task<V> task)
+            => await task.ConfigureAwait(false);
+
+
+        #region With existing
+
+        #region Task
+
+        async ValueTask<V> InternalGetOrUpdateAsync<A>(K key, Func<K, V, A, Task<V>> func, A arg, bool waitUntilReady)
+        {
+            Lock(key);
+            try
+            {
+                var c = C;
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out var val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if ((task != null) && (!task.IsCompleted))
+                                return await task.ConfigureAwait(false);
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var value = await func(key, val.Item2, arg).ConfigureAwait(false);
+                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    c[key] = val;
+                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V v = default;
+                        try
+                        {
+                            v = await func(key, val.Item2, arg).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                        }
+                        finally
+                        {
+                        }
+                        return v;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.GetAwaiter().GetResult();
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default;
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        async ValueTask<V> InternalGetOrUpdateAsync<A0, A1>(K key, Func<K, V, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady)
+        {
+            Lock(key);
+            try
+            {
+                var c = C;
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out var val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if ((task != null) && (!task.IsCompleted))
+                                return await task.ConfigureAwait(false);
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var value = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
+                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    c[key] = val;
+                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V v = default;
+                        try
+                        {
+                            v = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                        }
+                        finally
+                        {
+                        }
+                        return v;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.GetAwaiter().GetResult();
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default;
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        async ValueTask<V> InternalGetOrUpdateAsync(K key, Func<K, V, Task<V>> func, bool waitUntilReady)
+        {
+            Lock(key);
+            try
+            {
+                var c = C;
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out var val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if ((task != null) && (!task.IsCompleted))
+                                return await task.ConfigureAwait(false);
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var value = await func(key, val.Item2).ConfigureAwait(false);
+                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    c[key] = val;
+                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V v = default;
+                        try
+                        {
+                            v = await func(key, val.Item2).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                        }
+                        finally
+                        {
+                        }
+                        return v;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.GetAwaiter().GetResult();
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default;
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        #endregion//Task
+
+
+
+        #region ValueTask
+
+        async ValueTask<V> InternalGetOrUpdateAsync<A>(K key, Func<K, V, A, ValueTask<V>> func, A arg, bool waitUntilReady)
+        {
+            Lock(key);
+            try
+            {
+                var c = C;
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out var val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if ((task != null) && (!task.IsCompleted))
+                                return await task.ConfigureAwait(false);
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var value = await func(key, val.Item2, arg).ConfigureAwait(false);
+                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    c[key] = val;
+                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V v = default;
+                        try
+                        {
+                            v = await func(key, val.Item2, arg).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                        }
+                        finally
+                        {
+                        }
+                        return v;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.GetAwaiter().GetResult();
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default;
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        async ValueTask<V> InternalGetOrUpdateAsync<A0, A1>(K key, Func<K, V, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady)
+        {
+            Lock(key);
+            try
+            {
+                var c = C;
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out var val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if ((task != null) && (!task.IsCompleted))
+                                return await task.ConfigureAwait(false);
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var value = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
+                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    c[key] = val;
+                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V v = default;
+                        try
+                        {
+                            v = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                        }
+                        finally
+                        {
+                        }
+                        return v;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.GetAwaiter().GetResult();
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default;
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        async ValueTask<V> InternalGetOrUpdateAsync(K key, Func<K, V, ValueTask<V>> func, bool waitUntilReady)
+        {
+            Lock(key);
+            try
+            {
+                var c = C;
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out var val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if ((task != null) && (!task.IsCompleted))
+                                return await task.ConfigureAwait(false);
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var value = await func(key, val.Item2).ConfigureAwait(false);
+                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    c[key] = val;
+                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V v = default;
+                        try
+                        {
+                            v = await func(key, val.Item2).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                        }
+                        finally
+                        {
+                        }
+                        return v;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.GetAwaiter().GetResult();
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default;
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        #endregion//ValueTask
+
+        #endregion//With existing
+
+
+
+        #region Without existing
+
+        #region Task
+
+        async ValueTask<V> InternalGetOrUpdateAsync<A>(K key, Func<K, A, Task<V>> func, A arg, bool waitUntilReady)
+        {
+            Lock(key);
+            try
+            {
+                var c = C;
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out var val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if ((task != null) && (!task.IsCompleted))
+                                return await task.ConfigureAwait(false);
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var value = await func(key, arg).ConfigureAwait(false);
+                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    c[key] = val;
+                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V v = default;
+                        try
+                        {
+                            v = await func(key, arg).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                        }
+                        finally
+                        {
+                        }
+                        return v;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.GetAwaiter().GetResult();
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default;
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        async ValueTask<V> InternalGetOrUpdateAsync<A0, A1>(K key, Func<K, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady)
+        {
+            Lock(key);
+            try
+            {
+                var c = C;
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out var val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if ((task != null) && (!task.IsCompleted))
+                                return await task.ConfigureAwait(false);
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var value = await func(key, arg0, arg1).ConfigureAwait(false);
+                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    c[key] = val;
+                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V v = default;
+                        try
+                        {
+                            v = await func(key, arg0, arg1).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                        }
+                        finally
+                        {
+                        }
+                        return v;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.GetAwaiter().GetResult();
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default;
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        async ValueTask<V> InternalGetOrUpdateAsync(K key, Func<K, Task<V>> func, bool waitUntilReady)
+        {
+            Lock(key);
+            try
+            {
+                var c = C;
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out var val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if ((task != null) && (!task.IsCompleted))
+                                return await task.ConfigureAwait(false);
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var value = await func(key).ConfigureAwait(false);
+                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    c[key] = val;
+                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V v = default;
+                        try
+                        {
+                            v = await func(key).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                        }
+                        finally
+                        {
+                        }
+                        return v;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.GetAwaiter().GetResult();
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default;
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        #endregion//Task
+
+
+
+
+
+        #region ValueTask
+
+        async ValueTask<V> InternalGetOrUpdateAsync<A>(K key, Func<K, A, ValueTask<V>> func, A arg, bool waitUntilReady)
+        {
+            Lock(key);
+            try
+            {
+                var c = C;
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out var val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if ((task != null) && (!task.IsCompleted))
+                                return await task.ConfigureAwait(false);
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var value = await func(key, arg).ConfigureAwait(false);
+                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    c[key] = val;
+                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V v = default;
+                        try
+                        {
+                            v = await func(key, arg).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                        }
+                        finally
+                        {
+                        }
+                        return v;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.GetAwaiter().GetResult();
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default;
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        async ValueTask<V> InternalGetOrUpdateAsync<A0, A1>(K key, Func<K, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady)
+        {
+            Lock(key);
+            try
+            {
+                var c = C;
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out var val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if ((task != null) && (!task.IsCompleted))
+                                return await task.ConfigureAwait(false);
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var value = await func(key, arg0, arg1).ConfigureAwait(false);
+                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    c[key] = val;
+                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V v = default;
+                        try
+                        {
+                            v = await func(key, arg0, arg1).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                        }
+                        finally
+                        {
+                        }
+                        return v;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.GetAwaiter().GetResult();
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default;
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        async ValueTask<V> InternalGetOrUpdateAsync(K key, Func<K, ValueTask<V>> func, bool waitUntilReady)
+        {
+            Lock(key);
+            try
+            {
+                var c = C;
+                //  Test if someone else added this cache entry
+                if (c.TryGetValue(key, out var val))
+                {
+                    if (DateTime.UtcNow < val.Item1)
+                    {
+                        Interlocked.Increment(ref SemiHitCount);
+                        if (waitUntilReady)
+                        {
+                            var task = val.Item3;
+                            if ((task != null) && (!task.IsCompleted))
+                                return await task.ConfigureAwait(false);
+                        }
+                        return val.Item2;
+                    }
+                }
+                Interlocked.Increment(ref MissCount);
+                if (waitUntilReady)
+                {
+                    var value = await func(key).ConfigureAwait(false);
+                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+                    c[key] = val;
+                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                    return val.Item2;
+                }
+                else
+                {
+                    async Task<V> build()
+                    {
+                        V v = default;
+                        try
+                        {
+                            v = await func(key).ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
+                        try
+                        {
+                            c[key] = val;
+                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                        }
+                        finally
+                        {
+                        }
+                        return v;
+                    }
+                    var task = build();
+                    if (task.IsCompleted)
+                        return task.GetAwaiter().GetResult();
+                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+                    c[key] = val;
+                    TaskExt.StartNewAsyncChain(() => task);
+                    return default;
+                }
+            }
+            finally
+            {
+                Unlock(key);
+            }
+        }
+
+        #endregion//ValueTask
+
+        #endregion//Without existing
+
+
+
+        #endregion//Update
+
+
 
         long HitCount;
         long SemiHitCount;
@@ -1715,7 +1854,7 @@ namespace SysWeaver
         readonly ConcurrentDictionary<K, ValueTuple<DateTime, V, Task<V>>> C;
         readonly ConcurrentQueue<ValueTuple<DateTime, K>> Q = new ();
 
-        readonly TimeSpan TimeOut;
+        readonly Func<V, DateTime> GetExpirationDate;
 
         /// <summary>
         /// Get the count of cached items (somewhat slow)
@@ -1723,6 +1862,7 @@ namespace SysWeaver
         /// <returns>Number of cached items</returns>
         public int GetCount() => C.Count;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public IEnumerator<(DateTime, K, V)> GetEnumerator() => C.Select(x => (x.Value.Item1, x.Key, x.Value.Item2)).GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

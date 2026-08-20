@@ -75,7 +75,7 @@ namespace SysWeaver.MicroService
         /// <param name="name">Optional application name</param>
         /// <param name="runBeforeRegister">Optional method to call before registering services</param>
         /// <returns></returns>
-        public static async ValueTask Run(String name = null, Action<ServiceManager> runBeforeRegister = null)
+        public static async Task Run(String name = null, Action<ServiceManager> runBeforeRegister = null)
         {
             var setProgress = ConsoleTools.SetProgress;
             var a = new AsyncSignal();
@@ -1554,7 +1554,7 @@ namespace SysWeaver.MicroService
         readonly ConcurrentDictionary<IPerfMonitored, int> HavePerfMonitor = new();
 
 
-        public async ValueTask DumpStats(String baseName)
+        public async Task DumpStats(String baseName)
         {
             {
                 var s = SavedStats;

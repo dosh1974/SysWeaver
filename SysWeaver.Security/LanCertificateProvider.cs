@@ -84,7 +84,7 @@ namespace SysWeaver.Security
 
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(LanCertificateProvider));
 
-        async ValueTask<ValueTuple<X509Certificate2, int>> InternalGetCert(IMessageHost msg = null)
+        async Task<ValueTuple<X509Certificate2, int>> InternalGetCert(IMessageHost msg = null)
         {
             using var _ = PerfMon.Track(nameof(InternalGetCert));
             X509Certificate2 c;
@@ -177,7 +177,7 @@ namespace SysWeaver.Security
             return c;
         }
 
-        async ValueTask InvokeExpireSoon()
+        async Task InvokeExpireSoon()
         {
             using var _ = await Lock.Lock().ConfigureAwait(false);
             var nn = await InternalGetCert().ConfigureAwait(false);
