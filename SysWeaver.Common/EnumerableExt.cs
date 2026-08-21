@@ -256,10 +256,10 @@ namespace SysWeaver
         public static Task ProcessAsyncValue<T>(this IReadOnlyList<T> list, Func<T, Task> action, int maxConcurrency = 0)
         {
             if (list == null)
-                return TaskExt.CompValTask;
+                return Task.CompletedTask;
             var l = list.Count;
             if (l <= 0)
-                return TaskExt.CompValTask;
+                return Task.CompletedTask;
             if (l == 1)
                 return action(list[0]);
             ConcurrencyLimiter.LimitConcurrency(ref action, maxConcurrency, l);
@@ -362,10 +362,10 @@ namespace SysWeaver
         public static Task ProcessAsyncValue<T>(this IReadOnlyList<T> list, Func<T, int, Task> action, int maxConcurrency = 0)
         {
             if (list == null)
-                return TaskExt.CompValTask;
+                return Task.CompletedTask;
             var l = list.Count;
             if (l <= 0)
-                return TaskExt.CompValTask;
+                return Task.CompletedTask;
             if (l == 1)
                 return action(list[0], 0);
             ConcurrencyLimiter.LimitConcurrency(ref action, maxConcurrency, l);

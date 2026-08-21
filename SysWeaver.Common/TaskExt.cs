@@ -24,13 +24,7 @@ namespace SysWeaver
 
     public static class TaskExt
     {
-        /// <summary>
-        /// A completed value task
-        /// </summary>
-        public static readonly Task CompValTask = default;
-
-
-        /// <summary>
+          /// <summary>
         /// Start a new async task (new thread / new chain)
         /// </summary>
         /// <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
