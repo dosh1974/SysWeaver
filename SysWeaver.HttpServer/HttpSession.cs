@@ -426,13 +426,13 @@ namespace SysWeaver.Net
         /// <summary>
         /// This can be null, if you wan't to store something use the SaveCache property instead
         /// </summary>
-        internal ConcurrentDictionary<String, HttpCacheEntry> Cache;
+        internal LowAllocConcurrentDictionary<String, HttpCacheEntry> Cache;
 
 
         /// <summary>
         /// Return Cache or create a new Cache
         /// </summary>
-        internal ConcurrentDictionary<String, HttpCacheEntry> SaveCache
+        internal LowAllocConcurrentDictionary<String, HttpCacheEntry> SaveCache
         {
             get
             {

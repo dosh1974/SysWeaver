@@ -359,11 +359,11 @@ namespace SysWeaver.Net
         }
 
 
-        readonly ConcurrentDictionary<String, UserData> UserSessions = new ConcurrentDictionary<string, UserData>();
+        readonly LowAllocConcurrentDictionary<String, UserData> UserSessions = new LowAllocConcurrentDictionary<string, UserData>();
 
 
 
-        static void PrunceCache(ConcurrentDictionary<String, HttpCacheEntry> c)
+        static void PrunceCache(LowAllocConcurrentDictionary<String, HttpCacheEntry> c)
         {
             const int maxWork = 100;
             List<String> remove = new List<string>(maxWork);
@@ -762,7 +762,7 @@ namespace SysWeaver.Net
         }
 
         FrozenStringTree RedirectSearch = new FrozenStringTree(new StringTree());
-        readonly ConcurrentDictionary<String, ValueTuple<int, String>> Redirects = new (StringComparer.Ordinal);
+        readonly LowAllocConcurrentDictionary<String, ValueTuple<int, String>> Redirects = new (StringComparer.Ordinal);
         StringTree RedirectTree = new StringTree();
 
 
@@ -1352,7 +1352,7 @@ namespace SysWeaver.Net
                 }
                 //  Handle cached requests
                 String cacheKey = String.Empty;
-                ConcurrentDictionary<String, HttpCacheEntry> cache = null;
+                LowAllocConcurrentDictionary<String, HttpCacheEntry> cache = null;
                 var now = DateTime.UtcNow;
                 var nowT = now.Ticks;
                 if (rcd != 0)
@@ -2091,7 +2091,9 @@ namespace SysWeaver.Net
             return true;
         }
 
-        readonly ConcurrentDictionary<IHttpServerModule, int> Modules = new ConcurrentDictionary<IHttpServerModule, int>();
+        readonly LowAllocConcurrentDictionary<IHttpServerModule, int> Modules = new LowAllocConcurrentDictionary<IHttpServerModule, int>();
+
+
         /// <summary>
         /// All mods in order that doesn't respond to certain prefixes only
         /// </summary>
@@ -2179,7 +2181,7 @@ namespace SysWeaver.Net
             return true;
         }
 
-        readonly ConcurrentDictionary<IHttpServerRawModule, int> RawModules = new ConcurrentDictionary<IHttpServerRawModule, int>();
+        readonly LowAllocConcurrentDictionary<IHttpServerRawModule, int> RawModules = new LowAllocConcurrentDictionary<IHttpServerRawModule, int>();
 
         /// <summary>
         /// All RawMods in order that doesn't respond to certain prefixes only
@@ -2348,7 +2350,7 @@ namespace SysWeaver.Net
 
         //readonly ConcurrentDictionary<String, HttpSession> Sessions = new (StringComparer.Ordinal);
 
-        readonly ConcurrentDictionary<IReadOnlyMemoryKey<Char>, HttpSession> Sessions = new(ReadOnlyMemoryKey.HashStringEqualityComparer);
+        readonly LowAllocConcurrentDictionary<IReadOnlyMemoryKey<Char>, HttpSession> Sessions = new(128, ReadOnlyMemoryKey.HashStringEqualityComparer);
 
         ValueTask<HttpSession> GetSession(HttpServerRequest req)
         {
@@ -2775,7 +2777,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// TODO: Prune cache (remove expired and unused entriesd)
         /// </summary>
-        readonly ConcurrentDictionary<String, HttpCacheEntry> Cache = new(StringComparer.Ordinal);
+        readonly LowAllocConcurrentDictionary<String, HttpCacheEntry> Cache = new(StringComparer.Ordinal);
 
         static ReadOnlyMemory<Byte> CloneMemory(ReadOnlyMemory<Byte> mem)
         {
@@ -2784,7 +2786,7 @@ namespace SysWeaver.Net
             return t;
         }
 
-        async Task SaveToCache(ConcurrentDictionary<String, HttpCacheEntry> cache, String cacheKey, DateTime expires, long nowT, HttpRequestData i, HttpServerRequest req, String localUrl)
+        async Task SaveToCache(LowAllocConcurrentDictionary<String, HttpCacheEntry> cache, String cacheKey, DateTime expires, long nowT, HttpRequestData i, HttpServerRequest req, String localUrl)
         {
             using (PerfMon.Track(nameof(SaveToCache)))
             {

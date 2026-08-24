@@ -22,7 +22,7 @@ namespace SysWeaver.Net
         /// The encoder compression level to use, most preferable first etc
 
 
-        readonly ConcurrentDictionary<String, Tuple<ICompEncoder, CompEncoderLevels>> Matches = new ConcurrentDictionary<string, Tuple<ICompEncoder, CompEncoderLevels>>(StringComparer.Ordinal);
+        readonly SemiFrozenDictionary<String, Tuple<ICompEncoder, CompEncoderLevels>> Matches = new SemiFrozenDictionary<string, Tuple<ICompEncoder, CompEncoderLevels>>(StringComparer.Ordinal);
 
 
         /// <summary>
@@ -99,12 +99,12 @@ namespace SysWeaver.Net
             ii[methodsAndPerformance] = inst;
             return inst;
         }
-        static readonly ConcurrentDictionary<String, HttpCompressionPriority> InitInstances = new ConcurrentDictionary<string, HttpCompressionPriority>(StringComparer.Ordinal);
+        static readonly SemiFrozenDictionary<String, HttpCompressionPriority> InitInstances = new SemiFrozenDictionary<string, HttpCompressionPriority>(StringComparer.Ordinal);
 
-        static readonly ConcurrentDictionary<String, HttpCompressionPriority> Instances = new ConcurrentDictionary<string, HttpCompressionPriority>(StringComparer.Ordinal);
+        static readonly SemiFrozenDictionary<String, HttpCompressionPriority> Instances = new SemiFrozenDictionary<string, HttpCompressionPriority>(StringComparer.Ordinal);
 
 
-        static readonly ConcurrentDictionary<String, IReadOnlySet<String>> EncoderSets = new ConcurrentDictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
+        static readonly SemiFrozenDictionary<String, IReadOnlySet<String>> EncoderSets = new SemiFrozenDictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
 
         static readonly IReadOnlySet<String> Empty = new HashSet<String>().Freeze();
 

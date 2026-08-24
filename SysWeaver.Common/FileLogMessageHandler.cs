@@ -45,7 +45,7 @@ namespace SysWeaver
                 {
                     //  If we're updating, wait until we're not (uncommon)
                     while (IsTruncating)
-                        Thread.Sleep(1);
+                        await Task.Delay(1).ConfigureAwait(false);
                     //  Write the file, this can fail in rare cases due to an update being in process
                     await File.AppendAllTextAsync(fn, text).ConfigureAwait(false);
                     Interlocked.Add(ref WrittenChars, text.Length);
