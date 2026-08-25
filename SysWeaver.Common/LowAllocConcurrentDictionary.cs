@@ -204,10 +204,23 @@ namespace SysWeaver
         public bool Contains(KeyValuePair<TKey, TValue> item) => TryGetValue(item.Key, out var val) && EqualityComparer<TValue>.Default.Equals(val, item.Value);
         public bool Remove(KeyValuePair<TKey, TValue> item) => Contains(item) && Remove(item.Key);
 
+        public List<KeyValuePair<TKey, TValue>> ToList()
+            => new List<KeyValuePair<TKey, TValue>>(this);
+
+        public KeyValuePair<TKey, TValue>[] ToArray()
+            => new List<KeyValuePair<TKey, TValue>>(this).ToArray();
+
         public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
         {
             int cursor = arrayIndex;
-            foreach (var pair in this) array[cursor++] = pair;
+            var mx = array.Length;
+            foreach (var pair in this)
+            {
+                if (cursor >= mx)
+                    break;
+                array[cursor] = pair;
+                ++cursor;
+            }
         }
 
         struct Enumerator : IEnumerator<KeyValuePair<TKey, TValue>>

@@ -1607,19 +1607,19 @@ async function tableMain() {
             return;
         }
         const tit = ps.get('n');
+        if (tit)
+            document.title = tit;
         let p = ps.get('p');
         let jp = ps.get('jp');
         if (jp) {
             p = await Object.getPrototypeOf(async function () { }).constructor(jp)();
         }
-        await Table.addTable(url, null, ps.get('r'), p, removeLoader, tit, ps.get('s'), data =>
-        {
-            const nt = data.Title;
+        await Table.addTable(url, null, ps.get('r'), p, removeLoader, tit, ps.get('s'), data => {
             if (tit)
-                document.title = tit;
-            else
-                if (nt)
-                    document.title = nt;
+                return;
+            const nt = data.Title;
+            if (nt)
+                document.title = nt;
         }, ps.get('f'));
     }
     finally {

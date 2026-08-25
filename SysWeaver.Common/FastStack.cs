@@ -4,6 +4,9 @@ using System.Threading;
 
 namespace SysWeaver
 {
+
+
+    /*
     /// <summary>
     /// A fast thread safe stack.
     /// The data to push / pop from the stack must inherit from FastStackNode
@@ -78,5 +81,5 @@ namespace SysWeaver
     {
         internal volatile FastStackNode Next;
     }
-
+*/
 }

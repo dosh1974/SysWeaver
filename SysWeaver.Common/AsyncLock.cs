@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -246,8 +247,6 @@ namespace SysWeaver
             public readonly int MaxConcurrentAccess;
             public readonly SemaphoreSlim S;
 
-
-
             public void Dispose()
             {
                 var s = S;
@@ -262,6 +261,7 @@ namespace SysWeaver
 
 
     }
+
 
 
 }
