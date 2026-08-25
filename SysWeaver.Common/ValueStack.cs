@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver
 {
+
+
+    /*
     /// <summary>
     /// If possible use, FastStack instead, only use this if you don't have control over the type that is pushed / popped
     /// </summary>
@@ -37,6 +40,6 @@
 
 
     }
-
+    */
 
 }

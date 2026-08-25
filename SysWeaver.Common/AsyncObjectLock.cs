@@ -36,7 +36,7 @@ namespace SysWeaver
             if (l.TryAdd(obj, 0))
                 return new AsyncObjectLockHandle<T>(obj, Free);
             var sw = new SpinWait();
-            for (int i = 0; i < 100; ++ i)
+            for (int i = 0; i < 32; ++ i)
             {
                 sw.SpinOnce();
                 if (l.TryAdd(obj, 0))
@@ -64,6 +64,10 @@ namespace SysWeaver
 
     public readonly struct AsyncObjectLockHandle<T> : IDisposable
     {
+#if DEBUG
+        public override string ToString() => "Lock for " + V;
+#endif//DEBUG
+
         public AsyncObjectLockHandle()
         {
         }
@@ -80,7 +84,7 @@ namespace SysWeaver
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Dispose()
-            => Free(V);
+            => Free?.Invoke(V);
 
 
     }

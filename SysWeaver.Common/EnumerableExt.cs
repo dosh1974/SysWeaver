@@ -157,6 +157,25 @@ namespace SysWeaver
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         }
 
+
+        /// <summary>
+        /// Process all elements in a list in revered order
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list">The list to process</param>
+        /// <param name="action">The action to perform on each element</param>
+        public static void ProcessReverse<T>(this IReadOnlyList<T> list, Action<T> action)
+        {
+            if (list == null)
+                return;
+            var l = list.Count;
+            while (l > 0)
+            {
+                --l;
+                action(list[l]);
+            }
+        }
+
         /// <summary>
         /// Process all elements in a list.
         /// </summary>
