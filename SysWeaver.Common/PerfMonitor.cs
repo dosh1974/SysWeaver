@@ -193,41 +193,31 @@ namespace SysWeaver
 
     public static class PerfMonitorEx
     {
-        public static IPerfMesurement Track(this PerfMonitor tracker, String name)
+        public static PerfMesurement Track(this PerfMonitor tracker, String name)
         {
             if (tracker == null)
-                return null;
+                return default;
             var e = tracker.Begin(name);
             if (e == null)
-                return null;
+                return default;
             return new PerfMesurement(e);
         }
     }
 
 
-    public interface IPerfMesurement : IDisposable
-    {
-        /// <summary>
-        /// Time taken so far, in stop watch ticks
-        /// </summary>
-        long Ellapsed { get; }
-
-        /// <summary>
-        /// Get the start time stamp
-        /// </summary>
-        long StartTimeStamp { get; }
-
-    }
-
     public static class PerfMesurementExt
     {
-        public static TimeSpan GetEllapsedTime(this IPerfMesurement perf) => 
+        public static TimeSpan GetEllapsedTime(this PerfMesurement perf) => 
             PerfMonitor.ToTimeSpan(perf.Ellapsed);
     }
 
-    struct PerfMesurement : IPerfMesurement
+    public readonly struct PerfMesurement : IDisposable
     {
-        public PerfMesurement(PerfTrackerEntry e)
+        public PerfMesurement()
+        {
+        }
+
+        internal PerfMesurement(PerfTrackerEntry e)
         {
             E = e;
             int inp = Interlocked.Increment(ref e.InProgress);
@@ -245,11 +235,13 @@ namespace SysWeaver
         /// </summary>
         public long StartTimeStamp => Tc;
 
-        public readonly void Dispose() 
+        public void Dispose() 
         {
             var tc = Stopwatch.GetTimestamp();
             var took = tc - Tc;
             var e = E;
+            if (e == null)
+                return;
             Interlocked.Decrement(ref e.InProgress);
             Interlocked.Add(ref e.Total, took);
             Interlocked.Increment(ref e.Count);

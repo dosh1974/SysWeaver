@@ -746,7 +746,7 @@ namespace SysWeaver.MicroService
         /// <param name="showProgress">If true and running in a supported console, the console header will show the load progress</param>
         public void RegisterManifest(String manifest, String filename = null, bool trackPerf = true, bool showProgress = false)
         {
-            using var perfMon = (trackPerf && !String.IsNullOrEmpty(filename)) ? PerfMon.Track("Register." + Path.GetFileName(filename)) : null;
+            using var perfMon = (trackPerf && !String.IsNullOrEmpty(filename)) ? PerfMon.Track("Register." + Path.GetFileName(filename)) : default;
             ServiceManifest[] mf;
             try
             {
@@ -783,7 +783,7 @@ namespace SysWeaver.MicroService
         /// <param name="showProgress">If true and running in a supported console, the console header will show the load progress</param>
         public void RegisterManifestFile(String file, bool trackPerf = true, bool showProgress = false)
         {
-            using var perfMon = trackPerf ? PerfMon.Track("Register." + Path.GetFileName(file)) : null;
+            using var perfMon = trackPerf ? PerfMon.Track("Register." + Path.GetFileName(file)) : default;
             AddMessage(Tag + " Registering services from file \"" + file + "\":");
             var i = Instances;
             var c = i.Count;

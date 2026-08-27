@@ -303,8 +303,9 @@ namespace SysWeaver.Db
         /// <param name="data">The data</param>
         /// <param name="tableName">Optional table name</param>
         /// <param name="maxBatchSize">Number of rows per query</param>
+        /// <param name="useInsert">Do a bulk insert instead of upsert</param>
         /// <returns></returns>
-        public static async Task BulkUpsert<T>(OrmConnection con, IReadOnlyList<T> data, String tableName = null, int maxBatchSize = 4096)
+        public static async Task BulkUpsert<T>(OrmConnection con, IReadOnlyList<T> data, String tableName = null, int maxBatchSize = 4096, bool useInsert = false)
         {
             var def = ModelDefinition<T>.Definition;
             var us = GetUpsert(def, tableName);
@@ -340,7 +341,8 @@ namespace SysWeaver.Db
                     ++i;
                     sb.Append(count == 0 ? ")" : "),");
                 }
-                sb.Append(us[1]);
+                if (!useInsert)
+                    sb.Append(us[1]);
                 var cmd = sb.ToString();
                 var c = new CommandDefinition(cmd, dyn, flags: CommandFlags.None);
 //                var c = new CommandDefinition(cmd, p.ToDynamicParameters(), flags: CommandFlags.Buffered);
@@ -348,7 +350,6 @@ namespace SysWeaver.Db
                 Interlocked.Add(ref InternalRowsCompleted, cc);
             }
         }
-
 
 
 
@@ -404,8 +405,9 @@ namespace SysWeaver.Db
 
         String GetTypeCreate(FieldDefinition f)
         {
+            var key = GetKey(f);
             String suffix = "";
-            if (!f.IsNullable)
+            if ((!f.IsNullable) || key.FastEquals(" PRIMARY KEY"))
                 suffix += " NOT NULL";
             if (f.DefaultValue != null)
                 suffix += " DEFAULT @p0";
@@ -416,7 +418,7 @@ namespace SysWeaver.Db
                 var col = GetCollate(f);
                 suffix += " COLLATE " + col;
             }
-            suffix += GetKey(f);
+            suffix += key;
             var dp = DP;
             var typeName = dp.GetColumnTypeDefinition(f.FieldType, f.FieldName, f.FieldLength);
             if (NameMap.TryGetValue(typeName, out var x))
@@ -1005,6 +1007,7 @@ namespace SysWeaver.Db
                 }
             }
 
+
             //  Get existing indices
             Dictionary<String, ExistingIndex> existingIndexes = new Dictionary<String, ExistingIndex>(StringComparer.Ordinal);
             var fullTexts = new List<String, IndexInfo>(StringComparer.Ordinal);
@@ -1060,8 +1063,8 @@ namespace SysWeaver.Db
                         {
                             var fieldName = dp.GetQuotedColumnName(f.FieldName);
                             var cmd = "ALTER TABLE " + tableNameQ + " MODIFY COLUMN " + fieldName + " " + typeName;
-                            if (typeNameExisting.Contains(" PRIMARY KEY"))
-                                cmd = cmd.Replace(" PRIMARY KEY", "");
+//                            if (typeNameExisting.Contains(" PRIMARY KEY"))
+//                                cmd = cmd.Replace(" PRIMARY KEY", "");
                             if (typeNameExisting.Contains(" UNIQUE"))
                                 cmd = cmd.Replace(" UNIQUE", "");
                             /*
