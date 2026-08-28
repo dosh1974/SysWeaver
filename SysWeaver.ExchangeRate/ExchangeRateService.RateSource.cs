@@ -53,7 +53,7 @@ namespace SysWeaver.ExchangeRate
                 {
                     var ok = await UpdateRates().ConfigureAwait(false);
                     StartUpdating(min, !ok);
-                }));
+                }, "Exchange Rate Update"));
             }
 
             IDisposable UpdateTask;

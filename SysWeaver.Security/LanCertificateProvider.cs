@@ -172,7 +172,7 @@ namespace SysWeaver.Security
             Interlocked.Exchange(ref ExpireAction, null)?.Dispose();
             var nn = await InternalGetCert(Msg).ConfigureAwait(false);
             c = nn.Item1;
-            ExpireAction = Scheduler.AddValueTask(DateTime.UtcNow.AddMinutes(nn.Item2), InvokeExpireSoon);
+            ExpireAction = Scheduler.AddTask(DateTime.UtcNow.AddMinutes(nn.Item2), InvokeExpireSoon, "Renew LAN cert");
             Interlocked.Exchange(ref C, c)?.Dispose();
             return c;
         }
@@ -187,7 +187,7 @@ namespace SysWeaver.Security
             bool isWorse = CertificateTools.IsSelfSigned(newCert) && (!CertificateTools.IsSelfSigned(oldCert));
             if (oldCert.Thumbprint.FastEquals(newCert.Thumbprint) || isWorse)
             {
-                ExpireAction = Scheduler.AddValueTask(DateTime.UtcNow.AddMinutes(nn.Item2), InvokeExpireSoon);
+                ExpireAction = Scheduler.AddTask(DateTime.UtcNow.AddMinutes(nn.Item2), InvokeExpireSoon, "Renew LAN cert");
                 try
                 {
                     newCert.Dispose();
@@ -201,7 +201,7 @@ namespace SysWeaver.Security
             Interlocked.Exchange(ref ExpireAction, null)?.Dispose();
             oldCert = Interlocked.Exchange(ref C, newCert);
             OnChanged?.Invoke(newCert);
-            ExpireAction = Scheduler.AddValueTask(DateTime.UtcNow.AddMinutes(nn.Item2), InvokeExpireSoon);
+            ExpireAction = Scheduler.AddTask(DateTime.UtcNow.AddMinutes(nn.Item2), InvokeExpireSoon, "Renew LAN cert");
             try
             {
                 oldCert?.Dispose();

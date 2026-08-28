@@ -191,7 +191,7 @@ namespace SysWeaver.Net
                         {
                             var retry = DateTime.UtcNow.AddMinutes(FirstCertRetryMinutes);
                             msg?.AddMessage(Prefix + "Will try to get new certificate at " + retry.ToString("o"));
-                            Scheduler.AddTask(retry, () => SwitchCert(provider, pre));
+                            Scheduler.AddTask(retry, () => SwitchCert(provider, pre), "Retry get cert");
                         }else
                         {
                             CurrentCertThumbPrint = cert.Thumbprint;

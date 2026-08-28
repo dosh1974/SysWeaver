@@ -28,15 +28,17 @@ namespace SysWeaver
         /// Two tasks that are scheduled at the same time will be executed in the order of being added.
         /// </param>
         /// <param name="task">The task to execute</param>
+        /// <param name="name">An optional name (for debugging)</param>
+        /// <param name="repeatFn">An optional function that is executed after the task completed, ggiven the previous execution time, returns a new execution time</param>
         /// <returns>An object that can be disposed to prevent execution of the task in the future</returns>
-        public static IDisposable Add(DateTime when, Action task)
+        public static IDisposable Add(DateTime when, Action task, String name = null, Func<DateTime, DateTime> repeatFn = null)
         {
             if (when.Kind != DateTimeKind.Utc)
                 when = when.ToUniversalTime();
             var e = Entries;
             lock (e)
             {
-                var ee = new Entry(when.Ticks, Interlocked.Increment(ref Id), task);
+                var ee = new Entry(when.Ticks, Interlocked.Increment(ref Id), task, repeatFn, name);
                 e.Add(ee, 0);
                 if (CheckTask == null)
                     CheckTask = new PeriodicTask(Check, CheckFrequencyMs);
@@ -52,15 +54,17 @@ namespace SysWeaver
         /// Two tasks that are scheduled at the same time will be executed in the order of being added.
         /// </param>
         /// <param name="task">The task to execute</param>
+        /// <param name="name">An optional name (for debugging)</param>
+        /// <param name="repeatFn">An optional function that is executed after the task completed, ggiven the previous execution time, returns a new execution time</param>
         /// <returns>An object that can be disposed to prevent execution of the task in the future</returns>
-        public static IDisposable AddTask(DateTime when, Func<Task> task)
+        public static IDisposable AddTask(DateTime when, Func<Task> task, String name = null, Func<DateTime, DateTime> repeatFn = null)
         {
             if (when.Kind != DateTimeKind.Utc)
                 when = when.ToUniversalTime();
             var e = Entries;
             lock (e)
             {
-                var ee = new Entry(when.Ticks, Interlocked.Increment(ref Id), task);
+                var ee = new Entry(when.Ticks, Interlocked.Increment(ref Id), task, repeatFn, name);
                 e.Add(ee, 0);
                 if (CheckTask == null)
                     CheckTask = new PeriodicTask(Check, CheckFrequencyMs);
@@ -76,15 +80,17 @@ namespace SysWeaver
         /// Two tasks that are scheduled at the same time will be executed in the order of being added.
         /// </param>
         /// <param name="task">The task to execute</param>
+        /// <param name="name">An optional name (for debugging)</param>
+        /// <param name="repeatFn">An optional function that is executed after the task completed, ggiven the previous execution time, returns a new execution time</param>
         /// <returns>An object that can be disposed to prevent execution of the task in the future</returns>
-        public static IDisposable AddValueTask(DateTime when, Func<Task> task)
+        public static IDisposable AddValueTask(DateTime when, Func<ValueTask> task, String name = null, Func<DateTime, DateTime> repeatFn = null)
         {
             if (when.Kind != DateTimeKind.Utc)
                 when = when.ToUniversalTime();
             var e = Entries;
             lock (e)
             {
-                var ee = new Entry(when.Ticks, Interlocked.Increment(ref Id), task);
+                var ee = new Entry(when.Ticks, Interlocked.Increment(ref Id), task, repeatFn, name);
                 e.Add(ee, 0);
                 if (CheckTask == null)
                     CheckTask = new PeriodicTask(Check, CheckFrequencyMs);
@@ -134,24 +140,17 @@ namespace SysWeaver
             //  Execute the task
                 try
                 {
-                    for (; ; )
+                    switch (ee.Type)
                     {
-                        var ta = ee.TA;
-                        if (ta != null)
-                        {
-                            await ta().ConfigureAwait(false);
+                        case TaskTypes.TypeAction:
+                            ee.A();
                             break;
-                        }
-                        var vta = ee.VTA;
-                        if (vta != null)
-                        {
-                            await vta().ConfigureAwait(false);
+                        case TaskTypes.TypeTask:
+                            await ee.TA().ConfigureAwait(false);
                             break;
-                        }
-                        var a = ee.A;
-                        if (a != null)
-                            a();
-                        break;
+                        case TaskTypes.TypeValueTask:
+                            await ee.VTA().ConfigureAwait(false);
+                            break;
                     }
                 }
                 catch (Exception ex)
@@ -162,6 +161,24 @@ namespace SysWeaver
                 lock (e)
                 {
                     e.Remove(ee);
+                    var fn = ee.RepeatFn;
+                    if (fn != null)
+                    {
+                        try
+                        {
+                            var n = GetNext(ee.RunAt, fn);
+                            ee.Time = n.Ticks;
+                            e.Add(ee, 0);
+                        }
+                        catch (Exception ex)
+                        {
+                            TaskExceptions.OnException(new Exception(ee.ToString() + " failed to re-schedule", ex));
+
+                        }
+
+                    }
+
+
                     if (e.Count < 0)
                     {
                         Interlocked.Exchange(ref CheckTask, null);
@@ -186,23 +203,47 @@ namespace SysWeaver
             return true;
         }
 
+        public enum TaskTypes
+        {
+            TypeAction,
+            TypeTask,
+            TypeValueTask,
+        };
+
+        
+        
+        static DateTime GetNext(DateTime c, Func<DateTime, DateTime> fn)
+        {
+            for (; ; )
+            {
+                var n = fn(c);
+                if (n <= c)
+                    throw new Exception("Invalid repeat function!");
+                if (n > DateTime.UtcNow)
+                    return n;
+            }
+        }
+
 
         public sealed class Entry : IDisposable, IComparable<Entry>, IEquatable<Entry>
         {
 #if DEBUG
             public override string ToString() 
-                => String.Concat(Type, " #", TaskId, " @ ", Scheduled, ": ", Scheduler);
+                => Name == null ? String.Concat(Type, " #", TaskId, " @ ", Scheduled, ": ", Scheduler) : String.Concat(Type, " #", TaskId, ' ', Name, " @ ", Scheduled, ": ", Scheduler);
 #else//DEBUG
             public override string ToString() 
-                => String.Concat(Type, " #", TaskId);
+                => Name == null ? String.Concat(Type, " #", TaskId) : String.Concat(Type, " #", TaskId, ' ', Name);
 #endif//DEBUG
 
-            internal Entry(long time, long id, Action task)
+            internal Entry(long time, long id, Action task, Func<DateTime, DateTime> repeatFn, String name)
             {
                 Time = time;
                 Id = id;
                 HashCode = (int)id;
                 A = task;
+                Type = TaskTypes.TypeAction;
+                RepeatFn = repeatFn;
+                Name = name;
 #if DEBUG
                 var s = new StackTrace(2, true);
                 var frame = s.GetFrame(0);
@@ -211,12 +252,15 @@ namespace SysWeaver
 #endif//DEBUG
             }
 
-            internal Entry(long time, long id, Func<Task> task)
+            internal Entry(long time, long id, Func<Task> task, Func<DateTime, DateTime> repeatFn, String name)
             {
                 Time = time;
                 Id = id;
                 HashCode = (int)id;
                 TA = task;
+                Type = TaskTypes.TypeTask;
+                RepeatFn = repeatFn;
+                Name = name;
 #if DEBUG
                 var s = new StackTrace(2, true);
                 var frame = s.GetFrame(0);
@@ -225,12 +269,15 @@ namespace SysWeaver
 #endif//DEBUG
             }
 
-            internal Entry(long time, long id, Func<ValueTask> task)
+            internal Entry(long time, long id, Func<ValueTask> task, Func<DateTime, DateTime> repeatFn, String name)
             {
                 Time = time;
                 Id = id;
                 HashCode = (int)id;
                 VTA = task;
+                Type = TaskTypes.TypeValueTask;
+                RepeatFn = repeatFn;
+                Name = name;
 #if DEBUG
                 var s = new StackTrace(2, true);
                 var frame = s.GetFrame(0);
@@ -243,7 +290,7 @@ namespace SysWeaver
             internal int Guard;
 
             [TableDataIgnore]
-            internal readonly long Time;
+            internal long Time;
 
             [TableDataIgnore]
             public readonly long Id;
@@ -256,6 +303,10 @@ namespace SysWeaver
 
             [TableDataIgnore]
             internal readonly Func<ValueTask> VTA;
+
+
+            [TableDataIgnore]
+            internal readonly Func<DateTime, DateTime> RepeatFn;
 
             readonly int HashCode;
 
@@ -270,21 +321,39 @@ namespace SysWeaver
             public long TaskId => Id;
 
             /// <summary>
-            /// True if it's an async job
+            /// Optional name
             /// </summary>
-            public String Type
+            public String Name { get; init; }
+
+
+            /// <summary>
+            /// The type of task to perform
+            /// </summary>
+            public TaskTypes Type { get; init; }
+
+            /// <summary>
+            /// True if the function should be repeated
+            /// </summary>
+            public bool Repeat => RepeatFn != null;
+
+            /// <summary>
+            /// The repeat interval, zero if not repeating
+            /// </summary>
+            public TimeSpan RepeatFrequency
             {
                 get
                 {
-                    if (A != null)
-                        return "Sync";
-                    if (TA != null)
-                        return "Task";
-                    if (VTA != null)
-                        return "ValueTask";
-                    return "-";
+                    var fn = RepeatFn;
+                    if (fn == null)
+                        return TimeSpan.Zero;
+                    var n = RunAt;
+                    return GetNext(n, fn) - n;
                 }
             }
+          
+
+
+
 #if DEBUG
             /// <summary>
             /// When this task was scheduled
