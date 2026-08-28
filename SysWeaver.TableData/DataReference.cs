@@ -34,7 +34,7 @@ namespace SysWeaver.Data
             Data = data;
             var expTime = DateTime.UtcNow.AddSeconds(timeToLiveInSeconds);
             InternalExpires = expTime;
-            D = Scheduler.Add(expTime, Remove);
+            D = Scheduler.Add(expTime, Remove, "Remove data reference " + id);
         }
 
         /// <summary>
@@ -118,10 +118,7 @@ namespace SysWeaver.Data
             var expTime = DateTime.UtcNow.AddSeconds(TimeToLive);
             InternalExpires = expTime;
             Interlocked.Increment(ref InternalUseCounter);
-            D = Scheduler.Add(expTime, Remove);
-
-
-
+            D = Scheduler.Add(expTime, Remove, "Remove data reference " + Id);
         }
 
         #endregion//Server side
