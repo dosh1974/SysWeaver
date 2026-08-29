@@ -34,13 +34,11 @@ namespace SysWeaver.ExchangeRate
 
             public long NextUpdateTick => Interlocked.Read(ref NextUpdate);
 
-            public void StartUpdating(TimeSpan min, bool wasError = false)
+            public void StartUpdating(TimeSpan min)
             {
                 var utcNow = DateTime.UtcNow;
                 var utcNowTicks = utcNow.Ticks;
                 var updateTicks = TimeSpan.TicksPerMinute * S.RefreshMinutes;
-                if (wasError)
-                    updateTicks = (updateTicks + 7) >> 3;
                 var nextPeriod = (utcNowTicks / updateTicks) + 1;
                 var nextUpdate = new DateTime(nextPeriod * updateTicks, DateTimeKind.Utc);
                 if ((nextUpdate - utcNow) < min)
@@ -49,11 +47,12 @@ namespace SysWeaver.ExchangeRate
                     nextUpdate = new DateTime(nextPeriod * updateTicks, DateTimeKind.Utc);
                 }
                 Interlocked.Exchange(ref NextUpdate, nextUpdate.Ticks);
-                Interlocked.Exchange(ref UpdateTask, Scheduler.AddValueTask(nextUpdate, async () =>
+                UpdateTask = Scheduler.AddTask(nextUpdate, () => UpdateRates(), "Exchange Rate Update", t =>
                 {
-                    var ok = await UpdateRates().ConfigureAwait(false);
-                    StartUpdating(min, !ok);
-                }, "Exchange Rate Update"));
+                    t = t.AddMinutes(S.RefreshMinutes);
+                    Interlocked.Exchange(ref NextUpdate, t.Ticks);
+                    return t;
+                });
             }
 
             IDisposable UpdateTask;
