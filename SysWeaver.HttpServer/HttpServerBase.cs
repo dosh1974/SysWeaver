@@ -2688,7 +2688,7 @@ namespace SysWeaver.Net
                 yield return e;
             foreach (var e in TransformExceptions.GetStats(sys, "Transform."))
                 yield return e;
-            foreach (var e in RequestStats.GetStats(sys, "", "Requests per second", "Input bytes per request"))
+            foreach (var e in RequestStats.GetStats(sys, "", "Requests per second", "Input bytes per request", "Bytes per second"))
                 yield return e;
             var total = Interlocked.Read(ref CacheTotal);
             var hit = Interlocked.Read(ref CacheHit);

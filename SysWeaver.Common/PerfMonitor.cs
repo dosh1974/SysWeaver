@@ -1,13 +1,9 @@
 using SysWeaver.Data;
 using System;
 using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace SysWeaver
 {
@@ -120,7 +116,7 @@ namespace SysWeaver
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
 
-        readonly ConcurrentDictionary<String, PerfTrackerEntry> Entries = new(StringComparer.Ordinal);
+        readonly SemiFrozenDictionary<String, PerfTrackerEntry> Entries = new(StringComparer.Ordinal);
 
         bool InternalEnable = true;
 

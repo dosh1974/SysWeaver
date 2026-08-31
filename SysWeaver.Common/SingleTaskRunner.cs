@@ -7,7 +7,7 @@ namespace SysWeaver
     /// <summary>
     /// A class than let's you spawn an async task.
     /// Will wait for any previous task to complete before starting the new one.
-    /// If a previous task throws an exception, the Start method will throw that excpetion.
+    /// If a previous task throws an exception, the Start or Wait method will throw that excpetion.
     /// </summary>
     public sealed class SingleTaskRunner
     {
@@ -61,6 +61,9 @@ namespace SysWeaver
                 }
             });
         }
+
+
+
 
 
     }

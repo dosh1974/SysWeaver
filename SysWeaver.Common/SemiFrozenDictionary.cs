@@ -10,7 +10,7 @@ namespace SysWeaver
     /// <summary>
     /// Use this dictionary when number of reads far exceeds the number of modificatiions.
     /// This is thread safe in the same sense as a ConcurrentDictionary.
-    /// Aall reads are done on a frozen copy of the underlaying dictionary.
+    /// All reads are done on a frozen copy of the underlaying dictionary.
     /// Mutating underlaying dictionary is done using locks and the frozen copy is invalidated.
     /// </summary>
     /// <typeparam name="TKey"></typeparam>
@@ -119,6 +119,30 @@ namespace SysWeaver
             {
                 u.Add(item.Key, item.Value);
                 Internal = null;
+            }
+        }
+
+        public bool TryAdd(TKey key, TValue value)
+        {
+            var u = Underlaying;
+            lock (u)
+            {
+                if (!u.TryAdd(key, value))
+                    return false;
+                Internal = null;
+                return true;
+            }
+        }
+
+        public bool TryAdd(KeyValuePair<TKey, TValue> item)
+        {
+            var u = Underlaying;
+            lock (u)
+            {
+                if (!u.TryAdd(item.Key, item.Value))
+                    return false;
+                Internal = null;
+                return true;
             }
         }
 

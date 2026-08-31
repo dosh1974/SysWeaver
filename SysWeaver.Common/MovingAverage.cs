@@ -34,32 +34,77 @@ namespace SysWeaver
              => InternalAdd(out var now, value);
 
         /// <summary>
-        /// Add a value to the moving average and get the average
+        /// Get the moving average
         /// </summary>
+        /// <param name="sum">Total sum of the values in the time window</param>
         /// <param name="count">Number of values within the time window</param>
-        /// <param name="addPerSecond">Number of adds per second</param>
-        /// <param name="value">The value to add to the moving average</param>
         /// <param name="dt">Number of ticks between the last and first values within the time window</param>
-        /// <returns>The moving average of the added values</returns>
-        public Decimal Add(out int count, out decimal addPerSecond, decimal value, out long dt)
+        /// <returns>The values per second (sum / dt)</returns>
+        public Decimal GetAverage(out decimal sum, out int count, out long dt)
         {
-            var n = InternalAdd(out var now, value);
-            return Compute(n, now, out count, out addPerSecond, out dt);
+            var n = InternalGet(out var now);
+            Compute(n, now, out sum, out count, out dt);
+            return count <= 0 ? 0 : (sum / count);
+        }
+
+
+        /// <summary>
+        /// Get the sum per second
+        /// </summary>
+        /// <param name="sum">Total sum of the values in the time window</param>
+        /// <param name="count">Number of values within the time window</param>
+        /// <param name="dt">Number of ticks between the last and first values within the time window</param>
+        /// <returns>The values per second (sum / dt)</returns>
+        public Decimal GetVolume(out decimal sum, out int count, out long dt)
+        {
+            var n = InternalGet(out var now);
+            Compute(n, now, out sum, out count, out dt);
+            return dt <= 0 ? 0 : (sum * TimeSpan.TicksPerSecond / dt);
         }
 
         /// <summary>
-        /// Get the moving average
+        /// Get data
         /// </summary>
+        /// <param name="sum">Total sum of the values in the time window</param>
         /// <param name="count">Number of values within the time window</param>
-        /// <param name="addPerSecond">Number of adds per second</param>
         /// <param name="dt">Number of ticks between the last and first values within the time window</param>
-        /// <returns>The moving average of the added values</returns>
-        public Decimal Get(out int count, out decimal addPerSecond, out long dt)
+        public void GetData(out decimal sum, out int count, out long dt)
+        {
+            var n = InternalGet(out var now);
+            Compute(n, now, out sum, out count, out dt);
+        }
+
+        /// <summary>
+        /// Get stats
+        /// </summary>
+        /// <param name="system">Name of the system</param>
+        /// <param name="prefix">Optional prefix for this moving average</param>
+        /// <param name="countName">Name of the values per second stats, null = use default, set to "" to exclude count stats</param>
+        /// <param name="avgName">Name of the average value stats, null = use default, set to "" to exclude average value stats</param>
+        /// <param name="volumeName">Name of the volume stats, null = use default, set to "" to exclude volume stats</param>
+        /// <param name="countDesc">Description of the values per second stats, null = use default, set to "" to exclude count stats</param>
+        /// <param name="valueDesc">Description of the average value stats, null = use default, set to "" to exclude average value stats</param>
+        /// <param name="volumeDesc">Description of the volume stats, null = use default, set to "" to exclude volume stats</param>
+        /// <returns>The stats</returns>
+        public IEnumerable<Stats> GetStats(String system, String prefix = null, String countName = null, String avgName = null, String volumeName = null,  String countDesc = null, String valueDesc = null, String volumeDesc = null)
+        {
+            prefix = prefix ?? "";
+            GetData(out var sum, out var count, out var dt);
+            var dur = TimeSpan.FromTicks(InternalDur).ElapsedTime();
+            if ((countName != "") || (countDesc != ""))
+                yield return new Stats(system, prefix + (countName ?? "Values"), dt <= 0 ? 0 : (count * TimeSpan.TicksPerSecond / dt), ((countDesc ?? "per second") + " over the last " + dur).TrimStart().MakeFirstUppercase());
+            if ((avgName != "") || (valueDesc != ""))
+                yield return new Stats(system, prefix + (avgName ?? "Average"), count <= 0 ? 0 : (sum / count), ((valueDesc ?? "") + " over the last " + dur).TrimStart().MakeFirstUppercase());
+            if ((volumeName != "") || (volumeDesc != ""))
+                yield return new Stats(system, prefix + (volumeName ?? "Volume"), dt <= 0 ? 0 : (sum * TimeSpan.TicksPerSecond / dt), ((volumeDesc ?? "per second") + " over the last " + dur).TrimStart().MakeFirstUppercase());
+        }
+
+
+        State InternalGet(out long now)
         {
             var dur = InternalDur;
             var sw = new SpinWait();
             State n;
-            long now;
             for (; ; )
             {
                 var current = P;
@@ -72,29 +117,9 @@ namespace SysWeaver
                 FreeState(n);
                 sw.SpinOnce();
             }
-            return Compute(n, now, out count, out addPerSecond, out dt);
+            return n;
         }
 
-        /// <summary>
-        /// Get stats
-        /// </summary>
-        /// <param name="system">Name of the system</param>
-        /// <param name="prefix">Optional prefix for this moving average</param>
-        /// <param name="countName">Name of the values per second stats, null = use default, set to "" to exclude count stats</param>
-        /// <param name="valueName">Name of the average value stats, null = use default, set to "" to exclude average value stats</param>
-        /// <param name="countDesc">Description of the values per second stats, null = use default, set to "" to exclude count stats</param>
-        /// <param name="valueDesc">Description of the average value stats, null = use default, set to "" to exclude average value stats</param>
-        /// <returns>The stats</returns>
-        public IEnumerable<Stats> GetStats(String system, String prefix = null, String countName = null, String valueName = null, String countDesc = null, String valueDesc = null)
-        {
-            prefix = prefix ?? "";
-            var val = Get(out var count, out var addsPerSecond, out var dt);
-            var dur = TimeSpan.FromTicks(InternalDur).ElapsedTime();
-            if ((countName != "") || (countDesc != ""))
-                yield return new Stats(system, prefix + (countName ?? "Values per second"), addsPerSecond, ((countDesc ?? "") + " over the last " + dur).TrimStart().MakeFirstUppercase());
-            if ((valueName != "") || (valueDesc != ""))
-                yield return new Stats(system, prefix + (valueName ?? "Average value"), val, ((valueDesc ?? "") + " over the last " + dur).TrimStart().MakeFirstUppercase());
-        }
 
         State InternalAdd(out long now, decimal value)
         {
@@ -143,7 +168,7 @@ namespace SysWeaver
             }
         }
 
-        Decimal Compute(State n, long now, out int count, out decimal addPerSecond, out long dt)
+        void Compute(State n, long now, out decimal sum, out int count, out long dt)
         {
             var times = n.Times;
             var h = n.Head;
@@ -154,12 +179,11 @@ namespace SysWeaver
             if (count <= 0)
             {
                 dt = 0;
-                addPerSecond = 0;
-                return 0;
+                sum = 0;
+                return;
             }
             dt = now - times[h];
-            addPerSecond = (Decimal)(count - 1) * TimeSpan.TicksPerSecond / dt;
-            return n.Sum / count;
+            sum = n.Sum;
         }
 
         static State Resize(State s, decimal value, long now)
