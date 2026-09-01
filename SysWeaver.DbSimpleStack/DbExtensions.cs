@@ -455,6 +455,28 @@ namespace SysWeaver.Db
             }
         }
 
+        /// <summary>
+        /// Run some sql and get all returned rows as an object
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="con"></param>
+        /// <param name="sql"></param>
+        /// <returns></returns>
+        public static async Task<IReadOnlyList<T>> GetRowsAsync<T>(this OrmConnection con, String sql) where T : new()
+        {
+            List<T> res = null;
+            using var r = await con.ExecuteReaderAsync(sql).ConfigureAwait(false);
+            while (await r.ReadAsync().ConfigureAwait(false))
+            {
+                res = res ?? new();
+                var t = new T();
+                r.CopyToObject(t);
+                res.Add(t);
+            }
+            return (res as IReadOnlyList<T>) ?? Array.Empty<T>();
+        }
+
+
 
     }
 

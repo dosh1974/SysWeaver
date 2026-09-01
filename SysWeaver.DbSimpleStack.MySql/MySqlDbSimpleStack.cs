@@ -1199,8 +1199,16 @@ namespace SysWeaver.Db
 
 
     }
-
-
+    /// <summary>
+    /// Row type for an OPTIMIZE TABLE query
+    /// </summary>
+    public sealed class MySqlOptimizeTableRow
+    {
+        public String Table { get; set; }
+        public String Op { get; set; }
+        public String Msg_type { get; set; }
+        public String Msg_text { get; set; }
+    }
 
 
 
