@@ -16,7 +16,11 @@ namespace SysWeaver.MicroService
         public readonly RequestOptions Options;
         public readonly IFileRepo Current;
         public readonly IFileRepo Master;
+
+#pragma warning disable CS0649
         public readonly FileHttpServerModuleFolder Bak;
+
+#pragma warning restore CS0649
 
         public SmServiceInfo(ManagedService service, FsManagedFolder syncher, ServerManagerParams p, IFileRepo current, IFileRepo master, FileHttpServerModuleFolder bak)
         {

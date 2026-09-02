@@ -15,6 +15,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
+		<ProjectReference Include="..\SysWeaver.MicroService.MySqlAudit\SysWeaver.MicroService.MySqlAudit.csproj" />
 		<ProjectReference Include="..\SysWeaver.WebBrowser\SysWeaver.WebBrowser.csproj" />
 	</ItemGroup>
 </Project>

@@ -143,8 +143,11 @@ namespace SysWeaver.HttpTransformer
                 Add(x.Key, new FileTranslationTransformer(x.Key, x.Value));
         }
 
+        /*
         readonly ICompType[] Methods;
         readonly String[] MethodsExtensions;
+
+        */
 
     }
 

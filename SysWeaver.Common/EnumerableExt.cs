@@ -272,20 +272,20 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <returns></returns>
-        public static Task ProcessAsyncValue<T>(this IReadOnlyList<T> list, Func<T, Task> action, int maxConcurrency = 0)
+        public static ValueTask ProcessAsyncValue<T>(this IReadOnlyList<T> list, Func<T, ValueTask> action, int maxConcurrency = 0)
         {
             if (list == null)
-                return Task.CompletedTask;
+                return ValueTask.CompletedTask;
             var l = list.Count;
             if (l <= 0)
-                return Task.CompletedTask;
+                return ValueTask.CompletedTask;
             if (l == 1)
                 return action(list[0]);
             ConcurrencyLimiter.LimitConcurrency(ref action, maxConcurrency, l);
-            var tt = GC.AllocateUninitializedArray<Task>(l);
+            var tt = GC.AllocateUninitializedArray<ValueTask>(l);
             for (int i = 0; i < l; ++i)
                 tt[i] = action(list[i]);
-            return Task.WhenAll(tt);
+            return TaskExt.WhenAll(tt);
         }
 
         /// <summary>
