@@ -15,12 +15,9 @@
 	  <ProjectReference Include="..\SysWeaver.MicroServices\SysWeaver.MicroServices.csproj" />
 	</ItemGroup>
 
-	<ItemGroup>
-	  <Folder Include="web\" />
-	</ItemGroup>
-
 	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
-		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\*+ .\web" />
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\edit\* .\web\edit" />
+		<Exec Command="..\_tools\compress\Compress.exe -OptimizeWebFiles false -Methods br .\srcWeb\edit\external\*+ .\web\edit\external" />
 		<ItemGroup>
 			<EmbeddedResource Include="web\**\*.br" Visible="false" />
 		</ItemGroup>

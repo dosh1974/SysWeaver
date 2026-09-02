@@ -1,5 +1,20 @@
 ﻿
 
+function SanitizeHtml(html) {
+    html = html.replace(
+        /(\s[a-zA-Z0-9:-]+)=([^"'\s>]+)/g,
+        (match, attribute, value) => {
+            // If the unquoted value has symbols Prettier hates, wrap it in double quotes
+            if (value.includes('/') || value.includes(':')) {
+                return `${attribute}="${value}"`;
+            }
+            return match; // Leave standard valid unquoted text (like lang=en) alone
+        }
+    );
+    return html;
+}
+
+
 async function textMain() {
     try {
         const p = getUrlParams();
@@ -74,7 +89,7 @@ async function textMain() {
         bmap.set("json", x => prettier.format(x, { parser: "json5", plugins: prettierPlugins, useTabs: true }));
         bmap.set("json5", x => prettier.format(x, { parser: "json5", plugins: prettierPlugins, useTabs: true }));
         bmap.set("css", x => prettier.format(x, { parser: "css", plugins: prettierPlugins, useTabs: true }));
-        bmap.set("html", x => prettier.format(x, { parser: "html", plugins: prettierPlugins, useTabs: true }));
+        bmap.set("html", x => prettier.format(SanitizeHtml(x), { parser: "html", plugins: prettierPlugins, useTabs: true }));
         bmap.set("markdown", x => prettier.format(x, { parser: "markdown", plugins: prettierPlugins, useTabs: true }));
         bmap.set("javascript", x => prettier.format(x, { parser: "typescript", plugins: prettierPlugins, useTabs: true }));
         bmap.set("xml", x => prettier.format(x, { parser: "xml", plugins: prettierPlugins, useTabs: true }));
@@ -138,7 +153,8 @@ async function textMain() {
                 _TF("Click to beautify the text", "Tool tip description on a button that when clicked will beatify some source code text"), "../icons/organize.svg", true, async () => {
                     beautifyButton.StartWorking();
                     try {
-                        text = await beautify(editor.session.getValue());
+                        text = editor.session.getValue();
+                        text = await beautify(text);
                         editor.session.setValue(text);
                     }
                     catch (e) {
@@ -153,7 +169,8 @@ async function textMain() {
             downloadButton = new Button("", _TF("Download", "Text on a button that when clicked will download the file"), _TF("Click to download the file", "Tool tip description on a button that when clicked will download the file"), "../icons/download.svg", true, async () => {
                 downloadButton.StartWorking();
                 try {
-                    downloadText(fname, editor.session.getValue());
+                    text = editor.session.getValue();
+                    downloadText(fname, text);
                 }
                 catch (e) {
                     Fail(_TF("Failed to download the file", "Error message displayed when a file download failed") + ":\n" + e);
