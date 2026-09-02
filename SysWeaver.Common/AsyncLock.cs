@@ -25,6 +25,17 @@ namespace SysWeaver
             return d;
         }
 
+
+        /// <summary>
+        /// Try to get a lock, returns null if a lock can't be obtained
+        /// </summary>
+        /// <returns>An IDisposable that releases the lock</returns>
+        public IDisposable TryLock()
+        {
+            var d = D;
+            return d.S.Wait(0) ? d : null;
+        }
+
         /// <summary>
         /// Wait for a lock to be taken, for a limited time
         /// </summary>

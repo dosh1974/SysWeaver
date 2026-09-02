@@ -36,9 +36,18 @@ namespace SysWeaver.AI
 
         public override string ToString() => String.Concat("Chat name: ", Name.ToQuoted(), ", Default chat model: ", DefaultChatModel.ToQuoted());
 
+        readonly IMessageHost Msg;
 
-        public OpenAiService(ServiceManager sm, OpenAiParams p)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sm"></param>
+        /// <param name="p"></param>
+        /// <param name="msg"></param>
+        public OpenAiService(ServiceManager sm = null, OpenAiParams p = null, IMessageHost msg = null)
         {
+            msg = msg ?? sm;
+            Msg = msg;
             Manager = sm;
             p = p ?? new OpenAiParams();
             var m = p.DefaultChatModel;
@@ -47,7 +56,7 @@ namespace SysWeaver.AI
             var n = p.ChatName;
             if (String.IsNullOrEmpty(n))
                 n = "OpenAI";
-            QrCode = sm.TryGet<IQrCodeService>();
+            QrCode = sm?.TryGet<IQrCodeService>();
             Name = n;
             SessionChatPrefix = n + ".ChatSession.";
             DefaultChatModel = m;
@@ -61,7 +70,7 @@ namespace SysWeaver.AI
             ImageGenLock = p.MaxConcurrentImages > 0 ? new AsyncLock(p.MaxConcurrentImages) : null;
             ChatLock = p.MaxConcurrentChats > 0 ? new AsyncLock(p.MaxConcurrentChats) : null;
 
-            Api = sm.TryGet<ApiHttpServerModule>();
+            Api = sm?.TryGet<ApiHttpServerModule>();
             var apiKey = p.GetApiKey(false);
             ApiKey = new ApiKeyCredential(apiKey ?? "Demo");
             Options = new OpenAIClientOptions
@@ -78,8 +87,8 @@ namespace SysWeaver.AI
             var cache = p.CacheTokensFor;
             if ((cache?.Length ?? 0) > 0)
             {
-                sm.AddMessage("Caching tokens:", MessageLevels.Debug);
-                using (sm.Tab())
+                msg?.AddMessage("Caching tokens:", MessageLevels.Debug);
+                using (msg?.Tab())
                 {
                     foreach (var t in cache)
                     {
@@ -96,10 +105,10 @@ namespace SysWeaver.AI
                         }
                         if (tikToken == null)
                         {
-                            sm.AddMessage("Failed to get a TikToken for " + t.ToQuoted(), exception, MessageLevels.Warning);
+                            msg?.AddMessage("Failed to get a TikToken for " + t.ToQuoted(), exception, MessageLevels.Warning);
                         }else
                         {
-                            sm.AddMessage("Cached TikToken for " + t.ToQuoted(), MessageLevels.Debug);
+                            msg?.AddMessage("Cached TikToken for " + t.ToQuoted(), MessageLevels.Debug);
                         }
                     }
                 }
@@ -110,13 +119,16 @@ namespace SysWeaver.AI
             AddCommand("save", CmdSaveConversation, null, "Save the current conversation for training", ["debug"]);
             AddCommand("prompt", CmdShowPrompt, null, "Show the current system prompt", ["debug"]);
             AddCommand("clear", CmdClear, null, "Clear the current chat");
-            UserStorage = sm.TryGet<IUserStorageService>();
-            foreach (var x in sm.UniqueInstances)
+            UserStorage = sm?.TryGet<IUserStorageService>();
+            if (sm != null)
             {
-                AddTools(x as IHaveOpenAiTools);
+                foreach (var x in sm.UniqueInstances)
+                {
+                    AddTools(x as IHaveOpenAiTools);
+                }
+                sm.OnServiceAdded += Sm_OnServiceAdded;
+                sm.OnServiceRemoved += Sm_OnServiceRemoved;
             }
-            sm.OnServiceAdded += Sm_OnServiceAdded;
-            sm.OnServiceRemoved += Sm_OnServiceRemoved;
         }
 
         readonly IUserStorageService UserStorage;
@@ -125,8 +137,11 @@ namespace SysWeaver.AI
         public void Dispose()
         {
             var sm = Manager;
-            sm.OnServiceRemoved -= Sm_OnServiceRemoved;
-            sm.OnServiceAdded -= Sm_OnServiceAdded;
+            if (sm != null)
+            {
+                sm.OnServiceRemoved -= Sm_OnServiceRemoved;
+                sm.OnServiceAdded -= Sm_OnServiceAdded;
+            }
         }
 
         void Sm_OnServiceAdded(object arg1, ServiceInfo arg2)

@@ -9,5 +9,13 @@
             Call once to register this serializer type to the serializer manager
             </summary>
         </member>
+        <member name="M:SysWeaver.Serialization.NewtonsoftJsonSerializer.ToFormattedJson``1(``0)">
+            <summary>
+            Convert an object to json text with nice formatting, specifically for byte array's.
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="obj"></param>
+            <returns></returns>
+        </member>
     </members>
 </doc>

@@ -355,13 +355,13 @@ class SessionManager
         if (!isTop) {
             function WindowClose() {
                 window.removeEventListener("beforeunload", WindowClose);
-                window.removeEventListener("unload", WindowClose);
+                //window.removeEventListener("unload", WindowClose);
                 const evs = Array.from(SessionManager.ServerEvents.keys());
                 if (evs.length > 0)
                     InterOp.Post(removeEvents, { Events: evs });
             }
             window.addEventListener("beforeunload", WindowClose);
-            window.addEventListener("unload", WindowClose);
+            //window.addEventListener("unload", WindowClose);
             SessionManager.AddMessageHandler(timeOffset, async data => {
                 if (data.From !== id)
                     window.SysWeaverServerTimeOffset = data.O;
@@ -711,7 +711,7 @@ class SessionManager
 
         function WindowClose() {
             window.removeEventListener("beforeunload", WindowClose);
-            window.removeEventListener("unload", WindowClose);
+            //window.removeEventListener("unload", WindowClose);
             InterOp.RemoveListener(eventHandler);
             if (!isMaster) {
                 console.log(logPrefix + "Stopping child " + id);
@@ -729,7 +729,7 @@ class SessionManager
         }
 
         window.addEventListener("beforeunload", WindowClose);
-        window.addEventListener("unload", WindowClose);
+        //window.addEventListener("unload", WindowClose);
     }
 
     static GetMap() {

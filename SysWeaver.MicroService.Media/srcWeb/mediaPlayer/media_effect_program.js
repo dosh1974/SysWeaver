@@ -31,6 +31,7 @@ class EffectProgramData {
     // Parses some shader source and extract variables
     constructor(gl, src, fileName) {
         const t = this;
+        t.Url = fileName;
         //  Setup async compilation
         if (typeof gl.PCompile === "undefined")
             gl.PCompile = gl.getExtension("KHR_parallel_shader_compile");
@@ -428,13 +429,29 @@ uniform vec4 iDate;                 // (year, month, day, time in seconds)
         gl.compileShader(vs);
         //  Wait for compilation to finish (or abort)
         if (!(await t.waitCompilation(vs, abortCheckFn))) {
-            console.warn("Failed to compile vertex shader \"" + c + "\":\n" + gl.getShaderInfoLog(vs));
+            let err;
+            try {
+                err = gl.getShaderInfoLog(vs);
+            }
+            catch (e) {
+                err = e.message;
+            }
+            console.warn("Failed to compile vertex shader \"" + c + "\":\n" + err);
             program.Dispose();
+            await MediaPlayerTools.SetError(err);
             return null;
         }
         if (!(await t.waitCompilation(fs, abortCheckFn))) {
-            console.warn("Failed to compile fragment shader \"" + c + "\":\n" + gl.getShaderInfoLog(fs));
+            let err;
+            try {
+                err = gl.getShaderInfoLog(fs);
+            }
+            catch (e) {
+                err = e.message;
+            }
+            console.warn("Failed to compile fragment shader \"" + c + "\":\n" + err);
             program.Dispose();
+            await MediaPlayerTools.SetError(err);
             return null;
         }
         if (abortCheckFn()) {

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
@@ -191,6 +192,23 @@ namespace SysWeaver.MicroService
         long JsInControlCount;
         long AdaptCount;
 
+
+        [ClassInterface(ClassInterfaceType.AutoDual)]
+        [ComVisible(true)]
+
+        public sealed class TextResult
+        {
+
+            public Task SetText(string text)
+            {
+                Text = text;
+                return Task.CompletedTask;
+            }
+
+            internal String Text;
+
+        }
+
         public async Task<Tuple<Byte[], MediaInfo>> GetAdaptiveImageAsync(String url, int initWidth = 1920, int initHeight = 1080, double scale = 1, ScreenshotImageFormats format = ScreenshotImageFormats.Png, int quality = 70, bool optimizeForSpeed = false, int extraDelayMs = 0)
         {
             String prefix = "[ThumbnailWeb " + Interlocked.Increment(ref PC) + "] ";
@@ -200,6 +218,8 @@ namespace SysWeaver.MicroService
             using var b = await Browser.OpenWindow().ConfigureAwait(false);
             using var a = new AdaptiveSize(M, prefix, format, quality, optimizeForSpeed, extraDelayMs);
             await b.AddJsObject("ScreenShotHost", a).ConfigureAwait(false);
+            var error = new TextResult();
+            await b.AddJsObject("ErrorText", error).ConfigureAwait(false);
             M.AddMessage(prefix + "Resizing window to " + initWidth + "x" + initHeight, MessageLevels.Debug);
             await b.Resize(initWidth, initHeight, scale).ConfigureAwait(false);
             //M.AddMessage(prefix + "Wait for resize to take effect");
@@ -248,6 +268,12 @@ namespace SysWeaver.MicroService
                         data = await b.CaptureJpeg(quality, optimizeForSpeed).ConfigureAwait(false);
                         break;
                 }
+            }
+            var et = error.Text;
+            if (!String.IsNullOrEmpty(et))
+            {
+                M.AddMessage(prefix + "Failed: " + et, MessageLevels.Warning);
+                throw new Exception(et);
             }
             M.AddMessage(prefix + "All done", MessageLevels.Debug);
             return Tuple.Create(data, n);

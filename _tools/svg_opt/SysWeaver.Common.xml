@@ -164,6 +164,21 @@
             <param name="mustBeValid">Throw if the user or password is empty</param>
             <returns>False if the user or password is empty, else True</returns>
         </member>
+        <member name="M:SysWeaver.ArrayEqualityComparer.Get``1">
+            <summary>
+            Get an array comparer, that uses the default element comparer
+            </summary>
+            <typeparam name="T"></typeparam>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.ArrayEqualityComparer.Get``1(System.Collections.Generic.IEqualityComparer{``0})">
+            <summary>
+            Get an array comparer, with the specified element comparer
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="comparer">Element comparer</param>
+            <returns></returns>
+        </member>
         <member name="M:SysWeaver.ArrayExt.SafeGetAt``1(``0[],System.Int32,``0)">
             <summary>
             Get a value from an array, return a value on fail.
@@ -545,6 +560,12 @@
             </summary>
             <returns>An IDisposable that releases the lock</returns>
         </member>
+        <member name="M:SysWeaver.AsyncLock.TryLock">
+            <summary>
+            Try to get a lock, returns null if a lock can't be obtained
+            </summary>
+            <returns>An IDisposable that releases the lock</returns>
+        </member>
         <member name="M:SysWeaver.AsyncLock.Lock(System.Int32)">
             <summary>
             Wait for a lock to be taken, for a limited time
@@ -601,6 +622,34 @@
             </summary>
             <param name="waitMilliSeconds">Number of milliseconds to wait at most</param>
             <returns>An IDisposable that releases the locks</returns>
+        </member>
+        <member name="T:SysWeaver.AsyncObjectLock`1">
+            <summary>
+            Lock access for one per 
+            </summary>
+            <typeparam name="T"></typeparam>
+        </member>
+        <member name="T:SysWeaver.AsyncSignal">
+            <summary>
+            An object that let tasks wait async for a signal (that is manually triggered elsewhere).
+            </summary>
+        </member>
+        <member name="P:SysWeaver.AsyncSignal.IsRaised">
+            <summary>
+            True if the async signal have been raised
+            </summary>
+        </member>
+        <member name="M:SysWeaver.AsyncSignal.Wait">
+            <summary>
+            Get a task that wait's until the signal is raised
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.AsyncSignal.Raise">
+            <summary>
+            Raise the signal (allow waiter's to continue)
+            </summary>
+            <returns></returns>
         </member>
         <member name="T:SysWeaver.BinarySearch">
             <summary>
@@ -1949,6 +1998,46 @@
             Folders can be overridden using the key "FileHashFolders" in the ApplicationName.Config.json file.
             </summary>
         </member>
+        <member name="F:SysWeaver.ConsoleProgressDisplays.Disabled">
+            <summary>
+            Disabled / Hide progress
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ConsoleProgressDisplays.Normal">
+            <summary>
+             Normal (Green/Blue fill based on theme)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ConsoleProgressDisplays.Error">
+            <summary>
+             Error (Red fill)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ConsoleProgressDisplays.Indeterminate">
+            <summary>
+            Indeterminate (Moving marquee/pulsing bar)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ConsoleProgressDisplays.Warning">
+            <summary>
+             = Warning (Yellow/Orange fill
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ConsoleTools.IsConsoleAvailable">
+            <summary>
+            True if a console window is available
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ConsoleTools.IsAnsiConsoleAvailable">
+            <summary>
+            True if a console window that supports ansi escape codes is available
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ConsoleTools.SetProgress">
+            <summary>
+            Set console progress indicator
+            </summary>
+        </member>
         <member name="P:SysWeaver.CredentialParams.User">
             <summary>
             Username or key
@@ -2318,6 +2407,11 @@
             Is a read only value
             </summary>
         </member>
+        <member name="F:SysWeaver.Data.TableDataColumnProps.WordWrap">
+            <summary>
+            Allow automatic word wrapping (hint)
+            </summary>
+        </member>
         <member name="T:SysWeaver.Data.TableDataConsts">
             <summary>
             Helpers and constants for table data
@@ -2391,6 +2485,11 @@
         <member name="T:SysWeaver.Data.TableDataDescAttribute">
             <summary>
             Put on a member to set it's description, default is the code comments
+            </summary>
+        </member>
+        <member name="T:SysWeaver.Data.TableDataWordWrapAttribute">
+            <summary>
+            Put on a member to indicate that values may be word wrapped when rendering (this is just a hint to the renderer)
             </summary>
         </member>
         <member name="T:SysWeaver.Data.TableDataDurationAttribute">
@@ -2536,6 +2635,11 @@
         <member name="F:SysWeaver.Data.TableDataExportOptions.Portrait">
             <summary>
             True to output in portrait mode
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Data.TableDataExportOptions.Custom">
+            <summary>
+            Custom string (can mean different thing for different exporters)
             </summary>
         </member>
         <member name="F:SysWeaver.Data.TableDataFilterBase.Invert">
@@ -3652,6 +3756,14 @@
             <param name="value">The value to return as an IEnumerable</param>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.EnumerableExt.ProcessReverse``1(System.Collections.Generic.IReadOnlyList{``0},System.Action{``0})">
+            <summary>
+            Process all elements in a list in revered order
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="list">The list to process</param>
+            <param name="action">The action to perform on each element</param>
+        </member>
         <member name="M:SysWeaver.EnumerableExt.Process``1(System.Collections.Generic.IReadOnlyList{``0},System.Action{``0})">
             <summary>
             Process all elements in a list.
@@ -3704,7 +3816,7 @@
             </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.ValueTask},System.Int32)">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.Task},System.Int32)">
             <summary>
             Process all elements in a list.
             Elements are processed in paralell (async).
@@ -3722,7 +3834,7 @@
             </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Threading.Tasks.ValueTask},System.Int32)">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Threading.Tasks.Task},System.Int32)">
             <summary>
             Process all elements in an enumerable.
             Elements are processed in paralell (async).
@@ -3776,7 +3888,7 @@
             </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Int32,System.Threading.Tasks.ValueTask},System.Int32)">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Int32,System.Threading.Tasks.Task},System.Int32)">
             <summary>
             Process all elements in a list.
             Elements are processed in paralell (async).
@@ -3794,7 +3906,7 @@
             </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Int32,System.Threading.Tasks.ValueTask},System.Int32)">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IEnumerable{``0},System.Func{``0,System.Int32,System.Threading.Tasks.Task},System.Int32)">
             <summary>
             Process all elements in an enumerable.
             Elements are processed in paralell (async).
@@ -3827,11 +3939,6 @@
             Additional information about the runtime environment
             </summary>
         </member>
-        <member name="F:SysWeaver.EnvInfo.HaveConsole">
-            <summary>
-            True if the process is running with a console window
-            </summary>
-        </member>
         <member name="F:SysWeaver.EnvInfo.ProcessorArchitecture">
             <summary>
             The processor architecture:
@@ -3850,7 +3957,7 @@
             "windows"
             </summary>
         </member>
-        <member name="F:SysWeaver.EnvInfo.OsName">
+        <member name="P:SysWeaver.EnvInfo.OsName">
             <summary>
             The friendly OS name
             </summary>
@@ -4064,6 +4171,24 @@
             Service used to change the application information such as display name etc
             </summary>
         </member>
+        <member name="T:SysWeaver.ExceptionStackEqualityComparer">
+            <summary>
+            Exceptions are deemed equal if they are of the same type and have the same stack trace (message can be different, so that time or other state information doesn't make them differ).
+            </summary>
+        </member>
+        <member name="F:SysWeaver.ExceptionStackEqualityComparer.Instance">
+            <summary>
+            The only instance
+            </summary>
+        </member>
+        <member name="M:SysWeaver.ExceptionExt.SetMessage(System.Exception,System.String)">
+            <summary>
+            Set a new text message on an exception.
+            Uses reflection and internal fields, so it may break in future versions of .NET.
+            </summary>
+            <param name="ex">The exception to set a new message text on</param>
+            <param name="newException">The new text</param>
+        </member>
         <member name="T:SysWeaver.ExceptionTracker">
             <summary>
             Class that can be used to track failures
@@ -4090,7 +4215,7 @@
             The last exception registered
             </summary>
         </member>
-        <member name="M:SysWeaver.ExternalProcess.Run(System.String,System.String,System.Action{System.String,System.Boolean},System.Action{System.Int32,System.Exception,System.TimeSpan,System.Collections.Generic.IEnumerable{System.String}})">
+        <member name="M:SysWeaver.ExternalProcess.Run(System.String,System.String,System.Action{System.String,System.Boolean},System.Action{System.Int32,System.Exception,System.TimeSpan,System.Collections.Generic.IEnumerable{System.String}},System.String,System.Boolean)">
             <summary>
             Run an external command
             </summary>
@@ -4098,9 +4223,11 @@
             <param name="args">Optional command arguments</param>
             <param name="onMessage">Optionally called on every line outputted, second parameter is false for stdout and true for stderr</param>
             <param name="onExit">Optionally called when the process completed or on error, paramaters are: exitCode, exception, duration and the last X stdout/stderr lines of output</param>
+            <param name="workingFolder">The folder to use as the current</param>
+            <param name="useShell">Use shell execute</param>
             <returns>The process exit code</returns>
         </member>
-        <member name="M:SysWeaver.ExternalProcess.RunAsync(System.String,System.String,System.Action{System.String,System.Boolean},System.Action{System.Int32,System.Exception,System.TimeSpan,System.Collections.Generic.IEnumerable{System.String}},System.Nullable{System.Threading.CancellationToken})">
+        <member name="M:SysWeaver.ExternalProcess.RunAsync(System.String,System.String,System.Action{System.String,System.Boolean},System.Action{System.Int32,System.Exception,System.TimeSpan,System.Collections.Generic.IEnumerable{System.String}},System.Nullable{System.Threading.CancellationToken},System.String,System.Boolean)">
             <summary>
             Run an external command
             </summary>
@@ -4109,6 +4236,8 @@
             <param name="onMessage">Optionally called on every line outputted, second parameter is false for stdout and true for stderr</param>
             <param name="onExit">Optionally called when the process completed or on error, paramaters are: exitCode, exception, duration and the last X stdout/stderr lines of output</param>
             <param name="cancelWait">An optional cancellation token</param>
+            <param name="workingFolder">The folder to use as the current</param>
+            <param name="useShell">Use shell execute</param>
             <returns>The process exit code</returns>
         </member>
         <member name="T:SysWeaver.FastByteArrayEqualityComparer">
@@ -4141,6 +4270,13 @@
             <param name="timeout">The duration to keep items in the cache (after last request)</param>
             <param name="comparer">An optional comparer</param>
         </member>
+        <member name="M:SysWeaver.FastMemCache`2.#ctor(System.Func{`1,System.DateTime},System.Collections.Generic.IEqualityComparer{`0})">
+            <summary>
+            Creates a cache that removes it's items after the specified duration (after last request)
+            </summary>
+            <param name="getExpirationTimeUtc">A function that gets the expiration time (as UTC) of a value</param>
+            <param name="comparer">An optional comparer</param>
+        </member>
         <member name="M:SysWeaver.FastMemCache`2.Set(`0,`1)">
             <summary>
             Set a new value
@@ -4163,7 +4299,7 @@
             <param name="value">The cached value or default it it deosn't exist</param>
             <returns>True if a value exist</returns>
         </member>
-        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdate(`0,System.Func{`0,`1,`1})">
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateWithExisting(`0,System.Func{`0,`1,`1})">
             <summary>
             Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
             Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
@@ -4172,7 +4308,7 @@
             <param name="func">The delegate used to create a non-existing item</param>
             <returns>The value of the item</returns>
         </member>
-        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdate``1(`0,System.Func{`0,`1,``0,`1},``0)">
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateWithExisting``1(`0,System.Func{`0,`1,``0,`1},``0)">
             <summary>
             Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
             Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
@@ -4182,7 +4318,7 @@
             <param name="arg">A custom argument that is passed to the delegate if invoked</param>
             <returns>The value of the item</returns>
         </member>
-        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdate``2(`0,System.Func{`0,`1,``0,``1,`1},``0,``1)">
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateWithExisting``2(`0,System.Func{`0,`1,``0,``1,`1},``0,``1)">
             <summary>
             Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
             Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
@@ -4193,7 +4329,7 @@
             <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
             <returns>The value of the item</returns>
         </member>
-        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateAsync(`0,System.Func{`0,`1,System.Threading.Tasks.Task{`1}},System.Boolean)">
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateWithExistingAsync(`0,System.Func{`0,`1,System.Threading.Tasks.Task{`1}},System.Boolean)">
             <summary>
             Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
             Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
@@ -4203,7 +4339,7 @@
             <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
             <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
         </member>
-        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateAsync``1(`0,System.Func{`0,`1,``0,System.Threading.Tasks.Task{`1}},``0,System.Boolean)">
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateWithExistingAsync``1(`0,System.Func{`0,`1,``0,System.Threading.Tasks.Task{`1}},``0,System.Boolean)">
             <summary>
             Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
             Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
@@ -4214,7 +4350,7 @@
             <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
             <returns>The value of the item</returns>
         </member>
-        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateAsync``2(`0,System.Func{`0,`1,``0,``1,System.Threading.Tasks.Task{`1}},``0,``1,System.Boolean)">
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateWithExistingAsync``2(`0,System.Func{`0,`1,``0,``1,System.Threading.Tasks.Task{`1}},``0,``1,System.Boolean)">
             <summary>
             Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
             Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
@@ -4226,7 +4362,7 @@
             <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
             <returns>The value of the item</returns>
         </member>
-        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateValueAsync(`0,System.Func{`0,`1,System.Threading.Tasks.ValueTask{`1}},System.Boolean)">
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateWithExistingValueAsync(`0,System.Func{`0,`1,System.Threading.Tasks.ValueTask{`1}},System.Boolean)">
             <summary>
             Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
             Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
@@ -4236,7 +4372,7 @@
             <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
             <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
         </member>
-        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateValueAsync``1(`0,System.Func{`0,`1,``0,System.Threading.Tasks.ValueTask{`1}},``0,System.Boolean)">
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateWithExistingValueAsync``1(`0,System.Func{`0,`1,``0,System.Threading.Tasks.ValueTask{`1}},``0,System.Boolean)">
             <summary>
             Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
             Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
@@ -4247,7 +4383,7 @@
             <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
             <returns>The value of the item</returns>
         </member>
-        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateValueAsync``2(`0,System.Func{`0,`1,``0,``1,System.Threading.Tasks.ValueTask{`1}},``0,``1,System.Boolean)">
+        <member name="M:SysWeaver.FastMemCache`2.GetOrUpdateWithExistingValueAsync``2(`0,System.Func{`0,`1,``0,``1,System.Threading.Tasks.ValueTask{`1}},``0,``1,System.Boolean)">
             <summary>
             Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
             Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
@@ -4359,6 +4495,12 @@
             <summary>
             Call to manually prune (remove) old items, no real need to call this unless memory usage is the primary concern
             </summary>
+        </member>
+        <member name="M:SysWeaver.FastMemCache`2.InternalPrune(System.DateTime)">
+            <summary>
+            Peform the actual prune, move to own method to make it easiier for the JIT to inline the Prune method (checking for pruning)
+            </summary>
+            <param name="exp"></param>
         </member>
         <member name="M:SysWeaver.FastMemCache`2.Remove(`0)">
             <summary>
@@ -5103,6 +5245,17 @@
             <param name="start">An optional start offset</param>
             <returns>A list of matches, ordered by name</returns>
         </member>
+        <member name="M:SysWeaver.FrozenStringTreeList`1.EnumPrefixesOf``3(System.String,System.Func{System.Collections.Generic.IReadOnlyList{`0},``1,``2,System.Threading.Tasks.Task{``0}},``1,``2,System.Int32)">
+            <summary>
+            Find all matching strings (in the tree), that matches the text
+            </summary>
+            <param name="text">The text to match against the strings in the tree</param>
+            <param name="fn">Async task to execute for every match, return a value to stop enumeration</param>
+            <param name="start">An optional start offset</param>
+            <param name="a0">Arg0</param>
+            <param name="a1">Arg1</param>
+            <returns>A list of matches, ordered by name</returns>
+        </member>
         <member name="M:SysWeaver.FrozenStringTreeList`1.InternalAddAllInOrder(System.Collections.Generic.List{System.Collections.Generic.IReadOnlyList{`0}},SysWeaver.FrozenStringTreeList{`0})">
             <summary>
             Get all string contained in the string tree, ordered by key
@@ -5317,6 +5470,11 @@
             The maximum time to delay a request
             </summary>
         </member>
+        <member name="P:SysWeaver.HttpRateLimiter.Waiting">
+            <summary>
+            Number of waiting threads now
+            </summary>
+        </member>
         <member name="M:SysWeaver.HttpRateLimiter.IsOverTheLimit">
             <summary>
             Check if we're exceeding the limit, wait if enabled and required
@@ -5356,271 +5514,6 @@
             <summary>
             Byte order: R, G, B, A
             </summary>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.Clear">
-            <summary>
-            Clear cached values
-            </summary>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetCount">
-            <summary>
-            Get the count of cached items (somewhat slow)
-            </summary>
-            <returns>Number of cached items</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdate(`0,System.Func{`0,`1,`1})">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdate``1(`0,System.Func{`0,`1,``0,`1},``0)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdate``2(`0,System.Func{`0,`1,``0,``1,`1},``0,``1)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdateAsync(`0,System.Func{`0,`1,System.Threading.Tasks.Task{`1}},System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdateAsync``1(`0,System.Func{`0,`1,``0,System.Threading.Tasks.Task{`1}},``0,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdateAsync``2(`0,System.Func{`0,`1,``0,``1,System.Threading.Tasks.Task{`1}},``0,``1,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdateValueAsync(`0,System.Func{`0,`1,System.Threading.Tasks.ValueTask{`1}},System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdateValueAsync``1(`0,System.Func{`0,`1,``0,System.Threading.Tasks.ValueTask{`1}},``0,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdateValueAsync``2(`0,System.Func{`0,`1,``0,``1,System.Threading.Tasks.ValueTask{`1}},``0,``1,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdate(`0,System.Func{`0,`1})">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdate``1(`0,System.Func{`0,``0,`1},``0)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdate``2(`0,System.Func{`0,``0,``1,`1},``0,``1)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdateAsync(`0,System.Func{`0,System.Threading.Tasks.Task{`1}},System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdateAsync``1(`0,System.Func{`0,``0,System.Threading.Tasks.Task{`1}},``0,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdateAsync``2(`0,System.Func{`0,``0,``1,System.Threading.Tasks.Task{`1}},``0,``1,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdateValueAsync(`0,System.Func{`0,System.Threading.Tasks.ValueTask{`1}},System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdateValueAsync``1(`0,System.Func{`0,``0,System.Threading.Tasks.ValueTask{`1}},``0,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetOrUpdateValueAsync``2(`0,System.Func{`0,``0,``1,System.Threading.Tasks.ValueTask{`1}},``0,``1,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetStats(System.Double@,System.Double@,System.Double@,System.Int64@,System.Int64@,System.Int64@,System.Int64@)">
-            <summary>
-            Get some stats about the cache performance
-            </summary>
-            <param name="hitRatio">The ratio [0, 1] of cache hits (GetOrUpdate returns an existing item)</param>
-            <param name="semiHitRatio">The ratio [0, 1] of semi cache hits (GetOrUpdate returns an existing item, but had to take a lock to get it, so less optimal)</param>
-            <param name="missRatio">The ratio [0, 1] of cache misses (GetOrUpdate doesn't have an item, and a new one have to be created)</param>
-            <param name="hitCount">Number of cache hits (GetOrUpdate returns an existing item)</param>
-            <param name="semiHitCount">Number of semi cache hits (GetOrUpdate returns an existing item, but had to take a lock to get it, so less optimal)</param>
-            <param name="missCount">Number of cache misses (GetOrUpdate doesn't have an item, and a new one have to be created)</param>
-            <param name="size">Number of items in the cache</param>
-            <returns>The total number of GetOrUpdate requests</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetStats(System.Int64@,System.Int64@,System.Int64@,System.Int64@)">
-            <summary>
-            Get some stats about the cache performance
-            </summary>
-            <param name="hitCount">Number of cache hits (GetOrUpdate returns an existing item)</param>
-            <param name="semiHitCount">Number of semi cache hits (GetOrUpdate returns an existing item, but had to take a lock to get it, so less optimal)</param>
-            <param name="missCount">Number of cache misses (GetOrUpdate doesn't have an item, and a new one have to be created)</param>
-            <param name="size">Number of items in the cache</param>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.GetStats(System.String,System.String)">
-            <summary>
-            Get some stats for the cache using Stats type
-            </summary>
-            <param name="system">A system name for the cache</param>
-            <param name="prefix">An optional prefix to add to the stats name</param>
-            <returns>Stats</returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.Prune">
-            <summary>
-            Call to manually prune (remove) old items, no real need to call this unless memory usage is the primary concern
-            </summary>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.Remove(`0)">
-            <summary>
-            Remove an entry from the cache
-            </summary>
-            <param name="key"></param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.ResetStats">
-            <summary>
-            Reset all stats counters
-            </summary>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.Set(`0,`1)">
-            <summary>
-            Set a new value
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="value">The new value</param>
-        </member>
-        <member name="M:SysWeaver.IMemCache`2.TryGet(`0,`1@)">
-            <summary>
-            Get an item if it's cached
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="value">The cached value or default it it deosn't exist</param>
-            <returns>True if a value exist</returns>
         </member>
         <member name="T:SysWeaver.Inspection.DescVersionAttribute">
             <summary>
@@ -6049,6 +5942,62 @@
             The variables used in the text.
             </summary>
         </member>
+        <member name="T:SysWeaver.LimitedObjectPool`1">
+            <summary>
+            An concurrent object pool with a limited number of cached objects.
+            There is a small chance that the number of objects exceeds the maximum.
+            The object must implement IDisposable and call the supplied Action there.
+            Do not perform any acutal disposing of required internal resources, resetting the object for re-use is fine.
+            If disposing of required internal resources is required, supply a disposer that will be called when an instance in no longer needed.
+            </summary>
+            <typeparam name="T"></typeparam>
+        </member>
+        <member name="M:SysWeaver.LimitedObjectPool`1.Get">
+            <summary>
+            Get a cached object or create a new one, use the using pattern (calling Dispose when the object can be re-used)
+            </summary>
+            <returns>An instance</returns>
+        </member>
+        <member name="M:SysWeaver.LimitedObjectPool`1.Dispose">
+            <summary>
+            This will remove all objects from the cache and call there disposer function.
+            Any subsequent calls to Get will return a new instance.
+            Any Dispose calls to objects not in the cache will call the disposer functions directly.
+            </summary>
+        </member>
+        <member name="F:SysWeaver.LimitedObjectPool`1.MaxCached">
+            <summary>
+            The maximum number of instances to cache (the cache can exceed this number by some amount under heavy concurrent load)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.LimitedObjectPool`1.InCache">
+            <summary>
+            Number of instances currently in the cache
+            </summary>
+        </member>
+        <member name="P:SysWeaver.LimitedObjectPool`1.InUse">
+            <summary>
+            Number of instance in use (Get called, but not Disposed)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.LimitedObjectPool`1.Created">
+            <summary>
+            Total number of created instances
+            </summary>
+        </member>
+        <member name="P:SysWeaver.LimitedObjectPool`1.Disposed">
+            <summary>
+            Total number of disposed instances
+            </summary>
+        </member>
+        <member name="T:SysWeaver.LowAllocConcurrentDictionary`2">
+            <summary>
+            A concurrent dictionary that doesn't allocate internal nodes as frequent as the regular ConcurrentDictionary.
+            
+            </summary>
+            <typeparam name="TKey"></typeparam>
+            <typeparam name="TValue"></typeparam>
+        </member>
         <member name="T:SysWeaver.ManagedFile">
             <summary>
             An object that represents a file.
@@ -6440,287 +6389,6 @@
             Get some readonly memory
             </summary>
         </member>
-        <member name="T:SysWeaver.MemCache`2">
-            <summary>
-            Implements a cache that removes an item after it's expiration.
-            Item's can have different expiration times.
-            If the lifetime is the same for all items use the FastMemCache class instead.
-            </summary>
-            <typeparam name="K">The type of the key</typeparam>
-            <typeparam name="V">The type of the value</typeparam>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.#ctor(System.Func{`1,System.DateTime},System.Collections.Generic.IEqualityComparer{`0})">
-            <summary>
-            Creates a cache that removes it's items after the specified duration (after last request)
-            </summary>
-            <param name="getExpirationTimeUtc">A function that gets the expiration time (as UTC) of a value</param>
-            <param name="comparer">An optional comparer</param>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.Set(`0,`1)">
-            <summary>
-            Set a new value
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="value">The new value</param>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.TryGet(`0,`1@)">
-            <summary>
-            Get an item if it's cached
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="value">The cached value or default it it deosn't exist</param>
-            <returns>True if a value exist</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdate(`0,System.Func{`0,`1,`1})">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdate``1(`0,System.Func{`0,`1,``0,`1},``0)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdate``2(`0,System.Func{`0,`1,``0,``1,`1},``0,``1)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdateAsync(`0,System.Func{`0,`1,System.Threading.Tasks.Task{`1}},System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdateAsync``1(`0,System.Func{`0,`1,``0,System.Threading.Tasks.Task{`1}},``0,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdateAsync``2(`0,System.Func{`0,`1,``0,``1,System.Threading.Tasks.Task{`1}},``0,``1,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdateValueAsync(`0,System.Func{`0,`1,System.Threading.Tasks.ValueTask{`1}},System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdateValueAsync``1(`0,System.Func{`0,`1,``0,System.Threading.Tasks.ValueTask{`1}},``0,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdateValueAsync``2(`0,System.Func{`0,`1,``0,``1,System.Threading.Tasks.ValueTask{`1}},``0,``1,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdate(`0,System.Func{`0,`1})">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdate``1(`0,System.Func{`0,``0,`1},``0)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdate``2(`0,System.Func{`0,``0,``1,`1},``0,``1)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdateAsync(`0,System.Func{`0,System.Threading.Tasks.Task{`1}},System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdateAsync``1(`0,System.Func{`0,``0,System.Threading.Tasks.Task{`1}},``0,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdateAsync``2(`0,System.Func{`0,``0,``1,System.Threading.Tasks.Task{`1}},``0,``1,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdateValueAsync(`0,System.Func{`0,System.Threading.Tasks.ValueTask{`1}},System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdateValueAsync``1(`0,System.Func{`0,``0,System.Threading.Tasks.ValueTask{`1}},``0,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetOrUpdateValueAsync``2(`0,System.Func{`0,``0,``1,System.Threading.Tasks.ValueTask{`1}},``0,``1,System.Boolean)">
-            <summary>
-            Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
-            Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
-            </summary>
-            <param name="key">Tke key</param>
-            <param name="func">The delegate used to create a non-existing item</param>
-            <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
-            <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
-            <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-            <returns>The value of the item</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.Prune">
-            <summary>
-            Call to manually prune (remove) old items, no real need to call this unless memory usage is the primary concern
-            </summary>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.Remove(`0)">
-            <summary>
-            Remove an entry from the cache
-            </summary>
-            <param name="key"></param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.Clear">
-            <summary>
-            Clear cached values
-            </summary>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetStats(System.String,System.String)">
-            <summary>
-            Get some stats for the cache using Stats type
-            </summary>
-            <param name="system">A system name for the cache</param>
-            <param name="prefix">An optional prefix to add to the stats name</param>
-            <returns>Stats</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetStats(System.Double@,System.Double@,System.Double@,System.Int64@,System.Int64@,System.Int64@,System.Int64@)">
-            <summary>
-            Get some stats about the cache performance
-            </summary>
-            <param name="hitRatio">The ratio [0, 1] of cache hits (GetOrUpdate returns an existing item)</param>
-            <param name="semiHitRatio">The ratio [0, 1] of semi cache hits (GetOrUpdate returns an existing item, but had to take a lock to get it, so less optimal)</param>
-            <param name="missRatio">The ratio [0, 1] of cache misses (GetOrUpdate doesn't have an item, and a new one have to be created)</param>
-            <param name="hitCount">Number of cache hits (GetOrUpdate returns an existing item)</param>
-            <param name="semiHitCount">Number of semi cache hits (GetOrUpdate returns an existing item, but had to take a lock to get it, so less optimal)</param>
-            <param name="missCount">Number of cache misses (GetOrUpdate doesn't have an item, and a new one have to be created)</param>
-            <param name="size">Number of items in the cache</param>
-            <returns>The total number of GetOrUpdate requests</returns>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetStats(System.Int64@,System.Int64@,System.Int64@,System.Int64@)">
-            <summary>
-            Get some stats about the cache performance
-            </summary>
-            <param name="hitCount">Number of cache hits (GetOrUpdate returns an existing item)</param>
-            <param name="semiHitCount">Number of semi cache hits (GetOrUpdate returns an existing item, but had to take a lock to get it, so less optimal)</param>
-            <param name="missCount">Number of cache misses (GetOrUpdate doesn't have an item, and a new one have to be created)</param>
-            <param name="size">Number of items in the cache</param>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.ResetStats">
-            <summary>
-            Reset all stats counters
-            </summary>
-        </member>
-        <member name="M:SysWeaver.MemCache`2.GetCount">
-            <summary>
-            Get the count of cached items (somewhat slow)
-            </summary>
-            <returns>Number of cached items</returns>
-        </member>
         <member name="M:SysWeaver.MemoryExtensions.ToHex(System.ReadOnlyMemory{System.Byte})">
             <summary>
             Converts some data into a hexadecimal string
@@ -7107,35 +6775,44 @@
             </summary>
             <param name="value"></param>
         </member>
-        <member name="M:SysWeaver.MovingAverage.Add(System.Int32@,System.Decimal@,System.Decimal,System.Int64@)">
-            <summary>
-            Add a value to the moving average and get the average
-            </summary>
-            <param name="count">Number of values within the time window</param>
-            <param name="addPerSecond">Number of adds per second</param>
-            <param name="value">The value to add to the moving average</param>
-            <param name="dt">Number of ticks between the last and first values within the time window</param>
-            <returns>The moving average of the added values</returns>
-        </member>
-        <member name="M:SysWeaver.MovingAverage.Get(System.Int32@,System.Decimal@,System.Int64@)">
+        <member name="M:SysWeaver.MovingAverage.GetAverage(System.Decimal@,System.Int32@,System.Int64@)">
             <summary>
             Get the moving average
             </summary>
+            <param name="sum">Total sum of the values in the time window</param>
             <param name="count">Number of values within the time window</param>
-            <param name="addPerSecond">Number of adds per second</param>
             <param name="dt">Number of ticks between the last and first values within the time window</param>
-            <returns>The moving average of the added values</returns>
+            <returns>The values per second (sum / dt)</returns>
         </member>
-        <member name="M:SysWeaver.MovingAverage.GetStats(System.String,System.String,System.String,System.String,System.String,System.String)">
+        <member name="M:SysWeaver.MovingAverage.GetVolume(System.Decimal@,System.Int32@,System.Int64@)">
+            <summary>
+            Get the sum per second
+            </summary>
+            <param name="sum">Total sum of the values in the time window</param>
+            <param name="count">Number of values within the time window</param>
+            <param name="dt">Number of ticks between the last and first values within the time window</param>
+            <returns>The values per second (sum / dt)</returns>
+        </member>
+        <member name="M:SysWeaver.MovingAverage.GetData(System.Decimal@,System.Int32@,System.Int64@)">
+            <summary>
+            Get data
+            </summary>
+            <param name="sum">Total sum of the values in the time window</param>
+            <param name="count">Number of values within the time window</param>
+            <param name="dt">Number of ticks between the last and first values within the time window</param>
+        </member>
+        <member name="M:SysWeaver.MovingAverage.GetStats(System.String,System.String,System.String,System.String,System.String,System.String,System.String,System.String)">
             <summary>
             Get stats
             </summary>
             <param name="system">Name of the system</param>
             <param name="prefix">Optional prefix for this moving average</param>
             <param name="countName">Name of the values per second stats, null = use default, set to "" to exclude count stats</param>
-            <param name="valueName">Name of the average value stats, null = use default, set to "" to exclude average value stats</param>
+            <param name="avgName">Name of the average value stats, null = use default, set to "" to exclude average value stats</param>
+            <param name="volumeName">Name of the volume stats, null = use default, set to "" to exclude volume stats</param>
             <param name="countDesc">Description of the values per second stats, null = use default, set to "" to exclude count stats</param>
             <param name="valueDesc">Description of the average value stats, null = use default, set to "" to exclude average value stats</param>
+            <param name="volumeDesc">Description of the volume stats, null = use default, set to "" to exclude volume stats</param>
             <returns>The stats</returns>
         </member>
         <member name="M:SysWeaver.MovingAverage.GetGlobalStats">
@@ -7720,7 +7397,7 @@
             <param name="delayInMs">Number of milli seconds to wait between any retries</param>
             <param name="replaceBak">If true and the backup folder exist, it will de deleted before swapping</param>
         </member>
-        <member name="M:SysWeaver.PathExt.TryFolderSwapAsync(System.String,System.String,System.String,System.Int32,System.Int32,System.Boolean,System.Func{System.String,System.Threading.Tasks.ValueTask{System.Exception}})">
+        <member name="M:SysWeaver.PathExt.TryFolderSwapAsync(System.String,System.String,System.String,System.Int32,System.Int32,System.Boolean,System.Func{System.String,System.Threading.Tasks.Task{System.Exception}})">
             <summary>
             Renames the target folder to backup folder then renames the new folder to target folder.
             </summary>
@@ -7911,16 +7588,6 @@
             <param name="stopWatchTicks">Stopwatch ticks</param>
             <returns>TimeSpan</returns>
         </member>
-        <member name="P:SysWeaver.IPerfMesurement.Ellapsed">
-            <summary>
-            Time taken so far, in stop watch ticks
-            </summary>
-        </member>
-        <member name="P:SysWeaver.IPerfMesurement.StartTimeStamp">
-            <summary>
-            Get the start time stamp
-            </summary>
-        </member>
         <member name="P:SysWeaver.PerfMesurement.Ellapsed">
             <summary>
             Time taken so far, in stop watch ticks
@@ -8026,27 +7693,7 @@
             <param name="continueOnException">If set to true and the task or it's creation casts an exception, continue the periodic execution anyway</param>
             <param name="initialDelay">If runNow is true, delay the first execution using the sleepMs parameter</param>
         </member>
-        <member name="M:SysWeaver.PeriodicTask.#ctor(System.Func{System.Threading.Tasks.ValueTask{System.Boolean}},System.Int32,System.Boolean,System.Boolean,System.Boolean)">
-            <summary>
-            Runs a task concurrently periodically with the specfied delay inbetween
-            </summary>
-            <param name="createTask">A function that creates the task to run at the given interval</param>
-            <param name="sleepMs">Number of milliseconds to to pause between each task execution</param>
-            <param name="runNow">Set to true to start immediately</param>
-            <param name="continueOnException">If set to true and the task or it's creation casts an exception, continue the periodic execution anyway</param>
-            <param name="initialDelay">If runNow is true, delay the first execution using the sleepMs parameter</param>
-        </member>
         <member name="M:SysWeaver.PeriodicTask.#ctor(System.Func{System.Threading.CancellationToken,System.Threading.Tasks.Task{System.Boolean}},System.Int32,System.Boolean,System.Boolean,System.Boolean)">
-            <summary>
-            Runs a task concurrently periodically with the specfied delay inbetween, this task can be cancelled
-            </summary>
-            <param name="createTask">A function that creates the task to run at the given interval, this task should be able to cancle using the canellation token provided</param>
-            <param name="sleepMs">Number of milliseconds to to pause between each task execution</param>
-            <param name="runNow">Set to true to start immediately</param>
-            <param name="continueOnException">If set to true and the task or it's creation casts an exception, continue the periodic execution anyway</param>
-            <param name="initialDelay">If runNow is true, delay the first execution using the sleepMs parameter</param>
-        </member>
-        <member name="M:SysWeaver.PeriodicTask.#ctor(System.Func{System.Threading.CancellationToken,System.Threading.Tasks.ValueTask{System.Boolean}},System.Int32,System.Boolean,System.Boolean,System.Boolean)">
             <summary>
             Runs a task concurrently periodically with the specfied delay inbetween, this task can be cancelled
             </summary>
@@ -8421,29 +8068,15 @@
             <param name="comparer"></param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.DictionaryExt.Freeze``1(System.Collections.Generic.HashSet{``0})">
+        <member name="M:SysWeaver.DictionaryExt.Single``2(``0,``1,System.Collections.Generic.IEqualityComparer{``0})">
             <summary>
-            Create a frozen version of a set
+            Create an optimized dictionary from a single entry
             </summary>
             <typeparam name="K"></typeparam>
-            <param name="d"></param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.DictionaryExt.Freeze``1(System.Collections.Generic.IReadOnlySet{``0})">
-            <summary>
-            Create a frozen version of a set
-            </summary>
-            <typeparam name="K"></typeparam>
-            <param name="d"></param>
-            <returns></returns>
-        </member>
-        <member name="M:SysWeaver.DictionaryExt.Freeze``1(System.Collections.Generic.IReadOnlySet{``0},System.Collections.Generic.IEqualityComparer{``0})">
-            <summary>
-            Create a frozen version of a set
-            </summary>
-            <typeparam name="K"></typeparam>
-            <param name="d"></param>
-            <param name="comparer"></param>
+            <typeparam name="V"></typeparam>
+            <param name="key"></param>
+            <param name="value"></param>
+            <param name="comp"></param>
             <returns></returns>
         </member>
         <member name="T:SysWeaver.ReplaceEmbeddedFilesAttribute">
@@ -8589,7 +8222,8 @@
         <member name="T:SysWeaver.Scheduler">
             <summary>
             Schedules a task to be performed at a specified time, precision is fairly low so the task can be executed a few seconds later than scheduled.
-            Two tasks that are scheduled at the same time will be executed in the order of being added.
+            Use this for low frequency tasks that should run on a schedule, once a day, once per hour and so on.
+            For high frequency tasks use the PeriodicTask instead.
             </summary>
         </member>
         <member name="F:SysWeaver.Scheduler.CheckFrequencyMs">
@@ -8597,37 +8231,46 @@
             Roughly the number of milli seconds between each check
             </summary>
         </member>
-        <member name="M:SysWeaver.Scheduler.Add(System.DateTime,System.Action)">
+        <member name="M:SysWeaver.Scheduler.Add(System.DateTime,System.Action,System.String,System.Func{System.DateTime,System.DateTime},System.Boolean)">
             <summary>
             Schedule a task to be performed at a specified time, precision is fairly low so the task can be executed a few seconds later than scheduled.
-            Two tasks that are scheduled at the same time will be executed in the order of being added.
+            Use this for low frequency tasks that should run on a schedule, once a day, once per hour and so on.
+            For high frequency tasks use the PeriodicTask instead.
             </summary>
             <param name="when">The UTC time to execute the task at, precision is fairly low so the task can be executed a few seconds later than scheduled.
-            Two tasks that are scheduled at the same time will be executed in the order of being added.
             </param>
             <param name="task">The task to execute</param>
+            <param name="name">An optional name (for debugging)</param>
+            <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous execution time, returns a new execution time.</param>
+            <param name="runAsync">Run this task independent on other tasks</param>
             <returns>An object that can be disposed to prevent execution of the task in the future</returns>
         </member>
-        <member name="M:SysWeaver.Scheduler.AddTask(System.DateTime,System.Func{System.Threading.Tasks.Task})">
+        <member name="M:SysWeaver.Scheduler.AddTask(System.DateTime,System.Func{System.Threading.Tasks.Task},System.String,System.Func{System.DateTime,System.DateTime},System.Boolean)">
             <summary>
             Schedule a task to be performed at a specified time, precision is fairly low so the task can be executed a few seconds later than scheduled.
-            Two tasks that are scheduled at the same time will be executed in the order of being added.
+            Use this for low frequency tasks that should run on a schedule, once a day, once per hour and so on.
+            For high frequency tasks use the PeriodicTask instead.
             </summary>
             <param name="when">The UTC time to execute the task at, precision is fairly low so the task can be executed a few seconds later than scheduled.
-            Two tasks that are scheduled at the same time will be executed in the order of being added.
             </param>
             <param name="task">The task to execute</param>
+            <param name="name">An optional name (for debugging)</param>
+            <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous execution time, returns a new execution time.</param>
+            <param name="runAsync">Run this task independent on other tasks</param>
             <returns>An object that can be disposed to prevent execution of the task in the future</returns>
         </member>
-        <member name="M:SysWeaver.Scheduler.AddValueTask(System.DateTime,System.Func{System.Threading.Tasks.ValueTask})">
+        <member name="M:SysWeaver.Scheduler.AddValueTask(System.DateTime,System.Func{System.Threading.Tasks.ValueTask},System.String,System.Func{System.DateTime,System.DateTime},System.Boolean)">
             <summary>
             Schedule a task to be performed at a specified time, precision is fairly low so the task can be executed a few seconds later than scheduled.
-            Two tasks that are scheduled at the same time will be executed in the order of being added.
+            Use this for low frequency tasks that should run on a schedule, once a day, once per hour and so on.
+            For high frequency tasks use the PeriodicTask instead.
             </summary>
             <param name="when">The UTC time to execute the task at, precision is fairly low so the task can be executed a few seconds later than scheduled.
-            Two tasks that are scheduled at the same time will be executed in the order of being added.
             </param>
             <param name="task">The task to execute</param>
+            <param name="name">An optional name (for debugging)</param>
+            <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous execution time, returns a new execution time.</param>
+            <param name="runAsync">Run this task independent on other tasks</param>
             <returns>An object that can be disposed to prevent execution of the task in the future</returns>
         </member>
         <member name="F:SysWeaver.Scheduler.TaskExceptions">
@@ -8640,6 +8283,21 @@
             Scheduled entries
             </summary>
         </member>
+        <member name="F:SysWeaver.Scheduler.TaskTypes.TypeAction">
+            <summary>
+            A non-async action
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Scheduler.TaskTypes.TypeTask">
+            <summary>
+            An async Task
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Scheduler.TaskTypes.TypeValueTask">
+            <summary>
+            An async ValueTask
+            </summary>
+        </member>
         <member name="P:SysWeaver.Scheduler.Entry.RunAt">
             <summary>
             When the task will be executed
@@ -8650,9 +8308,69 @@
             The internal unique Id of this task
             </summary>
         </member>
+        <member name="P:SysWeaver.Scheduler.Entry.Name">
+            <summary>
+            Optional name
+            </summary>
+        </member>
         <member name="P:SysWeaver.Scheduler.Entry.Type">
             <summary>
-            True if it's an async job
+            The type of task to perform
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Scheduler.Entry.Repeat">
+            <summary>
+            True if the function should be repeated
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Scheduler.Entry.RepeatFrequency">
+            <summary>
+            The repeat interval, zero if not repeating
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Scheduler.Entry.Count">
+            <summary>
+            Number of times the task have completed (exception or not)
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Scheduler.Entry.IsRunning">
+            <summary>
+            True if the task is currently running
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Scheduler.Entry.LastStart">
+            <summary>
+            The time when the task was last started
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Scheduler.Entry.LastEnd">
+            <summary>
+            The time when the task was last started
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Scheduler.Entry.AvgDuration">
+            <summary>
+            The average execution duration of the task
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Scheduler.Entry.ExceptionCount">
+            <summary>
+            Total number of exceptions
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Scheduler.Entry.LastException">
+            <summary>
+            The time of the last failure
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Scheduler.Entry.LastExceptionEx">
+            <summary>
+            The last exception text
+            </summary>
+        </member>
+        <member name="P:SysWeaver.Scheduler.Entry.Scheduled">
+            <summary>
+            When this task was scheduled
             </summary>
         </member>
         <member name="T:SysWeaver.Search.ITextRanker">
@@ -8701,7 +8419,7 @@
             <param name="content"></param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.Search.ITextSearcher`1.Search(System.String,System.Int32,System.Func{`0,System.Threading.Tasks.ValueTask{System.Boolean}})">
+        <member name="M:SysWeaver.Search.ITextSearcher`1.Search(System.String,System.Int32,System.Func{`0,System.Threading.Tasks.Task{System.Boolean}})">
             <summary>
             Search for some text
             </summary>
@@ -8948,6 +8666,13 @@
             <param name="passwordCanBeFile">True if password may be a file</param>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.Security.CertificateTools.Install(System.Security.Cryptography.X509Certificates.X509Certificate2)">
+            <summary>
+            Install a certificates (if it's not already installed)
+            </summary>
+            <param name="cert">The certificate to check/install</param>
+            <returns>True if the cert was installed (was new)</returns>
+        </member>
         <member name="T:SysWeaver.Security.ICertificateProvider">
             <summary>
             Represents an object that provides a certificate
@@ -8990,11 +8715,80 @@
             <summary>
             Use this dictionary when number of reads far exceeds the number of modificatiions.
             This is thread safe in the same sense as a ConcurrentDictionary.
-            Aall reads are done on a frozen copy of the underlaying dictionary.
+            All reads are done on a frozen copy of the underlaying dictionary.
             Mutating underlaying dictionary is done using locks and the frozen copy is invalidated.
             </summary>
             <typeparam name="TKey"></typeparam>
             <typeparam name="TValue"></typeparam>
+        </member>
+        <member name="M:SysWeaver.SetExt.Merge``1(System.Collections.Generic.IReadOnlySet{``0},System.Collections.Generic.IReadOnlySet{``0}[])">
+            <summary>
+            Merge two or more sets.
+            The comparer used is from the first non-null set.
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="t"></param>
+            <param name="others"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.SetExt.Merge``1(System.Collections.Generic.IReadOnlySet{``0},System.Boolean,System.Collections.Generic.IReadOnlySet{``0}[])">
+            <summary>
+            Merge two or more sets.
+            The comparer used is from the first non-null set.
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="t"></param>
+            <param name="freeze"></param>
+            <param name="others"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.SetExt.Freeze``1(System.Collections.Generic.HashSet{``0})">
+            <summary>
+            Create a frozen version of a set
+            </summary>
+            <typeparam name="K"></typeparam>
+            <param name="d"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.SetExt.Freeze``1(System.Collections.Generic.IReadOnlySet{``0})">
+            <summary>
+            Create a frozen version of a set
+            </summary>
+            <typeparam name="K"></typeparam>
+            <param name="d"></param>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.SetExt.Freeze``1(System.Collections.Generic.IReadOnlySet{``0},System.Collections.Generic.IEqualityComparer{``0})">
+            <summary>
+            Create a frozen version of a set
+            </summary>
+            <typeparam name="K"></typeparam>
+            <param name="d"></param>
+            <param name="comparer"></param>
+            <returns></returns>
+        </member>
+        <member name="T:SysWeaver.SingleTaskRunner">
+            <summary>
+            A class than let's you spawn an async task.
+            Will wait for any previous task to complete before starting the new one.
+            If a previous task throws an exception, the Start or Wait method will throw that excpetion.
+            </summary>
+        </member>
+        <member name="M:SysWeaver.SingleTaskRunner.Wait">
+            <summary>
+            Wait until any previous task is completed.
+            If a previous task threw an exception, this method will throw that exception.
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:SysWeaver.SingleTaskRunner.Start(System.Func{System.Threading.Tasks.Task})">
+            <summary>
+            Wait until any previous task is completed.
+            If a previous task threw an exception, this method will throw that exception.
+            Start the supplied task ina new async chain, and return immediately.
+            </summary>
+            <param name="task"></param>
+            <returns></returns>
         </member>
         <member name="M:SysWeaver.SpanExt.ToHexString(System.Span{System.Byte})">
             <summary>
@@ -9145,16 +8939,124 @@
             <param name="removeEmpty">True to remove empty lines</param>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.StringExt.FastToLower(System.String,System.Int32,System.Int32)">
+            <summary>
+            Make a culture invariant lower case version of a substring
+            </summary>
+            <param name="str">The string to transform into a culture invariant lower case</param>
+            <param name="startIndex">The index of the first character to convert</param>
+            <param name="length">The number of characters to convert</param>
+            <returns>Culture invariant lower case string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastTrimToLower(System.String)">
+            <summary>
+            Make a trimmed culture invariant lower case version of a string
+            </summary>
+            <param name="str">The string to transform into a trimmed culture invariant lower case</param>
+            <returns>A trimmed culture invariant lower cased string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastTrimStartToLower(System.String)">
+            <summary>
+            Make a trimmed (at start) culture invariant lower case version of a string
+            </summary>
+            <param name="str">The string to transform into a trimmed (at start) culture invariant lower case</param>
+            <returns>A trimmed (at start) culture invariant lower cased string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastTrimEndToLower(System.String)">
+            <summary>
+            Make a trimmed (at end) culture invariant lower case version of a string
+            </summary>
+            <param name="str">The string to transform into a trimmed (at end) culture invariant lower case</param>
+            <returns>A trimmed (at end) culture invariant lower cased string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastTrimToLower(System.String,System.Char)">
+            <summary>
+            Make a trimmed culture invariant lower case version of a string
+            </summary>
+            <param name="str">The string to transform into a trimmed culture invariant lower case</param>
+            <param name="trimChar">The character to trim</param>
+            <returns>A trimmed culture invariant lower cased string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastTrimStartToLower(System.String,System.Char)">
+            <summary>
+            Make a trimmed (at start) culture invariant lower case version of a string
+            </summary>
+            <param name="str">The string to transform into a trimmed (at start) culture invariant lower case</param>
+            <param name="trimChar">The character to trim</param>
+            <returns>A trimmed (at start) culture invariant lower cased string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastTrimEndToLower(System.String,System.Char)">
+            <summary>
+            Make a trimmed (at end) culture invariant lower case version of a string
+            </summary>
+            <param name="str">The string to transform into a trimmed (at end) culture invariant lower case</param>
+            <param name="trimChar">The character to trim</param>
+            <returns>A trimmed (at end) culture invariant lower cased string</returns>
+        </member>
         <member name="M:SysWeaver.StringExt.FastToLower(System.String)">
             <summary>
-            Make an culture invariant lower case version of a string
+            Make a culture invariant lower case version of a string
             </summary>
             <param name="str">The string to transform into a culture invariant lower case</param>
             <returns>Culture invariant lower case string</returns>
         </member>
+        <member name="M:SysWeaver.StringExt.FastToUpper(System.String,System.Int32,System.Int32)">
+            <summary>
+            Make a culture invariant upper case version of a substring
+            </summary>
+            <param name="str">The string to transform into a culture invariant upper case</param>
+            <param name="startIndex">The index of the first character to convert</param>
+            <param name="length">The number of characters to convert</param>
+            <returns>Culture invariant upper case string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastTrimToUpper(System.String)">
+            <summary>
+            Make a trimmed culture invariant upper case version of a string
+            </summary>
+            <param name="str">The string to transform into a trimmed culture invariant upper case</param>
+            <returns>A trimmed culture invariant upper cased string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastTrimStartToUpper(System.String)">
+            <summary>
+            Make a trimmed (at start) culture invariant upper case version of a string
+            </summary>
+            <param name="str">The string to transform into a trimmed (at start) culture invariant upper case</param>
+            <returns>A trimmed (at start) culture invariant upper cased string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastTrimEndToUpper(System.String)">
+            <summary>
+            Make a trimmed (at end) culture invariant upper case version of a string
+            </summary>
+            <param name="str">The string to transform into a trimmed (at end) culture invariant upper case</param>
+            <returns>A trimmed (at end) culture invariant upper cased string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastTrimToUpper(System.String,System.Char)">
+            <summary>
+            Make a trimmed culture invariant upper case version of a string
+            </summary>
+            <param name="str">The string to transform into a trimmed culture invariant upper case</param>
+            <param name="trimChar">The character to trim</param>
+            <returns>A trimmed culture invariant upper cased string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastTrimStartToUpper(System.String,System.Char)">
+            <summary>
+            Make a trimmed (at start) culture invariant upper case version of a string
+            </summary>
+            <param name="str">The string to transform into a trimmed (at start) culture invariant upper case</param>
+            <param name="trimChar">The character to trim</param>
+            <returns>A trimmed (at start) culture invariant upper cased string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastTrimEndToUpper(System.String,System.Char)">
+            <summary>
+            Make a trimmed (at end) culture invariant upper case version of a string
+            </summary>
+            <param name="str">The string to transform into a trimmed (at end) culture invariant upper case</param>
+            <param name="trimChar">The character to trim</param>
+            <returns>A trimmed (at end) culture invariant upper cased string</returns>
+        </member>
         <member name="M:SysWeaver.StringExt.FastToUpper(System.String)">
             <summary>
-            Make an culture invariant upper case version of a string
+            Make a culture invariant upper case version of a string
             </summary>
             <param name="str">The string to transform into a culture invariant upper case</param>
             <returns>Culture invariant upper case string</returns>
@@ -9547,6 +9449,14 @@
             <param name="replaceWith">The char to replace non-ascii chars to</param>
             <returns>The original string if all ascii, or a string with replace values</returns>
         </member>
+        <member name="M:SysWeaver.StringTools.MakeAscii(System.String,System.Char)">
+            <summary>
+            Make a string ascii, by removing diacritics, use a substitution table or replacement of non-ascii.
+            </summary>
+            <param name="s">The string to replace chars in</param>
+            <param name="subsituteUnknownWith">Unknown non-ascii chars will be replaced by this</param>
+            <returns>The original string if all ascii, or a string with replace values</returns>
+        </member>
         <member name="M:SysWeaver.StringTools.IsIdentifier(System.String)">
             <summary>
             Check if a string is a valid "identifier", only 'a'-'z' and numbers is accepeted (no number at the first position)
@@ -9727,6 +9637,43 @@
             <param name="value">The string to filter</param>
             <returns>The filtered string</returns>
         </member>
+        <member name="M:SysWeaver.StringTools.SplitFirst(System.String,System.Char,System.Boolean,System.Boolean)">
+            <summary>
+            Split a string into two parts (keeping the left part) on the first occurance of a char.
+            Example:
+            "name@example.com".SplitFirst('@') => "name"
+            </summary>
+            <param name="value">The value to split into two parts</param>
+            <param name="split">The character to split</param>
+            <param name="trimOuter">If true, the string is trimmed before splitting</param>
+            <param name="trimInner">If true, the resulting value is trimmed on the end and the right string (if available) is trimmed on the start</param>
+            <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned), semantically the same as value.Split(split)[0]</returns>
+        </member>
+        <member name="M:SysWeaver.StringTools.SplitFirst(System.String,System.Char,System.String@,System.Boolean,System.Boolean)">
+            <summary>
+            Split a string into two parts on the first occurance of a char.
+            Example:
+            var left = "name@example.com".SplitFirst('@', out var right);
+            left = "name";
+            right = "example.com";
+            </summary>
+            <param name="value">The value to split into two parts</param>
+            <param name="split">The character to split</param>
+            <param name="right">The right part, null if the split char isn't found</param>
+            <param name="trimOuter">If true, the string is trimmed before splitting</param>
+            <param name="trimInner">If true, the resulting value is trimmed on the end and the right string (if available) is trimmed on the start</param>
+            <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned)</returns>
+        </member>
+        <member name="M:SysWeaver.StringTools.SplitFirst(System.String,System.Char)">
+            <summary>
+            Split a string into two parts (keeping the left part) on the first occurance of a char.
+            Example:
+            "name@example.com".SplitFirst('@') => "name"
+            </summary>
+            <param name="value">The value to split into two parts</param>
+            <param name="split">The character to split</param>
+            <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned), semantically the same as value.Split(split)[0]</returns>
+        </member>
         <member name="M:SysWeaver.StringTools.SplitFirst(System.String,System.Char,System.String@)">
             <summary>
             Split a string into two parts on the first occurance of a char.
@@ -9753,16 +9700,6 @@
             <param name="left">The left part, null if the split char isn't found</param>
             <returns>null if the value is null, else the right part (if the split char isn't found, the original string is returned)</returns>
         </member>
-        <member name="M:SysWeaver.StringTools.SplitFirst(System.String,System.Char)">
-            <summary>
-            Split a string into two parts (keeping the left part) on the first occurance of a char.
-            Example:
-            "name@example.com".SplitFirst('@') => "name"
-            </summary>
-            <param name="value">The value to split into two parts</param>
-            <param name="split">The character to split</param>
-            <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned), semantically the same as value.Split(split)[0]</returns>
-        </member>
         <member name="M:SysWeaver.StringTools.SplitLast(System.String,System.Char)">
             <summary>
             Split a string into two parts on the last occurance of a char.
@@ -9773,6 +9710,17 @@
             <param name="value">The value to split into two parts</param>
             <param name="split">The character to split</param>
             <returns>null if the value is null, else the right part (if the split char isn't found, the original string is returned)</returns>
+        </member>
+        <member name="M:SysWeaver.StringTools.BeforeLast(System.String,System.Char)">
+            <summary>
+            Get the text before the last character.
+            Example:
+            var before = "www.example.com".BeforeLast('.');
+            before = "www.example";
+            </summary>
+            <param name="value">The value to process</param>
+            <param name="split">The character to split</param>
+            <returns>null if the value is null, else the part before the last occurence of the split char (if the split char isn't found, the original string is returned)</returns>
         </member>
         <member name="M:SysWeaver.StringTools.SecureEnd(System.String,System.Int32,System.String)">
             <summary>
@@ -9824,6 +9772,15 @@
             <param name="part">The string to repeat, ex: "Hello"</param>
             <param name="count">The number of times to repeat the string, ex: 3</param>
             <returns>A repeated string, ex: "HelloHelloHello"</returns>
+        </member>
+        <member name="M:SysWeaver.StringTools.EscapeMD(System.String,System.Boolean)">
+            <summary>
+            Escape some text to work inside mark down.
+            Doesn't escape +, - and . 
+            </summary>
+            <param name="text">The text to escape</param>
+            <param name="nbsp">If true, any spaces are converted to non breaking spaces to prevent word wrapping</param>
+            <returns>Escaped text</returns>
         </member>
         <member name="T:SysWeaver.StringTree">
             <summary>
@@ -10185,11 +10142,6 @@
             Draw the logo to the console with specific colors, use default to draw using the default color scheme
             </summary>
         </member>
-        <member name="F:SysWeaver.TaskExt.CompValTask">
-            <summary>
-            A completed value task
-            </summary>
-        </member>
         <member name="M:SysWeaver.TaskExt.StartNewAsyncChain(System.Func{System.Runtime.CompilerServices.ConfiguredTaskAwaitable})">
             <summary>
             Start a new async task (new thread / new chain)
@@ -10208,13 +10160,13 @@
             </summary>
             <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
         </member>
-        <member name="M:SysWeaver.TaskExt.StartNewAsyncChain(System.Func{System.Threading.Tasks.ValueTask})">
+        <member name="M:SysWeaver.TaskExt.StartNewAsyncChainValue(System.Func{System.Threading.Tasks.ValueTask})">
             <summary>
             Start a new async task (new thread / new chain)
             </summary>
             <param name="task">A function that creates the new task, and then returns the result of ConfigureAwait(false) on it</param>
         </member>
-        <member name="M:SysWeaver.TaskExt.RunAsync``1(System.Threading.Tasks.ValueTask{``0})">
+        <member name="M:SysWeaver.TaskExt.RunAsync``1(System.Threading.Tasks.Task{``0})">
             <summary>
             Run a task in a new thread / chain, then wait for the task to complete and return it's value
             </summary>
@@ -10228,7 +10180,7 @@
             </summary>
             <param name="t">The task to run</param>
         </member>
-        <member name="M:SysWeaver.TaskExt.RunAsync``1(System.Threading.Tasks.Task{``0})">
+        <member name="M:SysWeaver.TaskExt.RunAsync``1(System.Threading.Tasks.ValueTask{``0})">
             <summary>
             Run a task in a new thread / chain, then wait for the task to complete and return it's value
             </summary>
@@ -10323,6 +10275,13 @@
             <param name="delayInMs">The delay in milli seconds</param>
         </member>
         <member name="M:SysWeaver.TaskExt.RunDelayed(System.Threading.Tasks.Task,System.Int32)">
+            <summary>
+            Execute a task after some fixed duration
+            </summary>
+            <param name="task">The task to execute</param>
+            <param name="delayInMs">The delay in milli seconds</param>
+        </member>
+        <member name="M:SysWeaver.TaskExt.RunDelayed(System.Threading.Tasks.ValueTask,System.Int32)">
             <summary>
             Execute a task after some fixed duration
             </summary>
@@ -10699,7 +10658,6 @@
             </exception>        
         </member>
         <member name="M:SysWeaver.TaskExt.WhenAll(System.Collections.Generic.IReadOnlyList{System.Threading.Tasks.ValueTask})">
-            
             <summary>
             Creates a task that will complete when all of the supplied tasks have completed.
             </summary>
@@ -11742,11 +11700,12 @@
             Try (real hard) to find a type for the given type name
             </summary>
         </member>
-        <member name="M:SysWeaver.TypeFinder.Get(System.String)">
+        <member name="M:SysWeaver.TypeFinder.Get(System.String,System.Boolean)">
             <summary>
             Get the type for a given type name or null if it can't be found
             </summary>
             <param name="typeName">The name of the type to find</param>
+            <param name="noThrow">If true, alwayus return null instead of throwing</param>
             <returns>The type or null if it can't be found</returns>
         </member>
         <member name="T:SysWeaver.IUnmanagedReadOnlyMemory`1">
@@ -11835,6 +11794,20 @@
             <returns>A string of the format: OptionalPad + Prefix + ValueStr + Suffix</returns>
         </member>
         <member name="M:SysWeaver.ValueFormat.ToValueString(System.Double,System.Int32,System.String,System.String,System.Int32,System.Char,System.Char,System.Char)">
+            <summary>
+            Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+            </summary>
+            <param name="value">The value</param>
+            <param name="decimalCount">Numer of decimals</param>
+            <param name="prefix">Optional prefix, added before the value string</param>
+            <param name="suffix">Optional suffix, added after the value string</param>
+            <param name="minPadLeft">Pad the string (to the left) to this minimum length</param>
+            <param name="thousandSeparator">The thousand separator char to use</param>
+            <param name="padChar">The padding char to use</param>
+            <param name="decimalChar">The char to use as a decimal sparator</param>
+            <returns>A string of the format: OptionalPad + Prefix + ValueStr + Suffix</returns>
+        </member>
+        <member name="M:SysWeaver.ValueFormat.ToValueString(System.Single,System.Int32,System.String,System.String,System.Int32,System.Char,System.Char,System.Char)">
             <summary>
             Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
             </summary>

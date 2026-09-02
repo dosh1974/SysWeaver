@@ -417,7 +417,7 @@ namespace SysWeaver
 
         sealed class CleanUp
         {
-            public readonly String[] P = Folders.FromConfig("FileHashFolders", Folders.AllSharedFolders, "FileHash");
+            public readonly String[] P = Folders.FromConfig("FileHashFolders", Folders.AllSharedFolders, "FileHash", true);
 
             public CleanUp()
             {

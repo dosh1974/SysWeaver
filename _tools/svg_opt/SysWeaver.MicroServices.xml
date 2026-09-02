@@ -54,6 +54,16 @@
             The from address when sending emails using this instance
             </summary>
         </member>
+        <member name="T:SysWeaver.MicroService.IHaveDefaultInstanceName">
+            <summary>
+            Use this to specify a default instance name for a service object
+            </summary>
+        </member>
+        <member name="P:SysWeaver.MicroService.IHaveDefaultInstanceName.DefaultInstanceName">
+            <summary>
+            If no instance name is supplied when creating the service object, the name is collected from the instance
+            </summary>
+        </member>
         <member name="T:SysWeaver.MicroService.IQrCodeService">
             <summary>
             Service for generating QR code svgs

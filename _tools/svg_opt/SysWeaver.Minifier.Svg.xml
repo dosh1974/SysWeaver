@@ -49,6 +49,16 @@
             Remove atribute spaces
             </summary>
         </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveNonSvg">
+            <summary>
+            Remove non-svg data
+            </summary>
+        </member>
+        <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveNamespaces">
+            <summary>
+            Remove non-svg namespaces
+            </summary>
+        </member>
         <member name="F:SysWeaver.Minifier.SvgMinifierParams.RemoveTitle">
             <summary>
             Remove title elements

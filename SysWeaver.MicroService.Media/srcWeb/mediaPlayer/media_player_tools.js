@@ -519,5 +519,19 @@ class MediaPlayerTools {
 
     }
 
+
+    static async SetError(text) {
+        try {
+            if (window["CefSharp"])
+                await CefSharp.BindObjectAsync();
+            const cs = chrome.webview.hostObjects.ErrorText;
+            if (cs)
+                await cs.SetText(text);
+        }
+        catch (e) {
+        }
+    }
+
+
 }
 

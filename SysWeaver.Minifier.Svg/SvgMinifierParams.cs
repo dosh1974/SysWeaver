@@ -46,6 +46,17 @@
         public bool RemoveAttributeSpaces = true;
 
         /// <summary>
+        /// Remove non-svg data
+        /// </summary>
+        public bool RemoveNonSvg = true;
+
+        /// <summary>
+        /// Remove non-svg namespaces
+        /// </summary>
+        public bool RemoveNamespaces = true;
+
+
+        /// <summary>
         /// Remove title elements
         /// </summary>
         public bool RemoveTitle = true;

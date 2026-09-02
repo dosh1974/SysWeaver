@@ -17,8 +17,10 @@ namespace SysWeaver
         /// <param name="args">Optional command arguments</param>
         /// <param name="onMessage">Optionally called on every line outputted, second parameter is false for stdout and true for stderr</param>
         /// <param name="onExit">Optionally called when the process completed or on error, paramaters are: exitCode, exception, duration and the last X stdout/stderr lines of output</param>
+        /// <param name="workingFolder">The folder to use as the current</param>
+        /// <param name="useShell">Use shell execute</param>
         /// <returns>The process exit code</returns>
-        public static int Run(String cmd, String args = null, Action<String, bool> onMessage = null, Action<int, Exception, TimeSpan, IEnumerable<String>> onExit = null)
+        public static int Run(String cmd, String args = null, Action<String, bool> onMessage = null, Action<int, Exception, TimeSpan, IEnumerable<String>> onExit = null, String workingFolder = null, bool useShell = false)
         {
             var start = DateTime.UtcNow;
             LinkedList<String> log = new LinkedList<string>();
@@ -29,7 +31,8 @@ namespace SysWeaver
                     int logLen = 0;
                     StringBuilder err = new StringBuilder();
                     var si = p.StartInfo;
-                    si.UseShellExecute = false;
+                    si.WorkingDirectory = workingFolder;
+                    si.UseShellExecute = useShell;
                     si.RedirectStandardOutput = true;
                     si.RedirectStandardError = true;
                     si.FileName = cmd;
@@ -89,8 +92,10 @@ namespace SysWeaver
         /// <param name="onMessage">Optionally called on every line outputted, second parameter is false for stdout and true for stderr</param>
         /// <param name="onExit">Optionally called when the process completed or on error, paramaters are: exitCode, exception, duration and the last X stdout/stderr lines of output</param>
         /// <param name="cancelWait">An optional cancellation token</param>
+        /// <param name="workingFolder">The folder to use as the current</param>
+        /// <param name="useShell">Use shell execute</param>
         /// <returns>The process exit code</returns>
-        public static async Task<int> RunAsync(String cmd, String args = null, Action<String, bool> onMessage = null, Action<int, Exception, TimeSpan, IEnumerable<String>> onExit = null, CancellationToken? cancelWait = null )
+        public static async Task<int> RunAsync(String cmd, String args = null, Action<String, bool> onMessage = null, Action<int, Exception, TimeSpan, IEnumerable<String>> onExit = null, CancellationToken? cancelWait = null, String workingFolder = null, bool useShell = false)
         {
             var start = DateTime.UtcNow;
             LinkedList<String> log = new LinkedList<string>();
@@ -101,27 +106,35 @@ namespace SysWeaver
                     int logLen = 0;
                     StringBuilder err = new StringBuilder();
                     var si = p.StartInfo;
-                    si.UseShellExecute = false;
-                    si.RedirectStandardOutput = true;
-                    si.RedirectStandardError = true;
+                    si.WorkingDirectory = workingFolder;
+                    si.UseShellExecute = useShell;
+                    if (!useShell)
+                    {
+                        si.RedirectStandardOutput = true;
+                        si.RedirectStandardError = true;
+                    }
                     si.FileName = cmd;
                     if (!String.IsNullOrEmpty(args))
                         si.Arguments = args;
                     p.ErrorDataReceived += new DataReceivedEventHandler((sender, e) => err.Append(Environment.NewLine).Append(e.Data));
                     p.Start();
-                    p.BeginErrorReadLine();
-                    var o = p.StandardOutput.ReadToEnd().Trim();
-                    if (o.Length > 0)
+                    String o = "";
+                    if (!useShell)
                     {
-                        onMessage?.Invoke(o, false);
-                        lock (log)
+                        p.BeginErrorReadLine();
+                        o = p.StandardOutput.ReadToEnd().Trim();
+                        if (o.Length > 0)
                         {
-                            log.AddLast(o);
-                            ++logLen;
-                            while (logLen > 64)
+                            onMessage?.Invoke(o, false);
+                            lock (log)
                             {
-                                --logLen;
-                                log.RemoveFirst();
+                                log.AddLast(o);
+                                ++logLen;
+                                while (logLen > 64)
+                                {
+                                    --logLen;
+                                    log.RemoveFirst();
+                                }
                             }
                         }
                     }

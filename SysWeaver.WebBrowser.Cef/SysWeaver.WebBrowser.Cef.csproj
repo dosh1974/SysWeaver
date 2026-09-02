@@ -11,8 +11,6 @@
 
 	<ItemGroup>
 	  <PackageReference Include="CefSharp.OffScreen.NETCore" Version="150.0.110" />
-	  <PackageReference Include="chromiumembeddedframework.runtime.win-arm64" Version="150.0.11" />
-	  <PackageReference Include="chromiumembeddedframework.runtime.win-x64" Version="150.0.11" />
 	</ItemGroup>
 
 	<ItemGroup>

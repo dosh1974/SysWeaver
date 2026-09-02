@@ -9,6 +9,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace SysWeaver.Minifier
@@ -16,11 +17,36 @@ namespace SysWeaver.Minifier
     public static class SvgMinifier
     {
 
+        static readonly IReadOnlySet<String> KeepNamespaces = ReadOnlyData.Set(StringComparer.Ordinal,
+            "http://www.w3.org/2000/svg",
+            "http://www.w3.org/2000/xmlns/",
+            ""
+        );
+            
+
+
         public static String Optimize(String svgText, IMessageHost msg, SvgMinifierParams opt)
         {
-            XDocument xdoc = XDocument.Parse(svgText, opt.RemoveWhiteSpaces ? LoadOptions.None : LoadOptions.PreserveWhitespace);
+            XDocument xdoc;
+            bool stripRoot = false;
+            try
+            {
+                xdoc = XDocument.Parse(svgText, opt.RemoveWhiteSpaces ? LoadOptions.None : LoadOptions.PreserveWhitespace);
+            }
+            catch (XmlException ex)
+            {
+                if (ex.Message.FastStartsWith("There are multiple root elements"))
+                {
+                    stripRoot = true;
+                    svgText = String.Concat("<DummyRoot>", svgText, "</DummyRoot>");
+                    xdoc = XDocument.Parse(svgText, opt.RemoveWhiteSpaces ? LoadOptions.None : LoadOptions.PreserveWhitespace);
+                }else
+                {
+                    throw;
+                }
+            }
             var xSvg = FindFirst(xdoc.Root, "svg");
-            var va = xSvg.Attribute("viewBox");
+            var va = xSvg?.Attribute("viewBox");
             double x = 0, y = 0, width = 0, height = 0;
             if (va != null)
             {
@@ -37,7 +63,28 @@ namespace SysWeaver.Minifier
             {
                 xdoc.DescendantNodes().OfType<XComment>().Remove();
             }
-            bool haveViewport = width > 0 && height > 0;
+
+            if (opt.RemoveNamespaces)
+            {
+                if (xSvg != null)
+                {
+                    List<XAttribute> doDel = new();
+                    foreach (var a in xSvg.Attributes())
+                    {
+                        if (!a.IsNamespaceDeclaration)
+                            continue;
+                        if (!a.Name.LocalName.FastEquals("xmlns"))
+                            doDel.Add(a);
+
+                    }
+                    foreach (var a in doDel)
+                        a.Remove();
+                }
+            }
+
+
+
+                bool haveViewport = width > 0 && height > 0;
             bool canDoVisualOpts = haveViewport;
             if (haveViewport || opt.RemoveSize)
             {
@@ -384,6 +431,35 @@ namespace SysWeaver.Minifier
                 }
                 xdoc.DocumentType?.Remove();
 
+                if (opt.RemoveNonSvg)
+                {
+                    List<XElement> delEl = new ();
+                    foreach (var el in xdoc.Descendants())
+                    {
+                        if (!KeepNamespaces.Contains(el.Name.NamespaceName))
+                        {
+                            delEl.Add(el);
+                            continue;
+                        }
+                        List<XAttribute> delAtrs = new ();
+                        foreach (var at in el.Attributes())
+                        {
+                            if (!KeepNamespaces.Contains(at.Name.NamespaceName))
+                            {
+                                delAtrs.Add(at);
+                                continue;
+                            }
+                        }
+                        foreach (var d in delAtrs)
+                            d.Remove();
+                    }
+                    foreach (var d in delEl)
+                        d.Remove();
+                    Validate(bref, xdoc);
+                }
+
+
+
                 if (opt.RemoveAttributeSpaces)
                 {
                     foreach (var el in xdoc.Descendants())
@@ -582,8 +658,20 @@ namespace SysWeaver.Minifier
 
 
             String text;
-            using (var tw = new StringWriter())
+            if (stripRoot)
             {
+                text = String.Concat(xdoc.Root.Elements().Select(cc =>
+                {
+                    using var tw = new StringWriter();
+                    cc.Save(tw, SaveOptions.OmitDuplicateNamespaces | (opt.RemoveWhiteSpaces ? SaveOptions.DisableFormatting : SaveOptions.None));
+                    var t = tw.ToString();
+                    t = t.Substring(t.FastIndexOf("?>") + 2);
+                    return t;
+                }));
+            }
+            else
+            {
+                using var tw = new StringWriter();
                 xdoc.Save(tw, SaveOptions.OmitDuplicateNamespaces | (opt.RemoveWhiteSpaces ? SaveOptions.DisableFormatting : SaveOptions.None));
                 text = tw.ToString();
             }
@@ -890,6 +978,12 @@ namespace SysWeaver.Minifier
 
         static bool GetRender(SvgDocument svg, out int w, out int h)
         {
+            if (svg == null)
+            {
+                w = 0;
+                h = 0;
+                return false;
+            }
             w = (int)Math.Ceiling(svg.ViewBox.Width * 10);
             h = (int)Math.Ceiling(svg.ViewBox.Height * 10);
             const int max = 2048;
@@ -922,6 +1016,8 @@ namespace SysWeaver.Minifier
                     doc.Save(ms);
                     ms.Position = 0;
                     svg = SvgDocument.Open<SvgDocument>(ms);
+                    if (svg == null)
+                        return null;
                 }
                 GetRender(svg, out var w, out var h);
                 var bm = new Bitmap(w, h);

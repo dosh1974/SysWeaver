@@ -76,8 +76,12 @@ namespace SysWeaver.MicroService
 
         public override long ChangeCounter => Interlocked.Read(ref InternalChangeCounter);
 
-        long InternalChangeCounter;
 
+        #pragma warning disable CS0649
+
+        long InternalChangeCounter; //  No external changes support for now.
+
+        #pragma warning restore CS0649
 
         async Task<long> FindUser(OrmConnection c, String identifier)
         {

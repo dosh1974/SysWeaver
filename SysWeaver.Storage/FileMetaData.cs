@@ -101,8 +101,8 @@ namespace SysWeaver
             {
                 C = -Math.Max(1, cacheExpirationDays);
 
-                var baeFolder = Folders.FromConfig("FileMetaDataFolders", Folders.AllSharedFolders, "FileMetaData");
-                var p = Folders.FromConfig("FileMetaData" + keyType + "Folders", baeFolder, keyType);
+                var baseFolder = Folders.FromConfig("FileMetaDataFolders", Folders.AllSharedFolders, "FileMetaData", true);
+                var p = Folders.FromConfig("FileMetaData" + keyType + "Folders", baseFolder, keyType, true);
                 P = p;
                 AppDomain.CurrentDomain.ProcessExit += CurrentDomain_ProcessExit;
             }
