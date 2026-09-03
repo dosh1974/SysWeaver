@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Docs;
 using SysWeaver.Search;
+using SysWeaver.Serialization;
 using SysWeaver.Translation;
 
 namespace SysWeaver.Data
@@ -42,6 +43,46 @@ namespace SysWeaver.Data
                 RowCount = table.RowCount,
                 Title = table.Title,
             };
+
+
+        public static TableData FromTypedData(Type type, IDeserializer ser, ReadOnlySpan<Byte> data)
+        {
+            var c = TableConverters;
+            var key = String.Concat(type.FullName, '_', ser.Mime);
+            var e = type.GetGenericArguments()[0];
+            var columns = GetCols(e);
+            if (c.TryGetValue(key, out var fn))
+                return fn(ser, data, columns);
+            e = GetPropertyType(columns);
+            type = typeof(TypedTableData<>).MakeGenericType(e);
+            var exp = Expression.Lambda<Func<IDeserializer, ReadOnlySpan<Byte>, TableDataColumn[], TableData>>(Expression.Call(MethodToTableData.MakeGenericMethod(e), Expression.Call(ParamSer, MethodSerCreate.MakeGenericMethod(type), ParamData), ParamCols), ParamSer, ParamData, ParamCols);
+            fn = exp.Compile();
+            c.TryAdd(key, fn);
+            return fn(ser, data, columns);
+        }
+
+
+        static TableData InternalToTableData<T>(this TypedTableData<T> table, TableDataColumn[] cols)
+            => new TableData
+            {
+                Cc = table.Cc,
+                RefreshRate = table.RefreshRate,
+                Rows = table.Rows.Convert(TableDataTools.GetRow),
+                Cols = cols,
+                RowCount = table.RowCount,
+                Title = table.Title,
+            };
+
+        static readonly ParameterExpression ParamSer = Expression.Parameter(typeof(IDeserializer), "ser");
+        static readonly ParameterExpression ParamData = Expression.Parameter(typeof(ReadOnlySpan<Byte>), "data");
+        static readonly ParameterExpression ParamCols = Expression.Parameter(typeof(TableDataColumn[]), "cols");
+
+
+
+        static readonly MethodInfo MethodSerCreate = typeof(IDeserializer).GetMethod(nameof(IDeserializer.Create), BindingFlags.Instance | BindingFlags.Public, [typeof(ReadOnlySpan<Byte>)]);
+
+        static readonly MethodInfo MethodToTableData = typeof(TableDataTools).GetMethod(nameof(InternalToTableData), BindingFlags.Static | BindingFlags.NonPublic);
+        static readonly ConcurrentDictionary<String, Func<IDeserializer, ReadOnlySpan<Byte>, TableDataColumn[], TableData>> TableConverters = new(StringComparer.Ordinal);
 
 
         /// <summary>
@@ -1260,6 +1301,88 @@ namespace SysWeaver.Data
         }
 
         static readonly ConcurrentDictionary<String, Tuple<Func<IEnumerator<Object[]>, TableDataColumn[], String, Func<TableDataRequest, TableData>>, Type>> TypeCache = new (StringComparer.Ordinal);
+
+
+
+        public static void DefineAutoProperty(this TypeBuilder typeBuilder, string propertyName, Type propertyType)
+        {
+            // 1. Define the private backing field (e.g., _status)
+            FieldBuilder fieldBuilder = typeBuilder.DefineField(
+                "_" + propertyName.ToLower(),
+                propertyType,
+                FieldAttributes.Private);
+
+            // 2. Define the property metadata
+            PropertyBuilder propertyBuilder = typeBuilder.DefineProperty(
+                propertyName,
+                PropertyAttributes.HasDefault,
+                propertyType,
+                null);
+
+            // Required method attributes for property accessors
+            MethodAttributes accessorAttributes =
+                MethodAttributes.Public |
+                MethodAttributes.SpecialName |
+                MethodAttributes.HideBySig;
+
+            // 3. Define the 'get' accessor method
+            MethodBuilder getMethodBuilder = typeBuilder.DefineMethod(
+                "get_" + propertyName,
+                accessorAttributes,
+                propertyType,
+                Type.EmptyTypes);
+
+            ILGenerator getIL = getMethodBuilder.GetILGenerator();
+            getIL.Emit(OpCodes.Ldarg_0);        // Load 'this' onto the evaluation stack
+            getIL.Emit(OpCodes.Ldfld, fieldBuilder); // Load the value of the backing field
+            getIL.Emit(OpCodes.Ret);            // Return the value
+
+            // 4. Define the 'set' accessor method
+            MethodBuilder setMethodBuilder = typeBuilder.DefineMethod(
+                "set_" + propertyName,
+                accessorAttributes,
+                null,
+                new Type[] { propertyType });
+
+            ILGenerator setIL = setMethodBuilder.GetILGenerator();
+            setIL.Emit(OpCodes.Ldarg_0);        // Load 'this' onto the evaluation stack
+            setIL.Emit(OpCodes.Ldarg_1);        // Load the incoming 'value' argument
+            setIL.Emit(OpCodes.Stfld, fieldBuilder); // Store 'value' into the backing field
+            setIL.Emit(OpCodes.Ret);            // Return void
+
+            // 5. Bind the get/set methods to the property metadata
+            propertyBuilder.SetGetMethod(getMethodBuilder);
+            propertyBuilder.SetSetMethod(setMethodBuilder);
+        }
+
+        static Type GetPropertyType(TableDataColumn[] defs)
+        {
+            var types = defs.Select(x => TypeFinder.Get(x.Type)).ToArray();
+            var names = defs.Select(x => x.Name).ToArray();
+            var key = String.Join('|', String.Join('/', types.Select(x => x.FullName)), String.Join("\\", names));
+            var cache = PropertyTypeCache;
+            if (cache.TryGetValue(key, out var type))
+                return type;
+            lock (cache)
+            {
+                if (cache.TryGetValue(key, out type))
+                    return type;
+                var l = types.Length;
+                var inpRows = InputRows;
+                var varCols = VarCols;
+
+                var typeName = "TableDatatPropType" + Interlocked.Increment(ref TypeName);
+                var typeBuilder = ModuleBuilder.DefineType(typeName, TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class);
+                for (int i = 0; i < l; ++i)
+                    typeBuilder.DefineAutoProperty(names[i], types[i]);
+                type = typeBuilder.CreateType();
+                if (!cache.TryAdd(key, type))
+                    type = cache[key];
+                return type;
+            }
+        }
+
+        static readonly ConcurrentDictionary<String, Type> PropertyTypeCache = new(StringComparer.Ordinal);
 
 
         public static TableDataFilter[] GetDefaultFilterRow<T>()

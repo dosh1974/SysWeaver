@@ -1,6 +1,7 @@
 ﻿
 
 using Newtonsoft.Json;
+using SkiaSharp;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -603,6 +604,18 @@ namespace SysWeaver.MicroService
         static readonly IReadOnlyDictionary<Type, ValTypes> DataConverters = GetDataConverters();
 
 
+
+        static Type StripTask(Type t)
+        {
+            if (!t.IsGenericType)
+                return t;
+            var ga = t.GetGenericTypeDefinition();
+            if (ga != typeof(Task<>))
+                if (ga != typeof(ValueTask<>))
+                    return t;
+            return t.GetGenericArguments()[0];
+        }
+
         /// <summary>
         /// Returns chart data for a table
         /// </summary>
@@ -615,13 +628,29 @@ namespace SysWeaver.MicroService
             var api = am.TryGet(p.TableApi);
             if (api == null)
                 throw new Exception("API " + p.TableApi.ToQuoted() + " is not found!");
+            if (!request.Session.IsValid(api.Auth))
+                throw new UserNotAllowedException();
             var opt = p.Options;
             if (opt != null)
                 opt.Cc = 0;
             var ser = am.DefaultSerializer;
             var apiParams = ser.Serialize(opt);
             var res = await api.InvokeAsync(request, apiParams).ConfigureAwait(false);
-            var data = ser.Create<TableData>(res);
+            var tableType = StripTask(api.MethodInfo.ReturnType);
+            TableData data;
+            if (tableType == typeof(TableData))
+            {
+                data = ser.Create<TableData>(res);
+            }else
+            {
+                if (!tableType.IsGenericType)
+                    throw new Exception("API " + p.TableApi.ToQuoted() + " doesn't return table data!");
+                if (tableType.GetGenericTypeDefinition() != typeof(TypedTableData<>))
+                    throw new Exception("API " + p.TableApi.ToQuoted() + " doesn't return table data!");
+                data = TableDataTools.FromTypedData(tableType, ser, res.Span);
+            }
+
+
             Dictionary<String, Tuple<TableDataColumn, int>> colMap = new Dictionary<string, Tuple<TableDataColumn, int>>(StringComparer.Ordinal);
             var cols = data.Cols;
             var cc = cols.Length;
@@ -635,6 +664,8 @@ namespace SysWeaver.MicroService
             var usedColumns = new HashSet<int>();
             foreach (var key in p.Keys)
             {
+                if (key == null)
+                    continue;
                 var col = colMap[key];
                 if (!usedColumns.Add(col.Item2))
                     throw new Exception("Key " + key.ToQuoted() + " is used more than once!");

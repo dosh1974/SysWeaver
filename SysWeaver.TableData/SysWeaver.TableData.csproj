@@ -12,6 +12,7 @@
 	  <ProjectReference Include="..\SysWeaver.Compression\SysWeaver.Compression.csproj" />
 	  <ProjectReference Include="..\SysWeaver.Docs\SysWeaver.Docs.csproj" />
 	  <ProjectReference Include="..\SysWeaver.ExpressionEvaluator\SysWeaver.ExpressionEvaluator.csproj" />
+	  <ProjectReference Include="..\SysWeaver.Serialization\SysWeaver.Serialization.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

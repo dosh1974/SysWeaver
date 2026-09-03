@@ -5,6 +5,8 @@ using SysWeaver.Data;
 
 namespace SysWeaver
 {
+
+    [TableDataPrimaryKey(nameof(Name))]
     public sealed class TextFile
     {
         /// <summary>
