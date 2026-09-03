@@ -357,7 +357,7 @@ namespace SysWeaver.Net
                 {
                     DispatchErrors.OnException(ex);
                 }
-                Thread.Sleep(0);
+                await Task.Yield();
             }
             //  Wait for all pending requests handlers to complete
             var now = DateTime.UtcNow;

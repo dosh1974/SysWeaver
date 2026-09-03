@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Linq;
+using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -16,6 +17,49 @@ namespace SysWeaver
         static readonly CompareInfo Ci = CultureInfo.InvariantCulture.CompareInfo;
 
         #region FastToLower
+
+
+        /// <summary>
+        /// Returns true if a string is all lowercased (invariant)
+        /// </summary>
+        /// <param name="str">The string to test</param>
+        /// <returns>True if all chars are lowercased (or not chars at all)</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool FastIsLower(this String str)
+            => InternalFastIsLower(str.AsSpan(), str.Length);
+
+        /// <summary>
+        /// Returns true if a string is all lowercased (invariant)
+        /// </summary>
+        /// <param name="str">The string to test</param>
+        /// <param name="startIndex">The index of the first character to test</param>
+        /// <param name="length">The number of characters to test</param>
+        /// <returns>True if all chars are lowercased (or not chars at all)</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool FastIsLower(this String str, int startIndex, int length = -1)
+        {
+            var s = str.AsSpan(startIndex);
+            return InternalFastIsLower(s, length < 0 ? s.Length : length);
+
+        }
+
+        /// <summary>
+        /// Returns true if all chars are lowercased (invariant)
+        /// </summary>
+        /// <param name="source">The chars</param>
+        /// <param name="l">The chars</param>
+        /// <returns>True if all chars are lowercased (or not chars at all)</returns>
+        static bool InternalFastIsLower(this ReadOnlySpan<Char> source, int l)
+        {
+            while (l > 0)
+            {
+                --l;
+                var c = source[l];
+                if (c != Char.ToLowerInvariant(c))
+                    return false;
+            }
+            return true;
+        }
 
         /// <summary>
         /// Make a culture invariant lower case version of a substring
@@ -32,15 +76,55 @@ namespace SysWeaver
                 length = sl;
             if ((startIndex == 0) && (length == sl))
                 return Ti.ToLower(str);
-            return String.Create(length, s, LowerCasedSubString);
+            var isLower = InternalFastIsLower(s, length);
+            return isLower ? new string(s[..length]) : String.Create(length, s, LowerCasedSubString);
         }
+
+
+        /// <summary>
+        /// Make a culture invariant lower case version of the first N chars of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a culture invariant lower case</param>
+        /// <param name="length">The number of characters to convert</param>
+        /// <returns>Culture invariant lower case string</returns>
+        public static String FastStartToLower(this String str, int length)
+        {
+            var s = str.AsSpan();
+            if (length == str.Length)
+                return Ti.ToLower(str);
+            var isLower = InternalFastIsLower(s, length);
+            return isLower ? new string(s[..length]) : String.Create(length, s, LowerCasedSubString);
+        }
+
 
         static readonly SpanAction<Char, ReadOnlySpan<Char>> LowerCasedSubString = (str, source) =>
         {
             var l = str.Length;
-            var ti = Ti;
-            for (int i = 0; i < l; ++i)
-                str[i] = ti.ToLower(source[i]);
+            int i = 0;
+
+            var p = str;
+            var l4 = l & ~3;
+            while (i < l4)
+            {
+                var a = source[i];
+                ++i;
+                var b = source[i];
+                ++i;
+                var c = source[i];
+                ++i;
+                var d = source[i];
+                ++i;
+                p[0] = Char.ToLowerInvariant(a);
+                p[1] = Char.ToLowerInvariant(b);
+                p[2] = Char.ToLowerInvariant(c);
+                p[3] = Char.ToLowerInvariant(d);
+                p = p[4..];
+            }
+            while (i < l)
+            {
+                str[i] = Char.ToLowerInvariant(source[i]);
+                ++i;
+            }
         };
 
         /// <summary>
@@ -62,7 +146,10 @@ namespace SysWeaver
                 -- ee;
             if ((ss == 0) && (ee == sl))
                 return Ti.ToLower(str);
-            return String.Create(ee - ss, s.Slice(ss), LowerCasedSubString);
+            s = s[ss..];
+            var l = ee - ss;
+            var isLower = InternalFastIsLower(s, l);
+            return isLower ? new String(s[..l]) : String.Create(l, s, LowerCasedSubString);
         }
 
         /// <summary>
@@ -81,7 +168,10 @@ namespace SysWeaver
                 return String.Empty;
             if (ss == 0)
                 return Ti.ToLower(str);
-            return String.Create(ee - ss, s.Slice(ss), LowerCasedSubString);
+            s = s[ss..];
+            var l = ee - ss;
+            var isLower = InternalFastIsLower(s, l);
+            return isLower ? new String(s) : String.Create(l, s, LowerCasedSubString);
         }
 
         /// <summary>
@@ -100,7 +190,8 @@ namespace SysWeaver
                 return String.Empty;
             if (ee == sl)
                 return Ti.ToLower(str);
-            return String.Create(ee, s, LowerCasedSubString);
+            var isLower = InternalFastIsLower(s, ee);
+            return isLower ? new String(s[..ee]) : String.Create(ee, s, LowerCasedSubString);
         }
 
 
@@ -123,9 +214,12 @@ namespace SysWeaver
                 return String.Empty;
             while ((ee > ss) && (s[ee - 1] == trimChar))
                 --ee;
-            if ((ss == 0) && (ee == sl))
+            if (ss == 0)
                 return Ti.ToLower(str);
-            return String.Create(ee - ss, s.Slice(ss), LowerCasedSubString);
+            s = s[ss..];
+            var l = ee - ss;
+            var isLower = InternalFastIsLower(s, l);
+            return isLower ? new String(s) : String.Create(l, s, LowerCasedSubString);
         }
 
         /// <summary>
@@ -145,7 +239,10 @@ namespace SysWeaver
                 return String.Empty;
             if (ss == 0)
                 return Ti.ToLower(str);
-            return String.Create(ee - ss, s.Slice(ss), LowerCasedSubString);
+            s = s[ss..];
+            var l = ee - ss;
+            var isLower = InternalFastIsLower(s, l);
+            return isLower ? new String(s) : String.Create(l, s, LowerCasedSubString);
         }
 
         /// <summary>
@@ -165,7 +262,8 @@ namespace SysWeaver
                 return String.Empty;
             if (ee == sl)
                 return Ti.ToLower(str);
-            return String.Create(ee, s, LowerCasedSubString);
+            var isLower = InternalFastIsLower(s, ee);
+            return isLower ? new String(s[..ee]) : String.Create(ee, s, LowerCasedSubString);
         }
 
         /// <summary>
@@ -175,12 +273,55 @@ namespace SysWeaver
         /// <returns>Culture invariant lower case string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String FastToLower(this String str)
-            => Ti.ToLower(str);
+            => InternalFastIsLower(str.AsSpan(), str.Length) ? str : Ti.ToLower(str);
 
         #endregion//FastToLower
 
 
         #region FastToUpper
+
+
+        /// <summary>
+        /// Returns true if a string is all uppercased (invariant)
+        /// </summary>
+        /// <param name="str">The string to test</param>
+        /// <returns>True if all chars are uppercased (or not chars at all)</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool FastIsUpper(this String str)
+            => InternalFastIsUpper(str.AsSpan(), str.Length);
+
+        /// <summary>
+        /// Returns true if a string is all uppercased (invariant)
+        /// </summary>
+        /// <param name="str">The string to test</param>
+        /// <param name="startIndex">The index of the first character to test</param>
+        /// <param name="length">The number of characters to test</param>
+        /// <returns>True if all chars are uppercased (or not chars at all)</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool FastIsUpper(this String str, int startIndex, int length = -1)
+        {
+            var s = str.AsSpan(startIndex);
+            return InternalFastIsUpper(s, length < 0 ? s.Length : length);
+
+        }
+
+        /// <summary>
+        /// Returns true if all chars are uppercased (invariant)
+        /// </summary>
+        /// <param name="source">The chars</param>
+        /// <param name="l">The chars</param>
+        /// <returns>True if all chars are uppercased (or not chars at all)</returns>
+        static bool InternalFastIsUpper(this ReadOnlySpan<Char> source, int l)
+        {
+            while (l > 0)
+            {
+                --l;
+                var c = source[l];
+                if (c != Char.ToUpperInvariant(c))
+                    return false;
+            }
+            return true;
+        }
 
         /// <summary>
         /// Make a culture invariant upper case version of a substring
@@ -197,15 +338,55 @@ namespace SysWeaver
                 length = sl;
             if ((startIndex == 0) && (length == sl))
                 return Ti.ToUpper(str);
-            return String.Create(length, s, UpperCasedSubString);
+            var isUpper = InternalFastIsUpper(s, length);
+            return isUpper ? new string(s[..length]) : String.Create(length, s, UpperCasedSubString);
         }
+
+
+        /// <summary>
+        /// Make a culture invariant upper case version of the first N chars of a string
+        /// </summary>
+        /// <param name="str">The string to transform into a culture invariant upper case</param>
+        /// <param name="length">The number of characters to convert</param>
+        /// <returns>Culture invariant upper case string</returns>
+        public static String FastStartToUpper(this String str, int length)
+        {
+            var s = str.AsSpan();
+            if (length == str.Length)
+                return Ti.ToUpper(str);
+            var isUpper = InternalFastIsUpper(s, length);
+            return isUpper ? new string(s[..length]) : String.Create(length, s, UpperCasedSubString);
+        }
+
 
         static readonly SpanAction<Char, ReadOnlySpan<Char>> UpperCasedSubString = (str, source) =>
         {
             var l = str.Length;
-            var ti = Ti;
-            for (int i = 0; i < l; ++i)
-                str[i] = ti.ToUpper(source[i]);
+            int i = 0;
+
+            var p = str;
+            var l4 = l & ~3;
+            while (i < l4)
+            {
+                var a = source[i];
+                ++i;
+                var b = source[i];
+                ++i;
+                var c = source[i];
+                ++i;
+                var d = source[i];
+                ++i;
+                p[0] = Char.ToUpperInvariant(a);
+                p[1] = Char.ToUpperInvariant(b);
+                p[2] = Char.ToUpperInvariant(c);
+                p[3] = Char.ToUpperInvariant(d);
+                p = p[4..];
+            }
+            while (i < l)
+            {
+                str[i] = Char.ToUpperInvariant(source[i]);
+                ++i;
+            }
         };
 
         /// <summary>
@@ -227,7 +408,10 @@ namespace SysWeaver
                 --ee;
             if ((ss == 0) && (ee == sl))
                 return Ti.ToUpper(str);
-            return String.Create(ee - ss, s.Slice(ss), UpperCasedSubString);
+            s = s[ss..];
+            var l = ee - ss;
+            var isUpper = InternalFastIsUpper(s, l);
+            return isUpper ? new String(s[..l]) : String.Create(l, s, UpperCasedSubString);
         }
 
         /// <summary>
@@ -246,7 +430,10 @@ namespace SysWeaver
                 return String.Empty;
             if (ss == 0)
                 return Ti.ToUpper(str);
-            return String.Create(ee - ss, s.Slice(ss), UpperCasedSubString);
+            s = s[ss..];
+            var l = ee - ss;
+            var isUpper = InternalFastIsUpper(s, l);
+            return isUpper ? new String(s) : String.Create(l, s, UpperCasedSubString);
         }
 
         /// <summary>
@@ -265,7 +452,8 @@ namespace SysWeaver
                 return String.Empty;
             if (ee == sl)
                 return Ti.ToUpper(str);
-            return String.Create(ee, s, UpperCasedSubString);
+            var isUpper = InternalFastIsUpper(s, ee);
+            return isUpper ? new String(s[..ee]) : String.Create(ee, s, UpperCasedSubString);
         }
 
 
@@ -288,9 +476,12 @@ namespace SysWeaver
                 return String.Empty;
             while ((ee > ss) && (s[ee - 1] == trimChar))
                 --ee;
-            if ((ss == 0) && (ee == sl))
+            if (ss == 0)
                 return Ti.ToUpper(str);
-            return String.Create(ee - ss, s.Slice(ss), UpperCasedSubString);
+            s = s[ss..];
+            var l = ee - ss;
+            var isUpper = InternalFastIsUpper(s, l);
+            return isUpper ? new String(s) : String.Create(l, s, UpperCasedSubString);
         }
 
         /// <summary>
@@ -310,7 +501,10 @@ namespace SysWeaver
                 return String.Empty;
             if (ss == 0)
                 return Ti.ToUpper(str);
-            return String.Create(ee - ss, s.Slice(ss), UpperCasedSubString);
+            s = s[ss..];
+            var l = ee - ss;
+            var isUpper = InternalFastIsUpper(s, l);
+            return isUpper ? new String(s) : String.Create(l, s, UpperCasedSubString);
         }
 
         /// <summary>
@@ -330,7 +524,8 @@ namespace SysWeaver
                 return String.Empty;
             if (ee == sl)
                 return Ti.ToUpper(str);
-            return String.Create(ee, s, UpperCasedSubString);
+            var isUpper = InternalFastIsUpper(s, ee);
+            return isUpper ? new String(s[..ee]) : String.Create(ee, s, UpperCasedSubString);
         }
 
         /// <summary>
@@ -340,7 +535,7 @@ namespace SysWeaver
         /// <returns>Culture invariant upper case string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String FastToUpper(this String str)
-            => Ti.ToUpper(str);
+            => InternalFastIsUpper(str.AsSpan(), str.Length) ? str : Ti.ToUpper(str);
 
         #endregion//FastToUpper
 

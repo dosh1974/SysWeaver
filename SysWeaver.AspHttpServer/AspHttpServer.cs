@@ -137,6 +137,17 @@ namespace SysWeaver.Net
             {
                 options.ApplicationServices = Prov;
                 options.AllowSynchronousIO = true;
+                options.Limits.MaxConcurrentConnections = 5000;           // Default ~1k
+                options.Limits.MaxConcurrentUpgradedConnections = 500;    // Keep lower
+                options.Limits.MaxRequestBodySize = 104857600;            // 100 MB
+                options.Limits.MinRequestBodyDataRate = new MinDataRate(
+                    bytesPerSecond: 240,                                   // 240 bytes/sec minimum
+                    gracePeriod: TimeSpan.FromSeconds(5));
+                options.Limits.MinResponseDataRate = new MinDataRate(
+                    bytesPerSecond: 240,
+                    gracePeriod: TimeSpan.FromSeconds(5));
+
+
                 options.ConfigureEndpointDefaults(def =>
                 {
                     def.KestrelServerOptions.Limits.KeepAliveTimeout = duration;
@@ -145,7 +156,6 @@ namespace SysWeaver.Net
                 options.ConfigureHttpsDefaults(def =>
                 {
                     //def.SslProtocols = System.Security.Authentication.SslProtocols.Tls13;
-
                 });
 
                 var prefixes = new List<HttpServerPrefix>();
@@ -507,63 +517,48 @@ namespace SysWeaver.Net
         /// <returns></returns>
         public async Task ProcessRequestAsync(HttpContext c)
         {
-            using (PerfMon.Track(nameof(ProcessRequestAsync)))
+            using var _ = PerfMon.Track(nameof(ProcessRequestAsync));
+            Interlocked.Increment(ref ReqCounter);
+            try
             {
                 var res = c.Response;
                 var req = c.Request;
-                String url = null;
-                Interlocked.Increment(ref ReqCounter);
+                if (IsPaused)
+                {
+                    await HandlePause(req, res).ConfigureAwait(false);
+                    return;
+                }
+                var url = req.GetDisplayUrl();
+                var host = GetHost(out var prefix, out var queryStart, out var didIndex, ref url);
+                if (prefix == null)
+                {
+                    await HandleInvalidPrefix(req, res).ConfigureAwait(false);
+                    return;
+                }
+                using var data = new AspHttpServerRequest(c, url, prefix, this, host, queryStart, didIndex);
+                await Handle(data).ConfigureAwait(false);
+            }
+            catch (HttpListenerException ex)
+            {
+                ListenerExceptions.OnException(ex);
+            }
+            catch (Exception ex)
+            {
+                RequestExceptions.OnException(ex);
+#if DEBUG
+                Msg?.AddMessage(Prefix + "Request failed!", ex, MessageLevels.Debug);
+#endif//DEBUG
                 try
                 {
-                    if (IsPaused)
-                    {
-                        await HandlePause(req, res).ConfigureAwait(false);
-                        return;
-                    }
-                    url = req.GetDisplayUrl();
-                    var host = GetHost(out var prefix, out var queryStart, out var didIndex, ref url);
-                    if (prefix == null)
-                    {
-                        await HandleInvalidPrefix(req, res).ConfigureAwait(false);
-                        return;
-                    }
-                    using var data = new AspHttpServerRequest(c, url, prefix, this, host, queryStart, didIndex);
-                    await Handle(data).ConfigureAwait(false);
+                    c.Response.StatusCode = 500;
                 }
-                catch (HttpListenerException ex)
+                catch
                 {
-                    ListenerExceptions.OnException(ex);
                 }
-                catch (Exception ex)
-                {
-                    RequestExceptions.OnException(ex);
-#if DEBUG
-                    Msg?.AddMessage(Prefix + "Request failed!", ex, MessageLevels.Debug);
-#endif//DEBUG
-                    try
-                    {
-                        res.StatusCode = 500;
-                    }
-                    catch
-                    {
-                    }
-                }
-                finally
-                {
-                    try
-                    {
-                        res.Body.Dispose();
-                        req.Body.Dispose();
-                    }
-                    catch (Exception ex)
-                    {
-                        RequestExceptions.OnException(ex);
-#if DEBUG
-                        Msg?.AddMessage(Prefix + "Closing the response for \"" + url + "\" failed!", ex, MessageLevels.Debug);
-#endif//DEBUG
-                    }
-                    Interlocked.Decrement(ref ReqCounter);
-                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref ReqCounter);
             }
         }
 

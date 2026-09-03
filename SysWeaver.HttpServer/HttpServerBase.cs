@@ -2601,7 +2601,7 @@ namespace SysWeaver.Net
                 var end = CharPtrTools.IndexOfAny(HostEnd, start, urlEnd);
                 if (end == null)
                     end = urlEnd;
-                var hostName = url.FastToLower(0, (int)(end - urlStart));
+                var hostName = url.FastStartToLower((int)(end - urlStart));
                 if (!Hosts.TryGetValue(hostName, out var host))
                     host = CreateHost(hostName, url);
                 prefix = host.Name;
