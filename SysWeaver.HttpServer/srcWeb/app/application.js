@@ -681,10 +681,8 @@ function CreatePopUpAtElement(element, widthScale, heightScale, offsetX, offsetY
         offsetX = 0;
     if (typeof offsetY !== "number")
         offsetY = 0;
-        
+
     const popupMenuElement = document.createElement("SysWeaver-PopupMenu");
-
-
     function setPos() {
 
         const rect = element.getBoundingClientRect();
@@ -695,8 +693,9 @@ function CreatePopUpAtElement(element, widthScale, heightScale, offsetX, offsetY
     }
 
     setPos();
+/*    
     //new ResizeObserver(setPos).observe(document.body);
-
+    */
 
     /*
     const s = window.getComputedStyle(element);

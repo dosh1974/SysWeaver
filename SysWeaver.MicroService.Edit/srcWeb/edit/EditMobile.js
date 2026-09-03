@@ -73,7 +73,7 @@
                 r2.classList.remove("Hide");
             };
         }
-        if (options.ReadOnly || ((member.Flags & TypeMemberFlags.ReadOnly) != 0))
+        if (options.ReadOnly || ((member.Flags & TypeMemberFlags.ReadOnly) !== 0))
             c.classList.add("EditReadOnly");
         return ret;
     }

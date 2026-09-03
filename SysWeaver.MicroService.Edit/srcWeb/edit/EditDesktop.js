@@ -60,7 +60,7 @@
         }
 
         ret.Icon = icon;
-        if (options.ReadOnly || ((member.Flags & 16) != 0))
+        if (options.ReadOnly || ((member.Flags & 16) !== 0))
             c.classList.add("EditReadOnly");
         return ret;
     }

@@ -713,7 +713,15 @@ namespace SysWeaver.MicroService
                     ret = typeof(Byte[]);
                 if (ret == typeof(Memory<Byte>))
                     ret = typeof(Byte[]);
-                r.Return = GetTypeInfo(ret, ret.FullName, isDebug, GetInfo(ri));
+                var rti = GetTypeInfo(ret, ret.FullName, isDebug, GetInfo(ri));
+                rti.DisplayName = "Value";
+                rti.Flags |= TypeMemberFlags.ReadOnly;
+                if (((rti.Flags & TypeMemberFlags.IsObject) == 0) || ((rti.Flags & TypeMemberFlags.IsPrimitive) != 0))
+                    if (rti.Members.Length == 1)
+                        rti.Members[0].DisplayName = ret.Name;
+                foreach (var mm in rti.Members)
+                    mm.Flags |= TypeMemberFlags.ReadOnly;
+                r.Return = rti;
             }
             r.Mime = retMime;
             //r = await Translate(r, request.Translator, lang).ConfigureAwait(false);

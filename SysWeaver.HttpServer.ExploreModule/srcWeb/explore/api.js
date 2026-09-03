@@ -360,14 +360,13 @@ async function apiMain() {
                     const opt = new EditOptions();
                     opt.ReadOnly = true;
                     const output = new Edit(data.Return, null, opt);
-                    //const output = new Edit(retType, null, opt);
                     await output.SetObject(res);
 
                     const tc1 = document.createElement("SysWeaver-TabContent");
                     tc1.appendChild(output.Element);
                     target.appendChild(tc1);
                     results.AddTab(
-                        _TF("RETURN", "The text of a tab header that will display the detailed result of an API call"),
+                        _TF("RESULT", "The text of a tab header that will display the detailed result of an API call"),
                         tc1);
                 }
                 target.appendChild(tc0);

@@ -809,7 +809,7 @@ class Edit {
                     ev.dataTransfer.effectAllowed = "copy";
                 }
             });
-            if ((!options.ReadOnly) && ((member.Flags & 16) == 0)) {
+            if (!(options.ReadOnly || ((member.Flags & 16) !== 0))) {
                 c.ondragover = ev => {
                     ev.preventDefault();
                     ev.dataTransfer.dropEffect = "copy";
@@ -1374,7 +1374,7 @@ class Edit {
             return true;
         };
 
-        const isReadOnly = options.ReadOnly || (Edit.IsPrimitive(type) && ((type.Members[0].Flags & 16) != 0));
+        const isReadOnly = options.ReadOnly || (Edit.IsPrimitive(type) && ((type.Members[0].Flags & 16) !== 0));
         if (options.CanExpand && (!Edit.IsPrimitive(type))) {
             let isExpanded = options.IsExpanded;
 

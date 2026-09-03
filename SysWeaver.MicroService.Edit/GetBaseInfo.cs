@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 
 namespace SysWeaver.MicroService.EditInternal
 {
@@ -6,6 +7,12 @@ namespace SysWeaver.MicroService.EditInternal
     {
         protected GetBaseInfo(bool haveDefault, Object def, Type type, String summary, String remarks, bool isReadOnly, string name)
         {
+            if (type.IsGenericType)
+            {
+                var gt = type.GetGenericTypeDefinition();
+                if ((gt == typeof(Task<>)) || (gt == typeof(ValueTask<>)))
+                    type = type.GetGenericArguments()[0];
+            }
             Def = def;
             Type = type;
             Summary = summary;
