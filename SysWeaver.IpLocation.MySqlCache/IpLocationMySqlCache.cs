@@ -40,6 +40,8 @@ namespace SysWeaver.IpLocation.Caches
         public ValueTask<IpLocation> Get(string ip, Func<string, Task<IpLocation>> getFromSource)
             => Cache.GetOrUpdateAsync(ip, DbGet, getFromSource);
 
+        static readonly DateTime CityAdded = new DateTime(2026, 09, 07, 09, 45, 00);
+
         async Task<IpLocation> DbGet(string ip, Func<string, Task<IpLocation>> getFromSource)
         {
             using (var c = await Db.GetAsync().ConfigureAwait(false))
@@ -52,7 +54,13 @@ namespace SysWeaver.IpLocation.Caches
                     if (res.Added >= old)
                     {
                         var d = res.Data;
-                        return d == null ? null : Ser.FromString<IpLocation>(d);
+                        if (d == null)
+                            return null;
+                        var ipl = Ser.FromString<IpLocation>(d);
+                        if (ipl.City != null) 
+                            return ipl;
+                        if (res.Added > CityAdded)
+                            return ipl;
                     }
                     await c.DeleteAsync(res).ConfigureAwait(false);
                 }

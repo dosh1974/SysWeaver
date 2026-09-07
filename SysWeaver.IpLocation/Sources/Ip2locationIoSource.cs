@@ -63,7 +63,8 @@ namespace SysWeaver.IpLocation.Sources
                 null,
                 d.@as,
                 Name,
-                DateTime.UtcNow);
+                DateTime.UtcNow,
+                d.city_name);
         }
 
 

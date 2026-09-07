@@ -78,7 +78,8 @@ namespace SysWeaver.IpLocation.Sources
                 d.state_code,
                 d.organization,
                 Name, 
-                DateTime.UtcNow);
+                DateTime.UtcNow,
+                d.city);
         }
 
 

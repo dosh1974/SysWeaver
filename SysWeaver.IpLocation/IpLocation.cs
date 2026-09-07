@@ -15,12 +15,14 @@ namespace SysWeaver.IpLocation
         public String AutonomousSystem;
         public String Source;
         public DateTime Sourced;
+        public String City;
+
 
         public IpLocation()
         {
         }
 
-        public IpLocation(string isoCountry, double latitude, double longitude, string address, string regionCode, string autonomousSystem, string source, DateTime sourced)
+        public IpLocation(string isoCountry, double latitude, double longitude, string address, string regionCode, string autonomousSystem, string source, DateTime sourced, String city)
         {
             IsoCountry = isoCountry;
             Latitude = latitude;
@@ -30,6 +32,7 @@ namespace SysWeaver.IpLocation
             AutonomousSystem = autonomousSystem;
             Source = source;
             Sourced = sourced;
+            City = city;
         }
 
         public IpLocation(IpLocation c)
@@ -42,6 +45,7 @@ namespace SysWeaver.IpLocation
             AutonomousSystem = c.AutonomousSystem;
             Source = c.Source;
             Sourced = c.Sourced;
+            City = c.City;
         }
     }
 

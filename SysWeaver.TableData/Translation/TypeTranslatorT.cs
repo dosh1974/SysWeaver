@@ -209,7 +209,7 @@ namespace SysWeaver.Translation
                         throw new Exception(String.Concat("Negative argument index found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
                     if (ix >= tl)
                         throw new Exception(String  .Concat("Invalid argument index ", ix, ", found in \"", x, "\", on member \"", memberName, "\" in type \"", type.FullName, '"'));
-                    argStart = x.IndexOf('}', argEnd + 1);
+                    argStart = x.IndexOf('{', argEnd + 1);
                 }
 #endif//DEBUG
 

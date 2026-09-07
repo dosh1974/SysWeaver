@@ -65,6 +65,15 @@ namespace SysWeaver.IpLocation.Caches
         [TableDataText(60)]
         public String Address => Loc?.Address;
 
+
+        /// <summary>
+        /// City
+        /// </summary>
+        [Ignore]
+        [TableDataText(60)]
+        public String City => Loc?.City;
+
+
         /// <summary>
         /// What Autonomous System provided this information
         /// </summary>
