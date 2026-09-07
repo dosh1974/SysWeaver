@@ -164,6 +164,56 @@
             <param name="mustBeValid">Throw if the user or password is empty</param>
             <returns>False if the user or password is empty, else True</returns>
         </member>
+        <member name="T:SysWeaver.AppInfo">
+            <summary>
+            Service used to change the application information such as display name etc
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AppInfoParams.AppName">
+            <summary>
+            The name of the application (can be used for file names etc)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AppInfoParams.AppDisplayName">
+            <summary>
+            The display name of the application (can be used for texts etc, displayed to end users)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AppInfoParams.AppDescription">
+            <summary>
+            The description of the application
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AppInfoParams.AppSeed">
+            <summary>
+            A seed (changes the automatically generated logo)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AppInfoParams.AppLanguage">
+            <summary>
+            The default language to use, system should try to localize according to this.
+            The two letter ISO 639-1 language code of the language, ex: "en", "es", "de".
+            Can optionally have an ISO 3166 Alpha 2 country code appended, ex: "en-GB", "en-US", "es-MX", "es-ES".
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AppInfoParams.ThreadPoolWorkerThreads">
+            <summary>
+            Specify the number of worker threads.
+            0 = Use default.
+            greater than 0 = Use exactly this many.
+            less than  0 = Use the maximum of the default and the number of CPU cores multiplied by the absolute value of this number as a percentage.
+            Ex: -200 = Max(default, (coreCount * 200) / 100)
+            </summary>
+        </member>
+        <member name="F:SysWeaver.AppInfoParams.ThreadPoolIoThreads">
+            <summary>
+            Specify the number of IO threads.
+            0 = Use default.
+            greater than 0 = Use exactly this many.
+            less than  0 = Use the maximum of the default and the number of CPU cores multiplied by the absolute value of this number as a percentage.
+            Ex: -200 = Max(default, (coreCount * 200) / 100)
+            </summary>
+        </member>
         <member name="M:SysWeaver.ArrayEqualityComparer.Get``1">
             <summary>
             Get an array comparer, that uses the default element comparer
@@ -3816,7 +3866,7 @@
             </param>
             <returns></returns>
         </member>
-        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.Task},System.Int32)">
+        <member name="M:SysWeaver.EnumerableExt.ProcessAsyncValue``1(System.Collections.Generic.IReadOnlyList{``0},System.Func{``0,System.Threading.Tasks.ValueTask},System.Int32)">
             <summary>
             Process all elements in a list.
             Elements are processed in paralell (async).
@@ -4137,38 +4187,6 @@
             The default language to use, system should try to localize according to this.
             The two letter ISO 639-1 language code of the language, ex: "en", "es", "de".
             Can optionally have an ISO 3166 Alpha 2 country code appended, ex: "en-GB", "en-US", "es-MX", "es-ES".
-            </summary>
-        </member>
-        <member name="F:SysWeaver.AppInfoParams.AppName">
-            <summary>
-            The name of the application (can be used for file names etc)
-            </summary>
-        </member>
-        <member name="F:SysWeaver.AppInfoParams.AppDisplayName">
-            <summary>
-            The display name of the application (can be used for texts etc, displayed to end users)
-            </summary>
-        </member>
-        <member name="F:SysWeaver.AppInfoParams.AppDescription">
-            <summary>
-            The description of the application
-            </summary>
-        </member>
-        <member name="F:SysWeaver.AppInfoParams.AppSeed">
-            <summary>
-            A seed (changes the automatically generated logo)
-            </summary>
-        </member>
-        <member name="F:SysWeaver.AppInfoParams.AppLanguage">
-            <summary>
-            The default language to use, system should try to localize according to this.
-            The two letter ISO 639-1 language code of the language, ex: "en", "es", "de".
-            Can optionally have an ISO 3166 Alpha 2 country code appended, ex: "en-GB", "en-US", "es-MX", "es-ES".
-            </summary>
-        </member>
-        <member name="T:SysWeaver.AppInfo">
-            <summary>
-            Service used to change the application information such as display name etc
             </summary>
         </member>
         <member name="T:SysWeaver.ExceptionStackEqualityComparer">
@@ -8939,12 +8957,44 @@
             <param name="removeEmpty">True to remove empty lines</param>
             <returns></returns>
         </member>
+        <member name="M:SysWeaver.StringExt.FastIsLower(System.String)">
+            <summary>
+            Returns true if a string is all lowercased (invariant)
+            </summary>
+            <param name="str">The string to test</param>
+            <returns>True if all chars are lowercased (or not chars at all)</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastIsLower(System.String,System.Int32,System.Int32)">
+            <summary>
+            Returns true if a string is all lowercased (invariant)
+            </summary>
+            <param name="str">The string to test</param>
+            <param name="startIndex">The index of the first character to test</param>
+            <param name="length">The number of characters to test</param>
+            <returns>True if all chars are lowercased (or not chars at all)</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.InternalFastIsLower(System.ReadOnlySpan{System.Char},System.Int32)">
+            <summary>
+            Returns true if all chars are lowercased (invariant)
+            </summary>
+            <param name="source">The chars</param>
+            <param name="l">The chars</param>
+            <returns>True if all chars are lowercased (or not chars at all)</returns>
+        </member>
         <member name="M:SysWeaver.StringExt.FastToLower(System.String,System.Int32,System.Int32)">
             <summary>
             Make a culture invariant lower case version of a substring
             </summary>
             <param name="str">The string to transform into a culture invariant lower case</param>
             <param name="startIndex">The index of the first character to convert</param>
+            <param name="length">The number of characters to convert</param>
+            <returns>Culture invariant lower case string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastStartToLower(System.String,System.Int32)">
+            <summary>
+            Make a culture invariant lower case version of the first N chars of a string
+            </summary>
+            <param name="str">The string to transform into a culture invariant lower case</param>
             <param name="length">The number of characters to convert</param>
             <returns>Culture invariant lower case string</returns>
         </member>
@@ -9000,12 +9050,44 @@
             <param name="str">The string to transform into a culture invariant lower case</param>
             <returns>Culture invariant lower case string</returns>
         </member>
+        <member name="M:SysWeaver.StringExt.FastIsUpper(System.String)">
+            <summary>
+            Returns true if a string is all uppercased (invariant)
+            </summary>
+            <param name="str">The string to test</param>
+            <returns>True if all chars are uppercased (or not chars at all)</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastIsUpper(System.String,System.Int32,System.Int32)">
+            <summary>
+            Returns true if a string is all uppercased (invariant)
+            </summary>
+            <param name="str">The string to test</param>
+            <param name="startIndex">The index of the first character to test</param>
+            <param name="length">The number of characters to test</param>
+            <returns>True if all chars are uppercased (or not chars at all)</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.InternalFastIsUpper(System.ReadOnlySpan{System.Char},System.Int32)">
+            <summary>
+            Returns true if all chars are uppercased (invariant)
+            </summary>
+            <param name="source">The chars</param>
+            <param name="l">The chars</param>
+            <returns>True if all chars are uppercased (or not chars at all)</returns>
+        </member>
         <member name="M:SysWeaver.StringExt.FastToUpper(System.String,System.Int32,System.Int32)">
             <summary>
             Make a culture invariant upper case version of a substring
             </summary>
             <param name="str">The string to transform into a culture invariant upper case</param>
             <param name="startIndex">The index of the first character to convert</param>
+            <param name="length">The number of characters to convert</param>
+            <returns>Culture invariant upper case string</returns>
+        </member>
+        <member name="M:SysWeaver.StringExt.FastStartToUpper(System.String,System.Int32)">
+            <summary>
+            Make a culture invariant upper case version of the first N chars of a string
+            </summary>
+            <param name="str">The string to transform into a culture invariant upper case</param>
             <param name="length">The number of characters to convert</param>
             <returns>Culture invariant upper case string</returns>
         </member>

@@ -20,6 +20,7 @@ namespace SysWeaver.Minifier
         static readonly IReadOnlySet<String> KeepNamespaces = ReadOnlyData.Set(StringComparer.Ordinal,
             "http://www.w3.org/2000/svg",
             "http://www.w3.org/2000/xmlns/",
+            "http://www.w3.org/1999/xlink",
             ""
         );
             
@@ -74,8 +75,8 @@ namespace SysWeaver.Minifier
                         if (!a.IsNamespaceDeclaration)
                             continue;
                         if (!a.Name.LocalName.FastEquals("xmlns"))
-                            doDel.Add(a);
-
+                            if (!a.Name.LocalName.FastEquals("xlink"))
+                                doDel.Add(a);
                     }
                     foreach (var a in doDel)
                         a.Remove();

@@ -354,6 +354,48 @@ namespace SysWeaver
             return array;
         }
 
+
+        /// <summary>
+        /// Convert dictionary values from one type to another
+        /// </summary>
+        /// <typeparam name="Key"></typeparam>
+        /// <typeparam name="CurrentValue"></typeparam>
+        /// <typeparam name="NewValue"></typeparam>
+        /// <param name="dictionary"></param>
+        /// <param name="func"></param>
+        /// <returns></returns>
+        public static Dictionary<Key, NewValue> ConvertValues<Key, CurrentValue, NewValue>(this IReadOnlyDictionary<Key, CurrentValue> dictionary, Func<Key, CurrentValue, NewValue> func)
+        {
+            if (dictionary == null)
+                return null;
+            var d = new Dictionary<Key, NewValue>(dictionary.Count, dictionary.GetComparer());
+            foreach (var kv in dictionary)
+                d.TryAdd(kv.Key, func(kv.Key, kv.Value));
+            return d;
+        }
+
+        /// <summary>
+        /// Convert dictionary values from one type to another
+        /// </summary>
+        /// <typeparam name="Key"></typeparam>
+        /// <typeparam name="CurrentValue"></typeparam>
+        /// <typeparam name="NewValue"></typeparam>
+        /// <param name="dictionary"></param>
+        /// <param name="func"></param>
+        /// <returns></returns>
+        public static Dictionary<Key, NewValue> ConvertValues<Key, CurrentValue, NewValue>(this IReadOnlyDictionary<Key, CurrentValue> dictionary, Func<CurrentValue, NewValue> func)
+        {
+            if (dictionary == null)
+                return null;
+            var d = new Dictionary<Key, NewValue>(dictionary.Count, dictionary.GetComparer());
+            foreach (var kv in dictionary)
+                d.TryAdd(kv.Key, func(kv.Value));
+            return d;
+        }
+
+
+
+
         /// <summary>
         /// Convert an array to another element type using a function
         /// </summary>
