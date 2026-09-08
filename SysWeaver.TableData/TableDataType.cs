@@ -285,7 +285,7 @@ namespace SysWeaver.Data
                         throw new Exception(String.Concat("Negative argument index found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
                     if (ix >= tl)
                         throw new Exception(String.Concat("Invalid argument index ", ix, ", found in \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
-                    argStart = x.IndexOf('}', argEnd + 1);
+                    argStart = x.IndexOf('{', argEnd + 1);
                 }
 #endif//DEBUG
 
@@ -294,7 +294,7 @@ namespace SysWeaver.Data
                 for (int i = 0; i < tl; ++i)
                 {
                     var name = t[i];
-                    var fi = type.GetField(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                    var fi = type.GetField(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
                     int cIndex = -1;
                     if (fi != null)
                     {
@@ -303,7 +303,7 @@ namespace SysWeaver.Data
                     }
                     else
                     {
-                        var pi = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                        var pi = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
                         if (pi != null)
                         {
                             if (!memberCols.TryGetValue(pi, out cIndex))
@@ -311,7 +311,15 @@ namespace SysWeaver.Data
                         }
                     }
                     if (cIndex >= 0)
+                    {
                         reads.Add(Expression.ArrayAccess(p, Expression.Constant(cIndex)));
+#if DEBUG
+                    }
+                    else
+                    {
+                        throw new Exception(String.Concat("Invalid member name \"", name, "\" found on attribute with text \"", x, "\", on member \"", colIndex, "\" in type \"", type.FullName, '"'));
+#endif//DEBUG
+                    }
                 }
                 tl = reads.Count;
                 if (tl <= 0)
