@@ -253,13 +253,22 @@ namespace SysWeaver.Remote
                             {
                                 b = password;
                                 c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", b);
-                                auth = ", auth: bearer";
+                                auth = ", auth: Bearer";
                             }
                             else
                             {
-                                var byteArray = Encoding.ASCII.GetBytes(String.Join(":", user, password));
-                                c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
-                                auth = ", auth: basic";
+                                if (lu[0] == '*')
+                                {
+                                    lu = lu.Substring(1);
+                                    b = password;
+                                    c.DefaultRequestHeaders.Add(lu, b);
+                                    auth = ", auth: " + lu;
+                                }
+                                else {
+                                    var byteArray = Encoding.ASCII.GetBytes(String.Join(":", user, password));
+                                    c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
+                                    auth = ", auth: Basic";
+                                }
                             }
                             break;
                         case RemoteAuthMethod.SysWeaverLogin:

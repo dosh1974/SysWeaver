@@ -28,11 +28,14 @@ namespace SysWeaver
         /// <param name="onChange">The callback to invoke whenever the file data has changed</param>
         public ManagedFile(ManagedFileParams p, Func<ManagedFileData, Task> onChange = null)
         {
+            MustExist = p.MustExist;
             A = onChange;
             HashCheck = p.HashCheck;
             Location = p.Location;
             Source = GetSource(p);
         }
+
+        readonly bool MustExist;
 
         /// <summary>
         /// Create a managed file object.
@@ -43,6 +46,7 @@ namespace SysWeaver
         /// <param name="onChange">The callback to invoke whenever the file data has changed</param>
         public ManagedFile(ManagedFileParams p, Action<ManagedFileData> onChange = null)
         {
+            MustExist = p.MustExist;
             S = onChange;
             HashCheck = p.HashCheck;
             Location = p.Location;
@@ -60,16 +64,16 @@ namespace SysWeaver
             var x = InternalData;
             if (x != null)
                 return x;
-            var r = await Source.TryGetNow().ConfigureAwait(false);
-            var ex = r.Item2;
+            var data = await Source.TryGetNow().ConfigureAwait(false);
+            Interlocked.Exchange(ref InternalData, data);
+            var ex = data.Ex;
             if (ex != null)
             {
                 Exceptions.OnException(ex);
-                throw ex;
-            }
-            var data = r.Item1;
-            Interlocked.Exchange(ref InternalData, data);
-            Interlocked.Increment(ref InternalChangeCount);
+                if (MustExist)
+                    throw ex;
+            }else 
+                Interlocked.Increment(ref InternalChangeCount);
             return data;
         }
 
@@ -84,15 +88,17 @@ namespace SysWeaver
             var x = InternalData;
             if (x != null)
                 return x;
-            var r = Source.TryGetNow().RunAsync();
-            var ex = r.Item2;
+            var data = Source.TryGetNow().RunAsync();
+            Interlocked.Exchange(ref InternalData, data);
+            var ex = data.Ex;
             if (ex != null)
             {
                 Exceptions.OnException(ex);
-                throw ex;
+                if (MustExist)
+                    throw ex;
             }
-            var data = r.Item1;
-            Interlocked.Exchange(ref InternalData, data);
+            else
+                Interlocked.Increment(ref InternalChangeCount);
             return data;
         }
 
@@ -127,14 +133,14 @@ namespace SysWeaver
             InternalData = null;
         }
 
-        public static bool TryAddSchema(String schema, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Exception, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource> sourceCreator)
+        public static bool TryAddSchema(String schema, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource> sourceCreator)
         {
             var s = SourceSchemaCreator;
             lock (s)
                 return s.TryAdd(schema, sourceCreator);
         }
 
-        public static bool TryRemoveSchema(String schema, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Exception, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource> sourceCreator)
+        public static bool TryRemoveSchema(String schema, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource> sourceCreator)
         {
             var s = SourceSchemaCreator;
             lock (s)
@@ -149,14 +155,14 @@ namespace SysWeaver
 
         static ManagedFile()
         {
-            var s = new ConcurrentDictionary<string, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Exception, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource>>(StringComparer.Ordinal);
+            var s = new ConcurrentDictionary<string, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource>>(StringComparer.Ordinal);
             SourceSchemaCreator = s;
             s.TryAdd("file", (m, l, p, t, h) => new DiscManagedFile(m, l, p, t, h));
             s.TryAdd("http", (m, l, p, t, h) => new HttpManagedFile(m, l, p, t, h));
             s.TryAdd("https", (m, l, p, t, h) => new HttpManagedFile(m, l, p, t, h));
         }
 
-        static readonly ConcurrentDictionary<String, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Exception, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource>> SourceSchemaCreator; 
+        static readonly ConcurrentDictionary<String, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource>> SourceSchemaCreator; 
 
         IManagedFileSource GetSource(ManagedFileParams p)
         {
@@ -181,8 +187,9 @@ namespace SysWeaver
         long InternalChangeCount;
         long InternalHashEqualCount;
 
-        async Task OnChange(ManagedFileData data, Exception ex)
+        async Task OnChange(ManagedFileData data)
         {
+            var ex = data.Ex;
             if (ex != null)
             {
                 Exceptions.OnException(ex);

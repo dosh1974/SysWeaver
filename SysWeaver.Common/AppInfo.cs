@@ -110,7 +110,8 @@ namespace SysWeaver
             }
             if (workerThreads != DefWorkerThreads || ioThreads != DefIoThreads)
                 ThreadPool.SetMinThreads(workerThreads, ioThreads);
-
+            UseWorkerThreads = workerThreads;
+            UseIoThreads = ioThreads;
         }
 
 

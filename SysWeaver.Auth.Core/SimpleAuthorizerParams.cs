@@ -10,6 +10,12 @@ namespace SysWeaver.Auth
             String.Concat(
                 nameof(Users), ": [", String.Join(", ", (Users ?? []).Select(x => x.Split(':')[0].ToQuoted())), "]");
 
+
+        public SimpleAuthorizerParams()
+        {
+            MustExist = false;
+        }
+
         /// <summary>
         /// One user per string with the following syntax: "username:password".
         /// Auth tokens can be specified by appending a colon (:) and a comma separated list of tokens, ex:

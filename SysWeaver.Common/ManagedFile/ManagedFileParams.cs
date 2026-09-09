@@ -44,6 +44,11 @@ namespace SysWeaver
         /// </summary>
         public bool HashCheck = true;
         //public int FtpPollFrequency = 5000;
+
+        /// <summary>
+        /// If true, the file must exist or an exception will be thrown
+        /// </summary>
+        public bool MustExist = true;
     }
 
 }

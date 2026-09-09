@@ -37,13 +37,16 @@ namespace SysWeaver
 
         public override string ToString() => Location.ToQuoted();
 
-        public ManagedFileData(string location, Memory<Byte> data, DateTime lastWriteTimeUtc, byte[] hash, ManagedFile manager)
+        public readonly Exception Ex;
+
+        public ManagedFileData(string location, Memory<Byte> data, DateTime lastWriteTimeUtc, byte[] hash, ManagedFile manager, Exception ex)
         {
             Location = location;
             Data = data;
             LastWriteTimeUtc = lastWriteTimeUtc;
             Hash = hash;
             Manager = manager;
+            Ex = ex;
         }
 
         internal readonly Byte[] Hash;

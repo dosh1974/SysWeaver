@@ -81,8 +81,7 @@ namespace SysWeaver.Auth
         {
             var cache = HttpCache;
             var s = authHeaderString.Trim();
-            var sp = s.IndexOf(' ');
-            var key = sp >= 0 ? s.Substring(0, sp) : null;
+            var key = s.SplitFirst(' ', out var p, false, true);
             var isBasic = key.FastEquals("Basic");
             Authorization aa;
             if (cache.TryGetValue(s, out var auth))
@@ -98,9 +97,8 @@ namespace SysWeaver.Auth
             if (isBasic)
             {
             //  Handling basic auth
-                var p = s.Substring(sp + 1).TrimStart();
                 var userPwd = Encoding.UTF8.GetString(Convert.FromBase64String(p));
-                sp = userPwd.IndexOf(':');
+                var sp = userPwd.IndexOf(':');
                 if (sp > 0)
                 {
                     var username = userPwd.Substring(0, sp);
@@ -114,11 +112,10 @@ namespace SysWeaver.Auth
                 }
                 auth = Tuple.Create(aa, true);
             }
-            if (key == "Bearer")
+            if (key.FastEquals("Bearer") || key.FastEquals("*key"))
             {
                 //  Handling Bearer auth
-                var token = s.Substring(sp + 1).TrimStart();
-                aa = await BearerAuth(token).ConfigureAwait(false);
+                aa = await BearerAuth(p).ConfigureAwait(false);
                 auth = Tuple.Create(aa, false);
             }
             //  Get auth

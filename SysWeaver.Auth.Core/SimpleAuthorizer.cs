@@ -49,7 +49,7 @@ namespace SysWeaver.Auth
             Msg = msg;
             Params = p;
             InternalPasswordPolicy = p.PasswordPolicy ?? new PasswordPolicy();
-
+            MustExist = p.MustExist;
             if (p.ApiKeyAuth != null)
             {
                 var aa = p.ApiKeyManagementAuth;
@@ -65,15 +65,16 @@ namespace SysWeaver.Auth
             {
                 MethodAuths = ReadOnlyData.EmptyDictionary<String, String>();
             }
-
-            UpdateUsers(true);
             if (!String.IsNullOrEmpty(p.Location))
             {
                 UserFile = new ManagedFile(p, OnFileUpdate);
                 OnFileUpdate(UserFile.TryGetNow());
-            }
+            }else
+                UpdateUsers();
         }
-        
+
+        readonly bool MustExist;
+
         readonly IMessageHost Msg;
 
         public override PasswordPolicy PasswordPolicy => InternalPasswordPolicy;
@@ -94,6 +95,14 @@ namespace SysWeaver.Auth
         {
             if (d == null)
             {
+                FileLines = null;
+                UpdateUsers();
+                return;
+            }
+            var ex = d.Ex;
+            if (ex != null)
+            {
+                Msg?.AddMessage(LogPrefix + "Failed to read " + d.Location.ToQuoted(), ex, MessageLevels.Warning);
                 FileLines = null;
                 UpdateUsers();
                 return;
@@ -126,9 +135,11 @@ namespace SysWeaver.Auth
             }
         }
 
+        bool First = true;
 
-        void UpdateUsers(bool first = false)
+        void UpdateUsers()
         {
+            var first = Interlocked.Exchange(ref First, false);
             var msg = Msg;
             try
             {
@@ -141,19 +152,25 @@ namespace SysWeaver.Auth
                 var aba = p.AllowBasicAuth;
                 var apiKeyAuth = p.ApiKeyAuth;
                 Dictionary<String, Task<Authorization>> bearerAuths = new(StringComparer.Ordinal);
-                msg.AddMessage(LogPrefix + "Adding users from config", MessageLevels.Debug);
-                using (msg.Tab())
-                    AddUsers(a, guidMap, p.Users, aba);
-                msg.AddMessage(LogPrefix + "Adding users from file", MessageLevels.Debug);
-                using (msg.Tab())
-                    AddUsers(a, guidMap, FileLines, aba);
+                if ((p.Users?.Length ?? 0) > 0)
+                {
+                    msg.AddMessage(LogPrefix + "Adding users from service config", MessageLevels.Debug);
+                    using (msg.Tab())
+                        AddUsers(a, guidMap, p.Users, aba);
+                }
+                if ((FileLines?.Length ?? 0) > 0)
+                {
+                    msg.AddMessage(LogPrefix + "Adding users from file", MessageLevels.Debug);
+                    using (msg.Tab())
+                        AddUsers(a, guidMap, FileLines, aba);
+                }
                 if (apiKeyAuth != null)
                 {
-                    msg.AddMessage(LogPrefix + "Adding users from api keys", MessageLevels.Debug);
-                    using var __ = msg.Tab();
                     var apiKeys = KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);
-                    if (apiKeys != null)
+                    if ((apiKeys?.Length ?? 0) > 0)
                     {
+                        msg.AddMessage(LogPrefix + "Adding users from stored api keys", MessageLevels.Debug);
+                        using var __ = msg.Tab();
                         apiKeyAuth = ":" + apiKeyAuth;
                         foreach (var kv in apiKeys)
                         {
@@ -186,9 +203,13 @@ namespace SysWeaver.Auth
             }
             catch (Exception ex)
             {
-                if (first)
-                    throw;
                 Fails.OnException(ex);
+                if (first)
+                {
+                    if (MustExist)
+                        throw;
+                    msg.AddMessage(LogPrefix + "Failed to update users", ex, MessageLevels.Warning);
+                }
             }
             msg.AddMessage(LogPrefix + "Users updated", MessageLevels.Debug);
         }

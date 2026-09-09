@@ -5,7 +5,7 @@ namespace SysWeaver
 {
     public interface IManagedFileSource : IDisposable
     {
-        Task<Tuple<ManagedFileData, Exception>> TryGetNow();
+        Task<ManagedFileData> TryGetNow();
     }
 
 }

@@ -8,12 +8,13 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+
 namespace SysWeaver
 {
     sealed class HttpManagedFile : IManagedFileSource
     {
 
-        public HttpManagedFile(ManagedFile manager, String url, ManagedFileParams p, Func<ManagedFileData, Exception, Task> onChange, Func<ReadOnlyMemory<Byte>, Byte[]> computeHash)
+        public HttpManagedFile(ManagedFile manager, String url, ManagedFileParams p, Func<ManagedFileData, Task> onChange, Func<ReadOnlyMemory<Byte>, Byte[]> computeHash)
         {
             Manager = manager;
             P = p;
@@ -39,7 +40,7 @@ namespace SysWeaver
         String LastTime;
         String ETag;
 
-        public async Task<Tuple<ManagedFileData, Exception>> TryGetNow()
+        public async Task<ManagedFileData> TryGetNow()
         {
             var f = Url;
             try
@@ -59,7 +60,7 @@ namespace SysWeaver
                 if (s == HttpStatusCode.NotModified)
                     return null;
                 if (s != HttpStatusCode.OK)
-                    return new Tuple<ManagedFileData, Exception>(null, new Exception("Http response was: " + (int)s + " - " + s));
+                    return new ManagedFileData(Url, Memory<Byte>.Empty, DateTime.MinValue, null, Manager, new Exception("Http response was: " + (int)s + " - " + s));
                 var h = res.Content.Headers;
                 ETag = h.TryGetValues("ETag", out var v) ? v?.FirstOrDefault() : null;
                 var d = DateTime.UtcNow;
@@ -73,18 +74,17 @@ namespace SysWeaver
                     }
                 }
                 var data = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-                var fd = new ManagedFileData(Url, data, d, ConputeHash(data), Manager);
-                return new Tuple<ManagedFileData, Exception>(fd, null);
+                return new ManagedFileData(Url, data, d, ConputeHash(data), Manager, null);
 
             }
             catch (Exception ex)
             {
-                return new Tuple<ManagedFileData, Exception>(null, ex);
+                return new ManagedFileData(Url, Memory<Byte>.Empty, DateTime.MinValue, null, Manager, ex);
             }
         }
 
         readonly String Url;
-        readonly Func<ManagedFileData, Exception, Task> A;
+        readonly Func<ManagedFileData, Task> A;
 
         PeriodicTask PollTask;
 
@@ -93,7 +93,7 @@ namespace SysWeaver
             var res = await TryGetNow().ConfigureAwait(false);
             if (res == null)
                 return true;
-            await A(res.Item1, res.Item2).ConfigureAwait(false);
+            await A(res).ConfigureAwait(false);
             return true;
         }
 

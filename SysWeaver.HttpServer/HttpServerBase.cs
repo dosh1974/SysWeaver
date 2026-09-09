@@ -1088,6 +1088,12 @@ namespace SysWeaver.Net
                 var h = data.GetReqHeader("Authorization");
                 if (h == null)
                 {
+                    h = data.GetReqHeader("x-api-key");
+                    if (h != null)
+                        h = "*key " + h;
+                }
+                if (h == null)
+                {
                     var ad = AuthRedirect;
                     if (ad != null)
                     {
