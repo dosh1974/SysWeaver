@@ -433,7 +433,9 @@ namespace SysWeaver
             var l = s.Length;
             if (l <= maxLen)
                 return s;
-            var el = elipses?.Length ?? 0;
+            if (String.IsNullOrEmpty(elipses))
+                return s.Substring(0, maxLen);
+            var el = elipses.Length;
             if ((el + el) < maxLen)
                 return s.Substring(0, maxLen - el) + elipses;
             return s.Substring(0, maxLen);

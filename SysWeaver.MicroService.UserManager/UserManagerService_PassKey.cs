@@ -93,7 +93,7 @@ namespace SysWeaver.MicroService
         {
             if (deviceId == null)
                 return false;
-            deviceId = deviceId.LimitLength(64, null);
+            deviceId = deviceId.LimitLength(64, "");
             using var c = await Db.GetAsync().ConfigureAwait(false);
             return (await c.FirstOrDefaultAsync<DbAuthPassKey>(x => x.DeviceId == deviceId).ConfigureAwait(false)) != null;
         }
@@ -107,7 +107,7 @@ namespace SysWeaver.MicroService
         {
             if (deviceId == null)
                 return null;
-            deviceId = deviceId.LimitLength(64, null);
+            deviceId = deviceId.LimitLength(64, "");
             using var c = await Db.GetAsync().ConfigureAwait(false);
             return (await c.SelectAsync<DbAuthPassKey>(x => x.DeviceId == deviceId).ConfigureAwait(false)).Select(x => x.CredentialId).ToList();
         }
@@ -134,7 +134,7 @@ namespace SysWeaver.MicroService
         {
             if (uid == 0)
                 return false;
-            deviceId = deviceId.LimitLength(64, null);
+            deviceId = deviceId.LimitLength(64, "");
             using var c = await Db.GetAsync().ConfigureAwait(false);
             return (await c.FirstOrDefaultAsync<DbAuthPassKey>(x => (x.DeviceId == deviceId) && (x.UserId == uid)).ConfigureAwait(false)) != null;
         }
@@ -165,8 +165,8 @@ namespace SysWeaver.MicroService
             await c.InsertAsync(new DbAuthPassKey
             {
                 CredentialId = credentialId,
-                DeviceName = deviceName.LimitLength(64, null),
-                DeviceId = deviceId.LimitLength(64, null),
+                DeviceName = deviceName.LimitLength(64, ""),
+                DeviceId = deviceId.LimitLength(64, ""),
                 PublicKey = publicKey,
                 UserId = user.Id,
                 Created = now,

@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using OpenAI.Chat;
+using Svg;
 using System;
 using System.ClientModel;
 using System.Collections.Concurrent;
@@ -413,7 +414,6 @@ namespace SysWeaver.AI
 
         //internal readonly HashSet<String> SeenUsers = new HashSet<string>(StringComparer.Ordinal);
 
-
         public async Task<String> Complete(String text, HttpServerRequest request, OpenAiDebugMessage debug = null, String from = null, Func<String, long, long, Task> onUsage = null)
         {
             using var _a = Monitor?.Track(nameof(Complete));
@@ -422,17 +422,7 @@ namespace SysWeaver.AI
             if (!String.IsNullOrEmpty(from))
                 um.ParticipantName = from;
             messages.Add(um);
-            ChatCompletionOptions options = new ChatCompletionOptions();
-            if (HaveTemperature)
-                options.Temperature = Temperature;
-            var tools = Tools;
-            if (tools.Count > 0)
-            {
-                var d = options.Tools;
-                foreach (var x in tools)
-                    d.Add(x.Value.Tool);
-                options.AllowParallelToolCalls = SupportParallelToolCalls;
-            }
+            var options = CreateOptions();
             var session = request.Session;
             long totalIn = 0;
             long totalOut = 0;
@@ -534,21 +524,14 @@ namespace SysWeaver.AI
             if (!String.IsNullOrEmpty(from))
                 um.ParticipantName = from;
             messages.Add(um);
-            ChatCompletionOptions options = new ChatCompletionOptions();
-            if (HaveTemperature)
-                options.Temperature = Temperature;
+            var options = CreateOptions();
             StringBuilder link = new StringBuilder();
-            var tools = Tools;
-            if (tools.Count > 0)
+            if (options.Tools.Count > 0)
             {
-                var d = options.Tools;
-                foreach (var x in tools)
-                    d.Add(x.Value.Tool);
-                options.AllowParallelToolCalls = SupportParallelToolCalls;
                 if (request != null)
                     request.Properties[OpenAiToolExt.RequestAiToolContext] = new OpenAiToolContext(this, link, saveFile, saveData);
-                //options.ToolChoice = ChatToolChoice.CreateAutoChoice();
             }
+            int linkLen = link.Length;
             long totalIn = 0;
             long totalOut = 0;
             StringBuilder sb = new StringBuilder();
@@ -590,7 +573,7 @@ namespace SysWeaver.AI
                                 }
                             }
                             if (changed)
-                                await onUpdate(sb.ToString(), link.Length > 0 ? link.ToString() : null).ConfigureAwait(false);
+                                await onUpdate(sb.ToString(), link?.ToString()).ConfigureAwait(false);
                         }
                         var tcs = sp.ToolCallUpdates;
                         if (tcs != null)
@@ -652,10 +635,13 @@ namespace SysWeaver.AI
                     newCalls[index] = ChatToolCall.CreateFunctionToolCall(x.Key, val.Item2, vb.Length > 0 ? BinaryData.FromString(vb.ToString()) : null);
                 }
                 messages.Add(new AssistantChatMessage(newCalls));
-                var l = link.Length;
                 await AiCalls(newCalls, request, debug, onTools, ApiMessages).ConfigureAwait(false);
-                if (link.Length != l)
-                    await onUpdate(sb.ToString(), link.Length > 0 ? link.ToString() : null).ConfigureAwait(false);
+                var newL = link.Length;
+                if (newL != linkLen)
+                {
+                    linkLen = newL;
+                    await onUpdate(sb.ToString(), newL > 0 ? link.ToString() : null).ConfigureAwait(false);
+                }
                 onTools?.Invoke(null);
             }
             //  Remove tool call messages

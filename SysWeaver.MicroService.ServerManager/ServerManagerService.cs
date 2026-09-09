@@ -215,7 +215,7 @@ namespace SysWeaver.MicroService
             if (!Services.TryAdd(f.Name.FastToLower(), new SmServiceInfo(f, v, p, currentRepo, masterRepo, bak)))
             {
                 Syncer.RemoveManagedFolder(v);
-                throw new Exception("Must have a unique name!");
+                throw new Exception("Must have a unique name! " + f.Name);
             }
             FileModule.AddFolder(bak);
             FileUploader.AddRepo(currentRepo);

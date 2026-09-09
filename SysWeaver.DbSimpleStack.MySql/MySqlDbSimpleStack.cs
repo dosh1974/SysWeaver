@@ -345,8 +345,15 @@ namespace SysWeaver.Db
                     sb.Append(us[1]);
                 var cmd = sb.ToString();
                 var c = new CommandDefinition(cmd, dyn, flags: CommandFlags.None);
-//                var c = new CommandDefinition(cmd, p.ToDynamicParameters(), flags: CommandFlags.Buffered);
-                await con.ExecuteAsync(c).ConfigureAwait(false);
+                //                var c = new CommandDefinition(cmd, p.ToDynamicParameters(), flags: CommandFlags.Buffered);
+                try
+                {
+                    await con.ExecuteAsync(c).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Table: " + (tableName ?? def.Name)?.ToQuoted() + " of type: " + typeof(T).FullName.ToQuoted(), ex);
+                }
                 Interlocked.Add(ref InternalRowsCompleted, cc);
             }
         }
@@ -1063,8 +1070,8 @@ namespace SysWeaver.Db
                         {
                             var fieldName = dp.GetQuotedColumnName(f.FieldName);
                             var cmd = "ALTER TABLE " + tableNameQ + " MODIFY COLUMN " + fieldName + " " + typeName;
-//                            if (typeNameExisting.Contains(" PRIMARY KEY"))
-//                                cmd = cmd.Replace(" PRIMARY KEY", "");
+                            if (typeNameExisting.Contains(" PRIMARY KEY"))
+                                cmd = cmd.Replace(" PRIMARY KEY", "");
                             if (typeNameExisting.Contains(" UNIQUE"))
                                 cmd = cmd.Replace(" UNIQUE", "");
                             /*

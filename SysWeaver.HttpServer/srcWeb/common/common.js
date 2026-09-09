@@ -257,6 +257,18 @@ function GetServerTick() {
 /** Static class that manages server session messages */
 class SessionManager
 {
+
+    static Create() {
+        InterOp.AddListener(SessionManager.InternalOnMsg);
+    }
+
+
+    static InternalOnMsg(msg) {
+        SessionManager.StartUp.push(msg);
+    }
+
+    static StartUp = [];
+
     static Current = document.currentScript.src;
 
     /**
@@ -266,8 +278,10 @@ class SessionManager
      */
     static AddServerEvent(name) {
         name = name.toLowerCase();
+        //console.log(InterOp.Id + ": AddServerEvent " + name);
         if (SessionManager.AddRef(SessionManager.ServerEvents, name))
         {
+            //console.log(InterOp.Id + ": AddServerEvent (new) " + name);
             InterOp.Post("SessionManager.AddEvents", { Events: [name] });
             return true;
         }
@@ -282,7 +296,9 @@ class SessionManager
     static RemoveServerEvent(name)
     {
         name = name.toLowerCase();
+        //console.log(InterOp.Id + ": RemoveServerEvent " + name);
         if (SessionManager.DecRef(SessionManager.ServerEvents, name)) {
+            //console.log(InterOp.Id + ": RemoveServerEvent (new) " + name);
             InterOp.Post("SessionManager.RemoveEvents", { Events: [name] });
             return true;
         }
@@ -355,13 +371,21 @@ class SessionManager
         if (!isTop) {
             function WindowClose() {
                 window.removeEventListener("beforeunload", WindowClose);
-                //window.removeEventListener("unload", WindowClose);
-                const evs = Array.from(SessionManager.ServerEvents.keys());
-                if (evs.length > 0)
+                window.removeEventListener("pagehide", WindowClose);
+                console.log(logPrefix + "Stopping child " + id);
+                const evs = [];
+                SessionManager.ServerEvents.forEach((v, k) => {
+                    for (let i = 0; i < v; ++i)
+                        evs.push(k);
+                });
+                SessionManager.ServerEvents.clear();
+                if (evs.length > 0) {
+                    console.log(logPrefix + "Unregistering events: " + evs);
                     InterOp.Post(removeEvents, { Events: evs });
+                }
             }
             window.addEventListener("beforeunload", WindowClose);
-            //window.addEventListener("unload", WindowClose);
+            window.addEventListener("pagehide", WindowClose);
             SessionManager.AddMessageHandler(timeOffset, async data => {
                 if (data.From !== id)
                     window.SysWeaverServerTimeOffset = data.O;
@@ -464,6 +488,7 @@ class SessionManager
             //console.log(logPrefix + "Server events changed to: " + evs);
             const ma = masterAbort;
             if (ma) {
+                masterAbort = null;
                 try {
                     ma.abort();
                 }
@@ -491,7 +516,15 @@ class SessionManager
                 }
             }
             StartServerTimeSync();
-            console.log(logPrefix + "Master started from " + cc);
+            //console.log(logPrefix + "Master started from " + cc);
+            const startM = SessionManager.StartUp;
+            if (startM !== null) {
+                InterOp.RemoveListener(SessionManager.InternalOnMsg);
+                SessionManager.StartUp = null;
+                const l = startM.length;
+                for (let i = 0; i < l; ++i)
+                    await eventHandler(startM[i]);
+            }
             while (isMaster) {
 
                 const req =
@@ -564,6 +597,7 @@ class SessionManager
         let response = (name, fn) => masterMap.set(name, fn);
         response(addEvents, data => {
             const events = data.Events;
+            //console.log(InterOp.Id + ": Got new server events! " + events);
             let changed = false;
             events.forEach(e => {
                 changed |= SessionManager.AddRef(serverEvents, e.toLowerCase());
@@ -577,6 +611,7 @@ class SessionManager
         });
         response(removeEvents, data => {
             const events = data.Events;
+            //console.log(InterOp.Id + ": Removed server events! " + events);
             let changed = false;
             events.forEach(e => {
                 changed |= SessionManager.DecRef(serverEvents, e.toLowerCase());
@@ -615,7 +650,7 @@ class SessionManager
         async function eventHandler(ev) {
             const data = InterOp.GetMessage(ev);
             const messageType = data.Type;
-            //console.log("" + InterOp.Id + (isMaster ? " [master]" : "") + " got: " + messageType);
+//            console.log("" + InterOp.Id + (isMaster ? " [master]" : "") + " got: " + messageType);
             if (!messageType)
                 return;
             const fn = (isMaster ? masterMap : childMap).get(messageType);
@@ -623,6 +658,7 @@ class SessionManager
                 await fn(data);
         }
 
+        //console.log(InterOp.Id + ": Started event listener!");
         InterOp.AddListener(eventHandler);
 
         let checkMasterTimer = null;
@@ -641,9 +677,6 @@ class SessionManager
         }
 
         let isStarting = false;
-
-
-
 
         async function StartMaster(how, startCc) {
 
@@ -705,21 +738,32 @@ class SessionManager
         await StartMaster(0);
         if (!isMaster)
             StartChild();
+        if (SessionManager.StartUp !== null) {
+            InterOp.RemoveListener(SessionManager.InternalOnMsg);
+            SessionManager.StartUp = null;
+        }
+        
 
         //  Send events incase some have been registered already
         //sendEvents();
 
         function WindowClose() {
             window.removeEventListener("beforeunload", WindowClose);
-            //window.removeEventListener("unload", WindowClose);
             InterOp.RemoveListener(eventHandler);
             if (!isMaster) {
                 console.log(logPrefix + "Stopping child " + id);
                 if (checkMasterTimer)
                     clearInterval(checkMasterTimer);
-                const evs = Array.from(SessionManager.ServerEvents.keys());
-                if (evs.length > 0)
+                const evs = [];
+                SessionManager.ServerEvents.forEach((v, k) => {
+                    for (let i = 0; i < k; ++i)
+                        evs.push(k);
+                });
+                SessionManager.ServerEvents.clear();
+                if (evs.length > 0) {
+                    console.log(logPrefix + "Unregistering events: " + evs);
                     InterOp.Post(removeEvents, { Events: evs });
+                }
             } else {
                 console.log(logPrefix + "Stopping master " + id);
                 isMaster = false;
@@ -727,9 +771,7 @@ class SessionManager
                 InterOp.Post(masterClosed, { Cc: cc });
             }
         }
-
         window.addEventListener("beforeunload", WindowClose);
-        //window.addEventListener("unload", WindowClose);
     }
 
     static GetMap() {
@@ -812,7 +854,11 @@ class InterOpBroadcast {
                 data: m,
             };
             const c = listeners.length;
+            if (m.Type === "chat.replace.openai.pure")
+                console.log("Brodcasting " + m.Type + " to " + c + " listeners!");
+
             for (let i = 0; i < c; ++i) {
+
                 try {
                     listeners[i](e);
                 }
@@ -7606,7 +7652,7 @@ async function SysWeaverInit() {
             const isNew = (serverInstance !== msg.Value) && (serverInstance != null);
             console.log("Current server instance: " + serverInstance);
             console.log("New server instance: " + msg.Value);
-            console.log("Is new: " + isNew);
+            //console.log("Is new: " + isNew);
             setServerInstance(msg.Value);
             if (isNew) {
                 await delayedReload(msg);
@@ -7619,7 +7665,7 @@ async function SysWeaverInit() {
             const isNew = serverInstance !== msg.Value;
             console.log("Current server instance: " + serverInstance);
             console.log("New server instance: " + msg.Value);
-            console.log("Is new: " + isNew);
+            //console.log("Is new: " + isNew);
             setServerInstance(msg.Value);
             if (isNew) {
                 await delayedReload(msg);
@@ -7685,4 +7731,5 @@ async function SysWeaverInit() {
 
 }
 
+SessionManager.Create();
 SysWeaverInit();

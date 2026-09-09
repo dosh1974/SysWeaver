@@ -1,4 +1,5 @@
-﻿using OpenAI.Chat;
+﻿using Microsoft.Extensions.Options;
+using OpenAI.Chat;
 using System;
 using System.ClientModel;
 using System.Collections.Concurrent;
@@ -20,10 +21,43 @@ namespace SysWeaver.AI
             HaveTemperature = o.Temp;
             SupportSystemRole = o.System;
             SupportParallelToolCalls = o.PTools;
+            CanReason = o.NoEffort;
             Client = c;
             Monitor = monitor;
             ToolCache = toolCache;
         }
+        readonly bool CanReason;
+
+
+        volatile ChatCompletionOptions Options;
+
+#pragma warning disable OPENAI001
+
+        protected ChatCompletionOptions CreateOptions()
+        {
+            var options = Options;
+            if (options != null)
+                return options;
+            options = new ChatCompletionOptions();
+            if (HaveTemperature)
+                options.Temperature = Temperature;
+            if (CanReason)
+                options.ReasoningEffortLevel = ChatReasoningEffortLevel.Low;
+            var tools = Tools;
+            if (tools.Count > 0)
+            {
+                if (CanReason)
+                    options.ReasoningEffortLevel = ChatReasoningEffortLevel.None;
+                var d = options.Tools;
+                foreach (var x in tools)
+                    d.Add(x.Value.Tool);
+                options.AllowParallelToolCalls = SupportParallelToolCalls;
+            }
+            return options;
+        }
+
+#pragma warning restore OPENAI001
+
 
         protected readonly ChatClient Client;
         protected readonly PerfMonitor Monitor;
@@ -61,6 +95,7 @@ namespace SysWeaver.AI
 
         public IEnumerable<KeyValuePair<String, OpenAiTool>> ALlTools => Tools;
 
+
         /// <summary>
         /// Add an API endpoint that the AI can use in this session
         /// </summary>
@@ -76,6 +111,7 @@ namespace SysWeaver.AI
             if (tool == null)
                 return false;
             Tools.TryAdd(tool.Name, tool);
+            Options = null;
             return true;
         }
 
@@ -90,6 +126,7 @@ namespace SysWeaver.AI
             if (tool == null)
                 return false;
             Tools.TryAdd(tool.Name, tool);
+            Options = null;
             return true;
         }
 
@@ -110,6 +147,7 @@ namespace SysWeaver.AI
             if (tool == null)
                 return false;
             Tools.TryAdd(tool.Name, tool);
+            Options = null;
             return true;
         }
 
@@ -205,17 +243,7 @@ namespace SysWeaver.AI
                 messages.Add(s);
             var um = new UserChatMessage(text);
             messages.Add(um);
-            ChatCompletionOptions options = new ChatCompletionOptions();
-            if (HaveTemperature)
-                options.Temperature = Temperature;
-            var tools = Tools;
-            if (tools.Count > 0)
-            {
-                var d = options.Tools;
-                foreach (var x in tools)
-                    d.Add(x.Value.Tool);
-                options.AllowParallelToolCalls = SupportParallelToolCalls;
-            }
+            var options = CreateOptions();
             long totalIn = 0;
             long totalOut = 0;
             var model = Model;

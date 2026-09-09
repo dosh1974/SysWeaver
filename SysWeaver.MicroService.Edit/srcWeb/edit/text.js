@@ -86,8 +86,8 @@ async function textMain() {
         */
 
 
-        bmap.set("json", x => prettier.format(x, { parser: "json5", plugins: prettierPlugins, useTabs: true }));
-        bmap.set("json5", x => prettier.format(x, { parser: "json5", plugins: prettierPlugins, useTabs: true }));
+        bmap.set("json", x => prettier.format(x,  { parser: "json5", plugins: prettierPlugins, useTabs: true, quoteProps: "preserve", singleQuote: false, trailingComma: "all", bracketSpacing: true, }));
+        bmap.set("json5", x => prettier.format(x, { parser: "json5", plugins: prettierPlugins, useTabs: true, quoteProps: "preserve", singleQuote: false, trailingComma: "all", bracketSpacing: true }));
         bmap.set("css", x => prettier.format(x, { parser: "css", plugins: prettierPlugins, useTabs: true }));
         bmap.set("html", x => prettier.format(SanitizeHtml(x), { parser: "html", plugins: prettierPlugins, useTabs: true }));
         bmap.set("markdown", x => prettier.format(x, { parser: "markdown", plugins: prettierPlugins, useTabs: true }));

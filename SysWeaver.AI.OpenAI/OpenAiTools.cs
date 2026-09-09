@@ -93,6 +93,11 @@ namespace SysWeaver.AI
             /// True if model supports paralell tool calls
             /// </summary>
             public bool? PTools = true;
+
+            /// <summary>
+            /// If true, no reasoning effort can be set
+            /// </summary>
+            public bool NoEffort = false;
         }
 
         internal static String FilterSpeechName(String s)
@@ -133,11 +138,11 @@ namespace SysWeaver.AI
 
         static readonly Opt[] Opts =
         [
-            new Opt { Model = "o1-preview", Temp = false, System = false, PTools = null },
-            new Opt { Model = "o1-mini", Temp = false, System = false, PTools = null },
-            new Opt { Model = "o1", Temp = false, PTools = null },
-            new Opt { Model = "o3-mini", Temp = false, PTools = null },
-            new Opt { Model = "gpt-5", Temp = false },
+            new Opt { Model = "o1-preview", Temp = false, System = false, PTools = null, NoEffort = true },
+            new Opt { Model = "o1-mini", Temp = false, System = false, PTools = null, NoEffort = true },
+            new Opt { Model = "o1", Temp = false, PTools = null, NoEffort = true },
+            new Opt { Model = "o3-mini", Temp = false, PTools = null, NoEffort = true },
+            new Opt { Model = "gpt-5", Temp = false, NoEffort = true },
         ];
 
 

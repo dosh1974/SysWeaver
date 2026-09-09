@@ -8,7 +8,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="FFmpeg.AutoGen.Bindings.DynamicallyLoaded" Version="8.1.0" />
+	  <PackageReference Include="FFmpeg.AutoGen.Bindings.DynamicallyLoaded" Version="9.0.1.1" />
 	</ItemGroup>
 
   <ItemGroup>

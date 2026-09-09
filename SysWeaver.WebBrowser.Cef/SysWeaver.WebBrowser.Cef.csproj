@@ -10,12 +10,24 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="CefSharp.OffScreen.NETCore" Version="150.0.110" />
+	  <PackageReference Include="CefSharp.OffScreen.NETCore" Version="151.3.240" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\SysWeaver.Common\SysWeaver.Common.csproj" />
 		<ProjectReference Include="..\SysWeaver.MicroService.MySqlAudit\SysWeaver.MicroService.MySqlAudit.csproj" />
 		<ProjectReference Include="..\SysWeaver.WebBrowser\SysWeaver.WebBrowser.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Update="chromiumembeddedframework.runtime.win-arm64" Version="151.3.24" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Update="chromiumembeddedframework.runtime.win-x64" Version="151.3.24" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Update="chromiumembeddedframework.runtime.win-x86" Version="151.3.24" />
 	</ItemGroup>
 </Project>

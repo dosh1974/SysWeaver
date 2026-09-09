@@ -1,28 +1,12 @@
 ﻿using CommunityToolkit.HighPerformance;
-using OpenAI;
-using OpenAI.Chat;
 using OpenAI.Images;
 using System;
-using System.Buffers;
-using System.ClientModel;
-using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
-using System.Reflection;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using SysWeaver.Auth;
-using SysWeaver.Chat;
-using SysWeaver.Data;
-using SysWeaver.Media;
 using SysWeaver.Media.Png;
 using SysWeaver.MicroService;
 using SysWeaver.Net;
-using SysWeaver.Serialization;
-using TiktokenSharp;
 
 namespace SysWeaver.AI
 {
@@ -54,6 +38,9 @@ namespace SysWeaver.AI
             return new ImageClient(model, ApiKey, Options);
         }
 
+#pragma warning disable OPENAI001
+
+
         /// <summary>
         /// Generate an image
         /// </summary>
@@ -77,7 +64,8 @@ namespace SysWeaver.AI
                     Quality = p.HighQuality ? GeneratedImageQuality.High : GeneratedImageQuality.Standard,
                     Size = ImageSizes[(int)p.Size],
                     Style = p.Vivid ? GeneratedImageStyle.Vivid : GeneratedImageStyle.Natural,
-                    ResponseFormat = GeneratedImageFormat.Bytes,
+                    OutputFileFormat = GeneratedImageFileFormat.Png,
+                    //ResponseFormat = GeneratedImageFormat.Bytes,
                 };
            
             GeneratedImage image;
@@ -134,9 +122,6 @@ namespace SysWeaver.AI
             return pngMem;
         }
 
-
-
-
         static readonly IReadOnlyDictionary<String, Func<OpenAiImagePrompt, ImageGenerationOptions>> ModelOptions = new Dictionary<String, Func<OpenAiImagePrompt, ImageGenerationOptions>>(StringComparer.Ordinal)
         {
             { 
@@ -162,6 +147,22 @@ namespace SysWeaver.AI
                         Quality = p.HighQuality ? "high" : "medium",
                         Size = ImageSizes2[(int)p.Size],
                     }
+                },
+                {
+                "gpt-image-2.5-sunburst",
+                    p => new ImageGenerationOptions
+                    {
+                        Quality = p.HighQuality ? "high" : "medium",
+                        Size = ImageSizes2_5[(int)p.Size],
+                    }
+            },
+            {
+                "gpt-image-2.5-flare",
+                    p => new ImageGenerationOptions
+                    {
+                        Quality = p.HighQuality ? "high" : "medium",
+                        Size = ImageSizes2_5[(int)p.Size],
+                    }
             },
             {
                 "dall-e-2",
@@ -177,13 +178,19 @@ namespace SysWeaver.AI
                     {
                         Quality = p.HighQuality ? GeneratedImageQuality.High : GeneratedImageQuality.Standard,
                         Size = ImageSizes[(int)p.Size],
-                        Style = p.Vivid ? GeneratedImageStyle.Vivid : GeneratedImageStyle.Natural,
-                        ResponseFormat = GeneratedImageFormat.Bytes,
                     }
             },
         }.Freeze();
 
-#pragma warning disable OPENAI001
+
+        /*
+        Auto,
+        Square, 1:1 aspect ratio
+        Portrait, 3:4 aspect ratio
+        Landscape, 4:3 aspect ratio
+        TallPortrait, 9:16 aspect ratio
+        WideLandscape, 16:9 aspect ratio
+        */
 
         static readonly GeneratedImageSize[] ImageSizes = [
             GeneratedImageSize.Auto,
@@ -208,12 +215,20 @@ namespace SysWeaver.AI
         static readonly GeneratedImageSize[] ImageSizes2 = [
             GeneratedImageSize.Auto,
             new GeneratedImageSize(2048, 2048),
+            new GeneratedImageSize(1536, 2048),
+            new GeneratedImageSize(2048, 1536),
+            new GeneratedImageSize(2160, 3840),
+            new GeneratedImageSize(3840, 2160),
+            ];
+
+        static readonly GeneratedImageSize[] ImageSizes2_5 = [
+            GeneratedImageSize.Auto,
+            new GeneratedImageSize(2048, 2048),
             new GeneratedImageSize(2480, 3508),
             new GeneratedImageSize(3508, 2480),
             new GeneratedImageSize(2160, 3840),
             new GeneratedImageSize(3840, 2160),
             ];
-
 
 #pragma warning restore OPENAI001
 
