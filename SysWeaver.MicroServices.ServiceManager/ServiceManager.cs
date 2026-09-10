@@ -17,6 +17,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Auth;
 using System.Runtime.InteropServices;
+using System.Text.Json.Serialization;
 
 namespace SysWeaver.MicroService
 {
@@ -729,13 +730,22 @@ namespace SysWeaver.MicroService
         );
 
 
-        internal static readonly JsonSerializerOptions DeSerOpt = new JsonSerializerOptions
+
+        static ServiceManager()
         {
-            ReadCommentHandling = JsonCommentHandling.Skip,
-            AllowTrailingCommas = true,
-            IgnoreReadOnlyFields = true,
-            IncludeFields = true,
-        };
+            var o = new JsonSerializerOptions
+            {
+                ReadCommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true,
+                IgnoreReadOnlyFields = true,
+                IncludeFields = true,
+            };
+            o.Converters.Add(new JsonStringEnumConverter());
+            DeSerOpt = o;
+        }
+
+        internal static readonly JsonSerializerOptions DeSerOpt;
+
 
         /// <summary>
         /// Register a service manifest (array of service manifest entries as json)

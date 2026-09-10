@@ -32,10 +32,17 @@ namespace SysWeaver.AI
     {
 
         /// <summary>
-        /// The model used when supplying an empty model (can be configured)
+        /// The model used when not supplying a model in a session (can be configured)
         /// </summary>
         public readonly String DefaultChatModel;
 
+        /// <summary>
+        /// The tier used when not supplying a model in a session (can be configured)
+        /// </summary>
+        public readonly OpenAiServiceTier DefaultTier;
+        
+        /// The reasoning effort used when not supplying a model in a session (can be configured)
+        public readonly OpenAiReasoning DefaultReasoning; 
 
         readonly AsyncLock ChatLock;
 
@@ -60,21 +67,21 @@ namespace SysWeaver.AI
         /// Create a chat session (supporting SystemPrompt, tools etc)
         /// </summary>
         /// <param name="isPrivate">If true, this chat is user only</param>
-        /// <param name="model">The gpt model to use, ex:
-        /// "gpt-4o-mini" -	Our affordable and intelligent small model for fast, lightweight tasks.
-        /// "gpt-4o" - Our high-intelligence flagship model for complex, multi-step tasks.
-        /// "o1-preview" - Language models trained with reinforcement learning to perform complex reasoning.
-        /// </param>
+        /// <param name="p">Optional parameters for this session, if null, the default will be used.</param>
         /// <param name="joinAuth">Optional comma separated list of required auth tokens</param>
         /// <param name="clearAuth">Auth required to clear the chat session</param>
         /// <param name="defaultTools">true to add some default tools for the AI to use</param>
         /// <returns></returns>
-        public OpenAiChatSession CreateChatSession(bool isPrivate, String model = null, String joinAuth = "", String clearAuth = "Admin", bool defaultTools = true)
+        public OpenAiChatSession CreateChatSession(bool isPrivate, OpenAiSessionParams p = null, String joinAuth = "", String clearAuth = "Admin", bool defaultTools = true)
         {
-            if (String.IsNullOrEmpty(model))
-                model = DefaultChatModel;
+            p = p ?? new OpenAiSessionParams();
+            if (String.IsNullOrEmpty(p.Model))
+                p.Model = DefaultChatModel;
+            p.Tier = p.Tier ?? DefaultTier;
+            p.Reasoning = p.Reasoning ?? DefaultReasoning;
+
             var mon = PerfMon;
-            var s = new OpenAiChatSession(isPrivate, new ChatClient(model, ApiKey, Options), model, this, joinAuth, clearAuth, mon, ChatLock);
+            var s = new OpenAiChatSession(isPrivate, new ChatClient(p.Model, ApiKey, Options), p, this, joinAuth, clearAuth, mon, ChatLock);
             if (defaultTools)
             {
                 AddTool_GetPredefinedImage(s);
@@ -113,18 +120,17 @@ namespace SysWeaver.AI
         /// <summary>
         /// Create a query session (supporting SystemPrompt, tools etc)
         /// </summary>
-        /// <param name="model">The gpt model to use, ex:
-        /// "gpt-4o-mini" -	Our affordable and intelligent small model for fast, lightweight tasks.
-        /// "gpt-4o" - Our high-intelligence flagship model for complex, multi-step tasks.
-        /// "o1-preview" - Language models trained with reinforcement learning to perform complex reasoning.
-        /// </param>
+        /// <param name="p">Optional parameters for this session, if null, the default will be used.</param>
         /// <returns></returns>
-        public OpenAiQuerySession CreateQuerySession(String model = null)
+        public OpenAiQuerySession CreateQuerySession(OpenAiSessionParams p = null)
         {
-            if (String.IsNullOrEmpty(model))
-                model = DefaultChatModel;
+            p = p ?? new OpenAiSessionParams();
+            if (String.IsNullOrEmpty(p.Model))
+                p.Model = DefaultChatModel;
+            p.Tier = p.Tier ?? DefaultTier;
+            p.Reasoning = p.Reasoning ?? DefaultReasoning;
             var mon = PerfMon;
-            var s = new OpenAiQuerySession(new ChatClient(model, ApiKey, Options), model, this, mon);
+            var s = new OpenAiQuerySession(new ChatClient(p.Model, ApiKey, Options), p, this, mon);
             return s;
         }
 

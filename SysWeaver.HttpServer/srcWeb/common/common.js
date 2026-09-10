@@ -259,6 +259,7 @@ class SessionManager
 {
 
     static Create() {
+        SessionManager.StartUp = [];
         InterOp.AddListener(SessionManager.InternalOnMsg);
     }
 
@@ -267,7 +268,7 @@ class SessionManager
         SessionManager.StartUp.push(msg);
     }
 
-    static StartUp = [];
+    static StartUp;
 
     static Current = document.currentScript.src;
 
@@ -279,7 +280,7 @@ class SessionManager
     static AddServerEvent(name) {
         name = name.toLowerCase();
         //console.log(InterOp.Id + ": AddServerEvent " + name);
-        if (SessionManager.AddRef(SessionManager.ServerEvents, name))
+        if (SessionManager.AddRef(SessionManager.ServerEvents, name, true))
         {
             //console.log(InterOp.Id + ": AddServerEvent (new) " + name);
             InterOp.Post("SessionManager.AddEvents", { Events: [name] });
@@ -297,7 +298,7 @@ class SessionManager
     {
         name = name.toLowerCase();
         //console.log(InterOp.Id + ": RemoveServerEvent " + name);
-        if (SessionManager.DecRef(SessionManager.ServerEvents, name)) {
+        if (SessionManager.DecRef(SessionManager.ServerEvents, name, true)) {
             //console.log(InterOp.Id + ": RemoveServerEvent (new) " + name);
             InterOp.Post("SessionManager.RemoveEvents", { Events: [name] });
             return true;
@@ -306,16 +307,20 @@ class SessionManager
     }
 
 
-    static AddRef(map, name) {
+    static AddRef(map, name, isOwned) {
         let count = map.get(name);
         if (!count)
             count = 0;
         ++count;
         map.set(name, count);
+        if (isOwned)
+            SessionManager.AddRef(SessionManager.OwnedEvents, name);
         return count === 1;
     }
 
-    static DecRef(map, name) {
+    static DecRef(map, name, isOwned) {
+        if (isOwned)
+            SessionManager.DecRef(SessionManager.OwnedEvents, name);
         let count = map.get(name);
         if (!count) {
             map.delete(name);
@@ -330,7 +335,11 @@ class SessionManager
         return true;
     }
 
+    /** All server events, ref counted, mirrored to all slaves */
     static ServerEvents = new Map();
+
+    /** Server registered by this page, ref counted */
+    static OwnedEvents = new Map();
 
     static Url = new URL(SessionManager.Current + "/../../Api/application/GetMessages").href;
 
@@ -352,9 +361,11 @@ class SessionManager
         const ping = messagePrefix + "Ping";
         const pong = messagePrefix + "Pong";
         const masterClosed = messagePrefix + "MasterClosed";
-        const masterChanged = messagePrefix + "MasterChanged";
+        //const masterEventsChanged = messagePrefix + "MasterChanged"; // Pushed by master to slaves
         const addEvents = messagePrefix + "AddEvents";
         const removeEvents = messagePrefix + "RemoveEvents";
+        const getEvents = messagePrefix + "GetEvents"; // Query master for events from slave
+
         const timeOffset = messagePrefix + "TimeOffset";
         const getTimeOffset = messagePrefix + "GetTimeOffset";
 
@@ -372,15 +383,16 @@ class SessionManager
             function WindowClose() {
                 window.removeEventListener("beforeunload", WindowClose);
                 window.removeEventListener("pagehide", WindowClose);
-                console.log(logPrefix + "Stopping child " + id);
+                console.log(logPrefix + "Stopping iframe " + id);
                 const evs = [];
-                SessionManager.ServerEvents.forEach((v, k) => {
+                SessionManager.OwnedEvents.forEach((v, k) => {
                     for (let i = 0; i < v; ++i)
                         evs.push(k);
                 });
-                SessionManager.ServerEvents.clear();
                 if (evs.length > 0) {
-                    console.log(logPrefix + "Unregistering events: " + evs);
+                    const m = SessionManager.ServerEvents;
+                    evs.forEach(v => SessionManager.DecRef(m, v, true));
+                    console.log(logPrefix + "Unregistering owned events: " + evs);
                     InterOp.Post(removeEvents, { Events: evs });
                 }
             }
@@ -475,26 +487,21 @@ class SessionManager
             update();
         }
 
-
-
-        let serverEvents = null;
         const eventElement = document.createElement("SysWeaver-EventHandler");
 
-
-        let masterAbort = null;
+        let masterAbort = new AbortController();
+;
 
         function serverEventsChanged() {
-            const evs = Array.from(serverEvents.keys());
+            //const evs = Array.from(SessionManager.ServerEvents.keys());
             //console.log(logPrefix + "Server events changed to: " + evs);
             const ma = masterAbort;
-            if (ma) {
-                masterAbort = null;
-                try {
+            try {
+                if (!ma.signal.aborted)
                     ma.abort();
-                }
-                catch
-                {
-                }
+            }
+            catch
+            {
             }
         }
 
@@ -530,7 +537,7 @@ class SessionManager
                 const req =
                 {
                     Cc: cc,
-                    MessageTypes: Array.from(serverEvents.keys()),
+                    MessageTypes: Array.from(SessionManager.ServerEvents.keys()),
                 };
                 const r = new Request(SessionManager.Url, {
                     method: "POST",
@@ -541,12 +548,19 @@ class SessionManager
                     },
                     body: ToTypedJson(req),
                 });
-                masterAbort = new AbortController();
+                await delay(1);
+                if (masterAbort.signal.aborted) {
+                    masterAbort = new AbortController();
+                    continue;
+                }
+/*                InterOp.Post(masterEventsChanged,
+                    {
+                        ServerEvents: Array.from(SessionManager.ServerEvents.entries()),
+                    });*/
                 try {
                     const res = await fetch(r, { signal: masterAbort.signal });
                     if (res.status === 200) {
                         const response = await res.json();
-                        masterAbort = null;
                         if (response) {
                             cc = response.Cc;
                             const prefix = response.Prefix;
@@ -568,13 +582,11 @@ class SessionManager
                     } else {
                         onError();
                     }
-                    masterAbort = null;
                 }
                 catch (e) {
-                    masterAbort = null;
                     //  No delay if aborted
                     if (e instanceof DOMException) {
-                        if (e.name === "AbortError")    
+                        if (e.name === "AbortError")
                             continue;
                     }
                     onError();
@@ -600,7 +612,7 @@ class SessionManager
             //console.log(InterOp.Id + ": Got new server events! " + events);
             let changed = false;
             events.forEach(e => {
-                changed |= SessionManager.AddRef(serverEvents, e.toLowerCase());
+                changed |= SessionManager.AddRef(SessionManager.ServerEvents, e.toLowerCase());
             });
             if (changed)
                 serverEventsChanged();
@@ -614,7 +626,7 @@ class SessionManager
             //console.log(InterOp.Id + ": Removed server events! " + events);
             let changed = false;
             events.forEach(e => {
-                changed |= SessionManager.DecRef(serverEvents, e.toLowerCase());
+                changed |= SessionManager.DecRef(SessionManager.ServerEvents, e.toLowerCase());
             });
             if (changed)
                 serverEventsChanged();
@@ -622,6 +634,13 @@ class SessionManager
         response(getTimeOffset, data => {
             InterOp.Post(timeOffset, { To: data.From, O: window.SysWeaverServerTimeOffset });
         });
+/*        response(getEvents, data => {
+            InterOp.Post(masterEventsChanged,
+                {
+                    To: data.From,
+                    ServerEvents: Array.from(SessionManager.ServerEvents.entries()),
+                });
+        });*/
         //  Child message responses
         const childMap = new Map();
         response = (name, fn) => childMap.set(name, fn);
@@ -632,20 +651,35 @@ class SessionManager
             }
         });
         response(masterClosed, async data => {
-            if (data.From !== id)
-                await StartMaster(1, data.Cc);
+            SessionManager.Create();
+            if (data.From === id)
+                return;
+            //  Get server events
+            let se = null;
+            const ev = data.ServerEvents;
+            if (ev) {
+                //console.log(logPrefix + "Events from previous master: " + JSON.stringify(ev));
+                se = new Map(ev);
+            }
+            SessionManager.ServerEvents = se ?? new Map();
+            await StartMaster(1, data.Cc);
+
         });
+
+
         response(timeOffset, async data => {
             if (data.From !== id)
                 window.SysWeaverServerTimeOffset = data.O;
         });
+
+
+
+        /*
         //  All message repsonses
         response = (name, fn) => {
             masterMap.set(name, fn); childMap.set(name, fn);
         };
-        response(masterChanged, async data => {
-            sendEvents();
-        });
+        */
 
         async function eventHandler(ev) {
             const data = InterOp.GetMessage(ev);
@@ -690,7 +724,10 @@ class SessionManager
                         return;
                     if (isMaster)
                         return;
-                    //  
+                    if (checkMasterTimer)
+                        clearInterval(checkMasterTimer);
+                    isMaster = true;
+                    SessionManager.IsMaster = true;
                     switch (how) {
                         case 0:
                             console.log(logPrefix + "Starting as master " + id);
@@ -702,19 +739,14 @@ class SessionManager
                             console.log(logPrefix + "Switching to master " + id + " (from polling)");
                             break;
                     }
-                    if (checkMasterTimer)
-                        clearInterval(checkMasterTimer);
-                    isMaster = true;
-                    SessionManager.IsMaster = true;
-                    //  Get server events
-                    serverEvents = new Map();
-                    InterOp.Post(masterChanged);
-                    await delay(100); // Wait a bit so that we can collect events (that way we don't have to restart so often)
-                    //
                     RunMaster(startCc);
                 }
                 finally {
                     isStarting = false;
+                    if (SessionManager.StartUp !== null) {
+                        InterOp.RemoveListener(SessionManager.InternalOnMsg);
+                        SessionManager.StartUp = null;
+                    }
                 }
             }
 
@@ -732,46 +764,53 @@ class SessionManager
         function StartChild() {
             console.log(logPrefix + "Starting as child " + id);
             InterOp.Post(getTimeOffset);
+//            InterOp.Post(getEvents);
             checkMasterTimer = setInterval(MaybeStartMaster, 1000);
         }
 
         await StartMaster(0);
         if (!isMaster)
             StartChild();
-        if (SessionManager.StartUp !== null) {
-            InterOp.RemoveListener(SessionManager.InternalOnMsg);
-            SessionManager.StartUp = null;
-        }
+  
         
 
         //  Send events incase some have been registered already
         //sendEvents();
 
         function WindowClose() {
+            window.removeEventListener("pagehide", WindowClose);
             window.removeEventListener("beforeunload", WindowClose);
             InterOp.RemoveListener(eventHandler);
+            const evs = [];
+            SessionManager.OwnedEvents.forEach((v, k) => {
+                for (let i = 0; i < k; ++i) {
+                    evs.push(k);
+                }
+            });
+            const m = SessionManager.ServerEvents;
+            evs.forEach(v => SessionManager.DecRef(m, v, true));
             if (!isMaster) {
-                console.log(logPrefix + "Stopping child " + id);
+                console.log(logPrefix + "Stopping slave " + id);
                 if (checkMasterTimer)
                     clearInterval(checkMasterTimer);
-                const evs = [];
-                SessionManager.ServerEvents.forEach((v, k) => {
-                    for (let i = 0; i < k; ++i)
-                        evs.push(k);
-                });
-                SessionManager.ServerEvents.clear();
                 if (evs.length > 0) {
-                    console.log(logPrefix + "Unregistering events: " + evs);
+                    //console.log(logPrefix + "Unregistering owned events: " + evs);
                     InterOp.Post(removeEvents, { Events: evs });
                 }
             } else {
+                InterOp.Post(masterClosed,
+                    {
+                        Cc: cc,
+                        ServerEvents: Array.from(m.entries()),
+                    });
                 console.log(logPrefix + "Stopping master " + id);
                 isMaster = false;
                 SessionManager.IsMaster = false;
-                InterOp.Post(masterClosed, { Cc: cc });
             }
         }
         window.addEventListener("beforeunload", WindowClose);
+        window.addEventListener("pagehide", WindowClose);
+
     }
 
     static GetMap() {

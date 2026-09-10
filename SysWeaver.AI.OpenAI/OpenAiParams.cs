@@ -1,7 +1,28 @@
-﻿using System;
+﻿using Newtonsoft.Json.Converters;
+using System;
 
 namespace SysWeaver.AI
 {
+
+    public enum OpenAiReasoning
+    {
+        None,
+        Minimal,
+        Low,
+        Medium,
+        High,
+    }
+
+    public enum OpenAiServiceTier
+    {
+        Auto,
+        Default,
+        Flex,
+        Scale,
+
+        Fast,
+    }
+
     public sealed class OpenAiParams : ApiKeyParams
     {
         #region API setup
@@ -58,6 +79,17 @@ namespace SysWeaver.AI
         /// The name of chat's using this chat provider
         /// </summary>
         public String ChatName = "OpenAI";
+
+
+        /// <summary>
+        /// The reasoning effort for models that support reasoning
+        /// </summary>
+        public OpenAiReasoning DefaultReasoning = OpenAiReasoning.Minimal;
+
+        /// <summary>
+        /// The default service tier to use for chat
+        /// </summary>
+        public OpenAiServiceTier DefaultTier = OpenAiServiceTier.Auto;
 
         /// <summary>
         /// Maximum number of concurrent chat requests at the same time

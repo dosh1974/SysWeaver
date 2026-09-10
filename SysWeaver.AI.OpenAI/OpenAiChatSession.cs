@@ -41,12 +41,12 @@ namespace SysWeaver.AI
 
 
 
-        internal OpenAiChatSession(bool isPrivate, ChatClient c, String model, IOpenAiToolCache toolCache, String joinAuth, String clearAuth, PerfMonitor monitor, AsyncLock chatLock)
-            : base(c, model, toolCache, monitor)
+        internal OpenAiChatSession(bool isPrivate, ChatClient c, OpenAiSessionParams p, IOpenAiToolCache toolCache, String joinAuth, String clearAuth, PerfMonitor monitor, AsyncLock chatLock)
+            : base(c, p, toolCache, monitor)
         {
             IsPrivate = isPrivate;
             ChatLock = chatLock;
-            AgentName = model;
+            AgentName = p.Model;
             AgentImageUrl = "../openAI/icons/openai.svg";
             ErrorImageUrl = "../openAI/icons/error.svg";
             DebugImageUrl = "../openAI/icons/debug.svg";

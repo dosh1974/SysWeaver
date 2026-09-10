@@ -60,6 +60,8 @@ namespace SysWeaver.AI
             Name = n;
             SessionChatPrefix = n + ".ChatSession.";
             DefaultChatModel = m;
+            DefaultTier = p.DefaultTier;
+            DefaultReasoning = p.DefaultReasoning;
             
             m = p.DefaultImageModel;
             if (String.IsNullOrEmpty(m))

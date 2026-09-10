@@ -95,9 +95,15 @@ namespace SysWeaver.AI
             public bool? PTools = true;
 
             /// <summary>
-            /// If true, no reasoning effort can be set
+            /// If true, the model support the reasoning effort
             /// </summary>
-            public bool NoEffort = false;
+            public bool CanReason = true;
+
+            /// <summary>
+            /// If true, the model support setting the service tier
+            /// </summary>
+            public bool HaveTiers = true;
+
         }
 
         internal static String FilterSpeechName(String s)
@@ -138,11 +144,11 @@ namespace SysWeaver.AI
 
         static readonly Opt[] Opts =
         [
-            new Opt { Model = "o1-preview", Temp = false, System = false, PTools = null, NoEffort = true },
-            new Opt { Model = "o1-mini", Temp = false, System = false, PTools = null, NoEffort = true },
-            new Opt { Model = "o1", Temp = false, PTools = null, NoEffort = true },
-            new Opt { Model = "o3-mini", Temp = false, PTools = null, NoEffort = true },
-            new Opt { Model = "gpt-5", Temp = false, NoEffort = true },
+            new Opt { Model = "o1-preview", Temp = false, System = false, PTools = null, CanReason = false, HaveTiers = false },
+            new Opt { Model = "o1-mini", Temp = false, System = false, PTools = null, CanReason = false, HaveTiers = false },
+            new Opt { Model = "o1", Temp = false, PTools = null, CanReason = false, HaveTiers = false },
+            new Opt { Model = "o3-mini", Temp = false, PTools = null, CanReason = false, HaveTiers = false },
+            new Opt { Model = "gpt-5", Temp = false, CanReason = true, HaveTiers = true },
         ];
 
 

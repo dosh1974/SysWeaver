@@ -12,26 +12,82 @@ using SysWeaver.Net;
 
 namespace SysWeaver.AI
 {
+
+    public class OpenAiSessionParams
+    {
+        /// <summary>
+        /// The model to use for this session.
+        /// Examples:
+        /// "gpt-4o-mini" -	Our affordable and intelligent small model for fast, lightweight tasks.
+        /// "gpt-4o" - Our high-intelligence flagship model for complex, multi-step tasks.
+        /// "o1-preview" - Language models trained with reinforcement learning to perform complex reasoning.
+        /// </summary>
+        public String Model;
+
+        /// <summary>
+        /// The reasoning effort for models that support reasoning.
+        /// Null to use default.
+        /// </summary>
+        public OpenAiReasoning? Reasoning;
+
+
+        /// <summary>
+        /// The service tier to use for chat
+        /// </summary>
+        public OpenAiServiceTier? Tier;
+
+
+    }
+
     public class OpenAiQuerySession
     {
-        public OpenAiQuerySession(ChatClient c, String model, IOpenAiToolCache toolCache = null, PerfMonitor monitor = null)
+        public OpenAiQuerySession(ChatClient c, OpenAiSessionParams p, IOpenAiToolCache toolCache = null, PerfMonitor monitor = null)
         {
+            var model = p.Model;
             Model = model;
             var o = OpenAiTools.GetOptions(model);
+            CanReason = o.CanReason;
+            if (CanReason)
+                ReasonigLevel = ReasonigLevels[(int)(p.Reasoning ?? OpenAiReasoning.Low)];
+            if (o.HaveTiers)
+                Tier = Tiers[(int)(p.Tier ?? OpenAiServiceTier.Auto)];
             HaveTemperature = o.Temp;
             SupportSystemRole = o.System;
             SupportParallelToolCalls = o.PTools;
-            CanReason = o.NoEffort;
             Client = c;
             Monitor = monitor;
             ToolCache = toolCache;
         }
-        readonly bool CanReason;
-
 
         volatile ChatCompletionOptions Options;
 
 #pragma warning disable OPENAI001
+
+
+        readonly bool CanReason; 
+        readonly ChatReasoningEffortLevel? ReasonigLevel;
+
+        static readonly ChatReasoningEffortLevel[] ReasonigLevels =
+        [
+            ChatReasoningEffortLevel.None,
+            ChatReasoningEffortLevel.Minimal,
+            ChatReasoningEffortLevel.Low,
+            ChatReasoningEffortLevel.Medium,
+            ChatReasoningEffortLevel.High,
+        ];
+
+        readonly ChatServiceTier? Tier;
+
+        static readonly ChatServiceTier[] Tiers =
+            [
+            ChatServiceTier.Auto,
+            ChatServiceTier.Default,
+            ChatServiceTier.Flex,
+            ChatServiceTier.Scale,
+            new ChatServiceTier("fast"),
+            ];
+
+
 
         protected ChatCompletionOptions CreateOptions()
         {
@@ -41,8 +97,8 @@ namespace SysWeaver.AI
             options = new ChatCompletionOptions();
             if (HaveTemperature)
                 options.Temperature = Temperature;
-            if (CanReason)
-                options.ReasoningEffortLevel = ChatReasoningEffortLevel.Low;
+            options.ReasoningEffortLevel = ReasonigLevel;
+            options.ServiceTier = Tier;
             var tools = Tools;
             if (tools.Count > 0)
             {
@@ -56,7 +112,7 @@ namespace SysWeaver.AI
             return options;
         }
 
-#pragma warning restore OPENAI001
+        #pragma warning restore OPENAI001
 
 
         protected readonly ChatClient Client;
