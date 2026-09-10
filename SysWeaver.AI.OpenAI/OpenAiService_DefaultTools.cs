@@ -149,7 +149,7 @@ namespace SysWeaver.AI
 
 
         /// <summary>
-        /// Get an url (png) to an AI (dall-e-3) generated image from a prompt.
+        /// Generate an image using generative AI.
         /// </summary>
         /// <param name="prompt">Paramaters for the generation</param>
         /// <param name="request"></param>
@@ -160,7 +160,7 @@ namespace SysWeaver.AI
             var c = request.Properties[RequestAiToolContext] as OpenAiToolContext;
             if (c == null)
                 return null;
-            var bin = await GenImage(prompt, request).ConfigureAwait(false);
+            var bin = await ImageGenerate(prompt, request).ConfigureAwait(false);
             var us = UserStorage;
             var filename = prompt.Title ?? "Image";
             if (us == null)
@@ -174,15 +174,46 @@ namespace SysWeaver.AI
             return "../" + await us.StorePublicFile(request, filename + ".png", bin, String.Join(',', s.JoinAuth)).ConfigureAwait(false);
         }
 
-        #endregion//Generate data
+
 
         /// <summary>
-        /// Use this function to convert some data (typically text based) into an URL.
+        /// Edit an image using generative AI.
         /// </summary>
-        /// <param name="data">Data paramaters</param>
+        /// <param name="prompt">Source image and paramaters for the generation</param>
         /// <param name="request"></param>
-        /// <returns>An url to the data</returns>
-        [OpenAiTool("🗜️")]
+        /// <returns>An url to the generated png image</returns>
+        [OpenAiTool("🎨")]
+        async Task<String> EditImage(OpenAiImageEditPrompt prompt, HttpServerRequest request)
+        {
+            var c = request.Properties[RequestAiToolContext] as OpenAiToolContext;
+            if (c == null)
+                return null;
+            var bin = await ImageEdit(prompt, request).ConfigureAwait(false);
+            var us = UserStorage;
+            var filename = prompt.Title ?? "Image";
+            if (us == null)
+            {
+                var data = "data:image/png;base64," + Convert.ToBase64String(bin.Span);
+                return c.AddMessageFile("image/png", data, filename);
+            }
+            var s = c.Session;
+            if (s.IsPrivate)
+                return "../" + await us.StorePrivateFile(request, filename + ".png", bin).ConfigureAwait(false);
+            return "../" + await us.StorePublicFile(request, filename + ".png", bin, String.Join(',', s.JoinAuth)).ConfigureAwait(false);
+        }
+
+
+        
+
+        #endregion//Generate data
+
+                /// <summary>
+                /// Use this function to convert some data (typically text based) into an URL.
+                /// </summary>
+                /// <param name="data">Data paramaters</param>
+                /// <param name="request"></param>
+                /// <returns>An url to the data</returns>
+                [OpenAiTool("🗜️")]
         String BuildData(OpenAiData data, HttpServerRequest request)
         {
             var c = request.Properties[RequestAiToolContext] as OpenAiToolContext;
@@ -246,6 +277,7 @@ namespace SysWeaver.AI
         static readonly MethodInfo Method_BuildQrCode = typeof(OpenAiService).GetMethod(nameof(BuildQrCode), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
 
         static readonly MethodInfo Method_GenerateImage = typeof(OpenAiService).GetMethod(nameof(GenerateImage), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+        static readonly MethodInfo Method_EditImage = typeof(OpenAiService).GetMethod(nameof(EditImage), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
 
         static readonly MethodInfo Method_DisplayUrl = typeof(OpenAiService).GetMethod(nameof(DisplayUrl), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
         static readonly MethodInfo Method_DisplayData = typeof(OpenAiService).GetMethod(nameof(DisplayData), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
@@ -298,6 +330,15 @@ namespace SysWeaver.AI
         /// <param name="s"></param>
         public void AddTool_GenerateImage(OpenAiChatSession s) =>
             s.AddTool(this, Method_GenerateImage, null, PerfMon, "Debug,Content");
+
+        /// <summary>
+        /// Add this tool to the chat session (if not included by default)
+        /// </summary>
+        /// <param name="s"></param>
+        public void AddTool_EditImage(OpenAiChatSession s) =>
+            s.AddTool(this, Method_EditImage, null, PerfMon, "Debug,Content");
+
+        
 
         /// <summary>
         /// Add this tool to the chat session (if not included by default)

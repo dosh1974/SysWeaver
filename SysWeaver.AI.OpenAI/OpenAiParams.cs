@@ -11,6 +11,7 @@ namespace SysWeaver.AI
         Low,
         Medium,
         High,
+        ExtraHigh,
     }
 
     public enum OpenAiServiceTier
@@ -84,7 +85,7 @@ namespace SysWeaver.AI
         /// <summary>
         /// The reasoning effort for models that support reasoning
         /// </summary>
-        public OpenAiReasoning DefaultReasoning = OpenAiReasoning.Minimal;
+        public OpenAiReasoning DefaultReasoning = OpenAiReasoning.Low;
 
         /// <summary>
         /// The default service tier to use for chat

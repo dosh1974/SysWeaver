@@ -1,4 +1,8 @@
 ﻿using System;
+using System.Linq;
+using System.Net;
+using System.Text;
+using System.Web;
 
 namespace SysWeaver
 {
@@ -77,6 +81,28 @@ namespace SysWeaver
             Mime = mime;
             Data = d;
         }
+
+        public static MemoryFile FromDataUri(String dataUri, String filename = null)
+        {
+            var header = dataUri.SplitFirst(',', out var data);
+            var schema = header.SplitFirst(':', out var mimeAndEncoding);
+            if (!schema.FastEquals("data:"))
+                throw new Exception("Invalid data uri");
+            var mime = mimeAndEncoding.SplitFirst(';', out var encoding);
+            if (String.IsNullOrEmpty(filename) && MimeTypeMap.TryGetExtensions(mime, out var exts))
+            {
+                var ext = exts.FirstOrDefault();
+                if (ext != null)
+                    filename = "Data" + ext;
+            }
+            if (String.IsNullOrEmpty(filename))
+                filename = "Data.png";
+            if (encoding.FastEquals("base64"))
+                return new MemoryFile(filename, mime, Convert.FromBase64String(data));
+            data = HttpUtility.UrlDecode(data);
+            return new MemoryFile(filename, mime, Encoding.UTF8.GetBytes(data));
+        }
+
 
     }
 

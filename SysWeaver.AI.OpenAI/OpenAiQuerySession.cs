@@ -74,6 +74,7 @@ namespace SysWeaver.AI
             ChatReasoningEffortLevel.Low,
             ChatReasoningEffortLevel.Medium,
             ChatReasoningEffortLevel.High,
+            new ChatReasoningEffortLevel("xhigh"),
         ];
 
         readonly ChatServiceTier? Tier;

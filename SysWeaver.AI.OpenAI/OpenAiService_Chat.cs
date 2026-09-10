@@ -93,6 +93,7 @@ namespace SysWeaver.AI
                 AddTool_BuildData(s);
 
                 AddTool_GenerateImage(s);
+                AddTool_EditImage(s);
 
                 AddTool_DisplayUrl(s);
                 AddTool_Calculate(s);
@@ -939,7 +940,7 @@ namespace SysWeaver.AI
             );
 
 
-        async Task<IReadOnlyList<ChatMessageContentPart>> GetData(ChatMessageBody message, HttpServerRequest request)
+        async Task<IReadOnlyList<ValueTuple<ChatMessageContentPart, String>>> GetData(ChatMessageBody message, HttpServerRequest request)
         {
             var d = message.Data;
             if (d == null)
@@ -950,10 +951,11 @@ namespace SysWeaver.AI
             var dd = d.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             var dl = dd.Length;
             var exts = ImageExtensions;
-            List<ChatMessageContentPart> images = new List<ChatMessageContentPart>(dl);
+            List<ValueTuple<ChatMessageContentPart, String>> images = new (dl);
             for (int i = 0; i < dl; ++ i)
             {
-                var x = dd[i];
+                var fn = dd[i];
+                var x = fn;
                 while (x.FastStartsWith("../"))
                     x = x.Substring(3);
                 try
@@ -966,7 +968,8 @@ namespace SysWeaver.AI
                     if (t == null)
                         continue;
                     bd = BinaryData.FromBytes(t.Memory);
-                    images.Add(ChatMessageContentPart.CreateImagePart(bd, mime, ChatImageDetailLevel.High));
+                    var p = ChatMessageContentPart.CreateImagePart(bd, mime, ChatImageDetailLevel.High);
+                    images.Add(ValueTuple.Create(p, fn));
                 }
                 catch
                 {

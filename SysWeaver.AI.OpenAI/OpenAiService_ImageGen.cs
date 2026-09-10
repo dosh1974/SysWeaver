@@ -1,7 +1,10 @@
 ﻿using CommunityToolkit.HighPerformance;
+using ExCSS;
 using OpenAI.Images;
+using SkiaSharp;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using SysWeaver.Media.Png;
@@ -47,16 +50,17 @@ namespace SysWeaver.AI
         /// <param name="p"></param>
         /// <param name="request"></param>
         /// <returns></returns>
-        [WebApi("debug/" + nameof(GenImage))]
+        [WebApi("debug/" + nameof(ImageGenerate))]
         [WebApiAuth(Roles.Debug)]
         [WebApiRaw("image/png", true)]
-        public async Task<ReadOnlyMemory<Byte>> GenImage(OpenAiImagePrompt p, HttpServerRequest request)
+        public async Task<ReadOnlyMemory<Byte>> ImageGenerate(OpenAiImagePrompt p, HttpServerRequest request)
         {
             using var _ = await (ImageGenLock?.Lock() ?? AsyncLock.NoLock).ConfigureAwait(false);
+            using var __ = PerfMon.Track(nameof(ImageGenerate));
             var model = p.Model ?? DefaultImageModel;
             var client = CreateImageClient(model);
             ImageGenerationOptions options = null;
-            if (ModelOptions.TryGetValue(model, out var fn))
+            if (ModelGenOptions.TryGetValue(model, out var fn))
                 options = fn(p);
             else
                 options = new()
@@ -70,36 +74,7 @@ namespace SysWeaver.AI
            
             GeneratedImage image;
             image = await client.GenerateImageAsync(p.Prompt, options).ConfigureAwait(false);
-            /*
 
-            int sleep = 1000;
-            DateTime failAt = DateTime.UtcNow.AddMinutes(5);
-            for (; ;)
-            {
-                try
-                {
-                    image = await client.GenerateImageAsync(p.Prompt, options).ConfigureAwait(false);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    var ee = ex as ClientResultException;
-                    if (ee != null)
-                    {
-                        if (ee.Status == 429)
-                        {
-                            var next = DateTime.UtcNow.AddMilliseconds(sleep);
-                            if (next > failAt)
-                                throw;
-                            await Task.Delay(sleep).ConfigureAwait(false);
-                            sleep = (sleep + 1000) + (sleep >> 1);
-                            continue;
-                        }
-                    }
-                    throw;
-                }
-            }
-            */
             BinaryData bytes = image.ImageBytes;
             var pngMem = bytes.ToMemory();
             List<PngChunk> chunks;
@@ -122,7 +97,95 @@ namespace SysWeaver.AI
             return pngMem;
         }
 
-        static readonly IReadOnlyDictionary<String, Func<OpenAiImagePrompt, ImageGenerationOptions>> ModelOptions = new Dictionary<String, Func<OpenAiImagePrompt, ImageGenerationOptions>>(StringComparer.Ordinal)
+
+
+        /// <summary>
+        /// Edit an existing image
+        /// </summary>
+        /// <param name="p"></param>
+        /// <param name="request"></param>
+        /// <returns></returns>
+        [WebApi("debug/" + nameof(ImageEdit))]
+        [WebApiAuth(Roles.Debug)]
+        [WebApiRaw("image/png", true)]
+        public async Task<ReadOnlyMemory<Byte>> ImageEdit(OpenAiImageEditPrompt p, HttpServerRequest request)
+        {
+            using var _ = await (ImageGenLock?.Lock() ?? AsyncLock.NoLock).ConfigureAwait(false);
+            using var __ = PerfMon.Track(nameof(ImageEdit));
+            var model = p.Model ?? DefaultImageModel;
+            var client = CreateImageClient(model);
+            ImageEditOptions options = null;
+            if (ModelEditOptions.TryGetValue(model, out var fn))
+                options = fn(p);
+            else
+                options = new()
+                {
+                    Quality = p.HighQuality ? GeneratedImageQuality.High : GeneratedImageQuality.Standard,
+                    Size = ImageSizes[(int)p.Size],
+                    OutputFileFormat = GeneratedImageFileFormat.Png,
+                };
+            MemoryFile file = null;
+            var s = p.SourceImage;
+            if (s.FastStartsWith("data:"))
+            {
+                file = MemoryFile.FromDataUri(s);
+            }else
+            {
+                var fns = s.SplitLast('/');
+                var ext = fns.SplitLast('.');
+                if (s.FastStartsWith("http://") || s.FastStartsWith("https://"))
+                {
+                    var data = await WebTools.HttpClient.GetByteArrayAsync(s).ConfigureAwait(false);
+                    var mime = MimeTypeMap.TryGetExtensions(ext, out var xx) ? xx.FirstOrDefault() : null;
+                    file = new MemoryFile(fns, mime ?? MimeTypeMap.Data, data);
+                }
+                else
+                {
+                    s = request.MakeRequestAbsolute(s);
+                    var rr = await request.Server.InternalRead(s, request.Session).ConfigureAwait(false);
+                    if (rr == null)
+                        throw new Exception("Don't know how to read the file " + s.ToQuoted());
+                    var data = rr.Item1;
+                    var mime = MimeTypeMap.TryGetExtensions(ext, out var xx) ? xx.FirstOrDefault() : null;
+                    file = new MemoryFile(fns, mime ?? MimeTypeMap.Data, data.Span);
+                }
+            }
+            GeneratedImage image;
+            {
+                using var ms = new MemoryStream(file.Data, false);
+                image = await client.GenerateImageEditAsync(ms, file.Name, p.Prompt, options).ConfigureAwait(false);
+            }
+
+            BinaryData bytes = image.ImageBytes;
+            var pngMem = bytes.ToMemory();
+            List<PngChunk> chunks;
+            using (var pms = pngMem.AsStream())
+                chunks = PngTools.ReadChunks(pms).ToList();
+            List<PngChunk> add = new List<PngChunk>(10)
+            {
+                PngTools.SetCreationTimeInfo(DateTime.UtcNow),
+                PngTools.CreateInformationChunk(PngKeywords.Software, EnvInfo.AppDisplayName),
+                PngTools.CreateInformationChunk(PngKeywords.Source, String.Concat(model, ' ', options.Quality).Trim().Replace("  ", " ").Replace("  ", " ")),
+                PngTools.CreateInformationChunk(PngKeywords.Description, p.Prompt),
+            };
+            var user = request?.Session?.Auth?.NickName;
+            if (user != null)
+                add.Add(PngTools.CreateInformationChunk(PngKeywords.Author, user));
+            if (!String.IsNullOrEmpty(p.Title))
+                add.Add(PngTools.CreateInformationChunk(PngKeywords.Title, p.Title));
+            chunks.InsertRange(1, add);
+            pngMem = PngTools.MakePng(chunks);
+            return pngMem;
+        }
+
+        static readonly GeneratedImageBackground[] Backgrounds = 
+        [
+            GeneratedImageBackground.Auto,
+            GeneratedImageBackground.Opaque,
+            GeneratedImageBackground.Transparent,
+        ];
+
+        static readonly IReadOnlyDictionary<String, Func<OpenAiImagePrompt, ImageGenerationOptions>> ModelGenOptions = new Dictionary<String, Func<OpenAiImagePrompt, ImageGenerationOptions>>(StringComparer.Ordinal)
         {
             { 
                 "gpt-image-1", 
@@ -138,6 +201,7 @@ namespace SysWeaver.AI
                     {
                         Quality = p.HighQuality ? "high" : "medium",
                         Size = ImageSizes1[(int)p.Size],
+                        Background = Backgrounds[(int)p.Background],
                     }
             },
             {   
@@ -154,6 +218,7 @@ namespace SysWeaver.AI
                     {
                         Quality = p.HighQuality ? "high" : "medium",
                         Size = ImageSizes2_5[(int)p.Size],
+                        Background = Backgrounds[(int)p.Background],
                     }
             },
             {
@@ -162,6 +227,7 @@ namespace SysWeaver.AI
                     {
                         Quality = p.HighQuality ? "high" : "medium",
                         Size = ImageSizes2_5[(int)p.Size],
+                        Background = Backgrounds[(int)p.Background],
                     }
             },
             {
@@ -182,6 +248,70 @@ namespace SysWeaver.AI
             },
         }.Freeze();
 
+
+
+        static readonly IReadOnlyDictionary<String, Func<OpenAiImageEditPrompt, ImageEditOptions>> ModelEditOptions = new Dictionary<String, Func<OpenAiImageEditPrompt, ImageEditOptions>>(StringComparer.Ordinal)
+        {
+            {
+                "gpt-image-1",
+                    p => new ImageEditOptions
+                    {
+                        Quality = p.HighQuality ? "high" : "medium",
+                        Size = ImageSizes1[(int)p.Size],
+                    }
+            },
+            {
+                "gpt-image-1.5",
+                    p => new ImageEditOptions
+                    {
+                        Quality = p.HighQuality ? "high" : "medium",
+                        Size = ImageSizes1[(int)p.Size],
+                        Background = Backgrounds[(int)p.Background],
+                    }
+            },
+            {
+                "gpt-image-2",
+                    p => new ImageEditOptions
+                    {
+                        Quality = p.HighQuality ? "high" : "medium",
+                        Size = (p.Small ? ImageSizes2s : ImageSizes2)[(int)p.Size],
+                    }
+                },
+                {
+                "gpt-image-2.5-sunburst",
+                    p => new ImageEditOptions
+                    {
+                        Quality = p.HighQuality ? "high" : "medium",
+                        Size = (p.Small ? ImageSizes2_5s : ImageSizes2_5)[(int)p.Size],
+                        Background = Backgrounds[(int)p.Background],
+                    }
+            },
+            {
+                "gpt-image-2.5-flare",
+                    p => new ImageEditOptions
+                    {
+                        Quality = p.HighQuality ? "high" : "medium",
+                        Size = (p.Small ? ImageSizes2_5s : ImageSizes2_5)[(int)p.Size],
+                        Background = Backgrounds[(int)p.Background],
+                    }
+            },
+            {
+                "dall-e-2",
+                    p => new ImageEditOptions
+                    {
+                        Size = GeneratedImageSize.W1024xH1024,
+                        ResponseFormat = GeneratedImageFormat.Bytes,
+                    }
+            },
+            {
+                "dall-e-3",
+                    p => new ImageEditOptions
+                    {
+                        Quality = p.HighQuality ? GeneratedImageQuality.High : GeneratedImageQuality.Standard,
+                        Size = ImageSizes[(int)p.Size],
+                    }
+            },
+        }.Freeze();
 
         /*
         Auto,
@@ -229,6 +359,25 @@ namespace SysWeaver.AI
             new GeneratedImageSize(2160, 3840),
             new GeneratedImageSize(3840, 2160),
             ];
+
+        static readonly GeneratedImageSize[] ImageSizes2s = [
+            GeneratedImageSize.Auto,
+            new GeneratedImageSize(2048 / 2, 2048 / 2),
+            new GeneratedImageSize(1536 / 2, 2048 / 2),
+            new GeneratedImageSize(2048 / 2, 1536 / 2),
+            new GeneratedImageSize(2160 / 2, 3840 / 2),
+            new GeneratedImageSize(3840 / 2, 2160 / 2),
+            ];
+
+        static readonly GeneratedImageSize[] ImageSizes2_5s = [
+            GeneratedImageSize.Auto,
+            new GeneratedImageSize(2048 / 2, 2048 / 2),
+            new GeneratedImageSize(2480 / 2, 3508 / 2),
+            new GeneratedImageSize(3508 / 2, 2480 / 2),
+            new GeneratedImageSize(2160 / 2, 3840 / 2),
+            new GeneratedImageSize(3840 / 2, 2160 / 2),
+            ];
+
 
 #pragma warning restore OPENAI001
 

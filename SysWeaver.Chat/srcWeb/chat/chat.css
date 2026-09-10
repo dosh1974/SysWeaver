@@ -249,10 +249,10 @@ SysWeaver-ChatRow.Mine {
         grid-column: 3 / 3;
     }
 
-    SysWeaver-ChatRow.Mine SysWeaver-ChatHeader {
-        grid-template-columns: var(--fi) auto var(--si);
-        padding: 2px 2px 2px 0.5em;
-    }
+SysWeaver-ChatRow.Mine SysWeaver-ChatHeader {
+    grid-template-columns: var(--fi) auto var(--si);
+    padding: 2px 2px 2px 0.5em;
+}
 
 SysWeaver-ChatHeader {
     display: block;
@@ -329,18 +329,30 @@ SysWeaver-ChatIcon {
         border: none;
         cursor: pointer;
         border-radius: calc(var(--si) * 0.1);
+        transform-origin: 20% center;
+        transition: transform ease-in-out 0.15s;
     }
 
 
-SysWeaver-ChatContent {
-    display: block;
-    padding: 0.5em;
-    text-align: left;
-    user-select: text;
-    overflow: hidden;
-    cursor: text;
-    max-height: 60vh;
-    /*white-space: pre-wrap;*/
+    SysWeaver-ChatRow.Mine SysWeaver-ChatIcon img {
+        transform-origin: 80% center;
+    }
+
+    SysWeaver-ChatIcon img:hover
+    {
+        transform: scale(2.0);
+
+    }
+
+    SysWeaver-ChatContent {
+        display: block;
+        padding: 0.5em;
+        text-align: left;
+        user-select: text;
+        overflow: hidden;
+        cursor: text;
+        max-height: 60vh;
+        /*white-space: pre-wrap;*/
     }
 
     SysWeaver-ChatContent:focus

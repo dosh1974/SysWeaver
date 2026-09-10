@@ -505,7 +505,7 @@ namespace SysWeaver.AI
 
 
         public async Task<String> CompleteUpdate(String text,
-            IReadOnlyList<ChatMessageContentPart> extraData,
+            IReadOnlyList<ValueTuple<ChatMessageContentPart, String>> extraData,
             HttpServerRequest request, 
             Func<String, String, Task> onUpdate, 
             Func<String, String, String, String> saveFile,
@@ -518,9 +518,13 @@ namespace SysWeaver.AI
         {
             using var _a = Monitor?.Track(nameof(CompleteUpdate));
             var messages = ApiMessages;
+            var haveData = (extraData?.Count ?? 0) > 0;
+            if (haveData)
+                text = String.Concat(text, "\n\n\nThe supplied content can be accessed using the following URL's:\n * ", String.Join("\n * ", extraData.Select(x => StringTools.EscapeMD(x.Item2).ToQuoted())));
             var um = new UserChatMessage(text);
-            foreach (var x in extraData.Nullable())
-                um.Content.Add(x);
+            if (haveData)
+                foreach (var x in extraData)
+                    um.Content.Add(x.Item1);
             if (!String.IsNullOrEmpty(from))
                 um.ParticipantName = from;
             messages.Add(um);
