@@ -71,8 +71,9 @@ namespace SysWeaver.AI
         /// <param name="joinAuth">Optional comma separated list of required auth tokens</param>
         /// <param name="clearAuth">Auth required to clear the chat session</param>
         /// <param name="defaultTools">true to add some default tools for the AI to use</param>
+        /// <param name="memory">An optional memory implementation </param>
         /// <returns></returns>
-        public OpenAiChatSession CreateChatSession(bool isPrivate, OpenAiSessionParams p = null, String joinAuth = "", String clearAuth = "Admin", bool defaultTools = true)
+        public OpenAiChatSession CreateChatSession(bool isPrivate, OpenAiSessionParams p = null, String joinAuth = "", String clearAuth = "Admin", bool defaultTools = true, IAiMemory memory = null)
         {
             p = p ?? new OpenAiSessionParams();
             if (String.IsNullOrEmpty(p.Model))
@@ -81,7 +82,7 @@ namespace SysWeaver.AI
             p.Reasoning = p.Reasoning ?? DefaultReasoning;
 
             var mon = PerfMon;
-            var s = new OpenAiChatSession(isPrivate, new ChatClient(p.Model, ApiKey, Options), p, this, joinAuth, clearAuth, mon, ChatLock);
+            var s = new OpenAiChatSession(isPrivate, new ChatClient(p.Model, ApiKey, Options), p, this, joinAuth, clearAuth, mon, ChatLock, memory);
             if (defaultTools)
             {
                 AddTool_GetPredefinedImage(s);
@@ -904,21 +905,20 @@ namespace SysWeaver.AI
             };
         }
 
-        Task<Chat.ChatMessage> CmdShowPrompt(String args, OpenAiChatSession s, HttpServerRequest r)
+        async Task<Chat.ChatMessage> CmdShowPrompt(String args, OpenAiChatSession s, HttpServerRequest r)
         {
-            var gs = s.GetSystemPrompt;
-            if (gs == null)
-                return Task.FromResult(new Chat.ChatMessage
+            var p = await s.BuildSystemPrompt(r.Session).ConfigureAwait(false);
+            if (p == null)
+                return new Chat.ChatMessage
                 {
                     Text = "There is no system prompt!",
-                    Format = Chat.ChatMessageFormats.Text,
-                });
-            var p = gs(r.Session);
-            return Task.FromResult(new Chat.ChatMessage
+                    Format = ChatMessageFormats.Text,
+                };
+            return new Chat.ChatMessage
             {
-                Text = String.Join(p, "```\n", "\n```"),
-                Format = Chat.ChatMessageFormats.MarkDown,
-            });
+                Text = String.Join(StringTools.EscapeMD(p), "```\n", "\n```"),
+                Format = ChatMessageFormats.MarkDown,
+            };
         }
 
 

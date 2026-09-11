@@ -182,7 +182,7 @@ namespace SysWeaver.AI
         /// <param name="prompt">Source image and paramaters for the generation</param>
         /// <param name="request"></param>
         /// <returns>An url to the generated png image</returns>
-        [OpenAiTool("🎨")]
+        [OpenAiTool("🖼️✂️")]
         async Task<String> EditImage(OpenAiImageEditPrompt prompt, HttpServerRequest request)
         {
             var c = request.Properties[RequestAiToolContext] as OpenAiToolContext;

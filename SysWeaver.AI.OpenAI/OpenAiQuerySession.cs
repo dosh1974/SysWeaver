@@ -41,7 +41,7 @@ namespace SysWeaver.AI
 
     public class OpenAiQuerySession
     {
-        public OpenAiQuerySession(ChatClient c, OpenAiSessionParams p, IOpenAiToolCache toolCache = null, PerfMonitor monitor = null)
+        public OpenAiQuerySession(ChatClient c, OpenAiSessionParams p, IOpenAiToolCache toolCache = null, PerfMonitor monitor = null, IAiMemory memory = null)
         {
             var model = p.Model;
             Model = model;
@@ -57,6 +57,14 @@ namespace SysWeaver.AI
             Client = c;
             Monitor = monitor;
             ToolCache = toolCache;
+            Memory = memory;
+            if (memory != null)
+            {
+                AddTool(this, Method_AddMemory, nameof(AddMemory), Monitor, "");
+                AddTool(this, Method_GetMemory, nameof(GetMemory), Monitor, "");
+                AddTool(this, Method_RemoveMemory, nameof(RemoveMemory), Monitor, "");
+                AddTool(this, Method_SetMemory, nameof(SetMemory), Monitor, "");
+            }
         }
 
         volatile ChatCompletionOptions Options;
@@ -89,6 +97,62 @@ namespace SysWeaver.AI
             ];
 
 
+        #region Memory
+
+        protected IAiMemory Memory;
+
+        /// <summary>
+        /// Add a memory entry for the current user.
+        /// A maximum of 64 entries can be added.
+        /// If the memory alredy exist, it's overwritten with this memory.
+        /// The memory stored for the key "Global" is availabe in the system prompt at all times.
+        /// </summary>
+        /// <param name="data">Data to add</param>
+        /// <param name="context"></param>
+        /// <returns>True if successful</returns>
+        [OpenAiTool("🧠➕")]
+        Task<bool> AddMemory(AiMemoryAdd data, HttpServerRequest context)
+           => Memory.AddMemory(context.Session, data.Key, data.Desc, data.Value);
+
+
+        /// <summary>
+        /// Get some memory associated with the current user
+        /// </summary>
+        /// <param name="key">The memory key</param>
+        /// <param name="context"></param>
+        /// <returns>The saved memory</returns>
+        [OpenAiTool("🧠")]
+        Task<string> GetMemory(String key, HttpServerRequest context)
+            => Memory.GetMemory(context.Session, key);
+
+
+        /// <summary>
+        /// Remove some stored memory associated with the current user
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="context"></param>
+        /// <returns>True if successful</returns>
+        [OpenAiTool("🧠❌")]
+        Task<bool> RemoveMemory(String key, HttpServerRequest context)
+            => Memory.RemoveMemory(context.Session, key);
+
+        /// <summary>
+        /// Update / set some memoru associated with the current user
+        /// </summary>
+        /// <param name="data">Data to update / set</param>
+        /// <param name="context"></param>
+        /// <returns>True if successful</returns>
+        [OpenAiTool("🧠💾")]
+        Task<bool> SetMemory(AiMemorySet data, HttpServerRequest context)
+           => Memory.SetMemory(context.Session, data.Key, data.Value);
+
+
+        static readonly MethodInfo Method_AddMemory = typeof(OpenAiQuerySession).GetMethod(nameof(AddMemory), BindingFlags.NonPublic | BindingFlags.Instance);
+        static readonly MethodInfo Method_GetMemory = typeof(OpenAiQuerySession).GetMethod(nameof(GetMemory), BindingFlags.NonPublic | BindingFlags.Instance);
+        static readonly MethodInfo Method_RemoveMemory = typeof(OpenAiQuerySession).GetMethod(nameof(RemoveMemory), BindingFlags.NonPublic | BindingFlags.Instance);
+        static readonly MethodInfo Method_SetMemory = typeof(OpenAiQuerySession).GetMethod(nameof(SetMemory), BindingFlags.NonPublic | BindingFlags.Instance);
+
+        #endregion//Memory
 
         protected ChatCompletionOptions CreateOptions()
         {
@@ -100,18 +164,17 @@ namespace SysWeaver.AI
                 options.Temperature = Temperature;
             options.ReasoningEffortLevel = ReasonigLevel;
             options.ServiceTier = Tier;
+            var d = options.Tools;
             var tools = Tools;
-            if (tools.Count > 0)
-            {
-                if (CanReason)
-                    options.ReasoningEffortLevel = ChatReasoningEffortLevel.None;
-                var d = options.Tools;
-                foreach (var x in tools)
-                    d.Add(x.Value.Tool);
-                options.AllowParallelToolCalls = SupportParallelToolCalls;
-            }
+            foreach (var x in Tools)
+                d.Add(x.Value.Tool);
+            options.AllowParallelToolCalls = SupportParallelToolCalls;
+            if ((options.Tools.Count > 0) && CanReason)
+                options.ReasoningEffortLevel = ChatReasoningEffortLevel.None;
             return options;
         }
+
+
 
         #pragma warning restore OPENAI001
 

@@ -360,22 +360,25 @@ namespace SysWeaver.AI
             new GeneratedImageSize(3840, 2160),
             ];
 
+        static int Fix16(int v)
+            => (v + 15) & ~15;
+
         static readonly GeneratedImageSize[] ImageSizes2s = [
             GeneratedImageSize.Auto,
-            new GeneratedImageSize(2048 / 2, 2048 / 2),
-            new GeneratedImageSize(1536 / 2, 2048 / 2),
-            new GeneratedImageSize(2048 / 2, 1536 / 2),
-            new GeneratedImageSize(2160 / 2, 3840 / 2),
-            new GeneratedImageSize(3840 / 2, 2160 / 2),
+            new GeneratedImageSize(Fix16(2048 / 2), Fix16(2048 / 2)),
+            new GeneratedImageSize(Fix16(1536 / 2), Fix16(2048 / 2)),
+            new GeneratedImageSize(Fix16(2048 / 2), Fix16(1536 / 2)),
+            new GeneratedImageSize(Fix16(2160 / 2), Fix16(3840 / 2)),
+            new GeneratedImageSize(Fix16(3840 / 2), Fix16(2160 / 2)),
             ];
 
         static readonly GeneratedImageSize[] ImageSizes2_5s = [
             GeneratedImageSize.Auto,
-            new GeneratedImageSize(2048 / 2, 2048 / 2),
-            new GeneratedImageSize(2480 / 2, 3508 / 2),
-            new GeneratedImageSize(3508 / 2, 2480 / 2),
-            new GeneratedImageSize(2160 / 2, 3840 / 2),
-            new GeneratedImageSize(3840 / 2, 2160 / 2),
+            new GeneratedImageSize(Fix16(2048 / 2), Fix16(2048 / 2)),
+            new GeneratedImageSize(Fix16(2480 / 2), Fix16(3508 / 2)),
+            new GeneratedImageSize(Fix16(3508 / 2), Fix16(2480 / 2)),
+            new GeneratedImageSize(Fix16(2160 / 2), Fix16(3840 / 2)),
+            new GeneratedImageSize(Fix16(3840 / 2), Fix16(2160 / 2)),
             ];
 
 

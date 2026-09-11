@@ -1,20 +1,13 @@
-﻿using Newtonsoft.Json;
-using OpenAI.Chat;
-using Svg;
+﻿using OpenAI.Chat;
 using System;
 using System.ClientModel;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
 using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Auth;
-using SysWeaver.Docs;
-using SysWeaver.MicroService;
 using SysWeaver.Net;
 
 namespace SysWeaver.AI
@@ -41,8 +34,8 @@ namespace SysWeaver.AI
 
 
 
-        internal OpenAiChatSession(bool isPrivate, ChatClient c, OpenAiSessionParams p, IOpenAiToolCache toolCache, String joinAuth, String clearAuth, PerfMonitor monitor, AsyncLock chatLock)
-            : base(c, p, toolCache, monitor)
+        internal OpenAiChatSession(bool isPrivate, ChatClient c, OpenAiSessionParams p, IOpenAiToolCache toolCache, String joinAuth, String clearAuth, PerfMonitor monitor, AsyncLock chatLock, IAiMemory memory)
+            : base(c, p, toolCache, monitor, memory)
         {
             IsPrivate = isPrivate;
             ChatLock = chatLock;
@@ -63,6 +56,7 @@ namespace SysWeaver.AI
             AddCommand("tools", ListTools, null, "List all tools available to the AI");
             AddCommand("tool", HelpTool, "<tool name>", "Get information about a tool");
         }
+
 
         public String ChatId { get; internal set;  }
         public override string ToString() => ChatId;
@@ -397,11 +391,89 @@ namespace SysWeaver.AI
 
         public readonly List<ChatMessage> ApiMessages = new List<ChatMessage>();
 
-        IEnumerable<ChatMessage> EnumMessages(HttpSession s)
+        const String MemSection = """
+                                  ## MEMORY  
+                                  """;
+
+
+
+        const String MemHeader =    """
+
+                                    This is a list of all key / value pairs you have previously stored about this user
+                                    
+                                    | Key | Last used | Short description |
+                                    |-----|-----------|-------------------|
+                                    """;
+
+        const String MemInstruction =   """
+                                        Please store / retrieve whatever you see fit to improve the user experience.  
+                                        Make sure to store key information about a user to make the experience more personal.  
+                                        Things to store: personal details, recent discussed items and so on.  
+                                        Make sure to update the memory frequently, call AddMemory / SetMemory whenever a discussion changes or other valuable information is revealed / added.
+                                        Consult stored memory when in doubt.  
+                                        Use a consistent key naming to avoid unnecessary memory retrieval.  
+
+                                        Memory can be modified using the following tools:  
+                                        - AddMemory to add a NEW memory.  
+                                        - GetMemory  
+                                        - SetMemory to update an EXISTING memory.   
+                                        - RemoveMemory  
+                                          
+                                        The memory stored with key "Global" will be available in the system prompt, keep frequent used, personal memories there.
+                                        """;
+
+        const String MemGlobal =    """
+                                    ### GLOBAL MEMORY 
+                                    This is the content of the global memory for this user:
+                                    """;
+
+
+        internal async Task<String> BuildSystemPrompt(HttpSession s)
         {
             var gs = GetSystemPrompt;
-            if (gs != null)
-                SystemPrompt = gs(s);
+            var p = gs == null ? null : gs(s);
+            var mem = Memory;
+            if (mem != null)
+            {
+                var r = await mem.GetMemoryEntries(s).ConfigureAwait(false);
+                if ((r != null) && (r.Length > 0))
+                {
+                    var data = String.Join("\n", r.Select(x => x.MdTableRow));
+                    var gmem = await mem.GetMemory(s, "Global").ConfigureAwait(false);
+
+                    if (String.IsNullOrEmpty(p))
+                    {
+                        if (String.IsNullOrEmpty(gmem))
+                            p = String.Concat(MemSection + "\n" + MemHeader, "\n", data, "\n\n" + MemInstruction);
+                        else
+                            p = String.Concat(MemSection + "\n" + MemHeader, "\n", data, "\n\n" + MemInstruction, "\n" + MemGlobal, "\n", gmem);
+                    }
+                    else
+                    {
+                        if (String.IsNullOrEmpty(gmem))
+                            p = String.Concat(p, "\n\n", MemSection + "\n" + MemHeader, "\n", data, "\n\n" + MemInstruction);
+                        else
+                            p = String.Concat(p, "\n\n", MemSection + "\n" + MemHeader, "\n", data, "\n\n" + MemInstruction, "\n" + MemGlobal, "\n", gmem);
+                    }
+                }else
+                {
+                    if (String.IsNullOrEmpty(p))
+                    {
+                        p = MemSection + "\n" + MemInstruction;
+                    }
+                    else
+                    {
+                        p = String.Concat(p, "\n\n", MemSection + "\n" + MemInstruction);
+                    }
+                }
+            }
+            return p;
+        }
+
+        IEnumerable<ChatMessage> EnumMessages(String p)
+        {
+            if (p != null)
+                SystemPrompt = p;
             var m = MsgSystemPrompt;
             if (m != null)
                 yield return m;
@@ -429,7 +501,8 @@ namespace SysWeaver.AI
             var model = Model;
             for (; ; )
             {
-                var mm = EnumMessages(session);
+                var sysP = await BuildSystemPrompt(session).ConfigureAwait(false);
+                var mm = EnumMessages(sysP);
                 ClientResult<ChatCompletion> r;
                 using (var _b = await (ChatLock?.Lock() ?? AsyncLock.NoLock).ConfigureAwait(false))
                 {
@@ -548,7 +621,8 @@ namespace SysWeaver.AI
                 StringBuilder e = new StringBuilder();
                 Dictionary<String, Tuple<int, String>> toolCallIndices = new Dictionary<string, Tuple<int, string>>(StringComparer.Ordinal);
                 List<StringBuilder> toolCalls = new List<StringBuilder>();
-                var mm = EnumMessages(session);
+                var p = await BuildSystemPrompt(session).ConfigureAwait(false);
+                var mm = EnumMessages(p);
                 using (var _ = await (ChatLock?.Lock() ?? AsyncLock.NoLock).ConfigureAwait(false))
                 {
                     using var _b = Monitor?.Track(nameof(Client.CompleteChatStreaming));
