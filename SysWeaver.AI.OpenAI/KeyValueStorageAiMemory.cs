@@ -81,7 +81,7 @@ namespace SysWeaver.AI
             var mem = await GetMem(session).ConfigureAwait(false);
             using var l = await mem.Lock.Lock().ConfigureAwait(false);
             if (!mem.M.TryGetValue(key, out var r))
-                throw new Exception("The memory \"" + key + "\" do NOT exist");
+                return null;
             r.H.Last = DateTime.UtcNow.Ticks;
             await KeyValueStore.AllApp.SetAsync(BuildKey(session), mem.M.Values.ToArray()).ConfigureAwait(false);
             return r.V;
