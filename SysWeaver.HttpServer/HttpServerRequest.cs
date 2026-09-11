@@ -153,8 +153,15 @@ namespace SysWeaver.Net
         /// </summary>
         public readonly bool DidIndex;
 
-        protected HttpServerRequest(String httpMethod, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart, bool didIndex)
+
+        /// <summary>
+        /// The raw url, uri encoded, zero processing from input.
+        /// </summary>
+        public readonly String RawUrl;
+
+        protected HttpServerRequest(String httpMethod, String rawUrl, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart, bool didIndex)
         {
+            RawUrl = rawUrl;
             DidIndex = didIndex;
             Method = httpMethod;
             var m = IntMethods.TryGetValue(httpMethod ?? "", out var hm) ? hm : HttpServerMethods.Other;
@@ -200,9 +207,16 @@ namespace SysWeaver.Net
         /// Parse and return query paramaters.
         /// URL encoded characters in the values are decoded.
         /// </summary>
-        public NameValueCollection QueryParameters => IQP ?? (IQP = HttpUtility.ParseQueryString(Url.Substring(QueryStringStart)));
+        public NameValueCollection QueryParameters => IQP ?? (IQP = GetQueryParameters());
 
-
+        NameValueCollection GetQueryParameters()
+        {
+            var u = RawUrl;
+            var l = u.IndexOf('?');
+            if (l < 0)
+                return new NameValueCollection();
+            return HttpUtility.ParseQueryString(u.Substring(l + 1));
+        }
 
         /// <summary>
         /// Parse and return query parameter dictionary (keys are all lowercase), only the last value is set if multiple keys are found.

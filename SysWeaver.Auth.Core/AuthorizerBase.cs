@@ -88,7 +88,7 @@ namespace SysWeaver.Auth
         /// <param name="userName">The plain text username</param>
         /// <returns>The salt and user guid, or null if the user is unknown Tuple.Create(salt, userGuid)</returns>
         public virtual Task<String> GetSaltAsync(String userName)
-             => Task.FromResult("NoLogin");
+             => TaskExt.NullStringTask;
 
         /// <summary>
         /// If any authorization information changes (db updates, files reloaded etc), increase this counter (invalidates cached auth's)

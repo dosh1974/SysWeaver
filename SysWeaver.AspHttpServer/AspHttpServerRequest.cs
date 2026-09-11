@@ -12,10 +12,10 @@ namespace SysWeaver.Net
 {
     public sealed class AspHttpServerRequest : HttpServerRequest
     {
-        public AspHttpServerRequest(HttpContext context, String url, String prefix, AspHttpServer server, HttpServerHostInfo host, int queryStart, bool didIndex, String newMethod = null)
+        public AspHttpServerRequest(HttpContext context, String rawUrl, String url, String prefix, AspHttpServer server, HttpServerHostInfo host, int queryStart, bool didIndex, String newMethod = null)
             : base(
                     newMethod ?? context.Request.Method,
-                    url, prefix, server, host, queryStart, didIndex)
+                    rawUrl, url, prefix, server, host, queryStart, didIndex)
         {
             Context = context;
             Req = context.Request;

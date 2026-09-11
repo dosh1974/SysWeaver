@@ -906,6 +906,7 @@ namespace SysWeaver.Net
             var p = data.QueryParamsLowercase;
             if (!p.TryGetValue("u", out var url))
                 throw new Exception("No 'u' query parameter found, expecting a redirect url");
+            Msg.AddMessage("url=" + url, MessageLevels.Warning);
             if (a == null)
             {
                 if (!p.TryGetValue("t", out var token))

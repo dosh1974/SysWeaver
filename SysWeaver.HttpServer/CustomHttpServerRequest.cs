@@ -10,7 +10,7 @@ namespace SysWeaver.Net
     {
 
         public CustomHttpServerRequest(String httpMethod = null, String url = "", String prefix = "", HttpServerBase server = null, HttpServerHostInfo host = null, int queryStart = -1, bool didIndex = false)
-            : base(httpMethod, url, prefix, server, host, queryStart, didIndex)
+            : base(httpMethod, url, url, prefix, server, host, queryStart, didIndex)
         { 
         }
 

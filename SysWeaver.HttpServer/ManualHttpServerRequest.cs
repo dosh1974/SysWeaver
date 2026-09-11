@@ -14,7 +14,7 @@ namespace SysWeaver.Net
     {
 
         public ManualHttpServerRequest(String httpMethod, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart, bool didIndex = false)
-            : base(httpMethod, url, prefix, server, host, queryStart, didIndex)
+            : base(httpMethod, url, url, prefix, server, host, queryStart, didIndex)
         {
         }
 
