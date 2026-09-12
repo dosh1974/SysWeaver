@@ -39,6 +39,14 @@ namespace SysWeaver.AI
         };
 
 
+        static readonly JsonSerializerOptions SerVerboseOptions = new()
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            WriteIndented = true,
+            IndentCharacter = ' ',
+            IndentSize = 2,
+        };
+
         public static String GetString(Type type, bool isOutput, String description = null)
         {
             var cache = StringCache;
@@ -57,8 +65,8 @@ namespace SysWeaver.AI
 
 
 
-        public static String ToString(JsonSchemaParam p)
-            => p == null ? "null" : JsonSerializer.Serialize(p, SerOptions);
+        public static String ToString(JsonSchemaParam p, bool verbose = false)
+            => p == null ? "null" : JsonSerializer.Serialize(p, verbose ? SerVerboseOptions : SerOptions);
 
         const String TypeName_String = "string";
         const String TypeName_Integer = "integer";
@@ -179,7 +187,7 @@ namespace SysWeaver.AI
                 };
             }
             if (type.IsPrimitive)
-                throw new Exception("Unhandled primitve type " + type.FullName.ToQuoted());
+                throw new Exception("Unhandled primitve type " + type.CleanTypename().ToQuoted());
             Dictionary<String, JsonSchemaParam> props = new Dictionary<string, JsonSchemaParam>(StringComparer.Ordinal);
             List<String> required = new List<string>();
             foreach (var x in type.GetMembers(BindingFlags.Public | BindingFlags.Instance))

@@ -88,7 +88,7 @@ namespace SysWeaver.AI
                 AddTool_GetPredefinedImage(s);
                 AddTool_GetFileExtensionIcon(s);
                 AddTool_GetCountryFlagIcon(s);
-                AddTool_BuildLogo(s);
+                //AddTool_BuildLogo(s);
                 AddTool_BuildQrCode(s);
                 AddTool_BuildTable(s);
                 AddTool_BuildData(s);
@@ -345,22 +345,22 @@ namespace SysWeaver.AI
             if (retType != null)
             {
                 bool isArray = retType.IsArray;
-                String prefix = "Return type is a ";
+                String prefix = "Return type is a";
                 if (isArray)
                 {
                     retType = retType.GetElementType();
-                    prefix = "Return type is an array of ";
+                    prefix = "Return type is an array of";
                 }
                 if (JsonSchema.TryGetPrim(retType, out var jtype))
                 {
                     if (String.IsNullOrEmpty(retDesc))
-                        retDesc = prefix + jtype.ToQuoted();
+                        retDesc = String.Concat(prefix, ' ', jtype.ToQuoted());
                     else
-                        retDesc = String.Concat(retDesc, ".\n", prefix, jtype.ToQuoted());
+                        retDesc = String.Concat(retDesc, ".\n", prefix, ' ', jtype.ToQuoted());
                 }
                 else
                 {
-                    retDesc = String.Concat(prefix, retType.Name.ToQuoted(), " that is an object with JSON schema: ", JsonSchema.ToString(JsonSchema.Get(retType, true, retDesc)));
+                    retDesc = String.Concat(prefix, isArray ? " objects" : "n object", " with JSON schema:\n```json\n", JsonSchema.ToString(JsonSchema.Get(retType, true, retDesc), true), "\n```");
                 }
                 methodDesc = String.IsNullOrEmpty(methodDesc) ? retDesc : String.Join(".\n", methodDesc, retDesc);
             }
@@ -1102,7 +1102,7 @@ namespace SysWeaver.AI
                     Data = message.Data,
                     Format = message.Format,
                     Lang = session?.Language,
-                    Time = DateTime.UtcNow
+                    Time = DateTime.UtcNow,
                 };
                 lock (s.Messages)
                 {
@@ -1111,6 +1111,7 @@ namespace SysWeaver.AI
                 }
                 c.PostMessage(providerChatId, m, session, scope);
                 var loadingData = s.WorkingImageUrl;
+                var start = DateTime.UtcNow;
                 try
                 {
                     m = new Chat.ChatMessage
@@ -1121,7 +1122,7 @@ namespace SysWeaver.AI
                         Text = s.ThinkMessage,
                         Data = loadingData,
                         Lang = session?.Language,
-                        Time = DateTime.UtcNow,
+                        Time = start,
                         Flags = ChatMessageFlags.IsWorking,
                     };
                     m.AddNamedData(OpenAiTools.DebugKey, debug);
@@ -1231,6 +1232,7 @@ namespace SysWeaver.AI
                 m.MenuItems = s.GetMenu(session, true, debug.HaveInfo ? OpenAiTools.EmptyStringSet : OpenAiTools.NoDebugSet);
                 c.ReplaceMessage(providerChatId, m, session, scope);
                 s.InvokeAiResponseCompleted(m.Text, request);
+                debug.Took = DateTime.UtcNow - start;
             }
             return true;
 

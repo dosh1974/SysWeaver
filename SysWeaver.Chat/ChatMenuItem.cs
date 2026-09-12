@@ -3,6 +3,8 @@ using System.Linq;
 
 namespace SysWeaver.Chat
 {
+
+
     public class ChatMenuItem
     {
         /// <summary>
@@ -39,7 +41,6 @@ namespace SysWeaver.Chat
         /// Any child items
         /// </summary>
         public ChatMenuItem[] Children;
-
 
         /// <summary>
         /// Copy everything but the children

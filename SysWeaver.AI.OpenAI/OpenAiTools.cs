@@ -21,6 +21,17 @@ namespace SysWeaver.AI
         internal static readonly Chat.ChatMenuItem[] DebugItems = Enum.GetNames(typeof(OpenAiDebugInfo)).Select(x =>
         {
             var et = typeof(OpenAiDebugInfo).XmlDocEnum(x)?.Summary;
+            if (x.FastEquals(OpenAiDebugInfo.Stats.ToString()))
+            {
+                return new Chat.ChatMenuItem
+                {
+                    Id = "ShowMessageStats",
+                    Name = "Stats",
+                    Value = x,
+                    Icon = "IconDebug" + x,
+                    Desc = et,
+                };
+            }
             return new Chat.ChatMenuItem
             {
                 Id = OpenAiTools.DebugMenuId + x,

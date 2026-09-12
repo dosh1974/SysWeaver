@@ -78,12 +78,14 @@ namespace SysWeaver.Data
         /// <summary>
         /// A change counter for the column information, if the request Cc is equal to this, no column information is sent
         /// </summary>
+        [OpenAiIgnore]
         public long Cc;
 
         /// <summary>
         /// Number of ms to wait before a new refresh
         /// </summary>
         [EditMin(0)]
+        [OpenAiIgnore]
         public long RefreshRate;
 
         /// <summary>

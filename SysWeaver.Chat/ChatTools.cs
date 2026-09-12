@@ -1,4 +1,5 @@
 ﻿using System;
+using SysWeaver.Data;
 using SysWeaver.Net;
 
 namespace SysWeaver.Chat
@@ -32,6 +33,49 @@ namespace SysWeaver.Chat
                 return nick; 
             return GetAnonymousUsername(session);
         }
+
+        /// <summary>
+        /// Remove data from a table that an AI doesn't care about
+        /// </summary>
+        /// <param name="d">The table to trim</param>
+        /// <returns>The same table, but trimmed</returns>
+        public static TableData TrimDataTable(TableData d)
+        {
+            var cols = d.Cols;
+            if (cols == null)
+                return d;
+            foreach (var c in cols)
+            {
+                c.Format = null;
+                c.Props = 0;
+                c.Type = c.Type.Replace("System.", "");
+                c.Title = null;
+            }
+            ;
+            return d;
+        }
+
+        /// <summary>
+        /// Remove data from a table that an AI doesn't care about
+        /// </summary>
+        /// <param name="d">The table to trim</param>
+        /// <returns>The same table, but trimmed</returns>
+        public static TypedTableData<T> TrimDataTable<T>(TypedTableData<T> d)
+        {
+            var cols = d.Cols;
+            if (cols == null)
+                return d;
+            foreach (var c in cols)
+            {
+                c.Format = null;
+                c.Props = 0;
+                c.Type = c.Type.Replace("System.", "");
+                c.Title = null;
+            }
+            ;
+            return d;
+        }
+
 
     }
 

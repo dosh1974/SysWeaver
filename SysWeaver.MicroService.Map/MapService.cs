@@ -38,7 +38,7 @@ namespace SysWeaver.MicroService
         /// <param name="request"></param>
         /// <returns>An url to a svg image with the generated map</returns>
         [OpenAiUse]
-        [OpenAiTool("🗺️")]
+        [OpenAiTool("🗺️✨")]
         public String BuildMap(MapGenParams map, HttpServerRequest request)
         {
             var c = request.Properties[OpenAiToolExt.RequestAiToolContext] as IOpenAiToolContext;
@@ -55,7 +55,7 @@ namespace SysWeaver.MicroService
         /// <param name="map">The map to get information about</param>
         /// <returns>An array of all region names (that can be stylized)</returns>
         [OpenAiUse]
-        [OpenAiTool("ℹ️")]
+        [OpenAiTool("🗺️📥")]
         public String[] GetMapRegions(MapSelect map)
             => MapTools.GetRegions(map).Select(x => x.N).ToArray();
 

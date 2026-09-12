@@ -10,14 +10,6 @@ using SysWeaver.Net;
 namespace SysWeaver.Chat
 {
 
-    [Flags]
-    public enum ChatMessageFlags
-    {
-        IsWorking = 1,
-
-        CanRemove = 256,
-    }
-
 
     /// <summary>
     /// A chat message

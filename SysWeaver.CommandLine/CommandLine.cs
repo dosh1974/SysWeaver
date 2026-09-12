@@ -134,7 +134,7 @@ namespace SysWeaver
             if (Parsers.TryGetValue(type, out var p))
                 return p;
             if (throwOnError)
-                throw new InvalidCastException(String.Concat("Do not know how parse a string into ", type.FullName));
+                throw new InvalidCastException(String.Concat("Do not know how parse a string into ", type.CleanTypename()));
             return null;
         }
 

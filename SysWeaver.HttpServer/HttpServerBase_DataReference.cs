@@ -103,7 +103,7 @@ namespace SysWeaver.Net
         /// <returns>A "TableDataReference" to the modified table data.
         /// This data can't be used as is, must use GetTableData, continue working with it or display the data using some function.</returns>
         [WebApi("{0}")]
-        [OpenAiTool("✂️")]
+        [OpenAiTool("📅✂️")]
         public TableDataReference EditTableData(EditTableDataRequest request, HttpServerRequest context)
         {
             var bd = context.GetTableData(request.TableDataRef);
@@ -122,7 +122,7 @@ namespace SysWeaver.Net
         /// <param name="context"></param>
         /// <returns>The content of the table referenced</returns>
         [WebApi("{0}")]
-        [OpenAiTool("🔎")]
+        [OpenAiTool("📅🔎")]
         public BaseTableData GetTableData(GetTableDataRequest request, HttpServerRequest context)
         {
             var bd = context.GetTableData(request.TableDataRef);

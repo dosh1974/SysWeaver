@@ -23,6 +23,7 @@ using SysWeaver.Serialization;
 namespace SysWeaver.AI
 {
 
+
     public sealed partial class OpenAiService 
     {
 
@@ -40,7 +41,7 @@ namespace SysWeaver.AI
         /// <param name="type">The type of image to display</param>
         /// <param name="request"></param>
         /// <returns>An url to the svg image</returns>
-        [OpenAiTool("🎨")]
+        [OpenAiTool("🖼️📥")]
         String GetPredefinedImage(OpenAiImages type, HttpServerRequest request)
         {
             var c = request.Properties[RequestAiToolContext] as OpenAiToolContext;
@@ -75,7 +76,7 @@ namespace SysWeaver.AI
         /// <param name="fileExtension">The file extension to get an image for</param>
         /// <param name="request"></param>
         /// <returns>An url to the svg image</returns>
-        [OpenAiTool("📁")]
+        [OpenAiTool("📁📥")]
         String GetFileExtensionIcon(String fileExtension, HttpServerRequest request)
         {
             return "../icons/ext/" + fileExtension.FastTrimStartToLower('.') + ".svg";
@@ -95,7 +96,7 @@ namespace SysWeaver.AI
         /// </param>
         /// <param name="request"></param>
         /// <returns>An url to the svg image</returns>
-        [OpenAiTool("🏳️")]
+        [OpenAiTool("🏳️📥")]
         String GetCountryFlagIcon(String iso3166, HttpServerRequest request)
             => "../icons/flags/" + iso3166.FastToLower() + ".svg";
 
@@ -112,7 +113,7 @@ namespace SysWeaver.AI
         /// <param name="logo">Paramaters for the generation</param>
         /// <param name="request"></param>
         /// <returns>An url to the generated svg image</returns>
-        [OpenAiTool("🖌️")]
+        [OpenAiTool("🏷️✨")]
         String BuildLogo(OpenAiLogo logo, HttpServerRequest request)
         {
             var c = request.Properties[RequestAiToolContext] as OpenAiToolContext;
@@ -134,7 +135,7 @@ namespace SysWeaver.AI
         /// <param name="qrCodeContent">The text string to encode in the QR code</param>
         /// <param name="request"></param>
         /// <returns>An url to the generated svg image</returns>
-        [OpenAiTool("📷")]
+        [OpenAiTool("🔗✨")]
         String BuildQrCode(String qrCodeContent, HttpServerRequest request)
         {
             var c = request.Properties[RequestAiToolContext] as OpenAiToolContext;
@@ -150,11 +151,13 @@ namespace SysWeaver.AI
 
         /// <summary>
         /// Generate an image using generative AI.
+        /// Generating images are expensive, try to solve problems without generating an image.
+        /// Don't generate large images unless specified.
         /// </summary>
         /// <param name="prompt">Paramaters for the generation</param>
         /// <param name="request"></param>
         /// <returns>An url to the generated png image</returns>
-        [OpenAiTool("🖼️")]
+        [OpenAiTool("🖼️✨")]
         async Task<String> GenerateImage(OpenAiImagePrompt prompt, HttpServerRequest request)
         {
             var c = request.Properties[RequestAiToolContext] as OpenAiToolContext;
@@ -174,10 +177,10 @@ namespace SysWeaver.AI
             return "../" + await us.StorePublicFile(request, filename + ".png", bin, String.Join(',', s.JoinAuth)).ConfigureAwait(false);
         }
 
-
-
         /// <summary>
         /// Edit an image using generative AI.
+        /// Generating images are expensive, try to solve problems without generating an image.
+        /// Don't generate large images unless specified.
         /// </summary>
         /// <param name="prompt">Source image and paramaters for the generation</param>
         /// <param name="request"></param>
@@ -213,7 +216,7 @@ namespace SysWeaver.AI
                 /// <param name="data">Data paramaters</param>
                 /// <param name="request"></param>
                 /// <returns>An url to the data</returns>
-                [OpenAiTool("🗜️")]
+                [OpenAiTool("🛢️✨")]
         String BuildData(OpenAiData data, HttpServerRequest request)
         {
             var c = request.Properties[RequestAiToolContext] as OpenAiToolContext;
@@ -238,7 +241,7 @@ namespace SysWeaver.AI
         /// <param name="data">Data paramaters</param>
         /// <param name="request"></param>
         /// <returns>True when sucessful</returns>
-        [OpenAiTool("📺")]
+        [OpenAiTool("🛢️🖥️")]
         bool DisplayData(OpenAiData data, HttpServerRequest request)
         {
             var c = request.Properties[RequestAiToolContext] as OpenAiToolContext;
@@ -258,7 +261,7 @@ namespace SysWeaver.AI
         /// <param name="url">The url to display</param>
         /// <param name="request"></param>
         /// <returns>True when successful</returns>
-        [OpenAiTool("📺")]
+        [OpenAiTool("🔗🖥️")]
         bool DisplayUrl(String url, HttpServerRequest request)
         {
             var c = request.Properties[RequestAiToolContext] as OpenAiToolContext;
@@ -431,6 +434,8 @@ namespace SysWeaver.AI
                 return;
             s.AddRegistredTool("StoreFile");
             s.AddRegistredTool("StoreLink");
+            s.AddRegistredTool("GetStoredFiles");
+            s.AddRegistredTool("GetStoredLinks");
         }
 
         #endregion//Default tools
@@ -456,7 +461,7 @@ namespace SysWeaver.AI
         /// <param name="table">Data paramaters</param>
         /// <param name="request"></param>
         /// <returns>An url (html) to the table</returns>
-        [OpenAiTool("📋")]
+        [OpenAiTool("📅✨")]
         String BuildTable(OpenAiTable table, HttpServerRequest request)
         {
             var c = request.Properties[RequestAiToolContext] as OpenAiToolContext;
@@ -490,45 +495,45 @@ namespace SysWeaver.AI
                 switch (s.Type)
                 {
                     case OpenAiTableColumnTypes.Text:
-                        d.Type = typeof(String).FullName;
+                        d.Type = typeof(String).CleanTypename();
                         d.Format = new TableDataFormatAttribute(valFormat, GetDescFmt(valDesc, 0, 2), true).Value;
                         colWriters[i] = (srcText, destData) => destData[destIndex] = srcText;
                         break;
                     case OpenAiTableColumnTypes.Float:
-                        d.Type = typeof(Decimal).FullName;
+                        d.Type = typeof(Decimal).CleanTypename();
                         d.Format = new TableDataNumberAttribute(s.NumDecimals, valFormat, GetDescFmt(valDesc, 0, 2), true).Value;
                         d.Props |= TableDataColumnProps.CanChart;
                         colWriters[i] = (srcText, destData) => destData[destIndex] = Decimal.TryParse(srcText.RemoveChars(filterValues), ci, out var x) ? x : 0M; 
                         break;
                     case OpenAiTableColumnTypes.Integer:
-                        d.Type = typeof(Int64).FullName;
+                        d.Type = typeof(Int64).CleanTypename();
                         d.Format = new TableDataNumberAttribute(0, valFormat, GetDescFmt(valDesc, 0, 2), true).Value;
                         d.Props |= TableDataColumnProps.CanChart;
                         colWriters[i] = (srcText, destData) => destData[destIndex] = Int64.TryParse(srcText.RemoveChars(filterValues), ci, out var x) ? x : 0L;
                         break;
                     case OpenAiTableColumnTypes.DateTime:
-                        d.Type = typeof(DateTime).FullName;
+                        d.Type = typeof(DateTime).CleanTypename();
                         d.Format = new TableDataFormatAttribute(valFormat, GetDescFmt(valDesc, 0, 2), true).Value;
                         d.Props |= TableDataColumnProps.CanChart;
                         colWriters[i] = (srcText, destData) => destData[destIndex] = DateTime.TryParse(srcText, ci, out var x) ? x : DateTime.MinValue;
                         break;
                     case OpenAiTableColumnTypes.Image:
-                        d.Type = typeof(String).FullName;
+                        d.Type = typeof(String).CleanTypename();
                         d.Format = new TableDataImgAttribute(valFormat, null, GetDescFmt(valDesc, 2, 0)).Value;
                         colWriters[i] = (srcText, destData) => destData[destIndex] = srcText;
                         break;
                     case OpenAiTableColumnTypes.Link:
-                        d.Type = typeof(String).FullName;
+                        d.Type = typeof(String).CleanTypename();
                         d.Format = new TableDataUrlAttribute(valFormat, "+{2}", GetDescFmt(valDesc, 2, 0)).Value;
                         colWriters[i] = (srcText, destData) => destData[destIndex] = srcText;
                         break;
                     case OpenAiTableColumnTypes.Boolean:
-                        d.Type = typeof(Boolean).FullName;
+                        d.Type = typeof(Boolean).CleanTypename();
                         d.Format = new TableDataFormatAttribute(valFormat, GetDescFmt(valDesc, 0, 2), true).Value;
                         colWriters[i] = (srcText, destData) => destData[destIndex] = Boolean.TryParse(srcText, out var x) ? x : false;
                         break;
                     case OpenAiTableColumnTypes.Amount:
-                        d.Type = typeof(Decimal).FullName;
+                        d.Type = typeof(Decimal).CleanTypename();
                         d.Format = new TableDataNumberAttribute(s.NumDecimals, valFormat, GetDescFmt(valDesc, 0, 2), true).Value;
                         d.Props |= TableDataColumnProps.CanChart;
                         colWriters[i] = (srcText, destData) =>
@@ -564,7 +569,7 @@ namespace SysWeaver.AI
                             Name = "M" + (destIndex + 1),
                             Title = "ISO 4217 currency code",
                             Desc = s.ColDesc,
-                            Type = typeof(String).FullName,
+                            Type = typeof(String).CleanTypename(),
                             Format = new TableDataIsoCurrencyAttribute().Value,
                         });
                         break;
@@ -688,7 +693,7 @@ namespace SysWeaver.AI
         /// <param name="table">Data paramaters</param>
         /// <param name="request"></param>
         /// <returns>True if successful</returns>
-        [OpenAiTool("📋")]
+        [OpenAiTool("📅🖥️")]
         bool DisplayTable(OpenAiTable table, HttpServerRequest request)
         {
             var url = BuildTable(table, request);
@@ -734,66 +739,22 @@ namespace SysWeaver.AI
             return (Decimal)ExpressionEvaluator.UInt64.Value(expression);
         }
 
-
-        enum TimeIntervalUnits
-        {
-            /// <summary>
-            /// The number of seconds ellapsed
-            /// </summary>
-            Seconds = 0,
-            /// <summary>
-            /// The number of minutes ellapsed
-            /// </summary>
-            Minutes,
-            /// <summary>
-            /// The number of hours ellapsed
-            /// </summary>
-            Hours,
-            /// <summary>
-            /// The number of days ellapsed
-            /// </summary>
-            Days,
-        }
-
-#pragma warning disable CS0649
-
-        sealed class TimeInterval
-        {
-            /// <summary>
-            /// The start time
-            /// </summary>
-            public DateTime From;
-
-            /// <summary>
-            /// The end time
-            /// </summary>
-            public DateTime To;
-
-            /// <summary>
-            /// What to return
-            /// </summary>
-            [OpenAiOptional]
-            public TimeIntervalUnits ReturnUnit;
-        }
-
-#pragma warning restore CS0649
-
         /// <summary>
         /// Computes the elapsed time from a time interval.
         /// </summary>
         /// <param name="time">The interval (start, stop) and the desired return unit (seconds, minutes, hours, days)</param>
         /// <returns>The elapsed time in the specified unit</returns>
         [OpenAiTool("⏲️")]
-        Double ElapsedTime(TimeInterval time)
+        Double ElapsedTime(AiTimeInterval time)
         {
             var dt = time.To - time.From;
             switch (time.ReturnUnit)
             {
-                case TimeIntervalUnits.Minutes:
+                case AiTimeIntervalUnits.Minutes:
                     return dt.TotalMinutes;
-                case TimeIntervalUnits.Hours:
+                case AiTimeIntervalUnits.Hours:
                     return dt.TotalHours;
-                case TimeIntervalUnits.Days:
+                case AiTimeIntervalUnits.Days:
                     return dt.TotalDays;
                 default:
                     return dt.TotalSeconds;

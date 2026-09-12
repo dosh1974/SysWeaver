@@ -1,18 +1,17 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-
-using SysWeaver.Auth;
-using SysWeaver.Data;
-using SysWeaver.Compression;
-using SysWeaver.Net;
 using System.Threading;
+using System.Threading.Tasks;
+using SysWeaver.AI;
+using SysWeaver.Auth;
+using SysWeaver.Compression;
+using SysWeaver.Data;
+using SysWeaver.Net;
 using SysWeaver.Serialization;
-using System.Buffers;
-using System.Collections.Concurrent;
 
 namespace SysWeaver.MicroService
 {
@@ -248,12 +247,13 @@ namespace SysWeaver.MicroService
                                 continue;
                             var rng = parts[1];
                             bool isLink = rng.Length == 1 && rng.FastEquals("l");
-                            var exp = fi.LastAccessTimeUtc.Add(time);
+                            var lastAcc = fi.LastAccessTimeUtc;
+                            var exp = lastAcc.Add(time);
                             if (now < exp)
                             {
                                 var size = CalcDiscSize(pathIndex, fi.Length);
                                 sum += size;
-                                userFiles.Add(Tuple.Create(exp, filename, size, maxRemove, isLink));
+                                userFiles.Add(Tuple.Create(lastAcc, filename, size, maxRemove, isLink));
                                 continue;
                             }
                             //  Delete file
@@ -262,6 +262,10 @@ namespace SysWeaver.MicroService
                     }
                     if (sum <= maxDiscBytes)
                         continue;
+                    //  Keep at least one file
+                    var fileCount = userFiles.Count;
+                    if (fileCount < 2)
+                        continue;
                     //  Need to remove files
                     userFiles.Sort((a, b) => a.Item1.CompareTo(b.Item1));
                     foreach (var x in userFiles)
@@ -269,6 +273,10 @@ namespace SysWeaver.MicroService
                         DeleteFileAndEmptyPath(x.Item2, x.Item4, x.Item5);
                         sum -= x.Item3;
                         if (sum <= maxDiscBytes)
+                            break;
+                        --fileCount;
+                        //  Keep at least one file
+                        if (fileCount < 2)
                             break;
                     }
                 }
@@ -896,6 +904,17 @@ namespace SysWeaver.MicroService
 
 
         /// <summary>
+        /// Get all stored files
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        /// <exception cref="NoUserLoggedInException"></exception>
+        [WebApi]
+        [WebApiAuth]
+        public async Task<StoredFileInfo[]> GetAllStoredFiles(HttpServerRequest context)
+            => (await InternalGetStoredFiles(context).ConfigureAwait(false)).Item1.Select(x => x.Clone()).ToArray();
+
+        /// <summary>
         /// Get all stored files for the logged in user
         /// </summary>
         /// <param name="context"></param>
@@ -920,6 +939,7 @@ namespace SysWeaver.MicroService
         /// <returns>Table data with the files</returns>
         [WebApi]
         [WebApiAuth]
+
         public async Task<TableData> MyStoredFiles(TableDataRequest r, HttpServerRequest context)
         {
             var sf = await InternalGetStoredFiles(context).ConfigureAwait(false);
@@ -1107,6 +1127,18 @@ namespace SysWeaver.MicroService
         [WebApiAuth]
         public async Task<StoredUrl[]> GetStoredUrls(HttpServerRequest context)
             => (await InternalGetStoredUrls(context).ConfigureAwait(false)).Item1.ToArray();
+
+
+        /// <summary>
+        /// Get all stored links
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        /// <exception cref="NoUserLoggedInException"></exception>
+        [WebApi]
+        [WebApiAuth]
+        public async Task<StoredLinkInfo[]> GetAllStoredLinks(HttpServerRequest context)
+            => (await InternalGetStoredUrls(context).ConfigureAwait(false)).Item1.Select(x => x.Clone()).ToArray();
 
 
         /// <summary>

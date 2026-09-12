@@ -14,7 +14,7 @@ namespace SysWeaver
         public override string ToString() => String.Concat(System, '.', Name, " = ", Value);
 #endif//DEBUG
         public Stats(String system, String name, Object value, String desc, TableDataRawFormatAttribute formatAttribute)
-            : this(system, name, value, desc, String.Join('|', (value?.GetType() ?? typeof(String)).FullName, formatAttribute?.Value))
+            : this(system, name, value, desc, String.Join('|', (value?.GetType() ?? typeof(String)).CleanTypename(), formatAttribute?.Value))
         {
         }
 
@@ -23,7 +23,7 @@ namespace SysWeaver
             System = system;
             Name = name;
             Value = value;
-            TF = format ?? (value?.GetType() ?? typeof(String)).FullName;
+            TF = format ?? (value?.GetType() ?? typeof(String)).CleanTypename();
             Description = desc;
         }
         /// <summary>

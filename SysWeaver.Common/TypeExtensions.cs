@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 
@@ -205,92 +203,21 @@ namespace SysWeaver
             }
             return null;
         }
-    }
 
- 
-    public static class AssemblyExt
-    {
+
         /// <summary>
-        /// Get all embedded resourves in the assembly (this cached)
+        /// Get a clean type name (no version and culture info)
         /// </summary>
-        /// <param name="assembly"></param>
+        /// <param name="type"></param>
         /// <returns></returns>
-        public static IReadOnlySet<String> GetEmbeddedResource(this Assembly assembly)
+        public static String CleanTypename(this Type type)
         {
-            var c = EmbeddedResources;
-            if (c.TryGetValue(assembly, out var r))
-                return r;
-            r = new HashSet<String>(assembly.GetManifestResourceNames(), StringComparer.Ordinal).Freeze();
-            return c.TryAdd(assembly, r) ? r : c[assembly];
+            // TODO: Handle generic types better
+            var tn = type.FullName;
+            var asm = type.Assembly.FullName.SplitFirst(',');
+            return (String.IsNullOrEmpty(asm) ? tn : String.Join(',', tn, asm)).Replace(" ", "");
         }
 
-        static readonly ConcurrentDictionary<Assembly, IReadOnlySet<String>> EmbeddedResources = new();
-
-
-        /// <summary>
-        /// Get the last write time of the assembly, if it fails it will return the application start time (EnvInfo.AppStart).
-        /// It's safer to assume that the assembly was created at start.
-        /// </summary>
-        /// <param name="assembly"></param>
-        /// <returns></returns>
-        public static DateTime GetLastWriteTimerUtc(this Assembly assembly)
-        {
-            var c = TimeCache;
-            if (c.TryGetValue(assembly, out var t))
-                return t;
-            try
-            {
-                var loc = assembly.Location;
-                if (loc != null)
-                {
-                    var fi = new FileInfo(loc);
-                    if (fi.Exists)
-                    {
-                        t = fi.LastWriteTimeUtc;
-                        c.TryAdd(assembly, t);
-                        return t;
-                    }
-                }
-            }
-            catch
-            {
-            }
-            t = EnvInfo.AppStart;
-            c.TryAdd(assembly, t);
-            return t;
-        }
-
-        static readonly ConcurrentDictionary<Assembly, DateTime> TimeCache = new ConcurrentDictionary<Assembly, DateTime>();
-
-
-    }
-
-    /// <summary>
-    /// A collection of flags that describe some reflection properties
-    /// </summary>
-    [Flags]
-    public enum ReflectionFlags
-    {
-        /// <summary>
-        /// Nothing
-        /// </summary>
-        None = 0,
-        /// <summary>
-        /// The reflected item is static, else instance
-        /// </summary>
-        IsStatic = 1,
-        /// <summary>
-        /// The reflected item is public, else private / protected / internal etc
-        /// </summary>
-        IsPublic = 2,
-        /// <summary>
-        /// The reflected item is declared in the specified type, else it's declared in one of the inherited types
-        /// </summary>
-        IsDeclared = 4,
-        /// <summary>
-        /// All reflection types combined
-        /// </summary>
-        All = IsStatic | IsPublic | IsDeclared
     }
 
 }

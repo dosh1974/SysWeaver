@@ -13,32 +13,6 @@ using SysWeaver.Net;
 namespace SysWeaver.AI
 {
 
-    public class OpenAiSessionParams
-    {
-        /// <summary>
-        /// The model to use for this session.
-        /// Examples:
-        /// "gpt-4o-mini" -	Our affordable and intelligent small model for fast, lightweight tasks.
-        /// "gpt-4o" - Our high-intelligence flagship model for complex, multi-step tasks.
-        /// "o1-preview" - Language models trained with reinforcement learning to perform complex reasoning.
-        /// </summary>
-        public String Model;
-
-        /// <summary>
-        /// The reasoning effort for models that support reasoning.
-        /// Null to use default.
-        /// </summary>
-        public OpenAiReasoning? Reasoning;
-
-
-        /// <summary>
-        /// The service tier to use for chat
-        /// </summary>
-        public OpenAiServiceTier? Tier;
-
-
-    }
-
     public class OpenAiQuerySession
     {
         public OpenAiQuerySession(ChatClient c, OpenAiSessionParams p, IOpenAiToolCache toolCache = null, PerfMonitor monitor = null, IAiMemory memory = null)
@@ -121,7 +95,7 @@ namespace SysWeaver.AI
         /// <param name="key">The memory key</param>
         /// <param name="context"></param>
         /// <returns>The saved memory</returns>
-        [OpenAiTool("🧠")]
+        [OpenAiTool("🧠📥")]
         Task<string> GetMemory(String key, HttpServerRequest context)
             => Memory.GetMemory(context.Session, key);
 
@@ -275,9 +249,9 @@ namespace SysWeaver.AI
         {
             var start = DateTime.UtcNow;
             if (!Tools.TryGetValue(name, out var tool))
-                return new OpenAiCallInstance(name, b, start, DateTime.UtcNow, new Exception("The tool " + name.ToQuoted() + " is unknown!"));
+                return new OpenAiCallInstance(null, b, start, DateTime.UtcNow, new Exception("The tool " + name.ToQuoted() + " is unknown!"), name);
             if (!request.Session.IsValid(tool.Auth))
-                return new OpenAiCallInstance(name, b, start, DateTime.UtcNow, new Exception("The requesting user is not allowed to use the tool " + name.ToQuoted()));
+                return new OpenAiCallInstance(tool, b, start, DateTime.UtcNow, new Exception("The requesting user is not allowed to use the tool " + name.ToQuoted()));
 
             var icon = tool.Icon;
             callIcons.TryGetValue(icon, out var c);
@@ -286,11 +260,11 @@ namespace SysWeaver.AI
             {
                 using var xx = Monitor?.Track("AiCall." + name);
                 var res = await tool.Invoke(b, request).ConfigureAwait(false);
-                return new OpenAiCallInstance(name, b, start, DateTime.UtcNow, res);
+                return new OpenAiCallInstance(tool, b, start, DateTime.UtcNow, res);
             }
             catch (Exception e)
             {
-                return new OpenAiCallInstance(name, b, start, DateTime.UtcNow, e);
+                return new OpenAiCallInstance(tool, b, start, DateTime.UtcNow, e);
             }
         }
 
@@ -311,6 +285,8 @@ namespace SysWeaver.AI
             bool prevIsDigit = false;
             foreach (var x in icons.OrderByDescending(x => x.Value))
             {
+                if (sb.Length == 0)
+                    sb.Append('-');
                 if (prevIsDigit)
                     sb.Append(' ');
                 var c = x.Key;

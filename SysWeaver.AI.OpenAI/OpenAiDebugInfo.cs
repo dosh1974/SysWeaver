@@ -6,6 +6,10 @@
     public enum OpenAiDebugInfo
     {
         /// <summary>
+        /// Output some basic stats about the AI completion.
+        /// </summary>
+        Stats,
+        /// <summary>
         /// Output the function names and if they was successful.
         /// </summary>
         Overview,

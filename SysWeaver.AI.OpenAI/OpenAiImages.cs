@@ -1,21 +1,25 @@
 ﻿namespace SysWeaver.AI
 {
     /// <summary>
-    /// A predefined set of images that can be shown
+    /// A predefined set of images that can be shown and used in projects.
     /// </summary>
     enum OpenAiImages
     {
         /// <summary>
-        /// The logo of the application as an SVG file
+        /// The logo of the application that hosts the chat session as an SVG file (this not a company logo).
+        /// Don't use unless the user expclitly asks for the application logo.
         /// </summary>
         ApplicationLogo,
 
         /// <summary>
-        /// The icon of the application as an SVG file
+        /// The icon of the application that hosts the chat session as an SVG file (this not a company logo).
+        /// Don't use unless the user expclitly asks for the application icon.
         /// </summary>
         ApplicationIcon,
+        
         /// <summary>
-        /// Your logo, logo of the AI agent
+        /// The avatar image of the AI agent.
+        /// This is the image that is shown as YOU, the agent.
         /// </summary>
         AgentLogo,
 

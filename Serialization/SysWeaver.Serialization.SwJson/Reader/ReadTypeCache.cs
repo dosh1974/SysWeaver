@@ -145,7 +145,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Type \"" + t.FullName + "\" can't be processed", ex);
+                    throw new Exception("Type \"" + t.CleanTypename() + "\" can't be processed", ex);
                 }
 #endif//VERBOSE
         }
@@ -168,7 +168,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Type \"" + t.FullName + "\" can't be processed", ex);
+                    throw new Exception("Type \"" + t.CleanTypename() + "\" can't be processed", ex);
                 }
 #endif//VERBOSE
         }

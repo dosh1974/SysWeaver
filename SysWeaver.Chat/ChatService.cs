@@ -11,6 +11,7 @@ using System.Xml.Linq;
 using SysWeaver;
 using SysWeaver.AI;
 using SysWeaver.Compression;
+using SysWeaver.Data;
 using SysWeaver.MicroService;
 using SysWeaver.Net;
 using SysWeaver.Translation;
@@ -469,7 +470,6 @@ namespace SysWeaver.Chat
 
 
 
-
         /// <summary>
         /// Post a message to the specified chat session
         /// </summary>
@@ -509,20 +509,20 @@ namespace SysWeaver.Chat
 
 
         /// <summary>
-        /// Persist a file to the user's storage.
+        /// Persist a file to the user's storage an return a link that can be shared.
         /// </summary>
         /// <param name="request">What and how to store</param>
         /// <param name="context">The context for the http request (ignore)</param>
-        /// <returns>URL to the stored files</returns>
+        /// <returns>URL to the stored file, this linked can be shared</returns>
         [WebApi]
         [WebApiAuth]
-        [OpenAiTool("💽")]
+        [OpenAiTool("🛢️💾")]
         public async Task<String> StoreFile(ChatStore request, HttpServerRequest context)
         {
 
             var l = Uri.UnescapeDataString(request.Url);
             l = context.MakeRequestAbsolute(l);
-            var data = await context.Server.InternalRead(l).ConfigureAwait(false);
+            var data = await context.Server.InternalRead(l, context.Session).ConfigureAwait(false);
             if (!context.Session.IsValid(data.Item3.Auth))
                 throw new UserNotAllowedException();
             if (!AllowPublicStore)
@@ -543,19 +543,41 @@ namespace SysWeaver.Chat
                     url = await UserStore.StorePublicFile(context, filename, mem).ConfigureAwait(false);
                     break;
             }
-            return "../" + url;
+            return context.MakeAbsolute("../" + url);
+        }
+
+
+        /// <summary>
+        /// Get all stored files
+        /// </summary>
+        /// <param name="r">Optional filters</param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        /// <exception cref="NoUserLoggedInException"></exception>
+        [WebApi]
+        [WebApiAuth]
+        [OpenAiTool("🛢️📥")]
+        public async Task<TypedTableData<StoredFileInfo>> GetStoredFiles(TableDataRequest r, HttpServerRequest context)
+        {
+            var us = UserStore;
+            if (us == null)
+                return null;
+            var data = await us.GetAllStoredFiles(context).ConfigureAwait(false);
+            foreach (var x in data)
+                x.Url = "../" + x.Url;
+            return ChatTools.TrimDataTable(TableDataTools.GetTyped(r, data , "Stored files"));
         }
 
         /// <summary>
         /// Create a persistent link to some URL, save it and any files required to the user's storage.
-        /// WHen a user want to store something, this is what you want unless the user explicitly instructs you to save it as a file.
+        /// When a user want to store something, this is what you want unless the user explicitly instructs you to save it as a file.
         /// </summary>
         /// <param name="request">What and how to store</param>
         /// <param name="context">The context for the http request (ignore)</param>
-        /// <returns>URL showing the stored link</returns>
+        /// <returns>A public URL that can be shared</returns>
         [WebApi]
         [WebApiAuth]
-        [OpenAiTool("🔗")]
+        [OpenAiTool("🔗💾")]
         public async Task<String> StoreLink(ChatStore request, HttpServerRequest context)
         {
             const String localPrefix = "../";
@@ -581,7 +603,7 @@ namespace SysWeaver.Chat
                     return localPrefix + r;
             }
             l = context.Prefix + l;
-            var data = await context.Server.InternalRead(l).ConfigureAwait(false);
+            var data = await context.Server.InternalRead(l, context.Session).ConfigureAwait(false);
             if (!context.Session.IsValid(data.Item3.Auth))
                 throw new UserNotAllowedException();
             if (!AllowPublicStore)
@@ -708,10 +730,32 @@ namespace SysWeaver.Chat
                     files.Add(url);
                 }
                 url = await saveLink(url).ConfigureAwait(false);
-                return localPrefix + url;
+                //return localPrefix + url;
+                return context.MakeAbsolute(localPrefix + url);
             }
         }
 
+
+        /// <summary>
+        /// Get all stored links
+        /// </summary>
+        /// <param name="r">Optional filters</param>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        /// <exception cref="NoUserLoggedInException"></exception>
+        [WebApi]
+        [WebApiAuth]
+        [OpenAiTool("🔗📥")]
+        public async Task<TypedTableData<StoredLinkInfo>> GetStoredLinks(TableDataRequest r, HttpServerRequest context)
+        {
+            var us = UserStore;
+            if (us == null)
+                return null;
+            var data = await us.GetAllStoredLinks(context).ConfigureAwait(false);
+            foreach (var x in data)
+                x.Url = "../" + x.Url;
+            return ChatTools.TrimDataTable(TableDataTools.GetTyped(r, data, "Stored links"));
+        }
 
         /// <summary>
         /// Get a list of the supported input languages, with localized meta information.
@@ -751,7 +795,7 @@ namespace SysWeaver.Chat
     public sealed class ChatStore
     {
         /// <summary>
-        /// The URL to store.
+        /// The local URL to store
         /// </summary>
         public String Url;
         /// <summary>

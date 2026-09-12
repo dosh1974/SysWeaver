@@ -146,15 +146,15 @@ namespace SysWeaver
             if (seconds == 0)
                 return zeroAsThis ?? "0 seconds";
             if (seconds >= 10)
-                return seconds.ToString("0.0") + " seconds";
+                return seconds.ToString("0.0", CultureInfo.InvariantCulture) + " seconds";
             var ms = value.TotalMilliseconds;
             if (ms >= 10)
-                return ms.ToString("0.0") + " ms";
+                return ms.ToString("0.0", CultureInfo.InvariantCulture) + " ms";
             var us = value.TotalMicroseconds;
             if (us >= 10)
-                return us.ToString("0.0") + " µs";
+                return us.ToString("0.0", CultureInfo.InvariantCulture) + " µs";
             var ns = value.TotalNanoseconds;
-            return ns.ToString("0.0") + " ns";
+            return ns.ToString("0.0", CultureInfo.InvariantCulture) + " ns";
         }
 
 

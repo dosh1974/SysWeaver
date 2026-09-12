@@ -18,10 +18,10 @@ namespace SysWeaver.Serialization.SwJson
             }
             catch (Exception ex)
             {
-                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.FullName + "\"", ex);
+                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.CleanTypename() + "\"", ex);
             }
             if (m == null)
-                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.FullName + "\"");
+                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.CleanTypename() + "\"");
             return m;
         }
 
@@ -34,10 +34,10 @@ namespace SysWeaver.Serialization.SwJson
             }
             catch (Exception ex)
             {
-                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.FullName + "\" with flags " + b, ex);
+                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.CleanTypename() + "\" with flags " + b, ex);
             }
             if (m == null)
-                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.FullName + "\" with flags " + b);
+                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.CleanTypename() + "\" with flags " + b);
             return m;
         }
 
@@ -50,10 +50,10 @@ namespace SysWeaver.Serialization.SwJson
             }
             catch (Exception ex)
             {
-                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.FullName + "\" with argument types: " + String.Join(", ", b.Select(x => x.FullName)), ex);
+                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.CleanTypename() + "\" with argument types: " + String.Join(", ", b.Select(x => x.CleanTypename())), ex);
             }
             if (m == null)
-                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.FullName + "\" with argument types: " + String.Join(", ", b.Select(x => x.FullName)));
+                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.CleanTypename() + "\" with argument types: " + String.Join(", ", b.Select(x => x.CleanTypename())));
             return m;
         }
 
@@ -66,10 +66,10 @@ namespace SysWeaver.Serialization.SwJson
             }
             catch (Exception ex)
             {
-                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.FullName + "\" with flags " + b + ", argument types: " + String.Join(", ", types.Select(x => x.FullName)), ex);
+                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.CleanTypename() + "\" with flags " + b + ", argument types: " + String.Join(", ", types.Select(x => x.CleanTypename())), ex);
             }
             if (m == null)
-                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.FullName + "\" with flags " + b + ", argument types: " + String.Join(", ", types.Select(x => x.FullName)));
+                throw new Exception("Failed to get method \"" + name + "\" for type \"" + t.CleanTypename() + "\" with flags " + b + ", argument types: " + String.Join(", ", types.Select(x => x.CleanTypename())));
             return m;
         }
 

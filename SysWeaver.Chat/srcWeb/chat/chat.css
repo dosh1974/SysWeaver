@@ -811,6 +811,11 @@ SysWeaver-ChatLangItem {
     mask-image: url('../icons/minus.svg');
 }
 
+.IconDebugStats {
+    mask-image: url('../icons/fingerprint.svg');
+}
+
+
 .IconDebugOverview {
     mask-image: url('../icons/rating_off.svg');
 }

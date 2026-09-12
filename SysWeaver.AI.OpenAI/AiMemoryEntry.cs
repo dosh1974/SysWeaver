@@ -20,38 +20,4 @@ namespace SysWeaver.AI
 
     }
 
-
-    public static class AiMemoryLimits
-    {
-        public const int MaxRecords = 64;
-        public const int MaxKeyLen = 32;
-        public const int MaxDescLen = 128;
-        public const int MaxContentLen = 4096;
-    }
-
-    public class AiMemorySet
-    {
-        /// <summary>
-        /// The unqiue key used to manage this memory.
-        /// This is listed in the system prompt.
-        /// Max length is 32.
-        /// </summary>
-        public String Key;
-        /// <summary>
-        /// The value of this memory, typically MD text.
-        /// Max length is 4096.
-        /// </summary>
-        public String Value;
-    }
-
-    public class AiMemoryAdd : AiMemorySet
-    {
-        /// <summary>
-        /// A short textual description of this memory.
-        /// This is listed in the system prompt.
-        /// Max length is 128.
-        /// </summary>
-        public String Desc;
-    }
-
 }

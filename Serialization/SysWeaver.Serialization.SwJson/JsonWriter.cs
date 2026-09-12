@@ -45,7 +45,7 @@ namespace SysWeaver.Serialization.SwJson
         public static String DefaultTypename(Type type)
         {
             var tn = type.FullName;
-            var asm = type.Assembly.FullName.Split(',')[0];
+            var asm = type.Assembly.FullName.SplitFirst(',');
             if (AssemblyMap.TryGetValue(asm, out var na))
                 asm = na;
             var ns = NamespaceMap;
@@ -913,14 +913,14 @@ namespace SysWeaver.Serialization.SwJson
                     }
                 }
                 if (ti == null)
-                    throw new Exception("Don't know how to serializer type \"" + type.FullName + "\"");
+                    throw new Exception("Don't know how to serializer type \"" + type.CleanTypename() + "\"");
                 if (!Writers.TryAdd(type, ti))
                     Writers.TryGetValue(type, out ti);
                 return ti;
             }
             catch (Exception ex)
             {
-                throw new Exception("Failed to create writer for \"" + type.FullName + "\": " + ex.Message, ex);
+                throw new Exception("Failed to create writer for \"" + type.CleanTypename() + "\": " + ex.Message, ex);
             }
             finally
             {

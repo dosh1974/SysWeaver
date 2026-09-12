@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using SysWeaver.Data;
 
 namespace SysWeaver.Net
 {
@@ -92,6 +93,19 @@ namespace SysWeaver.Net
         /// <returns></returns>
         String GetUserPath(String userGuid);
 
+        /// <summary>
+        /// Get all stored files for a user
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        Task<StoredFileInfo[]> GetAllStoredFiles(HttpServerRequest context);
+
+        /// <summary>
+        /// Get all stored links for a user
+        /// </summary>
+        /// <param name="context"></param>
+        /// <returns></returns>
+        Task<StoredLinkInfo[]> GetAllStoredLinks(HttpServerRequest context);
 
     }
 
@@ -112,5 +126,149 @@ namespace SysWeaver.Net
         /// <returns>The store linked or null (if no special handling was performed)</returns>
         Task<String> HandleLink(IUserStorageService us, String url, UserStorageScopes scope, HttpServerRequest context);
     }
+
+    [TableDataPrimaryKey(nameof(Url))]
+    public class StoredFileInfo
+    {
+        /// <summary>
+        /// The url to the file
+        /// </summary>
+        [TableDataUrl("{0}", "../{0}")]
+        public String Url;
+
+        /// <summary>
+        /// The size of the file on disc (what counts towards quota)
+        /// </summary>
+        [TableDataByteSize]
+        public long Size;
+
+        /// <summary>
+        /// When the file was saved
+        /// </summary>
+        [TableDataOrder(2)]
+        public DateTime Saved;
+
+        /// <summary>
+        /// If true, the file is hidden from other users
+        /// </summary>
+        [TableDataOrder(2)]
+        public bool Private;
+
+        /// <summary>
+        /// If the file isn't private, and this is:
+        /// null - anyone can see this file, logged in or not.
+        /// "" - any logged in user can see this file.
+        /// [other] - Users with at least one of these tokens can see the file.
+        /// </summary>
+        [TableDataTags("{^0}", null, "{0}", true)]
+        [TableDataOrder(2)]
+        public String Auth;
+
+        /// <summary>
+        /// When the file was last viewed
+        /// </summary>
+        [TableDataOrder(2)]
+        public DateTime LastViewed;
+
+        /// <summary>
+        /// When the file expires
+        /// </summary>
+        [TableDataOrder(2)]
+        public DateTime Expires;
+
+
+        public void CopyFrom(StoredFileInfo s)
+        {
+            Url = s.Url;
+            Size = s.Size;
+            Saved = s.Saved;
+            Private = s.Private;
+            Auth = s.Auth;
+            LastViewed = s.LastViewed;
+            Expires = s.Expires;
+        }
+
+        public StoredFileInfo Clone()
+        {
+            var t = new StoredFileInfo();
+            t.CopyFrom(this);
+            return t;
+        }
+
+    }
+
+
+    [TableDataPrimaryKey(nameof(Url))]
+    public class StoredLinkInfo
+    {
+        /// <summary>
+        /// The url
+        /// </summary>
+        [TableDataUrl("{0}", "../{0}")]
+        public String Url;
+
+        /// <summary>
+        /// The size of the url on disc, excluding any stored files (what counts towards quota)
+        /// </summary>
+        [TableDataByteSize]
+        public long Size;
+
+        /// <summary>
+        /// When the url was saved
+        /// </summary>
+        [TableDataOrder(2)]
+        public DateTime Saved;
+
+        /// <summary>
+        /// If true, the url is hidden from other users
+        /// </summary>
+        [TableDataOrder(2)]
+        public bool Private;
+
+        /// <summary>
+        /// If the url isn't private, and this is:
+        /// null - anyone can see this url, logged in or not.
+        /// "" - any logged in user can see this url.
+        /// [other] - Users with at least one of these tokens can see the url.
+        /// </summary>
+        [TableDataTags("{^0}", null, "{0}", true)]
+        [TableDataOrder(2)]
+        public String Auth;
+
+        /// <summary>
+        /// When the url was last viewed
+        /// </summary>
+        [TableDataOrder(2)]
+        public DateTime LastViewed;
+
+        /// <summary>
+        /// When the url expires
+        /// </summary>
+        [TableDataOrder(2)]
+        public DateTime Expires;
+
+
+        public void CopyFrom(StoredLinkInfo s)
+        {
+            Url = s.Url;
+            Size = s.Size;
+            Saved = s.Saved;
+            Private = s.Private;
+            Auth = s.Auth;
+            LastViewed = s.LastViewed;
+            Expires = s.Expires;
+        }
+
+        public StoredLinkInfo Clone()
+        {
+            var t = new StoredLinkInfo();
+            t.CopyFrom(this);
+            return t;
+        }
+
+
+    }
+
+
 
 }

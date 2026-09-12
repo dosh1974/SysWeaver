@@ -162,7 +162,7 @@ namespace SysWeaver.Serialization.SwJson
             var t = typeof(T);
 #if VERBOSE
             if (!t.IsAssignableFrom(newType))
-                throw new Exception("Can't assign a value of type \"" + newType.FullName + "\" to a member of type \"" + t.FullName + "\"");
+                throw new Exception("Can't assign a value of type \"" + newType.CleanTypename() + "\" to a member of type \"" + t.CleanTypename() + "\"");
 #endif//VERBOSE
             bool isNew = t != newType;
             t = newType;
@@ -368,7 +368,7 @@ namespace SysWeaver.Serialization.SwJson
             var newType = Utf8JsonParser.ReadAndResolveType(ref d, e, state);
 #if VERBOSE
             if (!t.IsAssignableFrom(newType))
-                throw new Exception("Can't assign a value of type \"" + newType.FullName + "\" to a member of type \"" + t.FullName + "\"");
+                throw new Exception("Can't assign a value of type \"" + newType.CleanTypename() + "\" to a member of type \"" + t.CleanTypename() + "\"");
 #endif//VERBOSE
             bool isNew = t != newType;
             t = newType;
@@ -496,7 +496,7 @@ namespace SysWeaver.Serialization.SwJson
             }
             catch (Exception ex)
             {
-                throw new Exception("for type \"" + t.FullName + "\"", ex);
+                throw new Exception("for type \"" + t.CleanTypename() + "\"", ex);
             }
 #endif//VERBOSE
         }
@@ -517,7 +517,7 @@ namespace SysWeaver.Serialization.SwJson
             }
             catch (Exception ex)
             {
-                throw new Exception("for type \"" + typeof(T).FullName + "\"", ex);
+                throw new Exception("for type \"" + typeof(T).CleanTypename() + "\"", ex);
             }
 #endif//VERBOSE
         }

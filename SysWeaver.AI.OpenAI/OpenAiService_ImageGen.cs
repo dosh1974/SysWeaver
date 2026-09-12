@@ -66,7 +66,7 @@ namespace SysWeaver.AI
                 options = new()
                 {
                     Quality = p.HighQuality ? GeneratedImageQuality.High : GeneratedImageQuality.Standard,
-                    Size = ImageSizes[(int)p.Size],
+                    Size = ImageSizes[(int)p.Aspect],
                     Style = p.Vivid ? GeneratedImageStyle.Vivid : GeneratedImageStyle.Natural,
                     OutputFileFormat = GeneratedImageFileFormat.Png,
                     //ResponseFormat = GeneratedImageFormat.Bytes,
@@ -121,7 +121,7 @@ namespace SysWeaver.AI
                 options = new()
                 {
                     Quality = p.HighQuality ? GeneratedImageQuality.High : GeneratedImageQuality.Standard,
-                    Size = ImageSizes[(int)p.Size],
+                    Size = ImageSizes[(int)p.Aspect],
                     OutputFileFormat = GeneratedImageFileFormat.Png,
                 };
             MemoryFile file = null;
@@ -192,7 +192,7 @@ namespace SysWeaver.AI
                     p => new ImageGenerationOptions
                     {
                         Quality = p.HighQuality ? "high" : "medium",
-                        Size = ImageSizes1[(int)p.Size],
+                        Size = ImageSizes1[(int)p.Aspect],
                     }
             },
             { 
@@ -200,7 +200,7 @@ namespace SysWeaver.AI
                     p => new ImageGenerationOptions
                     {
                         Quality = p.HighQuality ? "high" : "medium",
-                        Size = ImageSizes1[(int)p.Size],
+                        Size = ImageSizes1[(int)p.Aspect],
                         Background = Backgrounds[(int)p.Background],
                     }
             },
@@ -209,7 +209,7 @@ namespace SysWeaver.AI
                     p => new ImageGenerationOptions
                     {
                         Quality = p.HighQuality ? "high" : "medium",
-                        Size = ImageSizes2[(int)p.Size],
+                        Size = ImageSizes2[(int)p.Aspect],
                     }
                 },
                 {
@@ -217,7 +217,7 @@ namespace SysWeaver.AI
                     p => new ImageGenerationOptions
                     {
                         Quality = p.HighQuality ? "high" : "medium",
-                        Size = ImageSizes2_5[(int)p.Size],
+                        Size = ImageSizes2_5[(int)p.Aspect],
                         Background = Backgrounds[(int)p.Background],
                     }
             },
@@ -226,7 +226,7 @@ namespace SysWeaver.AI
                     p => new ImageGenerationOptions
                     {
                         Quality = p.HighQuality ? "high" : "medium",
-                        Size = ImageSizes2_5[(int)p.Size],
+                        Size = ImageSizes2_5[(int)p.Aspect],
                         Background = Backgrounds[(int)p.Background],
                     }
             },
@@ -243,7 +243,7 @@ namespace SysWeaver.AI
                     p => new ImageGenerationOptions
                     {
                         Quality = p.HighQuality ? GeneratedImageQuality.High : GeneratedImageQuality.Standard,
-                        Size = ImageSizes[(int)p.Size],
+                        Size = ImageSizes[(int)p.Aspect],
                     }
             },
         }.Freeze();
@@ -257,7 +257,7 @@ namespace SysWeaver.AI
                     p => new ImageEditOptions
                     {
                         Quality = p.HighQuality ? "high" : "medium",
-                        Size = ImageSizes1[(int)p.Size],
+                        Size = ImageSizes1[(int)p.Aspect],
                     }
             },
             {
@@ -265,7 +265,7 @@ namespace SysWeaver.AI
                     p => new ImageEditOptions
                     {
                         Quality = p.HighQuality ? "high" : "medium",
-                        Size = ImageSizes1[(int)p.Size],
+                        Size = ImageSizes1[(int)p.Aspect],
                         Background = Backgrounds[(int)p.Background],
                     }
             },
@@ -274,7 +274,7 @@ namespace SysWeaver.AI
                     p => new ImageEditOptions
                     {
                         Quality = p.HighQuality ? "high" : "medium",
-                        Size = (p.Small ? ImageSizes2s : ImageSizes2)[(int)p.Size],
+                        Size = (p.Large ? ImageSizes2 : ImageSizes2s)[(int)p.Aspect],
                     }
                 },
                 {
@@ -282,7 +282,7 @@ namespace SysWeaver.AI
                     p => new ImageEditOptions
                     {
                         Quality = p.HighQuality ? "high" : "medium",
-                        Size = (p.Small ? ImageSizes2_5s : ImageSizes2_5)[(int)p.Size],
+                        Size = (p.Large ? ImageSizes2_5 : ImageSizes2_5s)[(int)p.Aspect],
                         Background = Backgrounds[(int)p.Background],
                     }
             },
@@ -291,7 +291,7 @@ namespace SysWeaver.AI
                     p => new ImageEditOptions
                     {
                         Quality = p.HighQuality ? "high" : "medium",
-                        Size = (p.Small ? ImageSizes2_5s : ImageSizes2_5)[(int)p.Size],
+                        Size = (p.Large ? ImageSizes2_5 : ImageSizes2_5s)[(int)p.Aspect],
                         Background = Backgrounds[(int)p.Background],
                     }
             },
@@ -308,7 +308,7 @@ namespace SysWeaver.AI
                     p => new ImageEditOptions
                     {
                         Quality = p.HighQuality ? GeneratedImageQuality.High : GeneratedImageQuality.Standard,
-                        Size = ImageSizes[(int)p.Size],
+                        Size = ImageSizes[(int)p.Aspect],
                     }
             },
         }.Freeze();

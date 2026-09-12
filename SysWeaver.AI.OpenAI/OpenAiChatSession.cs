@@ -83,7 +83,11 @@ namespace SysWeaver.AI
                 if (!haveDebug)
                     if (!session.IsValid(a))
                         continue;
-                p.Append("- **").Append(OpenAiTools.MdEscape(t.Name)).Append("**");
+                p.Append("- **").Append(OpenAiTools.MdEscape(t.Name));
+                var icon = t.Icon;
+                if (!String.IsNullOrEmpty(icon))
+                    p.Append(" [").Append(OpenAiTools.MdEscape(icon)).Append(']');
+                p.Append("**");
                 if (haveDebug)
                 {
                     if (a != null)
@@ -121,7 +125,11 @@ namespace SysWeaver.AI
             if (!Tools.TryGetValue(args, out var t))
                 throw new Exception(args.ToQuoted() + " is an unknown tool!");
             StringBuilder p = new StringBuilder();
-            p.Append("## ").AppendLine(OpenAiTools.MdEscape(t.Name));
+            p.Append("## ").Append(OpenAiTools.MdEscape(t.Name));
+            var icon = t.Icon;
+            if (!String.IsNullOrEmpty(icon))
+                p.Append(" [").Append(OpenAiTools.MdEscape(icon)).Append(']');
+            p.AppendLine();
             var tt = t.Tool;
             var desc = tt.FunctionDescription;
             if (!String.IsNullOrEmpty(desc))
@@ -688,6 +696,11 @@ namespace SysWeaver.AI
                     {
                         totalIn += usage.InputTokenCount;
                         totalOut += usage.OutputTokenCount;
+                        if (debug != null)
+                        {
+                            debug.InputTokenCount += usage.InputTokenCount;
+                            debug.OutputTokenCount += usage.OutputTokenCount;
+                        }
                     }
                 }
                 if (e.Length > 0)

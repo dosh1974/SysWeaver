@@ -352,7 +352,7 @@ namespace SysWeaver.Db
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Table: " + (tableName ?? def.Name)?.ToQuoted() + " of type: " + typeof(T).FullName.ToQuoted(), ex);
+                    throw new Exception("Table: " + (tableName ?? def.Name)?.ToQuoted() + " of type: " + typeof(T).CleanTypename().ToQuoted(), ex);
                 }
                 Interlocked.Add(ref InternalRowsCompleted, cc);
             }
@@ -1105,9 +1105,9 @@ namespace SysWeaver.Db
                 {
                     var p = indexProps[i];
                     if (!props.TryGetValue(p, out var fi))
-                        throw new Exception(t.FullName + " attribute value " + nameof(FullTextSearchIndexAttribute) + "." + nameof(fti.Props) + " have an unknown property name " + p.ToQuoted() + "!");
+                        throw new Exception(t.CleanTypename() + " attribute value " + nameof(FullTextSearchIndexAttribute) + "." + nameof(fti.Props) + " have an unknown property name " + p.ToQuoted() + "!");
                     if (fi.FieldType != typeof(String))
-                        throw new Exception(t.FullName + " attribute value " + nameof(FullTextSearchIndexAttribute) + "." + nameof(fti.Props) + " property " + p.ToQuoted() + " is not a string, only strings may be used for full text search!");
+                        throw new Exception(t.CleanTypename() + " attribute value " + nameof(FullTextSearchIndexAttribute) + "." + nameof(fti.Props) + " property " + p.ToQuoted() + " is not a string, only strings may be used for full text search!");
                     var name = ns.GetColumnName(fi.Name);
                     collates.TryGetValue(name, out var collate);
                     if (i == 0)
@@ -1116,7 +1116,7 @@ namespace SysWeaver.Db
                     }else
                     {
                         if (collate != col)
-                            throw new Exception(t.FullName + " attribute value " + nameof(FullTextSearchIndexAttribute) + "." + nameof(fti.Props) + " property " + p.ToQuoted() + " doesn't have the collation " + col.ToQuoted() + ", all properties must have the same collation!");
+                            throw new Exception(t.CleanTypename() + " attribute value " + nameof(FullTextSearchIndexAttribute) + "." + nameof(fti.Props) + " property " + p.ToQuoted() + " doesn't have the collation " + col.ToQuoted() + ", all properties must have the same collation!");
                     }
                     indexProps[i] = name;
                 }

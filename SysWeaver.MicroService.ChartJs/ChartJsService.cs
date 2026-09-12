@@ -111,7 +111,7 @@ namespace SysWeaver.MicroService
         /// <param name="request"></param>
         /// <returns>An url to a html page containing the generated chart</returns>
         [OpenAiUse]
-        [OpenAiTool("📊")]
+        [OpenAiTool("📊✨")]
         String BuildAdvancedChart(ChartJsConfig chart, HttpServerRequest request)
         {
             var c = ChartSerialize(chart);
@@ -127,7 +127,7 @@ namespace SysWeaver.MicroService
         /// <param name="request"></param>
         /// <returns>True if successful</returns>
         [OpenAiUse]
-        [OpenAiTool("📊")]
+        [OpenAiTool("📊🖥️")]
         bool DisplayAdvancedChart(ChartJsConfig chart, HttpServerRequest request)
         {
             var url = BuildAdvancedChart(chart, request);
@@ -148,7 +148,7 @@ namespace SysWeaver.MicroService
         /// <param name="request"></param>
         /// <returns>An url to a html page containing the generated chart</returns>
         [OpenAiUse]
-        [OpenAiTool("📊")]
+        [OpenAiTool("📊✨")]
         String BuildChart(Chart chart, HttpServerRequest request)
         {
             var labels = chart.Labels;
@@ -367,7 +367,7 @@ namespace SysWeaver.MicroService
         /// <param name="request"></param>
         /// <returns>True if successful</returns>
         [OpenAiUse]
-        [OpenAiTool("📊")]
+        [OpenAiTool("📊🖥️")]
         bool DisplayChart(Chart chart, HttpServerRequest request)
         {
             var url = BuildChart(chart, request);

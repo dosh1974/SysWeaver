@@ -17,13 +17,10 @@ namespace SysWeaver.AI
         [OpenAiOptional]
         public bool HighQuality = true;
 
-
         /// <summary>
-        /// Create a smaller image (half size), think 4K vs 1080p.
+        /// Create a larger image, think 4K vs 1080p.
         /// </summary>
-        [OpenAiOptional]
-        public bool Small = false;
-
+        public bool Large = false;
 
         /// <summary>
         /// Vivid colors (false = natural colors).
@@ -32,10 +29,10 @@ namespace SysWeaver.AI
         public bool Vivid;
 
         /// <summary>
-        /// The desired size / aspect ratio
+        /// The desired aspect ratio
         /// </summary>
         [OpenAiOptional]
-        public OpenAiImageSizes Size = OpenAiImageSizes.Square;
+        public OpenAiImageAspectRatios Aspect = OpenAiImageAspectRatios.Square;
 
         /// <summary>
         /// The title of this image, used as filename etc.
@@ -47,7 +44,7 @@ namespace SysWeaver.AI
         /// The image model to use, only set if the user required a specfifc model or if transparency is requested.
         /// Valid models are: 
         /// * "gpt-image-1" 
-        /// * "gpt-image-1.5" 
+        /// * "gpt-image-1.5" (use if transparency is required)
         /// * "gpt-image-2 (default)"
         /// </summary>
         [OpenAiOptional]
