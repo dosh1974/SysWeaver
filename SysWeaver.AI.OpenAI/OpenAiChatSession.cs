@@ -133,10 +133,10 @@ namespace SysWeaver.AI
             var tt = t.Tool;
             var desc = tt.FunctionDescription;
             if (!String.IsNullOrEmpty(desc))
-                p.Append(OpenAiTools.MdEscape(desc)).AppendLine(" ");
+                p.Append(OpenAiTools.MdEscape(desc)).AppendLine("  ");
             var fp = tt.FunctionParameters?.ToString();
             if (!String.IsNullOrEmpty(fp))
-                p.Append(String.Join(OpenAiTools.BeautifyJson(fp), "```json\n", "\n```"));
+                p.Append(String.Join(OpenAiTools.BeautifyJson(fp), "\n```json\n", "\n```\n"));
             return Task.FromResult(new Chat.ChatMessage
             {
                 Text = p.ToString(),
@@ -435,6 +435,57 @@ namespace SysWeaver.AI
                                     This is the content of the global memory for this user:
                                     """;
 
+        const String RestAPI = """
+                                    ### REST API  
+                                    Tools that have a REST API url in their description can be invoked using a JSON post to that url (response is JSON).  
+                                    The url in the tool is relative to the site root, so the site root must be prepended.
+                                    Never assume property names, always read the tool descriptions.  
+                                    The site root is *[ROOT]*.  
+                                        
+                                    ALWAYS use the full absolute url when invoking any API.  
+                                    Make sure to respect the casing of properties.  
+                                    ALWAYS remove the top level object of the tool call input schema when calling a rest API.  
+                                    Example of a tool description:  
+                                    ```json  
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "operatorNameOrIds": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                    ```  
+                                    Should have the following structure when an API is invoked:  
+                                    ```json  
+                                    {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    }
+                                    ```  
+                                    Same is true for returned data.  
+
+                                    For every REST API call, inspect the actual response schema or a real tool response before writing client-side API integration code.  
+
+                                    Table reference rule:  
+                                    - Check if API's return a table data reference or a table data.  
+                                    - If it's a table reference, call the GetTableData API to get the  ACTUAL table data.  
+
+                                    REST request body rule:
+                                    - For REST API calls, remove the outer tool-function input wrapper from the request schema.
+                                    - Example: if a tool’s input is `{ "queryParams": { ... } }`, POST only `{ ... }`, not `{ "queryParams": { ... } }`.
+                                    
+                                    Verification before delivery:
+                                    - For generated HTML that calls APIs, validate every endpoint path, request-body shape, response property name, and table-reference flow against the function descriptions and/or an actual successful tool response.  
+                                    - Never claim a fix was applied unless the generated HTML contains the corrected code.  
+                                    - Whenever a fix is requested, regenerate the artifact and immediately display the corrected version.  
+
+                                    """;
 
         internal async Task<String> BuildSystemPrompt(HttpSession s)
         {
@@ -475,6 +526,7 @@ namespace SysWeaver.AI
                     }
                 }
             }
+            p = String.Concat(p, "\n\n", RestAPI.Replace("[ROOT]", StringTools.EscapeMD(s.SiteRoot)));
             return p;
         }
 

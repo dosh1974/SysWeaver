@@ -20,7 +20,7 @@ namespace SysWeaver.Net
         public override string ToString() => String.Concat("Token: ", Token, ", expires: ", new DateTime(ExpirationTime, DateTimeKind.Utc), ", auth: ", Auth);
 #endif//DEBUG
 
-        public HttpSession(HttpRateLimiterParams rateLimiterParams, String token, long utcNowTicks, long keepAliveDurationTicks, String userAgent, String address, String httpProtocol, String deviceId)
+        public HttpSession(HttpRateLimiterParams rateLimiterParams, String token, long utcNowTicks, long keepAliveDurationTicks, String userAgent, String address, String httpProtocol, String deviceId, String siteRoot)
         {
             RateLimiter = rateLimiterParams == null ? null : new HttpRateLimiter(rateLimiterParams);
             DeviceId = deviceId;
@@ -31,8 +31,10 @@ namespace SysWeaver.Net
             UserAgent = userAgent;
             Address = address;
             HttpProtocol = httpProtocol;
+            SiteRoot = siteRoot;
         }
 
+        public readonly String SiteRoot;
         internal readonly HttpRateLimiter RateLimiter;
 
         /// <summary>

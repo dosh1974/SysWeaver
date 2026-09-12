@@ -24,7 +24,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// The Uri of the end point
         /// </summary>
-        [TableDataUrl(null, "*../explore/api.html?q={0}")]
+        [TableDataUrl(null, "*../explore/api.html?q={0}", "Click to show the API details")]
         public String Uri;
 
         /// <summary>

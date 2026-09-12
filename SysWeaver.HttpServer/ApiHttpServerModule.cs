@@ -11,6 +11,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Translation;
+using System.Diagnostics.CodeAnalysis;
 
 namespace SysWeaver.Net
 {
@@ -99,6 +100,9 @@ namespace SysWeaver.Net
             return foundAny;
         }
 
+        static String GetMethodSignature(MethodInfo m)
+            => String.Join('\n', m.DeclaringType.FullName, m);
+
         public void AddMethod(Object o, MethodInfo method, String url = null, String root = null)
         {
             //  Handle the optional attribute (dynamically exclude some API's, depending on config etc)
@@ -149,6 +153,7 @@ namespace SysWeaver.Net
             var baseUrl = GetBaseUrl(method, url, root);
             if (Entries.TryRemove(baseUrl, out var ep))
             {
+                Methods.TryRemove(GetMethodSignature(method), out var _);
                 try
                 {
                     InternalRemoveEndPoint(ep);
@@ -289,6 +294,7 @@ namespace SysWeaver.Net
                     return;
                 var e = ApiHttpEntry.Create(IoParams, o, method, url, PerfMon, Auth, CachedCompression, Compression, LocationPrefix, AuditBegin, AuditEnd, AuditException);
                 entries[url] = e;
+                Methods[GetMethodSignature(method)] = url;
                 if (IsDataTable(e.ArgType, e.RetType))
                     Tables[e] = Interlocked.Increment(ref TableId);
                 OnApiAdded?.Invoke(e);
@@ -352,6 +358,10 @@ namespace SysWeaver.Net
         }
 
         readonly SemiFrozenDictionary<String, ApiHttpEntry> Entries = new SemiFrozenDictionary<string, ApiHttpEntry>(StringComparer.Ordinal);
+        readonly SemiFrozenDictionary<String, String> Methods = new SemiFrozenDictionary<string, string>(StringComparer.Ordinal);
+
+        public bool TryGetApi(MethodInfo m, out string url)
+            => Methods.TryGetValue(GetMethodSignature(m), out url);
 
         /// <summary>
         /// Try to get information about an end point

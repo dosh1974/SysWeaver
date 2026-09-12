@@ -120,7 +120,6 @@ namespace SysWeaver.AI
         Task<bool> SetMemory(AiMemorySet data, HttpServerRequest context)
            => Memory.SetMemory(context.Session, data.Key, data.Value);
 
-
         static readonly MethodInfo Method_AddMemory = typeof(OpenAiQuerySession).GetMethod(nameof(AddMemory), BindingFlags.NonPublic | BindingFlags.Instance);
         static readonly MethodInfo Method_GetMemory = typeof(OpenAiQuerySession).GetMethod(nameof(GetMemory), BindingFlags.NonPublic | BindingFlags.Instance);
         static readonly MethodInfo Method_RemoveMemory = typeof(OpenAiQuerySession).GetMethod(nameof(RemoveMemory), BindingFlags.NonPublic | BindingFlags.Instance);
@@ -285,7 +284,7 @@ namespace SysWeaver.AI
             bool prevIsDigit = false;
             foreach (var x in icons.OrderByDescending(x => x.Value))
             {
-                if (sb.Length == 0)
+                if (sb.Length > 0)
                     sb.Append('-');
                 if (prevIsDigit)
                     sb.Append(' ');

@@ -2407,9 +2407,11 @@ namespace SysWeaver.Net
             do
             {
                 sessionToken = GetSessionGuid();
-                session = new HttpSession(rateLimiterParams, sessionToken, now, extLife, ua, ip, prot, deviceId);
-                session.LanguageTimeStamp = DateTime.UtcNow;
-                session.Language = await GetAcceptLanguage(req.GetReqHeader("Accept-Language")).ConfigureAwait(false);
+                session = new HttpSession(rateLimiterParams, sessionToken, now, extLife, ua, ip, prot, deviceId, req.Prefix)
+                {
+                    LanguageTimeStamp = DateTime.UtcNow,
+                    Language = await GetAcceptLanguage(req.GetReqHeader("Accept-Language")).ConfigureAwait(false),
+                };
                 session.OnAuthLogout += RunOnLogout;
             } while (!sessions.TryAdd(ReadOnlyMemoryKey.Create(sessionToken), session));
             var exp = new DateTime(now + SessionCookieLifetime, DateTimeKind.Utc);

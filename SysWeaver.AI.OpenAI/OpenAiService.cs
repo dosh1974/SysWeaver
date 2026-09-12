@@ -168,14 +168,20 @@ namespace SysWeaver.AI
             var t = a.GetType();
             var pref = t.Name + ".";
             var perfMonitor = PerfMon;
+            var api = Api;
             foreach (var mm in t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
             {
                 if (mm.GetCustomAttribute<OpenAiToolAttribute>() == null)
                     if (!(mm.GetCustomAttribute<OpenAiUseAttribute>()?.Use ?? false))
                         continue;
+                if (api.TryGetApi(mm, out var url))
+                {
+                    GetTool(url);
+                    continue;
+                }
                 var fn = GetToolName(mm);
                 var endPoint = ApiHttpEntry.Create(IoParams, a, mm, fn, perfMonitor, ApiHttpEntry.DefaultAuth, ApiHttpEntry.DefaultCachedCompression, ApiHttpEntry.DefaultLocationPrefix);
-                GetTool(fn, endPoint);
+                GetTool(fn, endPoint, false);
             }
         }
 

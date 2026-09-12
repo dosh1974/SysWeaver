@@ -28,15 +28,20 @@ namespace SysWeaver.AI
 
         public readonly String Icon;
 
-        public static OpenAiTool Create(String name, IApiHttpServerEndPoint endPoint, ChatTool tool)
-            => new OpenAiTool(name, endPoint, tool);
+        public readonly String Api;
 
-        OpenAiTool(String name, IApiHttpServerEndPoint endPoint, ChatTool tool)
+
+        public static OpenAiTool Create(String name, IApiHttpServerEndPoint endPoint, ChatTool tool, bool exposeApi = false)
+            => new OpenAiTool(name, endPoint, tool, exposeApi);
+
+        OpenAiTool(String name, IApiHttpServerEndPoint endPoint, ChatTool tool, bool exposeApi)
         {
-            Auth = endPoint?.Auth;
+            Auth = endPoint.Auth;
             Name = name;
             Tool = tool;
             endPoint.GetDesc(out var arg, out var ret, out var md, out var ad, out var rd, out var an);
+            if (exposeApi)
+                Api = endPoint.Uri; 
             Desc = md;
             Arg = arg;
             ArgName = an;
@@ -88,14 +93,14 @@ namespace SysWeaver.AI
             }, arg == null ? null : "<json data>", Desc);
         }
 
-
+        /*
         public static OpenAiTool Create(Object instance, MethodInfo method, ChatTool tool, PerfMonitor perfMonitor = null, String defaultAuth = ApiHttpEntry.DefaultAuth, String defaultCachedCompression = ApiHttpEntry.DefaultCachedCompression, String defaultCompression = ApiHttpEntry.DefaultCompression, String locationPrefix = ApiHttpEntry.DefaultLocationPrefix)
         {
             var name = String.Join('_', instance.GetType().Name, method.Name);
-            var endPoint = ApiHttpEntry.Create(OpenAiService.IoParams, instance, method, name, perfMonitor, defaultAuth, defaultCachedCompression, defaultCompression, locationPrefix);
+            var endPoint = ApiHttpEntry.Create(OpenAiService.IoParams, instance, method, name, perfMonitor, defaultAuth, defaultCachedCompression, defaultCompression, locationPrefix, false);
             return new OpenAiTool(name, endPoint, tool);
         }
-
+        */
    
         public readonly Func<BinaryData, HttpServerRequest, Task<String>> Invoke;
 

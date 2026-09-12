@@ -436,6 +436,19 @@ namespace SysWeaver.AI
             s.AddRegistredTool("StoreLink");
             s.AddRegistredTool("GetStoredFiles");
             s.AddRegistredTool("GetStoredLinks");
+
+        }
+
+
+        /// <summary>
+        /// Add this tool to the chat session (if not included by default)
+        /// </summary>
+        /// <param name="s"></param>
+        public void AddTool_ValidateRestApiCall(OpenAiChatSession s)
+        {
+            if (Api == null)
+                return;
+            s.AddTool(this, Method_ValidateRestApiCall);
         }
 
         #endregion//Default tools

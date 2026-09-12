@@ -1,16 +1,12 @@
-﻿using CommunityToolkit.HighPerformance;
-using OpenAI;
-using OpenAI.Chat;
+﻿using OpenAI.Chat;
 using System;
 using System.Buffers;
 using System.ClientModel;
 using System.ClientModel.Primitives;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -19,12 +15,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using SysWeaver.Auth;
 using SysWeaver.Chat;
-using SysWeaver.Data;
-using SysWeaver.Media;
 using SysWeaver.MicroService;
 using SysWeaver.Net;
-using SysWeaver.Serialization;
 using TiktokenSharp;
+
 
 namespace SysWeaver.AI
 {
@@ -106,6 +100,8 @@ namespace SysWeaver.AI
 
                 AddTool_BuildMap(s);
                 AddTool_Store(s);
+
+                AddTool_ValidateRestApiCall(s);
 
                 //AddTool_DisplayGraph(s);
 
@@ -266,27 +262,10 @@ namespace SysWeaver.AI
         {
             if (Api == null)
                 return null;
-            IApiHttpServerEndPoint a = null;
-            if (fn == null)
-            {
-                a = Api.TryGet(apiName);
-                if (a == null)
-                    throw new ArgumentException("Unknown api name " + apiName.ToQuoted(), nameof(apiName));
-                fn = GetToolName(a.MethodInfo);
-            }
-            else
-            {
-                if (fn.Length == 0)
-                    fn = apiName.Replace('/', '_');
-            }
-
-            fn = String.IsNullOrEmpty(fn) ? apiName.Replace('/', '_') : fn;
+            IApiHttpServerEndPoint a = Api.TryGet(apiName);
             if (a == null)
-            {
-                a = Api.TryGet(apiName);
-                if (a == null)
-                    throw new ArgumentException("Unknown api name " + apiName.ToQuoted(), nameof(apiName));
-            }
+                throw new ArgumentException("Unknown api name " + apiName.ToQuoted(), nameof(apiName));
+            fn = fn ?? GetToolName(a.MethodInfo);
             return GetTool(fn, a);
         }
 
@@ -303,15 +282,21 @@ namespace SysWeaver.AI
 
         public OpenAiTool GetTool(Object instance, MethodInfo method, String fn = null, PerfMonitor perfMonitor = null, String defaultAuth = ApiHttpEntry.DefaultAuth, String defaultCachedCompression = ApiHttpEntry.DefaultCachedCompression, String defaultCompression = ApiHttpEntry.DefaultCompression, String locationPrefix = ApiHttpEntry.DefaultLocationPrefix)
         {
+            if (Api != null)
+            {
+                if (Api.TryGetApi(method, out var apiUrl))
+                    return GetTool(apiUrl, fn);
+            }
+
             fn = String.IsNullOrEmpty(fn) ? GetToolName(method) : fn;
             if (ApiTools.TryGetValue(fn, out var tool))
                 return tool;
             var endPoint = ApiHttpEntry.Create(OpenAiService.IoParams, instance, method, fn, perfMonitor, defaultAuth, defaultCachedCompression, defaultCompression, locationPrefix);
-            return GetTool(fn, endPoint);
+            return GetTool(fn, endPoint, false);
         }
 
 
-        OpenAiTool GetTool(String fn, IApiHttpServerEndPoint a)
+        OpenAiTool GetTool(String fn, IApiHttpServerEndPoint a, bool exposeApi = true)
         {
             var cache = ApiTools;
             if (cache.TryGetValue(fn, out var tool))
@@ -360,12 +345,22 @@ namespace SysWeaver.AI
                 }
                 else
                 {
-                    retDesc = String.Concat(prefix, isArray ? " objects" : "n object", " with JSON schema:\n```json\n", JsonSchema.ToString(JsonSchema.Get(retType, true, retDesc), true), "\n```");
+                    retDesc = String.Concat(prefix, isArray ? " objects" : "n object", " with JSON schema:  \n\n```json\n", JsonSchema.ToString(JsonSchema.Get(retType, true, retDesc), true), "\n```\n");
                 }
+                retDesc = String.Concat("## Tool returns  \n", retDesc);
                 methodDesc = String.IsNullOrEmpty(methodDesc) ? retDesc : String.Join(".\n", methodDesc, retDesc);
             }
-            var ct = ChatTool.CreateFunctionTool(fn, methodDesc.LimitLength(1024, ""), p, false);
-            tool = OpenAiTool.Create(fn, a, ct);
+            if (exposeApi)
+            {
+                var api = a.Uri;
+                if (api != null)
+                {
+                    methodDesc = methodDesc.Trim().LimitLength(900, "");
+                    methodDesc = String.Concat(methodDesc, "\n\n### REST API  \n" + api + "  \n");
+                }
+            }
+            var ct = ChatTool.CreateFunctionTool(fn, methodDesc.Trim().LimitLength(1024, ""), p, false);
+            tool = OpenAiTool.Create(fn, a, ct, exposeApi);
             if (!cache.TryAdd(fn, tool))
                 tool = cache[fn];
             return tool;
@@ -376,6 +371,60 @@ namespace SysWeaver.AI
             => 
             ApiTools.TryGetValue(fn, out var tool) ? tool : null;
 
+
+
+        /// <summary>
+        /// Validate an API.
+        /// Use this to validate a REST API call in some code that you make.
+        /// This will actually perform the supplied request and inform of any errors as well as letting you inspect the response structure.
+        /// </summary>
+        /// <param name="data">The REST API parameters</param>
+        /// <param name="context"></param>
+        /// <returns>The REST API return value as a Json string</returns>
+        [OpenAiTool("✅⛔")]
+        async Task<String> ValidateRestApiCall(OpenAiRestCall data, HttpServerRequest context)
+        {
+            var a = Api;
+            if (a == null)
+                throw new Exception("API calls is not supported!");
+
+            var url = data.ApiUrl;
+            var p = context.Prefix;
+            if (!url.FastStartsWith(p))
+                throw new Exception("API urls must be absolute, thus start with " + p.ToQuoted());
+            url = url.Substring(p.Length);
+            var api = a.TryGet(url);
+            if (api == null)
+                throw new Exception("Couldn't find the API " + url.ToQuoted());
+            var inp = data.PostJsonData;
+            api.GetDesc(out var arg, out var ret, out var _, out var _, out var _, out var _);
+            ReadOnlyMemory<Byte> indata = ReadOnlyMemory<Byte>.Empty;
+            if (arg == null)
+            {
+                if (!String.IsNullOrEmpty(inp))
+                    throw new Exception("API " + url.ToQuoted() + " do not take an input. Use GET or post no data");
+            }else
+            {
+                if (String.IsNullOrEmpty(inp))
+                    throw new Exception("API " + url.ToQuoted() + " expect Json POST data using the schema: " + JsonSchema.Get(arg, true));
+                indata = Encoding.UTF8.GetBytes(inp);
+            }
+            if (!context.Session.IsValid(api.Auth))
+                throw new UserNotAllowedException();
+            try
+            {
+                var outData = await api.InvokeAsync(context, indata).ConfigureAwait(false);
+                if (outData.IsEmpty)
+                    return null;
+                return Encoding.UTF8.GetString(outData.Span);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("API " + url.ToQuoted() + " threw error: " + ex.Message.ToQuoted() + ", expected Json POST data using the schema: " + JsonSchema.Get(arg, true), ex);
+            }
+        }
+
+        static readonly MethodInfo Method_ValidateRestApiCall = typeof(OpenAiService).GetMethod(nameof(ValidateRestApiCall), BindingFlags.NonPublic | BindingFlags.Instance);
 
         #endregion//Tools
 
