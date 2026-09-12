@@ -441,36 +441,8 @@ namespace SysWeaver.AI
                                     The url in the tool is relative to the site root, so the site root must be prepended.
                                     Never assume property names, always read the tool descriptions.  
                                     The site root is *[ROOT]*.  
-                                        
                                     ALWAYS use the full absolute url when invoking any API.  
                                     Make sure to respect the casing of properties.  
-                                    ALWAYS remove the top level object of the tool call input schema when calling a rest API.  
-                                    Example of a tool description:  
-                                    ```json  
-                                    {
-                                        "type": "object",
-                                        "properties": {
-                                            "operatorNameOrIds": {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "string"
-                                                }
-                                            }
-                                        }
-                                    }
-                                    ```  
-                                    Should have the following structure when an API is invoked:  
-                                    ```json  
-                                    {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "string"
-                                        }
-                                    }
-                                    ```  
-                                    Same is true for returned data.  
-
-                                    For every REST API call, inspect the actual response schema or a real tool response before writing client-side API integration code.  
 
                                     Table reference rule:  
                                     - Check if API's return a table data reference or a table data.  
@@ -481,8 +453,8 @@ namespace SysWeaver.AI
                                     - Example: if a tool’s input is `{ "queryParams": { ... } }`, POST only `{ ... }`, not `{ "queryParams": { ... } }`.
                                     
                                     Verification before delivery:
-                                    - For generated HTML that calls APIs, validate every endpoint path, request-body shape, response property name, and table-reference flow against the function descriptions and/or an actual successful tool response.  
-                                    - Never claim a fix was applied unless the generated HTML contains the corrected code.  
+                                    - For generated HTML or other code that calls APIs, validate every endpoint path, request-body shape, response property name, and table-reference flow against the function descriptions and/or an actual successful tool response.  
+                                    - ALWAYS call the ValidateRestApiCall tool, to validate your code.  
                                     - Whenever a fix is requested, regenerate the artifact and immediately display the corrected version.  
 
                                     """;
