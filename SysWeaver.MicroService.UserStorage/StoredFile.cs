@@ -20,7 +20,7 @@ namespace SysWeaver.MicroService
         /// </summary>
         [TableDataOrder(3)]
         public int Shard;
-
+        
         public StoredFile()
         {
         }

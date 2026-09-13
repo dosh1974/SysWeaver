@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ExCSS;
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
@@ -23,7 +24,9 @@ namespace SysWeaver.MicroService
     /// - Access scope (private, protected, public etc).
     /// - Files of suitable types are compressed on disc (and in transit).
     /// - Old data is automatically pruned (files are deleted if the time since last accees exceeds the policy).
-    /// - Disc quota is maintained (the files that would expire in the neareast future is deleted when exceeded).
+    /// - Disc quota is maintained (the files that was least recently accessed is deleted when exceeded).
+    /// - Access url's are in a random folder, no guessing.
+    /// - File names are kept so Save as.. gives a nice name.
     /// </summary>
     [WebApiUrl("UserStorage")]
     public sealed class UserStorageService : IUserStorageService, IHttpServerModule, IDisposable, IPerfMonitored, IHaveStats
@@ -67,8 +70,11 @@ namespace SysWeaver.MicroService
             var t = typeof(UserStorageService);
             var td = t.Assembly.GetUncompressedResourceData(t.Namespace + ".data.embed.html");
             var et = Encoding.UTF8.GetString(td.Span);
+            EmbeddTemplates = [
+                GetTemplate("embed"),
+                GetTemplate("img"),
+            ];
             EmbedComp = HttpCompressionPriority.GetSupportedEncoders("br:Balanced,deflate:Balanced,gzip:Balanced");
-            EmbeddTemplate = new TextTemplate(et, "${", "}");
             PerUserHandler = manager.TryGet<IUserStoragePerUserHandler>();
             Retention = p.Retention ?? new UserStorageDataRetention();
         //  Add file repos
@@ -99,6 +105,13 @@ namespace SysWeaver.MicroService
             PruneTask = new PeriodicTask(Prune, 15000);
         }
 
+        static TextTemplate GetTemplate(String name)
+        {
+            var t = typeof(UserStorageService);
+            var td = t.Assembly.GetUncompressedResourceData(String.Concat(t.Namespace, ".data.", name, ".html"));
+            var et = Encoding.UTF8.GetString(td.Span);
+            return new TextTemplate(et, "${", "}");
+        }
 
         public String[] OnlyForPrefixes { get; init; }
 
@@ -115,7 +128,7 @@ namespace SysWeaver.MicroService
 
         readonly HttpCompressionPriority EmbedComp;
 
-        readonly TextTemplate EmbeddTemplate;
+        readonly TextTemplate[] EmbeddTemplates;
 
         public override string ToString() =>
             String.IsNullOrEmpty(BaseUrl) ?
@@ -685,7 +698,14 @@ namespace SysWeaver.MicroService
                 var linkInfo = InternalLoadLink(fi.FullName);
                 var baseUrl = "../../../../../";
                 var newUrl = baseUrl + linkInfo.Url;
-                var res = EmbeddTemplate.Get(x => x.FastEquals("BaseUrl") ? baseUrl : newUrl);
+                mime = MimeTypeMap.GetMimeFromUrl(newUrl);
+                int type = 0;
+                if (mime.Item1.FastStartsWith("image/"))
+                    type = 1;
+                var x = context.GetQuery(null);
+                if (x != null)
+                    newUrl = String.Concat(newUrl, newUrl.Contains('?') ? '&' : '?', x);
+                var res = EmbeddTemplates[type].Get(x => x.FastEquals("BaseUrl") ? baseUrl : newUrl);
                 var mem = Encoding.UTF8.GetBytes(res);
                 var t = fi.LastAccessTimeUtc;
                 return new StaticMemoryHttpRequestHandler(l, "Embedded", mem, HttpServerTools.HtmlMime, EmbedComp, 30, 60, t, HttpServerTools.ToEtag(t));

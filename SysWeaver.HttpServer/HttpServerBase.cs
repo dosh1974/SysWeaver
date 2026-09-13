@@ -1223,7 +1223,21 @@ namespace SysWeaver.Net
                 if (HandleRedirect(redirectFrom, localUrl, data))
                     return;
             //  Get module handler
-            var t = await GetHandler(data).ConfigureAwait(false);
+            bool isHead = data.IsHead;
+            if (isHead && AllowAuthorizationAuth)
+                data.SetResHeader("Access-Control-Allow-Headers", "Authorization");
+            var url = data.Url;
+            IHttpRequestHandler t = null;
+            try
+            {
+                t = await GetHandler(data).ConfigureAwait(false);
+            }
+            catch (NoUserLoggedInException)
+            {
+                if (await HandleAuth(Array.Empty<String>(), data, session, localUrl, url, isHead).ConfigureAwait(false))
+                    return;
+                throw;
+            }
             if (t == null)
             {
                 //  Optional end points (internal end points that can be overridden)
@@ -1272,10 +1286,6 @@ namespace SysWeaver.Net
             //using var ___ = await DebugLock.Lock().ConfigureAwait(false); // Enabled this line to handle one request at a time
 #endif//DEBUG
 
-            bool isHead = data.IsHead;
-            if (isHead && AllowAuthorizationAuth)
-                data.SetResHeader("Access-Control-Allow-Headers", "Authorization");
-            var url = data.Url;
             var lang = session.Language ?? "";
             var translator = Translator;
             var haveTranslator = translator != null;

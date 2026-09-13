@@ -79,16 +79,16 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Tries to get the type of the MIME from the provided string.
+        /// Tries to get the type of the MIME from the provided file extension.
         /// </summary>
-        /// <param name="str">The filename or extension.</param>
+        /// <param name="str">The file extension.</param>
         /// <param name="mimeType">The variable to store the MIME type.</param>
         /// <param name="withCharset">Adds a charset=UTF-8 to text documents</param>
         /// <returns>The MIME type and if the type is compressible</returns>
         public static bool TryGetMimeType(string str, out Tuple<string, bool> mimeType, bool withCharset = true) => (withCharset ? MapWithCharSet : Map).TryGetValue(str, out mimeType);
 
         /// <summary>
-        /// Gets the type of the MIME from the provided string.
+        /// Gets the type of the MIME from the provided file extension.
         /// </summary>
         /// <param name="str">The file extension.</param>
         /// <param name="withCharset">Adds a charset=UTF-8 to text documents</param>
@@ -99,6 +99,24 @@ namespace SysWeaver
             return result ?? DefaultMimeType;
         }
 
+
+
+        /// <summary>
+        /// Gets the type of the MIME from the provided url.
+        /// </summary>
+        /// <param name="url">The url.</param>
+        /// <param name="withCharset">Adds a charset=UTF-8 to text documents</param>
+        /// <returns>The MIME type and if the type is compressible</returns>
+        public static Tuple<string, bool> GetMimeFromUrl(string url, bool withCharset = true)
+        {
+            var s = url.SplitFirst('?');
+            var ep = s.LastIndexOf('.');
+            if (ep < 0)
+                return DefaultMimeType;
+            var ext = s.Substring(ep + 1).FastToLower();
+            (withCharset ? MapWithCharSet : Map).TryGetValue(ext, out var result);
+            return result ?? DefaultMimeType;
+        }
 
         public sealed class ExtensionEntry
         {
