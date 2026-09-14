@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data.SqlTypes;
 using System.Linq;
 using System.Reflection;
 
@@ -204,19 +205,53 @@ namespace SysWeaver
             return null;
         }
 
-
         /// <summary>
-        /// Get a clean type name (no version and culture info)
+        /// Get a clean type name (no assembly qualified generic arguments)
         /// </summary>
         /// <param name="type"></param>
         /// <returns></returns>
         public static String CleanTypename(this Type type)
         {
-            // TODO: Handle generic types better
-            var tn = type.FullName;
-            var asm = type.Assembly.FullName.SplitFirst(',');
-            return (String.IsNullOrEmpty(asm) ? tn : String.Join(',', tn, asm)).Replace(" ", "");
+            if (!type.IsGenericType)
+                return type.FullName;
+            var c = CachedCleanTypename;
+            if (c.TryGetValue(type, out var v))
+                return v;
+            var test = type.FullName;
+            var rt = type.GetGenericTypeDefinition();
+            v = String.Concat(rt.FullName, '[', String.Join(", ", type.GetGenericArguments().Select(x => String.Concat('[', CleanTypename(x), ']'))), ']');
+            c.TryAdd(type, v);
+            return v;
         }
+
+        static readonly SemiFrozenDictionary<Type, String> CachedCleanTypename = new SemiFrozenDictionary<Type, string>();
+
+
+
+        /// <summary>
+        /// Get a clean assembly qualified type name (no version and culture info in assembly name)
+        /// </summary>
+        /// <param name="type"></param>
+        /// <returns></returns>
+        public static String CleanAssemblyQualifiedTypename(this Type type)
+        {
+            var c = CachedCleanAssemblyQualifiedTypename;
+            if (c.TryGetValue(type, out var v))
+                return v;
+
+            if (type.IsGenericType)
+            {
+                var test = type.FullName;
+                var rt = type.GetGenericTypeDefinition();
+                v = String.Concat(rt.FullName, '[', String.Join(", ", type.GetGenericArguments().Select(x => String.Concat('[', CleanAssemblyQualifiedTypename(x), ']'))), "], ", type.Assembly.FullName.SplitFirst(','));
+            }
+            else 
+                v = String.Concat(type.FullName, ", ", type.Assembly.FullName.SplitFirst(','));
+            c.TryAdd(type, v);
+            return v;
+        }
+
+        static readonly SemiFrozenDictionary<Type, String> CachedCleanAssemblyQualifiedTypename = new SemiFrozenDictionary<Type, string>();
 
     }
 

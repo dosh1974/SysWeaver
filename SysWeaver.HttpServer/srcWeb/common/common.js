@@ -5350,7 +5350,7 @@ class ValueFormat {
             return;
         }
         const s = nextValue.split('|');
-        ValueFormat.update(el, s[0], value, flash, s[1], s[2], onRefresh);
+        ValueFormat.update(el, s[0].split(',')[0], value, flash, s[1], s[2], onRefresh);
         return el;
     }
 
