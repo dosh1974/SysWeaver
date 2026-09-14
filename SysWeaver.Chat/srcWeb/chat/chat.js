@@ -3268,7 +3268,6 @@ async function chatMain() {
         const chatBackground = document.createElement("SysWeaver-Chat");
         if (ps.has("nobackground"))
             chatBackground.classList.add("NoBackground");
-
         page.appendChild(chatBackground);
         await Chat.addChat(chatBackground, chatId, null, options);
     }

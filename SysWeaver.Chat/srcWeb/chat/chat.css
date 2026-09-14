@@ -28,6 +28,12 @@ body.ChatMain{
         box-shadow: 0 0 64px rgba(var(--ThemeAcc1RGB), 0.15);
     }
 
+        body.ChatMain SysWeaver-Chat.NoBackground {
+            background: none transparent;
+            box-shadow: unset;
+            max-width: unset;
+        }
+
 SysWeaver-Chat {
     --ics: 48px;
     font-size: 125%;
@@ -42,11 +48,7 @@ SysWeaver-Chat {
     overflow: hidden;
 }
 
-    SysWeaver-Chat.NoBackground {
-        background: none transparent;
-        box-shadow: none !important;
-        max-width: 100% !important;
-    }
+
 
 SysWeaver-ChatMain {
     font-size: 125%;

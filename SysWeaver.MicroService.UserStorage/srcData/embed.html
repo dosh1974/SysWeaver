@@ -10,15 +10,15 @@
             background-color: transparent;
         }
     </style>
-    <title>Embed</title>
-    <script defer src="${BaseUrl}common/common.js"></script>
-    <script defer src="${BaseUrl}app/application.js"></script>
-    <link rel="icon" type="image/x-icon" href="${BaseUrl}favicon.ico" sizes="any">
-    <link rel="icon" type="image/svg+xml" href="${BaseUrl}icon.svg">
-    <link rel="apple-touch-icon" type="image/png" href="${BaseUrl}apple-touch-icon.png">
-    <link rel="manifest" href="${BaseUrl}/app/manifest.json">
-    <link rel="stylesheet" href="${BaseUrl}common/theme.css">
-    <link rel="stylesheet" href="${BaseUrl}app/application.css">
+    <title>${#Title Text}</title>
+    <script defer src="${@Base Url}common/common.js"></script>
+    <script defer src="${@Base Url}app/application.js"></script>
+    <link rel="icon" type="image/x-icon" href="${@Base Url}favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="${@Base Url}icon.svg">
+    <link rel="apple-touch-icon" type="image/png" href="${@Base Url}apple-touch-icon.png">
+    <link rel="manifest" href="${@Base Url}/app/manifest.json">
+    <link rel="stylesheet" href="${@Base Url}common/theme.css">
+    <link rel="stylesheet" href="${@Base Url}app/application.css">
     <style type="text/css">
 
 
@@ -32,6 +32,11 @@
             object-fit: contain;
             object-position: center;
         }
+        
+        iframe.T {
+            color-scheme: unset !important;
+        }
+
 
         Settings-Menu {
             background-color: rgba(var(--ThemeBackgroundRGB), 0.7);
@@ -60,11 +65,30 @@
     <script>
         window.onload = async () => {
             const f = document.body.getElementsByTagName("iframe")[0];
+            let delay = 100;
+            let i = 0;
+            const fn = () => {
+                try {
+                    const t = f.contentDocument.title;
+                    if (t !== document.title)
+                        document.title = t;
+                    delay = 5000;
+                }
+                catch {
+                    ++i;
+                    if (i > 50)
+                        delay = 5000;
+                }
+                setTimeout(fn, delay);
+            };
+            fn();
 
+
+            if (!window.IsTop)
+                return;
             const settingMenus = "Theme";
-            const themeItems = WebMenu.From(await sendRequest("${BaseUrl}Api/application/GetMenu", settingMenus)).Items;
+            const themeItems = WebMenu.From(await sendRequest("${$Base Url}Api/application/GetMenu", settingMenus)).Items;
             const til = themeItems.length;
-
             const expandEmbeddedIcon = new ColorIcon("IconSettings", "IconColorThemeMain", 32, 32, "Click to show settings", ev => {
                 if (badClick(ev))
                     return;
@@ -121,29 +145,10 @@
             const sm = document.createElement("Settings-Menu");
             sm.appendChild(expandEmbeddedIcon.Element);
             document.body.appendChild(sm);
-
-            let delay = 100;
-            let i = 0;
-            const fn = () => {
-                try {
-                    const t = f.contentDocument.title;
-                    if (t !== document.title)
-                        document.title = t;
-                    delay = 5000;
-                }
-                catch
-                {
-                    ++i;
-                    if (i > 50)
-                        delay = 5000;
-                }
-                setTimeout(fn, delay);
-            };
-            fn();
         };
     </script>
 </head>
 <body>
-    <iframe src="${UrlName}" frameborder="0" allowtransparency="true"></iframe>
+    <iframe class="${@Extre Themes}" src="${@Url Name}" frameborder="0" allowtransparency="true"></iframe>
 </body>
 </html>

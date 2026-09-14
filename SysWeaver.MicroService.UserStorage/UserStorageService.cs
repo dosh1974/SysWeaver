@@ -1,13 +1,13 @@
 ﻿using ExCSS;
 using System;
 using System.Buffers;
+using System.Buffers.Text;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using SysWeaver.AI;
 using SysWeaver.Auth;
 using SysWeaver.Compression;
 using SysWeaver.Data;
@@ -31,11 +31,13 @@ namespace SysWeaver.MicroService
     [WebApiUrl("UserStorage")]
     public sealed class UserStorageService : IUserStorageService, IHttpServerModule, IDisposable, IPerfMonitored, IHaveStats
     {
+
+        readonly ServiceManager Manager;
         public UserStorageService(ServiceManager manager, UserStorageParams p)
         {
             var fu = manager.TryGet<FileUploaderService>();
             FileUploader = fu;
-
+            Manager = manager;
             p = p ?? new UserStorageParams();
             var folders = p.Folders;
             var fl = folders?.Length ?? 0;
@@ -519,7 +521,7 @@ namespace SysWeaver.MicroService
             var bc = Convert.ToBase64String(bytes);
             var filename = String.Join(".", ToSafeString(bc), ser.Extension);
             filename = await InternalStoreFile(filename, data, basePath, false, "l").ConfigureAwait(false);
-            return filename.Substring(0, filename.Length - ser.Extension.Length - 1);
+            return filename.Substring(0, filename.Length - ser.Extension.Length - 1) + ".html";
         }
 
 
@@ -581,6 +583,17 @@ namespace SysWeaver.MicroService
         }
 
 
+        static String TrimLinkFilename(String filename)
+        {
+            var extPos = filename.LastIndexOf('.');
+            if (extPos < 0)
+                return filename;
+            var extl = filename.FastToLower(extPos + 1);
+            if (!HtmlExtensions.Contains(extl))
+                return null;
+            return filename.Substring(0, extPos);
+        }
+
         ValueTuple<FileInfo, ICompType> GetUploadDiscFile(String filename)
         {
             GetDiscFile(out var ext, out var comp, out var fi, filename);
@@ -605,6 +618,9 @@ namespace SysWeaver.MicroService
             }
             return false;
         }
+
+
+        static readonly IReadOnlySet<String> HtmlExtensions = ReadOnlyData.Set(StringComparer.Ordinal, "html", "htm");
 
         bool Validate(out FileInfo fi, out Tuple<String, bool> mime, out ICompType compType, out bool isLink, out UserStorageScopes scope, HttpServerRequest context, string l, bool markAsAccessed)
         {
@@ -641,13 +657,19 @@ namespace SysWeaver.MicroService
             var scopeS = parts[1 + r];
             var rngFlags = parts[2 + r];
             var filename = Uri.UnescapeDataString(parts[4 + r]);
+            isLink = rngFlags.FastEquals("l");
+            if (isLink)
+            {
+                filename = TrimLinkFilename(filename);
+                if (filename == null)
+                    return false;
+            }
             var fname = Path.Combine(
                 paths[shardIndex],
                 userPath,
                 scopeS,
                 rngFlags,
                 filename);
-            isLink = rngFlags.FastEquals("l");
             if (isLink)
                 fname = String.Join(".", fname, Ser.Extension);
             if (!GetDiscFile(out var ext, out compType, out fi, fname))
@@ -695,17 +717,41 @@ namespace SysWeaver.MicroService
             //  Validated everything, return file data
             if (isLink)
             {
-                var linkInfo = InternalLoadLink(fi.FullName);
+                bool supportTheme = false;
                 var baseUrl = "../../../../../";
-                var newUrl = baseUrl + linkInfo.Url;
-                mime = MimeTypeMap.GetMimeFromUrl(newUrl);
+                var linkInfo = InternalLoadLink(fi.FullName);
                 int type = 0;
+                String newUrl = linkInfo.Url;
+                String title = "embed";
+                if (newUrl.FastStartsWith(BaseUrlPrefix))
+                    title = newUrl.Substring(newUrl.LastIndexOf('/') + 1);
+
+                mime = MimeTypeMap.GetMimeFromUrl(newUrl);
                 if (mime.Item1.FastStartsWith("image/"))
+                {
+                //  Handle images specially
                     type = 1;
+                    supportTheme = true;
+                }else { 
+                    var view = Manager.GetExtensionViewer("../" + newUrl);
+                    if (view != null)
+                    {
+                        //  Use extension viewer f
+                        newUrl = view;
+                        supportTheme = true;
+                    }
+                }
+                newUrl = baseUrl + newUrl;
                 var x = context.GetQuery(null);
                 if (x != null)
                     newUrl = String.Concat(newUrl, newUrl.Contains('?') ? '&' : '?', x);
-                var res = EmbeddTemplates[type].Get(x => x.FastEquals("BaseUrl") ? baseUrl : newUrl);
+
+                Dictionary<String, String> ps = new Dictionary<string, string>(8, StringComparer.Ordinal);
+                ps["Base Url"] = baseUrl;
+                ps["Url Name"] = newUrl;
+                ps["Title Text"] = title;
+                ps["Extre Themes"] = supportTheme ? "T" : "";
+                var res = EmbeddTemplates[type].Get(ps);
                 var mem = Encoding.UTF8.GetBytes(res);
                 var t = fi.LastAccessTimeUtc;
                 return new StaticMemoryHttpRequestHandler(l, "Embedded", mem, HttpServerTools.HtmlMime, EmbedComp, 30, 60, t, HttpServerTools.ToEtag(t));
@@ -1109,12 +1155,15 @@ namespace SysWeaver.MicroService
                 throw new UserNotAllowedException();
             var scope = parts[1 + r];
             var pathShard = paths[shardIndex];
+            var filename = TrimLinkFilename(parts[4 + r]);
+            if (filename == null)
+                return false;
             var fname = Path.Combine(
                 pathShard,
                 userPath,
                 scope,
                 randomGuid,
-                String.Join(".", parts[4 + r], Ser.Extension));
+                String.Concat(filename, '.', Ser.Extension));
             var fi = new FileInfo(fname);
             if (!fi.Exists)
             {

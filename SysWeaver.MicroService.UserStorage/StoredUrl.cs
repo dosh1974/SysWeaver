@@ -25,7 +25,7 @@ namespace SysWeaver.MicroService
 
         public StoredUrl(string url, long size, bool compressed, bool isPrivate, string auth, DateTime saved, DateTime lastViewed, DateTime expires, int shard)
         {
-            Url = url;
+            Url = url + ".html";
             var l = url.LastIndexOf('.');
             Size = size;
             Comp = compressed;

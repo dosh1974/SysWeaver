@@ -10,15 +10,15 @@
             background-color: transparent;
         }
     </style>
-    <title>Embed</title>
-    <script defer src="${BaseUrl}common/common.js"></script>
-    <script defer src="${BaseUrl}app/application.js"></script>
-    <link rel="icon" type="image/x-icon" href="${BaseUrl}favicon.ico" sizes="any">
-    <link rel="icon" type="image/svg+xml" href="${BaseUrl}icon.svg">
-    <link rel="apple-touch-icon" type="image/png" href="${BaseUrl}apple-touch-icon.png">
-    <link rel="manifest" href="${BaseUrl}/app/manifest.json">
-    <link rel="stylesheet" href="${BaseUrl}common/theme.css">
-    <link rel="stylesheet" href="${BaseUrl}app/application.css">
+    <title>${Title Text}</title>
+    <script defer src="${@Base Url}common/common.js"></script>
+    <script defer src="${@Base Url}app/application.js"></script>
+    <link rel="icon" type="image/x-icon" href="${@Base Url}favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="${@Base Url}icon.svg">
+    <link rel="apple-touch-icon" type="image/png" href="${@Base Url}apple-touch-icon.png">
+    <link rel="manifest" href="${@Base Url}/app/manifest.json">
+    <link rel="stylesheet" href="${@Base Url}common/theme.css">
+    <link rel="stylesheet" href="${@Base Url}app/application.css">
     <style type="text/css">
 
 
@@ -60,12 +60,13 @@
         window.onload = async () => {
             const f = createImg();
             document.body.appendChild(f);
-            f.src = "${UrlName}";
+            f.src = "${$Url Name}";
 
+            if (!window.IsTop)
+                return;
             const settingMenus = "Theme";
-            const themeItems = WebMenu.From(await sendRequest("${BaseUrl}Api/application/GetMenu", settingMenus)).Items;
+            const themeItems = WebMenu.From(await sendRequest("${$Base Url}Api/application/GetMenu", settingMenus)).Items;
             const til = themeItems.length;
-
             const expandEmbeddedIcon = new ColorIcon("IconSettings", "IconColorThemeMain", 32, 32, "Click to show settings", ev => {
                 if (badClick(ev))
                     return;
