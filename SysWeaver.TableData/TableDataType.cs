@@ -297,10 +297,14 @@ namespace SysWeaver.Data
 
                     var fi = type.GetField(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
                     int cIndex = -1;
+#if DEBUG
                     bool found = false;
+#endif//DEBUG
                     if (fi != null)
                     {
+#if DEBUG
                         found = true;
+#endif//DEBUG
                         if (!memberCols.TryGetValue(fi, out cIndex))
                             cIndex = -1;
                     }
@@ -309,7 +313,9 @@ namespace SysWeaver.Data
                         var pi = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
                         if (pi != null)
                         {
+#if DEBUG
                             found = true;
+#endif//DEBUG
                             if (!memberCols.TryGetValue(pi, out cIndex))
                                 cIndex = -1;
                         }
