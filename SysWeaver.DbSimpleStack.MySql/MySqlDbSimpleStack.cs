@@ -1,11 +1,14 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Data.Common;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -294,6 +297,128 @@ namespace SysWeaver.Db
         }
 
 
+
+        static readonly ConcurrentDictionary<long, String> CachedGetBulkUpsertCommand = new ();
+        static String[] CachedCommandArgNames;
+
+        static String GetBulkUpsertCommand(out String[] pnames, long rowCount, long columnCount)
+        {
+            var c = CachedGetBulkUpsertCommand;
+
+            var pCount = rowCount * columnCount;
+            var ps = CachedCommandArgNames;
+            var prev = ps?.Length ?? 0;
+            if (prev < pCount)
+            {
+                ps = ArrayExt.Create((int)pCount, i => i < prev ? ps[i] : "p" + i);
+                Interlocked.Exchange(ref CachedCommandArgNames, ps);
+            }
+            pnames = ps;
+            var key = rowCount;
+            key <<= 32;
+            key += columnCount;
+            if (c.TryGetValue(key, out var x))
+                return x;
+            var sb = new StringBuilder();
+            int pi = 0;
+            while (rowCount > 0)
+            {
+                --rowCount;
+                sb.Append('(');
+                for (int j = 0; j < columnCount; ++j, ++pi)
+                    sb.Append(j == 0 ? "@" : ",@").Append(ps[pi]);
+                sb.Append(rowCount == 0 ? ")" : "),");
+            }
+            x = sb.ToString();
+            c.TryAdd(key, x);
+            return x;
+        }
+
+        /// <summary>
+        /// Prepare a buld upsert, do all code side tasks.
+        /// Retrurn a function that perform the actual upsert.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="data"></param>
+        /// <param name="tableName"></param>
+        /// <param name="maxBatchSize"></param>
+        /// <param name="useInsert"></param>
+        /// <returns>A fuinction that when called will uppsert the data</returns>
+        /// <exception cref="Exception"></exception>
+        public static Func<OrmConnection, Task> PrepareBulkUpsert<T>(IReadOnlyList<T> data, String tableName = null, int maxBatchSize = 2048, bool useInsert = false)
+        {
+            var def = ModelDefinition<T>.Definition;
+            var us = GetUpsert(def, tableName);
+            var fis = def.FieldDefinitions;
+            var fl = fis.Count;
+            var l = data.Count;
+            List<ValueTuple<String, int, Object[]>> cmds = new ((l + maxBatchSize - 1) / maxBatchSize + 16);
+            String[] paramNames = null;
+            var pool = ArrayPool<Object>.Shared;
+            var sb = new StringBuilder();
+            for (int i = 0; i < l;)
+            {
+                var left = l - i;
+                var count = left;
+                if (count > maxBatchSize)
+                {
+                    count = maxBatchSize;
+                }else
+                {
+                    if (count > 256)
+                    {
+                        count = left.EnsurePow2();
+                        if (count > left)
+                            count >>= 1;
+                    }
+                }
+                sb.Clear();
+                sb.Append(us[0]);
+                sb.Append(GetBulkUpsertCommand(out paramNames, count, fl));
+                int pCount = count * fl;
+                var ps = pool.Rent(pCount);
+                int pi = 0;
+                while (count > 0)
+                {
+                    var dd = data[i];
+                    for (int j = 0; j < fl; ++j, ++pi)
+                        ps[pi] = fis[j].GetValueFn(dd);
+                    ++i;
+                    --count;
+                }
+                if (!useInsert)
+                    sb.Append(us[1]);
+                var cmd = sb.ToString();
+                cmds.Add(ValueTuple.Create(cmd, pCount, ps));
+            }
+            return new Func<OrmConnection, Task>(async con =>
+            {
+                Interlocked.Add(ref InternalRowsScheuled, l);
+                var cc = cmds.Count;
+                for (int i = 0; i < cc; ++ i)
+                {
+                    var c = cmds[i];
+                    var cmd = c.Item1;
+                    var vl = c.Item2;
+                    var values = c.Item3;
+                    var dyn = new DynamicParameters();
+                    for (int j = 0; j < vl; ++ j)
+                        dyn.Add(paramNames[j], values[j]);
+                    pool.Return(values);
+                    var cmdDef = new CommandDefinition(cmd, dyn, flags: CommandFlags.None);
+                    try
+                    {
+                        await con.ExecuteAsync(cmdDef).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new Exception("Table: " + (tableName ?? def.Name)?.ToQuoted() + " of type: " + typeof(T).CleanTypename().ToQuoted(), ex);
+                    }
+                }
+                cmds = null;
+                Interlocked.Add(ref InternalRowsCompleted, l);
+            });
+        }
 
         /// <summary>
         /// Bulk upsert

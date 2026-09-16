@@ -107,6 +107,21 @@ namespace SysWeaver
             return t;
         }
 
+        /// <summary>
+        /// Create and initiate an array with a scalar value
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="count"></param>
+        /// <param name="getValue">The function that given an index returned the value to use</param>
+        /// <returns></returns>
+        public static T[] Create<T>(int count, Func<int, T> getValue)
+        {
+            var t = GC.AllocateUninitializedArray<T>(count);
+            var p = t.AsSpan();
+            for (int i = 0; i < count; ++i)
+                p[i] = getValue(i);
+            return t;
+        }
 
 
         /// <summary>

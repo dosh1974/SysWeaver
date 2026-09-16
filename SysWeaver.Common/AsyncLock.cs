@@ -37,6 +37,44 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// Try to lock all, returns null if all locks can't be obtained
+        /// </summary>
+        /// <returns>An IDisposable that releases the locks</returns>
+        public IDisposable TryLockAll()
+        {
+            var d = A;
+            var c = d.MaxConcurrentAccess;
+            var s = d.S;
+            for (int i = 0; i < c; ++i)
+            {
+                try
+                {
+                    s.Wait(0);
+                }
+                catch (TimeoutException)
+                {
+                    while (i > 0)
+                    {
+                        --i;
+                        s.Release();
+                    }
+                    return null;
+                }
+                catch
+                {
+                    while (i > 0)
+                    {
+                        --i;
+                        s.Release();
+                    }
+                    throw;
+                }
+            }
+            return d;
+        }
+
+
+        /// <summary>
         /// Wait for a lock to be taken, for a limited time
         /// </summary>
         /// <param name="waitMilliSeconds">Number of milliseconds to wait at most</param>
