@@ -12,129 +12,121 @@ namespace SysWeaver
 
     public sealed class CompactCharDictionary<T> : IEnumerable<KeyValuePair<Char, T>>
     {
-        public int Count => Data?.Length ?? 0;
+        public int Count => K?.Length ?? 0;
 
         public void Add(Char key, T value)
         {
-            var d = Data;
-            if (d == null)
+            var k = K;
+            var v = V;
+            if (k == null)
             {
-                d = Alloc(1);
-                d[0] = new E(key, value);
-                Data = d;
+
+                (k, v) = Alloc(1);
+                k[0] = key;
+                v[0] = value;
+                K = k;
+                V = v;
                 return;
             }
-            var dl = d.Length;
-            var n = Alloc(dl + 1);
-            for (int i = 0; i < dl; ++i)
-                n[i] = d[i];
-            n[dl] = new E(key, value);
-            Array.Sort(n);
-            Free(d);
-            Data = n;
+            var dl = k.Length;
+            var (nk, nv) = Alloc(dl + 1);
+            int o = 0;
+            int i;
+            for (i = 0; i < dl; ++i, ++o)
+            {
+                var kk = k[i];
+                if (kk > key)
+                {
+                    nk[o] = key;
+                    nv[o] = value;
+                    ++o;
+                    break;
+                }
+                nk[o] = kk;
+                nv[o] = v[i];
+            }
+            for (; i < dl; ++i, ++o)
+            {
+                nk[o] = k[i];
+                nv[o] = v[i];
+            }
+            if (o == dl)
+            {
+                nk[o] = key;
+                nv[o] = value;
+            }
+            //Array.Sort(n, EComparer.Instance);
+            Free((k, v));
+            K = nk;
+            V = nv;
         }
 
         public bool TryGetValue(Char key, out T value)
         {
-            var d = Data;
-            if (d == null)
+            var k = K;
+            if (k == null)
             {
-                value = default(T); 
+                value = default; 
                 return false;
             }
-            var dl = d.Length;
+            var dl = k.Length;
             if (dl < 8)
             {
                 for (int i = 0; i < dl; ++ i)
                 {
-                    var e = d[i];
-                    if (e.Key == key)
+                    var e = k[i];
+                    if (e == key)
                     {
-                        value = e.Value;
+                        value = V[i];
                         return true;
                     }
                 }
-                value = default(T);
+                value = default;
                 return false;
             }
-            var fi = BinarySearch.Find(0, dl, key, x => d[x].Key);
+            var fi = BinarySearch.Find(k, 0, dl, key);
             if (fi < 0)
             {
-                value = default(T);
+                value = default;
                 return false;
             }
-            value = d[fi].Value;
+            value = V[fi];
             return true;
         }
 
         public IEnumerator<KeyValuePair<char, T>> GetEnumerator()
         {
-            var d = Data;
-            if (d != null)
+            var k = K;
+            if (k != null)
             {
-                foreach (var x in d)
-                    yield return new KeyValuePair<Char, T>(x.Key, x.Value);
+                var l = k.Length;
+                var v = V;
+                for (int i = 0; i < l; ++i)
+                    yield return new KeyValuePair<Char, T>(k[i], v[i]);
             }
         }
 
         IEnumerator IEnumerable.GetEnumerator()
             => GetEnumerator();
 
-        sealed class E : IEquatable<E>, IComparable<E>
-        {
-            public override string ToString()
-                 => String.Concat('\'', Key, "': ", Value);
-
-            public override bool Equals(object obj)
-                => Equals(obj as E);
-
-            public override int GetHashCode()
-                => Key;
-
-            public bool Equals(E other)
-            {
-                if (other == null)
-                    return false;
-                if (other.Key == Key)
-                    throw new Exception("Key already exist!");
-                return false;
-            }
-
-            public int CompareTo(E other)
-                => Key - other.Key;
-
-            public readonly T Value;
-            public readonly Char Key;
-
-            public E(char key, T value)
-            {
-                Key = key;
-                Value = value;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        E[] Data;
-
+        Char[] K;
+        T[] V;
 
         #region Array allocator
 
         sealed class ArrayCache
         {
-            public E[] Alloc(int len)
+            public ValueTuple<Char[], T[]> Alloc(int size)
             {
                 if (S.TryPop(out var e))
                 {
                     Interlocked.Decrement(ref Count);
                     return e;
                 }
-                e = new E[len + 1];
-                return e;
+                return (GC.AllocateUninitializedArray<char>(size), GC.AllocateUninitializedArray<T>(size));
             }
 
-            public void Free(E[] data)
+            public void Free(ValueTuple<Char[], T[]> data)
             {
                 if (Interlocked.Increment(ref Count) > 1024)
                 {
@@ -145,28 +137,41 @@ namespace SysWeaver
             }
 
             int Count;
-            readonly ConcurrentStack<E[]> S = new ConcurrentStack<E[]>();
-        }
+            readonly ConcurrentStack<ValueTuple<Char[], T[]>> S = new ConcurrentStack<ValueTuple<Char[], T[]>>();
 
-        static E[] Alloc(int size)
-        {
-            --size;
-            if (size < 32)
-                return Cache[size].Alloc(size);
-            return new E[size + 1];
-        }
-
-        static void Free(E[] d)
-        {
-            int l = d.Length - 1;
-            if (l < 32)
+            public void Flush()
             {
-                Cache[l].Free(d);
-                return;
+                var s = S;
+                while (s.TryPop(out var _))
+                    Interlocked.Decrement(ref Count);
             }
         }
 
-        static readonly ArrayCache[] Cache = Enumerable.Range(0, 32).Select(x => new ArrayCache()).ToArray();
+        const int CacheCount = 64;
+
+        static ValueTuple<Char[], T[]> Alloc(int size)
+            => 
+            size <= CacheCount 
+            ? 
+            Cache[size].Alloc(size) 
+            : 
+            (GC.AllocateUninitializedArray<char>(size), GC.AllocateUninitializedArray<T>(size))
+            ;
+
+        static void Free(ValueTuple<Char[], T[]> d)
+        {
+            int size = d.Item1.Length;
+            if (size <= CacheCount)
+                Cache[size].Free(d);
+        }
+
+        static readonly ArrayCache[] Cache = ArrayExt.Create(CacheCount + 1, x => new ArrayCache());
+
+
+        public static void Flush()
+        {
+            Cache.Process(x => x.Flush());
+        }
 
 
         #endregion // Array allocator
@@ -187,6 +192,10 @@ namespace SysWeaver
     public sealed class CompactStringTree : IStringTree
     {
         CompactCharDictionary<CompactStringTree> Nodes;
+
+        public static void Flush() => CompactCharDictionary<CompactStringTree>.Flush();
+
+
         bool IsLeaf;
 
 #if DEBUG

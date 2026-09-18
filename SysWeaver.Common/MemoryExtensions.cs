@@ -70,24 +70,23 @@ namespace SysWeaver
         {
             public static readonly Cmp<T> Instance = new Cmp<T>();
 
-            public unsafe int Compare(ReadOnlyMemory<T> x, ReadOnlyMemory<T> y)
+            public int Compare(ReadOnlyMemory<T> x, ReadOnlyMemory<T> y)
             {
-                var l = x.Length;
-                var c = l - y.Length;
-                if (c != 0)
-                    return c;
-                using var px = x.Pin();
-                using var py = y.Pin();
-                var dx = (Byte*)px.Pointer;
-                var dy = (Byte*)py.Pointer;
-                l *= Marshal.SizeOf<T>();
-                for (int i = 0; i < l; ++ i)
+                var xl = x.Length;
+                var yl = y.Length;
+                var cl = xl < yl ? xl : yl;
+                var sx = x.Span;
+                var sy = y.Span;
+                var cmp = Comparer<T>.Default;
+                for (int i = 0; i < cl; ++ i)
                 {
-                    c = dx[i] - dy[i];
+                    var xx = sx[i];
+                    var yy = sy[i];
+                    var c = cmp.Compare(xx, yy);
                     if (c != 0)
                         return c;
                 }
-                return 0;
+                return xl - yl;
             }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
