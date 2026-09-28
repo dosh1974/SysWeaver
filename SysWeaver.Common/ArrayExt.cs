@@ -884,6 +884,46 @@ namespace SysWeaver
         }
 
 
+
+        /// <summary>
+        /// List1 and List2 must be sorted and contain no diplicates!
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list1"></param>
+        /// <param name="list2"></param>
+        /// <param name="comparer"></param>
+        /// <returns></returns>
+        public static List<T> IntersectSorted<T>(this IReadOnlyList<T> list1, IReadOnlyList<T> list2, IComparer<T> comparer = default)
+        {
+            var result = new List<T>(Math.Min(list1.Count, list2.Count));
+            int i = 0, j = 0;
+            comparer = comparer ?? Comparer<T>.Default;
+            while (i < list1.Count && j < list2.Count)
+            {
+                // Ordinal comparison is significantly faster than culture-aware comparisons
+                int cmp = comparer.Compare(list1[i], list2[j]);
+
+                if (cmp == 0)
+                {
+                    result.Add(list1[i]);
+                    i++;
+                    j++;
+                }
+                else if (cmp < 0)
+                {
+                    i++; // Advance the smaller item
+                }
+                else
+                {
+                    j++; // Advance the smaller item
+                }
+            }
+
+            return result;
+        }
+
+
+
     }
 
 }

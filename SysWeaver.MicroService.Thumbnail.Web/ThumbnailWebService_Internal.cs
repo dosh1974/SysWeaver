@@ -69,7 +69,7 @@ namespace SysWeaver.MicroService
 
             internal bool IsCapturing;
 
-            public async Task doIt(double duration, double fps, String error)
+            public async Task doIt(double duration, double fps, String error, double loadTime)
             {
                 if (Dead)
                     return;
@@ -104,6 +104,7 @@ namespace SysWeaver.MicroService
                     }
                     Duration = duration;
                     Fps = fps;
+                    LoadTime = loadTime;
                 }
                 catch
                 {
@@ -137,6 +138,7 @@ namespace SysWeaver.MicroService
             public double Duration;
             public double Fps;
 
+            public double LoadTime;
 
             public String Error;
 

@@ -248,6 +248,7 @@ namespace SysWeaver.MicroService
                     n.Height = b.Height;
                     n.Duration = a.Duration;
                     n.Fps = a.Fps;
+                    n.LoadTime = a.LoadTime;
                 }
                 if (a.Error != null)
                 {
@@ -400,8 +401,8 @@ namespace SysWeaver.MicroService
         /// <param name="context"></param>
         /// <returns></returns>
         [WebApi]
-        [WebApiClientCache(30)]
-        [WebApiRequestCache(25, WebApiCaches.Globally)]
+        //[WebApiClientCache(30)]
+        //[WebApiRequestCache(25, WebApiCaches.Globally)]
         [WebApiCompression("")]
         public Task<ScreenshotImageResponse> GetMediaEffect(GetMediaEffectRequest r, HttpServerRequest context)
             => InternalGetMedia(r, context);

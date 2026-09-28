@@ -1,7 +1,9 @@
 ﻿using System;
+using SysWeaver.Net;
 
 namespace SysWeaver.MicroService
 {
+
     public class GetGoogleMapRequest
     {
 

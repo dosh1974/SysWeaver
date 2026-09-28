@@ -141,9 +141,12 @@ namespace SysWeaver.AI
             var tools = Tools;
             foreach (var x in Tools)
                 d.Add(x.Value.Tool);
-            options.AllowParallelToolCalls = SupportParallelToolCalls;
-            if ((options.Tools.Count > 0) && CanReason)
-                options.ReasoningEffortLevel = ChatReasoningEffortLevel.None;
+            if (options.Tools.Count > 0)
+            {
+                options.AllowParallelToolCalls = SupportParallelToolCalls;
+                if (CanReason)
+                    options.ReasoningEffortLevel = ChatReasoningEffortLevel.None;
+            }
             return options;
         }
 
@@ -327,9 +330,10 @@ namespace SysWeaver.AI
         /// <param name="text">The query text</param>
         /// <param name="debug">An optional obejct used to track tool calls etc</param>
         /// <param name="onUsage">An optional function to call when token in/out usage is changed</param>
+        /// <param name="extraData">optional attachements</param>
         /// <returns>The Ai response, typically MD encoded text</returns>
         /// <exception cref="Exception"></exception>
-        public async Task<String> Query(String text, OpenAiDebugMessage debug = null, Func<String, long, long, Task> onUsage = null)
+        public async Task<String> Query(String text, OpenAiDebugMessage debug = null, Func<String, long, long, Task> onUsage = null, IReadOnlyList<ValueTuple<ChatMessageContentPart, String>> extraData = null)
         {
             using var _a = Monitor?.Track(nameof(Query));
             List<ChatMessage> messages = new List<ChatMessage>(2);
@@ -337,6 +341,10 @@ namespace SysWeaver.AI
             if (s != null)
                 messages.Add(s);
             var um = new UserChatMessage(text);
+            var haveData = (extraData?.Count ?? 0) > 0;
+            if (haveData)
+                foreach (var x in extraData)
+                    um.Content.Add(x.Item1);
             messages.Add(um);
             var options = CreateOptions();
             long totalIn = 0;

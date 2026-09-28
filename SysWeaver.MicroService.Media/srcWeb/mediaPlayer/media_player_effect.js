@@ -29,6 +29,7 @@ class MediaPlayerParamsEffect {
     CustomAnimX = null;
     CustomAnimY = null;
     CustomAnimZ = null;
+    Offset = 0;
 }
 
 class MediaPlayerEffect {
@@ -718,6 +719,8 @@ class MediaPlayerEffect {
 
     OnRender = null;
 
+    static ZeroDate = new Date("2001-01-01T11:37:42Z");
+
     static render(t, animTime) {
         if (!t.Program)
             return;
@@ -792,7 +795,7 @@ class MediaPlayerEffect {
 
         const gl = t.GL;
         gl.viewport(0, 0, w, h);
-        t.UniformTime(time * p.Speed);
+        t.UniformTime(time * p.Speed + p.Offset);
         t.UniformResolution(w, h);
 
 
@@ -838,8 +841,8 @@ class MediaPlayerEffect {
                 }
             }
         }
-
-        t.UniformDate(new Date());
+        const date = p.Speed > 0 ? new Date() : MediaPlayerEffect.ZeroDate;
+        t.UniformDate(date);
         const draw = () => {
             gl.drawArrays(gl.TRIANGLES, 0, 3);
 

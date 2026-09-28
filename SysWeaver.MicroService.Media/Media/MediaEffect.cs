@@ -20,13 +20,24 @@ namespace SysWeaver.MicroService.Media
         public int Height = 1080;
 
         /// <summary>
-        /// Speed of the effect
+        /// Speed of the effect:
+        /// time = RealTime * Speed + Offset
         /// </summary>
-        [EditRange(0.01, 100)]
+        [EditRange(-100, 100)]
         [EditDefault(1)]
         [EditSlider]
         [EditHideIf(nameof(Static), true)]
         public double Speed = 1;
+
+
+        /// <summary>
+        /// Time offset of the effect:
+        /// time = RealTime * Speed + Offset
+        /// </summary>
+        [EditDefault(0)]
+        [EditSlider]
+        [EditHideIf(nameof(Static), true)]
+        public double Offset = 0;
 
         /// <summary>
         /// If the effect is adjusting it's size dynamically and this is true, make sure that the rendered dimension doesn't exceed Width and Height
@@ -126,7 +137,7 @@ namespace SysWeaver.MicroService.Media
         public virtual void Validate()
         {
             var v = Speed;
-            Speed = v < 0.01 ? 0.01 : v > 100 ? 100 : v;
+            Speed = v < -100 ? -100 : v > 100 ? 100 : v;
             var w = Width;
             Width = w < 144 ? 144 : w > 7680 ? 7680 : w;
             var h = Height;
@@ -135,7 +146,7 @@ namespace SysWeaver.MicroService.Media
             DpiScale = d < 0.1 ? 0.1 : d > 1.0 ? 1.0 : d;
         }
 
-        public override int GetHashCode() => HashCode.Combine(Speed, Width, Height, DpiScale, Texture, ScrollId, MouseId,
+        public override int GetHashCode() => ObjectHash.Mix(Speed, Offset, Width, Height, DpiScale, Texture, ScrollId, MouseId,
             (LimitSize ? 1 : 0) |
             (DpiAdjust ? 2 : 0) |
             (Static ? 4 : 0) |
@@ -160,6 +171,8 @@ namespace SysWeaver.MicroService.Media
             if (Height != other.Height)
                 return false;
             if (Speed != other.Speed)
+                return false;
+            if (Offset != other.Offset)
                 return false;
             if (LimitSize != other.LimitSize)
                 return false;

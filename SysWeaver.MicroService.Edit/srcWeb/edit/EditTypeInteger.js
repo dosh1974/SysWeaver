@@ -1,18 +1,25 @@
 ﻿class EditTypeInteger {
 
-    constructor(signed, byteSize) {
+    constructor(signed, byteSize, nullable, literalMin, literalMax) {
         this.Signed = signed;
         this.ByteSize = byteSize;
-        //  Type min and max
-        let typeMax = Math.pow(2, byteSize * 8);
-        let typeMin = 0;
-        if (signed) {
-            typeMax /= 2;
-            typeMin = -typeMax;
-            --typeMax;
+
+        this.Nullable = nullable;
+        if (literalMax) {
+            this.TypeMin = literalMin;
+            this.TypeMax = literalMax;
+        } else {
+            //  Type min and max
+            let typeMax = Math.pow(2, byteSize * 8);
+            let typeMin = 0;
+            if (signed) {
+                typeMax /= 2;
+                typeMin = -typeMax;
+                --typeMax;
+            }
+            this.TypeMin = typeMin;
+            this.TypeMax = typeMax;
         }
-        this.TypeMin = typeMin;
-        this.TypeMax = typeMax;
     }
 
     IsOfType(obj) {
@@ -101,7 +108,7 @@
         //  Min
         let min = member.Min;
         if (Edit.IsValid(min))
-            min = Math.trunc(parseFloat("" + min));
+            min = Math.trunc(parseInt("" + min));
         const parsedMin = min;
         if (Edit.IsValid(min))
             min = min > typeMin ? min : typeMin;
@@ -115,13 +122,13 @@
         //  Max
         let max = member.Max;
         if (Edit.IsValid(max))
-            max = Math.trunc(parseFloat("" + max));
+            max = Math.trunc(parseInt("" + max));
         const parsedMax = max;
         if (Edit.IsValid(max))
             max = max < typeMax ? max : typeMax;
-
         else
             max = typeMax;
+
         if (max < typeMin)
             max = typeMin;
         if (max < min)

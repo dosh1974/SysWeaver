@@ -259,6 +259,7 @@ namespace SysWeaver.Media
         public Double Duration;
         public String IconFile;
         public double Fps;
+        public double LoadTime;
         public String Desc;
     }
 }

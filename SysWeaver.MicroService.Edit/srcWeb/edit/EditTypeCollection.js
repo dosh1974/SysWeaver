@@ -149,7 +149,7 @@
         if (!vals)
             vals = container.createVal();
 
-        const isReadOnly = options.ReadOnly || ((member.Flags & TypeMemberFlags.ReadOnly) != 0);
+        const isReadOnly = editContext.ReadOnly || options.ReadOnly || ((member.Flags & TypeMemberFlags.ReadOnly) != 0);
         const isFixed = (min >= max) || isReadOnly;
         const isIndexed = (member.Flags & TypeMemberFlags.Indexed) != 0;
 
@@ -220,6 +220,7 @@
 
         const newOpt = options.Clone();
         newOpt.Title = !Edit.IsPrimitive(elementType);
+        newOpt.ReadOnly |= isReadOnly;
 
         async function reOrder(values) {
             //  Need to change keys

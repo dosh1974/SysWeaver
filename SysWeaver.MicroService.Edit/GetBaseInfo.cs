@@ -20,6 +20,7 @@ namespace SysWeaver.MicroService.EditInternal
             IsReadOnly = isReadOnly;
             Name = name;
         }
+
         public readonly String Name;
 #pragma warning disable CS0649
         public readonly bool HaveDefault;

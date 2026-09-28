@@ -931,7 +931,7 @@ async function mediaEditMain() {
     PageLoaded();
 }
 
-class SsHask {
+class SsHack {
     isSupported() {
         console.log("isSupported()");
     }
@@ -940,8 +940,8 @@ class SsHask {
         console.log("setSize(" + width + ", " + height + ")");
     }
 
-    doIt(duration, fps, error) {
-        console.log("doIt(" + duration + ", " + fps + ", " + error + ")");
+    doIt(duration, fps, error, loadDuration) {
+        console.log("doIt(" + duration + ", " + fps + ", " + error + ", " + loadDuration + ")");
 
     }
 }
@@ -1165,9 +1165,10 @@ async function mediaPreviewMain() {
             }
         }
 
-        const shost = window["ScreenShotHost"] ?? GetHo() ?? (ps.has("hack") ? new SsHask() : null);
+        const shost = window["ScreenShotHost"] ?? GetHo() ?? (ps.has("hack") ? new SsHack() : null);
         if (shost) {
             await shost.isSupported();
+            window["ScreenShotHost"] = shost;
             target.classList.add("NoFade");
         }
         const fill = ps.has('fill') || shost;
@@ -1283,7 +1284,7 @@ async function mediaPreviewMain() {
         }
         catch (e) {
             if (shost)
-                await shost.doIt(0, 0, "" + e);
+                await shost.doIt(0, 0, "" + e, 0);
             Fail(e);
         }
         if (shost) {
@@ -1299,7 +1300,7 @@ async function mediaPreviewMain() {
             await player.Seek(pos);
             await MediaPlayerTools.delay(200);
             let fps = tot > 0 ? (1000.0 * count / tot) : 0;
-            await shost.doIt(player.Duration ?? 0, fps, null);
+            await shost.doIt(player.Duration ?? 0, fps, null, player.CompilationTime ?? 0);
         }
 
     }
