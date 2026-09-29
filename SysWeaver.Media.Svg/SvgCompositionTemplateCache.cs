@@ -28,10 +28,10 @@ namespace SysWeaver.Media
         public readonly TimeSpan Keep;
 
 
-        public Task<String> GetResolvedSvgFile(TextTemplate nameTemplate, IReadOnlyDictionary<String, String> vars, String basePath = null, Func<String, Task<ReadOnlyMemory<Byte>>> altReader = null, String color = null)
+        public Task<String> GetResolvedSvgFile(TextTemplate nameTemplate, IReadOnlyDictionary<String, String> vars, String basePath = null, SvgTools.FileReader altReader = null, String color = null)
             => GetResolvedSvgFile(nameTemplate.Get(k => vars.TryGetValue(k.FastToLower(), out var v) ? v : null), vars, basePath, altReader, color);
 
-        public async Task<String> GetResolvedSvgFile(String name, IReadOnlyDictionary<String, String> vars, String basePath = null, Func<String, Task<ReadOnlyMemory<Byte>>> altReader = null, String color = null)
+        public async Task<String> GetResolvedSvgFile(String name, IReadOnlyDictionary<String, String> vars, String basePath = null, SvgTools.FileReader altReader = null, String color = null)
         {
             var svgTemp = await SvgCache.GetOrUpdateAsync(name, n => LoadSvgFile(n, basePath, altReader)).ConfigureAwait(false);
             if (svgTemp == null)
@@ -48,22 +48,22 @@ namespace SysWeaver.Media
             });
         }
 
-        public ValueTask<String> GetBitmapFile(TextTemplate nameTemplate, IReadOnlyDictionary<String, String> vars, String basePath = null, Func<String, Task<ReadOnlyMemory<Byte>>> altReader = null)
+        public ValueTask<String> GetBitmapFile(TextTemplate nameTemplate, IReadOnlyDictionary<String, String> vars, String basePath = null, SvgTools.FileReader altReader = null)
             => GetBitmapFile(nameTemplate.Get(k => vars.TryGetValue(k.FastToLower(), out var v) ? v : null), basePath, altReader);
 
-        public ValueTask<String> GetBitmapFile(String name, String basePath = null, Func<String, Task<ReadOnlyMemory<Byte>>> altReader = null)
+        public ValueTask<String> GetBitmapFile(String name, String basePath = null, SvgTools.FileReader altReader = null)
             => BitmapCache.GetOrUpdateAsync(name, n => LoadBitmapFile(n, basePath, altReader));
 
 
-        async Task<TextTemplate> LoadSvgFile(String name, String basePath, Func<String, Task<ReadOnlyMemory<Byte>>> altReader)
+        async Task<TextTemplate> LoadSvgFile(String name, String basePath, SvgTools.FileReader altReader)
         {
             String svg;
             if (name[0] == '$')
             {
                 var res = await altReader(name.Substring(1)).ConfigureAwait(false);
-                if (res.IsEmpty)
+                if (res.Item1.IsEmpty)
                     return null;
-                svg = Encoding.UTF8.GetString(res.Span);
+                svg = Encoding.UTF8.GetString(res.Item1.Span);
             }
             else
             {
@@ -113,17 +113,18 @@ namespace SysWeaver.Media
             { "\"#fff\"", "\"[Col15]\"" },
         }.Freeze();
 
-        async Task<String> LoadBitmapFile(String name, String basePath, Func<String, Task<ReadOnlyMemory<Byte>>> altReader)
+        async Task<String> LoadBitmapFile(String name, String basePath, SvgTools.FileReader altReader)
         {
             var ext = name.Substring(name.LastIndexOf('.'));
             var mime = MimeTypeMap.GetMimeType(ext)?.Item1;
-            String data = String.Concat("data:", mime, ";base64,");
             if (name[0] == '$')
             {
                 var res = await altReader(name.Substring(1)).ConfigureAwait(false);
-                if (res.IsEmpty)
+                if (res.Item1.IsEmpty)
                     return null;
-                data += Convert.ToBase64String(res.Span);
+                if (mime.Contains("charset="))
+                    return String.Concat("data:", mime, ",", Encoding.UTF8.GetString(res.Item1.Span));
+                return String.Concat("data:", mime, ";base64,", Convert.ToBase64String(res.Item1.Span));
             }
             else
             {
@@ -131,9 +132,10 @@ namespace SysWeaver.Media
                 if (!File.Exists(name))
                     return null;
                 using var mem = FileReadOnlyMemory.Read(name);
-                data += Convert.ToBase64String(mem.Memory.Span);
+                if (mime.Contains("charset="))
+                    return String.Concat("data:", mime, ",", Encoding.UTF8.GetString(mem.Memory.Span));
+                return String.Concat("data:", mime, ";base64,", Convert.ToBase64String(mem.Memory.Span));
             }
-            return data;
         }
 
         public IEnumerable<Stats> GetStats(String system, String prefix = "")

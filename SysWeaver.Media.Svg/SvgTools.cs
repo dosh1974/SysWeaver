@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Globalization;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace SysWeaver.Media
 {
@@ -8,6 +9,9 @@ namespace SysWeaver.Media
 
     public static class SvgTools
     {
+
+        public delegate Task<ValueTuple<ReadOnlyMemory<Byte>, String>> FileReader(String filename);
+
         public static readonly IFormatProvider Format = CultureInfo.InvariantCulture;
         public static Func<double, String> GetFormat(int decimalCount)
         {
