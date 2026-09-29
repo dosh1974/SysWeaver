@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Dapper;
 using SimpleStack.Orm;
@@ -271,6 +273,20 @@ namespace SysWeaver.Db
 
         public OrmConnection Get() => F.OpenConnection();
         public Task<OrmConnection> GetAsync() => F.OpenConnectionAsync();
+
+
+
+        /// <summary>
+        /// Get all rows in a table
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="tableName"></param>
+        /// <returns></returns>
+        public async Task<List<T>> GetAll<T>(String tableName = null)
+        {
+            using var c = await F.OpenConnectionAsync().ConfigureAwait(false);
+            return (await (String.IsNullOrEmpty(tableName) ? c.SelectAsync<T>() : c.SelectAsync<T>(x => x.From(tableName))).ConfigureAwait(false)).ToList();
+        }
 
 
         /// <summary>
