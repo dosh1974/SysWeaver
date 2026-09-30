@@ -253,6 +253,50 @@ namespace SysWeaver
 
         static readonly SemiFrozenDictionary<Type, String> CachedCleanAssemblyQualifiedTypename = new SemiFrozenDictionary<Type, string>();
 
+
+
+
+        /// <summary>
+        /// Same as GetField but includes inherited non public and static fields
+        /// </summary>
+        /// <param name="type"></param>
+        /// <param name="name"></param>
+        /// <param name="flags"></param>
+        /// <returns></returns>
+        public static FieldInfo GetFieldWithBase(this Type type, String name, BindingFlags flags)
+        {
+            for(; ;)
+            {
+                var i = type.GetField(name, flags);
+                if (i != null)
+                    return i;
+                if (type == typeof(Object))
+                    return null;
+                type = type.BaseType;
+            }
+        }
+
+        /// <summary>
+        /// Same as GetProperty but includes inherited non public and static fields
+        /// </summary>
+        /// <param name="type"></param>
+        /// <param name="name"></param>
+        /// <param name="flags"></param>
+        /// <returns></returns>
+        public static PropertyInfo GetPropertyWithBase(this Type type, String name, BindingFlags flags)
+        {
+            for (; ; )
+            {
+                var i = type.GetProperty(name, flags);
+                if (i != null)
+                    return i;
+                if (type == typeof(Object))
+                    return null;
+                type = type.BaseType;
+            }
+        }
+
+
     }
 
 }

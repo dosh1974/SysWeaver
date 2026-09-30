@@ -295,7 +295,7 @@ namespace SysWeaver.Data
                 {
                     var name = t[i];
 
-                    var fi = type.GetField(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
+                    var fi = type.GetFieldWithBase(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
                     int cIndex = -1;
 #if DEBUG
                     bool found = false;
@@ -310,7 +310,7 @@ namespace SysWeaver.Data
                     }
                     else
                     {
-                        var pi = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
+                        var pi = type.GetPropertyWithBase(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
                         if (pi != null)
                         {
 #if DEBUG

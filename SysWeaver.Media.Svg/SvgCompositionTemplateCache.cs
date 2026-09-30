@@ -63,6 +63,8 @@ namespace SysWeaver.Media
                 var res = await altReader(name.Substring(1)).ConfigureAwait(false);
                 if (res.Item1.IsEmpty)
                     return null;
+                if (!res.Item2.FastEquals(MimeTypeMap.Svg))
+                    return null;
                 svg = Encoding.UTF8.GetString(res.Item1.Span);
             }
             else
