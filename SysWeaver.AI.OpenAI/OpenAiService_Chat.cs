@@ -132,6 +132,14 @@ namespace SysWeaver.AI
             return s;
         }
 
+        /// <summary>
+        /// Create a query session (supporting SystemPrompt, tools etc)
+        /// </summary>
+        /// <param name="model">The model to use.</param>
+        /// <returns></returns>
+        public OpenAiQuerySession CreateQuerySession(String model)
+            => CreateQuerySession(new OpenAiSessionParams { Model = model });
+
 
         /// <summary>
         /// Simple chat complete, only use to test server connection etc.

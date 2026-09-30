@@ -77,11 +77,20 @@ namespace SysWeaver.AI
         sealed class QuerySession : OpenAiQuerySession, IDisposable
         {
             public QuerySession(ConcurrentStack<QuerySession> s, ChatClient c, String model, IOpenAiToolCache toolCache = null, PerfMonitor monitor = null)
-                : base(c, model, toolCache, monitor)
+                : base(c, new OpenAiSessionParams
+                {
+                    Model = model
+                }, toolCache, monitor)
             {
                 S = s;
             }
-            
+
+            public QuerySession(ConcurrentStack<QuerySession> s, ChatClient c, OpenAiSessionParams p, IOpenAiToolCache toolCache = null, PerfMonitor monitor = null)
+                : base(c, p, toolCache, monitor)
+            {
+                S = s;
+            }
+
             ConcurrentStack<QuerySession> S;
 
             public void Dispose()
