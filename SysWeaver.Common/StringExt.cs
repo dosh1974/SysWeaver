@@ -54,8 +54,7 @@ namespace SysWeaver
             while (l > 0)
             {
                 --l;
-                var c = source[l];
-                if (c != Char.ToLowerInvariant(c))
+                if (!source[l].FastIsLowerOrNonLetter())
                     return false;
             }
             return true;
@@ -89,12 +88,14 @@ namespace SysWeaver
         /// <returns>Culture invariant lower case string</returns>
         public static String FastStartToLower(this String str, int length)
         {
+            if (length >= str.Length)
+                return str.FastToLower();
             var s = str.AsSpan();
-            if (length == str.Length)
-                return Ti.ToLower(str);
             var isLower = InternalFastIsLower(s, length);
             return isLower ? new string(s[..length]) : String.Create(length, s, LowerCasedSubString);
         }
+
+
 
 
         static readonly SpanAction<Char, ReadOnlySpan<Char>> LowerCasedSubString = (str, source) =>
@@ -114,18 +115,20 @@ namespace SysWeaver
                 ++i;
                 var d = source[i];
                 ++i;
-                p[0] = Char.ToLowerInvariant(a);
-                p[1] = Char.ToLowerInvariant(b);
-                p[2] = Char.ToLowerInvariant(c);
-                p[3] = Char.ToLowerInvariant(d);
+                p[0] = a.FastToLower();
+                p[1] = b.FastToLower();
+                p[2] = c.FastToLower();
+                p[3] = d.FastToLower();
                 p = p[4..];
             }
             while (i < l)
             {
-                str[i] = Char.ToLowerInvariant(source[i]);
+                str[i] = source[i].FastToLower();
                 ++i;
             }
         };
+
+        static readonly SpanAction<Char, ReadOnlySpan<Char>> LowerCaseSpan = (dst, src) => src.ToLowerInvariant(dst);
 
         /// <summary>
         /// Make a trimmed culture invariant lower case version of a string
@@ -134,22 +137,11 @@ namespace SysWeaver
         /// <returns>A trimmed culture invariant lower cased string</returns>
         public static String FastTrimToLower(this String str)
         {
-            var s = str.AsSpan();
-            var sl = s.Length;
-            int ss = 0;
-            int ee = sl;
-            while ((ss < ee) && Char.IsWhiteSpace(s[ss]))
-                ++ ss;
-            if (ss >= ee)
-                return String.Empty;
-            while ((ee > ss) && Char.IsWhiteSpace(s[ee - 1]))
-                -- ee;
-            if ((ss == 0) && (ee == sl))
+            var t = str.AsSpan().Trim();
+            var l = t.Length;
+            if (l == str.Length)
                 return Ti.ToLower(str);
-            s = s[ss..];
-            var l = ee - ss;
-            var isLower = InternalFastIsLower(s, l);
-            return isLower ? new String(s[..l]) : String.Create(l, s, LowerCasedSubString);
+            return l <= 0 ? String.Empty : String.Create(l, t, LowerCaseSpan);
         }
 
         /// <summary>
@@ -159,19 +151,11 @@ namespace SysWeaver
         /// <returns>A trimmed (at start) culture invariant lower cased string</returns>
         public static String FastTrimStartToLower(this String str)
         {
-            var s = str.AsSpan();
-            int ss = 0;
-            int ee = s.Length;
-            while ((ss < ee) && Char.IsWhiteSpace(s[ss]))
-                ++ss;
-            if (ss >= ee)
-                return String.Empty;
-            if (ss == 0)
+            var t = str.AsSpan().TrimStart();
+            var l = t.Length;
+            if (l == str.Length)
                 return Ti.ToLower(str);
-            s = s[ss..];
-            var l = ee - ss;
-            var isLower = InternalFastIsLower(s, l);
-            return isLower ? new String(s) : String.Create(l, s, LowerCasedSubString);
+            return l <= 0 ? String.Empty : String.Create(l, t, LowerCaseSpan);
         }
 
         /// <summary>
@@ -181,20 +165,12 @@ namespace SysWeaver
         /// <returns>A trimmed (at end) culture invariant lower cased string</returns>
         public static String FastTrimEndToLower(this String str)
         {
-            var s = str.AsSpan();
-            var sl = s.Length;
-            var ee = sl;
-            while ((ee > 0) && Char.IsWhiteSpace(s[ee - 1]))
-                --ee;
-            if (ee <= 0)
-                return String.Empty;
-            if (ee == sl)
+            var t = str.AsSpan().TrimEnd();
+            var l = t.Length;
+            if (l == str.Length)
                 return Ti.ToLower(str);
-            var isLower = InternalFastIsLower(s, ee);
-            return isLower ? new String(s[..ee]) : String.Create(ee, s, LowerCasedSubString);
+            return l <= 0 ? String.Empty : String.Create(l, t, LowerCaseSpan);
         }
-
-
 
         /// <summary>
         /// Make a trimmed culture invariant lower case version of a string
@@ -204,22 +180,11 @@ namespace SysWeaver
         /// <returns>A trimmed culture invariant lower cased string</returns>
         public static String FastTrimToLower(this String str, Char trimChar)
         {
-            var s = str.AsSpan();
-            var sl = s.Length;
-            int ss = 0;
-            var ee = sl;
-            while ((ss < ee) && (s[ss] == trimChar))
-                ++ss;
-            if (ss >= ee)
-                return String.Empty;
-            while ((ee > ss) && (s[ee - 1] == trimChar))
-                --ee;
-            if (ss == 0)
+            var t = str.AsSpan().Trim(trimChar);
+            var l = t.Length;
+            if (l == str.Length)
                 return Ti.ToLower(str);
-            s = s[ss..];
-            var l = ee - ss;
-            var isLower = InternalFastIsLower(s, l);
-            return isLower ? new String(s) : String.Create(l, s, LowerCasedSubString);
+            return l <= 0 ? String.Empty : String.Create(l, t, LowerCaseSpan);
         }
 
         /// <summary>
@@ -230,19 +195,11 @@ namespace SysWeaver
         /// <returns>A trimmed (at start) culture invariant lower cased string</returns>
         public static String FastTrimStartToLower(this String str, Char trimChar)
         {
-            var s = str.AsSpan();
-            int ss = 0;
-            var ee = s.Length;
-            while ((ss < ee) && (s[ss] == trimChar))
-                ++ss;
-            if (ss >= ee)
-                return String.Empty;
-            if (ss == 0)
+            var t = str.AsSpan().TrimStart(trimChar);
+            var l = t.Length;
+            if (l == str.Length)
                 return Ti.ToLower(str);
-            s = s[ss..];
-            var l = ee - ss;
-            var isLower = InternalFastIsLower(s, l);
-            return isLower ? new String(s) : String.Create(l, s, LowerCasedSubString);
+            return l <= 0 ? String.Empty : String.Create(l, t, LowerCaseSpan);
         }
 
         /// <summary>
@@ -253,17 +210,11 @@ namespace SysWeaver
         /// <returns>A trimmed (at end) culture invariant lower cased string</returns>
         public static String FastTrimEndToLower(this String str, Char trimChar)
         {
-            var s = str.AsSpan();
-            var sl = s.Length;
-            var ee = sl;
-            while ((ee > 0) && (s[ee - 1] == trimChar))
-                --ee;
-            if (ee <= 0)
-                return String.Empty;
-            if (ee == sl)
+            var t = str.AsSpan().TrimEnd(trimChar);
+            var l = t.Length;
+            if (l == str.Length)
                 return Ti.ToLower(str);
-            var isLower = InternalFastIsLower(s, ee);
-            return isLower ? new String(s[..ee]) : String.Create(ee, s, LowerCasedSubString);
+            return l <= 0 ? String.Empty : String.Create(l, t, LowerCaseSpan);
         }
 
         /// <summary>
@@ -316,8 +267,7 @@ namespace SysWeaver
             while (l > 0)
             {
                 --l;
-                var c = source[l];
-                if (c != Char.ToUpperInvariant(c))
+                if (!source[l].FastIsUpperOrNonLetter())
                     return false;
             }
             return true;
@@ -376,18 +326,20 @@ namespace SysWeaver
                 ++i;
                 var d = source[i];
                 ++i;
-                p[0] = Char.ToUpperInvariant(a);
-                p[1] = Char.ToUpperInvariant(b);
-                p[2] = Char.ToUpperInvariant(c);
-                p[3] = Char.ToUpperInvariant(d);
+                p[0] = a.FastToUpper();
+                p[1] = b.FastToUpper();
+                p[2] = c.FastToUpper();
+                p[3] = d.FastToUpper();
                 p = p[4..];
             }
             while (i < l)
             {
-                str[i] = Char.ToUpperInvariant(source[i]);
+                str[i] = source[i].FastToUpper();
                 ++i;
             }
         };
+
+        static readonly SpanAction<Char, ReadOnlySpan<Char>> UpperCaseSpan = (dst, src) => src.ToUpperInvariant(dst);
 
         /// <summary>
         /// Make a trimmed culture invariant upper case version of a string
@@ -396,22 +348,11 @@ namespace SysWeaver
         /// <returns>A trimmed culture invariant upper cased string</returns>
         public static String FastTrimToUpper(this String str)
         {
-            var s = str.AsSpan();
-            var sl = s.Length;
-            int ss = 0;
-            int ee = sl;
-            while ((ss < ee) && Char.IsWhiteSpace(s[ss]))
-                ++ss;
-            if (ss >= ee)
-                return String.Empty;
-            while ((ee > ss) && Char.IsWhiteSpace(s[ee - 1]))
-                --ee;
-            if ((ss == 0) && (ee == sl))
+            var t = str.AsSpan().Trim();
+            var l = t.Length;
+            if (l == str.Length)
                 return Ti.ToUpper(str);
-            s = s[ss..];
-            var l = ee - ss;
-            var isUpper = InternalFastIsUpper(s, l);
-            return isUpper ? new String(s[..l]) : String.Create(l, s, UpperCasedSubString);
+            return l <= 0 ? String.Empty : String.Create(l, t, UpperCaseSpan);
         }
 
         /// <summary>
@@ -421,19 +362,11 @@ namespace SysWeaver
         /// <returns>A trimmed (at start) culture invariant upper cased string</returns>
         public static String FastTrimStartToUpper(this String str)
         {
-            var s = str.AsSpan();
-            int ss = 0;
-            int ee = s.Length;
-            while ((ss < ee) && Char.IsWhiteSpace(s[ss]))
-                ++ss;
-            if (ss >= ee)
-                return String.Empty;
-            if (ss == 0)
+            var t = str.AsSpan().TrimStart();
+            var l = t.Length;
+            if (l == str.Length)
                 return Ti.ToUpper(str);
-            s = s[ss..];
-            var l = ee - ss;
-            var isUpper = InternalFastIsUpper(s, l);
-            return isUpper ? new String(s) : String.Create(l, s, UpperCasedSubString);
+            return l <= 0 ? String.Empty : String.Create(l, t, UpperCaseSpan);
         }
 
         /// <summary>
@@ -443,20 +376,12 @@ namespace SysWeaver
         /// <returns>A trimmed (at end) culture invariant upper cased string</returns>
         public static String FastTrimEndToUpper(this String str)
         {
-            var s = str.AsSpan();
-            var sl = s.Length;
-            var ee = sl;
-            while ((ee > 0) && Char.IsWhiteSpace(s[ee - 1]))
-                --ee;
-            if (ee <= 0)
-                return String.Empty;
-            if (ee == sl)
+            var t = str.AsSpan().TrimEnd();
+            var l = t.Length;
+            if (l == str.Length)
                 return Ti.ToUpper(str);
-            var isUpper = InternalFastIsUpper(s, ee);
-            return isUpper ? new String(s[..ee]) : String.Create(ee, s, UpperCasedSubString);
+            return l <= 0 ? String.Empty : String.Create(l, t, UpperCaseSpan);
         }
-
-
 
         /// <summary>
         /// Make a trimmed culture invariant upper case version of a string
@@ -466,22 +391,11 @@ namespace SysWeaver
         /// <returns>A trimmed culture invariant upper cased string</returns>
         public static String FastTrimToUpper(this String str, Char trimChar)
         {
-            var s = str.AsSpan();
-            var sl = s.Length;
-            int ss = 0;
-            var ee = sl;
-            while ((ss < ee) && (s[ss] == trimChar))
-                ++ss;
-            if (ss >= ee)
-                return String.Empty;
-            while ((ee > ss) && (s[ee - 1] == trimChar))
-                --ee;
-            if (ss == 0)
+            var t = str.AsSpan().Trim(trimChar);
+            var l = t.Length;
+            if (l == str.Length)
                 return Ti.ToUpper(str);
-            s = s[ss..];
-            var l = ee - ss;
-            var isUpper = InternalFastIsUpper(s, l);
-            return isUpper ? new String(s) : String.Create(l, s, UpperCasedSubString);
+            return l <= 0 ? String.Empty : String.Create(l, t, UpperCaseSpan);
         }
 
         /// <summary>
@@ -492,19 +406,11 @@ namespace SysWeaver
         /// <returns>A trimmed (at start) culture invariant upper cased string</returns>
         public static String FastTrimStartToUpper(this String str, Char trimChar)
         {
-            var s = str.AsSpan();
-            int ss = 0;
-            var ee = s.Length;
-            while ((ss < ee) && (s[ss] == trimChar))
-                ++ss;
-            if (ss >= ee)
-                return String.Empty;
-            if (ss == 0)
+            var t = str.AsSpan().TrimStart(trimChar);
+            var l = t.Length;
+            if (l == str.Length)
                 return Ti.ToUpper(str);
-            s = s[ss..];
-            var l = ee - ss;
-            var isUpper = InternalFastIsUpper(s, l);
-            return isUpper ? new String(s) : String.Create(l, s, UpperCasedSubString);
+            return l <= 0 ? String.Empty : String.Create(l, t, UpperCaseSpan);
         }
 
         /// <summary>
@@ -515,17 +421,11 @@ namespace SysWeaver
         /// <returns>A trimmed (at end) culture invariant upper cased string</returns>
         public static String FastTrimEndToUpper(this String str, Char trimChar)
         {
-            var s = str.AsSpan();
-            var sl = s.Length;
-            var ee = sl;
-            while ((ee > 0) && (s[ee - 1] == trimChar))
-                --ee;
-            if (ee <= 0)
-                return String.Empty;
-            if (ee == sl)
+            var t = str.AsSpan().TrimEnd(trimChar);
+            var l = t.Length;
+            if (l == str.Length)
                 return Ti.ToUpper(str);
-            var isUpper = InternalFastIsUpper(s, ee);
-            return isUpper ? new String(s[..ee]) : String.Create(ee, s, UpperCasedSubString);
+            return l <= 0 ? String.Empty : String.Create(l, t, UpperCaseSpan);
         }
 
         /// <summary>
