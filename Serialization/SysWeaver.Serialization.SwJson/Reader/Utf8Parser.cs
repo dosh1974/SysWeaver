@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace SysWeaver.Serialization.SwJson.Reader
@@ -170,6 +171,14 @@ namespace SysWeaver.Serialization.SwJson.Reader
             if (u >= 128)
                 ReadException.ThrowOnlyAsciiInParameter(u);
 #endif//DEBUG
+            //  The common case: no escapes (vectorized search)
+            var rem = new ReadOnlySpan<Byte>(d, (int)(e - d));
+            var i = rem.IndexOfAny((Byte)u, (Byte)'\\');
+            if ((i >= 0) && (rem[i] == u))
+            {
+                d += i + 1;
+                return false;
+            }
             bool gotEsc = false;
             while (d < e)
             {
@@ -193,6 +202,21 @@ namespace SysWeaver.Serialization.SwJson.Reader
         public static void GetUtf8RangeNoLast(ref ReadOnlySpan<Byte> ret, ref Byte* d, Byte* e, Func<Char, bool> until)
         {
             var s = d;
+            var tbl = Utf8JsonParser.GetEndTable(until);
+            if (tbl != null)
+            {
+                ref var t = ref MemoryMarshal.GetArrayDataReference(tbl);
+                while (d < e)
+                {
+                    if (Unsafe.Add(ref t, *d) != 0)
+                    {
+                        ret = new ReadOnlySpan<byte>(s, (int)(d - s));
+                        return;
+                    }
+                    ++d;
+                }
+                ReadException.ThrowEndOfData();
+            }
             while (d < e)
             {
                 uint t = *d;
@@ -241,6 +265,24 @@ namespace SysWeaver.Serialization.SwJson.Reader
         public static void GetAsciiRangeNoLast(ref ReadOnlySpan<Byte> ret, ref Byte* d, Byte* e, Func<Char, bool> until)
         {
             var s = d;
+            var tbl = Utf8JsonParser.GetEndTable(until);
+            if (tbl != null)
+            {
+                ref var t = ref MemoryMarshal.GetArrayDataReference(tbl);
+                while (d < e)
+                {
+                    uint c = *d;
+                    if (Unsafe.Add(ref t, c) != 0)
+                        break;
+#if VALIDATE
+                    if (c >= 128)
+                        ReadException.ThrowUnexpectedCharacter();
+#endif//VALIDATE
+                    ++d;
+                }
+                ret = new ReadOnlySpan<byte>(s, (int)(d - s));
+                return;
+            }
             while (d < e)
             {
                 uint t = *d;
@@ -269,6 +311,16 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// </summary>
         public static String ReadUtf8String(ref Char[] buf, ref Byte* d, Byte* e, Char until)
         {
+            var index = ReadUtf8Chars(ref buf, ref d, e, until);
+            return index <= 0 ? String.Empty : new String(buf, 0, index);
+        }
+
+        /// <summary>
+        /// Read chars into the buffer until the supplied char is found, position is set to after the found char
+        /// </summary>
+        /// <returns>The number of chars read</returns>
+        public static int ReadUtf8Chars(ref Char[] buf, ref Byte* d, Byte* e, Char until)
+        {
             var bufLen = buf.Length;
             int index = 0;
             while (d < e)
@@ -287,7 +339,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                     ++index;
                 }
             }
-            return index <= 0 ? String.Empty : String.Create(index, buf, WriteUtf8StringAction);
+            return index;
         }
 
         /// <summary>
@@ -300,13 +352,24 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <returns>The string read</returns>
         public static String ReadUtf8StringNoLast(ref Char[] buf, ref Byte* d, Byte* e, Func<Char, bool> until)
         {
+            var index = ReadUtf8CharsNoLast(ref buf, ref d, e, until);
+            return index <= 0 ? String.Empty : new String(buf, 0, index);
+        }
+
+        /// <summary>
+        /// Read chars into the buffer until a char is found that meets the end condition, position is set to before the char that met the condition
+        /// </summary>
+        /// <returns>The number of chars read</returns>
+        public static int ReadUtf8CharsNoLast(ref Char[] buf, ref Byte* d, Byte* e, Func<Char, bool> until)
+        {
             var bufLen = buf.Length;
             int index = 0;
+            var tbl = Utf8JsonParser.GetEndTable(until);
             while (d < e)
             {
                 var last = d;
                 var c = ReadUtf8Char(out var s, ref d, e);
-                if (until(c))
+                if (tbl != null ? ((c < 256) && (tbl[c] != 0)) : until(c))
                 {
                     d = last;
                     break;
@@ -322,7 +385,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                     ++index;
                 }
             }
-            return index <= 0 ? String.Empty : String.Create(index, buf, WriteUtf8StringAction);
+            return index;
         }
 
         /// <summary>
@@ -360,6 +423,24 @@ namespace SysWeaver.Serialization.SwJson.Reader
         public static String ReadAsciiStringNoLast(ref Byte* d, Byte* e, Func<Char, bool> until)
         {
             var s = d;
+            var tbl = Utf8JsonParser.GetEndTable(until);
+            if (tbl != null)
+            {
+                ref var t = ref MemoryMarshal.GetArrayDataReference(tbl);
+                while (d < e)
+                {
+                    uint c = *d;
+                    if (Unsafe.Add(ref t, c) != 0)
+                        break;
+#if VALIDATE
+                    if (c >= 128)
+                        ReadException.ThrowUnexpectedCharacter();
+#endif//VALIDATE
+                    ++d;
+                }
+                var tl = (int)(d - s);
+                return tl <= 0 ? String.Empty : String.Create(tl, new IntPtr(s), WriteAciiStringAction);
+            }
             while (d < e)
             {
                 var c = *d;
@@ -390,8 +471,41 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <returns>The string read</returns>
         public static int ReadEscapedUtf8CharArray(ref Char[] buf, ref Byte* d, Byte* e, Char until)
         {
-            var bufLen = buf.Length;
             int index = 0;
+            if (until < 128)
+            {
+                //  Find the next end char or escape (vectorized), transcode everything before it
+                var u = (Byte)until;
+                for (; ; )
+                {
+                    var rem = new ReadOnlySpan<Byte>(d, (int)(e - d));
+                    var i = rem.IndexOfAny(u, (Byte)'\\');
+                    var chunk = i < 0 ? rem : rem.Slice(0, i);
+                    if (!chunk.IsEmpty)
+                    {
+                        //  Max one char per byte
+                        var need = index + chunk.Length + 2;
+                        while (buf.Length < need)
+                            Grow(ref buf);
+                        System.Text.Unicode.Utf8.ToUtf16(chunk, buf.AsSpan(index), out _, out var written, true, true);
+                        index += written;
+                    }
+                    if (i < 0)
+                    {
+                        d = e;
+                        return index;
+                    }
+                    d += i + 1;
+                    if (rem[i] == u)
+                        return index;
+                    var c = Esc(ref d, e);
+                    if (index + 1 >= buf.Length)
+                        Grow(ref buf);
+                    buf[index] = c;
+                    ++index;
+                }
+            }
+            var bufLen = buf.Length;
             while (d < e)
             {
                 var c = ReadUtf8Char(out var s, ref d, e);
@@ -426,7 +540,24 @@ namespace SysWeaver.Serialization.SwJson.Reader
         public static String ReadEscapedUtf8String(ref Char[] buf, ref Byte* d, Byte* e, Char until)
         {
             var index = ReadEscapedUtf8CharArray(ref buf, ref d, e, until);
-            return index <= 0 ? String.Empty : String.Create(index, buf, WriteUtf8StringAction);
+            return index <= 0 ? String.Empty : new String(buf, 0, index);
+        }
+
+        /// <summary>
+        /// Read a json string (after the opening quote), position is set to after the closing quote.
+        /// Strings without escapes (the common case) are decoded directly from the data.
+        /// </summary>
+        public static String ReadJsonString(ref Char[] buf, ref Byte* d, Byte* e)
+        {
+            var rem = new ReadOnlySpan<Byte>(d, (int)(e - d));
+            var i = rem.IndexOfAny((Byte)'"', (Byte)'\\');
+            if ((i >= 0) && (rem[i] == '"'))
+            {
+                var s = i == 0 ? String.Empty : UTF8.GetString(d, i);
+                d += i + 1;
+                return s;
+            }
+            return ReadEscapedUtf8String(ref buf, ref d, e, '"');
         }
 
         /// <summary>
@@ -471,6 +602,39 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <param name="until">The char that stops the reading</param>
         /// <returns>The data read</returns>
         public static Byte[] ReadBase64Bytes(ref Byte* d, Byte* e, Char until)
+        {
+            var rem = new ReadOnlySpan<Byte>(d, (int)(e - d));
+            var end = rem.IndexOf((Byte)until);
+            if ((end >= 0) && ((end & 3) == 0))
+            {
+                var data = rem.Slice(0, end);
+                var bad = data.IndexOfAnyInRange((Byte)128, (Byte)255);
+                if (bad >= 0)
+                    ReadException.ThrowInvalidBase64Char(data[bad]);
+                if (end == 0)
+                {
+                    d += 1;
+                    return [];
+                }
+                int pad = 0;
+                if (data[end - 1] == '=')
+                {
+                    ++pad;
+                    if (data[end - 2] == '=')
+                        ++pad;
+                }
+                var blen = ((end * 3) >> 2) - pad;
+                var dta = GC.AllocateUninitializedArray<Byte>(blen);
+                if ((System.Buffers.Text.Base64.DecodeFromUtf8(data, dta, out var consumed, out var written) == OperationStatus.Done) && (consumed == end) && (written == blen))
+                {
+                    d += end + 1;
+                    return dta;
+                }
+            }
+            return ReadBase64BytesSlow(ref d, e, until);
+        }
+
+        static Byte[] ReadBase64BytesSlow(ref Byte* d, Byte* e, Char until)
         {
             var s = d;
             while (d < e)

@@ -28,7 +28,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                     return cv;
                 if (t.IsEnum)
                 {
-                    cv = new ReadTypeCache(t, Expression.Call(EnumParseT.MakeGenericMethod(t), Expression.Call(MethodReadUtf8MaybeQuoted, TempCall), ExpFalse));
+                    cv = new ReadTypeCache(t, Expression.Call(MethodReadEnum.MakeGenericMethod(t), TempCall));
                     //                    cv = new TypeCache(t, false, v => Expression.Call(EnumParse, Expression.Constant(t), v));
                     cache.TryAdd(t, cv);
                     return cv;
@@ -192,6 +192,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
         static readonly MethodInfo MethodIsNull = Helper.SafeGetMethod(JsonParserType, nameof(Utf8JsonParser.IsNullState), BindingFlags.Static | BindingFlags.Public);
 
         static readonly MethodInfo MethodReadUtf8MaybeQuoted = Helper.SafeGetMethod(JsonParserType, nameof(Utf8JsonParser.ReadUtf8MaybeQuoted), BindingFlags.Static | BindingFlags.Public);
+        static readonly MethodInfo MethodReadEnum = Helper.SafeGetMethod(JsonParserType, nameof(Utf8JsonParser.ReadEnum), BindingFlags.Static | BindingFlags.Public);
 
         static readonly MethodInfo MethodToUtf8StringEscaped = Helper.SafeGetMethod(JsonParserType, nameof(Utf8JsonParser.ToUtf8String), BindingFlags.Static | BindingFlags.Public);
 

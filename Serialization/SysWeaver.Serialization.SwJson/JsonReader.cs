@@ -2,7 +2,10 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq.Expressions;
+using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using SysWeaver.Serialization.SwJson.Reader;
 
 namespace SysWeaver.Serialization.SwJson
@@ -12,6 +15,7 @@ namespace SysWeaver.Serialization.SwJson
     /// <summary>
     /// Methods for creating an object given some json
     /// </summary>
+    [SkipLocalsInit]
     public unsafe static class JsonReader
     {
         /// <summary>
@@ -199,19 +203,48 @@ namespace SysWeaver.Serialization.SwJson
             }
             if (Utf8Parser.SkipWhite(ref d, e))
                 ReadException.ThrowExpectedArray();
-            var ld = new List<T>(1024);
+            //  The items are read into a pooled buffer, only the final array is allocated
+            var pool = ArrayPool<T>.Shared;
+            var buf = pool.Rent(16);
+            try
+            {
+                var count = ReadItems(state, ref buf);
+                if (count <= 0)
+                    return [];
+                var a = GC.AllocateUninitializedArray<T>(count);
+                buf.AsSpan(0, count).CopyTo(a);
+                return a;
+            }
+            finally
+            {
+                pool.Return(buf, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            }
+        }
+
+        /// <summary>
+        /// Read the items of an array (after the '['), into a pooled buffer that is replaced by a larger one as needed
+        /// </summary>
+        /// <returns>The number of items read</returns>
+        static int ReadItems<T>(JsonParserState state, ref T[] buf)
+        {
+            ref var d = ref state.D;
+            var e = state.E;
             var createTyped = ReadTyped<T>.Create;
-            for (; ;)
+            int count = 0;
+            for (; ; )
             {
                 if ((Char)(*d) == ']')
                 {
                     ++d;
                     break;
                 }
-                ld.Add(createTyped(state, Utf8JsonParser.EndOnArray));
+                if (count == buf.Length)
+                    buf = GrowRented(buf, count);
+                buf[count] = ReadItem(state, createTyped);
+                ++count;
                 if (Utf8Parser.SkipWhite(ref d, e))
                     ReadException.ThrowExpectedEndOfArray();
-                c = Utf8Parser.ReadAsciiChar(ref d, e);
+                var c = Utf8Parser.ReadAsciiChar(ref d, e);
                 if (c == ']')
                     break;
                 if (c != ',')
@@ -219,14 +252,49 @@ namespace SysWeaver.Serialization.SwJson
                 if (Utf8Parser.SkipWhite(ref d, e))
                     ReadException.ThrowExpectedEndOfArray();
             }
-            var count = ld.Count;
-            if (count <= 0)
-                return [];
-//            var a = new T[count];
-            var a = GC.AllocateUninitializedArray<T>(count);
-            for (int i = 0; i < count; ++i)
-                a[i] = ld[i];
-            return a;
+            return count;
+        }
+
+        static readonly bool Is64BitProcess = Environment.Is64BitProcess;
+
+        /// <summary>
+        /// Read an array item, common primitives are parsed directly (the same code as the generated creator, without the delegate call)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static T ReadItem<T>(JsonParserState state, ReadTyped<T>.TypedCreator create)
+        {
+            var endOn = Utf8JsonParser.EndOnArray;
+            if (typeof(T) == typeof(Int32))
+            {
+                if (Is64BitProcess)
+                    return (T)(Object)(Int32)SpanParsers.ToInt64(Utf8JsonParser.ReadAsciiReadOnlyMemoryMaybeQuoted(state, endOn));
+            }
+            else if (typeof(T) == typeof(Int64))
+            {
+                return (T)(Object)SpanParsers.ToInt64(Utf8JsonParser.ReadAsciiReadOnlyMemoryMaybeQuoted(state, endOn));
+            }
+            else if (typeof(T) == typeof(Double))
+            {
+                return (T)(Object)SpanParsers.ToDouble(Utf8JsonParser.ReadAsciiReadOnlyMemoryMaybeQuoted(state, endOn));
+            }
+            else if (typeof(T) == typeof(Boolean))
+            {
+                return (T)(Object)SpanParsers.ToBoolean(Utf8JsonParser.ReadAsciiReadOnlyMemoryMaybeQuoted(state, endOn));
+            }
+            else if (typeof(T) == typeof(String))
+            {
+                return (T)(Object)Utf8JsonParser.ReadQuotedString(state);
+            }
+            return create(state, endOn);
+        }
+
+        static T[] GrowRented<T>(T[] buf, int count)
+        {
+            var pool = ArrayPool<T>.Shared;
+            var nb = pool.Rent(count << 1);
+            buf.AsSpan(0, count).CopyTo(nb);
+            pool.Return(buf, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            return nb;
         }
 
         internal static ICollection<T> CreateCollection<T, C>(JsonParserState state, Func<Char, bool> endOn)
@@ -244,30 +312,61 @@ namespace SysWeaver.Serialization.SwJson
             }
             if (Utf8Parser.SkipWhite(ref d, e))
                 ReadException.ThrowExpectedArray();
-            var ld = new List<T>();
-            var createTyped = ReadTyped<T>.Create;
-            for (; ; )
+            //  The items are read into a pooled buffer, then the collection is created with the exact size
+            var pool = ArrayPool<T>.Shared;
+            var buf = pool.Rent(16);
+            try
             {
-                if ((Char)(*d) == ']')
-                {
-                    ++d;
-                    break;
-                }
-                ld.Add(createTyped(state, Utf8JsonParser.EndOnArray));
-                if (Utf8Parser.SkipWhite(ref d, e))
-                    ReadException.ThrowExpectedEndOfArray();
-                c = Utf8Parser.ReadAsciiChar(ref d, e);
-                if (c == ']')
-                    break;
-                if (c != ',')
-                    ReadException.ThrowExpectedValueSeparator();
-                if (Utf8Parser.SkipWhite(ref d, e))
-                    ReadException.ThrowExpectedEndOfArray();
+                var count = ReadItems(state, ref buf);
+                return CollectionFactory<T, C>.Create(buf, count);
             }
-            var ct = typeof(C);
-            if (ct == typeof(List<T>))
-                return ld;
-            return (ICollection<T>)Activator.CreateInstance(ct, ld);
+            finally
+            {
+                pool.Return(buf, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            }
+        }
+
+        /// <summary>
+        /// Creates a collection from the items read
+        /// </summary>
+        static class CollectionFactory<T, C>
+        {
+            public static readonly Func<T[], int, ICollection<T>> Create = GetCreate();
+
+            static ICollection<T> CreateList(T[] items, int count)
+            {
+                var l = new List<T>(count);
+                CollectionsMarshal.SetCount(l, count);
+                items.AsSpan(0, count).CopyTo(CollectionsMarshal.AsSpan(l));
+                return l;
+            }
+
+            static ICollection<T> CreateHashSet(T[] items, int count)
+            {
+                //  Same as new HashSet<T>(list) (that sizes the set to the number of items and adds them in order)
+                var h = new HashSet<T>(count);
+                for (int i = 0; i < count; ++i)
+                    h.Add(items[i]);
+                return h;
+            }
+
+            static Func<T[], int, ICollection<T>> GetCreate()
+            {
+                var ct = typeof(C);
+                if (ct == typeof(List<T>))
+                    return CreateList;
+                if (ct == typeof(HashSet<T>))
+                    return CreateHashSet;
+                //  The constructor that Activator.CreateInstance(ct, List<T>) would use (compiled instead of reflection)
+                var lt = typeof(List<T>);
+                var ctor = ct.GetConstructor(BindingFlags.Instance | BindingFlags.Public, Type.DefaultBinder, [lt], null);
+                if (ctor == null)
+                    return (items, count) => (ICollection<T>)Activator.CreateInstance(ct, CreateList(items, count));
+                var p = Expression.Parameter(lt, "l");
+                var ctorParam = ctor.GetParameters()[0].ParameterType;
+                var create = Expression.Lambda<Func<List<T>, ICollection<T>>>(Expression.Convert(Expression.New(ctor, ctorParam == lt ? p : Expression.Convert(p, ctorParam)), typeof(ICollection<T>)), p).Compile();
+                return (items, count) => create((List<T>)CreateList(items, count));
+            }
         }
 
         #endregion//Arrays
@@ -431,14 +530,8 @@ namespace SysWeaver.Serialization.SwJson
         {
             ref var d = ref state.D;
             var e = state.E;
-            var t = typeof(T);
-            if (t.IsGenericType)
-            {
-                var args = t.GetGenericArguments();
-                if (args.Length == 2)
-                    if (typeof(IDictionary<,>).MakeGenericType(args).IsAssignableFrom(t))
-                        return NewAndPopulateDictionary<T>(key, state, endOn);
-            }
+            if (DictionaryCheck<T>.IsDictionary)
+                return NewAndPopulateDictionary<T>(key, state, endOn);
             var members = ReadTyped<T>.GetMembers(out var v);
             for (; ; )
             {
@@ -469,6 +562,25 @@ namespace SysWeaver.Serialization.SwJson
         }
 
         #endregion // Object
+
+        /// <summary>
+        /// True if the type is a generic dictionary (computed once per type)
+        /// </summary>
+        static class DictionaryCheck<T>
+        {
+            public static readonly bool IsDictionary = Get();
+
+            static bool Get()
+            {
+                var t = typeof(T);
+                if (!t.IsGenericType)
+                    return false;
+                var args = t.GetGenericArguments();
+                if (args.Length != 2)
+                    return false;
+                return typeof(IDictionary<,>).MakeGenericType(args).IsAssignableFrom(t);
+            }
+        }
 
         static readonly Utf8Range TypeKey = Utf8Range.Create("$type");
         static readonly Utf8Range ValueKey = Utf8Range.Create("$value");
@@ -511,8 +623,13 @@ namespace SysWeaver.Serialization.SwJson
 #endif//VERBOSE
                 if (Utf8Parser.SkipWhite(ref d, e))
                     return default(T);
-                ReadTypeCache.Get(typeof(T));
-                return ReadTyped<T>.Create(state, Utf8JsonParser.EndOnObject);
+                var create = ReadTyped<T>.Create;
+                if (create == null)
+                {
+                    ReadTypeCache.Get(typeof(T));
+                    create = ReadTyped<T>.Create;
+                }
+                return create(state, Utf8JsonParser.EndOnObject);
 #if VERBOSE
             }
             catch (Exception ex)

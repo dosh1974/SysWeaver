@@ -43,7 +43,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 }
                 else
                 {
-                    New = Expression.Lambda<Func<T>>(Expression.Convert(Expression.Call(ReadTypeCache.MethodGetUninitializedObject, Expression.Constant(t)), t)).Compile();
+                    New = NewUninitialized(t);
                 }
                 var ti = new Dictionary<Utf8Range, TypedAssigner>();
                 var o = Expression.Parameter(t.MakeByRefType(), "v");
@@ -81,6 +81,16 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 obj = New();
                 return i;
             }
+        }
+
+        /// <summary>
+        /// Create an instance without calling a constructor (default for a value type, avoids boxing)
+        /// </summary>
+        static Func<T> NewUninitialized(Type t)
+        {
+            if (t.IsValueType)
+                return Expression.Lambda<Func<T>>(Expression.Default(t)).Compile();
+            return Expression.Lambda<Func<T>>(Expression.Convert(Expression.Call(ReadTypeCache.MethodGetUninitializedObject, Expression.Constant(t)), t)).Compile();
         }
 
         static Func<T> New;
@@ -146,7 +156,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
             }
             else
             {
-                n = Expression.Lambda<Func<T>>(Expression.Convert(Expression.Call(ReadTypeCache.MethodGetUninitializedObject, Expression.Constant(t)), t)).Compile();
+                n = NewUninitialized(t);
             }
             New = n;
             return n();
@@ -164,7 +174,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
             }
             else
             {
-                n = Expression.Lambda<Func<T>>(Expression.Convert(Expression.Call(ReadTypeCache.MethodGetUninitializedObject, Expression.Constant(t)), t)).Compile();
+                n = NewUninitialized(t);
             }
             New = n;
             return n();

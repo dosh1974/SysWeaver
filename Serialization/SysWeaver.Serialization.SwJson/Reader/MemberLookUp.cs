@@ -24,16 +24,16 @@ namespace SysWeaver.Serialization.SwJson.Reader
                     throw new Exception("Invalid number of entries!");
 #endif//DEBUG
                 var f = values.First();
-                Range = f.Key;
+                Key = f.Key.Mem.ToArray();
                 Value = f.Value;
             }
 
-            readonly Utf8Range Range;
+            readonly Byte[] Key;
             readonly T Value;
 
             public bool TryGetValue(JsonParserState state, ReadOnlySpan<Byte> key, out T value)
             {
-                if (Range.Equals(key))
+                if (key.SequenceEqual(Key))
                 {
                     value = Value;
                     return true;
@@ -56,21 +56,22 @@ namespace SysWeaver.Serialization.SwJson.Reader
         {
             public ListLookup(ICollection<KeyValuePair<Utf8Range, T>> values)
             {
-                Values = values.ToArray();
+                Keys = values.Select(x => x.Key.Mem.ToArray()).ToArray();
+                Values = values.Select(x => x.Value).ToArray();
             }
 
-            readonly KeyValuePair<Utf8Range, T>[] Values;
+            readonly Byte[][] Keys;
+            readonly T[] Values;
 
             public bool TryGetValue(JsonParserState state, ReadOnlySpan<Byte> key, out T value)
             {
-                var v = Values;
-                var l = v.Length;
+                var k = Keys;
+                var l = k.Length;
                 for (int i = 0; i < l; ++ i)
                 {
-                    var t = v[i];
-                    if (t.Key.Mem.Span.SequenceEqual(key))
+                    if (key.SequenceEqual(k[i]))
                     { 
-                        value = t.Value;
+                        value = Values[i];
                         return true;
                     }
                 }

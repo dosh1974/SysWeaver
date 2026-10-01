@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 namespace SysWeaver.Serialization.SwJson.Writer
 {
 
+    [SkipLocalsInit]
     unsafe public ref struct BufferWriter : IDisposable
     {
         public bool TypeIsOptional = false;
@@ -21,10 +22,26 @@ namespace SysWeaver.Serialization.SwJson.Writer
             Offset = startOffset;
         }
 
+        /// <summary>
+        /// Use a buffer that is already pinned by the caller (using fixed, cheaper than a GCHandle), the buffer must stay pinned until Dispose is called.
+        /// If the buffer grows, the new buffer is pinned (and freed) by the writer.
+        /// </summary>
+        /// <param name="pinnedData">The buffer (pinned)</param>
+        /// <param name="pinnedPtr">The address of the first byte in the buffer (null for an empty buffer)</param>
+        /// <param name="startOffset">The offset to start writing at</param>
+        internal BufferWriter(Byte[] pinnedData, Byte* pinnedPtr, int startOffset)
+        {
+            Data = pinnedData;
+            DataPtr = pinnedPtr;
+            S = pinnedData.Length;
+            Offset = startOffset;
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Dispose()
         {
-            PinHandle.Free();
+            if (PinHandle.IsAllocated)
+                PinHandle.Free();
             Data = null;
         }
 
@@ -59,26 +76,42 @@ namespace SysWeaver.Serialization.SwJson.Writer
                 throw new Exception("Not enough data enured before write!");
         }
 
-        void Grow(int end)
+        /// <summary>
+        /// Below this capacity the buffer grows linearly (needed size + 4 KB), above it the capacity is doubled.
+        /// Linear growth is faster for small buffers (no large object heap allocations), doubling avoids O(n^2) copying for big ones.
+        /// </summary>
+        const int LinearGrowthLimit = 64 * 1024;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        void Grow(long end)
         {
-            end += (4096 + 4095);
-            end &= ~4095;
-            var b = GC.AllocateUninitializedArray<Byte>(end);
+            if (end > Array.MaxLength)
+                throw new OutOfMemoryException("Can't grow the buffer to " + end + " bytes, the max size is " + Array.MaxLength + " bytes");
+            long size = end + 4096;
+            var s = S;
+            if (s >= LinearGrowthLimit)
+                size = Math.Max(size, (long)s << 1);
+            size = (size + 4095) & ~4095L;
+            if (size > Array.MaxLength)
+                size = Array.MaxLength;
+            var b = GC.AllocateUninitializedArray<Byte>((int)size);
             var o = Offset;
             if (o > 0)
                 Data.AsSpan<Byte>().Slice(0, o).CopyTo(b.AsSpan<Byte>().Slice(0, o));
             Data = b;
-            PinHandle.Free();
+            if (PinHandle.IsAllocated)
+                PinHandle.Free();
             PinHandle = GCHandle.Alloc(b, GCHandleType.Pinned);
             DataPtr = (Byte*)PinHandle.AddrOfPinnedObject().ToPointer();
-            S = end;
+            S = (int)size;
         }
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Ensure(int size)
         {
-            var end = Offset + size;
+            // Using a long so that Offset + size can't overflow
+            var end = (long)Offset + size;
             if (end > S)
                 Grow(end);
         }

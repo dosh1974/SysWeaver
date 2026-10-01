@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace SysWeaver.Serialization.SwJson.Reader
 {
@@ -107,12 +108,194 @@ namespace SysWeaver.Serialization.SwJson.Reader
             return (Int64)ToUInt64(d);
         }
 
-        public static Double ToDouble(ReadOnlySpan<Byte> d) => Double.Parse(d, ParseStyle, ParseCulture);
-        public static Single ToSingle(ReadOnlySpan<Byte> d) => Single.Parse(d, ParseStyle, ParseCulture);
-        public static Decimal ToDecimal(ReadOnlySpan<Byte> d) => Decimal.Parse(d, ParseStyle, ParseCulture);
+        #region Fast paths
+
+        //  The fast paths below handle the common formats exactly (same result as the .NET parsing), anything else uses the .NET parsing
+
+        /// <summary>
+        /// Parse [-]digits[.digits] (no exponent, max 19 digits) into a mantissa and the number of decimals
+        /// </summary>
+        static bool TryParseSimpleDecimal(ReadOnlySpan<Byte> d, out ulong mantissa, out int decimals, out bool negative)
+        {
+            mantissa = 0;
+            decimals = 0;
+            var l = d.Length;
+            int i = 0;
+            negative = (l > 0) && (d[0] == '-');
+            if (negative)
+                ++i;
+            int digits = 0;
+            int intDigits = 0;
+            bool dot = false;
+            for (; i < l; ++i)
+            {
+                uint c = d[i];
+                var v = c - '0';
+                if (v <= 9)
+                {
+                    if (digits >= 19)
+                        return false;
+                    mantissa = mantissa * 10 + v;
+                    ++digits;
+                    if (dot)
+                        ++decimals;
+                    else
+                        ++intDigits;
+                    continue;
+                }
+                if ((c != '.') || dot)
+                    return false;
+                dot = true;
+            }
+            //  At least one digit before and after the dot
+            return (intDigits > 0) && (!dot || (decimals > 0));
+        }
+
+        static readonly double[] Pow10Double = [1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22];
+        static readonly float[] Pow10Single = [1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f, 1e8f, 1e9f, 1e10f];
+
+        /// <summary>
+        /// n / 10^k is correctly rounded when n and 10^k are exactly representable (n &lt; 2^53, k &lt;= 22), the same as Double.Parse
+        /// </summary>
+        public static Double ToDouble(ReadOnlySpan<Byte> d)
+        {
+            if (TryParseSimpleDecimal(d, out var n, out var k, out var neg) && (n < (1UL << 53)))
+            {
+                var v = (double)n;
+                if (k > 0)
+                    v /= Pow10Double[k];
+                return neg ? -v : v;
+            }
+            return Double.Parse(d, ParseStyle, ParseCulture);
+        }
+
+        /// <summary>
+        /// n / 10^k is correctly rounded when n and 10^k are exactly representable (n &lt; 2^24, k &lt;= 10), the same as Single.Parse
+        /// </summary>
+        public static Single ToSingle(ReadOnlySpan<Byte> d)
+        {
+            if (TryParseSimpleDecimal(d, out var n, out var k, out var neg) && (n < (1UL << 24)) && (k <= 10))
+            {
+                var v = (float)n;
+                if (k > 0)
+                    v /= Pow10Single[k];
+                return neg ? -v : v;
+            }
+            return Single.Parse(d, ParseStyle, ParseCulture);
+        }
+
+        /// <summary>
+        /// A decimal is the mantissa and the scale (the number of decimals, trailing zeros are kept), the same as Decimal.Parse
+        /// </summary>
+        public static Decimal ToDecimal(ReadOnlySpan<Byte> d)
+        {
+            //  Zero is left to Decimal.Parse (negative zero)
+            if (TryParseSimpleDecimal(d, out var n, out var k, out var neg) && (n != 0) && (k <= 28))
+                return new Decimal((int)(uint)n, (int)(uint)(n >> 32), 0, neg, (Byte)k);
+            return Decimal.Parse(d, ParseStyle, ParseCulture);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static bool TryDigits(ReadOnlySpan<Byte> d, int offset, int count, out int value)
+        {
+            value = 0;
+            for (int i = 0; i < count; ++i)
+            {
+                var v = (uint)d[offset + i] - '0';
+                if (v > 9)
+                    return false;
+                value = value * 10 + (int)v;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Parse an optional fraction of a second ".f" with 1-7 digits at the offset, to ticks
+        /// </summary>
+        static bool TryFraction(ReadOnlySpan<Byte> d, ref int offset, out long ticks)
+        {
+            ticks = 0;
+            if ((offset >= d.Length) || (d[offset] != '.'))
+                return true;
+            ++offset;
+            int count = 0;
+            long v = 0;
+            while ((offset < d.Length) && (((uint)d[offset] - '0') <= 9))
+            {
+                if (count >= 7)
+                    return false;
+                v = v * 10 + (d[offset] - '0');
+                ++count;
+                ++offset;
+            }
+            if (count == 0)
+                return false;
+            for (int i = count; i < 7; ++i)
+                v *= 10;
+            ticks = v;
+            return true;
+        }
+
+        /// <summary>
+        /// Parse "HH:mm:ss" at the offset (valid ranges only)
+        /// </summary>
+        static bool TryTimeOfDay(ReadOnlySpan<Byte> d, int offset, out long ticks)
+        {
+            ticks = 0;
+            if ((d.Length < offset + 8) || (d[offset + 2] != ':') || (d[offset + 5] != ':'))
+                return false;
+            if (!TryDigits(d, offset, 2, out var h) || !TryDigits(d, offset + 3, 2, out var m) || !TryDigits(d, offset + 6, 2, out var sec))
+                return false;
+            if ((h > 23) || (m > 59) || (sec > 59))
+                return false;
+            ticks = ((h * 60L + m) * 60L + sec) * TimeSpan.TicksPerSecond;
+            return true;
+        }
+
+        /// <summary>
+        /// Parse "yyyy-MM-dd" (valid dates only)
+        /// </summary>
+        static bool TryDate(ReadOnlySpan<Byte> d, out DateTime date)
+        {
+            date = default;
+            if ((d.Length < 10) || (d[4] != '-') || (d[7] != '-'))
+                return false;
+            if (!TryDigits(d, 0, 4, out var y) || !TryDigits(d, 5, 2, out var mo) || !TryDigits(d, 8, 2, out var day))
+                return false;
+            if ((y < 1) || (mo < 1) || (mo > 12) || (day < 1) || (day > DateTime.DaysInMonth(y, mo)))
+                return false;
+            date = new DateTime(y, mo, day);
+            return true;
+        }
+
+        /// <summary>
+        /// Parse "yyyy-MM-ddTHH:mm:ss[.fffffff]", returns the offset after the parsed text
+        /// </summary>
+        static bool TryDateTimeCore(ReadOnlySpan<Byte> d, out DateTime value, out int end)
+        {
+            value = default;
+            end = 0;
+            if ((d.Length < 19) || (d[10] != 'T') || !TryDate(d, out var date) || !TryTimeOfDay(d, 11, out var time))
+                return false;
+            end = 19;
+            if (!TryFraction(d, ref end, out var fraction))
+                return false;
+            value = new DateTime(date.Ticks + time + fraction);
+            return true;
+        }
+
+        #endregion//Fast paths
 
         public static DateTime ToDateTime(ReadOnlySpan<Byte> d)
         {
+            //  Like DateTime.Parse with RoundtripKind: no suffix is Unspecified, Z is Utc (an offset is converted to local time, left to DateTime.Parse)
+            if (TryDateTimeCore(d, out var dt, out var end))
+            {
+                if (end == d.Length)
+                    return dt;
+                if ((end == d.Length - 1) && (d[end] == 'Z'))
+                    return DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+            }
             var l = d.Length;
             Span<Char> t = stackalloc Char[l];
             for (int i = 0; i < l; ++i)
@@ -122,6 +305,47 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         public static TimeSpan ToTimeSpan(ReadOnlySpan<Byte> d)
         {
+            //  [-][d.]hh:mm:ss[.fffffff]
+            {
+                var len = d.Length;
+                int o = 0;
+                var neg = (len > 0) && (d[0] == '-');
+                if (neg)
+                    ++o;
+                ulong days = 0;
+                var colon = d.IndexOf((Byte)':');
+                var dot = d.Slice(o).IndexOf((Byte)'.');
+                bool ok = colon > 0;
+                if (ok && (dot >= 0) && ((o + dot) < colon))
+                {
+                    //  Days
+                    var dl = dot;
+                    if ((dl < 1) || (dl > 8) || !TryDigits(d, o, dl, out var dv))
+                        ok = false;
+                    else
+                    {
+                        days = (ulong)dv;
+                        o += dl + 1;
+                    }
+                }
+                if (ok && (colon == o + 2) && TryTimeOfDay(d, o, out var time))
+                {
+                    o += 8;
+                    if (TryFraction(d, ref o, out var fraction) && (o == len))
+                    {
+                        var ticks = days * TimeSpan.TicksPerDay + (ulong)time + (ulong)fraction;
+                        if (neg)
+                        {
+                            if (ticks <= (1UL << 63))
+                                return new TimeSpan(unchecked(-(long)ticks));
+                        }
+                        else if (ticks <= long.MaxValue)
+                        {
+                            return new TimeSpan((long)ticks);
+                        }
+                    }
+                }
+            }
             var l = d.Length;
             Span<Char> t = stackalloc Char[l];
             for (int i = 0; i < l; ++i)
@@ -131,6 +355,8 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         public static DateOnly ToDateOnly(ReadOnlySpan<Byte> d)
         {
+            if ((d.Length == 10) && TryDate(d, out var date))
+                return DateOnly.FromDateTime(date);
             var l = d.Length;
             Span<Char> t = stackalloc Char[l];
             for (int i = 0; i < l; ++i)
@@ -140,6 +366,12 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         public static TimeOnly ToTimeOnly(ReadOnlySpan<Byte> d)
         {
+            if (TryTimeOfDay(d, 0, out var time))
+            {
+                int o = 8;
+                if (TryFraction(d, ref o, out var fraction) && (o == d.Length))
+                    return new TimeOnly(time + fraction);
+            }
             var l = d.Length;
             Span<Char> t = stackalloc Char[l];
             for (int i = 0; i < l; ++i)
@@ -149,6 +381,24 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         public static DateTimeOffset ToDateTimeOffset(ReadOnlySpan<Byte> d)
         {
+            //  yyyy-MM-ddTHH:mm:ss[.fffffff](Z|+hh:mm|-hh:mm), no suffix is the local offset (left to DateTimeOffset.Parse)
+            if (TryDateTimeCore(d, out var dt, out var end))
+            {
+                var rem = d.Length - end;
+                if ((rem == 1) && (d[end] == 'Z'))
+                    return new DateTimeOffset(dt, TimeSpan.Zero);
+                if ((rem == 6) && ((d[end] == '+') || (d[end] == '-')) && (d[end + 3] == ':') && TryDigits(d, end + 1, 2, out var oh) && TryDigits(d, end + 4, 2, out var om) && (om <= 59))
+                {
+                    var offset = oh * 60 + om;
+                    if (offset <= 14 * 60)
+                    {
+                        var ot = TimeSpan.FromMinutes(d[end] == '-' ? -offset : offset);
+                        var utc = dt.Ticks - ot.Ticks;
+                        if ((utc >= DateTime.MinValue.Ticks) && (utc <= DateTime.MaxValue.Ticks))
+                            return new DateTimeOffset(dt, ot);
+                    }
+                }
+            }
             var l = d.Length;
             Span<Char> t = stackalloc Char[l];
             for (int i = 0; i < l; ++i)
@@ -158,6 +408,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         public static Guid ToGuid(ReadOnlySpan<Byte> d)
         {
+            //  The "D" format (the common one), directly from the UTF8
+            if ((d.Length == 36) && System.Buffers.Text.Utf8Parser.TryParse(d, out Guid g, out var consumed, 'D') && (consumed == 36))
+                return g;
             var l = d.Length;
             Span<Char> t = stackalloc Char[l];
             for (int i = 0; i < l; ++i)
@@ -247,9 +500,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
             {
                 { typeof(UInt64), e => Expression.Call(u64, e) },
                 { typeof(Int64), e => Expression.Call(s64, e) },
-                { typeof(Double), e => Expression.Call(MethodDouble, e, eps, epc) },
-                { typeof(Single), e => Expression.Call(MethodSingle, e, eps, epc) },
-                { typeof(Decimal), e => Expression.Call(MethodDecimal, e, eps, epc) },
+                { typeof(Double), e => Expression.Call(Helper.SafeGetMethod(t, nameof(ToDouble), BindingFlags.Static | BindingFlags.Public), e) },
+                { typeof(Single), e => Expression.Call(Helper.SafeGetMethod(t, nameof(ToSingle), BindingFlags.Static | BindingFlags.Public), e) },
+                { typeof(Decimal), e => Expression.Call(Helper.SafeGetMethod(t, nameof(ToDecimal), BindingFlags.Static | BindingFlags.Public), e) },
                 { typeof(DateTime), e => Expression.Call(Helper.SafeGetMethod(t, nameof(ToDateTime), BindingFlags.Static | BindingFlags.Public), e) },
                 { typeof(TimeSpan), e => Expression.Call(Helper.SafeGetMethod(t, nameof(ToTimeSpan), BindingFlags.Static | BindingFlags.Public), e) },
                 { typeof(DateOnly), e => Expression.Call(Helper.SafeGetMethod(t, nameof(ToDateOnly), BindingFlags.Static | BindingFlags.Public), e) },

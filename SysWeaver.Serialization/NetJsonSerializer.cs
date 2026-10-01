@@ -45,6 +45,7 @@ namespace SysWeaver.Serialization
                 IncludeFields = true,
                 WriteIndented = false,
                 AllowTrailingCommas = true,
+                NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
                 Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             },
             new JsonSerializerOptions
@@ -54,6 +55,7 @@ namespace SysWeaver.Serialization
                 IncludeFields = true,
                 WriteIndented = true,
                 AllowTrailingCommas = true,
+                NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
                 Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             },
             new JsonSerializerOptions
@@ -63,6 +65,7 @@ namespace SysWeaver.Serialization
                 IncludeFields = true,
                 WriteIndented = false,
                 AllowTrailingCommas = true,
+                NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
                 Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             },
         ];
@@ -74,14 +77,14 @@ namespace SysWeaver.Serialization
                 IgnoreReadOnlyProperties = true,
                 IncludeFields = true,
                 AllowTrailingCommas = true,
+                NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
                 ReadCommentHandling = JsonCommentHandling.Skip,
             };
 
 
         public ReadOnlyMemory<byte> Serialize<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
         {
-            var text = JsonSerializer.Serialize<T>(obj, Options[(int)options]);
-            return Encoding.GetBytes(text);
+            return JsonSerializer.SerializeToUtf8Bytes<T>(obj, Options[(int)options]);
         }
 
         public string ToString<T>(T obj, SerializerOptions options = SerializerOptions.Compact)

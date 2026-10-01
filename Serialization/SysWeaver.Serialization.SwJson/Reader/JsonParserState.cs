@@ -10,15 +10,23 @@ namespace SysWeaver.Serialization.SwJson.Reader
             Set(d, l);
         }
 
+        /// <summary>
+        /// The initial size of the temp buffers (they grow as needed, and are kept when the state is reused)
+        /// </summary>
+        const int InitialTempSize = 256;
+
+        /// <summary>
+        /// Temp buffers larger than this are released when the state is returned to the pool
+        /// </summary>
+        const int MaxKeptTempSize = 1 << 16;
+
         void Set(Byte* d, int l)
         {
             S = d;
             D = d;
             E = d + l;
-            if (l > 1024)
-                l = 1024;
-            Temp = GC.AllocateUninitializedArray<Char>(l);
-            TempB = GC.AllocateUninitializedArray<Byte>(l >> 1);
+            Temp ??= GC.AllocateUninitializedArray<Char>(InitialTempSize);
+            TempB ??= GC.AllocateUninitializedArray<Byte>(InitialTempSize);
         }
 
         public Byte* S;
@@ -56,6 +64,10 @@ namespace SysWeaver.Serialization.SwJson.Reader
         {
             if (Count >= 32)
                 return;
+            if (Temp.Length > MaxKeptTempSize)
+                Temp = null;
+            if (TempB.Length > MaxKeptTempSize)
+                TempB = null;
             for (; ;)
             {
                 var t = First;

@@ -18,7 +18,8 @@ namespace SysWeaver.Serialization.SwJson
     /// <summary>
     /// Methods for serializing an object to a buffer
     /// </summary>
-    unsafe public static class JsonWriter
+    [SkipLocalsInit]
+    unsafe public static partial class JsonWriter
     {
 
         /// <summary>
@@ -81,19 +82,26 @@ namespace SysWeaver.Serialization.SwJson
         /// <returns>The number of bytes written to the buffer</returns>
         public static int ToJsonBytes<T>(ref Byte[] dest, T value, int destOffset = 0, bool typeIsOptional = true)
         {
-            var w = new BufferWriter(dest, destOffset)
+            var b = dest ?? GC.AllocateUninitializedArray<Byte>(4096);
+            //  Pinning with fixed is cheaper than a GCHandle
+            fixed (Byte* p = b)
             {
-                TypeIsOptional = typeIsOptional,
-            };
-            try
-            {
-                InternalMaybeBoxed(ref w, value);
-                dest = w.GetBuffer();
-                return w.Position;
-            }
-            finally
-            {
-                w.Dispose();
+                var w = new BufferWriter(b, p, destOffset)
+                {
+                    TypeIsOptional = typeIsOptional,
+                };
+                try
+                {
+                    //  Primitives are written without an Ensure (the caller ensures the bounded size)
+                    w.Ensure(64);
+                    InternalMaybeBoxed(ref w, value);
+                    dest = w.GetBuffer();
+                    return w.Position;
+                }
+                finally
+                {
+                    w.Dispose();
+                }
             }
         }
 
@@ -110,21 +118,28 @@ namespace SysWeaver.Serialization.SwJson
             Byte[] temp = null;
             if (dest == null)
                 temp = dest = ArrayPoolStream.Rent(4096);
-            var w = new BufferWriter(dest)
+            //  Pinning with fixed is cheaper than a GCHandle
+            fixed (Byte* p = dest)
             {
-                TypeIsOptional = typeIsOptional,
-            };
-            try
-            {
-                InternalMaybeBoxed(ref w, value);
-                var d = w.GetBuffer();
-                if (d != temp)
-                    ArrayPoolStream.Return(temp);
-                return new Memory<byte>(d, 0, w.Offset);
-            }
-            finally
-            {
-                w.Dispose();
+                var w = new BufferWriter(dest, p, 0)
+                {
+                    TypeIsOptional = typeIsOptional,
+                };
+                try
+                {
+                    //  Primitives are written without an Ensure (the caller ensures the bounded size)
+                    w.Ensure(64);
+                    InternalMaybeBoxed(ref w, value);
+                    var d = w.GetBuffer();
+                    // temp is null if the caller supplied the buffer
+                    if ((temp != null) && (d != temp))
+                        ArrayPoolStream.Return(temp);
+                    return new Memory<byte>(d, 0, w.Offset);
+                }
+                finally
+                {
+                    w.Dispose();
+                }
             }
         }
 
@@ -140,18 +155,24 @@ namespace SysWeaver.Serialization.SwJson
             var temp = ArrayPoolStream.Rent(4096);
             try
             {
-                var w = new BufferWriter(temp)
+                //  Pinning with fixed is cheaper than a GCHandle
+                fixed (Byte* p = temp)
                 {
-                    TypeIsOptional = typeIsOptional
-                };
-                try
-                {
-                    InternalMaybeBoxed(ref w, value);
-                    return Encoding.UTF8.GetString(w.GetBuffer(), 0, w.Offset);
-                }
-                finally
-                {
-                    w.Dispose();
+                    var w = new BufferWriter(temp, p, 0)
+                    {
+                        TypeIsOptional = typeIsOptional
+                    };
+                    try
+                    {
+                        //  Primitives are written without an Ensure (the caller ensures the bounded size)
+                        w.Ensure(64);
+                        InternalMaybeBoxed(ref w, value);
+                        return Encoding.UTF8.GetString(w.GetBuffer(), 0, w.Offset);
+                    }
+                    finally
+                    {
+                        w.Dispose();
+                    }
                 }
             }
             finally
@@ -222,7 +243,9 @@ namespace SysWeaver.Serialization.SwJson
         {
             var l = t.Length;
             Char[] rented = null;
-            var d = l <= 4096 ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l)).AsSpan();
+            // An escaped char is at most 6 chars (\u00XX)
+            var bl = checked(l * 6);
+            var d = bl <= 4096 ? stackalloc Char[bl] : (rented = ArrayPool<Char>.Shared.Rent(bl)).AsSpan();
             try
             {
                 int o = 0;
@@ -334,8 +357,6 @@ namespace SysWeaver.Serialization.SwJson
         static readonly MethodInfo MethodMoveNext = Helper.SafeGetMethod(typeof(IEnumerator), nameof(IEnumerator.MoveNext), BindingFlags.Instance | BindingFlags.Public);
 
 
-
-
         static Expression MakeExpressionActionInternalT<T>() => Expression.Constant(new CacheT<T>.WriterDelT(Internal<T>));
         static Expression MakeExpressionActionInternalMaybeBoxedT<T>() => Expression.Constant(new CacheT<T>.WriterDelT(InternalMaybeBoxed<T>));
         static Expression MakeExpressionActionInternalMaybeNullT<T>() => Expression.Constant(new CacheT<T>.WriterDelT(InternalMaybeNull<T>));
@@ -390,8 +411,6 @@ namespace SysWeaver.Serialization.SwJson
 
         public delegate void WriterConstDel(ref BufferWriter w);
 
-        static readonly WriterConstDel BooleanTrue = GetWriteConstant(Encoding.UTF8.GetBytes("true"));
-        static readonly WriterConstDel BooleanFalse = GetWriteConstant(Encoding.UTF8.GetBytes("false"));
 
         static Expression GetWriteByteExpr(Byte c)
         {
@@ -645,16 +664,55 @@ namespace SysWeaver.Serialization.SwJson
                         }
                         var mi = MethodInternalKeyValueEnum.MakeGenericMethod(kt, pt);
                         List<Expression> program = new List<Expression>();
+                        List<ParameterExpression> pes = new List<ParameterExpression>();
                         program.Add(Ensure64Exp);
                         program.Add(WriteObjectBeginExp);
-                        program.Add(Expression.Call(mi, writer, Expression.Convert(WriterObject, ct), kmi, vmi, Expression.Constant(DictionaryKeysWithQuote.Contains(kt))));
+                        if (TryGetEnumeratorPattern(type, out _, out _, out var kvCurrent) && (kvCurrent.PropertyType == kvt))
+                        {
+                            //  Like InternalKeyValueEnum but without interface and delegate calls (and boxing)
+                            var dobj = Expression.Variable(type, "dict");
+                            var kv = Expression.Variable(kvt, "kv");
+                            pes.Add(dobj);
+                            pes.Add(kv);
+                            program.Add(Expression.Assign(dobj, Expression.Convert(WriterObject, type)));
+                            var keyWriter = CacheWriter(kt);
+                            var valueWriter = CacheWriter(pt);
+                            var needQuote = DictionaryKeysWithQuote.Contains(kt);
+                            var keyQuote = Encoding.UTF8.GetBytes("\"");
+                            var keyQuoteComma = Encoding.UTF8.GetBytes(",\"");
+                            var keyEndQuote = Encoding.UTF8.GetBytes("\":");
+                            var keyEnd = Encoding.UTF8.GetBytes(":");
+                            var comma = Encoding.UTF8.GetBytes(",");
+                            program.Add(GetLoopExp(type, kvt, dobj, (item, isFirst) =>
+                            {
+                                var key = Expression.Property(kv, nameof(KeyValuePair<int, int>.Key));
+                                var value = Expression.Property(kv, nameof(KeyValuePair<int, int>.Value));
+                                List<Expression> e = new List<Expression>(8);
+                                e.Add(Expression.Assign(kv, item));
+                                e.Add(Ensure64Exp);
+                                if (needQuote)
+                                    e.Add(GetWriteConstExp(isFirst ? keyQuote : keyQuoteComma));
+                                else if (!isFirst)
+                                    e.Add(GetWriteConstExp(comma));
+                                e.Add(GetWriteValueExp(kt, keyWriter, key));
+                                e.Add(Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(16)));
+                                e.Add(GetWriteConstExp(needQuote ? keyEndQuote : keyEnd));
+                                e.Add(GetWriteValueExp(pt, valueWriter, value));
+                                return Expression.Block(e);
+                            }, pes));
+                        }
+                        else
+                        {
+                            program.Add(Expression.Call(mi, writer, Expression.Convert(WriterObject, ct), kmi, vmi, Expression.Constant(DictionaryKeysWithQuote.Contains(kt))));
+                        }
+                        program.Add(Ensure64Exp);
                         program.Add(WriteObjectEndExp);
-                        var finalUntyped = CreateProgramBlock(program);
+                        var finalUntyped = CreateProgramBlock(program, pes);
                         var cbUntyped = Expression.Lambda<WriterDel>(finalUntyped, writer, WriterObject).Compile();
                         var temp = Append(TextObjectBegin, Append(GetTypeJson(type), TextSepComma));
                         program[0] = Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(temp.Length + 64));
                         program[1] = GetWriteConstantBufferExp(temp);
-                        var finalTyped = CreateProgramBlock(program);
+                        var finalTyped = CreateProgramBlock(program, pes);
                         var cbTyped = Expression.Lambda<WriterDel>(finalTyped, writer, WriterObject).Compile();
                         ti = new TypeInfo(cbUntyped, cbTyped);
                     }
@@ -665,68 +723,24 @@ namespace SysWeaver.Serialization.SwJson
                 {
                     var pt = colType.GetGenericArguments()[0];
                     var propWriter = CacheWriter(pt);
-                    var b = propWriter.WriteExp;
-                    bool isPrimitive = propWriter.BoundedSize > 0;// FixedSizeWriters.TryGetValue(pt, out var b);
                     List<ParameterExpression> pes = new List<ParameterExpression>();
                     List<Expression> program = new List<Expression>();
-                    if (isPrimitive)
+                    var cobj = Expression.Variable(type, "c");
+                    pes.Add(cobj);
+                    program.Add(Expression.Assign(cobj, Expression.Convert(WriterObject, type)));
+                    program.Add(Ensure64Exp);
+                    program.Add(WriteArrayBeginExp);
+                    var itemSize = propWriter.BoundedSize > 0 ? propWriter.BoundedSize + 8 : 64;
+                    var ensureItem = Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(itemSize));
+                    program.Add(GetLoopExp(type, pt, cobj, (item, isFirst) =>
                     {
-                        var lt = typeof(ICollection<>).MakeGenericType(pt);
-                        var obj = Expression.Variable(lt, "o");
-                        pes.Add(obj);
-                        program.Add(Expression.Assign(obj, Expression.Convert(WriterObject, lt)));
-                        program.Add(Expression.Call(writer, MethodBufferWriterEnsure, Expression.Multiply(Expression.Property(obj, nameof(ICollection<int>.Count)), GetInt32Exp(propWriter.BoundedSize))));
-                        program.Add(WriteArrayBeginExp);
-                        var label = Expression.Label("exit");
-                        var et = typeof(IEnumerable<>).MakeGenericType(pt);
-                        var getEnumMi = Helper.SafeGetMethod(et, nameof(IEnumerable<int>.GetEnumerator), BindingFlags.Instance | BindingFlags.Public);
-                        var ett = typeof(IEnumerator<>).MakeGenericType(pt);
-                        var enumerator = Expression.Variable(ett, "e");
-                        var propValue = ett.GetProperty(nameof(IEnumerator<int>.Current), BindingFlags.Instance | BindingFlags.Public);
-                        pes.Add(enumerator);
-                        program.Add(Expression.Assign(enumerator, Expression.Call(Expression.Convert(obj, et), getEnumMi)));
-                        program.Add(Expression.IfThen(Expression.Call(enumerator, MethodMoveNext), Expression.Block(
-                                b(Expression.Property(enumerator, propValue)),
-                                Expression.Loop(
-                                        Expression.Block(
-                                            Expression.IfThen(Expression.Not(Expression.Call(enumerator, MethodMoveNext)),
-                                                Expression.Break(label)),
-                                            WriteCommaEndExp,
-                                            b(Expression.Property(enumerator, propValue))
-                                        ), label))));
-                        program.Add(WriteArrayEndExp);
-                    }
-                    else
-                    {
-                        var conv = typeof(IEnumerable);
-                        MethodInfo mi;
-                        if (typeof(IList).IsAssignableFrom(type))
-                        {
-                            conv = typeof(IList);
-                            if (pt.IsPrimitive || pt.IsValueType)
-                            {
-                                mi = MethodInternalList;
-                            }
-                            else
-                            {
-                                mi = pt.IsSealed ? MethodInternalMaybeNullList : MethodInternalMaybeBoxedList;
-                            }
-                        }else
-                        {
-                            if (pt.IsPrimitive || pt.IsValueType)
-                            {
-                                mi = MethodInternalEnum;
-                            }
-                            else
-                            {
-                                mi = pt.IsSealed ? MethodInternalMaybeNullEnum : MethodInternalMaybeBoxedEnum;
-                            }
-                        }
-                        program.Add(Ensure64Exp);
-                        program.Add(WriteArrayBeginExp);
-                        program.Add(Expression.Call(mi, writer, Expression.Constant(pt), Expression.Convert(WriterObject, conv)));
-                        program.Add(WriteArrayEndExp);
-                    }
+                        var itemWrite = propWriter.BoundedSize > 0 ? propWriter.WriteExp(item) : GetWriteUnboundedExp(pt, item);
+                        if (isFirst)
+                            return Expression.Block(ensureItem, itemWrite);
+                        return Expression.Block(ensureItem, WriteCommaEndExp, itemWrite);
+                    }, pes));
+                    program.Add(Ensure64Exp);
+                    program.Add(WriteArrayEndExp);
                     var finalUntyped = CreateProgramBlock(program, pes);
                     var temp = Append(Append(GetTypeJson(type), TextSepComma), TextValues);
                     program.Insert(0, Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(temp.Length + 64)));
@@ -847,26 +861,7 @@ namespace SysWeaver.Serialization.SwJson
                         program.Add(Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(declName.Length + 64)));
                         program.Add(GetWriteConstantBufferExp(declName));
                         var acc = isProp ? Expression.Property(obj, pi) : Expression.Field(obj, fi);
-                        if (pt.IsPrimitive || pt.IsValueType)
-                        {
-                            if (propWriter.BoundedSize > 0)
-                            {
-                                program.Add(Expression.Call(Expression.Constant(propWriter.Write), MethodInvoke, writer, Expression.Convert(acc, typeof(Object))));
-                            }
-                            else
-                                program.Add(Expression.Call(MethodInternal.MakeGenericMethod(pt), writer, acc));
-                        }
-                        else
-                        {
-                            if (pt.IsSealed)
-                            {
-                                program.Add(Expression.Call(MethodInternalMaybeNull.MakeGenericMethod(pt), writer, acc));
-                            }
-                            else
-                            {
-                                program.Add(Expression.Call(MethodInternalMaybeBoxed.MakeGenericMethod(pt), writer, acc));
-                            }
-                        }
+                        program.Add(GetWriteUnboundedExp(pt, acc));
                         needComma = true;
                     }
                     var canOpt = isSimple;
@@ -928,69 +923,14 @@ namespace SysWeaver.Serialization.SwJson
             }
         }
 
-        static Byte[] GetNumberBytes(int i) => Encoding.UTF8.GetBytes(i.ToString());
-
-
-        const int NumberCacheSize = 100;
-
-
-        static WriterConstDel GetWriteConstant(Byte[] data)
-        {
-            var l = data.Length;
-            Expression[] code = GC.AllocateUninitializedArray<Expression>(3 + l + l);
-            code[0] = ReadDataExp;
-            code[1] = ReadOffsetExp;
-            int d = 2;
-            for (int i = 0; i < l; ++ i)
-            {
-                code[d] = CachedBytes[data[i]];
-                ++d;
-                code[d] = IncOffsetExpression;
-                ++d;
-            }
-            code[d] = WriteOffsetExp;
-            var exp = Expression.Block([ParamData, ParamOffset], code);
-            return Expression.Lambda<WriterConstDel>(exp, WriterExp).Compile();
-        }
-
-
 
         static Expression GetWriteConstantBufferExp(Byte[] buffer, bool ensure = false)
         {
-            var writer = WriterExp;
-            var d = ParamData;
-            if (buffer.Length > 24)
-            {
-                var size = GetInt32Exp(buffer.Length);
-                var f = Expression.Field(writer, BufferWriterOffset);
-                if (ensure)
-                {
-                    return Expression.Block(
-                            d.AsEnumerable(),
-                            ReadDataExp,
-                            Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(buffer.Length + 64)),
-                            Expression.Call(MethodBufferBlockCopy, Expression.Constant(buffer), GetInt32Exp(0), d, f, size),
-                            Expression.Assign(f, Expression.Add(f, size)));
-                }
-                return Expression.Block(
-                        d.AsEnumerable(),
-                        ReadDataExp,
-                        Expression.Call(MethodBufferBlockCopy, Expression.Constant(buffer), GetInt32Exp(0), d, f, size),
-                        Expression.Assign(f, Expression.Add(f, size)));
-            }
-            List<Expression> program = new List<Expression>();
-            var o = ParamOffset;
-            if (ensure)
-                program.Add(Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(buffer.Length + 64)));
-            program.Add(ReadDataExp);
-            program.Add(ReadOffsetExp); 
-            foreach (var b in buffer)
-            {
-                program.Add(CachedBytes[b]);
-                program.Add(IncOffsetExpression);
-            }
-            program.Add(WriteOffsetExp);
-            return Expression.Block([d, o], program);
+            var e = GetWriteConstExp(buffer);
+            if (!ensure)
+                return e;
+            //  Ensure must be called before writing (Ensure may replace the buffer)
+            return Expression.Block(Expression.Call(WriterExp, MethodBufferWriterEnsure, GetInt32Exp(buffer.Length + 64)), e);
         }
 
         static WriterConstDel GetWriteConstantBufferEnsuredAction(Byte[] buffer)
@@ -1013,15 +953,14 @@ namespace SysWeaver.Serialization.SwJson
 
         #region Runtime
 
-        static readonly WriterConstDel[] NumberWriterCache = Enumerable.Range(0, NumberCacheSize + 1).Select(x => GetWriteConstant(Encoding.UTF8.GetBytes(x.ToString()))).ToArray();
-        //static readonly Byte[][] NumberCache = Enumerable.Range(0, NumberCacheSize + 1).Select(x => Encoding.UTF8.GetBytes(x.ToString())).ToArray();
 
-        static readonly Byte[] Base64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".Select(x => (Byte)x).ToArray();
 
         static Byte[] GetEscapeChars()
         {
-            var t = GC.AllocateUninitializedArray<Byte>(128);
-            for (int i = 0; i < 31; ++i)
+            // Must be zero initialized (0 = no escape)
+            var t = new Byte[128];
+            // Json requires all control chars (0x00 - 0x1f) to be escaped
+            for (int i = 0; i < 32; ++i)
                 t[i] = 1;
             t[8] = (Byte)'b';
             t[9] = (Byte)'t';
@@ -1056,19 +995,6 @@ namespace SysWeaver.Serialization.SwJson
 
         static readonly Char[] Hex = "0123456789abcdef".ToCharArray();
         static readonly Byte[] HexBytes = Hex.Select(x => (Byte)x).ToArray();
-
-        static void Swap(Byte* start, Byte* end)
-        {
-            --end;
-            while (end > start)
-            {
-                var t = *start;
-                *start = *end;
-                *end = t;
-                --end;
-                ++start;
-            }
-        }
 
 
         public static Byte* WriteUnescapedCharArray(Byte* d, Char[] t, int count)
@@ -1337,6 +1263,7 @@ namespace SysWeaver.Serialization.SwJson
                     needComma = true;
                     writeKey(ref w, value.Key);
                     w.Write(SepQuote, SepColon);
+                    w.Ensure(64);
                     writeValue(ref w, value.Value);
                 }
             }
@@ -1350,119 +1277,37 @@ namespace SysWeaver.Serialization.SwJson
                     needComma = true;
                     writeKey(ref w, value.Key);
                     w.Write(SepColon);
+                    w.Ensure(64);
                     writeValue(ref w, value.Value);
                 }
             }
         }
 
 
+        //  The primitive writers below are called with at least 64 bytes ensured (the BoundedSize)
+
         static void WriteUInt32(ref BufferWriter w, UInt32 value)
         {
-            if (value <= NumberCacheSize)
-            {
-                NumberWriterCache[value](ref w);
-                return;
-            }
             var org = w.DataPtr;
-            var d = org + w.Offset;
-            var start = d;
-            do
-            {
-                var v = value;
-                value /= 10;
-                v += 48;
-                v -= value * 10;
-                *d = (Byte)v;
-                ++d;
-            } while (value != 0);
-            Swap(start, d);
-            w.Offset = (int)(d - org);
+            w.Offset = (int)(FastFormat.WriteUInt32(org + w.Offset, value) - org);
         }
 
-        static void WriteInt32(ref BufferWriter w, Int32 signedValue)
+        static void WriteInt32(ref BufferWriter w, Int32 value)
         {
             var org = w.DataPtr;
-            var d = org + w.Offset;
-            UInt32 value = (UInt32)signedValue;
-            if (signedValue < 0)
-            {
-                *d = (Byte)('-');
-                ++d;
-                value = (UInt32)(-signedValue);
-                ++w.Offset;
-            }
-            if (value <= NumberCacheSize)
-            {
-                NumberWriterCache[value](ref w);
-                return;
-            }
-            var start = d;
-            do
-            {
-                var v = value;
-                value /= 10;
-                v += 48;
-                v -= value * 10;
-                *d = (Byte)v;
-                ++d;
-            } while (value != 0);
-            Swap(start, d);
-            w.Offset = (int)(d - org);
+            w.Offset = (int)(FastFormat.WriteInt32(org + w.Offset, value) - org);
         }
 
-        static void WriteInt64(ref BufferWriter w, Int64 signedValue)
+        static void WriteInt64(ref BufferWriter w, Int64 value)
         {
             var org = w.DataPtr;
-            var d = org + w.Offset;
-            UInt64 value = (UInt64)signedValue;
-            if (signedValue < 0)
-            {
-                *d = (Byte)('-');
-                ++d;
-                value = (UInt64)(-signedValue);
-                ++w.Offset;
-            }
-            if (value <= NumberCacheSize)
-            {
-                NumberWriterCache[value](ref w);
-                return;
-            }
-            var start = d;
-            do
-            {
-                var v = value;
-                value /= 10;
-                v += 48;
-                v -= value * 10;
-                *d = (Byte)v;
-                ++d;
-            } while (value != 0);
-            Swap(start, d);
-            w.Offset = (int)(d - org);
-
+            w.Offset = (int)(FastFormat.WriteInt64(org + w.Offset, value) - org);
         }
 
         static void WriteUInt64(ref BufferWriter w, UInt64 value)
         {
-            if (value <= NumberCacheSize)
-            {
-                NumberWriterCache[value](ref w);
-                return;
-            }
             var org = w.DataPtr;
-            var d = org + w.Offset;
-            var start = d;
-            do
-            {
-                var v = value;
-                value /= 10;
-                v += 48;
-                v -= value * 10;
-                *d = (Byte)v;
-                ++d;
-            } while (value != 0);
-            Swap(start, d);
-            w.Offset = (int)(d - org);
+            w.Offset = (int)(FastFormat.WriteUInt64(org + w.Offset, value) - org);
         }
 
         static void WriteSingle(ref BufferWriter w, Single value)
@@ -1486,15 +1331,13 @@ namespace SysWeaver.Serialization.SwJson
                     }
                 }
             }
-            /*            var t = value.ToString("r", CultureInfo.InvariantCulture);
-                        w.WriteAsciiString(t);
-                        */
-/* .NET 8 better?
-            var o = w.Offset;
-            value.TryFormat(w.Data.AsSpan(o), out var size, "r", CultureInfo.InvariantCulture);
-            o += size;
-            w.Offset = o;
-*/
+            var org = w.DataPtr;
+            var d = FastFormat.TryWriteShortSingle(org + w.Offset, value);
+            if (d != null)
+            {
+                w.Offset = (int)(d - org);
+                return;
+            }
             value.TryFormat(w.AsSpan(), out var size, "r", CultureInfo.InvariantCulture);
             w.Offset += size;
         }
@@ -1521,13 +1364,15 @@ namespace SysWeaver.Serialization.SwJson
 
                 }
             }
-            /*
-            var t = value.ToString("r", CultureInfo.InvariantCulture);
-            w.WriteAsciiString(t);
-            */
+            var org = w.DataPtr;
+            var d = FastFormat.TryWriteShortDouble(org + w.Offset, value);
+            if (d != null)
+            {
+                w.Offset = (int)(d - org);
+                return;
+            }
             value.TryFormat(w.AsSpan(), out var size, "r", CultureInfo.InvariantCulture);
             w.Offset += size;
-            //w.WriteCharTempAsAscci(size);
         }
 
         static void WriteDecimal(ref BufferWriter w, Decimal value)
@@ -1552,27 +1397,15 @@ namespace SysWeaver.Serialization.SwJson
 
                 }
             }
-            //var t = value.ToString(CultureInfo.InvariantCulture);
-            //w.WriteAsciiString(t);
+            var org = w.DataPtr;
+            var d = FastFormat.TryWriteDecimal(org + w.Offset, value);
+            if (d != null)
+            {
+                w.Offset = (int)(d - org);
+                return;
+            }
             value.TryFormat(w.AsSpan(), out var size, "r", CultureInfo.InvariantCulture);
             w.Offset += size;
-            //w.WriteCharTempAsAscci(size);
-
-        }
-
-        static void TrimTime(Span<Byte> dest, ref int size)
-        {
-            while (size > 8)
-            {
-                --size;
-                var c = dest[size];
-                if (c != '0')
-                {
-                    if (c != '.')
-                        ++size;
-                    break;
-                }
-            }
         }
 
         static void TrimDateTime(Span<Byte> dest, ref int size)
@@ -1601,16 +1434,27 @@ namespace SysWeaver.Serialization.SwJson
 
         static void WriteTimeSpan(ref BufferWriter w, TimeSpan value)
         {
-            w.Write(SepQuote);
-            var dest = w.AsSpan();
-            value.TryFormat(dest, out var size, "c", CultureInfo.InvariantCulture);
-            TrimTime(dest, ref size);
-            w.Offset += size;
-            w.Write(SepQuote);
+            var org = w.DataPtr;
+            var d = org + w.Offset;
+            *d = SepQuote;
+            d = FastFormat.WriteTimeSpan(d + 1, value);
+            *d = SepQuote;
+            w.Offset = (int)(d + 1 - org);
         }
 
         static void WriteDateTime(ref BufferWriter w, DateTime value)
         {
+            var org = w.DataPtr;
+            var d = org + w.Offset;
+            *d = SepQuote;
+            var e = FastFormat.TryWriteDateTime(d + 1, value);
+            if (e != null)
+            {
+                *e = SepQuote;
+                w.Offset = (int)(e + 1 - org);
+                return;
+            }
+            //  Local time (needs the time zone)
             w.Write(SepQuote);
             var dest = w.AsSpan();
             value.TryFormat(dest, out var size, "o", CultureInfo.InvariantCulture);
@@ -1621,33 +1465,33 @@ namespace SysWeaver.Serialization.SwJson
 
         static void WriteDateOnly(ref BufferWriter w, DateOnly value)
         {
-            w.Write(SepQuote);
-            value.TryFormat(w.AsSpan(), out var size, "o", CultureInfo.InvariantCulture);
-            w.Offset += size;
-            w.Write(SepQuote);
+            var org = w.DataPtr;
+            var d = org + w.Offset;
+            *d = SepQuote;
+            d = FastFormat.WriteDateOnly(d + 1, value);
+            *d = SepQuote;
+            w.Offset = (int)(d + 1 - org);
         }
 
         static void WriteTimeOnly(ref BufferWriter w, TimeOnly value)
         {
-            w.Write(SepQuote);
-            var dest = w.AsSpan();
-            value.TryFormat(dest, out var size, "o", CultureInfo.InvariantCulture);
-            TrimTime(dest, ref size);
-            w.Offset += size;
-            w.Write(SepQuote);
+            var org = w.DataPtr;
+            var d = org + w.Offset;
+            *d = SepQuote;
+            d = FastFormat.WriteTimeOnly(d + 1, value);
+            *d = SepQuote;
+            w.Offset = (int)(d + 1 - org);
         }
 
         static void WriteDateTimeOffset(ref BufferWriter w, DateTimeOffset value)
         {
-            w.Write(SepQuote);
-            var dest = w.AsSpan();
-            value.TryFormat(dest, out var size, "o", CultureInfo.InvariantCulture);
-            TrimDateTime(dest, ref size);
-            w.Offset += size;
-            w.Write(SepQuote);
+            var org = w.DataPtr;
+            var d = org + w.Offset;
+            *d = SepQuote;
+            d = FastFormat.WriteDateTimeOffset(d + 1, value);
+            *d = SepQuote;
+            w.Offset = (int)(d + 1 - org);
         }
-
-        static readonly int GuidLen = Guid.Empty.ToString().Length;
 
         static void WriteGuid(ref BufferWriter w, Guid value)
         {
@@ -1657,78 +1501,19 @@ namespace SysWeaver.Serialization.SwJson
             w.Write(SepQuote);
         }
 
+        /// <summary>
+        /// Base64 encoded with quotes, l + (l &gt;&gt; 1) + 64 bytes must be ensured
+        /// </summary>
         static void WriteByteArray(ref BufferWriter w, Byte[] val)
         {
             var org = w.DataPtr;
             var d = org + w.Offset;
-            var l = val.Length;
-            var tripleCount = l / 3;
-            var tripleEnd = tripleCount * 3;
-            l -= tripleEnd;
-            var b = Base64;
             *d = SepQuote;
             ++d;
-            fixed (Byte* valPtr = val)
-            {
-                var value = valPtr;
-                var valueEnd = valPtr + tripleEnd;
-                while (value != valueEnd)
-                {
-                    uint t = *value;
-                    ++value;
-                    t <<= 8;
-                    t |= *value;
-                    ++value;
-                    t <<= 8;
-                    t |= *value;
-                    ++value;
-                    *d = b[(t >> 18)];
-                    ++d;
-                    *d = b[(t >> 12) & 0x3f];
-                    ++d;
-                    *d = b[(t >> 6) & 0x3f];
-                    ++d;
-                    *d = b[(t) & 0x3f];
-                    ++d;
-                }
-                switch (l)
-                {
-                    case 1:
-                        {
-                            uint t = *value;
-                            t <<= 16;
-                            *d = b[(t >> 18)];
-                            ++d;
-                            *d = b[(t >> 12) & 0x3f];
-                            ++d;
-                            *d = (Byte)'=';
-                            ++d;
-                            *d = (Byte)'=';
-                            ++d;
-                        }
-                        break;
-                    case 2:
-                        {
-                            uint t = *value;
-                            ++value;
-                            t <<= 8;
-                            t |= *value;
-                            t <<= 8;
-                            *d = b[(t >> 18)];
-                            ++d;
-                            *d = b[(t >> 12) & 0x3f];
-                            ++d;
-                            *d = b[(t >> 6) & 0x3f];
-                            ++d;
-                            *d = (Byte)'=';
-                            ++d;
-                        }
-                        break;
-                }
-            }
+            System.Buffers.Text.Base64.EncodeToUtf8(val, w.AsSpan().Slice(1), out _, out var written);
+            d += written;
             *d = SepQuote;
-            ++d;
-            w.Offset = (int)(d - org);
+            w.Offset = (int)(d + 1 - org);
         }
 
         static void WriteByteArrayEnsure(ref BufferWriter w, Object o)
@@ -1793,62 +1578,25 @@ namespace SysWeaver.Serialization.SwJson
         static void WriteBoolean(ref BufferWriter w, Boolean value)
         {
             w.Ensure(16);
-            (value ? BooleanTrue : BooleanFalse)(ref w);
+            var o = w.Offset;
+            var d = w.DataPtr + o;
+            if (value)
+            {
+                //  "true"
+                Unsafe.WriteUnaligned(d, 0x65757274u);
+                w.Offset = o + 4;
+                return;
+            }
+            //  "false" (8 bytes are written, only 5 are used)
+            Unsafe.WriteUnaligned(d, 0x00000065736c6166ul);
+            w.Offset = o + 5;
         }
 
         static void WriteString(ref BufferWriter w, String value)
         {
-            var l = value.Length;
-            var count = (l << 2) + 64;
-            w.Ensure(count);
-            var org = w.DataPtr;
-            var d = org + w.Offset;
-            *d = SepQuote;
-            ++d;
-            fixed (byte* esc = EscapeChars)
-            {
-                fixed (char* srcVal = value)
-                {
-                    var src = srcVal;
-                    var end = srcVal + l;
-                    while (src != end)
-                    {
-                        uint x = *src;
-                        if ((x >= 128) || (esc[x] != 0))
-                            break;
-                        ++src;
-                        *d = (Byte)x;
-                        ++d;
-                    }
-                    while (src < end)
-                    {
-                        uint x = *src;
-                        ++src;
-                        if (x < 128)
-                        {
-                            var e = esc[x];
-                            if (e == 0)
-                            {
-                                *d = (Byte)x;
-                                ++d;
-                                continue;
-                            }
-                            d = WriteEscape(d, x, e);
-                            continue;
-                        }
-                        if ((x < 0xd800) || (x > 0xdbff))
-                        {
-                            d = WriteUtf8(d, x);
-                            continue;
-                        }
-                        d = WriteMultiUtf8(d, x, *src);
-                        ++src;
-                    }
-                }
-            }
-            *d = SepQuote;
-            ++d;
-            w.Offset = (int)(d - org);
+            //  Max 3 bytes per char (escapes ensures more as needed)
+            w.Ensure(checked(value.Length * 3 + 64));
+            FastFormat.WriteString(ref w, value);
         }
 
         static Byte* WriteMultiUtf8(Byte* d, uint x, uint y)
@@ -1982,7 +1730,11 @@ namespace SysWeaver.Serialization.SwJson
                     p = Expression.Convert(Expression.Convert(ParamObj, t), convertTo);
                     t = convertTo;
                 }
-                var mi = Helper.SafeGetMethod(JsonWriterType, "Write" + t.Name, BindingFlags.Static | BindingFlags.NonPublic);
+                //  There are no 8 and 16 bit writers, use the 32 bit ones
+                var wt = (t == typeof(Byte)) || (t == typeof(UInt16)) ? typeof(UInt32) : ((t == typeof(SByte)) || (t == typeof(Int16)) ? typeof(Int32) : t);
+                if (wt != t)
+                    p = Expression.Convert(p, wt);
+                var mi = Helper.SafeGetMethod(JsonWriterType, "Write" + wt.Name, BindingFlags.Static | BindingFlags.NonPublic);
                 var w = WriterExp;
                 var buffer = Append(Append(GetTypeJson(t), TextSepComma), TextValue);
                 var untyped = Expression.Call(mi, w, p);
@@ -1994,7 +1746,7 @@ namespace SysWeaver.Serialization.SwJson
                         WriteObjectEndExp
                     ]);
                 if (convertTo != null)
-                    WriteExp = ep => Expression.Call(mi, w, Expression.Convert(ep, convertTo));
+                    WriteExp = wt != convertTo ? (ep => Expression.Call(mi, w, Expression.Convert(Expression.Convert(ep, convertTo), wt))) : (ep => Expression.Call(mi, w, Expression.Convert(ep, convertTo)));
                 else
                     WriteExp = ep => Expression.Call(mi, w, ep);
                 BoundedSize = boundedSize;
@@ -2012,8 +1764,6 @@ namespace SysWeaver.Serialization.SwJson
             public readonly WriterDel Write;
             public readonly WriterDel WriteOptionalTyped;
         }
-
-
 
         #endregion//Internal
 

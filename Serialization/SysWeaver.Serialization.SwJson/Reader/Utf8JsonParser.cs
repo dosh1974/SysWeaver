@@ -17,6 +17,40 @@ namespace SysWeaver.Serialization.SwJson.Reader
         public static readonly Func<Char, bool> EndOnArray = FuncEndOnArray;
         public static readonly Func<Char, bool> EndOnAll = FuncEndOnAll;
 
+        /// <summary>
+        /// A table with the result of the end condition for all chars below 256 (1 = end), built from the delegate
+        /// </summary>
+        static Byte[] CreateEndTable(Func<Char, bool> f)
+        {
+            var t = new Byte[256];
+            for (int i = 0; i < 256; ++i)
+                t[i] = f((Char)i) ? (Byte)1 : (Byte)0;
+            return t;
+        }
+
+        static readonly Byte[] TableEndOnColon = CreateEndTable(FuncEndOnColon);
+        static readonly Byte[] TableEndOnObject = CreateEndTable(FuncEndOnObject);
+        static readonly Byte[] TableEndOnArray = CreateEndTable(FuncEndOnArray);
+        static readonly Byte[] TableEndOnAll = CreateEndTable(FuncEndOnAll);
+
+        /// <summary>
+        /// Get the lookup table for an end condition (instead of a delegate call per char), null if it's not one of the known end conditions.
+        /// All known end conditions are false for chars of 256 and above.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Byte[] GetEndTable(Func<Char, bool> f)
+        {
+            if (ReferenceEquals(f, EndOnObject))
+                return TableEndOnObject;
+            if (ReferenceEquals(f, EndOnArray))
+                return TableEndOnArray;
+            if (ReferenceEquals(f, EndOnAll))
+                return TableEndOnAll;
+            if (ReferenceEquals(f, EndOnColon))
+                return TableEndOnColon;
+            return null;
+        }
+
 
         const char Quote = '"';
 
@@ -57,7 +91,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 ReadException.ThrowExpectedQuoatedString();
             }
             ++d;
-            return Utf8Parser.ReadEscapedUtf8String(ref state.Temp, ref d, e, c);
+            return Utf8Parser.ReadJsonString(ref state.Temp, ref d, e);
         }
 
         public static Type ReadAndResolveType(ref Byte* d, Byte* e, JsonParserState state)
@@ -112,16 +146,14 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         static bool ReadEscapedKey(JsonParserState state, ref ReadOnlySpan<Byte> ret, Byte* s, Byte* d)
         {
+            //  Decode the escapes and encode as UTF8 (WriteUnescapedCharArray wrote an extra byte for every non ascii char, and outside of TempB for long keys)
             ref var buf = ref state.Temp;
             var len = Utf8Parser.ReadEscapedUtf8CharArray(ref buf, ref s, d - 1, (Char)0);
-            var maxLen = (int)(d - s) + 64;
+            var maxLen = Utf8Parser.UTF8.GetMaxByteCount(len);
             ref var tempB = ref state.TempB;
             if (tempB.Length < maxLen)
-                tempB = GC.AllocateUninitializedArray<Byte>(maxLen + 64);
-            fixed (Byte* tt = tempB)
-            {
-                len = (int)(JsonWriter.WriteUnescapedCharArray(tt, buf, len) - tt);
-            }
+                tempB = GC.AllocateUninitializedArray<Byte>(maxLen);
+            len = Utf8Parser.UTF8.GetBytes(buf, 0, len, tempB, 0);
             ret = new ReadOnlySpan<Byte>(tempB, 0, len);
             return true;
         }
@@ -159,6 +191,47 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 return Utf8Parser.ReadUtf8String(ref state.Temp, ref d, e, c);
             }
             return Utf8Parser.ReadUtf8StringNoLast(ref state.Temp, ref d, e, endOn);
+        }
+
+        /// <summary>
+        /// Read an enum, like Enum.Parse&lt;T&gt;(ReadUtf8MaybeQuoted(state, endOn)) without allocating a string
+        /// </summary>
+        public static T ReadEnum<T>(JsonParserState state, Func<Char, bool> endOn) where T : struct, Enum
+        {
+            ref var d = ref state.D;
+            var e = state.E;
+            var c = (Char)(*d);
+            int len;
+            if (c == Quote)
+            {
+                ++d;
+                //  Fast path: an exact name or a number (from the UTF8 bytes)
+                var rem = new ReadOnlySpan<Byte>(d, (int)(e - d));
+                var end = rem.IndexOf((Byte)Quote);
+                if ((end >= 0) && EnumReader<T>.TryGet(rem.Slice(0, end), out var fv))
+                {
+                    d += end + 1;
+                    return fv;
+                }
+                len = Utf8Parser.ReadUtf8Chars(ref state.Temp, ref d, e, c);
+            }
+            else
+            {
+                var tbl = GetEndTable(endOn);
+                if (tbl != null)
+                {
+                    var p = d;
+                    while ((p < e) && (tbl[*p] == 0))
+                        ++p;
+                    if (EnumReader<T>.TryGet(new ReadOnlySpan<Byte>(d, (int)(p - d)), out var fv))
+                    {
+                        d = p;
+                        return fv;
+                    }
+                }
+                len = Utf8Parser.ReadUtf8CharsNoLast(ref state.Temp, ref d, e, endOn);
+            }
+            return Enum.Parse<T>(new ReadOnlySpan<Char>(state.Temp, 0, len), false);
         }
 
         public static String ReadAsciiMaybeQuoted(JsonParserState state, Func<Char, bool> endOn)
