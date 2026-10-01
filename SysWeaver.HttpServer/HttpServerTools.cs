@@ -415,63 +415,86 @@ namespace SysWeaver.Net
         }
 
 
-        // Cached delegate: allocated once per type load, not per UrlDecode call.
-        static readonly SpanAction<char, string> s_urlDecodeAction = UrlDecodeToSpan;
+        /// <summary>
+        /// Urls up to this length are decoded on the stack (longer urls use a pooled buffer)
+        /// </summary>
+        const int MaxStackDecodeChars = 512;
 
         /// <summary>
-        /// Allocation-free, except for the final string created by string.Create.
+        /// Allocation-free, except for the final string (only if the value needs decoding).
         /// Mimics HttpUtility.UrlDecode(string) using UTF-8 percent-decoding.
         /// </summary>
+        [SkipLocalsInit]
         public static string UrlDecode(string value)
         {
             if (value is null)
                 return null;
-
-            if (value.Length == 0)
+            // Most values doesn't need decoding (vectorized check)
+            var l = value.Length;
+            if (!value.AsSpan().ContainsAny('%', '+'))
                 return value;
-
-            // ------------------------------------------------------------------
-            // First pass:
-            // Dry run. No destination span. Only counts the decoded UTF-16 length
-            // and determines whether any decoding is actually needed.
-            // ------------------------------------------------------------------
-            var counter = new Utf8UrlDecoder(Span<char>.Empty, dryRun: true);
-            bool needsDecoding = false;
-
-            Process(value, ref counter, ref needsDecoding);
-
-            int decodedLength = counter.Length;
-
-            if (!needsDecoding)
+            if (l <= MaxStackDecodeChars)
             {
-                Debug.Assert(decodedLength == value.Length);
-                return value;
+                Span<char> buffer = stackalloc char[l];
+                var n = UrlDecode(value, buffer, out var needsDecoding);
+                return needsDecoding ? new string(buffer[..n]) : value;
             }
-
-            // ------------------------------------------------------------------
-            // Second pass:
-            // Allocate only the resulting string and decode into its span.
-            // ------------------------------------------------------------------
-            return string.Create(decodedLength, value, s_urlDecodeAction);
+            var rented = ArrayPool<char>.Shared.Rent(l);
+            try
+            {
+                var n = UrlDecode(value, rented, out var needsDecoding);
+                return needsDecoding ? new string(rented, 0, n) : value;
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(rented);
+            }
         }
 
-        static void UrlDecodeToSpan(Span<char> destination, string source)
+        /// <summary>
+        /// Url decode a value into a span in a single pass (same decoding as <see cref="UrlDecode(string)"/>).
+        /// The decoded value is never longer than the value.
+        /// </summary>
+        /// <param name="value">The value to decode</param>
+        /// <param name="destination">The destination, must be at least as long as the value</param>
+        /// <param name="needsDecoding">True if the value needed decoding, else the decoded value is identical to the value</param>
+        /// <returns>The number of chars written to the destination</returns>
+        public static int UrlDecode(ReadOnlySpan<char> value, Span<char> destination, out bool needsDecoding)
         {
+            if (destination.Length < value.Length)
+                throw new ArgumentException("The destination must be at least as long as the value", nameof(destination));
             var writer = new Utf8UrlDecoder(destination, dryRun: false);
-            bool unused = false;
-
-            Process(source, ref writer, ref unused);
-
-            Debug.Assert(writer.Length == destination.Length);
+            needsDecoding = false;
+            Process(value, ref writer, ref needsDecoding);
+            return writer.Length;
         }
 
-        static void Process(string source, ref Utf8UrlDecoder decoder, ref bool needsDecoding)
+        /// <summary>
+        /// Chars that are copied as is (all ASCII except the ones that needs decoding)
+        /// </summary>
+        static readonly SearchValues<char> PlainUrlChars = SearchValues.Create(
+            Enumerable.Range(0, 128).Select(x => (char)x).Where(x => (x != '%') && (x != '+')).ToArray());
+
+        static void Process(ReadOnlySpan<char> source, ref Utf8UrlDecoder decoder, ref bool needsDecoding)
         {
             int i = 0;
             int length = source.Length;
+            var plain = PlainUrlChars;
 
             while (i < length)
             {
+                // Copy runs of plain ASCII chars at once (vectorized search)
+                var run = source[i..].IndexOfAnyExcept(plain);
+                if (run != 0)
+                {
+                    if (run < 0)
+                        run = length - i;
+                    decoder.AddAsciiRun(source.Slice(i, run));
+                    i += run;
+                    if (i >= length)
+                        break;
+                }
+
                 char c = source[i];
 
                 // HttpUtility.UrlDecode decodes '+' to space.
@@ -670,6 +693,23 @@ namespace SysWeaver.Net
 
                     return;
                 }
+            }
+
+            /// <summary>
+            /// Add plain ASCII chars (no '%' or '+'), same as calling AddByte for each char
+            /// </summary>
+            public void AddAsciiRun(ReadOnlySpan<char> run)
+            {
+                if (_remaining != 0)
+                {
+                    // An incomplete UTF-8 sequence, handle the bytes one by one (invalid continuation bytes etc)
+                    foreach (var c in run)
+                        AddByte((byte)c);
+                    return;
+                }
+                if (!_dryRun)
+                    run.CopyTo(_output[_pos..]);
+                _pos += run.Length;
             }
 
             public void AddUtf16CodeUnit(char c)

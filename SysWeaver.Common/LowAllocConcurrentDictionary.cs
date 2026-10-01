@@ -2,36 +2,96 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 using System.Threading;
 
 namespace SysWeaver
 {
 
     /// <summary>
-    /// A concurrent dictionary that doesn't allocate internal nodes as frequent as the regular ConcurrentDictionary.
-    /// 
+    /// A concurrent dictionary designed for (very) large data sets, with as few and as small memory allocations as possible.
+    /// No memory is allocated per item, each segment stores the items inline in a few arrays (allocated when growing),
+    /// so the GC only sees a few hundred objects regardless of the number of items.
+    ///
+    /// The keys are split into segments, each segment is an open addressing hash table protected by a spin lock.
+    /// All modifications are done while holding the segment lock.
+    /// Reads are lock free, they are validated using a per segment version (seqlock) and retried if a write happened during the read.
     /// </summary>
     /// <typeparam name="TKey"></typeparam>
     /// <typeparam name="TValue"></typeparam>
     public sealed class LowAllocConcurrentDictionary<TKey, TValue> : IDictionary<TKey, TValue>
     {
-        const int SegmentCount = 64;
-        const int SegmentMask = SegmentCount - 1;
-        const int BlockSize = 16;
+        const int SegmentBits = 6;
+        const int SegmentCount = 1 << SegmentBits;
+        const int BlockBits = 4;
+        const int BlockSize = 1 << BlockBits;
+        /// <summary>
+        /// Max number of slots in a segment
+        /// </summary>
+        const int MaxSegmentSlots = 1 << 30;
+        const int MaxBlocks = MaxSegmentSlots >> BlockBits;
 
-        readonly Segment[] Segments;
+        /// <summary>
+        /// Number of lock free read attempts before falling back to reading under the lock
+        /// </summary>
+        const int MaxOptimisticReads = 8;
+
+        const byte TagEmpty = 0;
+        const byte TagTombstone = 1;
+
+        /// <summary>
+        /// If an insert sees this number of slots with the same tag (but a different key), the hash function is assumed to be under attack.
+        /// With a working hash the probability is astronomically small (tags are 8 bits), while full hash collisions always have the same tag.
+        /// </summary>
+        const int MaxFalseTagMatches = 32;
+
+        /// <summary>
+        /// If an insert has to scan this many blocks, the hash function is assumed to be under attack (4096 slots, extremely unlikely with a working hash)
+        /// </summary>
+        const int MaxProbeBlocks = 256;
+
+        readonly LowAllocDictionarySegment[] Segments;
+        /// <summary>
+        /// The comparer, null for value types using the default comparer (so that calls can be devirtualized and inlined).
+        /// For fast string keys this is the (randomized) ordinal comparer used as a fallback.
+        /// </summary>
         readonly IEqualityComparer<TKey> Comparer;
 
+        /// <summary>
+        /// True for string keys using ordinal comparison, these use a fast seeded hash, with a fallback to the randomized ordinal hash if collisions are detected
+        /// </summary>
+        readonly bool FastStrings;
+
+        /// <summary>
+        /// Create a new dictionary
+        /// </summary>
+        /// <param name="capacity">The number of items the dictionary can hold before it needs to grow, for large data sets set this to avoid growing (and the allocations it causes)</param>
+        /// <param name="comparer">The key comparer to use, null to use the default comparer</param>
         public LowAllocConcurrentDictionary(int capacity = 1024, IEqualityComparer<TKey> comparer = default)
         {
-            Comparer = comparer ?? EqualityComparer<TKey>.Default;
-            Segments = GC.AllocateUninitializedArray<Segment>(SegmentCount);
-            var cap = Math.Max(16, ((capacity + SegmentCount - 1) / SegmentCount).EnsurePow2());
+            Comparer = typeof(TKey).IsValueType && ((comparer == null) || ReferenceEquals(comparer, EqualityComparer<TKey>.Default))
+                ? null
+                : comparer ?? EqualityComparer<TKey>.Default;
+            // The default string comparer is ordinal
+            if ((typeof(TKey) == typeof(string)) && (ReferenceEquals(Comparer, EqualityComparer<string>.Default) || ReferenceEquals(Comparer, StringComparer.Ordinal)))
+            {
+                FastStrings = true;
+                Comparer = (IEqualityComparer<TKey>)(object)StringComparer.Ordinal;
+            }
+            Segments = new LowAllocDictionarySegment[SegmentCount];
+            // Room for capacity items in total without growing (taking the max load factor into account)
+            var perSegment = (Math.Max(0L, capacity) + SegmentCount - 1) / SegmentCount;
+            // Keys are randomly distributed between segments, for large capacities add 4 standard deviations of headroom (~1% at 10M items),
+            // else about half the segments would have to grow (doubling their size)
+            if (perSegment >= 1024)
+                perSegment += 4 * (long)Math.Sqrt(perSegment);
+            var slots = perSegment * 8 / 7 + 1;
+            var blocks = (int)Math.Clamp((slots + BlockSize - 1) >> BlockBits, 1, MaxBlocks);
             for (int i = 0; i < SegmentCount; i++)
-                Segments[i] = new Segment(cap);
+                Segments[i].Table = new Table(blocks);
         }
 
         public LowAllocConcurrentDictionary(IEqualityComparer<TKey> comparer)
@@ -40,36 +100,32 @@ namespace SysWeaver
         }
 
 
-        public void Add(TKey key, TValue value) { if (!TryAdd(key, value)) throw new ArgumentException(); }
+        public void Add(TKey key, TValue value)
+        {
+            if (!TryAdd(key, value))
+                throw new ArgumentException("An item with the same key has already been added", nameof(key));
+        }
+
         public bool ContainsKey(TKey key) => TryGetValue(key, out _);
         public bool Remove(TKey key) => TryRemove(key, out _);
 
         public TValue this[TKey key]
         {
             get => TryGetValue(key, out var val) ? val : throw new KeyNotFoundException();
-            set {
-                for (; ; )
-                {
-                    if (TryAdd(key, value))
-                        break;
-                    TryRemove(key, out _);
-                }
-            }
+            set => Set(key, value);
         }
 
+        /// <summary>
+        /// The number of items in the dictionary (a snapshot, other threads may modify the dictionary concurrently)
+        /// </summary>
         public int Count
         {
             get
             {
                 int total = 0;
+                var segs = Segments;
                 for (int s = 0; s < SegmentCount; s++)
-                {
-                    var tags = Volatile.Read(ref Segments[s].Tags);
-                    for (int i = 0; i < tags.Length; i++)
-                    {
-                        if (tags[i] > 1) total++;
-                    }
-                }
+                    total += Volatile.Read(ref GetTable(ref segs[s]).Live);
                 return total;
             }
         }
@@ -79,119 +135,784 @@ namespace SysWeaver
 
         public ICollection<TValue> Values => GetValuesCollection();
 
+        // The public operations selects the comparer strategy (devirtualized default comparer for value types, fast strings or a comparer instance)
+        // and the probing strategy (constant for the JIT), so that the core operations are specialized without any runtime checks
+
+        /// <summary>
+        /// True if the default comparer is used for a value type key (all calls can be devirtualized and inlined)
+        /// </summary>
+        bool UseDefaultComparer
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => typeof(TKey).IsValueType && (Comparer == null);
+        }
+
+        /// <summary>
+        /// True if string keys are compared ordinal (using the fast seeded hash)
+        /// </summary>
+        bool UseFastStrings
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => !typeof(TKey).IsValueType && FastStrings;
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryAdd(TKey key, TValue value)
-            => Sse2.IsSupported ? Sse2_TryAdd(key, value) : Fallback_TryAdd(key, value);
+        {
+            if (IsNull(key)) ThrowKeyNull();
+            if (UseDefaultComparer)
+                return Add<DefaultKeyComparer>(key, value, false);
+            if (UseFastStrings)
+                return Add<FastStringKeyComparer>(key, value, false);
+            return Add<CustomKeyComparer>(key, value, false);
+        }
+
+        /// <summary>
+        /// Add a key, or update the value if the key already exists
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        void Set(TKey key, TValue value)
+        {
+            if (IsNull(key)) ThrowKeyNull();
+            if (UseDefaultComparer)
+                Add<DefaultKeyComparer>(key, value, true);
+            else if (UseFastStrings)
+                Add<FastStringKeyComparer>(key, value, true);
+            else
+                Add<CustomKeyComparer>(key, value, true);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        bool Add<TCmp>(TKey key, TValue value, bool overwrite) where TCmp : struct, IKeyComparer
+            => Vector128.IsHardwareAccelerated ? AddCore<VectorProbe, TCmp>(key, value, overwrite) : AddCore<FallbackProbe, TCmp>(key, value, overwrite);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
-            => Sse2.IsSupported ? Sse2_TryGetValue(key, out value) : Fallback_TryGetValue(key, out value);
+        {
+            if (IsNull(key)) ThrowKeyNull();
+            if (UseDefaultComparer)
+                return Get<DefaultKeyComparer>(key, out value);
+            if (UseFastStrings)
+                return Get<FastStringKeyComparer>(key, out value);
+            return Get<CustomKeyComparer>(key, out value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        bool Get<TCmp>(TKey key, [MaybeNullWhen(false)] out TValue value) where TCmp : struct, IKeyComparer
+            => Vector128.IsHardwareAccelerated ? TryGetValueCore<VectorProbe, TCmp>(key, out value) : TryGetValueCore<FallbackProbe, TCmp>(key, out value);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryRemove(TKey key, [MaybeNullWhen(false)] out TValue value)
-            => Sse2.IsSupported ? Sse2_TryRemove(key, out value) : Fallback_TryRemove(key, out value);
-
+            => Remove(key, out value, false, default);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        byte GetKeyTag(int hashCode)
+        bool Remove(TKey key, [MaybeNullWhen(false)] out TValue value, bool matchValue, TValue expected)
         {
-            byte tag = (byte)((hashCode >> 24) & 0xFF);
-            return tag < 2 ? (byte)2 : tag;
+            if (IsNull(key)) ThrowKeyNull();
+            if (UseDefaultComparer)
+                return Remove<DefaultKeyComparer>(key, out value, matchValue, expected);
+            if (UseFastStrings)
+                return Remove<FastStringKeyComparer>(key, out value, matchValue, expected);
+            return Remove<CustomKeyComparer>(key, out value, matchValue, expected);
         }
 
-        sealed class Segment
-        {
-            public int LockState;
-            public byte[] Tags;
-            public Entry[] Entries;
-            public int CapacityMask;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        bool Remove<TCmp>(TKey key, [MaybeNullWhen(false)] out TValue value, bool matchValue, TValue expected) where TCmp : struct, IKeyComparer
+            => Vector128.IsHardwareAccelerated ? RemoveCore<VectorProbe, TCmp>(key, out value, matchValue, expected) : RemoveCore<FallbackProbe, TCmp>(key, out value, matchValue, expected);
 
-            public struct Entry
+        [DoesNotReturn]
+        static void ThrowKeyNull() => throw new ArgumentNullException("key");
+
+
+        #region Hashing
+
+        /// <summary>
+        /// How keys are hashed and compared
+        /// </summary>
+        interface IKeyComparer
+        {
+            /// <summary>
+            /// Get the 64 bit hash used for selecting the segment (and the slot, unless the table is randomized)
+            /// </summary>
+            static abstract ulong GetHash(IEqualityComparer<TKey> comparer, TKey key);
+
+            /// <summary>
+            /// Get the 64 bit hash used for selecting the slot in a table (the tag and home block)
+            /// </summary>
+            /// <param name="table">The table</param>
+            /// <param name="hash">The hash from GetHash</param>
+            /// <param name="key">The key</param>
+            /// <param name="comparer">The comparer instance</param>
+            static abstract ulong GetTableHash(Table table, ulong hash, TKey key, IEqualityComparer<TKey> comparer);
+
+            static abstract bool Equals(IEqualityComparer<TKey> comparer, TKey a, TKey b);
+
+            /// <summary>
+            /// True if tables can be switched to a randomized hash when collisions are detected
+            /// </summary>
+            static abstract bool CanRandomize { get; }
+        }
+
+        /// <summary>
+        /// The default comparer for value types (devirtualized and inlined by the JIT), the comparer argument is null
+        /// </summary>
+        struct DefaultKeyComparer : IKeyComparer
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong GetHash(IEqualityComparer<TKey> comparer, TKey key) => Mix(EqualityComparer<TKey>.Default.GetHashCode(key));
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong GetTableHash(Table table, ulong hash, TKey key, IEqualityComparer<TKey> comparer) => hash;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static bool Equals(IEqualityComparer<TKey> comparer, TKey a, TKey b) => EqualityComparer<TKey>.Default.Equals(a, b);
+
+            public static bool CanRandomize => false;
+        }
+
+        /// <summary>
+        /// A comparer instance
+        /// </summary>
+        struct CustomKeyComparer : IKeyComparer
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong GetHash(IEqualityComparer<TKey> comparer, TKey key) => Mix(comparer.GetHashCode(key));
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong GetTableHash(Table table, ulong hash, TKey key, IEqualityComparer<TKey> comparer) => hash;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static bool Equals(IEqualityComparer<TKey> comparer, TKey a, TKey b) => comparer.Equals(a, b);
+
+            public static bool CanRandomize => false;
+        }
+
+        /// <summary>
+        /// Ordinal string keys (TKey is string), using a fast seeded hash.
+        /// If collisions are detected in a table, it's rebuilt using the (randomized) ordinal comparer for the slots, 
+        /// the fast hash is still used for selecting the segment (an attack can at worst put all keys in the same segment).
+        /// </summary>
+        struct FastStringKeyComparer : IKeyComparer
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong GetHash(IEqualityComparer<TKey> comparer, TKey key) => LowAllocStringHash.GetHash(Unsafe.As<TKey, string>(ref key));
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static ulong GetTableHash(Table table, ulong hash, TKey key, IEqualityComparer<TKey> comparer)
+                => table.Randomized ? Mix(comparer.GetHashCode(key)) : hash;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static bool Equals(IEqualityComparer<TKey> comparer, TKey a, TKey b) => string.Equals(Unsafe.As<TKey, string>(ref a), Unsafe.As<TKey, string>(ref b));
+
+            public static bool CanRandomize => true;
+        }
+
+        /// <summary>
+        /// Mix a hash code into a 64 bit hash (fibonacci hashing), the high bits depends on all bits of the hash code.
+        /// Bits 58-63 selects the segment, bits 50-57 is the tag and bits 18-49 selects the home block.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ulong Mix(int hashCode) => unchecked((uint)hashCode * 0x9E3779B97F4A7C15UL);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        ulong GetHash<TCmp>(TKey key) where TCmp : struct, IKeyComparer => TCmp.GetHash(Comparer, key);
+
+        /// <summary>
+        /// Get the hash used for the slots of a table, without a comparer strategy (for the slow paths)
+        /// </summary>
+        ulong GetSlotHash(TKey key, bool randomized)
+        {
+            if (UseDefaultComparer)
+                return GetHash<DefaultKeyComparer>(key);
+            if (UseFastStrings)
+                return randomized ? Mix(Comparer.GetHashCode(key)) : GetHash<FastStringKeyComparer>(key);
+            return GetHash<CustomKeyComparer>(key);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        ref LowAllocDictionarySegment GetSegment(ulong h)
+            // The index is always less than SegmentCount (no bounds check needed)
+            => ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Segments), GetSegmentIndex(h));
+
+        static readonly bool KeyIsNullable = Nullable.GetUnderlyingType(typeof(TKey)) != null;
+
+        /// <summary>
+        /// Check if a key is null, without boxing value types (a "key == null" check boxes in unoptimized code)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static bool IsNull(TKey key) => typeof(TKey).IsValueType ? (KeyIsNullable && (key == null)) : (key == null);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static int GetSegmentIndex(ulong h) => (int)(h >> (64 - SegmentBits));
+
+        /// <summary>
+        /// 0 and 1 are reserved for empty and tombstone
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static byte GetKeyTag(ulong h)
+        {
+            byte tag = (byte)(h >> (56 - SegmentBits));
+            return tag <= TagTombstone ? (byte)(tag + 2) : tag;
+        }
+
+        /// <summary>
+        /// Map the hash to a block, works for any number of blocks (not just a power of two)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static int GetHomeBlock(ulong h, int blocks) => (int)((((h >> 18) & 0xffffffffUL) * (uint)blocks) >> 32);
+
+        #endregion//Hashing
+
+        #region Storage
+
+        struct Entry
+        {
+            public TKey Key;
+            public TValue Value;
+        }
+
+        /// <summary>
+        /// The storage of a segment, the tags and entries are always consistent with each other.
+        /// A table is never resized, a new table is created and published instead.
+        /// </summary>
+        sealed class Table
+        {
+            public readonly byte[] Tags;
+            /// <summary>
+            /// Only valid where the tag is a live tag (may be uninitialized memory elsewhere)
+            /// </summary>
+            public readonly Entry[] Entries;
+            /// <summary>
+            /// Number of blocks of BlockSize slots
+            /// </summary>
+            public readonly int Blocks;
+            /// <summary>
+            /// When the number of used slots reaches this, the table must be rebuilt (7/8 load factor)
+            /// </summary>
+            public readonly int MaxUsed;
+            /// <summary>
+            /// True if the slots are selected using the randomized fallback hash (see <see cref="FastStringKeyComparer"/>)
+            /// </summary>
+            public readonly bool Randomized;
+            /// <summary>
+            /// Number of live entries (only modified while holding the segment lock)
+            /// </summary>
+            public int Live;
+            /// <summary>
+            /// Number of non empty slots, live + tombstones (only modified while holding the segment lock)
+            /// </summary>
+            public int Used;
+
+            public Table(int blocks, bool randomized = false)
             {
-                public TKey Key;
-                public TValue Value;
+                Randomized = randomized;
+                var slots = blocks << BlockBits;
+                Tags = new byte[slots];
+                // No need to clear unmanaged memory, the tags tells what entries are valid
+                Entries = GC.AllocateUninitializedArray<Entry>(slots);
+                Blocks = blocks;
+                MaxUsed = slots - (slots >> 3);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static Table GetTable(ref LowAllocDictionarySegment seg) => Unsafe.As<Table>(Volatile.Read(ref seg.Table));
+
+        /// <summary>
+        /// Must hold the lock, creates and publishes a new table without any tombstones.
+        /// The old table is never modified after this, so concurrent readers of it are safe.
+        /// </summary>
+        /// <param name="seg">The segment to rebuild</param>
+        /// <param name="grow">True to force the table to grow, else it only grows if many entries are live</param>
+        /// <param name="randomized">True to use the randomized fallback hash for the slots of the new table</param>
+        /// <returns>The new table</returns>
+        Table Rebuild(ref LowAllocDictionarySegment seg, bool grow, bool randomized)
+        {
+            var old = Unsafe.As<Table>(seg.Table);
+            var oldSlots = old.Blocks << BlockBits;
+            // Only grow if there are many live entries, else just get rid of the tombstones
+            long newBlocks = (grow || (old.Live >= (oldSlots >> 1))) ? old.Blocks * 2L : old.Blocks;
+            if (newBlocks > MaxBlocks)
+            {
+                if ((old.Blocks < MaxBlocks) || (!grow && (old.Live < old.MaxUsed)))
+                    newBlocks = MaxBlocks;
+                else
+                    throw new InvalidOperationException("Dictionary segment is full");
+            }
+            var t = new Table((int)newBlocks, randomized);
+            var newTags = t.Tags;
+            var newEntries = t.Entries;
+            var newSlots = newTags.Length;
+            var blocks = t.Blocks;
+            var oldTags = old.Tags;
+            var oldEntries = old.Entries;
+            int live = 0;
+            for (int i = 0; i < oldSlots; i++)
+            {
+                if (oldTags[i] <= TagTombstone)
+                    continue;
+                ref var e = ref oldEntries[i];
+                // The tag must be recomputed, since the slot hash changes if the table is randomized
+                var h = GetSlotHash(e.Key, randomized);
+                int idx = GetHomeBlock(h, blocks) << BlockBits;
+                while (newTags[idx] != TagEmpty)
+                {
+                    if (++idx == newSlots)
+                        idx = 0;
+                }
+                newTags[idx] = GetKeyTag(h);
+                newEntries[idx] = e;
+                ++live;
+            }
+            t.Live = live;
+            t.Used = live;
+            Volatile.Write(ref seg.Table, t);
+            return t;
+        }
+
+        #endregion//Storage
+
+        #region Probing
+
+        /// <summary>
+        /// Probing strategy, both strategies must use the same probe order.
+        /// A key is always located before the first empty slot of its probe sequence,
+        /// the probe sequence starts at the beginning of the home block and is linear (wrapping around).
+        /// </summary>
+        interface IProbe
+        {
+            /// <summary>
+            /// Find the index of the key, -1 if not found.
+            /// May be called without holding the lock (the result must then be validated).
+            /// </summary>
+            static abstract int Find<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer) where TCmp : struct, IKeyComparer;
+
+            /// <summary>
+            /// Same as Find, but also measures the probe (to detect hash collision attacks).
+            /// Must hold the lock.
+            /// </summary>
+            /// <param name="falseTagMatches">The number of slots with a matching tag but a different key</param>
+            /// <param name="blocksScanned">The number of blocks scanned</param>
+            static abstract int FindForInsert<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer, out int falseTagMatches, out int blocksScanned) where TCmp : struct, IKeyComparer;
+
+            /// <summary>
+            /// Find the first free (empty or tombstone) slot, -1 if none exist.
+            /// Must hold the lock.
+            /// </summary>
+            static abstract int FindFree(Table table, int homeBlock);
+        }
+
+        /// <summary>
+        /// Checks the tags of a block (16 slots) at a time using SIMD (SSE2, AdvSimd etc)
+        /// </summary>
+        struct VectorProbe : IProbe
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static int Find<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer) where TCmp : struct, IKeyComparer
+            {
+                ref byte tags = ref MemoryMarshal.GetArrayDataReference(table.Tags);
+                ref Entry entries = ref MemoryMarshal.GetArrayDataReference(table.Entries);
+                int blocks = table.Blocks;
+                int block = homeBlock;
+                var tagVector = Vector128.Create(tag);
+                for (int attempts = 0; attempts < blocks; ++attempts)
+                {
+                    int first = block << BlockBits;
+                    var loaded = Vector128.LoadUnsafe(ref tags, (nuint)first);
+                    uint matchMask = Vector128.Equals(loaded, tagVector).ExtractMostSignificantBits();
+                    while (matchMask != 0)
+                    {
+                        int idx = first + BitOperations.TrailingZeroCount(matchMask);
+                        var k = Unsafe.Add(ref entries, idx).Key;
+                        // A concurrent remove may have cleared the key (lock free read), the read is retried in that case
+                        if (!IsNull(k) && TCmp.Equals(comparer, k, key))
+                            return idx;
+                        matchMask &= matchMask - 1;
+                    }
+                    if (Vector128.Equals(loaded, Vector128<byte>.Zero).ExtractMostSignificantBits() != 0)
+                        return -1;
+                    if (++block == blocks)
+                        block = 0;
+                }
+                return -1;
             }
 
-            public Segment(int initialCapacity)
+            public static int FindForInsert<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer, out int falseTagMatches, out int blocksScanned) where TCmp : struct, IKeyComparer
             {
-                int powerOfTwoCap = BlockSize;
-                while (powerOfTwoCap < initialCapacity) powerOfTwoCap <<= 1;
-
-                Tags = new byte[powerOfTwoCap];
-                Entries = GC.AllocateUninitializedArray<Entry>(powerOfTwoCap); // new Entry[powerOfTwoCap];
-                CapacityMask = powerOfTwoCap - 1;
+                ref byte tags = ref MemoryMarshal.GetArrayDataReference(table.Tags);
+                ref Entry entries = ref MemoryMarshal.GetArrayDataReference(table.Entries);
+                int blocks = table.Blocks;
+                int block = homeBlock;
+                var tagVector = Vector128.Create(tag);
+                int falseMatches = 0;
+                int attempts = 0;
+                int result = -1;
+                while (attempts < blocks)
+                {
+                    ++attempts;
+                    int first = block << BlockBits;
+                    var loaded = Vector128.LoadUnsafe(ref tags, (nuint)first);
+                    uint matchMask = Vector128.Equals(loaded, tagVector).ExtractMostSignificantBits();
+                    while (matchMask != 0)
+                    {
+                        int idx = first + BitOperations.TrailingZeroCount(matchMask);
+                        if (TCmp.Equals(comparer, Unsafe.Add(ref entries, idx).Key, key))
+                        {
+                            result = idx;
+                            goto done;
+                        }
+                        ++falseMatches;
+                        matchMask &= matchMask - 1;
+                    }
+                    if (Vector128.Equals(loaded, Vector128<byte>.Zero).ExtractMostSignificantBits() != 0)
+                        break;
+                    if (++block == blocks)
+                        block = 0;
+                }
+            done:
+                falseTagMatches = falseMatches;
+                blocksScanned = attempts;
+                return result;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void EnterLock()
+            public static int FindFree(Table table, int homeBlock)
             {
-                if (Interlocked.CompareExchange(ref LockState, 1, 0) == 0) return;
-
-                int spinCount = 1;
-                while (Interlocked.CompareExchange(ref LockState, 1, 0) != 0)
+                ref byte tags = ref MemoryMarshal.GetArrayDataReference(table.Tags);
+                int blocks = table.Blocks;
+                int block = homeBlock;
+                var tombstone = Vector128.Create(TagTombstone);
+                for (int attempts = 0; attempts < blocks; ++attempts)
                 {
-                    Thread.SpinWait(spinCount);
-                    if (spinCount < 64) spinCount <<= 1;
+                    int first = block << BlockBits;
+                    var loaded = Vector128.LoadUnsafe(ref tags, (nuint)first);
+                    // tag <= 1 <=> min(tag, 1) == tag
+                    uint freeMask = Vector128.Equals(Vector128.Min(loaded, tombstone), loaded).ExtractMostSignificantBits();
+                    if (freeMask != 0)
+                        return first + BitOperations.TrailingZeroCount(freeMask);
+                    if (++block == blocks)
+                        block = 0;
+                }
+                return -1;
+            }
+        }
+
+        /// <summary>
+        /// Checks one slot at a time (for platforms without SIMD)
+        /// </summary>
+        struct FallbackProbe : IProbe
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static int Find<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer) where TCmp : struct, IKeyComparer
+            {
+                var tags = table.Tags;
+                var entries = table.Entries;
+                int slots = tags.Length;
+                int idx = homeBlock << BlockBits;
+                for (int attempts = 0; attempts < slots; ++attempts)
+                {
+                    byte t = tags[idx];
+                    if (t == TagEmpty)
+                        return -1;
+                    if (t == tag)
+                    {
+                        var k = entries[idx].Key;
+                        // A concurrent remove may have cleared the key (lock free read), the read is retried in that case
+                        if (!IsNull(k) && TCmp.Equals(comparer, k, key))
+                            return idx;
+                    }
+                    if (++idx == slots)
+                        idx = 0;
+                }
+                return -1;
+            }
+
+            public static int FindForInsert<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer, out int falseTagMatches, out int blocksScanned) where TCmp : struct, IKeyComparer
+            {
+                var tags = table.Tags;
+                var entries = table.Entries;
+                int slots = tags.Length;
+                int start = homeBlock << BlockBits;
+                int idx = start;
+                int falseMatches = 0;
+                int scanned = 0;
+                int result = -1;
+                while (scanned < slots)
+                {
+                    ++scanned;
+                    byte t = tags[idx];
+                    if (t == TagEmpty)
+                        break;
+                    if (t == tag)
+                    {
+                        if (TCmp.Equals(comparer, entries[idx].Key, key))
+                        {
+                            result = idx;
+                            break;
+                        }
+                        ++falseMatches;
+                    }
+                    if (++idx == slots)
+                        idx = 0;
+                }
+                falseTagMatches = falseMatches;
+                blocksScanned = (scanned + BlockSize - 1) >> BlockBits;
+                return result;
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public static int FindFree(Table table, int homeBlock)
+            {
+                var tags = table.Tags;
+                int slots = tags.Length;
+                int idx = homeBlock << BlockBits;
+                for (int attempts = 0; attempts < slots; ++attempts)
+                {
+                    if (tags[idx] <= TagTombstone)
+                        return idx;
+                    if (++idx == slots)
+                        idx = 0;
+                }
+                return -1;
+            }
+        }
+
+        #endregion//Probing
+
+        #region Operations
+
+        /// <summary>
+        /// Add a key
+        /// </summary>
+        /// <param name="key">The key to add</param>
+        /// <param name="value">The value to add</param>
+        /// <param name="overwrite">If true, an existing value is overwritten (and true is returned)</param>
+        /// <returns>True if the value was added (or overwritten), false if the key exists (and overwrite is false)</returns>
+        bool AddCore<TProbe, TCmp>(TKey key, TValue value, bool overwrite) where TProbe : struct, IProbe where TCmp : struct, IKeyComparer
+        {
+            var comparer = Comparer;
+            var h = GetHash<TCmp>(key);
+            ref var seg = ref GetSegment(h);
+
+            seg.EnterLock();
+            try
+            {
+                var table = Unsafe.As<Table>(seg.Table);
+                var th = TCmp.GetTableHash(table, h, key, comparer);
+                int idx = TProbe.FindForInsert<TCmp>(table, GetHomeBlock(th, table.Blocks), GetKeyTag(th), key, comparer, out var falseTagMatches, out var blocksScanned);
+                if (idx >= 0)
+                {
+                    if (!overwrite)
+                        return false;
+                    seg.BeginWrite();
+                    table.Entries[idx].Value = value;
+                    seg.EndWrite();
+                    return true;
+                }
+                if (TCmp.CanRandomize && !table.Randomized && ((falseTagMatches >= MaxFalseTagMatches) || (blocksScanned >= MaxProbeBlocks)))
+                {
+                    // Hash collisions (an attack?), switch the table to the randomized hash
+                    table = Rebuild(ref seg, false, true);
+                    th = TCmp.GetTableHash(table, h, key, comparer);
+                }
+                else if (table.Used >= table.MaxUsed)
+                {
+                    table = Rebuild(ref seg, false, table.Randomized);
+                }
+                for (; ; )
+                {
+                    idx = TProbe.FindFree(table, GetHomeBlock(th, table.Blocks));
+                    if (idx >= 0)
+                        break;
+                    table = Rebuild(ref seg, true, table.Randomized);
+                }
+                seg.BeginWrite();
+                ref var e = ref table.Entries[idx];
+                e.Key = key;
+                e.Value = value;
+                ref var t = ref table.Tags[idx];
+                if (t == TagEmpty)
+                    ++table.Used;
+                t = GetKeyTag(th);
+                ++table.Live;
+                seg.EndWrite();
+                return true;
+            }
+            finally
+            {
+                seg.ExitLock();
+            }
+        }
+
+        /// <summary>
+        /// The lookup fast path, a single lock free attempt (the common case), retries are done in <see cref="TryGetValueSlow"/>.
+        /// Kept small, so that the JIT doesn't need to save and spill many registers.
+        /// </summary>
+        bool TryGetValueCore<TProbe, TCmp>(TKey key, [MaybeNullWhen(false)] out TValue value) where TProbe : struct, IProbe where TCmp : struct, IKeyComparer
+        {
+            var h = GetHash<TCmp>(key);
+            ref var seg = ref GetSegment(h);
+            int version = Volatile.Read(ref seg.Version);
+            var table = GetTable(ref seg);
+            var comparer = Comparer;
+            var th = TCmp.GetTableHash(table, h, key, comparer);
+            // The table is always consistent (never torn), so it's safe to search even if a write is in progress (the result is then discarded)
+            int idx = TProbe.Find<TCmp>(table, GetHomeBlock(th, table.Blocks), GetKeyTag(th), key, comparer);
+            value = idx >= 0 ? Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Entries), idx).Value : default;
+            // Make sure that all reads above are done before validating the version
+            Volatile.ReadBarrier();
+            if (((version & 1) == 0) && (Volatile.Read(ref seg.Version) == version))
+                return idx >= 0;
+            return TryGetValueSlow<TProbe, TCmp>(ref seg, h, key, out value);
+        }
+
+        /// <summary>
+        /// A write happened during the lock free read, retry (and eventually read under the lock)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool TryGetValueSlow<TProbe, TCmp>(ref LowAllocDictionarySegment seg, ulong h, TKey key, [MaybeNullWhen(false)] out TValue value) where TProbe : struct, IProbe where TCmp : struct, IKeyComparer
+        {
+            var comparer = Comparer;
+            for (int attempt = 0; attempt < MaxOptimisticReads; ++attempt)
+            {
+                Thread.SpinWait(attempt + 1);
+                int version = Volatile.Read(ref seg.Version);
+                if ((version & 1) == 0)
+                {
+                    var table = GetTable(ref seg);
+                    var th = TCmp.GetTableHash(table, h, key, comparer);
+                    int idx = TProbe.Find<TCmp>(table, GetHomeBlock(th, table.Blocks), GetKeyTag(th), key, comparer);
+                    value = idx >= 0 ? table.Entries[idx].Value : default;
+                    Volatile.ReadBarrier();
+                    if (Volatile.Read(ref seg.Version) == version)
+                        return idx >= 0;
                 }
             }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void ExitLock()
+            // Heavy write contention, read while holding the lock
+            seg.EnterLock();
+            try
             {
-                Volatile.Write(ref LockState, 0);
+                var table = Unsafe.As<Table>(seg.Table);
+                var th = TCmp.GetTableHash(table, h, key, comparer);
+                int idx = TProbe.Find<TCmp>(table, GetHomeBlock(th, table.Blocks), GetKeyTag(th), key, comparer);
+                value = idx >= 0 ? table.Entries[idx].Value : default;
+                return idx >= 0;
             }
-
-            public void EnsureCapacity(IEqualityComparer<TKey> comparer)
+            finally
             {
-                int oldCapacity = Tags.Length;
-                int newCapacity = oldCapacity * 2;
+                seg.ExitLock();
+            }
+        }
 
-                var newTags = new byte[newCapacity];
-                var newEntries = GC.AllocateUninitializedArray<Entry>(newCapacity); // new Entry[newCapacity];
+        /// <summary>
+        /// Remove a key
+        /// </summary>
+        /// <param name="key">The key to remove</param>
+        /// <param name="value">The value of the removed key</param>
+        /// <param name="matchValue">If true, the key is only removed if the current value equals the expected value</param>
+        /// <param name="expected">The expected value (if matchValue is true)</param>
+        /// <returns>True if the key was removed</returns>
+        bool RemoveCore<TProbe, TCmp>(TKey key, [MaybeNullWhen(false)] out TValue value, bool matchValue, TValue expected) where TProbe : struct, IProbe where TCmp : struct, IKeyComparer
+        {
+            var comparer = Comparer;
+            var h = GetHash<TCmp>(key);
+            ref var seg = ref GetSegment(h);
 
-                int newMask = newCapacity - 1;
-
-                var tags = Tags;
-                var entries = Entries;
-                for (int i = 0; i < oldCapacity; i++)
+            seg.EnterLock();
+            try
+            {
+                var table = Unsafe.As<Table>(seg.Table);
+                var th = TCmp.GetTableHash(table, h, key, comparer);
+                int idx = TProbe.Find<TCmp>(table, GetHomeBlock(th, table.Blocks), GetKeyTag(th), key, comparer);
+                if (idx < 0)
                 {
-                    byte tag = tags[i];
-                    if (tag > 1)
+                    value = default;
+                    return false;
+                }
+                ref var e = ref table.Entries[idx];
+                if (matchValue && !EqualityComparer<TValue>.Default.Equals(e.Value, expected))
+                {
+                    value = default;
+                    return false;
+                }
+                seg.BeginWrite();
+                value = e.Value;
+                table.Tags[idx] = TagTombstone;
+                // Release the references, so that the key and value can be collected
+                if (RuntimeHelpers.IsReferenceOrContainsReferences<Entry>())
+                    e = default;
+                --table.Live;
+                seg.EndWrite();
+                return true;
+            }
+            finally
+            {
+                seg.ExitLock();
+            }
+        }
+        /// <summary>
+        /// Read a slot of a table, the result is consistent (not torn) even if the slot is modified concurrently
+        /// </summary>
+        static bool TryReadSlot(ref LowAllocDictionarySegment seg, Table table, int idx, out KeyValuePair<TKey, TValue> pair)
+        {
+            for (int attempt = 0; attempt < MaxOptimisticReads; ++attempt)
+            {
+                int version = Volatile.Read(ref seg.Version);
+                if ((version & 1) == 0)
+                {
+                    bool live = table.Tags[idx] > TagTombstone;
+                    var e = table.Entries[idx];
+                    Volatile.ReadBarrier();
+                    if (Volatile.Read(ref seg.Version) == version)
                     {
-                        int hashCode = comparer.GetHashCode(entries[i].Key);
-                        int targetBucket = (hashCode & int.MaxValue) & newMask;
-                        int currentIdx = targetBucket & ~(BlockSize - 1);
-
-                        while (true)
-                        {
-                            if (newTags[currentIdx] == 0)
-                            {
-                                newTags[currentIdx] = tag;
-                                newEntries[currentIdx] = Entries[i];
-                                break;
-                            }
-                            currentIdx = (currentIdx + 1) & newMask;
-                        }
+                        pair = live ? new KeyValuePair<TKey, TValue>(e.Key, e.Value) : default;
+                        return live;
                     }
                 }
-
-                Tags = newTags;
-                Entries = newEntries;
-                CapacityMask = newMask;
+                Thread.SpinWait(attempt + 1);
             }
+            // The table is either the current one (modified under the lock) or an old one (never modified)
+            seg.EnterLock();
+            try
+            {
+                if (table.Tags[idx] > TagTombstone)
+                {
+                    var e = table.Entries[idx];
+                    pair = new KeyValuePair<TKey, TValue>(e.Key, e.Value);
+                    return true;
+                }
+            }
+            finally
+            {
+                seg.ExitLock();
+            }
+            pair = default;
+            return false;
         }
+
+        #endregion//Operations
 
         public void Clear()
         {
+            var clearEntries = RuntimeHelpers.IsReferenceOrContainsReferences<Entry>();
+            var segs = Segments;
             for (int s = 0; s < SegmentCount; s++)
             {
-                var seg = Segments[s];
+                ref var seg = ref segs[s];
                 seg.EnterLock();
                 try
                 {
-                    seg.Tags.AsSpan().Clear();
-                    //Array.Clear(seg.Tags);
-                    //Array.Clear(seg.Entries);
+                    var table = Unsafe.As<Table>(seg.Table);
+                    if (table.Used <= 0)
+                        continue;
+                    seg.BeginWrite();
+                    table.Tags.AsSpan().Clear();
+                    // Release the references, so that the keys and values can be collected
+                    if (clearEntries)
+                        table.Entries.AsSpan().Clear();
+                    table.Live = 0;
+                    table.Used = 0;
+                    seg.EndWrite();
                 }
                 finally
                 {
@@ -202,34 +923,49 @@ namespace SysWeaver
 
         public void Add(KeyValuePair<TKey, TValue> item) => Add(item.Key, item.Value);
         public bool Contains(KeyValuePair<TKey, TValue> item) => TryGetValue(item.Key, out var val) && EqualityComparer<TValue>.Default.Equals(val, item.Value);
-        public bool Remove(KeyValuePair<TKey, TValue> item) => Contains(item) && Remove(item.Key);
+
+        /// <summary>
+        /// Remove the key, only if the value matches (atomically)
+        /// </summary>
+        public bool Remove(KeyValuePair<TKey, TValue> item)
+            => Remove(item.Key, out _, true, item.Value);
 
         public List<KeyValuePair<TKey, TValue>> ToList()
-            => new List<KeyValuePair<TKey, TValue>>(this);
+        {
+            // Don't use the List constructor, it would call Count and CopyTo (that uses ToList)
+            var list = new List<KeyValuePair<TKey, TValue>>(Count);
+            foreach (var p in this)
+                list.Add(p);
+            return list;
+        }
 
         public KeyValuePair<TKey, TValue>[] ToArray()
-            => new List<KeyValuePair<TKey, TValue>>(this).ToArray();
+            => ToList().ToArray();
 
         public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
         {
-            int cursor = arrayIndex;
-            var mx = array.Length;
-            foreach (var pair in this)
-            {
-                if (cursor >= mx)
-                    break;
-                array[cursor] = pair;
-                ++cursor;
-            }
+            ArgumentNullException.ThrowIfNull(array);
+            ArgumentOutOfRangeException.ThrowIfNegative(arrayIndex);
+            // Take a snapshot, the number of items may change while copying
+            var items = ToList();
+            if (items.Count > array.Length - arrayIndex)
+                throw new ArgumentException("The destination array is too small", nameof(array));
+            items.CopyTo(array, arrayIndex);
         }
 
-        struct Enumerator : IEnumerator<KeyValuePair<TKey, TValue>>
+        /// <summary>
+        /// Enumerates the items without allocating any memory (when used with foreach on the dictionary type).
+        /// The enumeration is weakly consistent (like ConcurrentDictionary):
+        /// Items that exist during the whole enumeration are returned exactly once.
+        /// Items added or removed during the enumeration may or may not be returned, a key that is removed and added again during the enumeration may be returned twice.
+        /// A returned key value pair is never torn.
+        /// </summary>
+        public struct Enumerator : IEnumerator<KeyValuePair<TKey, TValue>>
         {
             readonly LowAllocConcurrentDictionary<TKey, TValue> Dict;
             int SegmentIdx;
             int SlotIdx;
-            byte[] CurrentTags;
-            Segment.Entry[] CurrentEntries;
+            Table CurrentTable;
             KeyValuePair<TKey, TValue> C;
 
             internal Enumerator(LowAllocConcurrentDictionary<TKey, TValue> dict)
@@ -237,465 +973,234 @@ namespace SysWeaver
                 Dict = dict;
                 SegmentIdx = 0;
                 SlotIdx = -1;
-                CurrentTags = Volatile.Read(ref dict.Segments[0].Tags);
-                CurrentEntries = Volatile.Read(ref Dict.Segments[0].Entries);
+                CurrentTable = null;
                 C = default;
             }
 
             public bool MoveNext()
             {
-                var segmentIdx = SegmentIdx;
-                var slotIdx = SlotIdx;
-                var segCount = SegmentCount;
-                var ds = Dict.Segments;
-                var currentTags = CurrentTags;
-                var currentEntries = CurrentEntries;
-                while (segmentIdx < segCount)
+                var segs = Dict.Segments;
+                for (; ; )
                 {
-                    slotIdx++;
-                    if (slotIdx >= currentTags.Length)
+                    var table = CurrentTable;
+                    if (table == null)
                     {
-                        segmentIdx++;
-                        if (segmentIdx >= segCount) break;
-                        currentTags = Volatile.Read(ref ds[segmentIdx].Tags);
-                        currentEntries = Volatile.Read(ref ds[segmentIdx].Entries);
-                        slotIdx = 0;
+                        if (SegmentIdx >= SegmentCount)
+                            return false;
+                        // A table is either the current one or an old one (never modified), so items never move while enumerating it
+                        table = GetTable(ref segs[SegmentIdx]);
+                        CurrentTable = table;
+                        SlotIdx = -1;
                     }
-
-                    if (currentTags[slotIdx] > 1)
+                    var tags = table.Tags;
+                    var idx = SlotIdx;
+                    while (++idx < tags.Length)
                     {
-                        var entry = currentEntries[slotIdx];
-                        C = new KeyValuePair<TKey, TValue>(entry.Key, entry.Value);
-                        CurrentEntries = currentEntries;
-                        CurrentTags = currentTags;
-                        SegmentIdx = segmentIdx;
-                        SlotIdx = slotIdx;
-                        return true;
+                        if (tags[idx] <= TagTombstone)
+                            continue;
+                        if (TryReadSlot(ref segs[SegmentIdx], table, idx, out C))
+                        {
+                            SlotIdx = idx;
+                            return true;
+                        }
                     }
+                    CurrentTable = null;
+                    ++SegmentIdx;
                 }
-                        CurrentEntries = currentEntries;
-                        CurrentTags = currentTags;
-                        SegmentIdx = segmentIdx;
-                        SlotIdx = slotIdx;
-                return false;
             }
 
-            public KeyValuePair<TKey, TValue> Current => C;
-            object IEnumerator.Current => C;
-            public void Reset() { SegmentIdx = 0; SlotIdx = -1; }
-            public void Dispose() { }
+            public readonly KeyValuePair<TKey, TValue> Current => C;
+            readonly object IEnumerator.Current => C;
+
+            public void Reset()
+            {
+                SegmentIdx = 0;
+                SlotIdx = -1;
+                CurrentTable = null;
+                C = default;
+            }
+
+            public readonly void Dispose() { }
         }
 
-        public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() => new Enumerator(this);
-        
+        /// <summary>
+        /// Get an enumerator (a struct, so foreach on the dictionary type doesn't allocate)
+        /// </summary>
+        public Enumerator GetEnumerator() => new Enumerator(this);
+
+        IEnumerator<KeyValuePair<TKey, TValue>> IEnumerable<KeyValuePair<TKey, TValue>>.GetEnumerator() => new Enumerator(this);
 
         IEnumerator IEnumerable.GetEnumerator() => new Enumerator(this);
 
         List<TKey> GetKeysCollection()
         {
-            var list = new List<TKey>();
+            var list = new List<TKey>(Count);
             foreach (var p in this) list.Add(p.Key);
             return list;
         }
 
         List<TValue> GetValuesCollection()
         {
-            var list = new List<TValue>();
+            var list = new List<TValue>(Count);
             foreach (var p in this) list.Add(p.Value);
             return list;
         }
 
-
-        #region SSE2
-
-        unsafe bool Sse2_TryAdd(TKey key, TValue value)
-        {
-            if (key == null) throw new ArgumentNullException(nameof(key));
-
-            var comparer = Comparer;
-            int hashCode = comparer.GetHashCode(key);
-            Segment seg = Segments[(hashCode & int.MaxValue) & SegmentMask];
-            byte targetTag = GetKeyTag(hashCode);
-            int firstAvailableSlot = -1;
-            int attempts = 0;
-
-            seg.EnterLock();
-            try
-            {
-                int mask = seg.CapacityMask;
-                int initialBucket = (hashCode & int.MaxValue) & mask;
-                int currentBlockIdx = initialBucket & ~(BlockSize - 1);
-
-                int capacity = mask + 1;
-
-                fixed (byte* baseTagsPtr = seg.Tags)
-                {
-                    while (attempts < capacity)
-                    {
-                        byte* tagsPtr = baseTagsPtr + currentBlockIdx;
-                        Vector128<byte> loadedTags = Sse2.LoadVector128(tagsPtr);
-                        Vector128<byte> targetTagVector = Vector128.Create(targetTag);
-                        int matchMask = Sse2.MoveMask(Sse2.CompareEqual(loadedTags, targetTagVector));
-
-                        while (matchMask != 0)
-                        {
-                            int bitIndex = System.Numerics.BitOperations.TrailingZeroCount(matchMask);
-                            if (comparer.Equals(seg.Entries[currentBlockIdx + bitIndex].Key, key))
-                            {
-                                return false;
-                            }
-                            matchMask &= ~(1 << bitIndex);
-                        }
-
-                        if (firstAvailableSlot == -1)
-                        {
-                            int emptyMask = Sse2.MoveMask(Sse2.CompareEqual(loadedTags, Vector128<byte>.Zero));
-                            int tombstoneMask = Sse2.MoveMask(Sse2.CompareEqual(loadedTags, Vector128.Create((byte)1)));
-                            int freeMask = emptyMask | tombstoneMask;
-
-                            if (freeMask != 0)
-                            {
-                                firstAvailableSlot = currentBlockIdx + System.Numerics.BitOperations.TrailingZeroCount(freeMask);
-                            }
-                        }
-
-                        int hasEmpty = Sse2.MoveMask(Sse2.CompareEqual(loadedTags, Vector128<byte>.Zero));
-                        if (hasEmpty != 0) break;
-                        currentBlockIdx = (currentBlockIdx + BlockSize) & mask;
-                        attempts += BlockSize;
-                    }
-                }
-                if (firstAvailableSlot == -1)
-                {
-                    seg.EnsureCapacity(Comparer);
-                    seg.ExitLock();
-                    return TryAdd(key, value);
-                }
-
-                seg.Tags[firstAvailableSlot] = targetTag;
-                seg.Entries[firstAvailableSlot].Key = key;
-                seg.Entries[firstAvailableSlot].Value = value;
-                return true;
-            }
-            finally
-            {
-                seg.ExitLock();
-            }
-        }
-
-        unsafe bool Sse2_TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
-        {
-            if (key == null) throw new ArgumentNullException(nameof(key));
-
-            int hashCode = Comparer.GetHashCode(key);
-            Segment seg = Segments[(hashCode & int.MaxValue) & SegmentMask];
-            byte targetTag = GetKeyTag(hashCode);
-
-            // Optimistic completely lock-free read sequence using Volatile memory snapshots
-            byte[] tags = Volatile.Read(ref seg.Tags);
-            Segment.Entry[] entries = Volatile.Read(ref seg.Entries);
-            int mask = tags.Length - 1;
-
-            int initialBucket = (hashCode & int.MaxValue) & mask;
-            int currentBlockIdx = initialBucket & ~(BlockSize - 1);
-            int attempts = 0;
-            int capacity = mask + 1;
-
-            Vector128<byte> targetTagVector = Vector128.Create(targetTag);
-            Vector128<byte> zeroVector = Vector128.Create((byte)0);
-            var comparer = Comparer;
-            fixed (byte* baseTagsPtr = tags)
-            {
-                while (attempts < capacity)
-                {
-                    byte* tagsPtr = baseTagsPtr + currentBlockIdx;
-                    Vector128<byte> loadedTags = Sse2.LoadVector128(tagsPtr);
-                    int matchMask = Sse2.MoveMask(Sse2.CompareEqual(loadedTags, targetTagVector));
-                    while (matchMask != 0)
-                    {
-                        int bitIndex = System.Numerics.BitOperations.TrailingZeroCount(matchMask);
-                        int exactIdx = currentBlockIdx + bitIndex;
-
-                        if (comparer.Equals(entries[exactIdx].Key, key))
-                        {
-                            value = entries[exactIdx].Value;
-                            return true;
-                        }
-                        matchMask &= ~(1 << bitIndex);
-                    }
-                    int emptyMask = Sse2.MoveMask(Sse2.CompareEqual(loadedTags, zeroVector));
-                    if (emptyMask != 0)
-                        break;
-
-                    currentBlockIdx = (currentBlockIdx + BlockSize) & mask;
-                    attempts += BlockSize;
-                }
-            }
-            value = default;
-            return false;
-        }
-
-        unsafe bool Sse2_TryRemove(TKey key,  out TValue value)
-        {
-            if (key == null) throw new ArgumentNullException(nameof(key));
-
-            var comparer = Comparer;
-            int hashCode = comparer.GetHashCode(key);
-            Segment seg = Segments[(hashCode & int.MaxValue) & SegmentMask];
-            byte targetTag = GetKeyTag(hashCode);
-
-            // OPTIMIZATION: Hoist the mask directly from the segment field to avoid array header heap lookups
-            int mask = seg.CapacityMask;
-            byte[] tags = Volatile.Read(ref seg.Tags);
-            var entries = seg.Entries;
-
-            int initialBucket = (hashCode & int.MaxValue) & mask;
-            int currentBlockIdx = initialBucket & ~(BlockSize - 1);
-            int attempts = 0;
-            int capacity = mask + 1;
-
-            Vector128<byte> targetTagVector = Vector128.Create(targetTag);
-            Vector128<byte> zeroVector = Vector128.Create((byte)0);
-
-            fixed (byte* baseTagsPtr = tags)
-            {
-                while (attempts < capacity)
-                {
-                    byte* tagsPtr = baseTagsPtr + currentBlockIdx;
-
-                    Vector128<byte> loadedTags = Sse2.LoadVector128(tagsPtr);
-                    int matchMask = Sse2.MoveMask(Sse2.CompareEqual(loadedTags, targetTagVector));
-
-                    while (matchMask != 0)
-                    {
-                        int bitIndex = System.Numerics.BitOperations.TrailingZeroCount(matchMask);
-                        int exactIdx = currentBlockIdx + bitIndex;
-
-                        if (comparer.Equals(entries[exactIdx].Key, key))
-                        {
-                            seg.EnterLock();
-                            try
-                            {
-                                if (seg.Tags[exactIdx] == targetTag)
-                                {
-                                    ref var e = ref seg.Entries[exactIdx];
-                                    if (comparer.Equals(e.Key, key))
-                                    {
-                                        value = e.Value;
-                                        seg.Tags[exactIdx] = 1; // Mark as structural Tombstone
-                                        seg.Entries[exactIdx] = default; // Clear Key and Value atomically
-                                        return true;
-                                    }
-                                }
-                            }
-                            finally
-                            {
-                                seg.ExitLock();
-                            }
-                        }
-                        matchMask &= ~(1 << bitIndex);
-                    }
-
-                    // OPTIMIZATION: If this 16-element block has an empty slot (0), the search chain 
-                    // terminates here. The key cannot exist past this point.
-                    int emptyMask = Sse2.MoveMask(Sse2.CompareEqual(loadedTags, zeroVector));
-                    if (emptyMask != 0) break;
-
-                    currentBlockIdx = (currentBlockIdx + BlockSize) & mask;
-                    attempts += BlockSize;
-                }
-            }
-            value = default;
-            return false;
-        }
-
-        #endregion//SSE2
-
-
-        #region Fallback
-
-
-
-        unsafe bool Fallback_TryAdd(TKey key, TValue value)
-        {
-            if (key == null) throw new ArgumentNullException(nameof(key));
-
-            var comparer = Comparer;
-            int hashCode = comparer.GetHashCode(key);
-            Segment seg = Segments[(hashCode & int.MaxValue) & SegmentMask];
-            byte targetTag = GetKeyTag(hashCode);
-            int firstAvailableSlot = -1;
-            int attempts = 0;
-
-            seg.EnterLock();
-            try
-            {
-                int mask = seg.CapacityMask;
-                int initialBucket = (hashCode & int.MaxValue) & mask;
-                int currentBlockIdx = initialBucket & ~(BlockSize - 1);
-
-                int capacity = mask + 1;
-
-                fixed (byte* baseTagsPtr = seg.Tags)
-                {
-                    while (attempts < capacity)
-                    {
-                        byte* tagsPtr = baseTagsPtr + currentBlockIdx;
-                        for (int i = 0; i < BlockSize; i++)
-                        {
-                            int exactIdx = currentBlockIdx + i;
-                            byte t = tagsPtr[i];
-                            if (t == targetTag && comparer.Equals(seg.Entries[exactIdx].Key, key))
-                                return false;
-                            if (firstAvailableSlot == -1 && t <= 1) firstAvailableSlot = exactIdx;
-                            if (t == 0) break;
-                        }
-                        if (firstAvailableSlot != -1 && tagsPtr[firstAvailableSlot - currentBlockIdx] == 0) break;
-
-                        currentBlockIdx = (currentBlockIdx + BlockSize) & mask;
-                        attempts += BlockSize;
-                    }
-                }
-
-                if (firstAvailableSlot == -1)
-                {
-                    seg.EnsureCapacity(Comparer);
-                    seg.ExitLock();
-                    return TryAdd(key, value);
-                }
-
-                seg.Tags[firstAvailableSlot] = targetTag;
-                seg.Entries[firstAvailableSlot].Key = key;
-                seg.Entries[firstAvailableSlot].Value = value;
-                return true;
-            }
-            finally
-            {
-                seg.ExitLock();
-            }
-        }
-
-        unsafe bool Fallback_TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
-        {
-            if (key == null) throw new ArgumentNullException(nameof(key));
-
-            int hashCode = Comparer.GetHashCode(key);
-            Segment seg = Segments[(hashCode & int.MaxValue) & SegmentMask];
-            byte targetTag = GetKeyTag(hashCode);
-
-            // Optimistic completely lock-free read sequence using Volatile memory snapshots
-            byte[] tags = Volatile.Read(ref seg.Tags);
-            Segment.Entry[] entries = Volatile.Read(ref seg.Entries);
-            int mask = tags.Length - 1;
-
-            int initialBucket = (hashCode & int.MaxValue) & mask;
-            int currentBlockIdx = initialBucket & ~(BlockSize - 1);
-            int attempts = 0;
-            int capacity = mask + 1;
-
-            var comparer = Comparer;
-            fixed (byte* baseTagsPtr = tags)
-            {
-                while (attempts < capacity)
-                {
-                    byte* tagsPtr = baseTagsPtr + currentBlockIdx;
-
-                    for (int i = 0; i < BlockSize; i++)
-                    {
-                        int exactIdx = currentBlockIdx + i;
-                        byte t = tagsPtr[i];
-                        if (t == 0) { value = default; return false; }
-                        if (t == targetTag && comparer.Equals(entries[exactIdx].Key, key))
-                        {
-                            value = entries[exactIdx].Value;
-                            return true;
-                        }
-                    }
-
-                    currentBlockIdx = (currentBlockIdx + BlockSize) & mask;
-                    attempts += BlockSize;
-                }
-            }
-            value = default;
-            return false;
-        }
-
-        unsafe bool Fallback_TryRemove(TKey key, out TValue value)
-        {
-            if (key == null) throw new ArgumentNullException(nameof(key));
-
-            var comparer = Comparer;
-            int hashCode = comparer.GetHashCode(key);
-            Segment seg = Segments[(hashCode & int.MaxValue) & SegmentMask];
-            byte targetTag = GetKeyTag(hashCode);
-
-            // OPTIMIZATION: Hoist the mask directly from the segment field to avoid array header heap lookups
-            int mask = seg.CapacityMask;
-            byte[] tags = Volatile.Read(ref seg.Tags);
-            var entries = seg.Entries;
-
-            int initialBucket = (hashCode & int.MaxValue) & mask;
-            int currentBlockIdx = initialBucket & ~(BlockSize - 1);
-            int attempts = 0;
-            int capacity = mask + 1;
-
-            fixed (byte* baseTagsPtr = tags)
-            {
-                while (attempts < capacity)
-                {
-                    byte* tagsPtr = baseTagsPtr + currentBlockIdx;
-
-                    for (int i = 0; i < BlockSize; i++)
-                    {
-                        int exactIdx = currentBlockIdx + i;
-                        byte t = tagsPtr[i];
-                        if (t == 0)
-                        {
-                            value = default;
-                            return false;
-                        }
-                        if (t == targetTag)
-                        {
-                            if (comparer.Equals(entries[exactIdx].Key, key))
-                            {
-                                seg.EnterLock();
-                                try
-                                {
-                                    if (seg.Tags[exactIdx] == targetTag)
-                                    {
-                                        ref var e = ref seg.Entries[exactIdx];
-                                        if (comparer.Equals(e.Key, key))
-                                        {
-                                            value = e.Value;
-                                            seg.Tags[exactIdx] = 1;
-                                            e = default;
-                                            return true;
-                                        }
-                                    }
-                                }
-                                finally
-                                {
-                                    seg.ExitLock();
-                                }
-                            }
-                        }
-                    }
-                    currentBlockIdx = (currentBlockIdx + BlockSize) & mask;
-                    attempts += BlockSize;
-                }
-            }
-            value = default;
-            return false;
-        }
-
-
-
-
-        #endregion//Fallback
-
-
     }
 
 
+    /// <summary>
+    /// A fast (non cryptographic) ordinal string hash, randomly seeded per process (wyhash style, 128 bit multiply mixing).
+    /// The secret seed is mixed into every multiplication, so that inputs that zero a multiplier can't be crafted without knowing it.
+    /// A seed alone doesn't guarantee that collisions can't be found, so dictionaries using it must detect collisions and fall back to a randomized hash.
+    /// </summary>
+    static class LowAllocStringHash
+    {
+        static readonly ulong S0;
+        static readonly ulong S1;
+        static readonly ulong S2;
+
+        static LowAllocStringHash()
+        {
+            Span<ulong> s = stackalloc ulong[3];
+            System.Security.Cryptography.RandomNumberGenerator.Fill(MemoryMarshal.AsBytes(s));
+            S0 = s[0];
+            S1 = s[1];
+            S2 = s[2];
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ulong Mum(ulong a, ulong b)
+        {
+            ulong hi = Math.BigMul(a, b, out ulong lo);
+            return hi ^ lo;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ulong Read64(ref byte p, nuint offset) => Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref p, offset));
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ulong Read32(ref byte p, nuint offset) => Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref p, offset));
+
+        /// <summary>
+        /// Get a 64 bit hash of the string (all bits are well mixed)
+        /// </summary>
+        /// <param name="s">The string to hash (not null)</param>
+        /// <returns>A 64 bit hash, only valid during the life time of the process</returns>
+        public static ulong GetHash(string s)
+        {
+            ref byte p = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(s.AsSpan()));
+            nuint len = (nuint)s.Length << 1;
+            ulong h = S0 ^ len;
+            ulong a, b;
+            if (len <= 16)
+            {
+                if (len >= 8)
+                {
+                    a = Read64(ref p, 0);
+                    b = Read64(ref p, len - 8);
+                }
+                else if (len >= 4)
+                {
+                    a = Read32(ref p, 0);
+                    b = Read32(ref p, len - 4);
+                }
+                else
+                {
+                    // 0 or 1 char
+                    a = len > 0 ? Unsafe.ReadUnaligned<ushort>(ref p) : 0UL;
+                    b = 0;
+                }
+            }
+            else
+            {
+                nuint i = 0;
+                // Two independent lanes for 32 bytes at a time (more instruction level parallelism)
+                if (len > 32)
+                {
+                    ulong h2 = h ^ S2;
+                    do
+                    {
+                        h = Mum(Read64(ref p, i) ^ S1, Read64(ref p, i + 8) ^ h);
+                        h2 = Mum(Read64(ref p, i + 16) ^ S2, Read64(ref p, i + 24) ^ h2);
+                        i += 32;
+                    }
+                    while (len - i > 32);
+                    h ^= h2;
+                }
+                if (len - i > 16)
+                {
+                    h = Mum(Read64(ref p, i) ^ S1, Read64(ref p, i + 8) ^ h);
+                }
+                // The last 16 bytes (may overlap with already processed bytes)
+                a = Read64(ref p, len - 16);
+                b = Read64(ref p, len - 8);
+            }
+            return Mum(S2 ^ len, Mum(a ^ S1, b ^ h));
+        }
+    }
+
+
+    /// <summary>
+    /// A segment of a LowAllocConcurrentDictionary (not generic, since generic types can't have an explicit layout).
+    /// Each segment occupies 128 bytes, with the hot fields in the middle, so that different segments never share a cache line (no false sharing).
+    /// </summary>
+    [StructLayout(LayoutKind.Explicit, Size = 128)]
+    struct LowAllocDictionarySegment
+    {
+        /// <summary>
+        /// The current table, replaced (never modified) when growing
+        /// </summary>
+        [FieldOffset(64)]
+        public object Table;
+        /// <summary>
+        /// Incremented before and after every modification of the current table, odd while a modification is in progress
+        /// </summary>
+        [FieldOffset(72)]
+        public int Version;
+        [FieldOffset(76)]
+        int LockState;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void EnterLock()
+        {
+            if (Interlocked.CompareExchange(ref LockState, 1, 0) == 0) return;
+
+            int spinCount = 1;
+            while (Interlocked.CompareExchange(ref LockState, 1, 0) != 0)
+            {
+                Thread.SpinWait(spinCount);
+                if (spinCount < 64) spinCount <<= 1;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ExitLock()
+        {
+            Volatile.Write(ref LockState, 0);
+        }
+
+        /// <summary>
+        /// Must hold the lock, makes concurrent readers retry
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void BeginWrite()
+        {
+            // Only one writer (holding the lock), so no atomic increment is needed
+            Volatile.Write(ref Version, Version + 1);
+            // The odd version must be visible before any of the following writes
+            Volatile.WriteBarrier();
+        }
+
+        /// <summary>
+        /// Must hold the lock
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void EndWrite()
+        {
+            // Release semantics, all previous writes are visible before the even version
+            Volatile.Write(ref Version, Version + 1);
+        }
+    }
 
 }

@@ -222,7 +222,8 @@ namespace SysWeaver.Remote.Connection
                     throw new Exception("Only methods are allowed, member \"" + m.Name + "\" in type \"" + t.FullName + "\" is NOT a method!");
                 var mi = m as MethodInfo;
                 var returnType = mi.ReturnType;
-                var callTypes = restMethods[(int)GetRetType(ref returnType)];
+                var retType = GetRetType(ref returnType);
+                var callTypes = restMethods[(int)retType];
                 ++index;
                 var miParams = mi.GetParameters();
                 var parameterTypes = miParams.Select(v => v.ParameterType).ToArray();
@@ -380,7 +381,7 @@ namespace SysWeaver.Remote.Connection
                                             il.Emit(OpCodes.Ldsfld, optField);
                                         else
                                             il.Emit(OpCodes.Ldnull);
-                                        MethodInfo baseMethod = isReturningVoid ? callTypes[restIndex] : callTypes[restIndex].MakeGenericMethod(returnType, inputType);
+                                        MethodInfo baseMethod = isReturningVoid ? callTypes[restIndex].MakeGenericMethod(inputType) : callTypes[restIndex].MakeGenericMethod(returnType, inputType);
                                         il.Emit(OpCodes.Call, baseMethod);
                                     }
                                     break;
@@ -484,7 +485,7 @@ namespace SysWeaver.Remote.Connection
                                             il.Emit(OpCodes.Ldsfld, optField);
                                         else
                                             il.Emit(OpCodes.Ldnull);
-                                        MethodInfo baseMethod = isReturningVoid ? callTypes[restIndex] : callTypes[restIndex].MakeGenericMethod(returnType, inputType);
+                                        MethodInfo baseMethod = isReturningVoid ? callTypes[restIndex].MakeGenericMethod(inputType) : callTypes[restIndex].MakeGenericMethod(returnType, inputType);
                                         il.Emit(OpCodes.Call, baseMethod);
                                     }
                                     break;

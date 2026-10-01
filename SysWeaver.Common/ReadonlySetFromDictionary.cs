@@ -358,6 +358,9 @@ namespace SysWeaver
         static readonly IEnumerable<V> EmptyV = Enumerable.Empty<V>();
         static readonly IEnumerable<KeyValuePair<K, V>> EmptyKV = Enumerable.Empty<KeyValuePair<K, V>>();
 
+        static readonly IEnumerator<KeyValuePair<K, V>> EmptyKVEnum = EmptyKV.GetEnumerator();
+
+
         EmptyReadonlyDictionary(IEqualityComparer<K> comparer)
         {
             Comp = comparer;
@@ -367,17 +370,17 @@ namespace SysWeaver
 
         public V this[K key] => throw new KeyNotFoundException();
 
-        public IEnumerable<K> Keys => EmptyK;
+        public IEnumerable<K> Keys { get; } = EmptyK;
 
-        public IEnumerable<V> Values => EmptyV;
+        public IEnumerable<V> Values { get; } =  EmptyV;
 
-        public int Count => 0;
+        public int Count { get; } = 0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ContainsKey(K key) => false;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => EmptyKV.GetEnumerator();
+        public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => EmptyKVEnum;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(K key, [MaybeNullWhen(false)] out V value)
@@ -400,15 +403,13 @@ namespace SysWeaver
             Key = key;
             Value = value;
             Comp = comp;
-            Ke = [key];
-            Ve = [value];
+            Keys = [key];
+            Values = [value];
             KVe = [new KeyValuePair<K, V>(key, value)];
         }
 
         readonly K Key;
         readonly V Value;
-        readonly K[] Ke;
-        readonly V[] Ve;
         readonly IEnumerable<KeyValuePair<K, V>> KVe;
 
         public IEqualityComparer<K> Comp { get; init; }
@@ -424,11 +425,11 @@ namespace SysWeaver
 
         }
 
-        public IEnumerable<K> Keys => Ke;
+        public IEnumerable<K> Keys { get; init; }
 
-        public IEnumerable<V> Values => Ve;
+        public IEnumerable<V> Values { get; init; }
 
-        public int Count => 1;
+        public int Count { get; } = 1;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ContainsKey(K key)
@@ -437,6 +438,7 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => KVe.GetEnumerator();
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(K key, [MaybeNullWhen(false)] out V value)
         {
             var e = Comp.Equals(key, Key);

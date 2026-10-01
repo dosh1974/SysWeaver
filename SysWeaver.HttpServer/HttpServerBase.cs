@@ -1980,6 +1980,7 @@ namespace SysWeaver.Net
                 }
             }
             Prefixes = pp;
+            Hosts.SetPrefixes(pp);
             var msg = Msg;
             if (haveFirewall)
             {
@@ -2538,46 +2539,7 @@ namespace SysWeaver.Net
 
 
 
-        readonly SemiFrozenDictionary<String, HttpServerHostInfo> Hosts = new SemiFrozenDictionary<string, HttpServerHostInfo>(StringComparer.Ordinal);
-
-
-
-        HttpServerHostInfo CreateHost(String hostName, String url)
-        {
-            var hosts = Hosts;
-            lock (hosts)
-            {
-                if (!hosts.TryGetValue(hostName, out var host))
-                {
-                    var pr = Prefixes;
-                    var start = hostName.FastIndexOf("://") + 3;
-                    var end = hostName.IndexOf(':', start);
-                    if (end < 0)
-                        end = hostName.Length;
-                    String wild = hostName.Substring(start, end - start);
-                    if (pr.Length == 1)
-                    {
-                        var prefix = pr[0];
-                        var t = prefix.Prefix.Replace("*", wild);
-                        host = new HttpServerHostInfo(t, prefix);
-                        hosts[hostName] = host;
-                        return host;
-                    }
-                    foreach (var prefix in pr)
-                    {
-                        var t = prefix.Prefix.Replace("*", wild);
-                        if (url.FastStartsWith(t))
-                        {
-                            host = new HttpServerHostInfo(t, prefix);
-                            hosts[hostName] = host;
-                            return host;
-                        }
-                    }
-                    throw new Exception("Unknown host name!");
-                }
-                return host;
-            }
-        }
+        readonly HttpServerHosts Hosts = new HttpServerHosts();
 
 
         // TODO: Optimize (remove uri?)
@@ -2596,58 +2558,17 @@ namespace SysWeaver.Net
             return host;
         }*/
 
-        static readonly SearchValues<Char> HostEnd = SearchValues.Create(['/', '?' ]);
-        static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
 
-        public unsafe HttpServerHostInfo GetHost(out String prefix, out int queryStart, out bool didIndex, ref String url)
-        {
-#if DEBUG
-            var xxx = HttpUtility.UrlDecode(url);
-#endif//DEBUG
-            //url = HttpUtility.UrlDecode(url);
-            url = HttpServerTools.UrlDecode(url);
-#if DEBUG
-            Debug.Assert(xxx.FastEquals(url));
-#endif//DEBUG
-            didIndex = false;
-            var urlSpan = url.AsSpan();
-            var urlLen = urlSpan.Length;
-            fixed (Char* urlStart = urlSpan)
-            {
-                var urlEnd = urlStart + urlLen;
-                var pos = urlStart;
-                var start = CharPtrTools.IndexOf("://", pos, urlEnd) + 3;
-                var end = CharPtrTools.IndexOfAny(HostEnd, start, urlEnd);
-                if (end == null)
-                    end = urlEnd;
-                var hostName = url.FastStartToLower((int)(end - urlStart));
-                if (!Hosts.TryGetValue(hostName, out var host))
-                    host = CreateHost(hostName, url);
-                prefix = host.Name;
-                ++end;
-                var qs = CharPtrTools.IndexOf('?', end, urlEnd);
-                if (qs == null)
-                {
-                    queryStart = -1;
-                    if (urlStart[urlLen - 1] == '/')
-                    {
-                        didIndex = true;
-                        url += "index.html";
-                    }
-                }
-                else
-                {
-                    queryStart = (int)(qs - urlStart);
-                    if (urlStart[queryStart - 1] == '/')
-                    {
-                        url = urlSpan[..queryStart].ConcatToString("index.html", urlSpan[queryStart..]);
-                        didIndex = true;
-                        queryStart += 10;
-                    }
-                }
-                return host;
-            }
-        }
+        /// <summary>
+        /// Resolve the host of a url, decodes the url and inserts index.html for directory requests
+        /// </summary>
+        /// <param name="prefix">The prefix (the host name)</param>
+        /// <param name="queryStart">The index of the '?' that starts the query string, -1 if there is no query string</param>
+        /// <param name="didIndex">True if "index.html" was added to the url</param>
+        /// <param name="url">The url, replaced with the decoded url (with index.html inserted if needed)</param>
+        /// <returns>The host</returns>
+        public HttpServerHostInfo GetHost(out String prefix, out int queryStart, out bool didIndex, ref String url)
+            => Hosts.GetHost(out prefix, out queryStart, out didIndex, ref url);
 
 
         /*

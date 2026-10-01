@@ -81,7 +81,7 @@ namespace SysWeaver
         /// <param name="s">The string to format as a filename</param>
         /// <returns>A filename formatted string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String ToMail(this String s) => s == null ? "null" : String.Join(s, "\"mailto://", '"');
+        public static String ToMail(this String s) => s == null ? "null" : String.Join(s, "\"mailto:", '"');
 
 
         /// <summary>
@@ -100,35 +100,53 @@ namespace SysWeaver
         /// <returns>A string that has been "incremented"</returns>
         public static String CountUp(this String str)
         {
-            var l = str.Length;
-            String insert = String.Empty;
-            while (l > 0)
+            // Find the end of the last number
+            var end = str.Length;
+            while (end > 0)
             {
-                --l;
-                var c = str[l];
-                if ((c < '0') || (c > '9'))
-                {
-                    if (insert.Length > 0)
-                        return String.Concat(str.AsSpan(0, l), insert, str.AsSpan(l + insert.Length));
-                    continue;
-                }
-                insert = (char)((((c - '0') + 1) % 10) + '0') + insert;
-                if (c != '9')
-                    return String.Concat(str.AsSpan(0, l), insert, str.AsSpan(l + insert.Length));
+                var c = str[end - 1];
+                if ((c >= '0') && (c <= '9'))
+                    break;
+                --end;
             }
-            return str;
+            if (end <= 0)
+                return String.Concat(str, "_1");
+            // Find the start of the last number
+            var start = end - 1;
+            while (start > 0)
+            {
+                var c = str[start - 1];
+                if ((c < '0') || (c > '9'))
+                    break;
+                --start;
+            }
+            // Increment, propagating the carry
+            var chars = str.ToCharArray();
+            var i = end - 1;
+            while ((i >= start) && (chars[i] == '9'))
+            {
+                chars[i] = '0';
+                --i;
+            }
+            if (i >= start)
+            {
+                ++chars[i];
+                return new String(chars);
+            }
+            // All digits were 9's, ex: "99" => "100"
+            return String.Concat(str.AsSpan(0, start), "1", chars.AsSpan(start));
         }
 
         static readonly SpanAction<Char, String> CreateFirstUpperAction = (str, c) =>
         {
-            str[0] = Char.ToUpper(c[0]);
+            str[0] = c[0].FastToUpper();
             c.AsSpan().Slice(1).CopyTo(str.Slice(1));
         };  
 
         
         static readonly SpanAction<Char, String> CreateFirstLowerAction = (str, c) =>
         {
-            str[0] = Char.ToLower(c[0]);
+            str[0] = c[0].FastToLower();
             c.AsSpan().Slice(1).CopyTo(str.Slice(1));
         };
 
@@ -141,15 +159,9 @@ namespace SysWeaver
         /// </summary>
         /// <param name="str">The text to make the first letter uppercased</param>
         /// <returns>The original string or a new string with the first letter uppercased</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String MakeFirstUppercase(this String str)
-        {
-            if (String.IsNullOrEmpty(str))
-                return str;
-            var first = str[0];
-            if (!Char.IsLower(str[0]))
-                return str;
-            return String.Create(str.Length, str, CreateFirstUpperAction);
-        }
+            => (String.IsNullOrEmpty(str) || str[0].FastIsUpperOrNonLetter()) ? str : String.Create(str.Length, str, CreateFirstUpperAction);
 
         /// <summary>
         /// Make sure that the first character in each word is an uppercase letter (if it's a letter).
@@ -188,15 +200,9 @@ namespace SysWeaver
         /// </summary>
         /// <param name="str">The text to make the first letter lowercased</param>
         /// <returns>The original string or a new string with the first letter lowercased</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String MakeFirstLowercase(this String str)
-        {
-            if (String.IsNullOrEmpty(str))
-                return str;
-            var first = str[0];
-            if (!Char.IsUpper(str[0]))
-                return str;
-            return String.Create(str.Length, str, CreateFirstLowerAction);
-        }
+            => (String.IsNullOrEmpty(str) || str[0].FastIsLowerOrNonLetter()) ? str : String.Create(str.Length, str, CreateFirstLowerAction);
 
         /// <summary>
         /// Take a camel cased string and convert it to a space separated string. 
@@ -504,6 +510,7 @@ namespace SysWeaver
             var l = s.Length;
             var t = new StringBuilder(l);
             bool isWhite = true;
+            int lastNonWhite = 0;
             for (int i = 0; i < l; ++i)
             {
                 var c = s[i];
@@ -511,17 +518,16 @@ namespace SysWeaver
                 {
                     if (isWhite)
                         continue;
-                    c = ' ';
+                    t.Append(' ');
                     isWhite = true;
+                    continue;
                 }
-                else
-                {
-                    isWhite = false;
-                }
+                isWhite = false;
                 t.Append(c);
+                lastNonWhite = t.Length;
             }
-            s = t.ToString();
-            return s;
+            // Control chars and char map replacements can leave a trailing white space that the initial Trim didn't catch
+            return lastNonWhite == t.Length ? t.ToString() : t.ToString(0, lastNonWhite);
         }
 
 
@@ -638,7 +644,7 @@ namespace SysWeaver
             if (String.IsNullOrEmpty(s))
                 return s;
             var l = s.Length;
-            Span<Char> local = stackalloc Char[l];
+            Span<Char> local = l < 4096 ? stackalloc Char[l] : GC.AllocateUninitializedArray<Char>(l);
             bool mod = false;
             for (int i = 0; i < l; ++i)
             {
@@ -666,7 +672,7 @@ namespace SysWeaver
                 return s;
             s = s.RemoveDiacritics();
             var l = s.Length;
-            Span<Char> local = stackalloc Char[l];
+            Span<Char> local = l < 4096 ? stackalloc Char[l] : GC.AllocateUninitializedArray<Char>(l);
             bool mod = false;
             var toA = ToAscii;
             for (int i = 0; i < l; ++i)
@@ -690,13 +696,13 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Check if a string is a valid "identifier", only 'a'-'z' and numbers is accepeted (no number at the first position)
+        /// Check if a string is a valid "identifier", only 'a'-'z', 'A'-'Z', and numbers is accepeted (no number at the first position)
         /// </summary>
         /// <param name="s">The string to check</param>
         /// <returns>True if all chars in the string is valid</returns>
         public static bool IsIdentifier(this String s)
         {
-            if (s == null)
+            if (String.IsNullOrEmpty(s))
                 return false;
             var l = s.Length;
             for (int i = 0; i < l; ++i)
@@ -730,6 +736,7 @@ namespace SysWeaver
             var l = s.Length;
             if (l <= 0)
                 return false;
+            bool haveDigit = false;
             bool haveDecimal = false;
             for (int i = 0; i < l; ++i)
             {
@@ -749,8 +756,9 @@ namespace SysWeaver
                 }
                 if (c > '9')
                     return false;
+                haveDigit = true;
             }
-            return true;
+            return haveDigit;
         }
 
 
@@ -823,6 +831,7 @@ namespace SysWeaver
             var l = s.Length;
             StringBuilder b = new StringBuilder(l);
             bool wasSpace = true;
+            int lastNonSpace = 0;
             for (int i = 0; i < l; ++i)
             {
                 var c = s[i];
@@ -836,38 +845,53 @@ namespace SysWeaver
                 }
                 wasSpace = false;
                 b.Append(c);
+                lastNonSpace = b.Length;
             }
-            var nl = b.Length;
-            if (nl > 0)
-            {
-                --nl;
-                if (Char.IsWhiteSpace(b[nl]))
-                    return b.ToString(0, nl);
-            }
-            return b.ToString();
+            return lastNonSpace == b.Length ? b.ToString() : b.ToString(0, lastNonSpace);
         }
 
         /// <summary>
-        /// Remove some parantheses etc from a string
+        /// Remove some parantheses etc from a string.
+        /// Nested groups are removed as a whole, ex: "a (b (c) d) e" => "a e".
+        /// An unclosed group is kept as is, and an end char without a matching start char is kept.
         /// </summary>
         /// <param name="s"></param>
         /// <param name="groupStart"></param>
         /// <param name="groupEnd"></param>
-        /// <returns></returns>
+        /// <returns>The original string if no group was removed, else the string with all groups removed (and white spaces cleaned up)</returns>
         public static String RemoveGroup(String s, Char groupStart = '(', Char groupEnd = ')')
         {
-            bool changed = false;
-            for (; ; )
+            var l = s.Length;
+            StringBuilder b = null;
+            int depth = 0;
+            int groupPos = 0;
+            int copyFrom = 0;
+            for (int i = 0; i < l; ++i)
             {
-                var i = s.IndexOf(groupStart);
-                if (i < 0)
-                    return changed ? RemoveMultiWhiteSpace(s) : s;
-                var e = s.IndexOf(groupEnd, i + 1);
-                if (e < 0)
-                    return changed ? RemoveMultiWhiteSpace(s) : s;
-                s = s.Substring(0, i) + s.Substring(e + 1);
-                changed = true;
+                var c = s[i];
+                // Check end first, so that groupStart == groupEnd (ex: quotes) works
+                if ((c == groupEnd) && (depth > 0))
+                {
+                    --depth;
+                    if (depth == 0)
+                    {
+                        b ??= new StringBuilder(l);
+                        b.Append(s, copyFrom, groupPos - copyFrom);
+                        copyFrom = i + 1;
+                    }
+                    continue;
+                }
+                if (c != groupStart)
+                    continue;
+                if (depth == 0)
+                    groupPos = i;
+                ++depth;
             }
+            if (b == null)
+                return s;
+            // Keep the rest, including any unclosed group
+            b.Append(s, copyFrom, l - copyFrom);
+            return RemoveMultiWhiteSpace(b.ToString());
         }
 
         /// <summary>
@@ -901,7 +925,7 @@ namespace SysWeaver
         /// <returns>The combined string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String JoinWithSpecialLast(String first, String last, List<String> args)
-            => JoinWithSpecialLast(first, last, (IReadOnlyList<String>)args?.ToList());
+            => JoinWithSpecialLast(first, last, (IReadOnlyList<String>)args);
 
         /// <summary>
         /// Join strings using two separators, one only used for the last separation.
@@ -989,7 +1013,7 @@ namespace SysWeaver
                 return String.Empty;    
             var enc = Encoding.UTF8;
             var len = enc.GetMaxByteCount(l);
-            Span<Byte> mem = stackalloc Byte[len];
+            Span<Byte> mem = len < 4096 ? stackalloc Byte[len] : GC.AllocateUninitializedArray<Byte>(len);
             if (!enc.TryGetBytes(value.AsSpan(), mem, out len))
                 throw new Exception("Internal error!");
             return mem.Slice(0, len).ToHexString();
@@ -997,6 +1021,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Convert a hexadecimal string to it's original string (reverses the ToHex operation).
+        /// If the number of chars are odd, the last cxhar is ignored.
         /// </summary>
         /// <param name="value"></param>
         /// <returns>null if the input value was null. String.Empty is the input value was empty, else the original string (reverse of the ToHex operation)</returns>
@@ -1008,7 +1033,7 @@ namespace SysWeaver
             if (l <= 0)
                 return String.Empty;
             l >>= 1;
-            Span<Byte> data = stackalloc Byte[l];
+            Span<Byte> data = l < 4096 ? stackalloc Byte[l] : GC.AllocateUninitializedArray<Byte>(l);
             for (int i = 0, s = 0; i < l; ++i)
             {
                 var u = value[s].HexValue();
@@ -1023,7 +1048,8 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Convert a hexadecimal string to it's data representation
+        /// Convert a hexadecimal string to it's data representation.
+        /// If the number of chars are odd, the last cxhar is ignored.
         /// </summary>
         /// <param name="value">A hexadecimal string, can only be null, empty or the characters '0' - '9', 'a' - 'f' or 'A' - 'F' (or it will throw)</param>
         /// <returns>null if input value is null, an empty array if input value is empty, else the binary data represented by the string</returns>
@@ -1079,7 +1105,7 @@ namespace SysWeaver
             if (String.IsNullOrEmpty(value))
                 return value;
             var l = value.Length;
-            Span<Char> data = stackalloc char[l];
+            Span<Char> data = l < 4096 ? stackalloc Char[l] : GC.AllocateUninitializedArray<Char>(l);
             int o = 0;
             for (int i = 0; i < l; ++i)
             {
@@ -1107,7 +1133,7 @@ namespace SysWeaver
             if (String.IsNullOrEmpty(value))
                 return value;
             var l = value.Length;
-            Span<Char> data = stackalloc char[l];
+            Span<Char> data = l < 4096 ? stackalloc Char[l] : GC.AllocateUninitializedArray<Char>(l);
             int o = 0;
             for (int i = 0; i < l; ++i)
             {
@@ -1136,7 +1162,7 @@ namespace SysWeaver
             if (String.IsNullOrEmpty(value))
                 return value;
             var l = value.Length;
-            Span<Char> data = stackalloc char[l];
+            Span<Char> data = l < 4096 ? stackalloc Char[l] : GC.AllocateUninitializedArray<Char>(l);
             int o = 0;
             for (int i = 0; i < l; ++ i)
             {
@@ -1176,7 +1202,7 @@ namespace SysWeaver
             if (String.IsNullOrEmpty(value))
                 return value;
             var l = value.Length;
-            Span<Char> data = stackalloc char[l];
+            Span<Char> data = l < 4096 ? stackalloc Char[l] : GC.AllocateUninitializedArray<Char>(l);
             int o = 0;
             for (int i = 0; i < l; ++i)
             {
@@ -1210,7 +1236,7 @@ namespace SysWeaver
         /// <param name="split">The character to split</param>
         /// <param name="trimOuter">If true, the string is trimmed before splitting</param>
         /// <param name="trimInner">If true, the resulting value is trimmed on the end and the right string (if available) is trimmed on the start</param>
-        /// <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned), semantically the same as value.Split(split)[0]</returns>
+        /// <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned, trimmed if trimOuter is true), semantically the same as value.Split(split)[0]</returns>
         /*public static String SplitFirst(this String value, Char split, bool trimOuter, bool trimInner = true)
         {
             if (String.IsNullOrEmpty(value))
@@ -1267,7 +1293,7 @@ namespace SysWeaver
 
                 int splitOffset = new ReadOnlySpan<char>((void*)start, activeLength).IndexOf(split);
                 if (splitOffset < 0)
-                    return value;
+                    return activeLength == value.Length ? value : new string(start, 0, activeLength);
 
                 char* splitPos = start + splitOffset;
                 if (trimInner)
@@ -1296,7 +1322,7 @@ namespace SysWeaver
         /// <param name="right">The right part, null if the split char isn't found</param>
         /// <param name="trimOuter">If true, the string is trimmed before splitting</param>
         /// <param name="trimInner">If true, the resulting value is trimmed on the end and the right string (if available) is trimmed on the start</param>
-        /// <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned)</returns>
+        /// <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned, trimmed if trimOuter is true)</returns>
         /*
         public static String SplitFirst(this String value, Char split, out String right, bool trimOuter, bool trimInner = true)
         {
@@ -1368,7 +1394,7 @@ namespace SysWeaver
 
                 int splitOffset = new ReadOnlySpan<char>((void*)start, activeLength).IndexOf(split);
                 if (splitOffset < 0)
-                    return value;
+                    return activeLength == value.Length ? value : new string(start, 0, activeLength);
 
                 char* splitPos = start + splitOffset;
                 char* rightStart = splitPos + 1;
@@ -1567,17 +1593,15 @@ namespace SysWeaver
             var a = c.Add;
             var p = a.Length;
             var k = l - p;
-            int i;
-            for (i = 0; i < p; ++i)
-                str[i] = a[i];
-            for (; i < l; ++i)
-                str[i] = a[i + k];
+            a.AsSpan().CopyTo(str.Slice(0, p));
+            s.AsSpan(s.Length - k).CopyTo(str.Slice(p, k));
         };
 
 
 
         /// <summary>
         /// Make a string "secure" by only keeping a few chars "visible".
+        /// At most half the chars in the input can be kept, the rest will be replaced with *'s (or a custom suffix).
         /// Examples:
         /// "1234abcd5678".SecureEnd() => "1234********";
         /// "1234abcd5678".SecureEnd(4, "..") => "1234..";
@@ -1591,15 +1615,15 @@ namespace SysWeaver
             if (String.IsNullOrEmpty(value))
                 return null;
             var l = value.Length;
-            var minKeep = l - (l >> 1);
-            if (keep > minKeep)
-                keep = minKeep;
+            var maxKeep = l >> 1;
+            if (keep > maxKeep)
+                keep = maxKeep;
             if (suffix == null)
             {
                 var sc = new SecureCount
                 {
                     Str = value,
-                    Keep = l - keep,
+                    Keep = keep,
                 };
                 return String.Create(l, sc, SecureEndWithCountAction);
             }
@@ -1616,6 +1640,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Make a string "secure" by only keeping a few chars "visible".
+        /// At most half the chars in the input can be kept, the rest will be replaced with *'s (or a custom prefix).
         /// Examples:
         /// "1234abcd5678".SecureStart() => "********5678";
         /// "1234abcd5678".SecureStart(4, "..") => "..5678";
@@ -1629,15 +1654,15 @@ namespace SysWeaver
             if (String.IsNullOrEmpty(value))
                 return null;
             var l = value.Length;
-            var minKeep = l - (l >> 1);
-            if (keep > minKeep)
-                keep = minKeep;
+            var maxKeep = l >> 1;
+            if (keep > maxKeep)
+                keep = maxKeep;
             if (prefix == null)
             {
                 var sc = new SecureCount
                 {
                     Str = value,
-                    Keep = l - keep,
+                    Keep = keep,
                 };
                 return String.Create(l, sc, SecureStartWithCountAction);
             }
@@ -1765,7 +1790,7 @@ namespace SysWeaver
             if (text[0] == (Char)1)
                 return text.Substring(1);
             var l = text.Length;
-            Span<Char> t = stackalloc Char[l * 2];
+            Span<Char> t = l < 2048 ? stackalloc Char[l * 2] : GC.AllocateUninitializedArray<Char>(l * 2);
             int o = 0;
             var e = EscapeChars;
             for (int i = 0; i < l; ++i)

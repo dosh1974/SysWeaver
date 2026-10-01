@@ -57,7 +57,7 @@ namespace SysWeaver
             if (l <= 0)
                 return String.Empty;
             var h = HexChars;
-            Span<Char> temp = stackalloc Char[l + l];
+            Span<Char> temp = l < 2048 ? stackalloc Char[l + l] : GC.AllocateUninitializedArray<Char>(l + l);
             for (int i = 0, o = 0; i < l; ++i)
             {
                 var b = data[i];
