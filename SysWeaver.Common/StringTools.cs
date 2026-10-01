@@ -11,6 +11,21 @@ namespace SysWeaver
     public static class StringTools
     {
         /// <summary>
+        /// Temporary char buffers up to this length are allocated on the stack (larger buffers are rented from the shared array pool)
+        /// </summary>
+        const int MaxStackChars = 4096;
+
+        /// <summary>
+        /// Temporary int buffers up to this length are allocated on the stack (larger buffers are rented from the shared array pool)
+        /// </summary>
+        const int MaxStackInts = 2048;
+
+        /// <summary>
+        /// Temporary byte buffers up to this length are allocated on the stack (larger buffers are rented from the shared array pool)
+        /// </summary>
+        const int MaxStackBytes = 8192;
+
+        /// <summary>
         /// Compute a deterministic hash of the string contents
         /// </summary>
         /// <param name="s">The string to compute a hash for</param>
@@ -54,8 +69,8 @@ namespace SysWeaver
         /// <param name="quotationChar">The quotation char to use</param>
         /// <returns>A quoted string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String ToQuoted(this String s, Char quotationChar = '"') 
-            => s == null ? "null" : String.Join(s, quotationChar, quotationChar);
+        public static String ToQuoted(this String s, Char quotationChar = '"')
+            => s == null ? "null" : String.Concat(new ReadOnlySpan<Char>(in quotationChar), s, new ReadOnlySpan<Char>(in quotationChar));
 
         /// <summary>
         /// Add quotation chars around a string. Ex: Test => "Test"
@@ -64,8 +79,8 @@ namespace SysWeaver
         /// <param name="quotationChars">The quotation chars to use</param>
         /// <returns>A quoted string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String ToQuoted(this String s, String quotationChars) 
-            => s == null ? "null" : String.Join(s, quotationChars, quotationChars);
+        public static String ToQuoted(this String s, String quotationChars)
+            => s == null ? "null" : String.Concat(quotationChars, s, quotationChars);
 
         /// <summary>
         /// Format a string as a filename, typically add quotes
@@ -73,7 +88,7 @@ namespace SysWeaver
         /// <param name="s">The string to format as a filename</param>
         /// <returns>A filename formatted string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String ToFilename(this String s) => s == null ? "null" : String.Join(s, "\"file://", '"');
+        public static String ToFilename(this String s) => s == null ? "null" : String.Concat("\"file://", s, "\"");
 
         /// <summary>
         /// Format a string as a filename, typically add quotes
@@ -81,8 +96,10 @@ namespace SysWeaver
         /// <param name="s">The string to format as a filename</param>
         /// <returns>A filename formatted string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String ToMail(this String s) => s == null ? "null" : String.Join(s, "\"mailto:", '"');
+        public static String ToMail(this String s) => s == null ? "null" : String.Concat("\"mailto:", s, "\"");
 
+
+        static readonly String FolderEnd = Path.DirectorySeparatorChar + "\"";
 
         /// <summary>
         /// Format a string as a folder name, typically add quotes
@@ -90,7 +107,7 @@ namespace SysWeaver
         /// <param name="s">The string to format as a folder name</param>
         /// <returns>A folder name formatted string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String ToFolder(this String s) => s == null ? "null" : String.Join(Path.TrimEndingDirectorySeparator(s), "file://\"", Path.DirectorySeparatorChar + "\"");
+        public static String ToFolder(this String s) => s == null ? "null" : String.Concat("file://\"", Path.TrimEndingDirectorySeparator(s.AsSpan()), FolderEnd);
 
 
         /// <summary>
@@ -100,50 +117,50 @@ namespace SysWeaver
         /// <returns>A string that has been "incremented"</returns>
         public static String CountUp(this String str)
         {
+            var s = str.AsSpan();
             // Find the end of the last number
-            var end = str.Length;
-            while (end > 0)
-            {
-                var c = str[end - 1];
-                if ((c >= '0') && (c <= '9'))
-                    break;
-                --end;
-            }
+            var end = s.LastIndexOfAnyInRange('0', '9') + 1;
             if (end <= 0)
                 return String.Concat(str, "_1");
             // Find the start of the last number
-            var start = end - 1;
-            while (start > 0)
-            {
-                var c = str[start - 1];
-                if ((c < '0') || (c > '9'))
-                    break;
-                --start;
-            }
-            // Increment, propagating the carry
-            var chars = str.ToCharArray();
-            var i = end - 1;
-            while ((i >= start) && (chars[i] == '9'))
-            {
-                chars[i] = '0';
-                --i;
-            }
-            if (i >= start)
-            {
-                ++chars[i];
-                return new String(chars);
-            }
-            // All digits were 9's, ex: "99" => "100"
-            return String.Concat(str.AsSpan(0, start), "1", chars.AsSpan(start));
+            var start = s[..end].LastIndexOfAnyExceptInRange('0', '9') + 1;
+            // If all digits are 9's, the number gets one digit longer, ex: "99" => "100"
+            var grow = s[start..end].IndexOfAnyExcept('9') < 0;
+            return String.Create(grow ? s.Length + 1 : s.Length, (str, start, end), CountUpAction);
         }
+
+        static readonly SpanAction<Char, (String Str, int Start, int End)> CountUpAction = (d, st) =>
+        {
+            var s = st.Str.AsSpan();
+            var end = st.End;
+            if (d.Length == s.Length)
+            {
+                // Increment, propagating the carry (there is at least one digit that isn't a 9)
+                s.CopyTo(d);
+                var i = end - 1;
+                while (d[i] == '9')
+                {
+                    d[i] = '0';
+                    --i;
+                }
+                ++d[i];
+                return;
+            }
+            // All digits were 9's, ex: "x99y" => "x100y"
+            var start = st.Start;
+            s[..start].CopyTo(d);
+            d[start] = '1';
+            d.Slice(start + 1, end - start).Fill('0');
+            s[end..].CopyTo(d[(end + 1)..]);
+        };
 
         static readonly SpanAction<Char, String> CreateFirstUpperAction = (str, c) =>
         {
             str[0] = c[0].FastToUpper();
             c.AsSpan().Slice(1).CopyTo(str.Slice(1));
-        };  
+        };
 
-        
+
         static readonly SpanAction<Char, String> CreateFirstLowerAction = (str, c) =>
         {
             str[0] = c[0].FastToLower();
@@ -172,24 +189,42 @@ namespace SysWeaver
         /// </summary>
         /// <param name="str">The text to make the first letter in each word uppercased</param>
         /// <returns>The original string or a new string with the first letter in each word uppercased</returns>
-        public static unsafe String MakeFirstCharInWordsUppercase(this String str)
+        public static String MakeFirstCharInWordsUppercase(this String str)
         {
             if (String.IsNullOrEmpty(str))
                 return str;
-            Char[] newStr = null;
-            str.OnWordStart(x =>
+            // Find the first word start that changes (same word starts as OnWordStart)
+            var s = str.AsSpan();
+            var l = s.Length;
+            bool prevIsLetter = false;
+            for (int i = 0; i < l; ++i)
             {
-                var o = str[x];
-                var n = o.FastToUpper();
-                if (o == n)
-                    return true;
-                if (newStr == null)
-                    newStr = str.ToCharArray();
-                newStr[x] = n;
-                return true;
-            });
-            return newStr == null ? str : new string(newStr);
+                var c = s[i];
+                var isP = Char.IsLetterOrDigit(c);
+                if (isP && !prevIsLetter && (c.FastToUpper() != c))
+                    return String.Create(l, (str, i), MakeFirstCharInWordsUppercaseAction);
+                prevIsLetter = isP;
+            }
+            return str;
         }
+
+        static readonly SpanAction<Char, (String Str, int First)> MakeFirstCharInWordsUppercaseAction = (d, st) =>
+        {
+            var s = st.Str.AsSpan();
+            s.CopyTo(d);
+            var l = s.Length;
+            var first = st.First;
+            d[first] = s[first].FastToUpper();
+            bool prevIsLetter = true;
+            for (int i = first + 1; i < l; ++i)
+            {
+                var c = s[i];
+                var isP = Char.IsLetterOrDigit(c);
+                if (isP && !prevIsLetter)
+                    d[i] = c.FastToUpper();
+                prevIsLetter = isP;
+            }
+        };
 
         /// <summary>
         /// Make sure that the first character is a lowercase letter (if it's a letter).
@@ -205,7 +240,7 @@ namespace SysWeaver
             => (String.IsNullOrEmpty(str) || str[0].FastIsLowerOrNonLetter()) ? str : String.Create(str.Length, str, CreateFirstLowerAction);
 
         /// <summary>
-        /// Take a camel cased string and convert it to a space separated string. 
+        /// Take a camel cased string and convert it to a space separated string.
         /// Ex:
         /// "MyNameIsStupid" => "My name is stupid"
         /// </summary>
@@ -213,26 +248,54 @@ namespace SysWeaver
         /// <param name="space">The character to use for space</param>
         /// <param name="keepFirstWordLetterCasing">If true, keep the casing of the first letter in each word</param>
         /// <returns>The space separated string. Ex: "My name is stupid"</returns>
+        [SkipLocalsInit]
         public static String RemoveCamelCase(this String str, Char space = ' ', bool keepFirstWordLetterCasing = false)
         {
-            var sb = new StringBuilder(str.Length * 2);
-            bool prevIsUpper = true;
-            foreach (var c in str)
+            var s = str.AsSpan();
+            var l = str.Length;
+            // The result is at most twice as long
+            var bl = l + l;
+            char[] rented = null;
+            Span<Char> b = bl <= MaxStackChars ? stackalloc Char[bl] : (rented = ArrayPool<Char>.Shared.Rent(bl));
+            try
             {
-                var isUpper = Char.IsUpper(c);
-                if (isUpper && (!prevIsUpper))
+                int o = 0;
+                bool prevIsUpper = true;
+                foreach (var c in s)
                 {
-                    sb.Append(space);
-                    sb.Append(keepFirstWordLetterCasing ? c : CharExt.FastToLower(c));
-                    prevIsUpper = true;
-                    continue;
+                    var isUpper = Char.IsUpper(c);
+                    if (isUpper && (!prevIsUpper))
+                    {
+                        b[o] = space;
+                        b[o + 1] = keepFirstWordLetterCasing ? c : CharExt.FastToLower(c);
+                        o += 2;
+                        prevIsUpper = true;
+                        continue;
+                    }
+                    b[o] = c;
+                    ++o;
+                    prevIsUpper = isUpper;
                 }
-                sb.Append(c);
-                prevIsUpper = isUpper;
+                return o == l ? str : new String(b[..o]);
             }
-            return sb.ToString();
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+            }
         }
 
+
+        /// <summary>
+        /// The cost of mismatching a char (the cost of a mismatched pair is the max of the two chars cost)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static int LevensteinCharCost(char c, int costLetter, int costNumber)
+        {
+            if (Char.IsNumber(c))
+                return costNumber;
+            return Char.IsLetter(c) ? costLetter : 1;
+        }
 
         /// <summary>
         /// Levenstein distance
@@ -242,28 +305,11 @@ namespace SysWeaver
         /// <param name="costLetter">Mismatched letter cost</param>
         /// <param name="costNumber">Mismatched number cost</param>
         /// <returns>The Levenstein distance between the two strings</returns>
+        [SkipLocalsInit]
         public static int Levenstein(string source1, string source2, int costLetter = 1, int costNumber = 1)
         {
             var source1Length = source1?.Length ?? 0;
             var source2Length = source2?.Length ?? 0;
-
-            var matrix = new int[source1Length + 1, source2Length + 1];
-
-            int Cost(char a, char b)
-            {
-                int aa;
-                if (Char.IsNumber(a))
-                    aa = costNumber;
-                else
-                    aa = Char.IsLetter(a) ? costLetter : 1;
-                int bb;
-                if (Char.IsNumber(b))
-                    bb = costNumber;
-                else
-                    bb = Char.IsLetter(b) ? costLetter : 1;
-                return aa > bb ? aa : bb;
-            }
-
 
             // First calculation, if one entry is empty return full length
             if (source1Length == 0)
@@ -272,22 +318,53 @@ namespace SysWeaver
             if (source2Length == 0)
                 return source1Length;
 
-            // Initialization of matrix with row size source1Length and columns size source2Length
-            for (var i = 0; i <= source1Length; matrix[i, 0] = i++) { }
-            for (var j = 0; j <= source2Length; matrix[0, j] = j++) { }
-
-            // Calculate rows and collumns distances
-            for (var i = 1; i <= source1Length; i++)
+            // Only a single row of the matrix is needed, the "diagonal" and "left" values are kept in locals.
+            // The mismatch cost of every char in source2 is computed once (instead of for every mismatch)
+            var w = source2Length + 1;
+            var bl = w + source2Length;
+            int[] rented = null;
+            Span<int> buffer = bl <= MaxStackInts ? stackalloc int[bl] : (rented = ArrayPool<int>.Shared.Rent(bl));
+            try
             {
-                for (var j = 1; j <= source2Length; j++)
+                var row = buffer[..w];
+                var costs = buffer.Slice(w, source2Length);
+                for (var j = 0; j < w; ++j)
+                    row[j] = j;
+                var s1 = source1.AsSpan();
+                var s2 = source2.AsSpan();
+                for (var j = 0; j < s2.Length; ++j)
+                    costs[j] = LevensteinCharCost(s2[j], costLetter, costNumber);
+                var r = row[1..];
+                // Calculate rows and collumns distances
+                for (var i = 1; i <= source1Length; i++)
                 {
-                    var a = source2[j - 1];
-                    var b = source1[i - 1];
-                    var cost = a == b ? 0 : Cost(a, b);
-                    matrix[i, j] = Math.Min(Math.Min(matrix[i - 1, j] + 1, matrix[i, j - 1] + 1), matrix[i - 1, j - 1] + cost);
+                    var diag = i - 1;
+                    var left = i;
+                    var b = s1[i - 1];
+                    var costB = LevensteinCharCost(b, costLetter, costNumber);
+                    for (var j = 0; j < s2.Length; j++)
+                    {
+                        var up = r[j];
+                        int cost = 0;
+                        if (s2[j] != b)
+                        {
+                            cost = costs[j];
+                            if (costB > cost)
+                                cost = costB;
+                        }
+                        var v = Math.Min(Math.Min(up, left) + 1, diag + cost);
+                        diag = up;
+                        r[j] = v;
+                        left = v;
+                    }
                 }
+                return row[source2Length];
             }
-            return matrix[source1Length, source2Length];
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<int>.Shared.Return(rented);
+            }
         }
 
 
@@ -296,18 +373,52 @@ namespace SysWeaver
         /// </summary>
         /// <param name="text"></param>
         /// <returns></returns>
+        [SkipLocalsInit]
         public static String[] ExtractWords(this String text)
         {
-            List<String> textWords = new List<string>();
-            text.OnWordStart(pos =>
+            var l = text.Length;
+            var s = text.AsSpan();
+            // Find the word boundaries in a single pass (same word starts as OnWordStart), so that only the result is allocated.
+            // There are at most (l + 1) / 2 words, each needs a start and an end
+            var bl = l + 2;
+            int[] rented = null;
+            Span<int> bounds = bl <= MaxStackInts ? stackalloc int[bl] : (rented = ArrayPool<int>.Shared.Rent(bl));
+            try
             {
-                var e = text.EndOfWord(pos + 1);
-                if (e < 0)
-                    e = text.Length;
-                textWords.Add(text.Substring(pos, e - pos));
-                return true;
-            });
-            return textWords.ToArray();
+                int n = 0;
+                bool prevIsLetter = false;
+                for (int i = 0; i < l; ++i)
+                {
+                    var isP = Char.IsLetterOrDigit(s[i]);
+                    if (isP != prevIsLetter)
+                    {
+                        // A word start or end
+                        bounds[n] = i;
+                        ++n;
+                    }
+                    prevIsLetter = isP;
+                }
+                if (prevIsLetter)
+                {
+                    bounds[n] = l;
+                    ++n;
+                }
+                var count = n >> 1;
+                if (count == 0)
+                    return Array.Empty<String>();
+                var words = new String[count];
+                for (int w = 0, b = 0; w < count; ++w, b += 2)
+                {
+                    var start = bounds[b];
+                    words[w] = text.Substring(start, bounds[b + 1] - start);
+                }
+                return words;
+            }
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<int>.Shared.Return(rented);
+            }
         }
 
         /// <summary>
@@ -341,45 +452,55 @@ namespace SysWeaver
 
         public static int FuzzyMatch(string[] textWords, string[] matchWords)
         {
-            textWords = textWords.ToArray();
             var wlen = textWords.Length;
             var mlen = matchWords.Length;
             if ((wlen <= 0) || (mlen <= 0))
                 return int.MaxValue;
-            int levSum = 0;
-            for (int x = 0; x < mlen; ++x)
+            // The words are reordered, use a (pooled) copy
+            var pool = ArrayPool<String>.Shared;
+            var words = pool.Rent(wlen);
+            try
             {
-                var a = matchWords[x];
-                int levBest = int.MaxValue;
-                int ibest = 0;
-                for (int i = 0; i < wlen; ++i)
+                textWords.CopyTo(words, 0);
+                int levSum = 0;
+                for (int x = 0; x < mlen; ++x)
                 {
-                    var t = textWords[i];
-                    var found = t.IndexOf(a, StringComparison.Ordinal);
-                    var l = found < 0
-                        ?
-                        (Levenstein(t, a, FuzzyLevensteinLetterCost, FuzzyLevensteinNumberCost) << FuzzyLevensteinShiftWeight)
-                        :
-                        ((t.Length - a.Length) << FuzzyPartOfShiftWeight);
-                    if (l < levBest)
+                    var a = matchWords[x];
+                    int levBest = int.MaxValue;
+                    int ibest = 0;
+                    for (int i = 0; i < wlen; ++i)
                     {
-                        levBest = l;
-                        ibest = i;
+                        var t = words[i];
+                        var found = t.AsSpan().IndexOf(a.AsSpan());
+                        var l = found < 0
+                            ?
+                            (Levenstein(t, a, FuzzyLevensteinLetterCost, FuzzyLevensteinNumberCost) << FuzzyLevensteinShiftWeight)
+                            :
+                            ((t.Length - a.Length) << FuzzyPartOfShiftWeight);
+                        if (l < levBest)
+                        {
+                            levBest = l;
+                            ibest = i;
+                        }
                     }
+                    levSum += levBest;
+                    --wlen;
+                    if (wlen == 0)
+                    {
+                        levSum += ((mlen - x - 1) << FuzzyOrderShiftWeight);
+                        break;
+                    }
+                    var o = words[wlen];
+                    words[wlen] = words[ibest];
+                    words[ibest] = o;
                 }
-                levSum += levBest;
-                --wlen;
-                if (wlen == 0)
-                {
-                    levSum += ((mlen - x - 1) << FuzzyOrderShiftWeight);
-                    break;
-                }
-                var o = textWords[wlen];
-                textWords[wlen] = textWords[ibest];
-                textWords[ibest] = o;
+                levSum += (wlen << FuzzyMissingWordsShiftWeight);
+                return levSum;
             }
-            levSum += (wlen << FuzzyMissingWordsShiftWeight);
-            return levSum;
+            finally
+            {
+                pool.Return(words, true);
+            }
         }
 
         /// <summary>
@@ -443,7 +564,7 @@ namespace SysWeaver
                 return s.Substring(0, maxLen);
             var el = elipses.Length;
             if ((el + el) < maxLen)
-                return s.Substring(0, maxLen - el) + elipses;
+                return String.Concat(s.AsSpan(0, maxLen - el), elipses);
             return s.Substring(0, maxLen);
         }
 
@@ -477,6 +598,37 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Get the length of the chars after applying a char map
+        /// </summary>
+        static int GetMappedLength(ReadOnlySpan<Char> source, IReadOnlyDictionary<Char, String> charMap)
+        {
+            int l = 0;
+            foreach (var c in source)
+                l += charMap.TryGetValue(c, out var cc) ? (cc?.Length ?? 0) : 1;
+            return l;
+        }
+
+        /// <summary>
+        /// Apply a char map
+        /// </summary>
+        static void MapChars(ReadOnlySpan<Char> source, Span<Char> destination, IReadOnlyDictionary<Char, String> charMap)
+        {
+            int o = 0;
+            foreach (var c in source)
+            {
+                if (!charMap.TryGetValue(c, out var cc))
+                {
+                    destination[o] = c;
+                    ++o;
+                    continue;
+                }
+                if (cc == null)
+                    continue;
+                cc.AsSpan().CopyTo(destination[o..]);
+                o += cc.Length;
+            }
+        }
 
         /// <summary>
         /// Clean up strings, removing duplicate white-spaces, turning all white spaces to ' ' (tab's etc).
@@ -484,50 +636,60 @@ namespace SysWeaver
         /// <param name="s"></param>
         /// <param name="charMap">An optional char remapper</param>
         /// <returns>A sanitized string</returns>
+        [SkipLocalsInit]
         public static String Sanitize(this String s, IReadOnlyDictionary<Char, String> charMap = null)
         {
             if (String.IsNullOrEmpty(s))
                 return s;
-            s = s.Trim();
-            if (String.IsNullOrEmpty(s))
-                return s;
+            var src = s.AsSpan().Trim();
+            if (src.IsEmpty)
+                return String.Empty;
+            var l = src.Length;
             if (charMap != null)
             {
-                StringBuilder b = new StringBuilder(s.Length);
-                foreach (var c in s)
+                l = GetMappedLength(src, charMap);
+                if (l <= 0)
+                    return String.Empty;
+            }
+            char[] rented = null;
+            Span<Char> t = l <= MaxStackChars ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l));
+            try
+            {
+                t = t[..l];
+                if (charMap != null)
+                    MapChars(src, t, charMap);
+                else
+                    src.CopyTo(t);
+                // Collapse white spaces (in place)
+                bool isWhite = true;
+                int o = 0;
+                int lastNonWhite = 0;
+                for (int i = 0; i < l; ++i)
                 {
-                    if (!charMap.TryGetValue(c, out var cc))
+                    var c = t[i];
+                    if (Char.IsWhiteSpace(c) || (c < 31))
                     {
-                        b.Append(c);
+                        if (isWhite)
+                            continue;
+                        t[o] = ' ';
+                        ++o;
+                        isWhite = true;
                         continue;
                     }
-                    b.Append(cc);
+                    isWhite = false;
+                    t[o] = c;
+                    ++o;
+                    lastNonWhite = o;
                 }
-                s = b.ToString();
-                if (String.IsNullOrEmpty(s))
-                    return s;
+                // Control chars and char map replacements can leave a trailing white space that the initial Trim didn't catch
+                var res = t[..lastNonWhite];
+                return res.SequenceEqual(s) ? s : new String(res);
             }
-            var l = s.Length;
-            var t = new StringBuilder(l);
-            bool isWhite = true;
-            int lastNonWhite = 0;
-            for (int i = 0; i < l; ++i)
+            finally
             {
-                var c = s[i];
-                if (Char.IsWhiteSpace(c) || (c < 31))
-                {
-                    if (isWhite)
-                        continue;
-                    t.Append(' ');
-                    isWhite = true;
-                    continue;
-                }
-                isWhite = false;
-                t.Append(c);
-                lastNonWhite = t.Length;
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
             }
-            // Control chars and char map replacements can leave a trailing white space that the initial Trim didn't catch
-            return lastNonWhite == t.Length ? t.ToString() : t.ToString(0, lastNonWhite);
         }
 
 
@@ -544,6 +706,8 @@ namespace SysWeaver
             return false;
         }
 
+        static readonly Func<Char, bool> IsCodeIdentifierCharFn = IsCodeIdentifierChar;
+
         /// <summary>
         /// Clean up code strings, removing duplicate white-spaces, turning all white spaces to ' ' (tab's etc).
         /// Removing redunant spaces.
@@ -552,63 +716,70 @@ namespace SysWeaver
         /// <param name="isCodeIdentifier">An optional function that returns true if a char is a possible identifier</param>
         /// <param name="charMap">An optional char remapper</param>
         /// <returns>A sanitized string</returns>
+        [SkipLocalsInit]
         public static String CodeSanitize(this String s, Func<Char, bool> isCodeIdentifier = null, IReadOnlyDictionary<Char, String> charMap = null)
         {
             if (String.IsNullOrEmpty(s))
                 return s;
-            s = s.Trim();
-            if (String.IsNullOrEmpty(s))
-                return s;
-            if (isCodeIdentifier == null)
-                isCodeIdentifier = IsCodeIdentifierChar;
+            var src = s.AsSpan().Trim();
+            if (src.IsEmpty)
+                return String.Empty;
+            isCodeIdentifier ??= IsCodeIdentifierCharFn;
+            var l = src.Length;
             if (charMap != null)
             {
-                StringBuilder b = new StringBuilder(s.Length);
-                foreach (var c in s)
-                {
-                    if (!charMap.TryGetValue(c, out var cc))
-                    {
-                        b.Append(c);
-                        continue;
-                    }
-                    b.Append(cc);
-                }
-                s = b.ToString();
-                if (String.IsNullOrEmpty(s))
-                    return s;
+                l = GetMappedLength(src, charMap);
+                if (l <= 0)
+                    return String.Empty;
             }
-            var l = s.Length;
-            var t = new StringBuilder(l);
-            bool isWhite = true;
-            bool isIdentifier = false;
-            for (int i = 0; i < l; ++i)
+            char[] rented = null;
+            Span<Char> t = l <= MaxStackChars ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l));
+            try
             {
-                var c = s[i];
-                if (Char.IsWhiteSpace(c) || (c < 31))
-                {
-                    if (isWhite)
-                        continue;
-                    if (!isIdentifier)
-                        continue;
-                    var n = i + 1;
-                    if (n < l)
-                    {
-                        if (!isCodeIdentifier(s[n]))
-                            continue;
-                    }
-                    c = ' ';
-                    isWhite = true;
-                    isIdentifier = false;
-                }
+                t = t[..l];
+                if (charMap != null)
+                    MapChars(src, t, charMap);
                 else
+                    src.CopyTo(t);
+                // Collapse white spaces (in place, the write position is never after the read position)
+                bool isWhite = true;
+                bool isIdentifier = false;
+                int o = 0;
+                for (int i = 0; i < l; ++i)
                 {
-                    isWhite = false;
-                    isIdentifier = isCodeIdentifier(c);
+                    var c = t[i];
+                    if (Char.IsWhiteSpace(c) || (c < 31))
+                    {
+                        if (isWhite)
+                            continue;
+                        if (!isIdentifier)
+                            continue;
+                        var n = i + 1;
+                        if (n < l)
+                        {
+                            if (!isCodeIdentifier(t[n]))
+                                continue;
+                        }
+                        c = ' ';
+                        isWhite = true;
+                        isIdentifier = false;
+                    }
+                    else
+                    {
+                        isWhite = false;
+                        isIdentifier = isCodeIdentifier(c);
+                    }
+                    t[o] = c;
+                    ++o;
                 }
-                t.Append(c);
+                var res = t[..o];
+                return res.SequenceEqual(s) ? s : new String(res);
             }
-            s = t.ToString();
-            return s;
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+            }
         }
 
 
@@ -619,19 +790,9 @@ namespace SysWeaver
         /// </summary>
         /// <param name="s">The string to check</param>
         /// <returns>True if all chars in the string is less than 128</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsAsciiOnly(this String s)
-        {
-            if (s == null)
-                return true;
-            var l = s.Length;
-            for (int i = 0; i < l; ++i)
-            {
-                var c = s[i];
-                if (c >= 128)
-                    return false;
-            }
-            return true;
-        }
+            => Ascii.IsValid(s.AsSpan());
 
         /// <summary>
         /// Replace all non ascii chars in a string
@@ -643,21 +804,23 @@ namespace SysWeaver
         {
             if (String.IsNullOrEmpty(s))
                 return s;
-            var l = s.Length;
-            Span<Char> local = l < 4096 ? stackalloc Char[l] : GC.AllocateUninitializedArray<Char>(l);
-            bool mod = false;
-            for (int i = 0; i < l; ++i)
-            {
-                var c = s[i];
-                if (c >= 128)
-                {
-                    c = replaceWith;
-                    mod = true;
-                }
-                local[i] = c;
-            }
-            return mod ? new String(local) : s;
+            var first = s.AsSpan().IndexOfAnyExceptInRange((Char)0, (Char)127);
+            if (first < 0)
+                return s;
+            return String.Create(s.Length, (s, replaceWith, first), ReplaceNonAsciiAction);
         }
+
+        static readonly SpanAction<Char, (String Str, Char With, int First)> ReplaceNonAsciiAction = (d, st) =>
+        {
+            st.Str.AsSpan().CopyTo(d);
+            var w = st.With;
+            var l = d.Length;
+            for (int i = st.First; i < l; ++i)
+            {
+                if (d[i] >= 128)
+                    d[i] = w;
+            }
+        };
 
 
         /// <summary>
@@ -670,23 +833,28 @@ namespace SysWeaver
         {
             if (String.IsNullOrEmpty(s))
                 return s;
+            if (Ascii.IsValid(s.AsSpan()))
+                return s;
             s = s.RemoveDiacritics();
-            var l = s.Length;
-            Span<Char> local = l < 4096 ? stackalloc Char[l] : GC.AllocateUninitializedArray<Char>(l);
-            bool mod = false;
-            var toA = ToAscii;
-            for (int i = 0; i < l; ++i)
-            {
-                var c = s[i];
-                if (c >= 128)
-                {
-                    c = toA.TryGetValue(c, out var c2) ? c2 : subsituteUnknownWith;
-                    mod = true;
-                }
-                local[i] = c;
-            }
-            return mod ? new String(local) : s;
+            var first = s.AsSpan().IndexOfAnyExceptInRange((Char)0, (Char)127);
+            if (first < 0)
+                return s;
+            return String.Create(s.Length, (s, subsituteUnknownWith, first), MakeAsciiAction);
         }
+
+        static readonly SpanAction<Char, (String Str, Char With, int First)> MakeAsciiAction = (d, st) =>
+        {
+            st.Str.AsSpan().CopyTo(d);
+            var w = st.With;
+            var toA = ToAscii;
+            var l = d.Length;
+            for (int i = st.First; i < l; ++i)
+            {
+                var c = d[i];
+                if (c >= 128)
+                    d[i] = toA.TryGetValue(c, out var c2) ? c2 : w;
+            }
+        };
 
         static readonly IReadOnlyDictionary<Char, Char> ToAscii = new Dictionary<Char, Char>()
         {
@@ -694,6 +862,12 @@ namespace SysWeaver
             {  '×', 'x' },
         }.Freeze();
 
+
+        static readonly SearchValues<Char> AsciiLetters = SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
+        static readonly SearchValues<Char> AsciiLettersOrSpace = SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ");
+        static readonly SearchValues<Char> AsciiLettersOrDigits = SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789");
+        static readonly SearchValues<Char> HexDigits = SearchValues.Create("0123456789abcdefABCDEF");
+        static readonly SearchValues<Char> HexDigitsOrSpace = SearchValues.Create("0123456789abcdefABCDEF ");
 
         /// <summary>
         /// Check if a string is a valid "identifier", only 'a'-'z', 'A'-'Z', and numbers is accepeted (no number at the first position)
@@ -704,20 +878,10 @@ namespace SysWeaver
         {
             if (String.IsNullOrEmpty(s))
                 return false;
-            var l = s.Length;
-            for (int i = 0; i < l; ++i)
-            {
-                var c = s[i];
-                if ((c >= 'a') && (c <= 'z'))
-                    continue;
-                if ((c >= 'A') && (c <= 'Z'))
-                    continue;
-                if (i == 0)
-                    return false;
-                if ((c < '0') || (c > '9'))
-                    return false;
-            }
-            return true;
+            var c = s[0];
+            if (((uint)((c | 0x20) - 'a')) > ('z' - 'a'))
+                return false;
+            return s.AsSpan(1).IndexOfAnyExcept(AsciiLettersOrDigits) < 0;
         }
 
 
@@ -736,6 +900,9 @@ namespace SysWeaver
             var l = s.Length;
             if (l <= 0)
                 return false;
+            // Vectorized: only digits
+            if (s.AsSpan().IndexOfAnyExceptInRange('0', '9') < 0)
+                return true;
             bool haveDigit = false;
             bool haveDecimal = false;
             for (int i = 0; i < l; ++i)
@@ -770,29 +937,9 @@ namespace SysWeaver
         /// <returns>True if all chars in the string is hexadecimal digits</returns>
         public static bool IsHex(this String s, bool allowSpace = true)
         {
-            if (s == null)
+            if (String.IsNullOrEmpty(s))
                 return false;
-            var l = s.Length;
-            if (l <= 0)
-                return false;
-            for (int i = 0; i < l; ++i)
-            {
-                var c = s[i];
-                if (c < '0')
-                {
-                    if (allowSpace && (c == ' '))
-                        continue;
-                    return false;
-                }
-                if (c <= '9')
-                    continue;
-                if ((c >= 'a') && (c <= 'f'))
-                    continue;
-                if ((c >= 'A') && (c <= 'F'))
-                    continue;
-                return false;
-            }
-            return true;
+            return s.AsSpan().IndexOfAnyExcept(allowSpace ? HexDigitsOrSpace : HexDigits) < 0;
         }
 
 
@@ -806,10 +953,15 @@ namespace SysWeaver
         {
             if (s == null)
                 return false;
-            var l = s.Length;
-            for (int i = 0; i < l; ++i)
+            var v = s.AsSpan();
+            // Vectorized: skip ASCII letters (and spaces)
+            var first = v.IndexOfAnyExcept(allowSpace ? AsciiLettersOrSpace : AsciiLetters);
+            if (first < 0)
+                return true;
+            var l = v.Length;
+            for (int i = first; i < l; ++i)
             {
-                var c = s[i];
+                var c = v[i];
                 if (Char.IsLetter(c))
                     continue;
                 if (allowSpace && (c == ' '))
@@ -821,33 +973,61 @@ namespace SysWeaver
 
 
         /// <summary>
+        /// Removes duplicate white spaces, with a single white space, and trims white spaces from the start and end (in place).
+        /// </summary>
+        /// <param name="source">The source chars</param>
+        /// <param name="destination">The destination (may be the same as the source)</param>
+        /// <param name="useAsWhiteSpace">Replace white spaces with a single of this</param>
+        /// <returns>The number of chars written to the destination</returns>
+        static int RemoveMultiWhiteSpace(ReadOnlySpan<Char> source, Span<Char> destination, Char useAsWhiteSpace)
+        {
+            var l = source.Length;
+            int o = 0;
+            bool wasSpace = true;
+            int lastNonSpace = 0;
+            for (int i = 0; i < l; ++i)
+            {
+                var c = source[i];
+                if (Char.IsWhiteSpace(c))
+                {
+                    if (!wasSpace)
+                    {
+                        destination[o] = useAsWhiteSpace;
+                        ++o;
+                    }
+                    wasSpace = true;
+                    continue;
+                }
+                wasSpace = false;
+                destination[o] = c;
+                ++o;
+                lastNonSpace = o;
+            }
+            return lastNonSpace;
+        }
+
+        /// <summary>
         /// Removes duplicate white spaces, with a single white space (and trims white spaces from start and end).
         /// </summary>
         /// <param name="s">The string</param>
         /// <param name="useAsWhiteSpace">Replace white spaces with a single of this</param>
         /// <returns></returns>
+        [SkipLocalsInit]
         public static String RemoveMultiWhiteSpace(String s, Char useAsWhiteSpace = ' ')
         {
             var l = s.Length;
-            StringBuilder b = new StringBuilder(l);
-            bool wasSpace = true;
-            int lastNonSpace = 0;
-            for (int i = 0; i < l; ++i)
+            char[] rented = null;
+            Span<Char> b = l <= MaxStackChars ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l));
+            try
             {
-                var c = s[i];
-                bool isSpace = Char.IsWhiteSpace(c);
-                if (isSpace)
-                {
-                    if (!wasSpace)
-                        b.Append(useAsWhiteSpace);
-                    wasSpace = true;
-                    continue;
-                }
-                wasSpace = false;
-                b.Append(c);
-                lastNonSpace = b.Length;
+                var res = b[..RemoveMultiWhiteSpace(s, b, useAsWhiteSpace)];
+                return res.SequenceEqual(s) ? s : new String(res);
             }
-            return lastNonSpace == b.Length ? b.ToString() : b.ToString(0, lastNonSpace);
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+            }
         }
 
         /// <summary>
@@ -859,39 +1039,62 @@ namespace SysWeaver
         /// <param name="groupStart"></param>
         /// <param name="groupEnd"></param>
         /// <returns>The original string if no group was removed, else the string with all groups removed (and white spaces cleaned up)</returns>
+        [SkipLocalsInit]
         public static String RemoveGroup(String s, Char groupStart = '(', Char groupEnd = ')')
         {
-            var l = s.Length;
-            StringBuilder b = null;
-            int depth = 0;
-            int groupPos = 0;
-            int copyFrom = 0;
-            for (int i = 0; i < l; ++i)
-            {
-                var c = s[i];
-                // Check end first, so that groupStart == groupEnd (ex: quotes) works
-                if ((c == groupEnd) && (depth > 0))
-                {
-                    --depth;
-                    if (depth == 0)
-                    {
-                        b ??= new StringBuilder(l);
-                        b.Append(s, copyFrom, groupPos - copyFrom);
-                        copyFrom = i + 1;
-                    }
-                    continue;
-                }
-                if (c != groupStart)
-                    continue;
-                if (depth == 0)
-                    groupPos = i;
-                ++depth;
-            }
-            if (b == null)
+            var src = s.AsSpan();
+            var l = src.Length;
+            // Most strings doesn't contain any group
+            var firstStart = src.IndexOf(groupStart);
+            if (firstStart < 0)
                 return s;
-            // Keep the rest, including any unclosed group
-            b.Append(s, copyFrom, l - copyFrom);
-            return RemoveMultiWhiteSpace(b.ToString());
+            char[] rented = null;
+            Span<Char> b = l <= MaxStackChars ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l));
+            try
+            {
+                int o = 0;
+                bool changed = false;
+                int depth = 0;
+                int groupPos = 0;
+                int copyFrom = 0;
+                for (int i = firstStart; i < l; ++i)
+                {
+                    var c = src[i];
+                    // Check end first, so that groupStart == groupEnd (ex: quotes) works
+                    if ((c == groupEnd) && (depth > 0))
+                    {
+                        --depth;
+                        if (depth == 0)
+                        {
+                            changed = true;
+                            var keep = src.Slice(copyFrom, groupPos - copyFrom);
+                            keep.CopyTo(b[o..]);
+                            o += keep.Length;
+                            copyFrom = i + 1;
+                        }
+                        continue;
+                    }
+                    if (c != groupStart)
+                        continue;
+                    if (depth == 0)
+                        groupPos = i;
+                    ++depth;
+                }
+                if (!changed)
+                    return s;
+                // Keep the rest, including any unclosed group
+                var rest = src[copyFrom..];
+                rest.CopyTo(b[o..]);
+                o += rest.Length;
+                // Clean up the white spaces (in place)
+                var n = RemoveMultiWhiteSpace(b[..o], b, ' ');
+                return new String(b[..n]);
+            }
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+            }
         }
 
         /// <summary>
@@ -914,7 +1117,7 @@ namespace SysWeaver
         /// <returns>The combined string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String JoinWithSpecialLast(String first, String last, IEnumerable<String> args)
-            => JoinWithSpecialLast(first, last, (IReadOnlyList<String>)args?.ToList());
+            => JoinWithSpecialLast(first, last, args as IReadOnlyList<String> ?? args?.ToList());
 
         /// <summary>
         /// Join strings using two separators, one only used for the last separation.
@@ -944,12 +1147,42 @@ namespace SysWeaver
                 case 1:
                     return args[0];
                 case 2:
-                    return String.Join(last, args);
+                    return String.Concat(args[0], last, args[1]);
                 default:
-                    --counts;
-                    return String.Join(last, String.Join(first, args.ToArray(), 0, counts), args[counts]);
+                    return InternalJoinWithSpecialLast(first, last, args, counts);
             }
         }
+
+        /// <summary>
+        /// Join the first count strings (at least 3), only the result is allocated
+        /// </summary>
+        static String InternalJoinWithSpecialLast(String first, String last, IReadOnlyList<String> args, int count)
+        {
+            long total = (long)(first?.Length ?? 0) * (count - 2) + (last?.Length ?? 0);
+            for (int i = 0; i < count; ++i)
+                total += args[i]?.Length ?? 0;
+            return String.Create(checked((int)total), (first, last, args, count), JoinWithSpecialLastAction);
+        }
+
+        static readonly SpanAction<Char, (String First, String Last, IReadOnlyList<String> Args, int Count)> JoinWithSpecialLastAction = (d, st) =>
+        {
+            var args = st.Args;
+            var count = st.Count;
+            var lastIndex = count - 1;
+            int o = 0;
+            for (int i = 0; i < count; ++i)
+            {
+                if (i > 0)
+                {
+                    var sep = (i == lastIndex ? st.Last : st.First).AsSpan();
+                    sep.CopyTo(d[o..]);
+                    o += sep.Length;
+                }
+                var a = args[i].AsSpan();
+                a.CopyTo(d[o..]);
+                o += a.Length;
+            }
+        };
 
         /// <summary>
         /// Join strings using two separators into a string, one only used for the last separation.
@@ -971,7 +1204,7 @@ namespace SysWeaver
         /// <returns>The combined string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String JoinWithSpecialLast<T>(String first, String last, IEnumerable<T> args)
-            => JoinWithSpecialLast(first, last, (IReadOnlyList<T>)args?.ToList());
+            => JoinWithSpecialLast(first, last, args as IReadOnlyList<T> ?? args?.ToList());
 
 
         /// <summary>
@@ -991,10 +1224,21 @@ namespace SysWeaver
                 case 1:
                     return args[0]?.ToString();
                 case 2:
-                    return String.Join(last, args);
+                    return String.Concat(args[0]?.ToString(), last, args[1]?.ToString());
                 default:
-                    --counts;
-                    return String.Join(last, String.Join(first, args.Select(x => x?.ToString()).ToArray(), 0, counts), args[counts]);
+                    // Convert to strings in a pooled array
+                    var pool = ArrayPool<String>.Shared;
+                    var strings = pool.Rent(counts);
+                    try
+                    {
+                        for (int i = 0; i < counts; ++i)
+                            strings[i] = args[i]?.ToString();
+                        return InternalJoinWithSpecialLast(first, last, strings, counts);
+                    }
+                    finally
+                    {
+                        pool.Return(strings, true);
+                    }
             }
         }
 
@@ -1004,19 +1248,44 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The string</param>
         /// <returns>null if the input value was null. String.Empty is the input value was empty, else the hex encoded string only '0' to '9' and 'a' to 'f' is returned</returns>
+        [SkipLocalsInit]
         public static String ToHex(this String value)
         {
             if (value == null)
                 return null;
             var l = value.Length;
             if (l <= 0)
-                return String.Empty;    
+                return String.Empty;
             var enc = Encoding.UTF8;
             var len = enc.GetMaxByteCount(l);
-            Span<Byte> mem = len < 4096 ? stackalloc Byte[len] : GC.AllocateUninitializedArray<Byte>(len);
-            if (!enc.TryGetBytes(value.AsSpan(), mem, out len))
-                throw new Exception("Internal error!");
-            return mem.Slice(0, len).ToHexString();
+            byte[] rented = null;
+            Span<Byte> mem = len <= MaxStackBytes ? stackalloc Byte[len] : (rented = ArrayPool<Byte>.Shared.Rent(len));
+            try
+            {
+                if (!enc.TryGetBytes(value.AsSpan(), mem, out len))
+                    throw new Exception("Internal error!");
+                return Convert.ToHexStringLower(mem[..len]);
+            }
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Byte>.Shared.Return(rented);
+            }
+        }
+
+        /// <summary>
+        /// Decode hex chars to bytes, throws the same exception as HexValue on invalid chars
+        /// </summary>
+        /// <param name="value">The hex chars (an even number)</param>
+        /// <param name="data">The destination (half the length of the value)</param>
+        static void DecodeHex(ReadOnlySpan<Char> value, Span<Byte> data)
+        {
+            if (Convert.FromHexString(value, data, out var consumed, out _) == OperationStatus.Done)
+                return;
+            // Throw the same exception as before (on the first invalid char)
+            value[consumed].HexValue();
+            value[consumed + 1].HexValue();
+            throw new Exception("Invalid hex string!");
         }
 
         /// <summary>
@@ -1025,6 +1294,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value"></param>
         /// <returns>null if the input value was null. String.Empty is the input value was empty, else the original string (reverse of the ToHex operation)</returns>
+        [SkipLocalsInit]
         public static String ToStringFromHex(this String value)
         {
             if (value == null)
@@ -1033,17 +1303,19 @@ namespace SysWeaver
             if (l <= 0)
                 return String.Empty;
             l >>= 1;
-            Span<Byte> data = l < 4096 ? stackalloc Byte[l] : GC.AllocateUninitializedArray<Byte>(l);
-            for (int i = 0, s = 0; i < l; ++i)
+            byte[] rented = null;
+            Span<Byte> data = l <= MaxStackBytes ? stackalloc Byte[l] : (rented = ArrayPool<Byte>.Shared.Rent(l));
+            try
             {
-                var u = value[s].HexValue();
-                ++s;
-                u <<= 4;
-                u |= value[s].HexValue();
-                ++s;
-                data[i] = (Byte)u;
+                data = data[..l];
+                DecodeHex(value.AsSpan(0, l + l), data);
+                return Encoding.UTF8.GetString(data);
             }
-            return Encoding.UTF8.GetString(data);
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Byte>.Shared.Return(rented);
+            }
         }
 
 
@@ -1061,19 +1333,10 @@ namespace SysWeaver
             if (l <= 0)
                 return Array.Empty<Byte>();
             l >>= 1;
+            // The result (all bytes are written)
             var data = GC.AllocateUninitializedArray<Byte>(l);
-            for (int i = 0, s = 0; i < l; ++ i)
-            {
-                var u = value[s].HexValue();
-                ++s;
-                u <<= 4;
-                u |= value[s].HexValue();
-                ++s;
-                data[i] = (Byte)u;
-            }
+            DecodeHex(value.AsSpan(0, l + l), data);
             return data;
-
-
         }
 
         /// <summary>
@@ -1085,10 +1348,17 @@ namespace SysWeaver
         {
             if (value == null)
                 return false;
-            var l = value.Length;
-            for (int i = 0; i < l; ++i)
+            var v = value.AsSpan();
+            // Vectorized: ASCII letters
+            if (v.ContainsAny(AsciiLetters))
+                return true;
+            var first = v.IndexOfAnyExceptInRange((Char)0, (Char)127);
+            if (first < 0)
+                return false;
+            var l = v.Length;
+            for (int i = first; i < l; ++i)
             {
-                if (Char.IsLetter(value[i]))
+                if (Char.IsLetter(v[i]))
                     return true;
             }
             return false;
@@ -1100,26 +1370,39 @@ namespace SysWeaver
         /// <param name="value">The string to filter</param>
         /// <param name="keep">The chars to keep</param>
         /// <returns>The filtered string</returns>
+        [SkipLocalsInit]
         public static String Filter(this String value, IReadOnlySet<Char> keep)
         {
             if (String.IsNullOrEmpty(value))
                 return value;
-            var l = value.Length;
-            Span<Char> data = l < 4096 ? stackalloc Char[l] : GC.AllocateUninitializedArray<Char>(l);
-            int o = 0;
-            for (int i = 0; i < l; ++i)
-            {
-                var c = value[i];
-                if (!keep.Contains(c))
-                    continue;
-                data[o] = c;
-                ++o;
-            }
-            if (o == l)
+            var v = value.AsSpan();
+            var l = v.Length;
+            int first = 0;
+            while ((first < l) && keep.Contains(v[first]))
+                ++first;
+            if (first >= l)
                 return value;
-            if (o == 0)
-                return String.Empty;
-            return new string(data.Slice(0, o));
+            char[] rented = null;
+            Span<Char> data = l <= MaxStackChars ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l));
+            try
+            {
+                v[..first].CopyTo(data);
+                int o = first;
+                for (int i = first + 1; i < l; ++i)
+                {
+                    var c = v[i];
+                    if (!keep.Contains(c))
+                        continue;
+                    data[o] = c;
+                    ++o;
+                }
+                return o == 0 ? String.Empty : new string(data[..o]);
+            }
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+            }
         }
 
         /// <summary>
@@ -1128,26 +1411,39 @@ namespace SysWeaver
         /// <param name="value">The string to filter</param>
         /// <param name="keepFn">A function that is called to determine if a char should be kept, return true to keep the char</param>
         /// <returns>The filtered string</returns>
+        [SkipLocalsInit]
         public static String Filter(this String value, Func<Char, bool> keepFn)
         {
             if (String.IsNullOrEmpty(value))
                 return value;
-            var l = value.Length;
-            Span<Char> data = l < 4096 ? stackalloc Char[l] : GC.AllocateUninitializedArray<Char>(l);
-            int o = 0;
-            for (int i = 0; i < l; ++i)
-            {
-                var c = value[i];
-                if (!keepFn(c))
-                    continue;
-                data[o] = c;
-                ++o;
-            }
-            if (o == l)
+            var v = value.AsSpan();
+            var l = v.Length;
+            int first = 0;
+            while ((first < l) && keepFn(v[first]))
+                ++first;
+            if (first >= l)
                 return value;
-            if (o == 0)
-                return String.Empty;
-            return new string(data.Slice(0, o));
+            char[] rented = null;
+            Span<Char> data = l <= MaxStackChars ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l));
+            try
+            {
+                v[..first].CopyTo(data);
+                int o = first;
+                for (int i = first + 1; i < l; ++i)
+                {
+                    var c = v[i];
+                    if (!keepFn(c))
+                        continue;
+                    data[o] = c;
+                    ++o;
+                }
+                return o == 0 ? String.Empty : new string(data[..o]);
+            }
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+            }
         }
 
         /// <summary>
@@ -1157,28 +1453,45 @@ namespace SysWeaver
         /// <param name="minInclusive">The first char in the range to keep</param>
         /// <param name="maxInclusive">The last char in the range to keep</param>
         /// <returns>The filtered string</returns>
+        [SkipLocalsInit]
         public static String Filter(this String value, Char minInclusive, Char maxInclusive)
         {
             if (String.IsNullOrEmpty(value))
                 return value;
-            var l = value.Length;
-            Span<Char> data = l < 4096 ? stackalloc Char[l] : GC.AllocateUninitializedArray<Char>(l);
-            int o = 0;
-            for (int i = 0; i < l; ++ i)
-            {
-                var c = value[i];
-                if (c < minInclusive)
-                    continue;
-                if (c > maxInclusive)
-                    continue;
-                data[o] = c;
-                ++o;
-            }
-            if (o == l)
+            var v = value.AsSpan();
+            // Vectorized search for the first char to remove
+            var first = v.IndexOfAnyExceptInRange(minInclusive, maxInclusive);
+            if (first < 0)
                 return value;
-            if (o == 0)
-                return String.Empty;
-            return new string(data.Slice(0, o));
+            var l = v.Length;
+            char[] rented = null;
+            Span<Char> data = l <= MaxStackChars ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l));
+            try
+            {
+                v[..first].CopyTo(data);
+                int o = first;
+                v = v[(first + 1)..];
+                for (; ; )
+                {
+                    // Skip chars to remove, then copy the run of chars to keep (vectorized)
+                    var keepStart = v.IndexOfAnyInRange(minInclusive, maxInclusive);
+                    if (keepStart < 0)
+                        break;
+                    v = v[keepStart..];
+                    var keepEnd = v.IndexOfAnyExceptInRange(minInclusive, maxInclusive);
+                    if (keepEnd < 0)
+                        keepEnd = v.Length;
+                    v[..keepEnd].CopyTo(data[o..]);
+                    o += keepEnd;
+                    v = v[keepEnd..];
+                }
+                return o == 0 ? String.Empty : new string(data[..o]);
+            }
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+            }
         }
 
 
@@ -1197,33 +1510,47 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The string to filter</param>
         /// <returns>The filtered string</returns>
+        [SkipLocalsInit]
         public static String FilterInt(this String value)
         {
             if (String.IsNullOrEmpty(value))
                 return value;
-            var l = value.Length;
-            Span<Char> data = l < 4096 ? stackalloc Char[l] : GC.AllocateUninitializedArray<Char>(l);
-            int o = 0;
-            for (int i = 0; i < l; ++i)
-            {
-                var c = value[i];
-                if (c < '0')
-                {
-                    if (c != '-')
-                        continue;
-                    if (o != 0)
-                        continue;
-                }
-                if (c > '9')
-                    continue;
-                data[o] = c;
-                ++o;
-            }
-            if (o == l)
+            var v = value.AsSpan();
+            // Vectorized: only digits
+            if (v.IndexOfAnyExceptInRange('0', '9') < 0)
                 return value;
-            if (o == 0)
-                return String.Empty;
-            return new string(data.Slice(0, o));
+            var l = v.Length;
+            char[] rented = null;
+            Span<Char> data = l <= MaxStackChars ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l));
+            try
+            {
+                int o = 0;
+                for (int i = 0; i < l; ++i)
+                {
+                    var c = v[i];
+                    if (c < '0')
+                    {
+                        if (c != '-')
+                            continue;
+                        if (o != 0)
+                            continue;
+                    }
+                    if (c > '9')
+                        continue;
+                    data[o] = c;
+                    ++o;
+                }
+                if (o == l)
+                    return value;
+                if (o == 0)
+                    return String.Empty;
+                return new string(data[..o]);
+            }
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+            }
         }
 
 
@@ -1533,7 +1860,7 @@ namespace SysWeaver
             var p = value.LastIndexOf(split);
             if (p < 0)
                 return value;
-            return value.Substring(0, p);        
+            return value.Substring(0, p);
         }
 
         struct SecureCount
@@ -1550,40 +1877,25 @@ namespace SysWeaver
 
         static readonly SpanAction<Char, SecureCount> SecureEndWithCountAction = (str, c) =>
         {
-            var s = c.Str;
             var k = c.Keep;
-            int i;
-            for (i = 0; i < k; ++i)
-                str[i] = s[i];
-            var l = str.Length;
-            for (; i < l; ++i)
-                str[i] = '*';
+            c.Str.AsSpan(0, k).CopyTo(str);
+            str[k..].Fill('*');
         };
 
         static readonly SpanAction<Char, SecureStr> SecureEndWithStrAction = (str, c) =>
         {
-            var l = str.Length;
-            var s = c.Str;
             var a = c.Add;
-            var k = l - a.Length;
-            int i;
-            for (i = 0; i < k; ++i)
-                str[i] = s[i];
-            for (; i < l; ++i)
-                str[i] = a[i - k];
+            var k = str.Length - a.Length;
+            c.Str.AsSpan(0, k).CopyTo(str);
+            a.AsSpan().CopyTo(str[k..]);
         };
 
         static readonly SpanAction<Char, SecureCount> SecureStartWithCountAction = (str, c) =>
         {
             var l = str.Length;
-            var s = c.Str;
-            var k = c.Keep;
-            var p = l - k;
-            int i;
-            for (i = 0; i < p; ++i)
-                str[i] = '*';
-            for (; i < l; ++i)
-                str[i] = s[i];
+            var p = l - c.Keep;
+            str[..p].Fill('*');
+            c.Str.AsSpan(p, l - p).CopyTo(str[p..]);
         };
 
         static readonly SpanAction<Char, SecureStr> SecureStartWithStrAction = (str, c) =>
@@ -1739,21 +2051,25 @@ namespace SysWeaver
 
         static readonly SpanAction<Char, ReadOnlySpan<Char>> CreateCountAction = (str, c) =>
         {
-            var il = c.Length;
             var ol = str.Length;
-            for (int o = 0, i = 0; o < ol; ++o)
+            if (ol <= 0)
+                return;
+            // Copy the part once, then double the written chars until the string is filled
+            c.CopyTo(str);
+            var filled = c.Length;
+            while (filled < ol)
             {
-                str[o] = c[i];
-                ++i;
-                if (i >= il)
-                    i = 0;
+                var n = Math.Min(filled, ol - filled);
+                str[..n].CopyTo(str[filled..]);
+                filled += n;
             }
         };
 
-        
 
 
-        static readonly IReadOnlySet<Char> EscapeChars = ReadOnlyData.Set(
+
+        static readonly SearchValues<Char> EscapeChars = SearchValues.Create(
+            [
                 '\\',
                 '`',
                 '*',
@@ -1774,11 +2090,11 @@ namespace SysWeaver
                 //                '.',
                 '!',
                 '|'
-            );
+            ]);
 
         /// <summary>
         /// Escape some text to work inside mark down.
-        /// Doesn't escape +, - and . 
+        /// Doesn't escape +, - and .
         /// </summary>
         /// <param name="text">The text to escape</param>
         /// <param name="nbsp">If true, any spaces are converted to non breaking spaces to prevent word wrapping</param>
@@ -1789,29 +2105,57 @@ namespace SysWeaver
                 return "";
             if (text[0] == (Char)1)
                 return text.Substring(1);
-            var l = text.Length;
-            Span<Char> t = l < 2048 ? stackalloc Char[l * 2] : GC.AllocateUninitializedArray<Char>(l * 2);
-            int o = 0;
-            var e = EscapeChars;
-            for (int i = 0; i < l; ++i)
+            var s = text.AsSpan();
+            // Find the first char to escape (vectorized search, most texts doesn't have any)
+            var first = s.IndexOfAny(EscapeChars);
+            var from = nbsp ? ' ' : (Char)0xa0;
+            if (first < 0)
             {
-                var c = text[i];
+                if (!s.Contains(from))
+                    return text;
+                first = s.Length;
+            }
+            // Count the chars to escape (escape chars are often frequent, a per char lookup is faster than restarting a vectorized search)
+            var e = EscapeChars;
+            int escapes = 0;
+            var l = s.Length;
+            for (int i = first; i < l; ++i)
+            {
+                if (e.Contains(s[i]))
+                    ++escapes;
+            }
+            // Escape and replace in a single pass, only the result is allocated
+            return String.Create(l + escapes, (text, nbsp, first), EscapeMDAction);
+        }
+
+        static readonly SpanAction<Char, (String Text, bool Nbsp, int First)> EscapeMDAction = (d, st) =>
+        {
+            var s = st.Text.AsSpan();
+            var from = st.Nbsp ? ' ' : (Char)0xa0;
+            var to = st.Nbsp ? (Char)0xa0 : ' ';
+            var first = st.First;
+            // Before the first escaped char, only replace
+            s[..first].CopyTo(d);
+            d[..first].Replace(from, to);
+            var e = EscapeChars;
+            var l = s.Length;
+            int o = first;
+            for (int i = first; i < l; ++i)
+            {
+                var c = s[i];
                 if (e.Contains(c))
                 {
-                    t[o] = '\\';
+                    d[o] = '\\';
                     ++o;
                 }
-                t[o] = c;
+                else if (c == from)
+                {
+                    c = to;
+                }
+                d[o] = c;
                 ++o;
             }
-            if (o != l)
-                text = new string(t.Slice(0, o));
-            if (nbsp)
-                text = text.Replace(' ', (Char)0xa0);
-            else
-                text = text.Replace((Char)0xa0, ' ');
-            return text;
-        }
+        };
 
 
     }

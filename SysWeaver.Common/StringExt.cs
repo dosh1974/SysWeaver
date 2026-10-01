@@ -16,6 +16,11 @@ namespace SysWeaver
         static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
         static readonly CompareInfo Ci = CultureInfo.InvariantCulture.CompareInfo;
 
+        /// <summary>
+        /// Temporary buffers up to this number of chars are allocated on the stack (larger buffers are rented from the shared array pool)
+        /// </summary>
+        const int MaxStackChars = 4096;
+
         #region FastToLower
 
 
@@ -51,10 +56,18 @@ namespace SysWeaver
         /// <returns>True if all chars are lowercased (or not chars at all)</returns>
         static bool InternalFastIsLower(this ReadOnlySpan<Char> source, int l)
         {
-            while (l > 0)
+            var s = source[..l];
+            // Vectorized: any upper case ASCII letter
+            if (s.ContainsAnyInRange('A', 'Z'))
+                return false;
+            // Vectorized: all ASCII (and no upper case ASCII letters)
+            var nonAscii = s.IndexOfAnyExceptInRange((Char)0, (Char)0x7f);
+            if (nonAscii < 0)
+                return true;
+            // Non ASCII chars, check them one by one (ASCII chars are known to be ok)
+            for (int i = nonAscii; i < s.Length; ++i)
             {
-                --l;
-                if (!source[l].FastIsLowerOrNonLetter())
+                if (!s[i].FastIsLowerOrNonLetter())
                     return false;
             }
             return true;
@@ -95,38 +108,37 @@ namespace SysWeaver
             return isLower ? new string(s[..length]) : String.Create(length, s, LowerCasedSubString);
         }
 
-
-
-
-        static readonly SpanAction<Char, ReadOnlySpan<Char>> LowerCasedSubString = (str, source) =>
+        /// <summary>
+        /// Lower case chars (same as calling FastToLower for every char), ASCII is converted using SIMD
+        /// </summary>
+        /// <param name="source">The source chars</param>
+        /// <param name="destination">The destination, same length as the source</param>
+        static void LowerInto(ReadOnlySpan<Char> source, Span<Char> destination)
         {
-            var l = str.Length;
-            int i = 0;
+            if (Ascii.ToLower(source, destination, out var done) == OperationStatus.Done)
+                return;
+            // A non ASCII char, convert the rest one by one
+            var l = source.Length;
+            for (int i = done; i < l; ++i)
+                destination[i] = source[i].FastToLower();
+        }
 
-            var p = str;
-            var l4 = l & ~3;
-            while (i < l4)
-            {
-                var a = source[i];
-                ++i;
-                var b = source[i];
-                ++i;
-                var c = source[i];
-                ++i;
-                var d = source[i];
-                ++i;
-                p[0] = a.FastToLower();
-                p[1] = b.FastToLower();
-                p[2] = c.FastToLower();
-                p[3] = d.FastToLower();
-                p = p[4..];
-            }
-            while (i < l)
-            {
-                str[i] = source[i].FastToLower();
-                ++i;
-            }
-        };
+        /// <summary>
+        /// Upper case chars (same as calling FastToUpper for every char), ASCII is converted using SIMD
+        /// </summary>
+        /// <param name="source">The source chars</param>
+        /// <param name="destination">The destination, same length as the source</param>
+        static void UpperInto(ReadOnlySpan<Char> source, Span<Char> destination)
+        {
+            if (Ascii.ToUpper(source, destination, out var done) == OperationStatus.Done)
+                return;
+            // A non ASCII char, convert the rest one by one
+            var l = source.Length;
+            for (int i = done; i < l; ++i)
+                destination[i] = source[i].FastToUpper();
+        }
+
+        static readonly SpanAction<Char, ReadOnlySpan<Char>> LowerCasedSubString = (str, source) => LowerInto(source[..str.Length], str);
 
         static readonly SpanAction<Char, ReadOnlySpan<Char>> LowerCaseSpan = (dst, src) => src.ToLowerInvariant(dst);
 
@@ -264,10 +276,18 @@ namespace SysWeaver
         /// <returns>True if all chars are uppercased (or not chars at all)</returns>
         static bool InternalFastIsUpper(this ReadOnlySpan<Char> source, int l)
         {
-            while (l > 0)
+            var s = source[..l];
+            // Vectorized: any lower case ASCII letter
+            if (s.ContainsAnyInRange('a', 'z'))
+                return false;
+            // Vectorized: all ASCII (and no lower case ASCII letters)
+            var nonAscii = s.IndexOfAnyExceptInRange((Char)0, (Char)0x7f);
+            if (nonAscii < 0)
+                return true;
+            // Non ASCII chars, check them one by one (ASCII chars are known to be ok)
+            for (int i = nonAscii; i < s.Length; ++i)
             {
-                --l;
-                if (!source[l].FastIsUpperOrNonLetter())
+                if (!s[i].FastIsUpperOrNonLetter())
                     return false;
             }
             return true;
@@ -309,35 +329,7 @@ namespace SysWeaver
         }
 
 
-        static readonly SpanAction<Char, ReadOnlySpan<Char>> UpperCasedSubString = (str, source) =>
-        {
-            var l = str.Length;
-            int i = 0;
-
-            var p = str;
-            var l4 = l & ~3;
-            while (i < l4)
-            {
-                var a = source[i];
-                ++i;
-                var b = source[i];
-                ++i;
-                var c = source[i];
-                ++i;
-                var d = source[i];
-                ++i;
-                p[0] = a.FastToUpper();
-                p[1] = b.FastToUpper();
-                p[2] = c.FastToUpper();
-                p[3] = d.FastToUpper();
-                p = p[4..];
-            }
-            while (i < l)
-            {
-                str[i] = source[i].FastToUpper();
-                ++i;
-            }
-        };
+        static readonly SpanAction<Char, ReadOnlySpan<Char>> UpperCasedSubString = (str, source) => UpperInto(source[..str.Length], str);
 
         static readonly SpanAction<Char, ReadOnlySpan<Char>> UpperCaseSpan = (dst, src) => src.ToUpperInvariant(dst);
 
@@ -498,7 +490,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// using case sensitive, invariant culture 
+        /// using case sensitive, invariant culture
         /// </summary>
         /// <param name="str"></param>
         /// <param name="value">The text to search for</param>
@@ -508,7 +500,7 @@ namespace SysWeaver
             => str.AsSpan().IndexOf(value.AsSpan());
 
         /// <summary>
-        /// using case sensitive, invariant culture 
+        /// using case sensitive, invariant culture
         /// </summary>
         /// <param name="str"></param>
         /// <param name="value">The text to search for</param>
@@ -525,7 +517,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// using case sensitive, invariant culture 
+        /// using case sensitive, invariant culture
         /// </summary>
         /// <param name="str"></param>
         /// <param name="value">The text to search for</param>
@@ -535,7 +527,7 @@ namespace SysWeaver
             => str.AsSpan().LastIndexOf(value.AsSpan());
 
         /// <summary>
-        /// using case sensitive, invariant culture 
+        /// using case sensitive, invariant culture
         /// </summary>
         /// <param name="str"></param>
         /// <param name="value">The text to search for</param>
@@ -560,7 +552,7 @@ namespace SysWeaver
                 return str == null;
             if (str == null)
                 return false;
-*/ 
+*/
 /*return str.AsSpan().SequenceEqual(value.AsSpan());
         }
 */
@@ -742,9 +734,47 @@ namespace SysWeaver
         /// <param name="separator"></param>
         /// <param name="texts"></param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String JoinNonEmpty(String separator, params String[] texts) => texts == null ? null : String.Join(separator, texts.Where(x => !String.IsNullOrEmpty(x)));
+        public static String JoinNonEmpty(String separator, params String[] texts)
+        {
+            if (texts == null)
+                return null;
+            int count = 0;
+            int total = 0;
+            String single = null;
+            foreach (var t in texts)
+            {
+                if (String.IsNullOrEmpty(t))
+                    continue;
+                ++count;
+                total += t.Length;
+                single = t;
+            }
+            if (count <= 1)
+                return single ?? String.Empty;
+            if (count == texts.Length)
+                return String.Join(separator, texts);
+            total += (separator?.Length ?? 0) * (count - 1);
+            return String.Create(total, (separator, texts), JoinNonEmptyAction);
+        }
 
+        static readonly SpanAction<Char, (String Separator, String[] Texts)> JoinNonEmptyAction = (dst, state) =>
+        {
+            var sep = state.Separator.AsSpan();
+            bool first = true;
+            foreach (var t in state.Texts)
+            {
+                if (String.IsNullOrEmpty(t))
+                    continue;
+                if (!first)
+                {
+                    sep.CopyTo(dst);
+                    dst = dst[sep.Length..];
+                }
+                first = false;
+                t.AsSpan().CopyTo(dst);
+                dst = dst[t.Length..];
+            }
+        };
 
 
         /// <summary>
@@ -760,16 +790,23 @@ namespace SysWeaver
             var al = a.Length;
             if (b.Length != al)
                 throw new Exception("Must be the same length!");
-            Span<Char> res = stackalloc Char[al + al];
-            for (int i = 0, o = 0; i < al; ++ i)
+            // Written directly to the new string (no temporary buffer)
+            return String.Create(al + al, (a, b), InterleaveAction);
+        }
+
+        static readonly SpanAction<Char, (String A, String B)> InterleaveAction = (res, state) =>
+        {
+            var a = state.A.AsSpan();
+            var b = state.B.AsSpan();
+            var al = a.Length;
+            for (int i = 0, o = 0; i < al; ++i)
             {
                 res[o] = a[i];
                 ++o;
                 res[o] = b[i];
                 ++o;
             }
-            return new string(res);
-        }
+        };
 
 
 
@@ -807,23 +844,75 @@ namespace SysWeaver
         /// </summary>
         /// <param name="text"></param>
         /// <returns></returns>
+        [SkipLocalsInit]
         public static string RemoveDiacritics(this string text)
         {
-            var normalizedString = text.Normalize(NormalizationForm.FormD);
-            var stringBuilder = new StringBuilder(capacity: normalizedString.Length);
-
-            for (int i = 0; i < normalizedString.Length; i++)
+            var src = text.AsSpan();
+            // ASCII never contains any diacritics (and is always normalized)
+            if (Ascii.IsValid(src))
+                return text;
+            // Decompose (normalization form D) into a temporary buffer, guess the size (decomposing rarely more than doubles the length),
+            // only compute the exact length if the guess was to small (avoids an extra pass)
+            var dl = src.Length * 2 + 16;
+            char[] rented = null;
+            Span<Char> d = dl <= MaxStackChars ? stackalloc Char[dl] : (rented = ArrayPool<Char>.Shared.Rent(dl));
+            try
             {
-                char c = normalizedString[i];
-                var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
-                if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+                if (!src.TryNormalize(d, out dl, NormalizationForm.FormD))
                 {
-                    stringBuilder.Append(c);
+                    if (rented != null)
+                        ArrayPool<Char>.Shared.Return(rented);
+                    dl = src.GetNormalizedLength(NormalizationForm.FormD);
+                    rented = ArrayPool<Char>.Shared.Rent(dl);
+                    d = rented;
+                    if (!src.TryNormalize(d, out dl, NormalizationForm.FormD))
+                        throw new InvalidOperationException("Normalization failed");
+                }
+                // Remove the non spacing marks (in place)
+                int o = 0;
+                for (int i = 0; i < dl; i++)
+                {
+                    var c = d[i];
+                    if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                    {
+                        d[o] = c;
+                        ++o;
+                    }
+                }
+                var filtered = d[..o];
+                // Typically ASCII (or already normalized) when the marks are removed (fast checks, ASCII avoids calling the OS)
+                if (Ascii.IsValid(filtered) || filtered.IsNormalized(NormalizationForm.FormC))
+                    return new String(filtered);
+                // Compose (normalization form C), only the final string is allocated.
+                // Composing rarely makes it longer, guess the size and only compute the exact length if the guess was to small
+                var cl = o + 16;
+                char[] rented2 = null;
+                Span<Char> c2 = cl <= MaxStackChars ? stackalloc Char[cl] : (rented2 = ArrayPool<Char>.Shared.Rent(cl));
+                try
+                {
+                    if (!filtered.TryNormalize(c2, out cl, NormalizationForm.FormC))
+                    {
+                        if (rented2 != null)
+                            ArrayPool<Char>.Shared.Return(rented2);
+                        cl = filtered.GetNormalizedLength(NormalizationForm.FormC);
+                        rented2 = ArrayPool<Char>.Shared.Rent(cl);
+                        c2 = rented2;
+                        if (!filtered.TryNormalize(c2, out cl, NormalizationForm.FormC))
+                            throw new InvalidOperationException("Normalization failed");
+                    }
+                    return new String(c2[..cl]);
+                }
+                finally
+                {
+                    if (rented2 != null)
+                        ArrayPool<Char>.Shared.Return(rented2);
                 }
             }
-            return stringBuilder
-                .ToString()
-                .Normalize(NormalizationForm.FormC);
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+            }
         }
 
         /// <summary>
@@ -855,13 +944,30 @@ namespace SysWeaver
         /// Count the number of occurances of a substring
         /// </summary>
         /// <param name="text"></param>
-        /// <param name="subString"></param>
+        /// <param name="subString">The substring to count (an empty substring is never counted)</param>
         /// <param name="com"></param>
         /// <returns></returns>
         public static int Count(this String text, String subString, StringComparison com = StringComparison.CurrentCulture)
         {
             int c = 0;
             var l = subString.Length;
+            // An empty substring would be found everywhere (infinite loop)
+            if (l <= 0)
+                return 0;
+            if (com == StringComparison.Ordinal)
+            {
+                // Vectorized span search
+                var s = text.AsSpan();
+                var sub = subString.AsSpan();
+                for (; ; )
+                {
+                    var p = s.IndexOf(sub);
+                    if (p < 0)
+                        return c;
+                    ++c;
+                    s = s[(p + l)..];
+                }
+            }
             for (int p = 0; ;)
             {
                 p = text.IndexOf(subString, p, com);
@@ -885,8 +991,20 @@ namespace SysWeaver
                 return text;
             if (removeChars.Length <= 0)
                 return text;
-            var remove = new HashSet<Char>(removeChars);
-            return InternalRemoveChars(text, remove);
+            return InternalRemoveChars(text, removeChars);
+        }
+
+        /// <summary>
+        /// Remove all occurances of some chars from a string (no array is allocated for the chars).
+        /// </summary>
+        /// <param name="text"></param>
+        /// <param name="removeChars">The chars to remove</param>
+        /// <returns></returns>
+        public static String RemoveChars(this String text, params ReadOnlySpan<Char> removeChars)
+        {
+            if (removeChars.IsEmpty)
+                return text;
+            return InternalRemoveChars(text, removeChars);
         }
 
         /// <summary>
@@ -901,8 +1019,7 @@ namespace SysWeaver
                 return text;
             if (removeChars.Length <= 0)
                 return text;
-            var remove = new HashSet<Char>(removeChars);
-            return InternalRemoveChars(text, remove);
+            return InternalRemoveChars(text, removeChars.AsSpan());
         }
 
         /// <summary>
@@ -911,43 +1028,85 @@ namespace SysWeaver
         /// <param name="text"></param>
         /// <param name="removeChars">The chars to remove</param>
         /// <returns></returns>
+        [SkipLocalsInit]
         public static String RemoveChars(this String text, IReadOnlySet<Char> removeChars)
         {
             if (removeChars == null)
                 return text;
             if (removeChars.Count <= 0)
                 return text;
-            return InternalRemoveChars(text, removeChars);
-        }
-
-        static String InternalRemoveChars(String text, IReadOnlySet<Char> remove)
-        {
             if (text == null)
                 return text;
-            var l = text.Length;
-            if (l <= 0)
+            var s = text.AsSpan();
+            var l = s.Length;
+            int first = 0;
+            while ((first < l) && !removeChars.Contains(s[first]))
+                ++first;
+            if (first >= l)
                 return text;
-            Char[] o = null;
-            int d = 0;
-            for (int i = 0; i < l; ++i)
+            char[] rented = null;
+            Span<Char> o = l <= MaxStackChars ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l));
+            try
             {
-                var c = text[i];
-                bool haveO = o != null;
-                if (remove.Contains(c))
+                s[..first].CopyTo(o);
+                int d = first;
+                for (int i = first + 1; i < l; ++i)
                 {
-                    if (haveO)
+                    var c = s[i];
+                    if (removeChars.Contains(c))
                         continue;
-                    o = text.ToCharArray();
-                    d = i;
-                    continue;
-                }
-                if (haveO)
-                {
                     o[d] = c;
                     ++d;
                 }
+                return new String(o[..d]);
             }
-            return o == null ? text : new String(o, 0, d);
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+            }
+        }
+
+        /// <summary>
+        /// Remove all occurances of some chars (vectorized search, no allocations except for the result)
+        /// </summary>
+        [SkipLocalsInit]
+        static String InternalRemoveChars(String text, ReadOnlySpan<Char> remove)
+        {
+            if (text == null)
+                return text;
+            var s = text.AsSpan();
+            var first = s.IndexOfAny(remove);
+            if (first < 0)
+                return text;
+            var l = s.Length;
+            char[] rented = null;
+            Span<Char> o = l <= MaxStackChars ? stackalloc Char[l] : (rented = ArrayPool<Char>.Shared.Rent(l));
+            try
+            {
+                s[..first].CopyTo(o);
+                int d = first;
+                s = s[(first + 1)..];
+                for (; ; )
+                {
+                    var next = s.IndexOfAny(remove);
+                    if (next < 0)
+                    {
+                        s.CopyTo(o[d..]);
+                        d += s.Length;
+                        break;
+                    }
+                    s[..next].CopyTo(o[d..]);
+                    d += next;
+                    s = s[(next + 1)..];
+                }
+                return new String(o[..d]);
+            }
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Char>.Shared.Return(rented);
+            }
         }
 
     }

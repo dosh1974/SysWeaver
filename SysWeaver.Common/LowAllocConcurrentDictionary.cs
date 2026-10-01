@@ -491,6 +491,11 @@ namespace SysWeaver
             /// Same as Find, but also measures the probe (to detect hash collision attacks).
             /// Must hold the lock.
             /// </summary>
+            /// <param name="table">The table to search</param>
+            /// <param name="homeBlock">The block where the probe sequence starts</param>
+            /// <param name="tag">The tag of the key</param>
+            /// <param name="key">The key to find</param>
+            /// <param name="comparer">The comparer instance (null for the default comparer)</param>
             /// <param name="falseTagMatches">The number of slots with a matching tag but a different key</param>
             /// <param name="blocksScanned">The number of blocks scanned</param>
             static abstract int FindForInsert<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer, out int falseTagMatches, out int blocksScanned) where TCmp : struct, IKeyComparer;
