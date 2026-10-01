@@ -141,12 +141,61 @@ namespace SysWeaver.Net
         public readonly HttpServerHostInfo Host;
 
 
-        static readonly IReadOnlyDictionary<String, HttpServerMethods> IntMethods = new Dictionary<String, HttpServerMethods>(StringComparer.Ordinal)
+        /// <summary>
+        /// Map a http method to the enum (ordinal, a switch is a length check and a few char compares, no hashing)
+        /// </summary>
+        static HttpServerMethods GetHttpMethod(String httpMethod) => httpMethod switch
         {
-            { "GET", HttpServerMethods.GET },
-            { "POST", HttpServerMethods.POST },
-            { "HEAD", HttpServerMethods.HEAD },
-        }.Freeze();
+            "GET" => HttpServerMethods.GET,
+            "POST" => HttpServerMethods.POST,
+            "HEAD" => HttpServerMethods.HEAD,
+            _ => HttpServerMethods.Other,
+        };
+
+        /// <summary>
+        /// Local urls are cached (most requests are for a limited set of urls), so that the same local url doesn't allocate a new string for every request
+        /// </summary>
+        static readonly LowAllocConcurrentDictionary<String, String> LocalUrlCache = new LowAllocConcurrentDictionary<String, String>(MaxCachedLocalUrls);
+        static readonly LowAllocConcurrentDictionary<String, String>.AlternateLookup<ReadOnlySpan<Char>> LocalUrlLookup = LocalUrlCache.GetAlternateLookup<ReadOnlySpan<Char>>();
+        static int LocalUrlCacheCount;
+
+        /// <summary>
+        /// The max number of cached local urls (a bound, since the urls are controlled by the clients)
+        /// </summary>
+        const int MaxCachedLocalUrls = 4096;
+
+        /// <summary>
+        /// Longer local urls are never cached
+        /// </summary>
+        const int MaxCachedLocalUrlLength = 256;
+
+        /// <summary>
+        /// Get a part of the url, a cached string if the same local url has been seen before (same result as Substring)
+        /// </summary>
+        static String GetLocalUrl(String url, int start, int length)
+        {
+            if (((uint)start > (uint)url.Length) || ((uint)length > (uint)(url.Length - start)))
+                return url.Substring(start, length);
+            if ((start == 0) && (length == url.Length))
+                return url;
+            if (length == 0)
+                return String.Empty;
+            var s = url.AsSpan(start, length);
+            if (length > MaxCachedLocalUrlLength)
+                return new String(s);
+            if (LocalUrlLookup.TryGetValue(s, out var cached))
+                return cached;
+            var n = new String(s);
+            //  When the cache is full it's cleared, so that it adapts to the urls in use (and can't be filled with junk urls forever)
+            if (Volatile.Read(ref LocalUrlCacheCount) >= MaxCachedLocalUrls)
+            {
+                LocalUrlCache.Clear();
+                Volatile.Write(ref LocalUrlCacheCount, 0);
+            }
+            if (LocalUrlCache.TryAdd(n, n))
+                Interlocked.Increment(ref LocalUrlCacheCount);
+            return n;
+        }
 
         /// <summary>
         /// True if "index.html" was added automatically
@@ -164,14 +213,14 @@ namespace SysWeaver.Net
             RawUrl = rawUrl;
             DidIndex = didIndex;
             Method = httpMethod;
-            var m = IntMethods.TryGetValue(httpMethod ?? "", out var hm) ? hm : HttpServerMethods.Other;
+            var m = GetHttpMethod(httpMethod);
             HttpMethod = m;
             IsHead = m == HttpServerMethods.HEAD;
             Url = url;
             Prefix = prefix;
             var pl = prefix.Length;
             QueryStringStart = queryStart + 1;
-            LocalUrl = queryStart < 0 ? url.Substring(pl) : url.Substring(pl, queryStart - pl);
+            LocalUrl = queryStart < 0 ? GetLocalUrl(url, pl, url.Length - pl) : GetLocalUrl(url, pl, queryStart - pl);
             Server = server;
             Host = host;
         }
