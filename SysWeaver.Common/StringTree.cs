@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 
@@ -8,6 +9,7 @@ namespace SysWeaver
 
     /// <summary>
     /// A string tree stores a bunch of strings in a way that makes it fast to check if a test string starts with ANY of the contained strings.
+    /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
     /// </summary>
     public sealed class StringTree : IStringTree
     {
@@ -24,14 +26,17 @@ namespace SysWeaver
         /// <summary>
         /// Build a tree from a bunch of strings
         /// </summary>
-        /// <param name="strings">The strings to build a tree from, may not contain null</param>
+        /// <param name="strings">The strings to build a tree from, may not contain null or empty strings</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
         /// <returns>The tree</returns>
         public static StringTree Build(IEnumerable<String> strings, bool caseInSensitive = false)
         {
             StringTree parent = null;
             foreach (var s in strings)
+            {
+                ValidateAdd(s);
                 parent = InternalAdd(s, parent, caseInSensitive);
+            }
             parent = parent ?? new StringTree();
             if (caseInSensitive)
                 parent.Leaf = "caseInSensitive";
@@ -42,7 +47,7 @@ namespace SysWeaver
         /// <summary>
         /// Add a string to a new or existing tree
         /// </summary>
-        /// <param name="text">The string to add, may not be null</param>
+        /// <param name="text">The string to add, may not be null or empty</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree, if the tree already exists, the casing from that tree is used</param>
         /// <param name="parent">An existing tree</param>
         /// <returns>The new tree (or the existing)</returns>
@@ -50,6 +55,7 @@ namespace SysWeaver
         {
             if (parent != null)
                 caseInSensitive = parent.IsCaseInSensitive;
+            ValidateAdd(text);
             parent = InternalAdd(text, parent, caseInSensitive);
             parent = parent ?? new StringTree();
             if (caseInSensitive)
@@ -62,13 +68,14 @@ namespace SysWeaver
         /// Try to add a string to a new or existing tree
         /// </summary>
         /// <param name="parent">An existing or new tree to update</param>
-        /// <param name="text">The string to add, may not be null</param>
+        /// <param name="text">The string to add, may not be null or empty</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree, if the tree already exists, the casing from that tree is used</param>
         /// <returns>True if the string was added, false if it already existed</returns>
         public static bool TryAdd(ref StringTree parent, String text, bool caseInSensitive = false)
         {
             if (parent != null)
                 caseInSensitive = parent.IsCaseInSensitive;
+            ValidateAdd(text);
             if (!InternalAdd(out var x, text, parent, caseInSensitive))
                 return false;
             parent = x ?? new StringTree();
@@ -80,11 +87,12 @@ namespace SysWeaver
         /// <summary>
         /// Find the longest string (in the tree), that matches the text
         /// </summary>
-        /// <param name="text">The text to match against the strings in the tree</param>
-        /// <param name="start">An optional start offset</param>
+        /// <param name="text">The text to match against the strings in the tree, may not be empty (from the start offset)</param>
+        /// <param name="start">An optional start offset, must be less than the length of the text</param>
         /// <returns>The longest found match or null if no match is found</returns>
         public String StartsWithAny(String text, int start = 0)
         {
+            ValidateSearch(text, start);
             StringTree node = this;
             int len = text.Length;
             String found = null;
@@ -133,11 +141,12 @@ namespace SysWeaver
         /// <summary>
         /// Find all matching strings (in the tree), that matches the text
         /// </summary>
-        /// <param name="text">The text to match against the strings in the tree</param>
-        /// <param name="start">An optional start offset</param>
+        /// <param name="text">The text to match against the strings in the tree, may not be empty (from the start offset)</param>
+        /// <param name="start">An optional start offset, must be less than the length of the text</param>
         /// <returns>A list of matches, orderer from shortest match to longest match</returns>
         public List<String> AllStartsWithAny(String text, int start = 0)
         {
+            ValidateSearch(text, start);
             StringTree node = this;
             int len = text.Length;
             List<String> found = new List<string>();
@@ -186,11 +195,12 @@ namespace SysWeaver
         /// <summary>
         /// Find all strings (in the tree), that is a prefix of the text
         /// </summary>
-        /// <param name="text">The text to find prefixes (in the tree) for </param>
-        /// <param name="start">An optional start offset</param>
+        /// <param name="text">The text to find prefixes (in the tree) for, may not be empty (from the start offset)</param>
+        /// <param name="start">An optional start offset, must be less than the length of the text</param>
         /// <returns>A list of matches, ordered by name</returns>
         public List<String> PrefixesOf(String text, int start = 0)
         {
+            ValidateSearch(text, start);
             StringTree node = this;
             int len = text.Length;
             List<String> found = new();
@@ -427,6 +437,26 @@ namespace SysWeaver
             }
             res = nc;
             return true;
+        }
+
+        /// <summary>
+        /// Empty strings are not supported (the root leaf is used as the case in-sensitive marker), throws in debug builds
+        /// </summary>
+        [Conditional("DEBUG")]
+        internal static void ValidateAdd(String text)
+        {
+            if (text.Length == 0)
+                throw new Exception("Empty strings can't be added to a string tree!");
+        }
+
+        /// <summary>
+        /// Searching for an empty string (start at or beyond the end of the text) is not supported, throws in debug builds
+        /// </summary>
+        [Conditional("DEBUG")]
+        internal static void ValidateSearch(String text, int start)
+        {
+            if (start >= text.Length)
+                throw new Exception("Can't search for an empty string in a string tree, start (" + start + ") must be less than the length of the text (" + text.Length + ")!");
         }
 
         String Leaf;
