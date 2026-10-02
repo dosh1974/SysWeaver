@@ -1,17 +1,18 @@
-﻿using SysWeaver.Compression;
-using System;
+﻿using System;
+using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Specialized;
-using System.Net;
-using System.Web;
 using System.IO;
+using System.Net;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Collections.Concurrent;
+using System.Web;
+using SysWeaver.Compression;
 using SysWeaver.Data;
 using SysWeaver.Translation;
-using System.Buffers;
 
 namespace SysWeaver.Net
 {
@@ -144,6 +145,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Map a http method to the enum (ordinal, a switch is a length check and a few char compares, no hashing)
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static HttpServerMethods GetHttpMethod(String httpMethod) => httpMethod switch
         {
             "GET" => HttpServerMethods.GET,
@@ -152,6 +154,8 @@ namespace SysWeaver.Net
             _ => HttpServerMethods.Other,
         };
 
+        /*
+         
         /// <summary>
         /// Local urls are cached (most requests are for a limited set of urls), so that the same local url doesn't allocate a new string for every request
         /// </summary>
@@ -172,6 +176,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Get a part of the url, a cached string if the same local url has been seen before (same result as Substring)
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static String GetLocalUrl(String url, int start, int length)
         {
             if (((uint)start > (uint)url.Length) || ((uint)length > (uint)(url.Length - start)))
@@ -196,6 +201,7 @@ namespace SysWeaver.Net
                 Interlocked.Increment(ref LocalUrlCacheCount);
             return n;
         }
+        */
 
         /// <summary>
         /// True if "index.html" was added automatically
@@ -220,7 +226,9 @@ namespace SysWeaver.Net
             Prefix = prefix;
             var pl = prefix.Length;
             QueryStringStart = queryStart + 1;
-            LocalUrl = queryStart < 0 ? GetLocalUrl(url, pl, url.Length - pl) : GetLocalUrl(url, pl, queryStart - pl);
+            var l = (queryStart < 0 ? url.Length : queryStart) - pl;
+            //LocalUrl = GetLocalUrl(url, pl, l); // Use string cache
+            LocalUrl = url.Substring(pl, l);
             Server = server;
             Host = host;
         }

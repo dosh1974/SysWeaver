@@ -1170,21 +1170,24 @@ namespace SysWeaver.Net
 
         readonly MovingAverage RequestStats = new MovingAverage(TimeSpan.FromSeconds(15));
 
+        async Task<bool> HandleLimit(HttpServerRequest data, HttpRateLimiter rateLimiter)
+        {
+            var rateLimierTask = rateLimiter.IsOverTheLimit();
+            var c = rateLimierTask.IsCompleted;
+            if ((c && rateLimierTask.GetAwaiter().GetResult()) || (!c && await rateLimierTask.ConfigureAwait(false)))
+            {
+                await Set429(data).ConfigureAwait(false);
+                return true;
+            }
+            return false;
+
+        }
         public async Task Handle(HttpServerRequest data)
         {
             RequestStats.Add(data.ReqContentLength);
             var rateLimiter = ServerLimits;
-            if (rateLimiter != null) 
-            {
-                var rateLimierTask = rateLimiter.IsOverTheLimit();
-                var c = rateLimierTask.IsCompleted;
-                if ((c && rateLimierTask.GetAwaiter().GetResult()) || (!c && await rateLimierTask.ConfigureAwait(false)))
-                {
-                    await Set429(data).ConfigureAwait(false);
-                    return;
-                }
-
-            }
+            if ((rateLimiter != null) && (await HandleLimit(data, rateLimiter).ConfigureAwait(false)))
+                return;
             if (HaveRawModules && await HandleRaw(data).ConfigureAwait(false))
                 return;
             var sessionTask = GetSession(data);
@@ -1192,16 +1195,8 @@ namespace SysWeaver.Net
             session.IncRequestCounter();
             data.Init(session);
             rateLimiter = session.RateLimiter;
-            if (rateLimiter != null)
-            {
-                var rateLimierTask = rateLimiter.IsOverTheLimit();
-                var c = rateLimierTask.IsCompleted;
-                if ((c && rateLimierTask.GetAwaiter().GetResult()) || (!c && await rateLimierTask.ConfigureAwait(false)))
-                {
-                    await Set429(data).ConfigureAwait(false);
-                    return;
-                }
-            }
+            if ((rateLimiter != null) && (await HandleLimit(data, rateLimiter).ConfigureAwait(false)))
+                return;
             if ((ExternalRootUri == null) || (!ExternalRootUriFromRequest))
             {
                 ExternalRootUriFromRequest = true;
@@ -1261,27 +1256,11 @@ namespace SysWeaver.Net
             //  Rate limiting
             rateLimiter = t.ServiceRateLimiter;
             if (rateLimiter != null)
-            {
-                var rateLimierTask = rateLimiter.IsOverTheLimit();
-                var c = rateLimierTask.IsCompleted;
-                if ((c && rateLimierTask.GetAwaiter().GetResult()) || (!c && await rateLimierTask.ConfigureAwait(false)))
-                {
-                    await Set429(data).ConfigureAwait(false);
+                if ((rateLimiter != null) && (await HandleLimit(data, rateLimiter).ConfigureAwait(false)))
                     return;
-                }
-            }
             rateLimiter = t.SessionRateLimiter(session);
-            if (rateLimiter != null)
-            {
-                var rateLimierTask = rateLimiter.IsOverTheLimit();
-                var c = rateLimierTask.IsCompleted;
-                if ((c && rateLimierTask.GetAwaiter().GetResult()) || (!c && await rateLimierTask.ConfigureAwait(false)))
-                {
-                    await Set429(data).ConfigureAwait(false);
-                    return;
-                }
-
-            }
+            if ((rateLimiter != null) && (await HandleLimit(data, rateLimiter).ConfigureAwait(false)))
+                return;
 #if DEBUG
             //using var ___ = await DebugLock.Lock().ConfigureAwait(false); // Enabled this line to handle one request at a time
 #endif//DEBUG
