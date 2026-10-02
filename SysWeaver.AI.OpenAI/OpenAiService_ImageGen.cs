@@ -1,13 +1,10 @@
-﻿using CommunityToolkit.HighPerformance;
-using ExCSS;
-using OpenAI.Images;
-using SkiaSharp;
+﻿using OpenAI.Images;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
-using SysWeaver.Media.Png;
 using SysWeaver.MicroService;
 using SysWeaver.Net;
 
@@ -18,13 +15,6 @@ namespace SysWeaver.AI
     {
 
 
-        /// <summary>
-        /// The model used when supplying an empty model (can be configured)
-        /// </summary>
-        public readonly String DefaultImageModel;
-
-
-        readonly AsyncLock ImageGenLock;
 
 
         /// <summary>
@@ -42,6 +32,71 @@ namespace SysWeaver.AI
         }
 
 #pragma warning disable OPENAI001
+
+        #region Image tools
+
+        /// <summary>
+        /// Generate an image using generative AI.
+        /// Generating images are expensive, try to solve problems without generating an image.
+        /// Don't generate large images unless specified.
+        /// </summary>
+        /// <param name="prompt">Paramaters for the generation</param>
+        /// <param name="request"></param>
+        /// <returns>An url to the generated png image</returns>
+        [AiTool("🖼️✨")]
+        async Task<String> GenerateImage(OpenAiImagePrompt prompt, HttpServerRequest request)
+        {
+            var c = request.Properties[RequestAiToolContext] as AiToolContext;
+            if (c == null)
+                return null;
+            var bin = await ImageGenerate(prompt, request).ConfigureAwait(false);
+            return await StoreGeneratedImage(c, request, bin, prompt.Title).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Edit an image using generative AI.
+        /// Generating images are expensive, try to solve problems without generating an image.
+        /// Don't generate large images unless specified.
+        /// </summary>
+        /// <param name="prompt">Source image and paramaters for the generation</param>
+        /// <param name="request"></param>
+        /// <returns>An url to the generated png image</returns>
+        [AiTool("🖼️✂️")]
+        async Task<String> EditImage(OpenAiImageEditPrompt prompt, HttpServerRequest request)
+        {
+            var c = request.Properties[RequestAiToolContext] as AiToolContext;
+            if (c == null)
+                return null;
+            var bin = await ImageEdit(prompt, request).ConfigureAwait(false);
+            return await StoreGeneratedImage(c, request, bin, prompt.Title).ConfigureAwait(false);
+        }
+
+        static readonly MethodInfo Method_GenerateImage = typeof(OpenAiService).GetMethod(nameof(GenerateImage), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+        static readonly MethodInfo Method_EditImage = typeof(OpenAiService).GetMethod(nameof(EditImage), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+
+        /// <summary>
+        /// Add this tool to the chat session (if not included by default)
+        /// </summary>
+        /// <param name="s"></param>
+        public void AddTool_GenerateImage(IAiChatSession s) =>
+            s.AddTool(this, Method_GenerateImage, null, PerfMon, "Debug,Content");
+
+        /// <summary>
+        /// Add this tool to the chat session (if not included by default)
+        /// </summary>
+        /// <param name="s"></param>
+        public void AddTool_EditImage(IAiChatSession s) =>
+            s.AddTool(this, Method_EditImage, null, PerfMon, "Debug,Content");
+
+        protected override void AddDefaultTools(IAiChatSession s)
+        {
+            base.AddDefaultTools(s);
+            AddTool_GenerateImage(s);
+            AddTool_EditImage(s);
+        }
+
+        #endregion//Image tools
+
 
 
         /// <summary>
@@ -75,26 +130,7 @@ namespace SysWeaver.AI
             GeneratedImage image;
             image = await client.GenerateImageAsync(p.Prompt, options).ConfigureAwait(false);
 
-            BinaryData bytes = image.ImageBytes;
-            var pngMem = bytes.ToMemory();
-            List<PngChunk> chunks;
-            using (var s = pngMem.AsStream())
-                chunks = PngTools.ReadChunks(s).ToList();
-            List<PngChunk> add = new List<PngChunk>(10)
-            {
-                PngTools.SetCreationTimeInfo(DateTime.UtcNow),
-                PngTools.CreateInformationChunk(PngKeywords.Software, EnvInfo.AppDisplayName),
-                PngTools.CreateInformationChunk(PngKeywords.Source, String.Concat(model, ' ', options.Quality, ' ', options.Style).Trim().Replace("  ", " ").Replace("  ", " ")),
-                PngTools.CreateInformationChunk(PngKeywords.Description, p.Prompt),
-            };
-            var user = request?.Session?.Auth?.NickName;
-            if (user != null)
-                add.Add(PngTools.CreateInformationChunk(PngKeywords.Author, user));
-            if (!String.IsNullOrEmpty(p.Title))
-                add.Add(PngTools.CreateInformationChunk(PngKeywords.Title, p.Title));
-            chunks.InsertRange(1, add);
-            pngMem = PngTools.MakePng(chunks);
-            return pngMem;
+            return AiImageTools.AddPngInfo(image.ImageBytes.ToMemory(), String.Concat(model, ' ', options.Quality, ' ', options.Style), p.Prompt, p.Title, request);
         }
 
 
@@ -124,58 +160,14 @@ namespace SysWeaver.AI
                     Size = ImageSizes[(int)p.Aspect],
                     OutputFileFormat = GeneratedImageFileFormat.Png,
                 };
-            MemoryFile file = null;
-            var s = p.SourceImage;
-            if (s.FastStartsWith("data:"))
-            {
-                file = MemoryFile.FromDataUri(s);
-            }else
-            {
-                var fns = s.SplitLast('/');
-                var ext = fns.SplitLast('.');
-                if (s.FastStartsWith("http://") || s.FastStartsWith("https://"))
-                {
-                    var data = await WebTools.HttpClient.GetByteArrayAsync(s).ConfigureAwait(false);
-                    var mime = MimeTypeMap.TryGetExtensions(ext, out var xx) ? xx.FirstOrDefault() : null;
-                    file = new MemoryFile(fns, mime ?? MimeTypeMap.Data, data);
-                }
-                else
-                {
-                    s = request.MakeRequestAbsolute(s);
-                    var rr = await request.Server.InternalRead(s, request.Session).ConfigureAwait(false);
-                    if (rr == null)
-                        throw new Exception("Don't know how to read the file " + s.ToQuoted());
-                    var data = rr.Item1;
-                    var mime = MimeTypeMap.TryGetExtensions(ext, out var xx) ? xx.FirstOrDefault() : null;
-                    file = new MemoryFile(fns, mime ?? MimeTypeMap.Data, data.Span);
-                }
-            }
+            var file = await AiImageTools.LoadImage(p.SourceImage, request).ConfigureAwait(false);
             GeneratedImage image;
             {
                 using var ms = new MemoryStream(file.Data, false);
                 image = await client.GenerateImageEditAsync(ms, file.Name, p.Prompt, options).ConfigureAwait(false);
             }
 
-            BinaryData bytes = image.ImageBytes;
-            var pngMem = bytes.ToMemory();
-            List<PngChunk> chunks;
-            using (var pms = pngMem.AsStream())
-                chunks = PngTools.ReadChunks(pms).ToList();
-            List<PngChunk> add = new List<PngChunk>(10)
-            {
-                PngTools.SetCreationTimeInfo(DateTime.UtcNow),
-                PngTools.CreateInformationChunk(PngKeywords.Software, EnvInfo.AppDisplayName),
-                PngTools.CreateInformationChunk(PngKeywords.Source, String.Concat(model, ' ', options.Quality).Trim().Replace("  ", " ").Replace("  ", " ")),
-                PngTools.CreateInformationChunk(PngKeywords.Description, p.Prompt),
-            };
-            var user = request?.Session?.Auth?.NickName;
-            if (user != null)
-                add.Add(PngTools.CreateInformationChunk(PngKeywords.Author, user));
-            if (!String.IsNullOrEmpty(p.Title))
-                add.Add(PngTools.CreateInformationChunk(PngKeywords.Title, p.Title));
-            chunks.InsertRange(1, add);
-            pngMem = PngTools.MakePng(chunks);
-            return pngMem;
+            return AiImageTools.AddPngInfo(image.ImageBytes.ToMemory(), String.Concat(model, ' ', options.Quality), p.Prompt, p.Title, request);
         }
 
         static readonly GeneratedImageBackground[] Backgrounds = 

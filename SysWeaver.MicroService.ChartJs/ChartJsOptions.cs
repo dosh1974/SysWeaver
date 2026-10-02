@@ -11,45 +11,45 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Scales to use (defining axis)
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsScalesOptions scales;
 
         /// <summary>
         /// Resizes the chart canvas when its container does 
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool responsive = true;
 
         /// <summary>
         /// Maintain the original canvas aspect ratio (width / height) when resizing.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool maintainAspectRatio = true;
 
         /// <summary>
         /// Animation options
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public ChartJsAnimationOption animation = new ChartJsAnimationOption();
 
         /// <summary>
         /// Plugin options
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsPlugins plugins;
 
         /// <summary>
         /// Can be used to create a horizontal bar chart instead.
         /// Values can be "x" (default) or "y" to create a horizontal bar chart.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String indexAxis;
 
 
         /// <summary>
         /// Options specific to elements
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public ChartJsElementsOption elements;
 
     }
@@ -60,28 +60,28 @@ namespace SysWeaver.MicroService
         /// Point Configuration.
         /// Point elements are used to represent the points in a line, radar or bubble chart.
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public ChartJsBaseOptions point;
 
         /// <summary>
         /// Line Configuration.
         /// Line elements are used to represent the line in a line chart.
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public ChartJsBaseOptions line;
 
         /// <summary>
         /// Bar Configuration.
         /// Bar elements are used to represent the bars in a bar chart.
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public ChartJsBaseOptions bar;
 
         /// <summary>
         /// Arc Configuration.
         /// Arcs are used in the polar area, doughnut and pie charts.
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public ChartJsBaseOptions arc;
 
     }

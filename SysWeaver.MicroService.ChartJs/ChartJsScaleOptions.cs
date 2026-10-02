@@ -9,55 +9,55 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Controls the axis visibility
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? display = true;
 
         /// <summary>
         /// Reverse the scale.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? reverse;
 
         /// <summary>
         /// Should the data be stacked.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? stacked;
 
         /// <summary>
         /// User defined minimum number for the scale, overrides minimum value from data
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? min;
 
         /// <summary>
         /// User defined maximum number for the scale, overrides maximum value from data
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? max;
 
         /// <summary>
         /// Grid line configuration
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsGridOptions grid;
 
         /// <summary>
         /// Tick configuration
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsTickOptions ticks;
 
         /// <summary>
         /// Axis title configuration
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsTitle title;
 
         /// <summary>
         /// Point labels
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsPointLabel pointLabels;
     }
 
@@ -67,31 +67,31 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// If true, point labels are shown
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? display;
 
         /// <summary>
         /// If true, point labels are centered
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? centerPointLabels;
 
         /// <summary>
         /// Color of label
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String color;
 
         /// <summary>
         /// The font to use
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsFontOptions font;
 
         /// <summary>
         /// Padding between chart and point labels.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public int? padding;
 
     }

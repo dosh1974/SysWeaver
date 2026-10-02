@@ -8,13 +8,13 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Color of ticks.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String color;
 
         /// <summary>
         /// If true, show tick labels.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool display = true;
 
         /// <summary>
@@ -26,19 +26,19 @@ namespace SysWeaver.MicroService
         /// Where to put the title.
         /// Can be: "start", "center" or "end"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String align;
 
         /// <summary>
         /// Color of label backdrops.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String backdropColor;
 
         /// <summary>
         /// Padding of label backdrop.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public int? backdropPadding;
 
         /// <summary>
@@ -46,31 +46,31 @@ namespace SysWeaver.MicroService
         /// Useful when ticks are drawn on chart area. 
         /// Values less than zero are drawn under datasets, greater than zero on top.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public int z = 1;
 
         /// <summary>
         /// If true, draw a background behind the tick labels.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? showLabelBackdrop;
 
         /// <summary>
         /// If defined and stepSize is not specified, the step size will be rounded to this many decimal places.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? precision;
 
         /// <summary>
         /// User-defined fixed step size for the scale.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? stepSize;
 
         /// <summary>
         /// Should the data be stacked.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? beginAtZero;
 
     }

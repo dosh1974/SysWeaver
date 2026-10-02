@@ -15,7 +15,7 @@ namespace SysWeaver.Data
         /// </summary>
         [EditRange(0, 10)]
         [EditAllowNull]
-        [OpenAiOptional]
+        [AiOptional]
         public TableDataFilter[] Filters;
 
 
@@ -54,7 +54,7 @@ namespace SysWeaver.Data
         ///         RowCount = 101 => There are at least 101 rows total, 20 rows will be returned for page 2 and a page 3, 4, 5, 6 exists and maybe more pages.
         /// </summary>
         [EditMin(0)]
-        [OpenAiOptional]
+        [AiOptional]
         public long Row;
 
         /// <summary>
@@ -73,7 +73,7 @@ namespace SysWeaver.Data
         ///         RowCount = 101 => There are at least 101 rows total, 20 rows will be returned for page 2 and a page 3, 4, 5, 6 exists and maybe more pages.
         /// </summary>
         [EditMin(0)]
-        [OpenAiOptional]
+        [AiOptional]
         public long MaxRowCount;
             
         /// <summary>
@@ -91,7 +91,7 @@ namespace SysWeaver.Data
         ///         RowCount = 101 => There are at least 101 rows total, 20 rows will be returned for page 2 and a page 3, 4, 5, 6 exists and maybe more pages.
         /// </summary>
         [EditMin(0)]
-        [OpenAiIgnore]
+        [AiIgnore]
         public long LookAheadCount;
 
     }
@@ -111,33 +111,33 @@ namespace SysWeaver.Data
         /// <summary>
         /// Change counter, if this matches the internal counter, no column information will be returned (optimization)
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public long Cc;
 
         /// <summary>
         /// Extra per table type params
         /// </summary>
         [EditAllowNull]
-        [OpenAiIgnore]
+        [AiIgnore]
         public String Param;
 
         /// <summary>
         /// The db index to use for full text search (defaults to "FullText" if none is supplied)
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public String SearchIndex;
 
         /// <summary>
         /// The full text search (null or empty to do a regular table data request).
         /// Only available on Database mirrored tables that have a full text search index.
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public String SearchText;
 
         /// <summary>
         /// If true, use natural language search instead of boolean search
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public bool SearchNatural = true;
     }
 

@@ -21,14 +21,14 @@ namespace SysWeaver.Data
         /// <summary>
         /// If set, the new column is inserted before this column.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         [EditAllowNull]
         public String InsertBefore;
 
         /// <summary>
         /// If InsertBefore is null and this is set, the new column is inserted after this column.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         [EditAllowNull]
         public String InsertAfter;
     }

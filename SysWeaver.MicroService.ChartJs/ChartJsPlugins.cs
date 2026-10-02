@@ -8,30 +8,30 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Title options
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsTitle title;
 
         /// <summary>
         /// Legend options
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsLegend legend;
 
         /// <summary>
         /// Data labels 
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsDataLabels datalabels;
 
         /// <summary>
         /// Shadows
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsShadow shadow;
         /// <summary>
         /// Shadows
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsTooltip tooltip;
 
     }
@@ -49,25 +49,25 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Shadow offset X in pixels
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? dx = 2;
 
         /// <summary>
         /// Shadow offset Y in pixels
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? dy = 4;
 
         /// <summary>
         /// Blur radius in pixels
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? rad = 8;
 
         /// <summary>
         /// Shadow color
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String color;
 
 
@@ -79,7 +79,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Display the legend
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? display;
 
 

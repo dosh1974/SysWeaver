@@ -12,12 +12,12 @@ namespace SysWeaver.Data
         /// <summary>
         /// True to invert the filter result (i.e keep entries that would otherwise be rejected)
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool Invert;
         /// <summary>
         /// Use case sensitive operations if applicable
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool CaseSensitive;
         /// <summary>
         /// The filter operation to use

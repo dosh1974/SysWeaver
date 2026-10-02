@@ -25,7 +25,7 @@ namespace SysWeaver.Data
         /// <summary>
         /// Description of the data (shown as a tool tip)
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         [EditAllowNull]
         [AutoTranslate(false)]
         [AutoTranslateContext("This is the tool tip description of a column in a table.")]
@@ -58,14 +58,14 @@ namespace SysWeaver.Data
         /// <summary>
         /// Formatting hint (used when displaying the table), depends on Type etc.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         [EditAllowNull]
         public String Format;
         
         /// <summary>
         /// The column title (used when displaying the table, default is a cleaned up version of the Name).
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         [EditAllowNull]
         [AutoTranslate(false)]
         [AutoTranslateContext("This is the title text (header) of a column in a table")]
@@ -75,7 +75,7 @@ namespace SysWeaver.Data
         /// <summary>
         /// Column properties (flags)
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public TableDataColumnProps Props;
 
         public void CopyFrom(TableDataColumn from)

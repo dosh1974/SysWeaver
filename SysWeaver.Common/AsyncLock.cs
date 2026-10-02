@@ -11,7 +11,7 @@ namespace SysWeaver
         /// <summary>
         /// Useful helper when using the coalesce operator ?.
         /// </summary>
-        public static readonly Task<IDisposable> NoLock = new Task<IDisposable>(null);
+        public static readonly Task<IDisposable> NoLock = Task.FromResult<IDisposable>(null);
 
 
         /// <summary>

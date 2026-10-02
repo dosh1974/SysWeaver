@@ -22,13 +22,13 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Id of what x-axis to use.
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public String xAxisID = "x";
 
         /// <summary>
         /// If true the border isn't drawn at the bottom (start)
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public bool? parsing;
 
 

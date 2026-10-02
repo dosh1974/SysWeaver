@@ -429,6 +429,7 @@ FodyWeavers.xsd
 
 
 /SysWeaver.AI.OpenAI/web
+/SysWeaver.AI.Google/web
 /SysWeaver.Auth.Core/web
 /SysWeaver.Chat/web
 /SysWeaver.HttpServer.ExploreModule/data

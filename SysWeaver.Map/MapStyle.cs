@@ -10,43 +10,43 @@ namespace SysWeaver.Map
         /// <summary>
         /// The CSS color to use for filling, ex: "#f00", "#00f802", "red", "rgba(0, 255, 0, 0.5)"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String FillColor;
 
         /// <summary>
         /// The CSS color to use for strokes, ex: "#f00", "#00f802", "red", "rgba(0, 255, 0, 0.5)"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String StrokeColor;
 
         /// <summary>
         /// The width in pixels of the stroke
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? StrokeWidth;
 
         /// <summary>
         /// [0, 1] The amount to extrude, as a fraction of the max extrusion.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double Extrude;
 
         /// <summary>
         /// The CSS color to use for the filling the extruded polygons, ex: "#f00", "#00f802", "red", "rgba(0, 255, 0, 0.5)"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String ExtrudeFillColor;
 
         /// <summary>
         /// The CSS color to use for stroking of the extruded polygons, ex: "#f00", "#00f802", "red", "rgba(0, 255, 0, 0.5)"
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public String ExtrudeStrokeColor;
 
         /// <summary>
         /// The width in pixels to use for the strokes of the extruded polygons
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public double? ExtrudeStrokeWidth;
 
         /// <summary>
@@ -55,31 +55,31 @@ namespace SysWeaver.Map
         /// {1} = Is replaced with the country name if the region is a country code (else the region name is used).
         /// Use "\n" to insert a new line.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String Text = "{1}";
 
         /// <summary>
         /// The css color to use for text
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String TextColor = "#fff";
 
         /// <summary>
         /// The css color to use for text the outline
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String TextOutlineColor;
 
         /// <summary>
         /// The width of the text outline, less than zero means inherit or none
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? TextOutlineWidth;
 
         /// <summary>
         /// If set, specify the CSS font size for the text, ex: "100%", "14px"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String TextSize = "75%";
 
         /// <summary>
@@ -88,26 +88,26 @@ namespace SysWeaver.Map
         /// {1} = Is replaced with the country name if the region is a country code (else the region name is used).
         /// Use "\n" to insert a new line.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String TextToolTip;
 
 
         /// <summary>
         /// The font family to use, ex "Verdana"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String FontFamily;
 
         /// <summary>
         /// The CSS font weight to use, ex: "bold", "light", "900"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String FontWeight;
 
         /// <summary>
         /// The CSS font style to use, ex: "italic", "underline"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String FontStyle;
 
         /// <summary>
@@ -116,7 +116,7 @@ namespace SysWeaver.Map
         /// {1} = Is replaced with the country name if the region is a country code (else the region name is used).
         /// Use "\n" to insert a new line.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String ToolTip;
 
         public void WriteCss(StringBuilder sb, String className, MapStyleBase baseStyle)

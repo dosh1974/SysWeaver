@@ -18,7 +18,7 @@ using SysWeaver.Serialization.NewtonsoftJson;
 namespace SysWeaver.MicroService
 {
 
-    [OpenAiToolPrefix("")]
+    [AiToolPrefix("")]
     public sealed class ChartJsService : IHaveOpenAiTools, IDisposable, IChatStoreLinkHandler
     {
         public ChartJsService(ServiceManager manager, ChartJsParams p = null)
@@ -111,7 +111,7 @@ namespace SysWeaver.MicroService
         /// <param name="request"></param>
         /// <returns>An url to a html page containing the generated chart</returns>
         [OpenAiUse]
-        [OpenAiTool("📊✨")]
+        [AiTool("📊✨")]
         String BuildAdvancedChart(ChartJsConfig chart, HttpServerRequest request)
         {
             var c = ChartSerialize(chart);
@@ -127,13 +127,13 @@ namespace SysWeaver.MicroService
         /// <param name="request"></param>
         /// <returns>True if successful</returns>
         [OpenAiUse]
-        [OpenAiTool("📊🖥️")]
+        [AiTool("📊🖥️")]
         bool DisplayAdvancedChart(ChartJsConfig chart, HttpServerRequest request)
         {
             var url = BuildAdvancedChart(chart, request);
             if (url == null)
                 return false;
-            var c = request.Properties[OpenAiToolExt.RequestAiToolContext] as IOpenAiToolContext;
+            var c = request.Properties[OpenAiToolExt.RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return false;
             c.AddLink(url);
@@ -148,7 +148,7 @@ namespace SysWeaver.MicroService
         /// <param name="request"></param>
         /// <returns>An url to a html page containing the generated chart</returns>
         [OpenAiUse]
-        [OpenAiTool("📊✨")]
+        [AiTool("📊✨")]
         String BuildChart(Chart chart, HttpServerRequest request)
         {
             var labels = chart.Labels;
@@ -367,13 +367,13 @@ namespace SysWeaver.MicroService
         /// <param name="request"></param>
         /// <returns>True if successful</returns>
         [OpenAiUse]
-        [OpenAiTool("📊🖥️")]
+        [AiTool("📊🖥️")]
         bool DisplayChart(Chart chart, HttpServerRequest request)
         {
             var url = BuildChart(chart, request);
             if (url == null)
                 return false;
-            var c = request.Properties[OpenAiToolExt.RequestAiToolContext] as IOpenAiToolContext;
+            var c = request.Properties[OpenAiToolExt.RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return false;
             c.AddLink(url);

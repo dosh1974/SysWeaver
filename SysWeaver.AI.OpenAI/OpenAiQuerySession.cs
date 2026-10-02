@@ -1,11 +1,8 @@
-﻿using Microsoft.Extensions.Options;
 using OpenAI.Chat;
 using System;
 using System.ClientModel;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using SysWeaver.Net;
@@ -13,162 +10,56 @@ using SysWeaver.Net;
 namespace SysWeaver.AI
 {
 
-    public class OpenAiQuerySession
+    /// <summary>
+    /// A query session using the OpenAI chat completions API
+    /// </summary>
+    public class OpenAiQuerySession : AiQuerySessionBase
     {
-        public OpenAiQuerySession(ChatClient c, OpenAiSessionParams p, IOpenAiToolCache toolCache = null, PerfMonitor monitor = null, IAiMemory memory = null)
+        public OpenAiQuerySession(ChatClient c, OpenAiSessionParams p, IAiToolCache toolCache = null, PerfMonitor monitor = null, IAiMemory memory = null)
+            : this(c, p, OpenAiModels.GetOptions(p.Model), toolCache, monitor, memory)
         {
-            var model = p.Model;
-            Model = model;
-            var o = OpenAiTools.GetOptions(model);
+        }
+
+        OpenAiQuerySession(ChatClient c, OpenAiSessionParams p, OpenAiModels.Opt o, IAiToolCache toolCache, PerfMonitor monitor, IAiMemory memory)
+            : base(p.Model, o.Temp, o.System, o.PTools, toolCache, monitor, memory)
+        {
             CanReason = o.CanReason;
             if (CanReason)
-                ReasonigLevel = ReasonigLevels[(int)(p.Reasoning ?? OpenAiReasoning.Low)];
+                ReasonigLevel = OpenAiModels.ChatReasoningLevels[(int)(p.Reasoning ?? AiReasoning.Low)];
             if (o.HaveTiers)
-                Tier = Tiers[(int)(p.Tier ?? OpenAiServiceTier.Auto)];
-            HaveTemperature = o.Temp;
-            SupportSystemRole = o.System;
-            SupportParallelToolCalls = o.PTools;
+                Tier = OpenAiModels.ChatTiers[(int)(p.Tier ?? OpenAiServiceTier.Auto)];
             Client = c;
-            Monitor = monitor;
-            ToolCache = toolCache;
-            Memory = memory;
-            if (memory != null)
-            {
-                AddTool(this, Method_AddMemory, nameof(AddMemory), Monitor, "");
-                AddTool(this, Method_GetMemory, nameof(GetMemory), Monitor, "");
-                AddTool(this, Method_RemoveMemory, nameof(RemoveMemory), Monitor, "");
-                AddTool(this, Method_SetMemory, nameof(SetMemory), Monitor, "");
-            }
         }
 
         volatile ChatCompletionOptions Options;
 
 #pragma warning disable OPENAI001
 
-
-        readonly bool CanReason; 
+        readonly bool CanReason;
         readonly ChatReasoningEffortLevel? ReasonigLevel;
-
-        static readonly ChatReasoningEffortLevel[] ReasonigLevels =
-        [
-            ChatReasoningEffortLevel.None,
-            ChatReasoningEffortLevel.Minimal,
-            ChatReasoningEffortLevel.Low,
-            ChatReasoningEffortLevel.Medium,
-            ChatReasoningEffortLevel.High,
-            new ChatReasoningEffortLevel("xhigh"),
-        ];
-
         readonly ChatServiceTier? Tier;
 
-        static readonly ChatServiceTier[] Tiers =
-            [
-            ChatServiceTier.Auto,
-            ChatServiceTier.Default,
-            ChatServiceTier.Flex,
-            ChatServiceTier.Scale,
-            new ChatServiceTier("fast"),
-            ];
-
-
-        #region Memory
-
-        protected IAiMemory Memory;
-
-        /// <summary>
-        /// Add a memory entry for the current user.
-        /// A maximum of 64 entries can be added.
-        /// If the memory alredy exist, it's overwritten with this memory.
-        /// The memory stored for the key "Global" is availabe in the system prompt at all times.
-        /// </summary>
-        /// <param name="data">Data to add</param>
-        /// <param name="context"></param>
-        /// <returns>True if successful</returns>
-        [OpenAiTool("🧠➕")]
-        Task<bool> AddMemory(AiMemoryAdd data, HttpServerRequest context)
-           => Memory.AddMemory(context.Session, data.Key, data.Desc, data.Value);
-
-
-        /// <summary>
-        /// Get some memory associated with the current user
-        /// </summary>
-        /// <param name="key">The memory key</param>
-        /// <param name="context"></param>
-        /// <returns>The saved memory</returns>
-        [OpenAiTool("🧠📥")]
-        Task<string> GetMemory(String key, HttpServerRequest context)
-            => Memory.GetMemory(context.Session, key);
-
-
-        /// <summary>
-        /// Remove some stored memory associated with the current user
-        /// </summary>
-        /// <param name="key"></param>
-        /// <param name="context"></param>
-        /// <returns>True if successful</returns>
-        [OpenAiTool("🧠❌")]
-        Task<bool> RemoveMemory(String key, HttpServerRequest context)
-            => Memory.RemoveMemory(context.Session, key);
-
-        /// <summary>
-        /// Update / set some memoru associated with the current user
-        /// </summary>
-        /// <param name="data">Data to update / set</param>
-        /// <param name="context"></param>
-        /// <returns>True if successful</returns>
-        [OpenAiTool("🧠💾")]
-        Task<bool> SetMemory(AiMemorySet data, HttpServerRequest context)
-           => Memory.SetMemory(context.Session, data.Key, data.Value);
-
-        static readonly MethodInfo Method_AddMemory = typeof(OpenAiQuerySession).GetMethod(nameof(AddMemory), BindingFlags.NonPublic | BindingFlags.Instance);
-        static readonly MethodInfo Method_GetMemory = typeof(OpenAiQuerySession).GetMethod(nameof(GetMemory), BindingFlags.NonPublic | BindingFlags.Instance);
-        static readonly MethodInfo Method_RemoveMemory = typeof(OpenAiQuerySession).GetMethod(nameof(RemoveMemory), BindingFlags.NonPublic | BindingFlags.Instance);
-        static readonly MethodInfo Method_SetMemory = typeof(OpenAiQuerySession).GetMethod(nameof(SetMemory), BindingFlags.NonPublic | BindingFlags.Instance);
-
-        #endregion//Memory
+        protected override void OnToolsChanged()
+        {
+            Options = null;
+        }
 
         protected ChatCompletionOptions CreateOptions()
         {
             var options = Options;
             if (options != null)
                 return options;
-            options = new ChatCompletionOptions();
-            if (HaveTemperature)
-                options.Temperature = Temperature;
-            options.ReasoningEffortLevel = ReasonigLevel;
-            options.ServiceTier = Tier;
-            var d = options.Tools;
-            var tools = Tools;
-            foreach (var x in Tools)
-                d.Add(x.Value.Tool);
-            if (options.Tools.Count > 0)
-            {
-                options.AllowParallelToolCalls = SupportParallelToolCalls;
-                if (CanReason)
-                    options.ReasoningEffortLevel = ChatReasoningEffortLevel.None;
-            }
+            options = OpenAiModels.CreateChatOptions(GetTools(), HaveTemperature, Temperature, CanReason, ReasonigLevel, Tier, SupportParallelToolCalls);
+            Options = options;
             return options;
         }
 
-
-
-        #pragma warning restore OPENAI001
+#pragma warning restore OPENAI001
 
 
         protected readonly ChatClient Client;
-        protected readonly PerfMonitor Monitor;
-        protected readonly IOpenAiToolCache ToolCache;
-        public readonly String Model;
-        public readonly bool HaveTemperature;
-        public readonly bool SupportSystemRole;
-        public readonly bool? SupportParallelToolCalls;
 
-        /// <summary>
-        /// Temperature of the AI model, lower is more cosistent and less random [0, 2] (1 is default).
-        /// </summary>
-        public float Temperature = 0.2f;
-
-        public String SystemPrompt
+        public override String SystemPrompt
         {
             get =>
                 MsgSystemPrompt == null ? null : String.Join('\n', MsgSystemPrompt.Content.Select(x => x.Text));
@@ -187,143 +78,6 @@ namespace SysWeaver.AI
 
         public ChatMessage MsgSystemPrompt { get; private set; }
 
-        internal readonly Dictionary<String, OpenAiTool> Tools = new Dictionary<string, OpenAiTool>(StringComparer.Ordinal);
-
-        public IEnumerable<KeyValuePair<String, OpenAiTool>> ALlTools => Tools;
-
-
-        /// <summary>
-        /// Add an API endpoint that the AI can use in this session
-        /// </summary>
-        /// <param name="apiName">Name of tha api local url: ex: "Api/auth/GetUser"</param>
-        /// <param name="fn">An optional function name (as shown to the AI).
-        /// null - will use the underlaying method name (or as specified by the OpenAiToolName attribute) in combination with the declaring type name.
-        /// "" - will user the full apiName, but with '/' replaced by '_'.
-        /// </param>
-        /// <returns>True if the tool was added</returns>
-        public bool AddTool(String apiName, String fn = null)
-        {
-            var tool = ToolCache.GetTool(apiName, fn);
-            if (tool == null)
-                return false;
-            Tools.TryAdd(tool.Name, tool);
-            Options = null;
-            return true;
-        }
-
-        /// <summary>
-        /// Add a tool from some registered tool
-        /// </summary>
-        /// <param name="name">The name of the tool</param>
-        /// <returns>True if the tool was added</returns>
-        public bool AddRegistredTool(String name)
-        {
-            var tool = ToolCache.GetRegisteredTool(name);
-            if (tool == null)
-                return false;
-            Tools.TryAdd(tool.Name, tool);
-            Options = null;
-            return true;
-        }
-
-        /// <summary>
-        /// Add a method that the AI can use in this session.
-        /// </summary>
-        /// <param name="instance">Object instance</param>
-        /// <param name="method">The method</param>
-        /// <param name="fn">Optional function name, default will be instance type name _ method name</param>
-        /// <param name="perfMonitor">An optional performance monitor</param>
-        /// <param name="defaultAuth">The default auth to use if there is no WebApiAuthAttribute on the method</param>
-        /// <param name="defaultCachedCompression">The default compression when there is no WebApiCompressionAttribute on the method</param>
-        /// <param name="defaultCompression">The default compression for uncached cached methods when there is no WebApiCompressionAttribute on the method</param>
-        /// <returns></returns>
-        public bool AddTool(Object instance, MethodInfo method, String fn = null, PerfMonitor perfMonitor = null, String defaultAuth = ApiHttpEntry.DefaultAuth, String defaultCachedCompression = ApiHttpEntry.DefaultCachedCompression, String defaultCompression = ApiHttpEntry.DefaultCompression)
-        {
-            var tool = ToolCache.GetTool(instance, method, fn, perfMonitor, defaultAuth, defaultCachedCompression, defaultCompression);
-            if (tool == null)
-                return false;
-            Tools.TryAdd(tool.Name, tool);
-            Options = null;
-            return true;
-        }
-
-        async Task<OpenAiCallInstance> AiCall(String name, BinaryData b, HttpServerRequest request, ConcurrentDictionary<String, int> callIcons)
-        {
-            var start = DateTime.UtcNow;
-            if (!Tools.TryGetValue(name, out var tool))
-                return new OpenAiCallInstance(null, b, start, DateTime.UtcNow, new Exception("The tool " + name.ToQuoted() + " is unknown!"), name);
-            if (!request.Session.IsValid(tool.Auth))
-                return new OpenAiCallInstance(tool, b, start, DateTime.UtcNow, new Exception("The requesting user is not allowed to use the tool " + name.ToQuoted()));
-
-            var icon = tool.Icon;
-            callIcons.TryGetValue(icon, out var c);
-            callIcons[icon] = c + 1;
-            try
-            {
-                using var xx = Monitor?.Track("AiCall." + name);
-                var res = await tool.Invoke(b, request).ConfigureAwait(false);
-                return new OpenAiCallInstance(tool, b, start, DateTime.UtcNow, res);
-            }
-            catch (Exception e)
-            {
-                return new OpenAiCallInstance(tool, b, start, DateTime.UtcNow, e);
-            }
-        }
-
-        protected async Task AiCalls(IReadOnlyList<ChatToolCall> tcs, HttpServerRequest request, OpenAiDebugMessage debugMsg, Action<String> onToolCalls, List<ChatMessage> messages)
-        {
-            var tcl = tcs.Count;
-            if (tcl <= 0)
-                return;
-            debugMsg?.StartBatch();
-            ConcurrentDictionary<String, int> icons = new (StringComparer.Ordinal);
-            Task<OpenAiCallInstance>[] tasks = new Task<OpenAiCallInstance>[tcl];
-            for (int i = 0; i < tcl; ++i)
-            {
-                var tc = tcs[i];
-                tasks[i] = AiCall(tc.FunctionName, tc.FunctionArguments, request, icons);
-            }
-            StringBuilder sb = new StringBuilder();
-            bool prevIsDigit = false;
-            foreach (var x in icons.OrderByDescending(x => x.Value))
-            {
-                if (sb.Length > 0)
-                    sb.Append('-');
-                if (prevIsDigit)
-                    sb.Append(' ');
-                var c = x.Key;
-                var v = x.Value;
-                if (c == "")
-                {
-                    prevIsDigit = true;
-                    sb.Append('x').Append(v);
-                }
-                else
-                {
-                    sb.Append(x.Key);
-                    prevIsDigit = v > 1;
-                    if (prevIsDigit)
-                        sb.Append('x').Append(v);
-                }
-            }
-            onToolCalls?.Invoke(sb.ToString());
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-
-            for (int i = 0; i < tcl; ++i)
-            {
-                var tc = tcs[i];
-                var res = tasks[i].GetAwaiter().GetResult();
-                debugMsg?.AddCall(res);
-                var ex = res.Ex;
-                if (ex != null)
-                    messages?.Add(new ToolChatMessage(tc.Id, "Execution failed: " + ex.Message));
-                else
-                    messages?.Add(new ToolChatMessage(tc.Id, res.Ret));
-            }
-            debugMsg?.EndBatch();
-        }
-
-
         /// <summary>
         /// Perform a query
         /// </summary>
@@ -333,7 +87,7 @@ namespace SysWeaver.AI
         /// <param name="extraData">optional attachements</param>
         /// <returns>The Ai response, typically MD encoded text</returns>
         /// <exception cref="Exception"></exception>
-        public async Task<String> Query(String text, OpenAiDebugMessage debug = null, Func<String, long, long, Task> onUsage = null, IReadOnlyList<ValueTuple<ChatMessageContentPart, String>> extraData = null)
+        public override async Task<String> Query(String text, AiDebugMessage debug = null, Func<String, long, long, Task> onUsage = null, IReadOnlyList<ValueTuple<AiContentPart, String>> extraData = null)
         {
             using var _a = Monitor?.Track(nameof(Query));
             List<ChatMessage> messages = new List<ChatMessage>(2);
@@ -344,7 +98,7 @@ namespace SysWeaver.AI
             var haveData = (extraData?.Count ?? 0) > 0;
             if (haveData)
                 foreach (var x in extraData)
-                    um.Content.Add(x.Item1);
+                    um.Content.Add(OpenAiModels.ToChatPart(x.Item1));
             messages.Add(um);
             var options = CreateOptions();
             long totalIn = 0;
@@ -375,7 +129,6 @@ namespace SysWeaver.AI
                     case ChatFinishReason.Stop:
                         messages.Add(new AssistantChatMessage(r));
                         var sb = new StringBuilder();
-                        List<String> p = new List<string>(4);
                         foreach (var x in v.Content)
                         {
                             switch (x.Kind)
@@ -396,7 +149,7 @@ namespace SysWeaver.AI
                         messages.Add(new AssistantChatMessage(r));
                         var tcs = v.ToolCalls;
                         if (tcs != null)
-                            await AiCalls(tcs, null, debug, null, null).ConfigureAwait(false);
+                            await AiCalls(tcs, null, debug, null, messages).ConfigureAwait(false);
                         break;
                     case ChatFinishReason.Length:
                         if (onUsage != null)
@@ -422,6 +175,23 @@ namespace SysWeaver.AI
             }
         }
 
+        /// <summary>
+        /// Execute tool calls and add the results to the messages (if supplied)
+        /// </summary>
+        protected async Task AiCalls(IReadOnlyList<ChatToolCall> tcs, HttpServerRequest request, AiDebugMessage debugMsg, Action<String> onToolCalls, List<ChatMessage> messages)
+        {
+            var tcl = tcs.Count;
+            if (tcl <= 0)
+                return;
+            var calls = new AiFunctionCall[tcl];
+            for (int i = 0; i < tcl; ++i)
+                calls[i] = new AiFunctionCall(tcs[i].FunctionName, tcs[i].FunctionArguments);
+            var res = await AiCalls(calls, request, debugMsg, onToolCalls).ConfigureAwait(false);
+            if (messages == null)
+                return;
+            for (int i = 0; i < tcl; ++i)
+                messages.Add(new ToolChatMessage(tcs[i].Id, res[i]));
+        }
 
     }
 

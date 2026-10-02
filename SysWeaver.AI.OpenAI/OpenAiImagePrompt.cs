@@ -14,7 +14,7 @@ namespace SysWeaver.AI
         /// <summary>
         /// High quality (false = standard quality).
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool HighQuality = true;
 
         /// <summary>
@@ -25,14 +25,14 @@ namespace SysWeaver.AI
         /// <summary>
         /// Vivid colors (false = natural colors).
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool Vivid;
 
         /// <summary>
         /// The desired aspect ratio
         /// </summary>
-        [OpenAiOptional]
-        public OpenAiImageAspectRatios Aspect = OpenAiImageAspectRatios.Square;
+        [AiOptional]
+        public AiImageAspectRatios Aspect = AiImageAspectRatios.Square;
 
         /// <summary>
         /// The title of this image, used as filename etc.
@@ -47,7 +47,7 @@ namespace SysWeaver.AI
         /// * "gpt-image-1.5" (use if transparency is required)
         /// * "gpt-image-2 (default)"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String Model;
 
         /// <summary>
@@ -56,8 +56,8 @@ namespace SysWeaver.AI
         /// * "gpt-image-2.5-sunburst" (n/a)
         /// * "gpt-image-2.5-flare"  (n/a)
         /// </summary>
-        [OpenAiOptional]
-        public OpenAiImageBackgrounds Background;
+        [AiOptional]
+        public AiImageBackgrounds Background;
     }
 
 }

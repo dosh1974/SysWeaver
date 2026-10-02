@@ -17,14 +17,14 @@ namespace SysWeaver.MicroService
         /// Color for label x is: Colors[x] ?? Color ?? "#888". 
         /// Colors[x] returns null if Colors are null or x is out of bounds or Colors[x] == null.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String[] Colors;
         /// <summary>
         /// Color of values (unless overrideen in the Colors array).
         /// Color for label x is: Colors[x] ?? Color ?? "#888". 
         /// Colors[x] returns null if Colors are null or x is out of bounds or Colors[x] == null.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String Color;
         
         /// <summary>
@@ -35,13 +35,13 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// The opacity of the fill area (not border).
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double FillOpacity = 0.6;
 
         /// <summary>
         /// Width of the border
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double BorderWidth = 2.0;
 
     }

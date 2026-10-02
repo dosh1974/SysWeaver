@@ -23,7 +23,7 @@ namespace SysWeaver.Data
         ///         RowCount = 101 => There are at least 101 rows total, 20 rows will be returned for page 2 and a page 3, 4, 5, 6 exists and maybe more pages.
         /// </summary>
         [EditMin(0)]
-        [OpenAiIgnore]
+        [AiIgnore]
         public long RowCount;
 
         /// <summary>
@@ -34,7 +34,7 @@ namespace SysWeaver.Data
         /// <summary>
         /// Title of the table.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String Title;
 
         public void CopyFrom(CommonTableData s)
@@ -78,14 +78,14 @@ namespace SysWeaver.Data
         /// <summary>
         /// A change counter for the column information, if the request Cc is equal to this, no column information is sent
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public long Cc;
 
         /// <summary>
         /// Number of ms to wait before a new refresh
         /// </summary>
         [EditMin(0)]
-        [OpenAiIgnore]
+        [AiIgnore]
         public long RefreshRate;
 
         /// <summary>

@@ -8,13 +8,13 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// The color of the grid lines
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String color;
 
         /// <summary>
         /// If false, do not display grid lines for this axis.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool display = true;
     }
 

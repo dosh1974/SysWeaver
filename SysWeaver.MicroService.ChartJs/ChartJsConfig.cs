@@ -14,7 +14,7 @@ namespace SysWeaver.MicroService
         /// "doughnut"
         /// "polarArea"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public string type = "bar";
 
         /// <summary>
@@ -25,13 +25,13 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Options for displaying the data
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsOptions options;
 
         /// <summary>
         /// The refresh rate in ms of this chart
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public int RefreshRate;
 
         /// <summary>
@@ -49,14 +49,14 @@ namespace SysWeaver.MicroService
         /// "doughnut"
         /// "polararea"
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public string[] ValidTypes;
 
 
         /// <summary>
         /// Number of decimals to use
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public int Precision = -2;
 
 
@@ -64,7 +64,7 @@ namespace SysWeaver.MicroService
         /// The title of this chart, used as filename etc.
         /// Max length is 64.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         [AutoTranslate]
         [AutoTranslateContext("This is the title of chart image, it will also be used when saving the chart as a file, do NOT user any invalid chars")]
         public String Title;
@@ -73,13 +73,13 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// The prefix string for a value label
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String ValuePrefix = "";
 
         /// <summary>
         /// The suffix string for a value label
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String ValueSuffix = "";
 
         /// <summary>
@@ -92,19 +92,19 @@ namespace SysWeaver.MicroService
         /// 5 = Raw value 
         /// 6 = Formatted value
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public int ValueLabel;
 
         /// <summary>
         /// True to disable ability to order the data
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public bool? DisableOrderMenu;
 
         /// <summary>
         /// True to disable ability to colorize the data
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public bool? DisableColorMenu;
 
     }

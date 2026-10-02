@@ -7,22 +7,22 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// X-axis scale definition
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsScaleOptions x;
         /// <summary>
         /// Y-axis scale definition
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsScaleOptions y;
         /// <summary>
         /// Secondary x-axis scale definition
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsScaleOptions x2;
         /// <summary>
         /// Radial scale definition
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsScaleOptions r;
     }
 

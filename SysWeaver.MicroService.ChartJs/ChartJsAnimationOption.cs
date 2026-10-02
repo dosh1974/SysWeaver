@@ -11,19 +11,19 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// The number of milliseconds an animation takes.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double duration = 200;
 
         /// <summary>
         /// Easing method
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String easing = "easeOutQuart";
 
         /// <summary>
         /// Delay before starting the animations in milliseconds.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? delay;
     }
 

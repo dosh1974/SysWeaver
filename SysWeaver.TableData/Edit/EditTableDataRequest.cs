@@ -20,7 +20,7 @@ namespace SysWeaver.Data
         /// True to get column meta data, only do this on your first "request".
         /// Columns will not mutate unless you do it (and then you still know the meta data).
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool RequireColumns;
 
     }
@@ -41,7 +41,7 @@ namespace SysWeaver.Data
         /// Columns will not mutate unless you do it (and then you still know the meta data).
         /// It's very rare that this is required.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool RequireColumns;
 
     }

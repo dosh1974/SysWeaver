@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SysWeaver.AI</RootNamespace>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <NoWarn>1701;1702;1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.GenAI" Version="1.24.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SysWeaver.AI\SysWeaver.AI.csproj" />
+  </ItemGroup>
+
+	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
+		<Exec Command="rmdir /S /Q .\srcWeb\google\icons\.opt" ContinueOnError="true" />
+		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare .\srcWeb\google\icons\*.svg .\srcWeb\google\icons\.opt\" />
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\google\icons\.opt\* .\web\google\icons" />
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\google\icons\no_opt\* .\web\google\icons" />
+		<ItemGroup>
+			<EmbeddedResource Include="web\**\*.br" Visible="false" />
+		</ItemGroup>
+	</Target>
+</Project>

@@ -8,7 +8,7 @@ using SysWeaver.Net;
 namespace SysWeaver.MicroService
 {
 
-    [OpenAiToolPrefix("")]
+    [AiToolPrefix("")]
     public sealed class MapService : IHaveOpenAiTools
     {
         public MapService() 
@@ -38,10 +38,10 @@ namespace SysWeaver.MicroService
         /// <param name="request"></param>
         /// <returns>An url to a svg image with the generated map</returns>
         [OpenAiUse]
-        [OpenAiTool("🗺️✨")]
+        [AiTool("🗺️✨")]
         public String BuildMap(MapGenParams map, HttpServerRequest request)
         {
-            var c = request.Properties[OpenAiToolExt.RequestAiToolContext] as IOpenAiToolContext;
+            var c = request.Properties[OpenAiToolExt.RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return null;
             var data = MapGen.Generate(map);
@@ -55,7 +55,7 @@ namespace SysWeaver.MicroService
         /// <param name="map">The map to get information about</param>
         /// <returns>An array of all region names (that can be stylized)</returns>
         [OpenAiUse]
-        [OpenAiTool("🗺️📥")]
+        [AiTool("🗺️📥")]
         public String[] GetMapRegions(MapSelect map)
             => MapTools.GetRegions(map).Select(x => x.N).ToArray();
 

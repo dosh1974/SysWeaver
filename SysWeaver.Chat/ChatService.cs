@@ -29,7 +29,7 @@ namespace SysWeaver.Chat
     [OptionalDep<HttpServerBase>]
     [OptionalDep<IUserStorageService>]
     [WebApiUrl("../chat")]
-    [OpenAiToolPrefix("")]
+    [AiToolPrefix("")]
     public sealed class ChatService : IDisposable, IHttpServerModule, IHaveOpenAiTools
     {
         public override string ToString() => "Providers: " + String.Join(", ", Providers.Values.Select(x => x.Provider.Name));
@@ -516,7 +516,7 @@ namespace SysWeaver.Chat
         /// <returns>URL to the stored file, this linked can be shared</returns>
         [WebApi]
         [WebApiAuth]
-        [OpenAiTool("🛢️💾")]
+        [AiTool("🛢️💾")]
         public async Task<String> StoreFile(ChatStore request, HttpServerRequest context)
         {
 
@@ -556,7 +556,7 @@ namespace SysWeaver.Chat
         /// <exception cref="NoUserLoggedInException"></exception>
         [WebApi]
         [WebApiAuth]
-        [OpenAiTool("🛢️📥")]
+        [AiTool("🛢️📥")]
         public async Task<TypedTableData<StoredFileInfo>> GetStoredFiles(TableDataRequest r, HttpServerRequest context)
         {
             var us = UserStore;
@@ -577,7 +577,7 @@ namespace SysWeaver.Chat
         /// <returns>A public URL that can be shared</returns>
         [WebApi]
         [WebApiAuth]
-        [OpenAiTool("🔗💾")]
+        [AiTool("🔗💾")]
         public async Task<String> StoreLink(ChatStore request, HttpServerRequest context)
         {
             const String localPrefix = "../";
@@ -745,7 +745,7 @@ namespace SysWeaver.Chat
         /// <exception cref="NoUserLoggedInException"></exception>
         [WebApi]
         [WebApiAuth]
-        [OpenAiTool("🔗📥")]
+        [AiTool("🔗📥")]
         public async Task<TypedTableData<StoredLinkInfo>> GetStoredLinks(TableDataRequest r, HttpServerRequest context)
         {
             var us = UserStore;
@@ -802,7 +802,7 @@ namespace SysWeaver.Chat
         /// The access scope of the stored data.
         /// Always assume that the user wants a public scope, unless they state that it's private or if they wan't to share it with other users (use protected).
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public UserStorageScopes Scope = UserStorageScopes.Public;
     }
 

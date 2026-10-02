@@ -9,25 +9,25 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Top left corner value
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? topLeft;
 
         /// <summary>
         /// Top right corner value
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? topRight;
 
         /// <summary>
         /// Bottom right corner value
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? bottomRight;
 
         /// <summary>
         /// Bottom left corner value
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? bottomLeft;
     }
 
@@ -39,7 +39,7 @@ namespace SysWeaver.MicroService
         /// One color per value on the x-axis (labels).
         /// To use the same color for all values, supply an array with one element, ex: ["#f00"].
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String[] backgroundColor;
 
         /// <summary>
@@ -47,19 +47,19 @@ namespace SysWeaver.MicroService
         /// One color per value on the x-axis (labels).
         /// To use the same color for all values, supply an array with one element, ex: ["#f00"].
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String[] borderColor;
 
         /// <summary>
         /// The width in pixels of the border
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? borderWidth;
 
         /// <summary>
         /// The radius to use for rounded corners
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsCorner borderRadius = new ChartJsCorner
         {
             topLeft = 2,
@@ -69,7 +69,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// If true the border isn't drawn at the bottom (start)
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? borderSkipped = false;
 
 
@@ -78,13 +78,13 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Percent (0-1) of the available width each bar should be within the category width. 1.0 will take the whole category width and put the bars right next to each other. 
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? barPercentage;
 
         /// <summary>
         /// Percent (0-1) of the available width each category should be within the sample width.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? categoryPercentage;
 
         #region Line chart lines
@@ -97,26 +97,26 @@ namespace SysWeaver.MicroService
         /// "after" - Step-after Interpolation. 
         /// "middle" - Step-middle Interpolation. 
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String stepped;
 
         /// <summary>
         /// For line charts only.
         /// If false, the line is not drawn for this dataset.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? showLine;
 
         /// <summary>
         /// Bezier curve tension of the line. Set to 0 to draw straightlines. This option is ignored if monotone cubic interpolation is used.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? tension;
 
         /// <summary>
         /// How and if to fill area in a line chart
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsLineFillOptions fill;
 
         #endregion Line chart lines
@@ -126,7 +126,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Point radius, default 3.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? radius;
 
         /// <summary>
@@ -143,31 +143,31 @@ namespace SysWeaver.MicroService
         ///    "star"
         ///    "triangle"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String pointStyle;
 
         /// <summary>
         /// Point rotation (in degrees), defaul: 0
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? rotation;
 
         /// <summary>
         /// Extra radius added to point radius for hit detection, default: 1
         /// </summary>
-        [OpenAiIgnore]
+        [AiIgnore]
         public double? hitRadius;
 
         /// <summary>
         /// Point radius when hovered, default: 4
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? hoverRadius;
 
         /// <summary>
         /// Stroke width when hovered, default: 1
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double? hoverBorderWidth;
 
         #endregion//Line chart points
@@ -185,19 +185,19 @@ namespace SysWeaver.MicroService
         /// "start"
         /// "end"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String target;
 
         /// <summary>
         /// If no color is set, the default color will be the background color of the chart.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public string above;
 
         /// <summary>
         /// If no color is set, the default color will be the background color of the chart.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public string below;
     }
 

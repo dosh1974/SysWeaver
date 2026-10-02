@@ -30,7 +30,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Type of chart
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartTypes Type;
 
         /// <summary>
@@ -48,20 +48,20 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// If true the data series are stacked on top of each other.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool Stack;
 
         /// <summary>
         /// If true the chart should have a horizontal layout instead of a vertical (if applicable)
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool Horizontal;
 
         /// <summary>
         /// Sort data by this series (name of the series to use).
         /// If this string starts with a '-', the data is sorted in descending order.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String SortBySeries;
 
         /// <summary>
@@ -69,13 +69,13 @@ namespace SysWeaver.MicroService
         /// Typically the unit of the values (if applicable), like "km", "meters" or "hours" etc.
         /// If there is no unit or it's a count something like: "# of People", "Response Choices", "Votes" is suitable.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String ValueTitle;
 
         /// <summary>
         /// If true the chart should have a smoothed lines instead of straight lines (applies to line charts only)
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool SmoothLines;
 
 

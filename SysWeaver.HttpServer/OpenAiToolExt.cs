@@ -20,7 +20,7 @@ namespace SysWeaver.AI
         /// <param name="url">The local or absolute url to the file</param>
         public static void OpenAiAddLink(this HttpServerRequest request, String url)
         {
-            var c = request.Properties[RequestAiToolContext] as IOpenAiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return;
             c.AddLink(url);
@@ -36,7 +36,7 @@ namespace SysWeaver.AI
         /// <returns>The local url to the file</returns>
         public static String OpenAiAddMessageFile(this HttpServerRequest request, String mime, String data, String filename)
         {
-            var c = request.Properties[RequestAiToolContext] as IOpenAiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return null;
             return c.AddMessageFile(mime, data, filename);
@@ -52,7 +52,7 @@ namespace SysWeaver.AI
         /// <returns>The local url to the file</returns>
         public static String OpenAiAddMessageFile(this HttpServerRequest request, String mime, ReadOnlyMemory<Byte> data, String filename)
         {
-            var c = request.Properties[RequestAiToolContext] as IOpenAiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return null;
             return c.AddMessageFile(mime, data, filename);

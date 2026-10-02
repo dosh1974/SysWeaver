@@ -8,7 +8,7 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Display the title
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? display;
 
         /// <summary>
@@ -21,32 +21,32 @@ namespace SysWeaver.MicroService
         /// Where to put the title.
         /// Can be: "start", "center" or "end"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String align;
 
         /// <summary>
         /// Text color as a CSS color string.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String color;
 
         /// <summary>
         /// Marks that this box should take the full width/height of the canvas. If false, the box is sized and placed above/beside the chart area.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? fullSize = true;
 
         /// <summary>
         /// Position of the title.
         /// Can be: "top", "left", "bottom" or "right"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String position;
 
         /// <summary>
         /// The font to use
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public ChartJsFontOptions font;
 
     }

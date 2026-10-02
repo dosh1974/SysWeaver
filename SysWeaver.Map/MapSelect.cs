@@ -19,7 +19,7 @@ namespace SysWeaver.Map
         /// Only used when Map is a single country.
         /// The ISO 3166 country code.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String MapCountry;
 
     }

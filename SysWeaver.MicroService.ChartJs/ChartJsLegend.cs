@@ -8,39 +8,39 @@ namespace SysWeaver.MicroService
         /// <summary>
         /// Display the legend
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? display;
 
         /// <summary>
         /// Where to put the legend.
         /// Can be: "start", "center" or "end"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String align;
 
         /// <summary>
         /// Position of the legend.
         /// Can be: "top", "left", "bottom", "right", "chartArea"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public String position;
 
         /// <summary>
         /// Marks that this box should take the full width/height of the canvas
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? fullSize = true;
 
         /// <summary>
         /// Legend will show datasets in reverse order.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? reverse = true;
 
         /// <summary>
         /// True for rendering the legends from right to left.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public bool? rtl = true;
 
     }

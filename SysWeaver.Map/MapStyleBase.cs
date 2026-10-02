@@ -20,21 +20,21 @@ namespace SysWeaver.Map
         /// <summary>
         /// The target CSS color to use for shadowed part of any extrusion, ex: "#f00", "#00f802", "red", "rgba(0, 255, 0, 0.5)"
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public string ShadowColor = "#001";
 
         /// <summary>
         /// [0, 1] The intensity of the shadows.
         /// The final color is interpolated from the fill colour of the region and the shadow color (lerp), by this fraction.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double ShadowFillStrength = 0.4;
 
         /// <summary>
         /// [0, 1] The intensity of the shadows.
         /// The final color is interpolated from the fill colour of the region and the shadow color (lerp), by this fraction.
         /// </summary>
-        [OpenAiOptional]
+        [AiOptional]
         public double ShadowStrokeStrength = 0.3;
 
     }
