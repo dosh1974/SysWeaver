@@ -1,0 +1,494 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 47.5 47.5" xml:space="preserve" version="1.1" id="svg2">
+	<style>
+#eye_1,
+#eye_2 {
+  animation: animEyes_1 1000ms infinite;
+  transform-origin: top center;
+  transform-box: fill-box;
+}
+#mouth_1 {
+  animation: animMouth_1 1000ms infinite;
+}
+#head_1 {
+  animation: animHead_1 1000ms infinite;
+  transform-origin: top center;
+  transform-box: fill-box;
+}
+@keyframes animEyes_1 {
+  0% {
+    transform: rotate(0) scale(0.8);
+  }
+  40% {
+    transform: rotate(0) scale(0.8);
+  }
+  50% {
+    transform: rotate(0) scale(0.5);
+  }
+  58% {
+    transform: rotate(3deg) scale(1);
+  }
+  67% {
+    transform: rotate(-5deg);
+  }
+  75% {
+    transform: rotate(7deg) scale(1);
+  }
+  87% {
+    transform: rotate(-5deg);
+  }
+  94% {
+    transform: rotate(3deg);
+  }
+  100% {
+    transform: rotate(0) scale(0.8);
+  }
+}
+@keyframes animMouth_1 {
+  0% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3%) scale(1.1, 1);
+  }
+  62% {
+    transform: translateY(8%) scale(0.8, 1);
+  }
+  84% {
+    transform: translateY(8%) scale(1, 0.8);
+  }
+  92% {
+    transform: translateY(-2%) scale(0.8, 1);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+@keyframes animHead_1 {
+  0% {
+    transform: scale(1, 1);
+  }
+  30% {
+    transform: scale(1, 1);
+  }
+  40% {
+    transform: scale(1.05, 0.95);
+  }
+  50% {
+    transform: scale(0.95, 1.05);
+  }
+  60% {
+    transform: scale(1, 1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+#tear_5,
+#tear_6 {
+  animation: tearAnim_5 1000ms infinite;
+  transform-origin: bottom right;
+  transform-box: fill-box;
+}
+#tear_6 {
+  transform-origin: bottom left;
+  animation-name: tearAnim_6;
+}
+#head_5 {
+  animation: animHead_5 300ms infinite;
+  transform-origin: top center;
+  transform-box: fill-box;
+}
+#brow_5,
+#brow_6 {
+  animation: browAnim_5 500ms infinite;
+  transform-origin: bottom right;
+  transform-box: fill-box;
+}
+#brow_6 {
+  animation-name: browAnim_6;
+}
+#mouth_5,
+#mouth_6 {
+  animation: mouthAnim_5 1000ms infinite;
+  transform-origin: bottom center;
+  transform-box: fill-box;
+}
+@keyframes tearAnim_5 {
+  0% {
+    transform: scale(0) rotate(-45deg) translate(0, 0);
+  }
+  50% {
+    transform: scale(1) rotate(0) translate(0, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0) translate(0, -100%);
+    opacity: 0;
+  }
+}
+@keyframes tearAnim_6 {
+  0% {
+    transform: scale(0) rotate(45deg) translate(0, 0);
+  }
+  50% {
+    transform: scale(1) rotate(0) translate(0, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0) translate(0, -100%);
+    opacity: 0;
+  }
+}
+@keyframes animHead_5 {
+  0% {
+    transform: scale(1.05, 0.95);
+  }
+  50% {
+    transform: scale(0.95, 1.05);
+  }
+  100% {
+    transform: scale(1.05, 0.95);
+  }
+}
+@keyframes browAnim_5 {
+  0% {
+    transform: translate(0, 0) rotate(0);
+  }
+  50% {
+    transform: translate(0, 40%) rotate(8deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0);
+  }
+}
+@keyframes browAnim_6 {
+  0% {
+    transform: translate(0, 0) rotate(0);
+  }
+  50% {
+    transform: translate(0, 30%) rotate(-6deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0);
+  }
+}
+@keyframes mouthAnim_5 {
+  0% {
+    transform: scale(1, 1) translateY(0);
+  }
+  16% {
+    transform: scale(0.8, 1.2) translateY(0);
+  }
+  33% {
+    transform: scale(1, 1) translateY(0.1em);
+  }
+
+  49% {
+    transform: scale(0.8, 1.2) translateY(0.1em);
+  }
+  66% {
+    transform: scale(1, 1) translateY(0.1em);
+  }
+
+  82% {
+    transform: scale(0.8, 1.2) translateY(0);
+  }
+  100% {
+    transform: scale(1, 1) translateY(0);
+  }
+}
+
+#eye_3,
+#eye_4 {
+  animation: eyeAnim_3 1500ms infinite;
+  transform-origin: top center;
+  transform-box: fill-box;
+}
+#tounge_3 {
+  animation: toungeAnim_3 1500ms infinite;
+  transform-origin: top center;
+  transform-box: fill-box;
+}
+#mouth_3 {
+  animation: mouthAnim_3 1500ms infinite;
+  transform-origin: bottom center;
+  transform-box: fill-box;
+}
+#head_3 {
+  animation: animHead_3 1500ms infinite;
+  transform-origin: top center;
+  transform-box: fill-box;
+}
+@keyframes eyeAnim_3 {
+  0% {
+    transform: scale(1, 1);
+  }
+  15% {
+    transform: scale(1.2, 0.1);
+  }
+  20% {
+    transform: scale(1.2, 0.1);
+  }
+  35% {
+    transform: scale(1, 1);
+  }
+  40% {
+    transform: scale(1, 1);
+  }
+
+  45% {
+    transform: scale(1.2, 0.1);
+  }
+  50% {
+    transform: scale(1.2, 0.1);
+  }
+  65% {
+    transform: scale(1, 1);
+  }
+  100% {
+    transform: scale(1, 1);
+  }
+}
+@keyframes toungeAnim_3 {
+  0% {
+    transform: translateY(50%) scale(1, 0.6);
+  }
+  50% {
+    transform: translateY(2%) scale(0.9, 1.2);
+  }
+  100% {
+    transform: translateY(50%) scale(1, 0.6);
+  }
+}
+@keyframes mouthAnim_3 {
+  0% {
+    transform: scale(1, 1) translateY(20%);
+  }
+  50% {
+    transform: scale(1.1, 0.8) translateY(40%);
+  }
+  100% {
+    transform: scale(1, 1) translateY(20%);
+  }
+}
+@keyframes animHead_3 {
+  0% {
+    transform: scale(1, 1) translateY(0);
+  }
+  50% {
+    transform: scale(1.05, 0.95) translateY(10%);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+#eye_7,
+#eye_8 {
+  animation: animEyes_7 1500ms infinite;
+}
+#mouth_7 {
+  animation: animMouth_7 1500ms infinite;
+}
+#head_7 {
+  animation: animHead_7 1500ms infinite;
+  transform-origin: top center;
+  transform-box: fill-box;
+}
+@keyframes animEyes_7 {
+  0% {
+    transform: translate(-3%, 0);
+  }
+  16% {
+    transform: translate(3%, 0);
+  }
+  33% {
+    transform: translate(-3%, 0);
+  }
+  49% {
+    transform: translate(5%, -5%);
+  }
+  66% {
+    transform: translate(-5%, -5%);
+  }
+  82% {
+    transform: translate(3%, 0);
+  }
+  100% {
+    transform: translate(-3%, 0);
+  }
+}
+
+@keyframes animMouth_7 {
+  0% {
+    transform: translateX(-2%);
+  }
+  16% {
+    transform: translateX(2%);
+  }
+  33% {
+    transform: translateX(-2%);
+  }
+  49% {
+    transform: translateX(3%);
+  }
+  66% {
+    transform: translateX(-3%);
+  }
+  82% {
+    transform: translateX(2%);
+  }
+  100% {
+    transform: translateX(-2%);
+  }
+}
+
+@keyframes animHead_7 {
+  0% {
+    transform: scale(1, 1);
+  }
+  33% {
+    transform: scale(1, 1);
+  }
+  66% {
+    transform: scale(1.05, 0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+#mouth_9,
+#mouth_0 {
+  animation: mouthAnim_9 1200ms infinite;
+  transform-origin: top center;
+  transform-box: fill-box;
+}
+#mouth_0 {
+  animation-name: mouthAnim_0;
+}
+#brow_9,
+#brow_0 {
+  animation: browAnim_9 1200ms infinite;
+  transform-origin: top center;
+  transform-box: fill-box;
+}
+#brow_0 {
+  animation-name: browAnim_0;
+}
+#eye_9,
+#eye_0 {
+  animation: eyeAnim_9 1200ms infinite;
+  transform-origin: top center;
+  transform-box: fill-box;
+}
+#head_9 {
+  animation: animHead_9 300ms infinite;
+  transform-origin: top center;
+  transform-box: fill-box;
+}
+@keyframes mouthAnim_9 {
+  0% {
+    transform: scale(1, 1) translateY(0);
+  }
+  50% {
+    transform: scale(1.2, 0.8) translateY(10%);
+  }
+  100% {
+    transform: scale(1, 1) translateY(0);
+  }
+}
+@keyframes mouthAnim_0 {
+  0% {
+    transform: scale(1, 1) translateY(0);
+  }
+  50% {
+    transform: scale(1.2, 0.8) translateY(-20%);
+  }
+  100% {
+    transform: scale(1, 1) translateY(0);
+  }
+}
+@keyframes browAnim_9 {
+  0% {
+    transform: rotate(0) translateY(0);
+  }
+  50% {
+    transform: rotate(8deg) translateY(-40%);
+  }
+  100% {
+    transform: rotate(0) translateY(0);
+  }
+}
+@keyframes browAnim_0 {
+  0% {
+    transform: rotate(0) translateY(0);
+  }
+  50% {
+    transform: rotate(-8deg) translateY(-40%);
+  }
+  100% {
+    transform: rotate(0) translateY(0);
+  }
+}
+@keyframes eyeAnim_9 {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-40%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+@keyframes animHead_9 {
+  0% {
+    transform: scale(1, 1) translateY(0);
+  }
+  50% {
+    transform: scale(1.05, 0.95) translateY(4%);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+	
+	
+	</style>
+	<metadata id="metadata8">
+		<rdf:RDF>
+			<cc:Work rdf:about="">
+				<dc:format>image/svg+xml</dc:format>
+				<dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+			</cc:Work>
+		</rdf:RDF>
+	</metadata>
+	<defs id="defs6">
+		<clipPath id="clipPath16" clipPathUnits="userSpaceOnUse">
+			<path id="path18" d="M 0,38 38,38 38,0 0,0 0,38 Z"/>
+		</clipPath>
+	</defs>
+	<g transform="matrix(1.25,0,0,-1.25,0,47.5)" id="g10">
+		<g id="head_7">
+			<g clip-path="url(#clipPath16)" id="g14">
+				<g transform="translate(36,19)" id="g20">
+					<path id="path22" style="fill:#da2f47;fill-opacity:1;fill-rule:nonzero;stroke:none" d="m 0,0 c 0,-9.389 -7.611,-17 -17,-17 -9.388,0 -17,7.611 -17,17 0,9.388 7.612,17 17,17 C -7.611,17 0,9.388 0,0"/>
+				</g>
+				<g transform="translate(26.4854,7.1211)" id="g24">
+					<path id="mouth_7" style="fill:#292f33;fill-opacity:1;fill-rule:nonzero;stroke:none" d="m 0,0 c -0.045,0.179 -1.168,4.379 -7.485,4.379 -6.318,0 -7.441,-4.2 -7.485,-4.379 -0.055,-0.217 0.043,-0.442 0.237,-0.554 0.195,-0.109 0.439,-0.079 0.599,0.077 0.019,0.019 1.954,1.856 6.649,1.856 4.694,0 6.63,-1.837 6.648,-1.856 0.096,-0.094 0.224,-0.144 0.352,-0.144 0.084,0 0.169,0.021 0.246,0.064 C -0.043,-0.445 0.055,-0.218 0,0"/>
+				</g>
+				<g transform="translate(16.707,19.707)" id="g28">
+					<path id="eye_7" style="fill:#292f33;fill-opacity:1;fill-rule:nonzero;stroke:none" d="m 0,0 c -3.255,3.255 -8.486,3.293 -8.707,3.293 -0.552,0 -0.999,-0.447 -0.999,-0.999 -0.001,-0.551 0.446,-1 0.998,-1.001 0.029,0 1.925,-0.022 3.983,-0.737 -0.593,-0.64 -0.982,-1.634 -0.982,-2.763 0,-1.934 1.119,-3.5 2.5,-3.5 1.381,0 2.5,1.566 2.5,3.5 0,0.174 -0.019,0.34 -0.037,0.507 0.013,0 0.025,-0.007 0.037,-0.007 0.256,0 0.512,0.098 0.707,0.293 0.391,0.391 0.391,1.023 0,1.414"/>
+				</g>
+				<g transform="translate(30,23)" id="g32">
+					<path id="eye_8" style="fill:#292f33;fill-opacity:1;fill-rule:nonzero;stroke:none" d="m 0,0 c -0.221,0 -5.451,-0.038 -8.707,-3.293 -0.391,-0.391 -0.391,-1.023 0,-1.414 C -8.512,-4.902 -8.256,-5 -8,-5 c 0.013,0 0.024,0.007 0.036,0.007 C -7.98,-5.16 -8,-5.326 -8,-5.5 -8,-7.434 -6.881,-9 -5.5,-9 c 1.381,0 2.5,1.566 2.5,3.5 0,1.129 -0.389,2.123 -0.982,2.763 C -1.924,-2.022 -0.028,-2 0.002,-2 0.553,-1.999 1,-1.55 0.999,-0.999 0.998,-0.447 0.552,0 0,0"/>
+				</g>
+			</g>
+		</g>
+	</g>
+</svg>
