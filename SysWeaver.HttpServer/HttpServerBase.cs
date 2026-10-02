@@ -698,15 +698,11 @@ namespace SysWeaver.Net
             var r = Redirects;
             lock (r)
             {
-                var tree = RedirectTree;
                 if (replace)
                     RemoveFolderRedirect(fromFolder);
-                if (!StringTree.TryAdd(ref tree, fromFolder))
-                    return false;
                 if (!r.TryAdd(fromFolder, ValueTuple.Create(redirectCode, toFolder)))
-                    throw new Exception("Internal error!");
-                RedirectTree = tree;
-                RedirectSearch = new FrozenStringTree(tree);
+                    return false;
+                RedirectSearch = new StringPrefixLookup(r.Keys);
             }
             return true;
         }
@@ -729,12 +725,7 @@ namespace SysWeaver.Net
             {
                 if (!r.TryRemove(fromFolder, out var x))
                     return false;
-                StringTree tree = new StringTree();
-                foreach (var s in r.Keys)
-                    if (!StringTree.TryAdd(ref tree, s))
-                        throw new Exception("Internal error!");
-                RedirectTree = tree;
-                RedirectSearch = new FrozenStringTree(tree);
+                RedirectSearch = new StringPrefixLookup(r.Keys);
             }
             return true;
         }
@@ -761,9 +752,11 @@ namespace SysWeaver.Net
             return HandleRedirect(text, localUrl, data);
         }
 
-        FrozenStringTree RedirectSearch = new FrozenStringTree(new StringTree());
+        /// <summary>
+        /// The folders that are redirected (the keys of Redirects), rebuilt when a redirect is added or removed (in a lock of Redirects)
+        /// </summary>
+        StringPrefixLookup RedirectSearch = new StringPrefixLookup([]);
         readonly LowAllocConcurrentDictionary<String, ValueTuple<int, String>> Redirects = new (StringComparer.Ordinal);
-        StringTree RedirectTree = new StringTree();
 
 
         static async Task<IHttpRequestHandler> CheckModule(IReadOnlyList<IHttpServerModule> modules, HttpServerRequest data, IHttpServerModule ignoreThis)
