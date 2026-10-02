@@ -18,51 +18,44 @@ namespace SysWeaver
         /// Converts some data into a hexadecimal string
         /// </summary>
         /// <param name="bytes">The data</param>
-        /// <returns>A hexadecimal string</returns>
+        /// <returns>A hexadecimal string (lower case)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String ToHex(this ReadOnlyMemory<Byte> bytes) 
-            => String.Create(bytes.Length * 2, bytes, WriteHexAction);
+        public static String ToHex(this ReadOnlyMemory<Byte> bytes)
+            => Convert.ToHexStringLower(bytes.Span);
 
 
         /// <summary>
-        /// 
+        /// Decode some text data into lines (see StringTools.GetLines)
         /// </summary>
-        /// <param name="bytes">The data</param>
+        /// <param name="bytes">The data, a byte order mark (the preamble of the encoding) is removed</param>
         /// <param name="encoding">The text encoding, defaults to UTF8</param>
         /// <param name="trim">True to trim whitespaces from every line</param>
         /// <param name="removeEmpty">True to remove empty lines</param>
         /// <returns></returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String[] ToStringArray(this ReadOnlySpan<Byte> bytes, Encoding encoding = null, bool trim = false, bool removeEmpty = false)
-            => (encoding ?? Encoding.UTF8).GetString(bytes).GetLines(trim, removeEmpty);
-
-
-        static readonly Char[] ToHexDigits = "0123456789abcdef".ToCharArray();
-
-        static void WriteHex(Span<Char> to, ReadOnlyMemory<Byte> data)
         {
-            var ch = ToHexDigits;
-            var s = data.Span;
-            var l = data.Length;
-            int o = 0;            
-            for (int i = 0; i < l; ++ i)
-            {
-                var b = s[i];
-                var t = b;
-                b >>= 4;
-                t &= 0xf;
-                to[o] = ch[b];
-                ++o;
-                to[o] = ch[t];
-                ++o;
-            }
+            encoding ??= Encoding.UTF8;
+            var preamble = encoding.Preamble;
+            if ((preamble.Length > 0) && bytes.StartsWith(preamble))
+                bytes = bytes.Slice(preamble.Length);
+            return encoding.GetString(bytes).GetLines(trim, removeEmpty);
         }
+
+
+        /// <summary>
+        /// Write lower case hexadecimal digits (to must have room for 2 chars for every byte)
+        /// </summary>
+        static void WriteHex(Span<Char> to, ReadOnlyMemory<Byte> data)
+            => Convert.TryToHexStringLower(data.Span, to, out _);
 
         internal static readonly SpanAction<Char, ReadOnlyMemory<Byte>> WriteHexAction = WriteHex;
 
 
     }
 
+    /// <summary>
+    /// Comparers for ReadOnlyMemory, the equality comparer compares the elements (using EqualityComparer.Default), the comparer is lexicographic (using Comparer.Default)
+    /// </summary>
     public static class ReadOnlyMemoryComparer
     {
 
@@ -70,36 +63,17 @@ namespace SysWeaver
         {
             public static readonly Cmp<T> Instance = new Cmp<T>();
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public int Compare(ReadOnlyMemory<T> x, ReadOnlyMemory<T> y)
-            {
-                var xl = x.Length;
-                var yl = y.Length;
-                var cl = xl < yl ? xl : yl;
-                var sx = x.Span;
-                var sy = y.Span;
-                var cmp = Comparer<T>.Default;
-                for (int i = 0; i < cl; ++ i)
-                {
-                    var xx = sx[i];
-                    var yy = sy[i];
-                    var c = cmp.Compare(xx, yy);
-                    if (c != 0)
-                        return c;
-                }
-                return xl - yl;
-            }
+                => MemoryCompare<T>.Compare(x.Span, y.Span);
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool Equals(ReadOnlyMemory<T> x, ReadOnlyMemory<T> y)
-                => x.Span.SequenceEqual(y.Span);
+                => MemoryCompare<T>.Equals(x.Span, y.Span);
 
-            public unsafe int GetHashCode([DisallowNull] ReadOnlyMemory<T> obj)
-            {
-                using var pm = obj.Pin();
-                var s = (Byte*)pm.Pointer;
-                var t = new ReadOnlySpan<Byte>(s, obj.Length * Marshal.SizeOf<T>());
-                return GxHash.Hash32(t, 12);
-            }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public int GetHashCode([DisallowNull] ReadOnlyMemory<T> obj)
+                => MemoryCompare<T>.GetHashCode(obj.Span);
 
         }
 
@@ -114,6 +88,9 @@ namespace SysWeaver
 
     }
 
+    /// <summary>
+    /// Comparers for Memory, the equality comparer compares the elements (using EqualityComparer.Default), the comparer orders by length (shortest first) and then lexicographic (using Comparer.Default)
+    /// </summary>
     public static class MemoryComparer
     {
 
@@ -121,37 +98,21 @@ namespace SysWeaver
         {
             public static readonly Cmp<T> Instance = new Cmp<T>();
 
-            public unsafe int Compare(Memory<T> x, Memory<T> y)
+            public int Compare(Memory<T> x, Memory<T> y)
             {
-                var l = x.Length;
-                var c = l - y.Length;
+                var c = x.Length - y.Length;
                 if (c != 0)
                     return c;
-                using var px = x.Pin();
-                using var py = y.Pin();
-                var dx = (Byte*)px.Pointer;
-                var dy = (Byte*)py.Pointer;
-                l *= Marshal.SizeOf<T>();
-                for (int i = 0; i < l; ++i)
-                {
-                    c = dx[i] - dy[i];
-                    if (c != 0)
-                        return c;
-                }
-                return 0;
+                return MemoryCompare<T>.Compare(x.Span, y.Span);
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool Equals(Memory<T> x, Memory<T> y)
-                => x.Span.SequenceEqual(y.Span);
+                => MemoryCompare<T>.Equals(x.Span, y.Span);
 
-            public unsafe int GetHashCode([DisallowNull] Memory<T> obj)
-            {
-                using var pm = obj.Pin();
-                var s = (Byte*)pm.Pointer;
-                var t = new Span<Byte>(s, obj.Length * Marshal.SizeOf<T>());
-                return GxHash.Hash32(t, 12);
-            }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public int GetHashCode([DisallowNull] Memory<T> obj)
+                => MemoryCompare<T>.GetHashCode(obj.Span);
 
         }
 
@@ -164,6 +125,104 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEqualityComparer<Memory<T>> GetEqualityComparer<T>() => Cmp<T>.Instance;
 
+    }
+
+    /// <summary>
+    /// The implementation of the memory comparers
+    /// </summary>
+    static class MemoryCompare<T>
+    {
+        /// <summary>
+        /// True if equal values always have the same bytes (and different values different bytes), so the bytes can be compared and hashed.
+        /// True for the integer primitives, char, bool and enums (not for float / double, +0 and -0 are equal, all NaN are equal)
+        /// </summary>
+        static readonly bool Bitwise =
+            (typeof(T) == typeof(Byte)) || (typeof(T) == typeof(SByte)) || (typeof(T) == typeof(Char)) || (typeof(T) == typeof(bool)) ||
+            (typeof(T) == typeof(Int16)) || (typeof(T) == typeof(UInt16)) || (typeof(T) == typeof(Int32)) || (typeof(T) == typeof(UInt32)) ||
+            (typeof(T) == typeof(Int64)) || (typeof(T) == typeof(UInt64)) || (typeof(T) == typeof(IntPtr)) || (typeof(T) == typeof(UIntPtr)) ||
+            typeof(T).IsEnum;
+
+        /// <summary>
+        /// The bytes of the data (only valid if Bitwise)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ReadOnlySpan<Byte> Bytes(ReadOnlySpan<T> data)
+            => MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<T, Byte>(ref MemoryMarshal.GetReference(data)), data.Length * Unsafe.SizeOf<T>());
+
+        /// <summary>
+        /// The hash of empty data
+        /// </summary>
+        const int EmptyHash = 0x2f8b51c7;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool Equals(ReadOnlySpan<T> x, ReadOnlySpan<T> y)
+        {
+            if (x.Length != y.Length)
+                return false;
+            if (Bitwise)
+                return Bytes(x).SequenceEqual(Bytes(y));
+            return x.SequenceEqual(y);
+        }
+
+        public static int GetHashCode(ReadOnlySpan<T> data)
+        {
+            if (Bitwise)
+            {
+                // GxHash reads a whole vector for short data (and the reference of empty data can be null)
+                if (data.Length == 0)
+                    return EmptyHash;
+                return GxHash.Hash32(Bytes(data), 12);
+            }
+            // Combine the hashes of the elements (so that equal values always have the same hash)
+            HashCode h = new();
+            var cmp = EqualityComparer<T>.Default;
+            foreach (var x in data)
+                h.Add(x == null ? 0 : cmp.GetHashCode(x));
+            h.Add(data.Length);
+            return h.ToHashCode();
+        }
+
+        /// <summary>
+        /// Lexicographic compare (using Comparer.Default for the elements, then the shorter is first)
+        /// </summary>
+        public static int Compare(ReadOnlySpan<T> x, ReadOnlySpan<T> y)
+        {
+            if ((typeof(T) == typeof(Byte)) || (typeof(T) == typeof(Char)))
+            {
+                // Most compares are decided by the first element, so check it before the (vectorized) compare
+                if ((x.Length > 0) && (y.Length > 0))
+                {
+                    if (typeof(T) == typeof(Byte))
+                    {
+                        var a = Unsafe.As<T, Byte>(ref MemoryMarshal.GetReference(x));
+                        var b = Unsafe.As<T, Byte>(ref MemoryMarshal.GetReference(y));
+                        if (a != b)
+                            return a - b;
+                    }
+                    else
+                    {
+                        var a = Unsafe.As<T, Char>(ref MemoryMarshal.GetReference(x));
+                        var b = Unsafe.As<T, Char>(ref MemoryMarshal.GetReference(y));
+                        if (a != b)
+                            return a - b;
+                    }
+                }
+                if (typeof(T) == typeof(Byte))
+                    return Bytes(x).SequenceCompareTo(Bytes(y));
+                return MemoryMarshal.Cast<Byte, Char>(Bytes(x)).SequenceCompareTo(MemoryMarshal.Cast<Byte, Char>(Bytes(y)));
+            }
+            var xl = x.Length;
+            var yl = y.Length;
+            var cl = xl < yl ? xl : yl;
+            var cmp = Comparer<T>.Default;
+            for (int i = 0; i < cl; ++i)
+            {
+                var c = cmp.Compare(x[i], y[i]);
+                if (c != 0)
+                    return c;
+            }
+            return xl - yl;
+        }
     }
 
 }

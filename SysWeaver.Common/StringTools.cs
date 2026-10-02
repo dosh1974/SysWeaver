@@ -2014,27 +2014,37 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Split a string into lines
+        /// Split a string into lines (separated by '\n', any '\r' at the start or end of a line is removed)
         /// </summary>
         /// <param name="s"></param>
         /// <param name="trim">True to trim whitespaces from every line</param>
-        /// <param name="removeEmpty">True to remove empty lines</param>
+        /// <param name="removeEmpty">True to remove empty lines (after removing '\r' and trimming)</param>
         /// <returns></returns>
         public static String[] GetLines(this String s, bool trim = false, bool removeEmpty = false)
         {
             if (String.IsNullOrEmpty(s))
                 return Array.Empty<String>();
-            var opt = StringSplitOptions.None;
+            // Trimmed, or no '\r' to remove: String.Split (vectorized) gives the result
             if (trim)
-                opt |= StringSplitOptions.TrimEntries;
-            if (removeEmpty)
-                opt |= StringSplitOptions.RemoveEmptyEntries;
-            var lines = s.Split('\n', opt);
-            if (trim)
-                return lines;
-            var lc = lines.Length;
-            for (int i = 0; i < lc; ++i)
-                lines[i] = lines[i].Trim('\r');
+                return s.Split('\n', removeEmpty ? (StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) : StringSplitOptions.TrimEntries);
+            if (!s.Contains('\r'))
+                return s.Split('\n', removeEmpty ? StringSplitOptions.RemoveEmptyEntries : StringSplitOptions.None);
+            // Remove any '\r' at the start or end of every line (one allocation per line)
+            var span = s.AsSpan();
+            var lines = new String[span.Count('\n') + 1];
+            int n = 0;
+            for (; ; )
+            {
+                var i = span.IndexOf('\n');
+                var line = (i < 0 ? span : span.Slice(0, i)).Trim('\r');
+                if ((line.Length > 0) || !removeEmpty)
+                    lines[n++] = line.Length == s.Length ? s : new String(line);
+                if (i < 0)
+                    break;
+                span = span.Slice(i + 1);
+            }
+            if (n < lines.Length)
+                Array.Resize(ref lines, n);
             return lines;
         }
 

@@ -7,6 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 
 namespace SysWeaver
@@ -18,50 +19,57 @@ namespace SysWeaver
     public static class DictionaryExt
     {
 
-        struct Inst<K, V> : IReadOnlySet<K>
+        /// <summary>
+        /// The keys of a dictionary as a read only set
+        /// </summary>
+        sealed class KeySet<K, V> : IReadOnlySet<K>
         {
-            public Inst(IReadOnlyDictionary<K, V> d)
+            public KeySet(IReadOnlyDictionary<K, V> d)
             {
                 D = d;
             }
+
             readonly IReadOnlyDictionary<K, V> D;
 
             public int Count => D.Count;
 
             public bool Contains(K item) => D.ContainsKey(item);
 
-            public bool IsProperSubsetOf(IEnumerable<K> other)
-            {
-                throw new NotImplementedException();
-            }
+            /// <summary>
+            /// The keys as a set (using the comparer of the dictionary, the default comparer if it's unknown)
+            /// </summary>
+            HashSet<K> ToSet() => new(D.Keys, TryGetComparer(D) ?? EqualityComparer<K>.Default);
 
-            public bool IsProperSupersetOf(IEnumerable<K> other)
-            {
-                throw new NotImplementedException();
-            }
+            public bool IsProperSubsetOf(IEnumerable<K> other) => ToSet().IsProperSubsetOf(other);
 
-            public bool IsSubsetOf(IEnumerable<K> other)
-            {
-                throw new NotImplementedException();
-            }
+            public bool IsProperSupersetOf(IEnumerable<K> other) => ToSet().IsProperSupersetOf(other);
+
+            public bool IsSubsetOf(IEnumerable<K> other) => ToSet().IsSubsetOf(other);
 
             public bool IsSupersetOf(IEnumerable<K> other)
             {
-                throw new NotImplementedException();
+                // All the other items must be keys (no allocation)
+                foreach (var x in other)
+                    if (!D.ContainsKey(x))
+                        return false;
+                return true;
             }
 
             public bool Overlaps(IEnumerable<K> other)
             {
-                throw new NotImplementedException();
+                // Any of the other items is a key (no allocation)
+                if (D.Count == 0)
+                    return false;
+                foreach (var x in other)
+                    if (D.ContainsKey(x))
+                        return true;
+                return false;
             }
 
-            public bool SetEquals(IEnumerable<K> other)
-            {
-                throw new NotImplementedException();
-            }
+            public bool SetEquals(IEnumerable<K> other) => ToSet().SetEquals(other);
 
             public IEnumerator<K> GetEnumerator() => D.Keys.GetEnumerator();
-            
+
             IEnumerator IEnumerable.GetEnumerator() => D.Keys.GetEnumerator();
 
         }
@@ -73,7 +81,7 @@ namespace SysWeaver
         /// <typeparam name="V"></typeparam>
         /// <param name="dictionary">The dictionary to treat as a read only set</param>
         /// <returns></returns>
-        public static IReadOnlySet<K> KeysAsReadOnlySet<K, V>(this IReadOnlyDictionary<K, V> dictionary) => new Inst<K, V>(dictionary);
+        public static IReadOnlySet<K> KeysAsReadOnlySet<K, V>(this IReadOnlyDictionary<K, V> dictionary) => new KeySet<K, V>(dictionary);
 
 
         /// <summary>
@@ -87,6 +95,16 @@ namespace SysWeaver
         /// <returns>The dictionary, same object, useful for chaining</returns>
         public static IDictionary<K, V> Aggregate<K, V>(this IDictionary<K, V> dictionary, IReadOnlyDictionary<K, V> with, Func<V, V, V> func)
         {
+            if (dictionary is Dictionary<K, V> d)
+            {
+                // One lookup per key
+                foreach (var v in with)
+                {
+                    ref var e = ref CollectionsMarshal.GetValueRefOrAddDefault(d, v.Key, out var exists);
+                    e = exists ? func(e, v.Value) : v.Value;
+                }
+                return dictionary;
+            }
             foreach (var v in with)
             {
                 var key = v.Key;
@@ -136,6 +154,13 @@ namespace SysWeaver
 
 
         /// <summary>
+        /// The number of items in a collection (if it's known without enumerating it), else 0
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static int Capacity<T>(IEnumerable<T> vals)
+            => (vals != null) && vals.TryGetNonEnumeratedCount(out var c) ? c : 0;
+
+        /// <summary>
         /// Create a dictionary from a collection, if the same key is present more than once, the last is used
         /// </summary>
         /// <typeparam name="K"></typeparam>
@@ -145,7 +170,7 @@ namespace SysWeaver
         /// <returns></returns>
         public static Dictionary<K, V> Create<K, V>(IEnumerable<KeyValuePair<K, V>> vals, IEqualityComparer<K> k = null)
         {
-            var d = k == null ? new Dictionary<K, V>() : new Dictionary<K, V>(k);
+            var d = new Dictionary<K, V>(Capacity(vals), k);
             foreach (var x in vals.Nullable())
                 d[x.Key] = x.Value;
             return d;
@@ -161,7 +186,7 @@ namespace SysWeaver
         /// <returns></returns>
         public static Dictionary<K, V> Create<K, V>(IEnumerable<Tuple<K, V>> vals, IEqualityComparer<K> k = null)
         {
-            var d = k == null ? new Dictionary<K, V>() : new Dictionary<K, V>(k);
+            var d = new Dictionary<K, V>(Capacity(vals), k);
             foreach (var x in vals.Nullable())
                 d[x.Item1] = x.Item2;
             return d;
@@ -177,7 +202,7 @@ namespace SysWeaver
         /// <returns></returns>
         public static Dictionary<K, V> Create<K, V>(IEnumerable<ValueTuple<K, V>> vals, IEqualityComparer<K> k = null)
         {
-            var d = k == null ? new Dictionary<K, V>() : new Dictionary<K, V>(k);
+            var d = new Dictionary<K, V>(Capacity(vals), k);
             foreach (var x in vals.Nullable())
                 d[x.Item1] = x.Item2;
             return d;
@@ -196,7 +221,7 @@ namespace SysWeaver
         /// <returns></returns>
         public static ConcurrentDictionary<K, V> CreateConcurrent<K, V>(IEnumerable<KeyValuePair<K, V>> vals, IEqualityComparer<K> k = null)
         {
-            var d = k == null ? new ConcurrentDictionary<K, V>() : new ConcurrentDictionary<K, V>(k);
+            var d = new ConcurrentDictionary<K, V>(Environment.ProcessorCount, Math.Max(Capacity(vals), 31), k);
             foreach (var x in vals.Nullable())
                 d[x.Key] = x.Value;
             return d;
@@ -212,7 +237,7 @@ namespace SysWeaver
         /// <returns></returns>
         public static ConcurrentDictionary<K, V> CreateConcurrent<K, V>(IEnumerable<Tuple<K, V>> vals, IEqualityComparer<K> k = null)
         {
-            var d = k == null ? new ConcurrentDictionary<K, V>() : new ConcurrentDictionary<K, V>(k);
+            var d = new ConcurrentDictionary<K, V>(Environment.ProcessorCount, Math.Max(Capacity(vals), 31), k);
             foreach (var x in vals.Nullable())
                 d[x.Item1] = x.Item2;
             return d;
@@ -228,7 +253,7 @@ namespace SysWeaver
         /// <returns></returns>
         public static ConcurrentDictionary<K, V> CreateConcurrent<K, V>(IEnumerable<ValueTuple<K, V>> vals, IEqualityComparer<K> k = null)
         {
-            var d = k == null ? new ConcurrentDictionary<K, V>() : new ConcurrentDictionary<K, V>(k);
+            var d = new ConcurrentDictionary<K, V>(Environment.ProcessorCount, Math.Max(Capacity(vals), 31), k);
             foreach (var x in vals.Nullable())
                 d[x.Item1] = x.Item2;
             return d;
@@ -244,13 +269,9 @@ namespace SysWeaver
         /// <param name="key"></param>
         /// <param name="value"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryRemove<K, V>(this Dictionary<K, V> d, K key, out V value)
-        {
-            if (!d.TryGetValue(key, out value))
-                return false;
-            d.Remove(key);
-            return true;
-        }
+            => d.Remove(key, out value);
 
         /// <summary>
         /// Create a frozen version of a dictionary
@@ -281,7 +302,7 @@ namespace SysWeaver
         /// <typeparam name="K"></typeparam>
         /// <typeparam name="V"></typeparam>
         /// <param name="d"></param>
-        /// <param name="comparer"></param>
+        /// <param name="comparer">The comparer to use (also kept for an empty dictionary)</param>
         /// <returns></returns>
         public static IReadOnlyDictionary<K, V> Freeze<K, V>(this IReadOnlyDictionary<K, V> d, IEqualityComparer<K> comparer)
         {
@@ -291,7 +312,7 @@ namespace SysWeaver
                 throw new Exception("Must specify a comparer!");
             var l = d.Count;
             if (l <= 0)
-                return EmptyReadonlyDictionary<K, V>.Default;
+                return EmptyReadonlyDictionary<K, V>.Get(comparer);
             if (l == 1)
             {
                 if ((d as SingleReadonlyDictionary<K, V>)?.Comp == comparer)
@@ -318,23 +339,25 @@ namespace SysWeaver
             => new SingleReadonlyDictionary<K, V>(key, value, comp ?? EqualityComparer<K>.Default);
 
 
-
+        /// <summary>
+        /// Get the comparer of a dictionary (FrozenDictionary, Dictionary, ConcurrentDictionary and the dictionaries returned by Freeze / Single)
+        /// </summary>
+        /// <exception cref="Exception">If the comparer is unknown</exception>
         public static IEqualityComparer<K> GetComparer<K, V>(this IReadOnlyDictionary<K, V> dict)
-        {
-            var a = dict as FrozenDictionary<K, V>;
-            if (a != null)
-                return a.Comparer;
-            var b = dict as IHaveComparere<K>;
-            if (b != null)
-                return b.Comp;
-            var c = dict as Dictionary<K, V>;
-            if (c != null)
-                return c.Comparer;
-            var d = dict as ConcurrentDictionary<K, V>;
-            if (d != null)
-                return d.Comparer;
-            throw new Exception("No comparer could be found!");
-        }
+            => TryGetComparer(dict) ?? throw new Exception("No comparer could be found!");
+
+        /// <summary>
+        /// Get the comparer of a dictionary, or null if it's unknown
+        /// </summary>
+        static IEqualityComparer<K> TryGetComparer<K, V>(IReadOnlyDictionary<K, V> dict)
+            => dict switch
+            {
+                FrozenDictionary<K, V> a => a.Comparer,
+                IHaveComparere<K> b => b.Comp,
+                Dictionary<K, V> c => c.Comparer,
+                ConcurrentDictionary<K, V> d => d.Comparer,
+                _ => null,
+            };
     }
 
 
@@ -354,12 +377,32 @@ namespace SysWeaver
     {
 
         public static readonly EmptyReadonlyDictionary<K, V> Default = new (EqualityComparer<K>.Default);
-        static readonly IEnumerable<K> EmptyK = Enumerable.Empty<K>();
-        static readonly IEnumerable<V> EmptyV = Enumerable.Empty<V>();
-        static readonly IEnumerable<KeyValuePair<K, V>> EmptyKV = Enumerable.Empty<KeyValuePair<K, V>>();
 
-        static readonly IEnumerator<KeyValuePair<K, V>> EmptyKVEnum = EmptyKV.GetEnumerator();
+        /// <summary>
+        /// The empty dictionaries of other comparers
+        /// </summary>
+        static readonly ConditionalWeakTable<IEqualityComparer<K>, EmptyReadonlyDictionary<K, V>> Others = new();
 
+        /// <summary>
+        /// Get an empty dictionary with a comparer
+        /// </summary>
+        public static EmptyReadonlyDictionary<K, V> Get(IEqualityComparer<K> comparer)
+        {
+            if (comparer == Default.Comp)
+                return Default;
+            // The last used comparer is cached (it's typically the same comparer every time)
+            var last = Last;
+            if (last?.Comp == comparer)
+                return last;
+            last = Others.GetValue(comparer, c => new EmptyReadonlyDictionary<K, V>(c));
+            Last = last;
+            return last;
+        }
+
+        /// <summary>
+        /// The last empty dictionary returned for another comparer than the default
+        /// </summary>
+        static EmptyReadonlyDictionary<K, V> Last;
 
         EmptyReadonlyDictionary(IEqualityComparer<K> comparer)
         {
@@ -370,17 +413,18 @@ namespace SysWeaver
 
         public V this[K key] => throw new KeyNotFoundException();
 
-        public IEnumerable<K> Keys { get; } = EmptyK;
+        // Expression bodied (not initialized from static fields, they are not initialized yet when Default is created)
+        public IEnumerable<K> Keys => Array.Empty<K>();
 
-        public IEnumerable<V> Values { get; } =  EmptyV;
+        public IEnumerable<V> Values => Array.Empty<V>();
 
-        public int Count { get; } = 0;
+        public int Count => 0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ContainsKey(K key) => false;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => EmptyKVEnum;
+        public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => ((IEnumerable<KeyValuePair<K, V>>)Array.Empty<KeyValuePair<K, V>>()).GetEnumerator();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(K key, [MaybeNullWhen(false)] out V value)
@@ -403,6 +447,7 @@ namespace SysWeaver
             Key = key;
             Value = value;
             Comp = comp;
+            IsDefault = typeof(K).IsValueType && (comp == EqualityComparer<K>.Default);
             Keys = [key];
             Values = [value];
             KVe = [new KeyValuePair<K, V>(key, value)];
@@ -412,13 +457,22 @@ namespace SysWeaver
         readonly V Value;
         readonly IEnumerable<KeyValuePair<K, V>> KVe;
 
+        /// <summary>
+        /// True if the key is a value type and the comparer is the default comparer (devirtualized)
+        /// </summary>
+        readonly bool IsDefault;
+
         public IEqualityComparer<K> Comp { get; init; }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        bool IsKey(K key)
+            => IsDefault ? EqualityComparer<K>.Default.Equals(key, Key) : Comp.Equals(key, Key);
 
         public V this[K key]
         {
             get
             {
-                if (Comp.Equals(key, Key))
+                if (IsKey(key))
                     return Value;
                 throw new KeyNotFoundException();
             }
@@ -429,11 +483,11 @@ namespace SysWeaver
 
         public IEnumerable<V> Values { get; init; }
 
-        public int Count { get; } = 1;
+        public int Count => 1;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ContainsKey(K key)
-            => Comp.Equals(key, Key);
+            => IsKey(key);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => KVe.GetEnumerator();
@@ -441,9 +495,13 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(K key, [MaybeNullWhen(false)] out V value)
         {
-            var e = Comp.Equals(key, Key);
-            value = e ? Value : default;
-            return e;
+            if (IsKey(key))
+            {
+                value = Value;
+                return true;
+            }
+            value = default;
+            return false;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
