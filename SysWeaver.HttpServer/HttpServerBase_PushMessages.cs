@@ -72,8 +72,8 @@ namespace SysWeaver.Net
         /// <param name="validateAuth">If true, auth must be the same when sending response as when it was pushed</param>
         public void PushMessageAllSessions(PushMessage message, bool onlyLatest = true, bool validateAuth = true)
         {
-            foreach (var x in Sessions)
-                x.Value.PushMessage(message, onlyLatest, validateAuth);
+            foreach (var x in Sessions.Values)
+                x.PushMessage(message, onlyLatest, validateAuth);
         }
 
 

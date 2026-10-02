@@ -7,6 +7,7 @@ namespace SysWeaver
 {
     /// <summary>
     /// A string tree stores a bunch of strings in a way that makes it fast to check if a test string starts with ANY of the contained strings.
+    /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
     /// </summary>
     public sealed class StringTreeList<T>
     {
@@ -36,14 +37,17 @@ namespace SysWeaver
         /// <summary>
         /// Build a tree from a bunch of strings
         /// </summary>
-        /// <param name="strings">The strings to build a tree from, may not contain null</param>
+        /// <param name="strings">The strings to build a tree from, may not contain null or empty strings</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
         /// <returns>The tree</returns>
         public static StringTreeList<T> Build(IEnumerable<Tuple<String, T>> strings, bool caseInSensitive = false)
         {
             StringTreeList<T> parent = null;
             foreach (var s in strings)
+            {
+                StringTree.ValidateAdd(s.Item1);
                 parent = InternalAdd(s.Item1, s.Item2, parent, caseInSensitive);
+            }
             parent = parent ?? new StringTreeList<T>();
             if (caseInSensitive)
                 parent.Leaf = LeafList;
@@ -53,14 +57,17 @@ namespace SysWeaver
         /// <summary>
         /// Build a tree from a bunch of strings
         /// </summary>
-        /// <param name="strings">The strings to build a tree from, may not contain null</param>
+        /// <param name="strings">The strings to build a tree from, may not contain null or empty strings</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
         /// <returns>The tree</returns>
         public static StringTreeList<T> Build(IEnumerable<KeyValuePair<String, T>> strings, bool caseInSensitive = false)
         {
             StringTreeList<T> parent = null;
             foreach (var s in strings)
+            {
+                StringTree.ValidateAdd(s.Key);
                 parent = InternalAdd(s.Key, s.Value, parent, caseInSensitive);
+            }
             parent = parent ?? new StringTreeList<T>();
             if (caseInSensitive)
                 parent.Leaf = LeafList;
@@ -71,14 +78,18 @@ namespace SysWeaver
         /// Build a tree from a bunch of strings
         /// </summary>
         /// <param name="values">The values to add, may not contain null</param>
-        /// <param name="getKey">Function that extracts the string key</param>
+        /// <param name="getKey">Function that extracts the string key (may not return null or an empty string)</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
         /// <returns>The tree</returns>
         public static StringTreeList<T> Build(IEnumerable<T> values, Func<T, String> getKey, bool caseInSensitive = false)
         {
             StringTreeList<T> parent = null;
             foreach (var s in values)
-                parent = InternalAdd(getKey(s), s, parent, caseInSensitive);
+            {
+                var key = getKey(s);
+                StringTree.ValidateAdd(key);
+                parent = InternalAdd(key, s, parent, caseInSensitive);
+            }
             parent = parent ?? new StringTreeList<T>();
             if (caseInSensitive)
                 parent.Leaf = LeafList;
@@ -92,7 +103,7 @@ namespace SysWeaver
         /// <summary>
         /// Add a string to a new or existing tree
         /// </summary>
-        /// <param name="text">The string to add, may not be null</param>
+        /// <param name="text">The string to add, may not be null or empty</param>
         /// <param name="value">The value associated with the string, may not be null</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree, if the tree already exists, the casing from that tree is used</param>
         /// <param name="parent">An existing tree</param>
@@ -101,6 +112,7 @@ namespace SysWeaver
         {
             if (parent != null)
                 caseInSensitive = parent.IsCaseInSensitive;
+            StringTree.ValidateAdd(text);
             parent = InternalAdd(text, value, parent, caseInSensitive);
             parent = parent ?? new StringTreeList<T>();
             if (caseInSensitive)
@@ -113,7 +125,7 @@ namespace SysWeaver
         /// Try to add a string to a new or existing tree
         /// </summary>
         /// <param name="parent">An existing or new tree to update</param>
-        /// <param name="text">The string to add, may not be null</param>
+        /// <param name="text">The string to add, may not be null or empty</param>
         /// <param name="value">The value associated with the string, may not be null</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree, if the tree already exists, the casing from that tree is used</param>
         /// <returns>True if the string was added, false if it already existed</returns>
@@ -121,6 +133,7 @@ namespace SysWeaver
         {
             if (parent != null)
                 caseInSensitive = parent.IsCaseInSensitive;
+            StringTree.ValidateAdd(text);
             if (!InternalAdd(out var x, text, value, parent, caseInSensitive))
                 return false;
             parent = x ?? new StringTreeList<T>();
@@ -132,11 +145,12 @@ namespace SysWeaver
         /// <summary>
         /// Find the longest string (in the tree), that matches the text
         /// </summary>
-        /// <param name="text">The text to match against the strings in the tree</param>
-        /// <param name="start">An optional start offset</param>
+        /// <param name="text">The text to match against the strings in the tree, may not be empty (from the start offset)</param>
+        /// <param name="start">An optional start offset, must be less than the length of the text</param>
         /// <returns>The longest found match or null if no match is found</returns>
         public IReadOnlyList<T> StartsWithAny(String text, int start = 0)
         {
+            StringTree.ValidateSearch(text, start);
             StringTreeList<T> node = this;
             int len = text.Length;
             List<T> found = null;
@@ -185,11 +199,12 @@ namespace SysWeaver
         /// <summary>
         /// Find all matching strings (in the tree), that matches the text
         /// </summary>
-        /// <param name="text">The text to match against the strings in the tree</param>
-        /// <param name="start">An optional start offset</param>
+        /// <param name="text">The text to match against the strings in the tree, may not be empty (from the start offset)</param>
+        /// <param name="start">An optional start offset, must be less than the length of the text</param>
         /// <returns>A list of matches, ordered by name</returns>
         public List<List<T>> AllStartsWithAny(String text, int start = 0)
         {
+            StringTree.ValidateSearch(text, start);
             StringTreeList<T> node = this;
             int len = text.Length;
             List<List<T>> found = new();
@@ -238,11 +253,12 @@ namespace SysWeaver
         /// <summary>
         /// Find all matching strings (in the tree), that matches the text
         /// </summary>
-        /// <param name="text">The text to match against the strings in the tree</param>
-        /// <param name="start">An optional start offset</param>
+        /// <param name="text">The text to match against the strings in the tree, may not be empty (from the start offset)</param>
+        /// <param name="start">An optional start offset, must be less than the length of the text</param>
         /// <returns>A list of matches, ordered by name</returns>
         public List<List<T>> PrefixesOf(String text, int start = 0)
         {
+            StringTree.ValidateSearch(text, start);
             StringTreeList<T> node = this;
             int len = text.Length;
             List<List<T>> found = new();

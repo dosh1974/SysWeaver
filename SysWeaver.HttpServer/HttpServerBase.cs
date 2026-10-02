@@ -282,7 +282,6 @@ namespace SysWeaver.Net
 
         internal bool RunOnSessionRemove(HttpSession session, String reason = null)
         {
-            var sessions = Sessions;
             try
             {
                 session.InvokeOnClose();
@@ -431,7 +430,7 @@ namespace SysWeaver.Net
                 var rs = ExpiredSessions;
                 foreach (var x in remove)
                 {
-                    var xx = ReadOnlyMemoryKey.Create(x);
+                    var xx = x.AsMemory();
                     if (!sessions.TryRemove(xx, out var data))
                         continue;
                     if (data.CanExpire(now))
@@ -2059,7 +2058,7 @@ namespace SysWeaver.Net
                 }
                 OrderedMods = mods.ToArray();
                 AllMods = allMods;
-                PrefixMods = prefixes.Count > 0 ? FrozenStringTreeList.Build(prefixes) : null;
+                PrefixMods = prefixes.Count > 0 ? StringPrefixLookup.BuildList(prefixes) : null;
             }
         }
 
@@ -2095,7 +2094,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// A tree with modules that respond to certain prefixes only
         /// </summary>
-        FrozenStringTreeList<IHttpServerModule> PrefixMods;
+        StringPrefixLookup<IReadOnlyList<IHttpServerModule>> PrefixMods;
 
         #endregion //Modules
 
@@ -2149,7 +2148,7 @@ namespace SysWeaver.Net
                 OrderedRawMods = RawMods.ToArray();
                 AllRawMods = allRawMods;
                 HaveRawModules = allRawMods.Length > 0;
-                PrefixRawMods = prefixes.Count > 0 ? FrozenStringTreeList.Build(prefixes) : null;
+                PrefixRawMods = prefixes.Count > 0 ? StringPrefixLookup.BuildList(prefixes) : null;
             }
         }
 
@@ -2186,7 +2185,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// A tree with RawModules that respond to certain prefixes only
         /// </summary>
-        FrozenStringTreeList<IHttpServerRawModule> PrefixRawMods;
+        StringPrefixLookup<IReadOnlyList<IHttpServerRawModule>> PrefixRawMods;
 
         bool HaveRawModules;
 
@@ -2340,7 +2339,7 @@ namespace SysWeaver.Net
 
         //readonly ConcurrentDictionary<String, HttpSession> Sessions = new (StringComparer.Ordinal);
 
-        readonly LowAllocConcurrentDictionary<IReadOnlyMemoryKey<Char>, HttpSession> Sessions = new(128, ReadOnlyMemoryKey.HashStringEqualityComparer);
+        readonly LowAllocConcurrentDictionary<ReadOnlyMemory<Char>, HttpSession> Sessions = new(128, ReadOnlyMemoryComparer.GetEqualityComparer<Char>());
 
         ValueTask<HttpSession> GetSession(HttpServerRequest req)
         {
@@ -2353,7 +2352,7 @@ namespace SysWeaver.Net
             String sessionToken = null;
             if (!sessionTokenMemory.IsEmpty)
             {
-                if (Sessions.TryGetValue(ReadOnlyMemoryKey.Create(sessionTokenMemory), out var session))
+                if (Sessions.TryGetValue(sessionTokenMemory, out var session))
                 {
                     session.Touch(DateTime.UtcNow.Ticks, req);
                     return ValueTask.FromResult(session);
@@ -2385,19 +2384,22 @@ namespace SysWeaver.Net
             var extLife = SessionExtendLifetime;
             var rateLimiterParams = SessionLimits;
             HttpSession session;
-            var now = DateTime.UtcNow.Ticks;
+            var now = DateTime.UtcNow;
+            var nowTicks = now.Ticks;
             var sessions = Sessions;
+            var langTask = GetAcceptLanguage(req.GetReqHeader("Accept-Language"));
+            var lang = langTask.IsCompleted ? langTask.GetAwaiter().GetResult() : await langTask.ConfigureAwait(false);
             do
             {
                 sessionToken = GetSessionGuid();
-                session = new HttpSession(rateLimiterParams, sessionToken, now, extLife, ua, ip, prot, deviceId, req.Prefix)
+                session = new HttpSession(rateLimiterParams, sessionToken, nowTicks, extLife, ua, ip, prot, deviceId, req.Prefix)
                 {
-                    LanguageTimeStamp = DateTime.UtcNow,
-                    Language = await GetAcceptLanguage(req.GetReqHeader("Accept-Language")).ConfigureAwait(false),
+                    LanguageTimeStamp = now,
+                    Language = lang,
                 };
                 session.OnAuthLogout += RunOnLogout;
-            } while (!sessions.TryAdd(ReadOnlyMemoryKey.Create(sessionToken), session));
-            var exp = new DateTime(now + SessionCookieLifetime, DateTimeKind.Utc);
+            } while (!sessions.TryAdd(sessionToken.AsMemory(), session));
+            var exp = new DateTime(nowTicks + SessionCookieLifetime, DateTimeKind.Utc);
             req.UpdateCookie(HttpServerTools.MakeCookie(SessionCookieName, sessionToken, exp, cookieOpt));
             try
             {
@@ -2416,8 +2418,7 @@ namespace SysWeaver.Net
         {
             if (session == null)
                 return false;
-            var sessions = Sessions;
-            if (!sessions.TryRemove(ReadOnlyMemoryKey.Create(session.Token), out session))
+            if (!Sessions.TryRemove(session.Token.AsMemory(), out session))
                 return false;
             Interlocked.Decrement(ref CurrentSessionCount);
             RunOnSessionRemove(session);
@@ -2759,8 +2760,8 @@ namespace SysWeaver.Net
         [WebApiAuth(Roles.Ops)]
         public void InvalidateAllSessionCaches()
         {
-            foreach (var s in Sessions)
-                s.Value.InvalidateCache();
+            foreach (var s in Sessions.Values)
+                s.InvalidateCache();
         }
 
         /// <summary>
@@ -2769,8 +2770,8 @@ namespace SysWeaver.Net
         /// <param name="shouldInvalidate">A function to determine if the entry shgould be cleared, the string is the local url</param>
         public void InvalidateAllSessionCaches(Func<String, bool> shouldInvalidate)
         {
-            foreach (var s in Sessions)
-                s.Value.InvalidateCache(shouldInvalidate);
+            foreach (var s in Sessions.Values)
+                s.InvalidateCache(shouldInvalidate);
         }
 
         /// <summary>
