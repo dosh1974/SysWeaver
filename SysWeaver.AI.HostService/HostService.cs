@@ -38,7 +38,12 @@ namespace SysWeaver.AI
             if ((prefix.Length > 0) && (!prefix.EndsWith('/')))
                 prefix += '/';
             Prefix = prefix;
-            OnlyForPrefixes = prefix.Length > 0 ? [prefix] : null;
+            OnlyForPrefixes =
+            [
+                prefix + ModelsPath,
+                prefix + ChatCompletionsPath,
+                prefix + ResponsesPath
+            ];
             ModelsHandler = new HostRequestHandler(nameof(GetModels), Auth, GetModels);
             ModelHandler = new HostRequestHandler(nameof(GetModel), Auth, GetModel);
             ChatCompletionsHandler = new HostRequestHandler(nameof(ChatCompletions), Auth, ChatCompletions);
@@ -50,6 +55,7 @@ namespace SysWeaver.AI
                 sm.OnServiceRemoved += OnServicesChanged;
             }
         }
+
 
         public void Dispose()
         {
@@ -277,7 +283,10 @@ namespace SysWeaver.AI
             using var _ = PerfMon.Track(nameof(GetModel));
             try
             {
-                var id = Uri.UnescapeDataString(r.LocalUrl.Substring(Prefix.Length + ModelsPath.Length + 1));
+                var idPart = r.LocalUrl.AsSpan(Prefix.Length + ModelsPath.Length + 1).TrimEnd('/');
+                if (r.DidIndex && idPart.EndsWith(IndexSuffix, StringComparison.Ordinal))
+                    idPart = idPart.Slice(0, idPart.Length - IndexSuffix.Length);
+                var id = Uri.UnescapeDataString(idPart.ToString());
                 var map = await GetMap().ConfigureAwait(false);
                 if (!map.Lookup.TryGetValue(id, out var m))
                     throw new HostException(404, String.Concat("The model `", id, "` does not exist or you do not have access to it."), "invalid_request_error", "model_not_found", "model");
@@ -305,13 +314,15 @@ namespace SysWeaver.AI
         readonly IHttpRequestHandler ResponsesHandler;
         readonly IHttpRequestHandler MethodNotAllowedHandler;
 
+        const String IndexSuffix = "/index.html";
+
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             var url = context.LocalUrl;
-            var prefix = Prefix;
-            if (!url.StartsWith(prefix, StringComparison.Ordinal))
-                return null;
-            var path = url.AsSpan(prefix.Length).TrimEnd('/');
+            var path = url.AsSpan(Prefix.Length).TrimEnd('/');
+            //  The server adds "index.html" to urls ending with a '/'
+            if (context.DidIndex && path.EndsWith(IndexSuffix, StringComparison.Ordinal))
+                path = path.Slice(0, path.Length - IndexSuffix.Length);
             var method = context.HttpMethod;
             var isGet = (method == HttpServerMethods.GET) || (method == HttpServerMethods.HEAD);
             var isPost = method == HttpServerMethods.POST;
