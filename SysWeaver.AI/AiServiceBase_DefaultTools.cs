@@ -21,6 +21,7 @@ namespace SysWeaver.AI
 {
 
 
+    [WebApiUrl("../ai")]
     public abstract partial class AiServiceBase 
     {
 
@@ -44,7 +45,7 @@ namespace SysWeaver.AI
             var c = request.Properties[RequestAiToolContext] as AiToolContext;
             if (c == null)
                 return null;
-            var aip = WebRoot + "icons/";
+            var aip = AiTools.IconRoot;
             switch (type)
             {
                 case AiImages.ApplicationLogo:
@@ -617,7 +618,7 @@ namespace SysWeaver.AI
             }
             var getter = TableDataTools.GetStaticTableFn(cols.ToArray(), rows, table.Title);
             var name = c.AddMessageData(getter);
-            var url = "../explore/table.html?q=" + WebRoot + "MessageTable&p=" + name;
+            var url = "../explore/table.html?q=" + AiTools.WebRoot + "MessageTable&p=" + name;
             //c.AddLink(url);
             return url;
         }
@@ -706,8 +707,8 @@ namespace SysWeaver.AI
         /// <param name="r"></param>
         /// <param name="context"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
-        protected async Task<TableData> InternalMessageTable(TableDataRequest r, HttpServerRequest context)
+        [WebApi]
+        public async Task<TableData> MessageTable(TableDataRequest r, HttpServerRequest context)
         {
             var l = r.Param;
             if (String.IsNullOrEmpty(l))

@@ -19,6 +19,7 @@ namespace SysWeaver.AI
     public abstract partial class AiServiceBase : IAiService, IDisposable
     {
 
+
         public override string ToString() => String.Concat("Chat name: ", Name.ToQuoted(), ", Default chat model: ", DefaultChatModel.ToQuoted());
 
         protected readonly IMessageHost Msg;
@@ -32,17 +33,12 @@ namespace SysWeaver.AI
         /// <param name="defaultName">The name of the chat provider if not specified in the parameters</param>
         /// <param name="defaultChatModel">The default chat model if not specified in the parameters</param>
         /// <param name="defaultImageModel">The default image model if not specified in the parameters</param>
-        /// <param name="webRoot">The url root of the web resources of the derived service (where the WebApi's of the derived type are), ex: "../openAI/".
-        /// The "icons" sub folder must contain: "debug.svg", "error.svg", "working.svg", "Smiley_Angry.svg", "Smiley_HappyCrying.svg", "Smiley_Love.svg", "Smiley_Sad.svg", "Smiley_Tounge.svg".
-        /// </param>
-        /// <param name="perfMonitorName">The name of the performance monitor</param>
-        protected AiServiceBase(ServiceManager sm, AiServiceParams p, IMessageHost msg, String defaultName, String defaultChatModel, String defaultImageModel, String webRoot, String perfMonitorName)
+        protected AiServiceBase(ServiceManager sm, AiServiceParams p, IMessageHost msg, String defaultName, String defaultChatModel, String defaultImageModel)
         {
             msg = msg ?? sm;
             Msg = msg;
             Manager = sm;
-            PerfMon = new PerfMonitor(perfMonitorName);
-            WebRoot = webRoot;
+            PerfMon = new PerfMonitor(defaultName);
             var m = p.DefaultChatModel;
             if (String.IsNullOrEmpty(m))
                 m = defaultChatModel;
@@ -81,11 +77,6 @@ namespace SysWeaver.AI
                 sm.OnServiceRemoved += Sm_OnServiceRemoved;
             }
         }
-
-        /// <summary>
-        /// The url root of the web resources of the derived service, ex: "../openAI/"
-        /// </summary>
-        protected readonly String WebRoot;
 
         /// <summary>
         /// The model used when not supplying a model in a session (can be configured)

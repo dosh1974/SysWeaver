@@ -23,10 +23,9 @@
   </ItemGroup>
 
 	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
-		<Exec Command="rmdir /S /Q .\srcWeb\openAI\icons\.opt" />
-		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare .\srcWeb\openAI\icons\*.svg .\srcWeb\openAI\icons\.opt\" />
-		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\openAI\icons\.opt\* .\web\openAI\icons" />
-		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\openAI\icons\no_opt\* .\web\openAI\icons" />
+		<Exec Command="rmdir /S /Q .\srcWeb\ai\icons\.opt" ContinueOnError="true" />
+		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare .\srcWeb\ai\icons\*.svg .\srcWeb\ai\icons\.opt\" />
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\ai\icons\.opt\* .\web\ai\icons" />
 		<ItemGroup>
 			<EmbeddedResource Include="web\**\*.br" Visible="false" />
 		</ItemGroup>

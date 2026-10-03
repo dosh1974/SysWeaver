@@ -61,6 +61,16 @@ namespace SysWeaver.AI
             ContextSize = (int)(llm.ContextSize > 0 ? llm.ContextSize : (uint)Weights.ContextSize);
             Lock = new AsyncLock(Math.Max(1, llm.MaxConcurrent));
             Created = File.GetLastWriteTimeUtc(filePath);
+            try
+            {
+                BuiltInTemplate = GetBuiltInTemplate();
+            }
+            catch
+            {
+                Weights.Dispose();
+                throw;
+            }
+            AntiPrompts = BuiltInTemplate == TemplateGemma4 ? ["<turn|>"] : null;
         }
 
         static GGMLType? GetType(LlamaSharpKvCacheType t)
@@ -128,10 +138,52 @@ namespace SysWeaver.AI
         internal const String RoleUser = "user";
         internal const String RoleAssistant = "assistant";
 
+        /// <summary>
+        /// Name of the built in Gemma 4 template (can be used as the ChatTemplate)
+        /// </summary>
+        internal const String TemplateGemma4 = "gemma4";
+
+        /// <summary>
+        /// The built in format to use (llama.cpp can't run jinja templates, it only knows a fixed set of templates), null to let llama.cpp apply the template
+        /// </summary>
+        readonly String BuiltInTemplate;
+
+        /// <summary>
+        /// Extra stop sequences used by the built in template (if any)
+        /// </summary>
+        readonly String[] AntiPrompts;
+
         LLamaTemplate CreateTemplate()
         {
             var t = Llm.ChatTemplate;
             return String.IsNullOrEmpty(t) ? new LLamaTemplate(Weights) : new LLamaTemplate(t);
+        }
+
+        /// <summary>
+        /// Get the built in template to use if llama.cpp doesn't support the chat template
+        /// </summary>
+        /// <returns>The name of the built in template to use, or null if llama.cpp supports the template</returns>
+        String GetBuiltInTemplate()
+        {
+            var t = Llm.ChatTemplate;
+            if (String.Equals(t, TemplateGemma4, StringComparison.OrdinalIgnoreCase))
+                return TemplateGemma4;
+            try
+            {
+                var test = CreateTemplate();
+                test.AddAssistant = true;
+                test.Add(RoleUser, "Hi");
+                test.Apply();
+                return null;
+            }
+            catch (Exception ex)
+            {
+                if (String.IsNullOrEmpty(t))
+                    Weights.Metadata.TryGetValue("tokenizer.chat_template", out t);
+                if ((t != null) && t.Contains("<|turn>", StringComparison.Ordinal))
+                    return TemplateGemma4;
+                throw new Exception(String.Concat("The chat template of model \"", Name, "\" isn't supported by llama.cpp, set ChatTemplate to a template known by llama.cpp (ex: \"chatml\") or to \"", TemplateGemma4, "\""), ex);
+            }
         }
 
         /// <summary>
@@ -143,12 +195,20 @@ namespace SysWeaver.AI
         /// <returns>The prompt</returns>
         String Format(String systemPrompt, IReadOnlyList<LlamaSharpMessage> messages, int first)
         {
-            var t = CreateTemplate();
-            t.AddAssistant = true;
+            var bt = BuiltInTemplate;
+            var t = bt == null ? CreateTemplate() : null;
+            var sb = bt == null ? null : new StringBuilder();
+            void Add(String role, String content)
+            {
+                if (t != null)
+                    t.Add(role, content);
+                else
+                    AddGemma4(sb, role, content);
+            }
             var haveSystem = !String.IsNullOrEmpty(systemPrompt);
             var systemAsUser = haveSystem && (!Llm.SupportSystemRole);
             if (haveSystem && (!systemAsUser))
-                t.Add(RoleSystem, systemPrompt);
+                Add(RoleSystem, systemPrompt);
             var ml = messages.Count;
             for (int i = first; i < ml; ++i)
             {
@@ -159,12 +219,28 @@ namespace SysWeaver.AI
                     c = String.Concat(systemPrompt, "\n\n", c);
                     systemAsUser = false;
                 }
-                t.Add(m.Role, c);
+                Add(m.Role, c);
             }
             if (systemAsUser)
-                t.Add(RoleUser, systemPrompt);
+                Add(RoleUser, systemPrompt);
+            if (t == null)
+            {
+                //  Start a model turn with an empty thought channel (thinking disabled)
+                sb.Append("<|turn>model\n<|channel>thought\n<channel|>");
+                return sb.ToString();
+            }
+            t.AddAssistant = true;
             return Encoding.UTF8.GetString(t.Apply());
         }
+
+        /// <summary>
+        /// Add a message using the Gemma 4 format (the BOS token is added by the tokenizer)
+        /// </summary>
+        static void AddGemma4(StringBuilder sb, String role, String content)
+            => sb
+                .Append("<|turn>").Append(role == RoleAssistant ? "model" : role).Append('\n')
+                .Append(content.Trim())
+                .Append("<turn|>\n");
 
         /// <summary>
         /// Create a user message
@@ -259,9 +335,14 @@ namespace SysWeaver.AI
         const String ThinkEnd = "</think>";
 
         /// <summary>
+        /// Start and end tags of thinking (Gemma 4 uses a thought channel)
+        /// </summary>
+        static readonly ValueTuple<String, String>[] ThinkTags = [(ThinkStart, ThinkEnd), ("<|channel>", "<channel|>")];
+
+        /// <summary>
         /// Tokens that some models outputs at the end of a message (if special tokens are decoded)
         /// </summary>
-        static readonly String[] EndTokens = ["<|im_end|>", "<|eot_id|>", "<end_of_turn>", "<|end|>", "<|endoftext|>", "</s>", "<|return|>"];
+        static readonly String[] EndTokens = ["<|im_end|>", "<|eot_id|>", "<end_of_turn>", "<turn|>", "<|end|>", "<|endoftext|>", "</s>", "<|return|>"];
 
         static String RemoveEndTokens(String s)
         {
@@ -276,20 +357,27 @@ namespace SysWeaver.AI
         /// </summary>
         internal static String RemoveThinking(String s)
         {
+            foreach (var (start, end) in ThinkTags)
+                s = RemoveThinking(s, start, end);
+            return s;
+        }
+
+        static String RemoveThinking(String s, String start, String end)
+        {
             //  Some templates starts the thinking, so the output only contains the end tag
-            var e = s.IndexOf(ThinkEnd, StringComparison.Ordinal);
-            var b = s.IndexOf(ThinkStart, StringComparison.Ordinal);
+            var e = s.IndexOf(end, StringComparison.Ordinal);
+            var b = s.IndexOf(start, StringComparison.Ordinal);
             if ((e >= 0) && ((b < 0) || (b > e)))
-                s = s.Substring(e + ThinkEnd.Length);
+                s = s.Substring(e + end.Length);
             for (; ; )
             {
-                b = s.IndexOf(ThinkStart, StringComparison.Ordinal);
+                b = s.IndexOf(start, StringComparison.Ordinal);
                 if (b < 0)
                     return s;
-                e = s.IndexOf(ThinkEnd, b, StringComparison.Ordinal);
+                e = s.IndexOf(end, b, StringComparison.Ordinal);
                 if (e < 0)
                     return s.Substring(0, b);
-                s = String.Concat(s.AsSpan(0, b), s.AsSpan(e + ThinkEnd.Length));
+                s = String.Concat(s.AsSpan(0, b), s.AsSpan(e + end.Length));
             }
         }
 
@@ -483,6 +571,8 @@ namespace SysWeaver.AI
                         DecodeSpecialTokens = llm.DecodeSpecialTokens,
                         SamplingPipeline = sampler,
                     };
+                    if (AntiPrompts != null)
+                        ip.AntiPrompts = AntiPrompts;
                     var raw = new StringBuilder();
                     var textStart = text.Length;
                     String visible = "";

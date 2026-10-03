@@ -11,6 +11,17 @@ namespace SysWeaver.AI
 
     public static class AiTools
     {
+        /// <summary>
+        /// The url root of the web resources of this service
+        /// </summary>
+        internal const String WebRoot = "../ai/";
+
+        /// <summary>
+        /// The url root of the icons of this service
+        /// </summary>
+        internal const String IconRoot = WebRoot + "icons/";
+
+
 
         internal const String DebugKey = "*open_ai_debug*";
         internal const String DebugMenuId = "FnDebug";

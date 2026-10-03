@@ -18,10 +18,9 @@
   </ItemGroup>
 
 	<Target Name="EmbedLocal" BeforeTargets="BeforeBuild">
-		<Exec Command="rmdir /S /Q .\srcWeb\llamaSharp\icons\.opt" ContinueOnError="true" />
-		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare .\srcWeb\llamaSharp\icons\*.svg .\srcWeb\llamaSharp\icons\.opt\" />
-		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\llamaSharp\icons\.opt\* .\web\llamaSharp\icons" />
-		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\llamaSharp\icons\no_opt\* .\web\llamaSharp\icons" />
+		<Exec Command="rmdir /S /Q .\srcWeb\ai\icons\.opt" ContinueOnError="true" />
+		<Exec Command="..\_tools\svg_opt\SvgOpt.exe -Compare .\WebCompare .\srcWeb\ai\icons\*.svg .\srcWeb\ai\icons\.opt\" />
+		<Exec Command="..\_tools\compress\Compress.exe -Methods br .\srcWeb\ai\icons\.opt\* .\web\ai\icons" />
 		<ItemGroup>
 			<EmbeddedResource Include="web\**\*.br" Visible="false" />
 		</ItemGroup>

@@ -1,7 +1,7 @@
 using OpenAI;
 using System;
 using System.ClientModel;
-using SysWeaver.Chat;
+using System.Threading.Tasks;
 using SysWeaver.Data;
 using SysWeaver.MicroService;
 using SysWeaver.Net;
@@ -10,7 +10,7 @@ using TiktokenSharp;
 namespace SysWeaver.AI
 {
 
-    [WebApiUrl("../openAI")]
+    [WebApiUrl("../" + ServiceName)]
     [RequiredDep<ApiHttpServerModule>]
     [OptionalDep<IUserStorageService>]
     [OptionalDep<IQrCodeService>]
@@ -18,15 +18,6 @@ namespace SysWeaver.AI
     [AiToolPrefix("")]
     public sealed partial class OpenAiService : AiServiceBase
     {
-        /// <summary>
-        /// The url root of the web resources of this service
-        /// </summary>
-        internal const String WebUrlRoot = "../openAI/";
-
-        /// <summary>
-        /// The url root of the icons of this service
-        /// </summary>
-        internal const String IconRoot = WebUrlRoot + "icons/";
 
         /// <summary>
         ///
@@ -39,8 +30,10 @@ namespace SysWeaver.AI
         {
         }
 
+        internal const String ServiceName = "OpenAI";
+
         OpenAiService(ServiceManager sm, OpenAiParams p, IMessageHost msg, int _)
-            : base(sm, p, msg, "OpenAI", "gpt-4.1", "dall-e-3", WebUrlRoot, "OpenAI")
+            : base(sm, p, msg, ServiceName, "gpt-4.1", "dall-e-3")
         {
             msg = Msg;
             DefaultTier = p.DefaultTier;
@@ -81,7 +74,8 @@ namespace SysWeaver.AI
                         if (tikToken == null)
                         {
                             msg?.AddMessage("Failed to get a TikToken for " + t.ToQuoted(), exception, MessageLevels.Warning);
-                        }else
+                        }
+                        else
                         {
                             msg?.AddMessage("Cached TikToken for " + t.ToQuoted(), MessageLevels.Debug);
                         }
@@ -92,6 +86,32 @@ namespace SysWeaver.AI
 
         readonly ApiKeyCredential ApiKey;
         readonly OpenAIClientOptions Options;
+
+        #region DEBUG
+
+        /// <summary>
+        /// Get a table with all available LLM models
+        /// </summary>
+        /// <param name="req"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebMenuTable(null, "Debug/AI/Models/LLM/" + ServiceName, ServiceName, "All available LLM models from this " + ServiceName + " service")]
+        public async Task<TypedTableData<AiLlmModel>> GetLlmModelTable(TableDataRequest req)
+            => TableDataTools.GetTyped(req, await GetLlmModels().ConfigureAwait(false), ServiceName + " LLM models");
+
+        /// <summary>
+        /// Get a table with all available image models
+        /// </summary>
+        /// <param name="req"></param>
+        /// <returns></returns>
+        [WebApi]
+        [WebApiAuth(Roles.AdminOps)]
+        [WebMenuTable(null, "Debug/AI/Models/Image/" + ServiceName, ServiceName, "All available image models from this " + ServiceName + " service")]
+        public async Task<TypedTableData<AiImageModel>> GetImageModelTable(TableDataRequest req)
+            => TableDataTools.GetTyped(req, await GetImageModels().ConfigureAwait(false), ServiceName + " image models");
+
+        #endregion//DEBUG
 
     }
 

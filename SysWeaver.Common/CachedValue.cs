@@ -11,7 +11,7 @@ namespace SysWeaver
     {
 
 
-        /// <summary>
+        /// <summary>1
         /// Create a value cahce,
         /// </summary>
         /// <param name="defaultCacheDuration">The duration to keep a cached version (if no explicit expiration time is supplied)</param>

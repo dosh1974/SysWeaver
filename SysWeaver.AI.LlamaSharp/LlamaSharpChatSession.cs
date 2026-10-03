@@ -14,7 +14,7 @@ namespace SysWeaver.AI
     public sealed class LlamaSharpChatSession : AiChatSessionBase
     {
         internal LlamaSharpChatSession(bool isPrivate, LlamaSharpModel model, IAiToolCache toolCache, String joinAuth, String clearAuth, PerfMonitor monitor, AsyncLock chatLock, IAiMemory memory)
-            : base(isPrivate, model.Name, true, model.Llm.SupportSystemRole, model.Llm.SupportTools ? true : null, toolCache, joinAuth, clearAuth, monitor, chatLock, memory, LlamaSharpAiService.IconRoot, "llama.svg")
+            : base(isPrivate, model.Name, true, model.Llm.SupportSystemRole, model.Llm.SupportTools ? true : null, toolCache, joinAuth, clearAuth, monitor, chatLock, memory, LlamaSharpAiService.ServiceName + ".svg")
         {
             LlmModel = model;
         }

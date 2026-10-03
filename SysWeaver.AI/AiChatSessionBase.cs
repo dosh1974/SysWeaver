@@ -36,7 +36,6 @@ namespace SysWeaver.AI
         /// </summary>
         protected readonly AsyncLock ChatLock;
 
-
         /// <summary>
         /// Create a chat session
         /// </summary>
@@ -51,14 +50,14 @@ namespace SysWeaver.AI
         /// <param name="monitor">Optional performance monitor</param>
         /// <param name="chatLock">Optional lock used to limit the number of concurrent requests to the API</param>
         /// <param name="memory">Optional memory implementation</param>
-        /// <param name="iconRoot">The url root of the icons, ex: "../openAI/icons/", must contain "debug.svg", "error.svg" and "working.svg"</param>
         /// <param name="agentIcon">The filename of the agent icon (in the icon root), ex: "openai.svg"</param>
-        protected AiChatSessionBase(bool isPrivate, String model, bool haveTemperature, bool supportSystemRole, bool? supportParallelToolCalls, IAiToolCache toolCache, String joinAuth, String clearAuth, PerfMonitor monitor, AsyncLock chatLock, IAiMemory memory, String iconRoot, String agentIcon)
+        protected AiChatSessionBase(bool isPrivate, String model, bool haveTemperature, bool supportSystemRole, bool? supportParallelToolCalls, IAiToolCache toolCache, String joinAuth, String clearAuth, PerfMonitor monitor, AsyncLock chatLock, IAiMemory memory, String agentIcon)
             : base(model, haveTemperature, supportSystemRole, supportParallelToolCalls, toolCache, monitor, memory)
         {
             IsPrivate = isPrivate;
             ChatLock = chatLock;
             AgentName = model;
+            var iconRoot = AiTools.IconRoot;
             AgentImageUrl = iconRoot + agentIcon;
             ErrorImageUrl = iconRoot + "error.svg";
             DebugImageUrl = iconRoot + "debug.svg";

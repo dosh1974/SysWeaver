@@ -28,7 +28,7 @@ namespace SysWeaver.AI
         }
 
         OpenAiResponseChatSession(bool isPrivate, ResponsesClient c, OpenAiSessionParams p, OpenAiModels.Opt o, IAiToolCache toolCache, String joinAuth, String clearAuth, PerfMonitor monitor, AsyncLock chatLock, IAiMemory memory)
-            : base(isPrivate, p.Model, o.Temp, o.System, o.PTools, toolCache, joinAuth, clearAuth, monitor, chatLock, memory, OpenAiService.IconRoot, "openai.svg")
+            : base(isPrivate, p.Model, o.Temp, o.System, o.PTools, toolCache, joinAuth, clearAuth, monitor, chatLock, memory, OpenAiService.ServiceName + ".svg") 
         {
             CanReason = o.CanReason;
             if (CanReason)

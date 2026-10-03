@@ -21,7 +21,7 @@ namespace SysWeaver.AI
         }
 
         GoogleChatSession(bool isPrivate, Client c, GoogleSessionParams p, GoogleModels.Opt o, IAiToolCache toolCache, String joinAuth, String clearAuth, PerfMonitor monitor, AsyncLock chatLock, IAiMemory memory)
-            : base(isPrivate, p.Model, o.Temp, o.System, o.PTools, toolCache, joinAuth, clearAuth, monitor, chatLock, memory, GoogleAiService.IconRoot, "google.svg")
+            : base(isPrivate, p.Model, o.Temp, o.System, o.PTools, toolCache, joinAuth, clearAuth, monitor, chatLock, memory, GoogleAiService.ServiceName + ".svg")
         {
             Thinking = GoogleModels.GetThinking(o.Thinking, p.Reasoning ?? AiReasoning.Low);
             Tier = GoogleModels.GetTier(p.Tier ?? GoogleServiceTier.Default);
