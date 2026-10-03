@@ -26,6 +26,18 @@ namespace SysWeaver.AI
         String DefaultImageModel { get; }
 
         /// <summary>
+        /// Get the large language models (chat / text generation) available from the API (cached, updated at most every 5 minutes)
+        /// </summary>
+        /// <returns>The available models</returns>
+        Task<AiLlmModel[]> GetLlmModels();
+
+        /// <summary>
+        /// Get the image generation models available from the API (cached, updated at most every 5 minutes)
+        /// </summary>
+        /// <returns>The available models</returns>
+        Task<AiImageModel[]> GetImageModels();
+
+        /// <summary>
         /// Create a chat session (supporting SystemPrompt, tools etc)
         /// </summary>
         /// <param name="isPrivate">If true, this chat is user only</param>
