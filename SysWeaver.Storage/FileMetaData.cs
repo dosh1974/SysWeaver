@@ -92,6 +92,154 @@ namespace SysWeaver
 
         public static readonly ConcurrentQueue<String> AdditionalCleanup = new ConcurrentQueue<string>();
 
+        /// <summary>
+        /// Prefix of the meta data files, the rest of the name is the base name (hash + key suffix) followed by FileExt
+        /// </summary>
+        internal const String MetaPrefix = "Meta_";
+
+        /// <summary>
+        /// Length of the content hash that starts all file names (except the meta data prefix)
+        /// </summary>
+        const int HashLength = 26;
+
+        /// <summary>
+        /// Update the last access time of a meta data file (used to decide when to prune it), at most once per hour to avoid excessive file system writes
+        /// </summary>
+        /// <param name="fi">The meta data file</param>
+        internal static void Touch(FileInfo fi)
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
+                if (fi.LastAccessTimeUtc < now.AddHours(-1))
+                    fi.LastAccessTimeUtc = now;
+            }
+            catch
+            {
+            }
+        }
+
+        static bool IsHash(ReadOnlySpan<char> s)
+        {
+            if (s.Length < HashLength)
+                return false;
+            foreach (var c in s.Slice(0, HashLength))
+                if (!(((c >= 'a') && (c <= 'z')) || ((c >= '0') && (c <= '9'))))
+                    return false;
+            return true;
+        }
+
+        /// <summary>
+        /// Get the base name (hash + key suffix) from a meta data file name
+        /// </summary>
+        static bool TryGetMetaBase(String fileName, out String baseName)
+        {
+            baseName = null;
+            if (!fileName.StartsWith(MetaPrefix, StringComparison.Ordinal))
+                return false;
+            if (!fileName.EndsWith(FileExt, StringComparison.OrdinalIgnoreCase))
+                return false;
+            var b = fileName.Substring(MetaPrefix.Length, fileName.Length - MetaPrefix.Length - FileExt.Length);
+            if (!IsHash(b))
+                return false;
+            baseName = b;
+            return true;
+        }
+
+        /// <summary>
+        /// Find the base name that owns a data file, the longest base name that the file name starts with
+        /// (base names of different key suffixes can be prefixes of each other, ex: "hash" and "hash_x").
+        /// </summary>
+        static String GetOwner(String fileName, IEnumerable<String> baseNames)
+        {
+            String owner = null;
+            foreach (var b in baseNames)
+                if (fileName.StartsWith(b, StringComparison.OrdinalIgnoreCase) && ((owner == null) || (b.Length > owner.Length)))
+                    owner = b;
+            return owner;
+        }
+
+        static void TryDelete(FileInfo fi)
+        {
+            try
+            {
+                fi.Delete();
+            }
+            catch
+            {
+            }
+        }
+
+        static DateTime LastUsed(FileInfo fi)
+        {
+            var a = fi.LastAccessTimeUtc;
+            var w = fi.LastWriteTimeUtc;
+            return a > w ? a : w;
+        }
+
+        /// <summary>
+        /// Delete expired meta data and all files associated with it, also deletes old files that aren't associated with any meta data
+        /// </summary>
+        /// <param name="folder">The folder to clean</param>
+        /// <param name="killOlderThan">Meta data that hasn't been used since this time is deleted</param>
+        static void CleanFolder(String folder, DateTime killOlderThan)
+        {
+            var di = new DirectoryInfo(folder);
+            if (!di.Exists)
+                return;
+            var files = di.GetFiles("*", SearchOption.TopDirectoryOnly);
+            //  Base name => expired
+            var bases = new Dictionary<String, bool>(StringComparer.OrdinalIgnoreCase);
+            foreach (var f in files)
+                if (TryGetMetaBase(f.Name, out var b))
+                    bases[b] = LastUsed(f) < killOlderThan;
+            foreach (var f in files)
+            {
+                var name = f.Name;
+                if (TryGetMetaBase(name, out var b))
+                {
+                    if (bases[b])
+                        TryDelete(f);
+                    continue;
+                }
+                if (!IsHash(name))
+                    continue;
+                var owner = GetOwner(name, bases.Keys);
+                //  Files without meta data (ex: old formats, aborted processing) are deleted when they are old
+                if (owner == null ? (LastUsed(f) < killOlderThan) : bases[owner])
+                    TryDelete(f);
+            }
+        }
+
+        /// <summary>
+        /// Delete all files associated with a base name (used when the meta data couldn't be saved)
+        /// </summary>
+        /// <param name="baseFileName">The full path of the base name, either the data base name or the meta data name (without extension)</param>
+        static void CleanBase(String baseFileName)
+        {
+            var di = new DirectoryInfo(Path.GetDirectoryName(baseFileName));
+            if (!di.Exists)
+                return;
+            var name = Path.GetFileName(baseFileName);
+            if (name.StartsWith(MetaPrefix, StringComparison.Ordinal))
+            {
+                TryDelete(new FileInfo(baseFileName + FileExt));
+                return;
+            }
+            var files = di.GetFiles("*", SearchOption.TopDirectoryOnly);
+            var bases = new HashSet<String>(StringComparer.OrdinalIgnoreCase) { name };
+            foreach (var f in files)
+                if (TryGetMetaBase(f.Name, out var b))
+                    bases.Add(b);
+            foreach (var f in files)
+            {
+                if (f.Name.StartsWith(MetaPrefix, StringComparison.Ordinal))
+                    continue;
+                if (String.Equals(GetOwner(f.Name, bases), name, StringComparison.OrdinalIgnoreCase))
+                    TryDelete(f);
+            }
+        }
+
         sealed class CleanUp
         {
             public readonly String[] P;
@@ -109,66 +257,23 @@ namespace SysWeaver
 
             void CurrentDomain_ProcessExit(object sender, EventArgs e)
             {
-                try
+                var killOlderThan = DateTime.UtcNow.AddDays(C);
+                foreach (var p in P)
                 {
-                    var killOlderThan = DateTime.UtcNow.AddDays(C);
-                    foreach (var p in P)
+                    try
                     {
-                        var fl = p.Length + 27 + FileExt.Length;
-                        foreach (var x in Directory.GetFiles(p, "*" + FileExt, SearchOption.TopDirectoryOnly))
-                        {
-                            if (x.Length != fl)
-                                continue;
-                            try
-                            {
-                                var fi = new FileInfo(x);
-                                if (!fi.Exists)
-                                    continue;
-                                if (fi.LastAccessTimeUtc < killOlderThan)
-                                {
-                                    try
-                                    {
-                                        fi.Delete();
-                                    }
-                                    catch
-                                    {
-                                    }
-                                    foreach (var y in Directory.GetFiles(p, fi.Name + "_*", SearchOption.TopDirectoryOnly))
-                                    {
-                                        try
-                                        {
-                                            File.Delete(y);
-                                        }
-                                        catch
-                                        {
-                                        }
-                                    }
-                                }
-                            }
-                            catch
-                            {
-                            }
-                        }
+                        CleanFolder(p, killOlderThan);
                     }
-                }
-                catch
-                {
+                    catch
+                    {
+                    }
                 }
                 var ac = AdditionalCleanup;
                 while (ac.TryDequeue(out var bn))
                 {
                     try
                     {
-                        foreach (var y in Directory.GetFiles(Path.GetDirectoryName(bn), Path.GetFileNameWithoutExtension(bn) + "_*", SearchOption.TopDirectoryOnly))
-                        {
-                            try
-                            {
-                                File.Delete(y);
-                            }
-                            catch
-                            {
-                            }
-                        }
+                        CleanBase(bn);
                     }
                     catch
                     {

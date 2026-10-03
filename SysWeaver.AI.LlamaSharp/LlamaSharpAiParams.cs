@@ -152,7 +152,8 @@ namespace SysWeaver.AI
 
         /// <summary>
         /// An optional chat template to use instead of the template in the model file.
-        /// Can be the name of a template known by llama.cpp (ex: "chatml", "llama3") or a template string.
+        /// Can be the name of a template known by llama.cpp (ex: "chatml", "llama3"), "gemma4" (built in, since llama.cpp doesn't support it) or a template string.
+        /// If the template isn't supported by llama.cpp and Gemma 4 tags are found in it, the built in "gemma4" template is used.
         /// </summary>
         public String ChatTemplate;
 
@@ -176,7 +177,7 @@ namespace SysWeaver.AI
         public bool SupportSystemRole = true;
 
         /// <summary>
-        /// True if the model can use tools (tools are described in the system prompt and the model is asked to respond with &lt;tool_call&gt; tags (Hermes / Qwen style))
+        /// True if the model can use tools (tools are described in the system prompt and the model is asked to respond with &lt;tool_call&gt; tags (Hermes / Qwen style), the built in "gemma4" template uses the native Gemma 4 tool format)
         /// </summary>
         public bool SupportTools = true;
 

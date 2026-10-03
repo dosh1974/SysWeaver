@@ -6,6 +6,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -25,7 +26,8 @@ namespace SysWeaver.AI
         /// </summary>
         /// <param name="llm">The model parameters</param>
         /// <param name="filePath">The resolved (absolute) file path</param>
-        internal LlamaSharpModel(LlamaSharpLlm llm, String filePath)
+        /// <param name="msg">Optional message host</param>
+        internal LlamaSharpModel(LlamaSharpLlm llm, String filePath, IMessageHost msg = null)
         {
             Llm = llm;
             Name = llm.Name;
@@ -57,7 +59,21 @@ namespace SysWeaver.AI
             if (llm.RopeFrequencyScale > 0)
                 mp.RopeFrequencyScale = llm.RopeFrequencyScale;
             Params = mp;
-            Weights = LLamaWeights.LoadFromFile(mp);
+            try
+            {
+                Weights = LLamaWeights.LoadFromFile(mp);
+                LoadedFilePath = filePath;
+            }
+            catch
+            {
+                //  Some models have layers that the bundled llama.cpp doesn't support, try to use a copy without them
+                var stripped = LlamaSharpGguf.GetStrippedModel(filePath, Name, msg);
+                if (stripped == null)
+                    throw;
+                mp.ModelPath = stripped;
+                Weights = LLamaWeights.LoadFromFile(mp);
+                LoadedFilePath = stripped;
+            }
             ContextSize = (int)(llm.ContextSize > 0 ? llm.ContextSize : (uint)Weights.ContextSize);
             Lock = new AsyncLock(Math.Max(1, llm.MaxConcurrent));
             Created = File.GetLastWriteTimeUtc(filePath);
@@ -70,7 +86,8 @@ namespace SysWeaver.AI
                 Weights.Dispose();
                 throw;
             }
-            AntiPrompts = BuiltInTemplate == TemplateGemma4 ? ["<turn|>"] : null;
+            IsGemma4 = BuiltInTemplate == LlamaSharpGemma4.Name;
+            AntiPrompts = IsGemma4 ? LlamaSharpGemma4.AntiPrompts : null;
         }
 
         static GGMLType? GetType(LlamaSharpKvCacheType t)
@@ -98,6 +115,11 @@ namespace SysWeaver.AI
         /// The resolved file path of the model
         /// </summary>
         public readonly String FilePath;
+
+        /// <summary>
+        /// The file that was actually loaded, can be a processed copy of FilePath (ex: with unsupported layers removed)
+        /// </summary>
+        public readonly String LoadedFilePath;
 
         /// <summary>
         /// The context size (in tokens) of each request
@@ -138,15 +160,17 @@ namespace SysWeaver.AI
         internal const String RoleUser = "user";
         internal const String RoleAssistant = "assistant";
 
-        /// <summary>
-        /// Name of the built in Gemma 4 template (can be used as the ChatTemplate)
-        /// </summary>
-        internal const String TemplateGemma4 = "gemma4";
+        const String TemplateGemma4 = LlamaSharpGemma4.Name;
 
         /// <summary>
         /// The built in format to use (llama.cpp can't run jinja templates, it only knows a fixed set of templates), null to let llama.cpp apply the template
         /// </summary>
         readonly String BuiltInTemplate;
+
+        /// <summary>
+        /// True if the built in Gemma 4 template is used (including native tool calls)
+        /// </summary>
+        readonly bool IsGemma4;
 
         /// <summary>
         /// Extra stop sequences used by the built in template (if any)
@@ -189,26 +213,22 @@ namespace SysWeaver.AI
         /// <summary>
         /// Format a conversation using the chat template of the model (ending with the start of an assistant message)
         /// </summary>
-        /// <param name="systemPrompt">The system prompt (including tool descriptions), can be null</param>
+        /// <param name="systemPrompt">The system prompt, can be null</param>
+        /// <param name="tools">The tools available to the model, can be null</param>
         /// <param name="messages">The messages</param>
         /// <param name="first">Index of the first message to include</param>
         /// <returns>The prompt</returns>
-        String Format(String systemPrompt, IReadOnlyList<LlamaSharpMessage> messages, int first)
+        String Format(String systemPrompt, AiTool[] tools, IReadOnlyList<LlamaSharpMessage> messages, int first)
         {
-            var bt = BuiltInTemplate;
-            var t = bt == null ? CreateTemplate() : null;
-            var sb = bt == null ? null : new StringBuilder();
-            void Add(String role, String content)
-            {
-                if (t != null)
-                    t.Add(role, content);
-                else
-                    AddGemma4(sb, role, content);
-            }
+            if (IsGemma4)
+                return LlamaSharpGemma4.Format(systemPrompt, tools, messages, first);
+            systemPrompt = AddTools(systemPrompt, tools);
+            var t = CreateTemplate();
+            t.AddAssistant = true;
             var haveSystem = !String.IsNullOrEmpty(systemPrompt);
             var systemAsUser = haveSystem && (!Llm.SupportSystemRole);
             if (haveSystem && (!systemAsUser))
-                Add(RoleSystem, systemPrompt);
+                t.Add(RoleSystem, systemPrompt);
             var ml = messages.Count;
             for (int i = first; i < ml; ++i)
             {
@@ -219,28 +239,12 @@ namespace SysWeaver.AI
                     c = String.Concat(systemPrompt, "\n\n", c);
                     systemAsUser = false;
                 }
-                Add(m.Role, c);
+                t.Add(m.Role, c);
             }
             if (systemAsUser)
-                Add(RoleUser, systemPrompt);
-            if (t == null)
-            {
-                //  Start a model turn with an empty thought channel (thinking disabled)
-                sb.Append("<|turn>model\n<|channel>thought\n<channel|>");
-                return sb.ToString();
-            }
-            t.AddAssistant = true;
+                t.Add(RoleUser, systemPrompt);
             return Encoding.UTF8.GetString(t.Apply());
         }
-
-        /// <summary>
-        /// Add a message using the Gemma 4 format (the BOS token is added by the tokenizer)
-        /// </summary>
-        static void AddGemma4(StringBuilder sb, String role, String content)
-            => sb
-                .Append("<|turn>").Append(role == RoleAssistant ? "model" : role).Append('\n')
-                .Append(content.Trim())
-                .Append("<turn|>\n");
 
         /// <summary>
         /// Create a user message
@@ -331,6 +335,34 @@ namespace SysWeaver.AI
 
         const String ToolCallStart = "<tool_call>";
         const String ToolCallEnd = "</tool_call>";
+
+        /// <summary>
+        /// Start and end tags of tool calls (Hermes / Qwen style and native Gemma 4)
+        /// </summary>
+        static readonly ValueTuple<String, String>[] ToolCallTags = [(ToolCallStart, ToolCallEnd), (LlamaSharpGemma4.ToolCallStart, LlamaSharpGemma4.ToolCallEnd)];
+
+        /// <summary>
+        /// Find the first tool call start tag
+        /// </summary>
+        /// <param name="s">The text to search</param>
+        /// <param name="pos">The position to start searching at</param>
+        /// <param name="tag">The index of the tag in ToolCallTags</param>
+        /// <returns>The position of the start tag, or -1 if not found</returns>
+        static int FindToolCall(String s, int pos, out int tag)
+        {
+            int best = -1;
+            tag = -1;
+            for (int i = 0; i < ToolCallTags.Length; ++i)
+            {
+                var b = s.IndexOf(ToolCallTags[i].Item1, pos, StringComparison.Ordinal);
+                if ((b >= 0) && ((best < 0) || (b < best)))
+                {
+                    best = b;
+                    tag = i;
+                }
+            }
+            return best;
+        }
         const String ThinkStart = "<think>";
         const String ThinkEnd = "</think>";
 
@@ -342,7 +374,7 @@ namespace SysWeaver.AI
         /// <summary>
         /// Tokens that some models outputs at the end of a message (if special tokens are decoded)
         /// </summary>
-        static readonly String[] EndTokens = ["<|im_end|>", "<|eot_id|>", "<end_of_turn>", "<turn|>", "<|end|>", "<|endoftext|>", "</s>", "<|return|>"];
+        static readonly String[] EndTokens = ["<|im_end|>", "<|eot_id|>", "<end_of_turn>", "<turn|>", LlamaSharpGemma4.ToolResponseStart, "<|end|>", "<|endoftext|>", "</s>", "<|return|>"];
 
         static String RemoveEndTokens(String s)
         {
@@ -389,23 +421,29 @@ namespace SysWeaver.AI
             var s = RemoveThinking(RemoveEndTokens(raw));
             for (; ; )
             {
-                var b = s.IndexOf(ToolCallStart, StringComparison.Ordinal);
+                var b = FindToolCall(s, 0, out var tag);
                 if (b < 0)
                     break;
-                var e = s.IndexOf(ToolCallEnd, b, StringComparison.Ordinal);
+                var end = ToolCallTags[tag].Item2;
+                var e = s.IndexOf(end, b, StringComparison.Ordinal);
                 if (e < 0)
                 {
                     s = s.Substring(0, b);
                     break;
                 }
-                s = String.Concat(s.AsSpan(0, b), s.AsSpan(e + ToolCallEnd.Length));
+                s = String.Concat(s.AsSpan(0, b), s.AsSpan(e + end.Length));
             }
             //  Hide a partial tag at the end (while streaming)
             var lt = s.LastIndexOf('<');
             if (lt >= 0)
             {
                 var tail = s.AsSpan(lt);
-                if (ToolCallStart.AsSpan().StartsWith(tail, StringComparison.Ordinal) || ThinkStart.AsSpan().StartsWith(tail, StringComparison.Ordinal))
+                var partial = false;
+                foreach (var (start, _) in ToolCallTags)
+                    partial |= start.AsSpan().StartsWith(tail, StringComparison.Ordinal);
+                foreach (var (start, _) in ThinkTags)
+                    partial |= start.AsSpan().StartsWith(tail, StringComparison.Ordinal);
+                if (partial)
                     s = s.Substring(0, lt);
             }
             return s.Trim();
@@ -414,43 +452,63 @@ namespace SysWeaver.AI
         /// <summary>
         /// Parse the tool calls in some model output
         /// </summary>
-        internal static List<AiFunctionCall> GetToolCalls(String output)
+        /// <param name="output">The model output</param>
+        /// <param name="errors">An error message for each call that couldn't be parsed (null for valid calls), the list is null if there are no calls</param>
+        /// <returns>The calls, or null if there are no calls</returns>
+        internal static List<AiFunctionCall> GetToolCalls(String output, out List<String> errors)
         {
             List<AiFunctionCall> calls = null;
+            errors = null;
             int pos = 0;
             for (; ; )
             {
-                var b = output.IndexOf(ToolCallStart, pos, StringComparison.Ordinal);
+                var b = FindToolCall(output, pos, out var tag);
                 if (b < 0)
                     break;
-                b += ToolCallStart.Length;
-                var e = output.IndexOf(ToolCallEnd, b, StringComparison.Ordinal);
-                var json = (e < 0 ? output.Substring(b) : output.Substring(b, e - b)).Trim();
-                pos = e < 0 ? output.Length : e + ToolCallEnd.Length;
+                var (start, end) = ToolCallTags[tag];
+                b += start.Length;
+                var e = output.IndexOf(end, b, StringComparison.Ordinal);
+                var call = (e < 0 ? output.Substring(b) : output.Substring(b, e - b)).Trim();
+                pos = e < 0 ? output.Length : e + end.Length;
                 calls ??= new List<AiFunctionCall>();
-                calls.Add(ParseToolCall(json));
+                errors ??= new List<String>();
+                String error;
+                if (start == ToolCallStart)
+                    calls.Add(ParseToolCall(call, out error));
+                else
+                    calls.Add(LlamaSharpGemma4.ParseCall(call, InvalidToolCall, out error));
+                errors.Add(error);
             }
             return calls;
         }
 
         /// <summary>
-        /// The name used for a tool call that couldn't be parsed (the model gets an error back)
+        /// The name used for a tool call where the function name couldn't be parsed
         /// </summary>
         const String InvalidToolCall = "invalid_tool_call";
 
-        static AiFunctionCall ParseToolCall(String json)
+        const String HermesFormatHelp = "use the format: {\"name\": <function-name>, \"arguments\": <args-json-object>}";
+
+        static AiFunctionCall ParseToolCall(String json, out String error)
         {
+            error = null;
+            String name = null;
             try
             {
                 using var d = JsonDocument.Parse(json);
                 var r = d.RootElement;
                 if (r.ValueKind != JsonValueKind.Object)
+                {
+                    error = "Error: The tool call isn't a json object, " + HermesFormatHelp;
                     return new AiFunctionCall(InvalidToolCall, BinaryData.FromString("{}"));
-                String name = null;
+                }
                 if (r.TryGetProperty("name", out var n) && (n.ValueKind == JsonValueKind.String))
                     name = n.GetString();
                 if (String.IsNullOrEmpty(name))
+                {
+                    error = "Error: The tool call doesn't have a name, " + HermesFormatHelp;
                     return new AiFunctionCall(InvalidToolCall, BinaryData.FromString("{}"));
+                }
                 if (!r.TryGetProperty("arguments", out var a))
                     r.TryGetProperty("parameters", out a);
                 String args = a.ValueKind switch
@@ -462,10 +520,67 @@ namespace SysWeaver.AI
                 };
                 return new AiFunctionCall(name, BinaryData.FromString(String.IsNullOrWhiteSpace(args) ? "{}" : args));
             }
-            catch
+            catch (Exception ex)
             {
-                return new AiFunctionCall(InvalidToolCall, BinaryData.FromString("{}"));
+                error = String.Concat("Error: The tool call isn't valid json (", ex.Message, "), ", HermesFormatHelp);
+                return new AiFunctionCall(name ?? InvalidToolCall, BinaryData.FromString("{}"));
             }
+        }
+
+        /// <summary>
+        /// Find the tool that the model meant to call.
+        /// Some models adds a namespace (ex: "default_api:BuildTable" or "functions.BuildTable") or use a different casing.
+        /// </summary>
+        /// <param name="name">The name used by the model</param>
+        /// <param name="tools">The available tools</param>
+        /// <returns>The name of the tool, or null if there is no such tool</returns>
+        static String ResolveToolName(String name, AiTool[] tools)
+        {
+            if (tools == null)
+                return null;
+            foreach (var t in tools)
+                if (String.Equals(t.Name, name, StringComparison.Ordinal))
+                    return t.Name;
+            var i = name.LastIndexOfAny([':', '.', '/']);
+            var n = (i >= 0 ? name.Substring(i + 1) : name).Trim().Trim('"', '\'');
+            foreach (var t in tools)
+                if (String.Equals(t.Name, n, StringComparison.OrdinalIgnoreCase))
+                    return t.Name;
+            return null;
+        }
+
+        /// <summary>
+        /// Resolve the tool names of calls, calls to unknown tools gets an error
+        /// </summary>
+        static void ResolveToolNames(List<AiFunctionCall> calls, List<String> errors, AiTool[] tools)
+        {
+            for (int i = 0; i < calls.Count; ++i)
+            {
+                if (errors[i] != null)
+                    continue;
+                var c = calls[i];
+                var name = ResolveToolName(c.Name, tools);
+                if (name != null)
+                {
+                    if (name != c.Name)
+                        calls[i] = new AiFunctionCall(name, c.Arguments);
+                    continue;
+                }
+                errors[i] = (tools?.Length ?? 0) > 0
+                    ? String.Concat("Error: There is no tool named \"", c.Name, "\", the available tools are: ", String.Join(", ", tools.Select(x => x.Name)), ".")
+                    : String.Concat("Error: There is no tool named \"", c.Name, "\", no tools are available.");
+            }
+        }
+
+        /// <summary>
+        /// Get a string that identifies a set of calls (used to detect a model repeating the same calls)
+        /// </summary>
+        static String GetCallsSignature(List<AiFunctionCall> calls)
+        {
+            var sb = new StringBuilder();
+            foreach (var c in calls)
+                sb.Append(c.Name).Append('\0').Append(c.Arguments?.ToString()).Append('\0');
+            return sb.ToString();
         }
 
         /// <summary>
@@ -473,16 +588,17 @@ namespace SysWeaver.AI
         /// </summary>
         static readonly JsonSerializerOptions ToolResponseJson = new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-        static LlamaSharpMessage CreateToolResponses(IReadOnlyList<AiFunctionCall> calls, String[] res)
+        LlamaSharpMessage CreateToolResponses(IReadOnlyList<AiFunctionCall> calls, String[] res)
         {
+            if (IsGemma4)
+                return new LlamaSharpMessage(RoleUser, LlamaSharpGemma4.CreateToolResponses(calls, res), false, true);
             var sb = new StringBuilder();
             for (int i = 0; i < calls.Count; ++i)
             {
                 if (i > 0)
                     sb.Append('\n');
-                var r = calls[i].Name == InvalidToolCall ? "Error: The tool call wasn't valid json, use the format: {\"name\": <function-name>, \"arguments\": <args-json-object>}" : res[i];
                 sb.Append("<tool_response>\n");
-                sb.Append(JsonSerializer.Serialize(new Dictionary<String, String> { { "name", calls[i].Name }, { "content", r } }, ToolResponseJson));
+                sb.Append(JsonSerializer.Serialize(new Dictionary<String, String> { { "name", calls[i].Name }, { "content", res[i] } }, ToolResponseJson));
                 sb.Append("\n</tool_response>");
             }
             return new LlamaSharpMessage(RoleUser, sb.ToString(), false, true);
@@ -496,6 +612,16 @@ namespace SysWeaver.AI
         /// The maximum number of tool call rounds in a single request (small models can get stuck calling tools)
         /// </summary>
         const int MaxToolRounds = 32;
+
+        /// <summary>
+        /// The maximum number of times the model may repeat the exact same tool calls (in consecutive rounds)
+        /// </summary>
+        const int MaxRepeatedToolCalls = 2;
+
+        /// <summary>
+        /// Number of tokens in the context that are never used
+        /// </summary>
+        const int ContextMargin = 4;
 
         /// <summary>
         /// Run requests until the model stops calling tools.
@@ -522,13 +648,15 @@ namespace SysWeaver.AI
             long totalIn = 0;
             long totalOut = 0;
             int toolRounds = 0;
+            String prevSig = null;
+            int repeats = 0;
             var llm = Llm;
             try
             {
                 for (; ; )
                 {
                     var tools = llm.SupportTools ? getTools() : null;
-                    var systemPrompt = AddTools(await getSystemPrompt().ConfigureAwait(false), tools);
+                    var systemPrompt = await getSystemPrompt().ConfigureAwait(false);
 
                     //  Remove the oldest messages until the prompt (and some output) fits in the context
                     var ctx = ContextSize;
@@ -538,7 +666,7 @@ namespace SysWeaver.AI
                     int promptTokens;
                     for (; ; )
                     {
-                        prompt = Format(systemPrompt, history, first);
+                        prompt = Format(systemPrompt, tools, history, first);
                         promptTokens = CountTokens(prompt, true);
                         if ((promptTokens + reserve) <= ctx)
                             break;
@@ -551,7 +679,8 @@ namespace SysWeaver.AI
                             break;
                         first = next;
                     }
-                    var maxOut = ctx - promptTokens;
+                    //  Keep a small margin, so that the executor never runs out of context
+                    var maxOut = ctx - promptTokens - ContextMargin;
                     if (llm.MaxTokens > 0)
                         maxOut = Math.Min(maxOut, llm.MaxTokens);
                     if (maxOut <= 0)
@@ -619,14 +748,40 @@ namespace SysWeaver.AI
                     var output = RemoveThinking(RemoveEndTokens(raw.ToString())).Trim();
                     text.Length = textStart;
                     text.Append(GetVisibleText(output));
-                    var calls = llm.SupportTools ? GetToolCalls(output) : null;
+                    List<String> errors = null;
+                    var calls = llm.SupportTools ? GetToolCalls(output, out errors) : null;
                     if (output.Length > 0)
                         history.Add(new LlamaSharpMessage(RoleAssistant, output, calls != null));
+                    if (outTokens >= maxOut)
+                        return "Error: Incomplete model output due to MaxTokens parameter or token limit exceeded.";
                     if (calls == null)
-                        return outTokens >= maxOut ? "Error: Incomplete model output due to MaxTokens parameter or token limit exceeded." : null;
+                        return null;
                     if (++toolRounds > MaxToolRounds)
                         return "Error: The model made too many rounds of tool calls.";
-                    var res = await exec(calls).ConfigureAwait(false);
+                    //  Small models can get stuck making the same (failing) calls over and over
+                    var sig = GetCallsSignature(calls);
+                    repeats = sig == prevSig ? repeats + 1 : 0;
+                    prevSig = sig;
+                    if (repeats >= MaxRepeatedToolCalls)
+                        return String.Concat("Error: The model is stuck repeating the same tool call (", calls[0].Name, ").");
+                    ResolveToolNames(calls, errors, tools);
+                    //  Only execute valid calls, invalid calls gets an error message back
+                    var res = new String[calls.Count];
+                    List<AiFunctionCall> valid = null;
+                    for (int i = 0; i < res.Length; ++i)
+                    {
+                        res[i] = errors[i];
+                        if (errors[i] == null)
+                            (valid ??= new List<AiFunctionCall>()).Add(calls[i]);
+                    }
+                    if (valid != null)
+                    {
+                        var vres = await exec(valid).ConfigureAwait(false);
+                        int vi = 0;
+                        for (int i = 0; i < res.Length; ++i)
+                            if (errors[i] == null)
+                                res[i] = vres[vi++];
+                    }
                     history.Add(CreateToolResponses(calls, res));
                     if (afterTools != null)
                         await afterTools().ConfigureAwait(false);

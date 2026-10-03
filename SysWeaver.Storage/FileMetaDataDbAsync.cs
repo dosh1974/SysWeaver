@@ -81,6 +81,7 @@ namespace SysWeaver
                 if (cache.TryGetValue(dataName, out var ce) && (ce.Item1 == lwt))
                 {
                     data = (T)ce.Item2;
+                    FileMetaData.Touch(fi);
                 }
                 else
                 {
@@ -90,7 +91,7 @@ namespace SysWeaver
                         using (var s = fi.OpenRead())
                             await comp.DecompressAsync(s, ms).ConfigureAwait(false);
                         data = ser.Create<T>(ms.GetBuffer().AsSpan().Slice(0, (int)ms.Length));
-                        fi.LastAccessTimeUtc = DateTime.UtcNow;
+                        FileMetaData.Touch(fi);
                         cache.TryAdd(dataName, Tuple.Create(lwt, (Object)data));
                     }
                     catch
