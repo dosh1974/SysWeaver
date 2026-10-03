@@ -79,6 +79,23 @@ namespace SysWeaver.AI
         public static AiTool Create(String name, IApiHttpServerEndPoint endPoint, AiToolFunction tool, bool exposeApi = false)
             => new AiTool(name, endPoint, tool, exposeApi);
 
+        /// <summary>
+        /// Create a tool that is defined (and executed) by a caller, used to describe the tool to the model only (it can't be invoked)
+        /// </summary>
+        /// <param name="tool">The function definition</param>
+        /// <returns>A tool</returns>
+        public static AiTool CreateExternal(AiToolFunction tool)
+            => new AiTool(tool);
+
+        AiTool(AiToolFunction tool)
+        {
+            Name = tool.FunctionName;
+            Tool = tool;
+            Desc = tool.FunctionDescription;
+            Icon = "";
+            Invoke = (p, request) => throw new NotSupportedException("The tool " + Name.ToQuoted() + " is defined by the caller and can't be invoked");
+        }
+
         AiTool(String name, IApiHttpServerEndPoint endPoint, AiToolFunction tool, bool exposeApi)
         {
             Auth = endPoint.Auth;

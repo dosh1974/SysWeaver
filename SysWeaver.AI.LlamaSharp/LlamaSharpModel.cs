@@ -10,6 +10,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SysWeaver.AI
@@ -624,6 +625,144 @@ namespace SysWeaver.AI
         const int ContextMargin = 4;
 
         /// <summary>
+        /// The result of a single inference
+        /// </summary>
+        sealed class InferResult
+        {
+            /// <summary>
+            /// The model output (end tokens and thinking removed)
+            /// </summary>
+            public String Output;
+
+            /// <summary>
+            /// Number of tokens in the prompt
+            /// </summary>
+            public int PromptTokens;
+
+            /// <summary>
+            /// Number of generated tokens
+            /// </summary>
+            public int OutTokens;
+
+            /// <summary>
+            /// True if the output was cut due to the token limit
+            /// </summary>
+            public bool IsTruncated;
+
+            /// <summary>
+            /// An error message if the inference couldn't be done, else null
+            /// </summary>
+            public String Error;
+        }
+
+        /// <summary>
+        /// Run a single inference (the oldest messages are removed if the conversation doesn't fit in the context)
+        /// </summary>
+        /// <param name="systemPrompt">The system prompt, can be null</param>
+        /// <param name="tools">The tools available to the model, can be null</param>
+        /// <param name="history">The conversation (not modified)</param>
+        /// <param name="temperature">The temperature to use</param>
+        /// <param name="maxTokens">The maximum number of tokens to generate, 0 or less for no limit (except the context size)</param>
+        /// <param name="chatLock">Optional lock to limit concurrency</param>
+        /// <param name="monitor">Optional performance monitor</param>
+        /// <param name="onVisible">If non null, this is called with the visible text (thinking and tool calls removed) whenever it changes</param>
+        /// <param name="cancel">Cancellation token</param>
+        /// <returns>The result</returns>
+        async Task<InferResult> Infer(String systemPrompt, AiTool[] tools, List<LlamaSharpMessage> history, float temperature, int maxTokens,
+            AsyncLock chatLock, PerfMonitor monitor, Func<String, Task> onVisible, CancellationToken cancel)
+        {
+            var llm = Llm;
+            //  Remove the oldest messages until the prompt (and some output) fits in the context
+            var ctx = ContextSize;
+            var reserve = Math.Min(Math.Max(maxTokens, 256), ctx / 4);
+            int first = 0;
+            String prompt;
+            int promptTokens;
+            for (; ; )
+            {
+                prompt = Format(systemPrompt, tools, history, first);
+                promptTokens = CountTokens(prompt, true);
+                if ((promptTokens + reserve) <= ctx)
+                    break;
+                //  Keep at least the last message, and start with a user message (that isn't a tool response)
+                int next = first + 1;
+                var hl = history.Count;
+                while ((next < hl) && ((history[next].Role != RoleUser) || history[next].IsToolResponse))
+                    ++next;
+                if (next >= hl)
+                    break;
+                first = next;
+            }
+            //  Keep a small margin, so that the executor never runs out of context
+            var maxOut = ctx - promptTokens - ContextMargin;
+            if (maxTokens > 0)
+                maxOut = Math.Min(maxOut, maxTokens);
+            if (maxOut <= 0)
+                return new InferResult
+                {
+                    PromptTokens = promptTokens,
+                    Error = String.Concat("Error: The prompt (", promptTokens.ToString(), " tokens) doesn't fit in the context (", ctx.ToString(), " tokens)."),
+                };
+
+            using var sampler = new DefaultSamplingPipeline
+            {
+                Temperature = temperature,
+                TopK = llm.TopK,
+                TopP = llm.TopP,
+                MinP = llm.MinP,
+                RepeatPenalty = llm.RepeatPenalty,
+            };
+            var ip = new InferenceParams
+            {
+                MaxTokens = maxOut,
+                DecodeSpecialTokens = llm.DecodeSpecialTokens,
+                SamplingPipeline = sampler,
+            };
+            if (AntiPrompts != null)
+                ip.AntiPrompts = AntiPrompts;
+            var raw = new StringBuilder();
+            String visible = "";
+            int outTokens = 0;
+            using (var _ = await (chatLock?.Lock() ?? AsyncLock.NoLock).ConfigureAwait(false))
+            using (var _l = await Lock.Lock().ConfigureAwait(false))
+            {
+                using var _m = monitor?.Track(nameof(StatelessExecutor.InferAsync));
+                //  An executor creates a new context for each inference, but can't be used concurrently
+                if (!Executors.TryTake(out var executor))
+                    executor = new StatelessExecutor(Weights, Params)
+                    {
+                        ApplyTemplate = false,
+                    };
+                try
+                {
+                    await foreach (var t in executor.InferAsync(prompt, ip, cancel).ConfigureAwait(false))
+                    {
+                        ++outTokens;
+                        raw.Append(t);
+                        if (onVisible == null)
+                            continue;
+                        var v = GetVisibleText(raw.ToString());
+                        if (v == visible)
+                            continue;
+                        visible = v;
+                        await onVisible(v).ConfigureAwait(false);
+                    }
+                }
+                finally
+                {
+                    Executors.Add(executor);
+                }
+            }
+            return new InferResult
+            {
+                Output = RemoveThinking(RemoveEndTokens(raw.ToString())).Trim(),
+                PromptTokens = promptTokens,
+                OutTokens = outTokens,
+                IsTruncated = outTokens >= maxOut,
+            };
+        }
+
+        /// <summary>
         /// Run requests until the model stops calling tools.
         /// The model responses (without thinking) and tool responses are added to the history.
         /// </summary>
@@ -657,102 +796,31 @@ namespace SysWeaver.AI
                 {
                     var tools = llm.SupportTools ? getTools() : null;
                     var systemPrompt = await getSystemPrompt().ConfigureAwait(false);
-
-                    //  Remove the oldest messages until the prompt (and some output) fits in the context
-                    var ctx = ContextSize;
-                    var reserve = Math.Min(Math.Max(llm.MaxTokens, 256), ctx / 4);
-                    int first = 0;
-                    String prompt;
-                    int promptTokens;
-                    for (; ; )
-                    {
-                        prompt = Format(systemPrompt, tools, history, first);
-                        promptTokens = CountTokens(prompt, true);
-                        if ((promptTokens + reserve) <= ctx)
-                            break;
-                        //  Keep at least the last message, and start with a user message (that isn't a tool response)
-                        int next = first + 1;
-                        var hl = history.Count;
-                        while ((next < hl) && ((history[next].Role != RoleUser) || history[next].IsToolResponse))
-                            ++next;
-                        if (next >= hl)
-                            break;
-                        first = next;
-                    }
-                    //  Keep a small margin, so that the executor never runs out of context
-                    var maxOut = ctx - promptTokens - ContextMargin;
-                    if (llm.MaxTokens > 0)
-                        maxOut = Math.Min(maxOut, llm.MaxTokens);
-                    if (maxOut <= 0)
-                        return String.Concat("Error: The prompt (", promptTokens.ToString(), " tokens) doesn't fit in the context (", ctx.ToString(), " tokens).");
-
-                    using var sampler = new DefaultSamplingPipeline
-                    {
-                        Temperature = temperature,
-                        TopK = llm.TopK,
-                        TopP = llm.TopP,
-                        MinP = llm.MinP,
-                        RepeatPenalty = llm.RepeatPenalty,
-                    };
-                    var ip = new InferenceParams
-                    {
-                        MaxTokens = maxOut,
-                        DecodeSpecialTokens = llm.DecodeSpecialTokens,
-                        SamplingPipeline = sampler,
-                    };
-                    if (AntiPrompts != null)
-                        ip.AntiPrompts = AntiPrompts;
-                    var raw = new StringBuilder();
                     var textStart = text.Length;
-                    String visible = "";
-                    int outTokens = 0;
-                    using (var _ = await (chatLock?.Lock() ?? AsyncLock.NoLock).ConfigureAwait(false))
-                    using (var _l = await Lock.Lock().ConfigureAwait(false))
+                    Func<String, Task> onVisible = onText == null ? null : v =>
                     {
-                        using var _m = monitor?.Track(nameof(StatelessExecutor.InferAsync));
-                        //  An executor creates a new context for each inference, but can't be used concurrently
-                        if (!Executors.TryTake(out var executor))
-                            executor = new StatelessExecutor(Weights, Params)
-                            {
-                                ApplyTemplate = false,
-                            };
-                        try
-                        {
-                            await foreach (var t in executor.InferAsync(prompt, ip).ConfigureAwait(false))
-                            {
-                                ++outTokens;
-                                raw.Append(t);
-                                if (onText == null)
-                                    continue;
-                                var v = GetVisibleText(raw.ToString());
-                                if (v == visible)
-                                    continue;
-                                visible = v;
-                                text.Length = textStart;
-                                text.Append(v);
-                                await onText(text.ToString()).ConfigureAwait(false);
-                            }
-                        }
-                        finally
-                        {
-                            Executors.Add(executor);
-                        }
-                    }
-                    totalIn += promptTokens;
-                    totalOut += outTokens;
+                        text.Length = textStart;
+                        text.Append(v);
+                        return onText(text.ToString());
+                    };
+                    var r = await Infer(systemPrompt, tools, history, temperature, llm.MaxTokens, chatLock, monitor, onVisible, default).ConfigureAwait(false);
+                    if (r.Error != null)
+                        return r.Error;
+                    totalIn += r.PromptTokens;
+                    totalOut += r.OutTokens;
                     if (debug != null)
                     {
-                        debug.InputTokenCount += promptTokens;
-                        debug.OutputTokenCount += outTokens;
+                        debug.InputTokenCount += r.PromptTokens;
+                        debug.OutputTokenCount += r.OutTokens;
                     }
-                    var output = RemoveThinking(RemoveEndTokens(raw.ToString())).Trim();
+                    var output = r.Output;
                     text.Length = textStart;
                     text.Append(GetVisibleText(output));
                     List<String> errors = null;
                     var calls = llm.SupportTools ? GetToolCalls(output, out errors) : null;
                     if (output.Length > 0)
                         history.Add(new LlamaSharpMessage(RoleAssistant, output, calls != null));
-                    if (outTokens >= maxOut)
+                    if (r.IsTruncated)
                         return "Error: Incomplete model output due to MaxTokens parameter or token limit exceeded.";
                     if (calls == null)
                         return null;
@@ -795,5 +863,152 @@ namespace SysWeaver.AI
         }
 
         #endregion//Request loop
+
+        #region Completion
+
+        /// <summary>
+        /// The temperature used for completions if none is specified (same as the llama.cpp server)
+        /// </summary>
+        const float DefaultCompletionTemperature = 0.8f;
+
+        /// <summary>
+        /// Format a tool call made by the model (as the model would have written it)
+        /// </summary>
+        String FormatToolCall(AiCompletionToolCall call)
+        {
+            var args = String.IsNullOrWhiteSpace(call.Arguments) ? "{}" : call.Arguments;
+            if (IsGemma4)
+                return LlamaSharpGemma4.FormatCall(call.Name, args);
+            String argsJson;
+            try
+            {
+                using var d = JsonDocument.Parse(args);
+                argsJson = d.RootElement.GetRawText();
+            }
+            catch
+            {
+                //  Arguments that isn't valid json is sent as a string
+                argsJson = JsonSerializer.Serialize(args, ToolResponseJson);
+            }
+            return String.Concat(ToolCallStart, "\n{\"name\": ", JsonSerializer.Serialize(call.Name, ToolResponseJson), ", \"arguments\": ", argsJson, "}\n", ToolCallEnd);
+        }
+
+        /// <summary>
+        /// Convert the messages of a completion request to the conversation format
+        /// </summary>
+        List<LlamaSharpMessage> GetHistory(AiCompletionRequest request)
+        {
+            var history = new List<LlamaSharpMessage>();
+            var callNames = new Dictionary<String, String>(StringComparer.Ordinal);
+            var messages = request.Messages;
+            var ml = messages.Count;
+            for (int i = 0; i < ml; ++i)
+            {
+                var m = messages[i];
+                switch (m.Role)
+                {
+                    case AiCompletionRoles.User:
+                        history.Add(CreateUserMessage(m.Text ?? "", null, m.Name));
+                        break;
+                    case AiCompletionRoles.Assistant:
+                        {
+                            var calls = m.ToolCalls;
+                            var haveCalls = (calls?.Count ?? 0) > 0;
+                            var sb = new StringBuilder(m.Text ?? "");
+                            if (haveCalls)
+                                foreach (var c in calls)
+                                {
+                                    if (c.Id != null)
+                                        callNames[c.Id] = c.Name;
+                                    if (sb.Length > 0)
+                                        sb.Append('\n');
+                                    sb.Append(FormatToolCall(c));
+                                }
+                            history.Add(new LlamaSharpMessage(RoleAssistant, sb.ToString(), haveCalls));
+                        }
+                        break;
+                    case AiCompletionRoles.Tool:
+                        {
+                            //  Consecutive tool results are added as a single message
+                            var calls = new List<AiFunctionCall>();
+                            var res = new List<String>();
+                            for (; i < ml; ++i)
+                            {
+                                var t = messages[i];
+                                if (t.Role != AiCompletionRoles.Tool)
+                                    break;
+                                var name = t.Name;
+                                if (String.IsNullOrEmpty(name) && (t.ToolCallId != null))
+                                    callNames.TryGetValue(t.ToolCallId, out name);
+                                calls.Add(new AiFunctionCall(name ?? "", null));
+                                res.Add(t.Text ?? "");
+                            }
+                            --i;
+                            history.Add(CreateToolResponses(calls, res.ToArray()));
+                        }
+                        break;
+                }
+            }
+            return history;
+        }
+
+        /// <summary>
+        /// Complete a conversation (stateless), tool calls are returned (not executed)
+        /// </summary>
+        /// <param name="request">The request</param>
+        /// <param name="chatLock">Optional lock to limit concurrency</param>
+        /// <param name="monitor">Optional performance monitor</param>
+        /// <param name="onText">Optional callback with the accumulated text response whenever it changes</param>
+        /// <returns>The result</returns>
+        internal async Task<AiCompletionResult> Complete(AiCompletionRequest request, AsyncLock chatLock, PerfMonitor monitor, Func<String, Task> onText)
+        {
+            var llm = Llm;
+            AiTool[] tools = null;
+            var rt = request.Tools;
+            if (llm.SupportTools && (request.ToolChoice != AiCompletionToolChoices.None) && ((rt?.Count ?? 0) > 0))
+                tools = rt.Select(AiTool.CreateExternal).ToArray();
+            else if ((request.ToolChoice == AiCompletionToolChoices.Required) && ((rt?.Count ?? 0) > 0))
+                throw new AiCompletionException("The model " + Name.ToQuoted() + " doesn't support tools", "tools_not_supported");
+            var systemPrompt = request.SystemPrompt;
+            if ((tools != null) && (request.ToolChoice == AiCompletionToolChoices.Required))
+                systemPrompt = String.Concat(systemPrompt, String.IsNullOrEmpty(systemPrompt) ? "" : "\n\n", "You must call at least one of the tools.");
+            var maxTokens = request.MaxTokens ?? llm.MaxTokens;
+            var r = await Infer(systemPrompt, tools, GetHistory(request), request.Temperature ?? DefaultCompletionTemperature, maxTokens, chatLock, monitor, onText, request.Cancel).ConfigureAwait(false);
+            if (r.Error != null)
+                throw new AiCompletionException(r.Error.Substring(7), "context_length_exceeded");
+            var output = r.Output;
+            List<AiCompletionToolCall> toolCalls = null;
+            if (tools != null)
+            {
+                var calls = GetToolCalls(output, out var errors);
+                if (calls != null)
+                {
+                    ResolveToolNames(calls, errors, tools);
+                    //  Calls that couldn't be parsed or to unknown tools can't be executed by the caller, so they are dropped
+                    for (int i = 0; i < calls.Count; ++i)
+                    {
+                        if (errors[i] != null)
+                            continue;
+                        (toolCalls ??= new List<AiCompletionToolCall>()).Add(new AiCompletionToolCall
+                        {
+                            Id = "call_" + Guid.NewGuid().ToString("N").Substring(0, 24),
+                            Name = calls[i].Name,
+                            Arguments = calls[i].Arguments?.ToString() ?? "{}",
+                        });
+                    }
+                }
+            }
+            return new AiCompletionResult
+            {
+                Model = Name,
+                Text = GetVisibleText(output),
+                ToolCalls = toolCalls,
+                FinishReason = toolCalls != null ? AiCompletionFinishReasons.ToolCalls : (r.IsTruncated ? AiCompletionFinishReasons.Length : AiCompletionFinishReasons.Stop),
+                InputTokens = r.PromptTokens,
+                OutputTokens = r.OutTokens,
+            };
+        }
+
+        #endregion//Completion
     }
 }

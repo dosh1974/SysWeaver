@@ -342,6 +342,33 @@ namespace SysWeaver.AI
             }
         }
 
+        /// <summary>
+        /// Format a tool call (as the model writes it), ex: "&lt;|tool_call&gt;call:name{key:&lt;|"|&gt;text&lt;|"|&gt;}&lt;tool_call|&gt;"
+        /// </summary>
+        /// <param name="name">The name of the function</param>
+        /// <param name="jsonArgs">The arguments as a json object</param>
+        /// <returns>The tool call</returns>
+        public static String FormatCall(String name, String jsonArgs)
+        {
+            var sb = new StringBuilder();
+            sb.Append(ToolCallStart).Append(CallPrefix).Append(name);
+            try
+            {
+                using var d = JsonDocument.Parse(jsonArgs);
+                var r = d.RootElement;
+                if (r.ValueKind == JsonValueKind.Object)
+                    FormatArgument(sb, r, false);
+                else
+                    sb.Append("{}");
+            }
+            catch
+            {
+                sb.Append("{}");
+            }
+            sb.Append(ToolCallEnd);
+            return sb.ToString();
+        }
+
         #endregion//Tool declaration
 
         #region Tool call parsing

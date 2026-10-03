@@ -237,6 +237,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SysWeaver.AI.Google", "SysW
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SysWeaver.AI.LlamaSharp", "SysWeaver.AI.LlamaSharp\SysWeaver.AI.LlamaSharp.csproj", "{CD58D56B-AD8B-4D77-A14D-B86BC32BAB62}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SysWeaver.AI.HostService", "SysWeaver.AI.HostService\SysWeaver.AI.HostService.csproj", "{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -1627,6 +1629,18 @@ Global
 		{CD58D56B-AD8B-4D77-A14D-B86BC32BAB62}.Release|x64.Build.0 = Release|Any CPU
 		{CD58D56B-AD8B-4D77-A14D-B86BC32BAB62}.Release|x86.ActiveCfg = Release|Any CPU
 		{CD58D56B-AD8B-4D77-A14D-B86BC32BAB62}.Release|x86.Build.0 = Release|Any CPU
+		{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}.Debug|x64.Build.0 = Debug|Any CPU
+		{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}.Debug|x86.Build.0 = Debug|Any CPU
+		{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}.Release|x64.ActiveCfg = Release|Any CPU
+		{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}.Release|x64.Build.0 = Release|Any CPU
+		{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}.Release|x86.ActiveCfg = Release|Any CPU
+		{0D40FF0A-58AE-4D92-AA21-23F48307FB3C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

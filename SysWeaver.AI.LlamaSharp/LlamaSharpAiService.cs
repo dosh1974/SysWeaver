@@ -191,6 +191,16 @@ namespace SysWeaver.AI
             return Task.FromResult(new AiModels(llms, []));
         }
 
+        /// <summary>
+        /// Complete a conversation (stateless, the whole conversation is in the request).
+        /// Tools in the request are defined by the caller, tool calls are returned (not executed).
+        /// </summary>
+        /// <param name="request">The request</param>
+        /// <param name="onText">Optional callback with the accumulated text response whenever it changes (streaming)</param>
+        /// <returns>The result</returns>
+        public override Task<AiCompletionResult> Complete(AiCompletionRequest request, Func<String, Task> onText = null)
+            => GetModel(request.Model).Complete(request, ChatLock, PerfMon, onText);
+
         #endregion//Models
 
         #region Sessions

@@ -20,6 +20,7 @@ No API key, no usage costs and no data leaves the machine.
 - Models are selected per session using the model name (model code) from the configuration.
 - Chat sessions (streaming) and query sessions, prompts are formatted using the chat template of the model (or a configured template).
 - Tool calling of annotated service methods (`[OpenAiTool]` / `[OpenAiUse]`), using the Hermes / Qwen `<tool_call>` format (described in the system prompt).
+- Stateless completions (`IAiService.Complete`, used by [SysWeaver.AI.HostService](../SysWeaver.AI.HostService/README.md)) with caller defined tools (tool calls are returned, not executed) and token streaming.
 - Thinking (`<think>` tags) is removed from responses.
 - The oldest messages are dropped when a conversation doesn't fit in the context.
 - CPU and Vulkan (GPU) backends are included, the Vulkan backend is used if available.

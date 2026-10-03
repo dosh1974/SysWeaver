@@ -38,6 +38,15 @@ namespace SysWeaver.AI
         Task<AiImageModel[]> GetImageModels();
 
         /// <summary>
+        /// Complete a conversation (stateless, the whole conversation is in the request).
+        /// Tools in the request are defined by the caller, tool calls are returned (not executed).
+        /// </summary>
+        /// <param name="request">The request</param>
+        /// <param name="onText">Optional callback with the accumulated text response whenever it changes (streaming), not all services stream</param>
+        /// <returns>The result</returns>
+        Task<AiCompletionResult> Complete(AiCompletionRequest request, Func<String, Task> onText = null);
+
+        /// <summary>
         /// Create a chat session (supporting SystemPrompt, tools etc)
         /// </summary>
         /// <param name="isPrivate">If true, this chat is user only</param>
