@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Threading.Tasks;
-using CommunityToolkit.HighPerformance;
 
 using CompStream = System.IO.Compression.BrotliStream;
 
@@ -66,61 +65,80 @@ namespace SysWeaver.Compression
 
         public void Compress(Stream from, Stream to, CompEncoderLevels level)
         {
-            using var cs = new CompStream(to, CompHelpers.StreamLevels[(int)level], true);
-            from.CopyTo(cs);
+            using var cs = new CompStream(to, CompHelpers.GetStreamLevel(level), true);
+            CompStreamHelpers.CopyFull(from, cs);
         }
 
         public int Compress(Stream from, Span<Byte> to, CompEncoderLevels level)
         {
-            var l = to.Length;
             unsafe
             {
                 fixed (byte* bp = to)
                 {
-                    using var ms = new UnmanagedMemoryStream(bp, l, l, FileAccess.Write);
-                    Compress(from, ms, level);
-                    return (int)ms.Position;
+                    var ms = CompStreamHelpers.RentWriter(bp, to.Length);
+                    try
+                    {
+                        Compress(from, ms, level);
+                        return ms.Written;
+                    }
+                    finally
+                    {
+                        CompStreamHelpers.Return(ms);
+                    }
                 }
             }
         }
 
         public int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level)
         {
-            var l = to.Length;
             unsafe
             {
                 fixed (byte* bp = to)
                 {
-                    using var ms = new UnmanagedMemoryStream(bp, l, l, FileAccess.Write);
-                    Compress(from, ms, level);
-                    return (int)ms.Position;
+                    var ms = CompStreamHelpers.RentWriter(bp, to.Length);
+                    try
+                    {
+                        Compress(from, ms, level);
+                        return ms.Written;
+                    }
+                    finally
+                    {
+                        CompStreamHelpers.Return(ms);
+                    }
                 }
             }
         }
 
         public void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level)
         {
-            using var cs = new CompStream(to, CompHelpers.StreamLevels[(int)level], true);
+            using var cs = new CompStream(to, CompHelpers.GetStreamLevel(level), true);
             cs.Write(from);
         }
 
         public async Task CompressAsync(Stream from, Stream to, CompEncoderLevels level)
         {
-            using var cs = new CompStream(to, CompHelpers.StreamLevels[(int)level], true);
-            await from.CopyToAsync(cs).ConfigureAwait(false);
+            using var cs = new CompStream(to, CompHelpers.GetStreamLevel(level), true);
+            await CompStreamHelpers.CopyFullAsync(from, cs).ConfigureAwait(false);
         }
 
         public async Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level)
         {
-            using var ms = to.AsStream();
-            await CompressAsync(from, ms, level).ConfigureAwait(false);
-            return (int)ms.Position;
+            var ms = CompStreamHelpers.RentWriter(to);
+            try
+            {
+                await CompressAsync(from, ms, level).ConfigureAwait(false);
+                return ms.Written;
+            }
+            finally
+            {
+                CompStreamHelpers.Return(ms);
+            }
         }
 
         public async Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level)
         {
-            using var ms = from.AsStream();
-            await CompressAsync(ms, to, level).ConfigureAwait(false);
+            using var cs = new CompStream(to, CompHelpers.GetStreamLevel(level), true);
+            await cs.WriteAsync(from).ConfigureAwait(false);
         }
 
         #endregion//Compress
@@ -128,66 +146,24 @@ namespace SysWeaver.Compression
 
         #region Decompress
 
-        public void Decompress(Stream from, Stream to)
-        {
-            using var cs = new CompStream(from, CompressionMode.Decompress, true);
-            cs.CopyTo(to);
-        }
+        //  The BrotliStream silently returns the data decompressed so far if the data is truncated (unless the process wide
+        //  "System.IO.Compression.UseStrictValidation" switch is set), so decompression uses the BrotliDecoder based implementation.
 
-        public int Decompress(Stream from, Span<Byte> to)
-        {
-            var cs = new CompStream(from, CompressionMode.Decompress, true);
-            var size = cs.Read(to);
-            if (cs.Read(to) > 0)
-                throw new ArgumentException(CompHelpers.DecDestTooSmall, nameof(to));
-            return size;
-        }
+        static readonly ICompDecoder Decoder = CompBrotliNETNew.Instance;
 
-        public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to)
-        {
-            unsafe
-            {
-                fixed (byte* bp = from)
-                {
-                    using var ms = new UnmanagedMemoryStream(bp, from.Length);
-                    return Decompress(ms, to);
-                }
-            }
-        }
+        public void Decompress(Stream from, Stream to) => Decoder.Decompress(from, to);
 
-        public void Decompress(ReadOnlySpan<Byte> from, Stream to)
-        {
-            unsafe
-            {
-                fixed (byte* bp = from)
-                {
-                    using var ms = new UnmanagedMemoryStream(bp, from.Length);
-                    Decompress(ms, to);
-                }
-            }
-        }
+        public int Decompress(Stream from, Span<Byte> to) => Decoder.Decompress(from, to);
 
-        public async Task DecompressAsync(Stream from, Stream to)
-        {
-            using var cs = new CompStream(from, CompressionMode.Decompress, true);
-            await cs.CopyToAsync(to).ConfigureAwait(false);
-        }
+        public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to) => Decoder.Decompress(from, to);
 
-        public async Task<int> DecompressAsync(Stream from, Memory<Byte> to)
-        {
-            using var cs = new CompStream(from, CompressionMode.Decompress, true);
-            var size = await cs.ReadAsync(to).ConfigureAwait(false);
-            if (await cs.ReadAsync(to).ConfigureAwait(false) > 0)
-                throw new ArgumentException(CompHelpers.DecDestTooSmall, nameof(to));
-            return size;
-        }
+        public void Decompress(ReadOnlySpan<Byte> from, Stream to) => Decoder.Decompress(from, to);
 
-        public async Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to)
-        {
-            using var ms = from.AsStream();
-            await DecompressAsync(ms, to).ConfigureAwait(false);
-        }
+        public Task DecompressAsync(Stream from, Stream to) => Decoder.DecompressAsync(from, to);
 
+        public Task<int> DecompressAsync(Stream from, Memory<Byte> to) => Decoder.DecompressAsync(from, to);
+
+        public Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to) => Decoder.DecompressAsync(from, to);
 
         #endregion//Decompress
 

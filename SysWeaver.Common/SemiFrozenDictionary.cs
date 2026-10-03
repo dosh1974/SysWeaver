@@ -13,65 +13,38 @@ namespace SysWeaver
     /// This is thread safe in the same sense as a ConcurrentDictionary.
     /// Reads are done on a frozen copy of the underlaying dictionary.
     /// Mutating underlaying dictionary is done using locks and the frozen copy is invalidated.
-    /// After a modification, lookups are done on the underlaying dictionary (using the lock) until enough lookups have been done to make it worth to freeze it again
-    /// (so that a dictionary that is modified often, like a growing cache, isn't frozen after every modification).
-    /// Enumerations (and Keys / Values) always use a frozen copy.
+    /// The first read after a modification freezes it again (the intended usage is a few modifications at startup / shutdown, and reads only at runtime).
     /// </summary>
     /// <typeparam name="TKey"></typeparam>
     /// <typeparam name="TValue"></typeparam>
     public sealed class SemiFrozenDictionary<TKey, TValue> : IDictionary<TKey, TValue>
     {
         /// <summary>
-        /// The frozen copy, null after a modification (until it's frozen again)
+        /// The frozen copy, null after a modification (until the next read freezes it again)
         /// </summary>
         IReadOnlyDictionary<TKey, TValue> Internal;
 
         /// <summary>
-        /// The number of lookups done on the underlaying dictionary since the last modification (protected by the lock)
-        /// </summary>
-        int ReadsSinceChange;
-
-        /// <summary>
-        /// The dictionary is frozen after this many lookups (or the number of items, if it's more) since the last modification
-        /// </summary>
-        const int MinReadsBeforeFreeze = 8;
-
-        /// <summary>
         /// Get the frozen copy (freeze it if needed)
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         IReadOnlyDictionary<TKey, TValue> Get()
+            => Internal ?? Freeze();
+
+        /// <summary>
+        /// Freeze the underlaying dictionary (the first read after a modification)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        IReadOnlyDictionary<TKey, TValue> Freeze()
         {
-            var i = Internal;
-            if (i != null)
-                return i;
             lock (Underlaying)
             {
-                i = Internal;
+                var i = Internal;
                 if (i != null)
                     return i;
                 i = Underlaying.Freeze();
                 Internal = i;
                 return i;
-            }
-        }
-
-        /// <summary>
-        /// A lookup when there is no frozen copy
-        /// </summary>
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        bool SlowTryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
-        {
-            var u = Underlaying;
-            lock (u)
-            {
-                var i = Internal;
-                if (i != null)
-                    return i.TryGetValue(key, out value);
-                var found = u.TryGetValue(key, out value);
-                // Freeze when the lookups have cost about as much as freezing
-                if (++ReadsSinceChange >= Math.Max(MinReadsBeforeFreeze, u.Count))
-                    Internal = u.Freeze();
-                return found;
             }
         }
 
@@ -82,7 +55,6 @@ namespace SysWeaver
         void Changed()
         {
             Internal = null;
-            ReadsSinceChange = 0;
         }
 
 
@@ -230,12 +202,7 @@ namespace SysWeaver
         }
 
         public bool ContainsKey(TKey key)
-        {
-            var i = Internal;
-            if (i != null)
-                return i.ContainsKey(key);
-            return SlowTryGetValue(key, out _);
-        }
+            => Get().ContainsKey(key);
 
         public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
         {
@@ -293,12 +260,7 @@ namespace SysWeaver
         }
 
         public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
-        {
-            var i = Internal;
-            if (i != null)
-                return i.TryGetValue(key, out value);
-            return SlowTryGetValue(key, out value);
-        }
+            => Get().TryGetValue(key, out value);
 
         IEnumerator IEnumerable.GetEnumerator()
             => Get().GetEnumerator();

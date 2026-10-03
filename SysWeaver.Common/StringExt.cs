@@ -13,7 +13,6 @@ namespace SysWeaver
     public static class StringExt
     {
 
-        static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
         static readonly CompareInfo Ci = CultureInfo.InvariantCulture.CompareInfo;
 
         /// <summary>
@@ -87,9 +86,9 @@ namespace SysWeaver
             if (length < 0)
                 length = sl;
             if ((startIndex == 0) && (length == sl))
-                return Ti.ToLower(str);
-            var isLower = InternalFastIsLower(s, length);
-            return isLower ? new string(s[..length]) : String.Create(length, s, LowerCasedSubString);
+                return str.FastToLower();
+            // Always allocates, so convert while copying (no need to test if it's already lower cased)
+            return String.Create(length, s, LowerCasedSubString);
         }
 
 
@@ -103,9 +102,8 @@ namespace SysWeaver
         {
             if (length >= str.Length)
                 return str.FastToLower();
-            var s = str.AsSpan();
-            var isLower = InternalFastIsLower(s, length);
-            return isLower ? new string(s[..length]) : String.Create(length, s, LowerCasedSubString);
+            // Always allocates, so convert while copying (no need to test if it's already lower cased)
+            return String.Create(length, str.AsSpan(), LowerCasedSubString);
         }
 
         /// <summary>
@@ -152,7 +150,7 @@ namespace SysWeaver
             var t = str.AsSpan().Trim();
             var l = t.Length;
             if (l == str.Length)
-                return Ti.ToLower(str);
+                return str.FastToLower();
             return l <= 0 ? String.Empty : String.Create(l, t, LowerCaseSpan);
         }
 
@@ -166,7 +164,7 @@ namespace SysWeaver
             var t = str.AsSpan().TrimStart();
             var l = t.Length;
             if (l == str.Length)
-                return Ti.ToLower(str);
+                return str.FastToLower();
             return l <= 0 ? String.Empty : String.Create(l, t, LowerCaseSpan);
         }
 
@@ -180,7 +178,7 @@ namespace SysWeaver
             var t = str.AsSpan().TrimEnd();
             var l = t.Length;
             if (l == str.Length)
-                return Ti.ToLower(str);
+                return str.FastToLower();
             return l <= 0 ? String.Empty : String.Create(l, t, LowerCaseSpan);
         }
 
@@ -195,7 +193,7 @@ namespace SysWeaver
             var t = str.AsSpan().Trim(trimChar);
             var l = t.Length;
             if (l == str.Length)
-                return Ti.ToLower(str);
+                return str.FastToLower();
             return l <= 0 ? String.Empty : String.Create(l, t, LowerCaseSpan);
         }
 
@@ -210,7 +208,7 @@ namespace SysWeaver
             var t = str.AsSpan().TrimStart(trimChar);
             var l = t.Length;
             if (l == str.Length)
-                return Ti.ToLower(str);
+                return str.FastToLower();
             return l <= 0 ? String.Empty : String.Create(l, t, LowerCaseSpan);
         }
 
@@ -225,7 +223,7 @@ namespace SysWeaver
             var t = str.AsSpan().TrimEnd(trimChar);
             var l = t.Length;
             if (l == str.Length)
-                return Ti.ToLower(str);
+                return str.FastToLower();
             return l <= 0 ? String.Empty : String.Create(l, t, LowerCaseSpan);
         }
 
@@ -236,7 +234,17 @@ namespace SysWeaver
         /// <returns>Culture invariant lower case string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String FastToLower(this String str)
-            => InternalFastIsLower(str.AsSpan(), str.Length) ? str : Ti.ToLower(str);
+            => InternalFastIsLower(str.AsSpan(), str.Length) ? str : String.Create(str.Length, str, LowerCasedString);
+
+        /// <summary>
+        /// Lower case a whole string, ASCII is converted using SIMD, the rest (if any) is converted using the invariant culture (exactly like TextInfo.ToLower)
+        /// </summary>
+        static readonly SpanAction<Char, String> LowerCasedString = (dst, src) =>
+        {
+            var s = src.AsSpan();
+            if (Ascii.ToLower(s, dst, out var done) != OperationStatus.Done)
+                s[done..].ToLowerInvariant(dst[done..]);
+        };
 
         #endregion//FastToLower
 
@@ -307,9 +315,9 @@ namespace SysWeaver
             if (length < 0)
                 length = sl;
             if ((startIndex == 0) && (length == sl))
-                return Ti.ToUpper(str);
-            var isUpper = InternalFastIsUpper(s, length);
-            return isUpper ? new string(s[..length]) : String.Create(length, s, UpperCasedSubString);
+                return str.FastToUpper();
+            // Always allocates, so convert while copying (no need to test if it's already upper cased)
+            return String.Create(length, s, UpperCasedSubString);
         }
 
 
@@ -321,11 +329,10 @@ namespace SysWeaver
         /// <returns>Culture invariant upper case string</returns>
         public static String FastStartToUpper(this String str, int length)
         {
-            var s = str.AsSpan();
             if (length == str.Length)
-                return Ti.ToUpper(str);
-            var isUpper = InternalFastIsUpper(s, length);
-            return isUpper ? new string(s[..length]) : String.Create(length, s, UpperCasedSubString);
+                return str.FastToUpper();
+            // Always allocates, so convert while copying (no need to test if it's already upper cased)
+            return String.Create(length, str.AsSpan(), UpperCasedSubString);
         }
 
 
@@ -343,7 +350,7 @@ namespace SysWeaver
             var t = str.AsSpan().Trim();
             var l = t.Length;
             if (l == str.Length)
-                return Ti.ToUpper(str);
+                return str.FastToUpper();
             return l <= 0 ? String.Empty : String.Create(l, t, UpperCaseSpan);
         }
 
@@ -357,7 +364,7 @@ namespace SysWeaver
             var t = str.AsSpan().TrimStart();
             var l = t.Length;
             if (l == str.Length)
-                return Ti.ToUpper(str);
+                return str.FastToUpper();
             return l <= 0 ? String.Empty : String.Create(l, t, UpperCaseSpan);
         }
 
@@ -371,7 +378,7 @@ namespace SysWeaver
             var t = str.AsSpan().TrimEnd();
             var l = t.Length;
             if (l == str.Length)
-                return Ti.ToUpper(str);
+                return str.FastToUpper();
             return l <= 0 ? String.Empty : String.Create(l, t, UpperCaseSpan);
         }
 
@@ -386,7 +393,7 @@ namespace SysWeaver
             var t = str.AsSpan().Trim(trimChar);
             var l = t.Length;
             if (l == str.Length)
-                return Ti.ToUpper(str);
+                return str.FastToUpper();
             return l <= 0 ? String.Empty : String.Create(l, t, UpperCaseSpan);
         }
 
@@ -401,7 +408,7 @@ namespace SysWeaver
             var t = str.AsSpan().TrimStart(trimChar);
             var l = t.Length;
             if (l == str.Length)
-                return Ti.ToUpper(str);
+                return str.FastToUpper();
             return l <= 0 ? String.Empty : String.Create(l, t, UpperCaseSpan);
         }
 
@@ -416,7 +423,7 @@ namespace SysWeaver
             var t = str.AsSpan().TrimEnd(trimChar);
             var l = t.Length;
             if (l == str.Length)
-                return Ti.ToUpper(str);
+                return str.FastToUpper();
             return l <= 0 ? String.Empty : String.Create(l, t, UpperCaseSpan);
         }
 
@@ -427,7 +434,17 @@ namespace SysWeaver
         /// <returns>Culture invariant upper case string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String FastToUpper(this String str)
-            => InternalFastIsUpper(str.AsSpan(), str.Length) ? str : Ti.ToUpper(str);
+            => InternalFastIsUpper(str.AsSpan(), str.Length) ? str : String.Create(str.Length, str, UpperCasedString);
+
+        /// <summary>
+        /// Upper case a whole string, ASCII is converted using SIMD, the rest (if any) is converted using the invariant culture (exactly like TextInfo.ToUpper)
+        /// </summary>
+        static readonly SpanAction<Char, String> UpperCasedString = (dst, src) =>
+        {
+            var s = src.AsSpan();
+            if (Ascii.ToUpper(s, dst, out var done) != OperationStatus.Done)
+                s[done..].ToUpperInvariant(dst[done..]);
+        };
 
         #endregion//FastToUpper
 

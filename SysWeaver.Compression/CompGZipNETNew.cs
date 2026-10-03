@@ -1,25 +1,18 @@
-﻿/*
+#if NET11_0_OR_GREATER
 
 using System;
-using System.Collections.Generic;
-
-using System.IO;
-using System.IO.Compression;
-
+using System.Buffers;
 using System.Collections.Frozen;
-
-using CompStream = System.IO.Compression.GZipStream;
-using Decoder = System.IO.Compression.GZipDecoder;
-using Encoder = System.IO.Compression.GZipEncoder;
-
-
+using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
-using CommunityToolkit.HighPerformance;
+
+using Codec = SysWeaver.Compression.CompStreamCodec<SysWeaver.Compression.CompGZipNETNew.GZipEncoder, SysWeaver.Compression.CompGZipNETNew.GZipDecoder>;
 
 namespace SysWeaver.Compression
 {
     /// <summary>
-    /// A compression type that uses GZip for compression
+    /// A compression type that uses GZip (the .NET 11+ System.IO.Compression.GZipEncoder / GZipDecoder) for compression
     /// </summary>
     public sealed class CompGZipNETNew : ICompType
     {
@@ -48,7 +41,7 @@ namespace SysWeaver.Compression
         /// <summary>
         /// The instance of the compressor
         /// </summary>
-        public static ICompType Instance = new CompGZipNETNew();
+        public static readonly ICompType Instance = new CompGZipNETNew();
 
         static readonly String CompTS = String.Concat('[', CompHttpCode, "] ", CompName, " @ prio ", CompPrio, " for extensions: ", String.Join(", ", CompExtensions));
 
@@ -69,321 +62,206 @@ namespace SysWeaver.Compression
 
         #endregion//Info
 
-        #region Compress
+        #region Encoder / decoder
 
-        public void Compress(Stream from, Stream to, CompEncoderLevels level)
-        {
-            try
-            {
-                if (from.CanSeek)
-                {
-                    var len = from.Length;
-                    if (len < MaxStack)
-                    {
-                        Span<Byte> src = stackalloc Byte[(int)len];
-                        len = from.Read(src);
-                        Span<Byte> buf = stackalloc Byte[(int)len + MaxOverhead];
-                        var s = Compress(src[..(int)len], buf, level);
-                        to.Write(buf[..s]);
-                        return;
-                    }
-
-                    if (len < MaxBuffered)
-                    {
-                        var src = ArrayPoolStream.Rent((int)len);
-                        try
-                        {
-                            len = from.Read(src, 0, (int)len);
-                            var sm = src.AsSpan()[..(int)len];
-                            var buf = ArrayPoolStream.Rent((int)len + MaxOverhead);
-                            try
-                            {
-
-                                var bs = buf.AsSpan();
-                                var s = Compress(sm, bs, level);
-                                to.Write(bs[..s]);
-                                return;
-                            }
-                            finally
-                            {
-                                ArrayPoolStream.Return(buf);
-                            }
-                        }
-                        finally
-                        {
-                            ArrayPoolStream.Return(src);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-            using var cs = new CompStream(to, CompHelpers.StreamLevels[(int)level], true);
-            from.CopyTo(cs);
-        }
-
-        public int Compress(Stream from, Span<Byte> to, CompEncoderLevels level)
-        {
-            try
-            {
-                if (from.CanSeek)
-                {
-                    var len = from.Length;
-                    if (len < MaxStack)
-                    {
-                        Span<Byte> src = stackalloc Byte[(int)len];
-                        len = from.Read(src);
-                        var s = Compress(src[..(int)len], to, level);
-                        return s;
-                    }
-
-                    if (len < MaxBuffered)
-                    {
-                        var src = ArrayPoolStream.Rent((int)len);
-                        try
-                        {
-                            len = from.Read(src, 0, (int)len);
-                            var sm = src.AsSpan()[..(int)len];
-                            var s = Compress(sm, to, level);
-                            return s;
-                        }
-                        finally
-                        {
-                            ArrayPoolStream.Return(src);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-            var l = to.Length;
-            unsafe
-            {
-                fixed (byte* bp = to)
-                {
-                    using var ms = new UnmanagedMemoryStream(bp, l, l, FileAccess.Write);
-                    Compress(from, ms, level);
-                    return (int)ms.Position;
-                }
-            }
-        }
-
-        static readonly int[] Quality =
+        /// <summary>
+        /// zlib quality (0-9) for each level
+        /// </summary>
+        static ReadOnlySpan<int> Quality =>
         [
-            1, 4, 11
+            1, 6, 9
         ];
 
-        const int EncoderWindow = 24;
-        const int MaxOverhead = 128;
-        const int MaxStack = (1 << 10) - MaxOverhead;
-        const int MaxBuffered = (1 << 16) - MaxOverhead;
+        /// <summary>
+        /// zlib window size (8-15)
+        /// </summary>
+        const int EncoderWindow = 15;
 
-        public int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level)
-        {
-#if DEBUG
-            if (!Encoder.TryCompress(from, to, out var written, Quality[(int)level], EncoderWindow))
-                throw new Exception("Failed to compress!");
-#else//DEBUG
-            Encoder.TryCompress(from, to, out var written, Quality[(int)level], EncoderWindow);
-#endif//DEBUG
-            return written;
-        }
+        /// <summary>
+        /// The encoders and decoders are classes holding native state that is expensive to create, so they are pooled and reused
+        /// </summary>
+        static readonly CompInstancePool<System.IO.Compression.GZipEncoder>[] EncoderPools = [new(), new(), new()];
 
-        public void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level)
+        static readonly CompInstancePool<System.IO.Compression.GZipDecoder> DecoderPool = new();
+
+        static System.IO.Compression.GZipEncoder RentEncoder(CompEncoderLevels level)
+            => EncoderPools[(int)level].TryRent() ?? new System.IO.Compression.GZipEncoder(Quality[(int)level], EncoderWindow);
+
+        static void ReturnEncoder(CompEncoderLevels level, System.IO.Compression.GZipEncoder enc)
         {
-            var len = from.Length;
-            if (len < MaxStack)
+            try
             {
-                Span<Byte> buf = stackalloc Byte[len + MaxOverhead];
-                var s = Compress(from, buf, level);
-                to.Write(buf[..s]);
+                enc.Reset();
+            }
+            catch
+            {
+                enc.Dispose();
                 return;
             }
-
-            if (len < MaxBuffered)
-            {
-                var buf = ArrayPoolStream.Rent(len + MaxOverhead);
-                try
-                {
-                    var bs = buf.AsSpan();
-                    var s = Compress(from, bs, level);
-                    to.Write(bs[..s]);
-                    return;
-                }
-                finally
-                {
-                    ArrayPoolStream.Return(buf);
-                }
-            }
-            using var cs = new CompStream(to, CompHelpers.StreamLevels[(int)level], true);
-            cs.Write(from);
+            EncoderPools[(int)level].Return(enc);
         }
 
-        public async Task CompressAsync(Stream from, Stream to, CompEncoderLevels level)
+        static System.IO.Compression.GZipDecoder RentDecoder() => DecoderPool.TryRent() ?? new System.IO.Compression.GZipDecoder();
+
+        static void ReturnDecoder(System.IO.Compression.GZipDecoder dec)
         {
             try
             {
-                if (from.CanSeek)
-                {
-                    var len = from.Length;
-                    if (len < MaxBuffered)
-                    {
-                        var src = ArrayPoolStream.Rent((int)len);
-                        try
-                        {
-                            len = await from.ReadAsync(src, 0, (int)len).ConfigureAwait(false);
-                            var sm = src.AsSpan()[..(int)len];
-                            var buf = ArrayPoolStream.Rent((int)len + MaxOverhead);
-                            try
-                            {
-
-                                var bs = buf.AsSpan();
-                                var s = Compress(sm, bs, level);
-                                await to.WriteAsync(buf, 0, s).ConfigureAwait(false);
-                                return;
-                            }
-                            finally
-                            {
-                                ArrayPoolStream.Return(buf);
-                            }
-                        }
-                        finally
-                        {
-                            ArrayPoolStream.Return(src);
-                        }
-                    }
-                }
+                dec.Reset();
             }
             catch
             {
+                dec.Dispose();
+                return;
             }
-
-            using var cs = new CompStream(to, CompHelpers.StreamLevels[(int)level], true);
-            await from.CopyToAsync(cs).ConfigureAwait(false);
+            DecoderPool.Return(dec);
         }
 
-        public async Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level)
+        /// <summary>
+        /// A pooled .NET gzip encoder
+        /// </summary>
+        public struct GZipEncoder : ICompStreamEncoder<GZipEncoder>
         {
-            try
-            {
-                if (from.CanSeek)
-                {
-                    var len = from.Length;
-                    if (len < MaxBuffered)
-                    {
-                        var src = ArrayPoolStream.Rent((int)len);
-                        try
-                        {
-                            len = await from.ReadAsync(src, 0, (int)len).ConfigureAwait(false);
-                            var sm = src.AsSpan()[..(int)len];
-                            var s = Compress(sm, to.Span, level);
-                            return s;
-                        }
-                        finally
-                        {
-                            ArrayPoolStream.Return(src);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-            using var ms = to.AsStream();
-            await CompressAsync(from, ms, level).ConfigureAwait(false);
-            return (int)ms.Position;
-        }
+            System.IO.Compression.GZipEncoder E;
+            CompEncoderLevels Level;
 
-        public async Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level)
-        {
-            var len = from.Length;
-            if (len < MaxBuffered)
+            /// <summary>
+            /// True when the encoder completed a stream (the last block was compressed).
+            /// Only completed encoders are reused, GZipEncoder.Reset() doesn't reset an encoder that didn't complete a stream (.NET 11 RC1), the next stream is corrupted.
+            /// </summary>
+            bool Completed;
+
+            public static GZipEncoder Create(CompEncoderLevels level) => new GZipEncoder
             {
-                var buf = ArrayPoolStream.Rent(len + MaxOverhead);
+                E = RentEncoder(level),
+                Level = level,
+            };
+
+            public static int GetMaxCompressedLength(int inputSize) => (int)Math.Min(System.IO.Compression.GZipEncoder.GetMaxCompressedLength(inputSize), Array.MaxLength);
+
+            /// <summary>
+            /// Not using GZipEncoder.TryCompress since it creates (allocates) a new encoder on every call
+            /// </summary>
+            public static bool TryCompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten, CompEncoderLevels level)
+            {
+                var enc = Create(level);
                 try
                 {
-                    var bs = buf.AsSpan();
-                    var s = Compress(from.Span, bs, level);
-                    await to.WriteAsync(buf, 0, s).ConfigureAwait(false);
-                    return;
+                    return Codec.TryCompress(ref enc, source, destination, out bytesWritten);
                 }
                 finally
                 {
-                    ArrayPoolStream.Return(buf);
+                    enc.Dispose();
                 }
             }
-            using var ms = from.AsStream();
-            await CompressAsync(ms, to, level).ConfigureAwait(false);
+
+            public OperationStatus Compress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
+            {
+                var status = E.Compress(source, destination, out bytesConsumed, out bytesWritten, isFinalBlock);
+                Completed = isFinalBlock && (status == OperationStatus.Done);
+                return status;
+            }
+
+            public void Dispose()
+            {
+                var e = E;
+                if (e == null)
+                    return;
+                E = null;
+                if (Completed)
+                    ReturnEncoder(Level, e);
+                else
+                    e.Dispose();
+            }
         }
+
+        /// <summary>
+        /// A pooled .NET gzip decoder
+        /// </summary>
+        public struct GZipDecoder : ICompStreamDecoder<GZipDecoder>
+        {
+            System.IO.Compression.GZipDecoder D;
+
+            public static GZipDecoder Create() => new GZipDecoder
+            {
+                D = RentDecoder(),
+            };
+
+            /// <summary>
+            /// Not using GZipDecoder.TryDecompress since it creates (allocates) a new decoder on every call, the (pooled) streaming decoder is used instead
+            /// </summary>
+            public static bool TryDecompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten)
+            {
+                bytesWritten = 0;
+                return false;
+            }
+
+            /// <summary>
+            /// Concatenated gzip members are valid gzip data (and supported by GZipStream), but the GZipDecoder stops after the first member
+            /// </summary>
+            public static int NextHeaderSize => 2;
+
+            public bool BeginNext(ReadOnlySpan<Byte> next)
+            {
+                if (!CompHelpers.IsGZipMember(next))
+                    return false;
+                D.Reset();
+                return true;
+            }
+
+            public OperationStatus Decompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten)
+                => D.Decompress(source, destination, out bytesConsumed, out bytesWritten);
+
+            public void Dispose()
+            {
+                var d = D;
+                if (d == null)
+                    return;
+                D = null;
+                ReturnDecoder(d);
+            }
+        }
+
+        #endregion//Encoder / decoder
+
+        #region Compress
+
+        public void Compress(Stream from, Stream to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public int Compress(Stream from, Span<Byte> to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public Task CompressAsync(Stream from, Stream to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
+
+        public Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
+
+        public Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
 
         #endregion//Compress
 
 
         #region Decompress
 
-        public void Decompress(Stream from, Stream to)
-        {
-            using var cs = new CompStream(from, CompressionMode.Decompress, true);
-            cs.CopyTo(to);
-        }
+        public void Decompress(Stream from, Stream to) => Codec.Decompress(from, to);
 
-        public int Decompress(Stream from, Span<Byte> to)
-        {
-            var cs = new CompStream(from, CompressionMode.Decompress, true);
-            var size = cs.Read(to);
-            if (cs.Read(to) > 0)
-                throw new ArgumentException(CompHelpers.DecDestTooSmall, nameof(to));
-            return size;
-        }
+        public int Decompress(Stream from, Span<Byte> to) => Codec.Decompress(from, to);
 
-        public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to)
-        {
-            if (!Decoder.TryDecompress(from, to, out var written))
-                throw new Exception("Failed to decompress!");
-            return written;
-        }
+        public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to) => Codec.Decompress(from, to);
 
-        public void Decompress(ReadOnlySpan<Byte> from, Stream to)
-        {
-            unsafe
-            {
-                fixed (byte* bp = from)
-                {
-                    using var ms = new UnmanagedMemoryStream(bp, from.Length);
-                    Decompress(ms, to);
-                }
-            }
-        }
+        public void Decompress(ReadOnlySpan<Byte> from, Stream to) => Codec.Decompress(from, to);
 
-        public async Task DecompressAsync(Stream from, Stream to)
-        {
-            using var cs = new CompStream(from, CompressionMode.Decompress, true);
-            await cs.CopyToAsync(to).ConfigureAwait(false);
-        }
+        public Task DecompressAsync(Stream from, Stream to) => Codec.DecompressAsync(from, to);
 
-        public async Task<int> DecompressAsync(Stream from, Memory<Byte> to)
-        {
-            using var cs = new CompStream(from, CompressionMode.Decompress, true);
-            var size = await cs.ReadAsync(to).ConfigureAwait(false);
-            if (await cs.ReadAsync(to).ConfigureAwait(false) > 0)
-                throw new ArgumentException(CompHelpers.DecDestTooSmall, nameof(to));
-            return size;
-        }
+        public Task<int> DecompressAsync(Stream from, Memory<Byte> to) => Codec.DecompressAsync(from, to);
 
-        public async Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to)
-        {
-            using var ms = from.AsStream();
-            await DecompressAsync(ms, to).ConfigureAwait(false);
-        }
-
+        public Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to) => Codec.DecompressAsync(from, to);
 
         #endregion//Decompress
 
     }
-
-
 }
 
-*/
+#endif//NET11_0_OR_GREATER

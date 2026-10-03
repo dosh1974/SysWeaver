@@ -43,10 +43,41 @@ namespace SysWeaver.Compression
                     var k3 = "." + k2;
                     if (!f.TryGetValue(k3, out val) || (val.Prio <= type.Prio))
                         f[k3] = type;
+                    if (!ExtOrder.Contains(k2))
+                    {
+                        ExtOrder.Add(k2);
+                        ExtOrder.Add(k3);
+                    }
                 }
+                //  Copy on write, so that lookups are lock and allocation free
+                var exts = new KeyValuePair<String, ICompType>[ExtOrder.Count];
+                for (int i = 0; i < exts.Length; ++i)
+                    exts[i] = new KeyValuePair<String, ICompType>(ExtOrder[i], f[ExtOrder[i]]);
+                ExtArray = exts;
                 return true;
             }
         }
+
+        /// <summary>
+        /// Get the implementation for a given file extension (uses the ones with highest prio if multiple compressors are available)
+        /// </summary>
+        /// <param name="ext">The file extension, all lowercase (can include a . prefix, like ".gzip")</param>
+        /// <returns>A compressor for the given file extension or null if non exist</returns>
+        public static ICompType GetFromExt(ReadOnlySpan<Char> ext)
+        {
+            foreach (var x in ExtArray)
+                if (ext.SequenceEqual(x.Key))
+                    return x.Value;
+            return null;
+        }
+
+        /// <summary>
+        /// All file extensions (with and without a "." prefix) and the implementation to use, in the order that they where added
+        /// </summary>
+        internal static ReadOnlySpan<KeyValuePair<String, ICompType>> ExtensionArray => ExtArray;
+
+        static readonly List<String> ExtOrder = new();
+        static volatile KeyValuePair<String, ICompType>[] ExtArray = [];
 
         /// <summary>
         /// Get all added compression types in the order that they we're added

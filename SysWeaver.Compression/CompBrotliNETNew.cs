@@ -1,18 +1,14 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 
 using System.IO;
-using System.IO.Compression;
 
 using System.Collections.Frozen;
 
-using CompStream = System.IO.Compression.BrotliStream;
-using Decoder = System.IO.Compression.BrotliDecoder;
-using Encoder = System.IO.Compression.BrotliEncoder;
-
-
 using System.Threading.Tasks;
-using CommunityToolkit.HighPerformance;
+
+using Codec = SysWeaver.Compression.CompStreamCodec<SysWeaver.Compression.CompBrotliNETNew.BrotliEncoder, SysWeaver.Compression.CompBrotliNETNew.BrotliDecoder>;
 
 namespace SysWeaver.Compression
 {
@@ -46,7 +42,7 @@ namespace SysWeaver.Compression
         /// <summary>
         /// The instance of the compressor
         /// </summary>
-        public static ICompType Instance = new CompBrotliNETNew();
+        public static readonly ICompType Instance = new CompBrotliNETNew();
 
         static readonly String CompTS = String.Concat('[', CompHttpCode, "] ", CompName, " @ prio ", CompPrio, " for extensions: ", String.Join(", ", CompExtensions));
 
@@ -67,300 +63,110 @@ namespace SysWeaver.Compression
 
         #endregion//Info
 
-        #region Compress
+        #region Encoder / decoder
 
-        public void Compress(Stream from, Stream to, CompEncoderLevels level)
-        {
-            try
-            {
-                if (from.CanSeek)
-                {
-                    var len = from.Length;
-                    if (len < MaxBuffered)
-                    {
-                        var ilen = (int)len;
-                        var temp= ArrayPoolStream.Rent(ilen * 2 + MaxOverhead);
-                        try
-                        {
-                            var s = temp.AsSpan();
-                            var srcSpan = s.Slice(0, ilen);
-                            var destSpan = s.Slice(ilen);
-                            from.ReadExactly(srcSpan);
-                            var destLen = Compress(srcSpan, destSpan, level);
-                            to.Write(temp, ilen, destLen);
-                            return;
-                        }
-                        finally
-                        {
-                            ArrayPoolStream.Return(temp);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-            using var cs = new CompStream(to, CompHelpers.StreamLevels[(int)level], true);
-            from.CopyTo(cs);
-        }
-
-        public int Compress(Stream from, Span<Byte> to, CompEncoderLevels level)
-        {
-            try
-            {
-                if (from.CanSeek)
-                {
-                    var len = from.Length;
-                    var ilen = (int)len;
-                    if (len < MaxStack)
-                    {
-                        Span<Byte> src = stackalloc Byte[ilen];
-                        from.ReadExactly(src);
-                        var s = Compress(src[..ilen], to, level);
-                        return s;
-                    }
-
-                    if (len < MaxBuffered)
-                    {
-                        var temp = ArrayPoolStream.Rent(ilen);
-                        try
-                        {
-                            var sm = temp.AsSpan()[..ilen];
-                            from.ReadExactly(sm);
-                            var s = Compress(sm, to, level);
-                            return s;
-                        }
-                        finally
-                        {
-                            ArrayPoolStream.Return(temp);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-            var l = to.Length;
-            unsafe
-            {
-                fixed (byte* bp = to)
-                {
-                    using var ms = new UnmanagedMemoryStream(bp, l, l, FileAccess.Write);
-                    Compress(from, ms, level);
-                    return (int)ms.Position;
-                }
-            }
-        }
-
-        static readonly int[] Quality =
+        static ReadOnlySpan<int> Quality =>
         [
             1, 4, 11
         ];
 
         const int EncoderWindow = 24;
-        const int MaxOverhead = 128;
-        const int MaxStack = (1 << 10) - MaxOverhead;
-        const int MaxBuffered = (1 << 16) - MaxOverhead;
 
-        public int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level)
+        /// <summary>
+        /// The .NET brotli encoder (a struct, the native state can't be reset so it's not pooled)
+        /// </summary>
+        public struct BrotliEncoder : ICompStreamEncoder<BrotliEncoder>
         {
-#if DEBUG
-            if (!Encoder.TryCompress(from, to, out var written, Quality[(int)level], EncoderWindow))
-                throw new Exception("Failed to compress!");
-#else//DEBUG
-            Encoder.TryCompress(from, to, out var written, Quality[(int)level], EncoderWindow);
-#endif//DEBUG
-            return written;
+            System.IO.Compression.BrotliEncoder E;
+
+            public static BrotliEncoder Create(CompEncoderLevels level) => new BrotliEncoder
+            {
+                E = new System.IO.Compression.BrotliEncoder(Quality[(int)level], EncoderWindow),
+            };
+
+            public static int GetMaxCompressedLength(int inputSize) => System.IO.Compression.BrotliEncoder.GetMaxCompressedLength(inputSize);
+
+            /// <summary>
+            /// Uses the one-shot native compression (no encoder state is created)
+            /// </summary>
+            public static bool TryCompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten, CompEncoderLevels level)
+                => System.IO.Compression.BrotliEncoder.TryCompress(source, destination, out bytesWritten, Quality[(int)level], EncoderWindow);
+
+            public OperationStatus Compress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
+                => E.Compress(source, destination, out bytesConsumed, out bytesWritten, isFinalBlock);
+
+            public void Dispose() => E.Dispose();
         }
 
-        public void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level)
+        /// <summary>
+        /// The .NET brotli decoder (a struct, the native state can't be reset so it's not pooled)
+        /// </summary>
+        public struct BrotliDecoder : ICompStreamDecoder<BrotliDecoder>
         {
-            var len = from.Length;
-            /*
-            if (len < MaxStack)
+            System.IO.Compression.BrotliDecoder D;
+
+            public static BrotliDecoder Create() => new BrotliDecoder
             {
-                Span<Byte> buf = stackalloc Byte[len + MaxOverhead];
-                var s = Compress(from, buf, level);
-                to.Write(buf[..s]);
-                return;
-            }
-            */
-            if (len < MaxBuffered)
-            {
-                var buf = ArrayPoolStream.Rent(len + MaxOverhead);
-                try
-                {
-                    var bs = buf.AsSpan();
-                    var s = Compress(from, bs, level);
-                    to.Write(buf, 0, s);
-                    return;
-                }
-                finally
-                {
-                    ArrayPoolStream.Return(buf);
-                }
-            }
-            using var cs = new CompStream(to, CompHelpers.StreamLevels[(int)level], true);
-            cs.Write(from);
+                D = new System.IO.Compression.BrotliDecoder(),
+            };
+
+            /// <summary>
+            /// Uses the one-shot native decompression (no decoder state is created)
+            /// </summary>
+            public static bool TryDecompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten)
+                => System.IO.Compression.BrotliDecoder.TryDecompress(source, destination, out bytesWritten);
+
+            /// <summary>
+            /// Concatenated brotli streams are not supported
+            /// </summary>
+            public static int NextHeaderSize => 0;
+
+            public bool BeginNext(ReadOnlySpan<Byte> next) => false;
+
+            public OperationStatus Decompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten)
+                => D.Decompress(source, destination, out bytesConsumed, out bytesWritten);
+
+            public void Dispose() => D.Dispose();
         }
 
-        public async Task CompressAsync(Stream from, Stream to, CompEncoderLevels level)
-        {
-            try
-            {
-                if (from.CanSeek)
-                {
-                    var len = from.Length;
-                    if (len < MaxBuffered)
-                    {
-                        var ilen = (int)len;
-                        var temp = ArrayPoolStream.Rent(ilen * 2 + MaxOverhead);
-                        try
-                        {
-                            await from.ReadExactlyAsync(temp, 0, ilen).ConfigureAwait(false);
-                            var s = temp.AsSpan();
-                            var srcSpan = s.Slice(0, ilen);
-                            var destSpan = s.Slice(ilen);
-                            var destLen = Compress(srcSpan, destSpan, level);
-                            to.Write(temp, ilen, destLen);
-                            await to.WriteAsync(temp, ilen, destLen).ConfigureAwait(false);
-                            return;
-                        }
-                        finally
-                        {
-                            ArrayPoolStream.Return(temp);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
+        #endregion//Encoder / decoder
 
-            using var cs = new CompStream(to, CompHelpers.StreamLevels[(int)level], true);
-            await from.CopyToAsync(cs).ConfigureAwait(false);
-        }
+        #region Compress
 
-        public async Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level)
-        {
-            try
-            {
-                if (from.CanSeek)
-                {
-                    var len = from.Length;
-                    if (len < MaxBuffered)
-                    {
-                        var ilen = (int)len;
-                        var src = ArrayPoolStream.Rent(ilen);
-                        try
-                        {
-                            await from.ReadExactlyAsync(src, 0, ilen).ConfigureAwait(false);
-                            var sm = src.AsSpan()[..ilen];
-                            var s = Compress(sm, to.Span, level);
-                            return s;
-                        }
-                        finally
-                        {
-                            ArrayPoolStream.Return(src);
-                        }
-                    }
-                }
-            }
-            catch
-            {
-            }
-            using var ms = to.AsStream();
-            await CompressAsync(from, ms, level).ConfigureAwait(false);
-            return (int)ms.Position;
-        }
+        public void Compress(Stream from, Stream to, CompEncoderLevels level) => Codec.Compress(from, to, level);
 
-        public async Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level)
-        {
-            var len = from.Length;
-            if (len < MaxBuffered)
-            {
-                var buf = ArrayPoolStream.Rent(len + MaxOverhead);
-                try
-                {
-                    var bs = buf.AsSpan();
-                    var s = Compress(from.Span, bs, level);
-                    await to.WriteAsync(buf, 0, s).ConfigureAwait(false);
-                    return;
-                }
-                finally
-                {
-                    ArrayPoolStream.Return(buf);
-                }
-            }
-            using var ms = from.AsStream();
-            await CompressAsync(ms, to, level).ConfigureAwait(false);
-        }
+        public int Compress(Stream from, Span<Byte> to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public Task CompressAsync(Stream from, Stream to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
+
+        public Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
+
+        public Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
 
         #endregion//Compress
 
 
         #region Decompress
 
-        public void Decompress(Stream from, Stream to)
-        {
-            using var cs = new CompStream(from, CompressionMode.Decompress, true);
-            cs.CopyTo(to);
-        }
+        public void Decompress(Stream from, Stream to) => Codec.Decompress(from, to);
 
-        public int Decompress(Stream from, Span<Byte> to)
-        {
-            var cs = new CompStream(from, CompressionMode.Decompress, true);
-            var size = cs.Read(to);
-            if (cs.Read(to) > 0)
-                throw new ArgumentException(CompHelpers.DecDestTooSmall, nameof(to));
-            return size;
-        }
+        public int Decompress(Stream from, Span<Byte> to) => Codec.Decompress(from, to);
 
-        public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to)
-        {
-            if (!Decoder.TryDecompress(from, to, out var written))
-                throw new Exception("Failed to decompress!");
-            return written;
-        }
+        public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to) => Codec.Decompress(from, to);
 
-        public void Decompress(ReadOnlySpan<Byte> from, Stream to)
-        {
-            unsafe
-            {
-                fixed (byte* bp = from)
-                {
-                    using var ms = new UnmanagedMemoryStream(bp, from.Length);
-                    Decompress(ms, to);
-                }
-            }
-        }
+        public void Decompress(ReadOnlySpan<Byte> from, Stream to) => Codec.Decompress(from, to);
 
-        public async Task DecompressAsync(Stream from, Stream to)
-        {
-            using var cs = new CompStream(from, CompressionMode.Decompress, true);
-            await cs.CopyToAsync(to).ConfigureAwait(false);
-        }
+        public Task DecompressAsync(Stream from, Stream to) => Codec.DecompressAsync(from, to);
 
-        public async Task<int> DecompressAsync(Stream from, Memory<Byte> to)
-        {
-            using var cs = new CompStream(from, CompressionMode.Decompress, true);
-            var size = await cs.ReadAsync(to).ConfigureAwait(false);
-            if (await cs.ReadAsync(to).ConfigureAwait(false) > 0)
-                throw new ArgumentException(CompHelpers.DecDestTooSmall, nameof(to));
-            return size;
-        }
+        public Task<int> DecompressAsync(Stream from, Memory<Byte> to) => Codec.DecompressAsync(from, to);
 
-        public async Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to)
-        {
-            using var ms = from.AsStream();
-            await DecompressAsync(ms, to).ConfigureAwait(false);
-        }
-
+        public Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to) => Codec.DecompressAsync(from, to);
 
         #endregion//Decompress
 
     }
-
-
-
 }

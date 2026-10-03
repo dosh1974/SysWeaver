@@ -1,12 +1,12 @@
-﻿using CommunityToolkit.HighPerformance;
-using System;
-using System.Collections.Concurrent;
+﻿using System;
+using System.Buffers;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Threading.Tasks;
 using ZstdSharp;
+
+using Codec = SysWeaver.Compression.CompStreamCodec<SysWeaver.Compression.CompZstdSharp.ZstdEncoder, SysWeaver.Compression.CompZstdSharp.ZstdDecoder>;
 
 namespace SysWeaver.Compression
 {
@@ -57,182 +57,195 @@ namespace SysWeaver.Compression
 
         #endregion//Info
 
-        #region Compress
+        #region Encoder / decoder
 
-        static readonly int[] Levels = new int[]
-        {
+        static readonly int[] Levels =
+        [
              1,
              9,
              22,
-        };
+        ];
 
-        sealed class MyCompressor : Compressor, IDisposable
+        /// <summary>
+        /// Pooled compressors (one pool per level), the native context is kept between uses
+        /// </summary>
+        static readonly CompInstancePool<Compressor>[] Compressors = [new(), new(), new()];
+
+        /// <summary>
+        /// Pooled decompressors, the native context is kept between uses
+        /// </summary>
+        static readonly CompInstancePool<Decompressor> Decompressors = new();
+
+        static Compressor RentCompressor(CompEncoderLevels level) => Compressors[(int)level].TryRent() ?? new Compressor(Levels[(int)level]);
+
+        static void Return(CompEncoderLevels level, Compressor c)
         {
-            public MyCompressor(ConcurrentStack<MyCompressor> s, int level) : base(level)
-            {
-                S = s;
-            }
-            readonly ConcurrentStack<MyCompressor> S;
-            public new void Dispose()
-            {
-                S.Push(this);
-            }
+            c.ResetStream();
+            Compressors[(int)level].Return(c);
         }
 
+        static Decompressor RentDecompressor() => Decompressors.TryRent() ?? new Decompressor();
 
-        static readonly ConcurrentStack<MyCompressor>[] Compressors = new ConcurrentStack<MyCompressor>[]
+        static void Return(Decompressor d)
         {
-            new ConcurrentStack<MyCompressor> (),
-            new ConcurrentStack<MyCompressor> (),
-            new ConcurrentStack<MyCompressor> (),
-        };
-
-        static MyCompressor GetComp(CompEncoderLevels level)
-        {
-            var il = (int)level;
-            var s = Compressors[il];
-            if (s.TryPop(out var c))
-                return c;
-            c = new MyCompressor(s, Levels[il]);
-            return c;
+            d.ResetStream();
+            Decompressors.Return(d);
         }
 
-        public void Compress(Stream from, Stream to, CompEncoderLevels level)
+        /// <summary>
+        /// A pooled zstd compressor
+        /// </summary>
+        public struct ZstdEncoder : ICompStreamEncoder<ZstdEncoder>
         {
-            using var cs = new CompressionStream(to, Levels[(int)level]);
-            from.CopyTo(cs);
-        }
+            Compressor C;
+            CompEncoderLevels Level;
 
-        public int Compress(Stream from, Span<Byte> to, CompEncoderLevels level)
-        {
-            var l = to.Length;
-            unsafe
+            public static ZstdEncoder Create(CompEncoderLevels level) => new ZstdEncoder
             {
-                fixed (byte* bp = to)
+                C = RentCompressor(level),
+                Level = level,
+            };
+
+            public static int GetMaxCompressedLength(int inputSize) => Compressor.GetCompressBound(inputSize);
+
+            public static bool TryCompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten, CompEncoderLevels level)
+            {
+                var bound = Compressor.GetCompressBound(source.Length);
+                var c = RentCompressor(level);
+                try
                 {
-                    using var ms = new UnmanagedMemoryStream(bp, l, l, FileAccess.Write);
-                    Compress(from, ms, level);
-                    return (int)ms.Position;
+                    if (destination.Length >= bound)
+                        return c.TryWrap(source, destination, out bytesWritten);
+                    //  Zstd fails if the destination is smaller than the worst case size, even if the compressed data fits.
+                    //  Compress to a temp buffer and copy the result if it fits.
+                    var temp = ArrayPoolStream.Rent(bound);
+                    try
+                    {
+                        if (!c.TryWrap(source, temp.AsSpan(0, bound), out var size) || (size > destination.Length))
+                        {
+                            bytesWritten = 0;
+                            return false;
+                        }
+                        temp.AsSpan(0, size).CopyTo(destination);
+                        bytesWritten = size;
+                        return true;
+                    }
+                    finally
+                    {
+                        ArrayPoolStream.Return(temp);
+                    }
+                }
+                finally
+                {
+                    Return(level, c);
                 }
             }
+
+            public OperationStatus Compress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
+                => C.WrapStream(source, destination, out bytesConsumed, out bytesWritten, isFinalBlock);
+
+            public void Dispose()
+            {
+                var c = C;
+                if (c == null)
+                    return;
+                C = null;
+                Return(Level, c);
+            }
         }
 
-        public int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level)
+        /// <summary>
+        /// A pooled zstd decompressor
+        /// </summary>
+        public struct ZstdDecoder : ICompStreamDecoder<ZstdDecoder>
         {
-            using var c = GetComp(level);
-            return c.Wrap(from, to);
+            Decompressor D;
+
+            public static ZstdDecoder Create() => new ZstdDecoder
+            {
+                D = RentDecompressor(),
+            };
+
+            public static bool TryDecompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten)
+            {
+                bytesWritten = 0;
+                //  A zstd frame is never empty
+                if (source.IsEmpty)
+                    return false;
+                var d = RentDecompressor();
+                try
+                {
+                    return d.TryUnwrap(source, destination, out bytesWritten);
+                }
+                catch (ZstdException)
+                {
+                    return false;
+                }
+                finally
+                {
+                    Return(d);
+                }
+            }
+
+            /// <summary>
+            /// Concatenated zstd frames are valid zstd data
+            /// </summary>
+            public static int NextHeaderSize => 4;
+
+            /// <summary>
+            /// The decompressor is ready for the next frame when a frame is done
+            /// </summary>
+            public bool BeginNext(ReadOnlySpan<Byte> next) => CompHelpers.IsZstdFrame(next);
+
+            public OperationStatus Decompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten)
+                => D.UnwrapStream(source, destination, out bytesConsumed, out bytesWritten);
+
+            public void Dispose()
+            {
+                var d = D;
+                if (d == null)
+                    return;
+                D = null;
+                Return(d);
+            }
         }
 
-        public void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level)
-        {
-            using var cs = new CompressionStream(to, Levels[(int)level]);
-            cs.Write(from);
-        }
+        #endregion//Encoder / decoder
 
-        public async Task CompressAsync(Stream from, Stream to, CompEncoderLevels level)
-        {
-            using var cs = new CompressionStream(to, Levels[(int)level]);
-            await from.CopyToAsync(cs).ConfigureAwait(false);
-        }
+        #region Compress
 
-        public async Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level)
-        {
-            using var ms = to.AsStream();
-            await CompressAsync(from, ms, level).ConfigureAwait(false);
-            return (int)ms.Position;
-        }
+        public void Compress(Stream from, Stream to, CompEncoderLevels level) => Codec.Compress(from, to, level);
 
-        public async Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level)
-        {
-            using var cs = new CompressionStream(to, Levels[(int)level]);
-            await cs.WriteAsync(from).ConfigureAwait(false);
-        }
+        public int Compress(Stream from, Span<Byte> to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public Task CompressAsync(Stream from, Stream to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
+
+        public Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
+
+        public Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
 
         #endregion//Compress
 
 
         #region Decompress
 
+        public void Decompress(Stream from, Stream to) => Codec.Decompress(from, to);
 
-        sealed class MyDecompressor : Decompressor, IDisposable
-        {
-            public MyDecompressor(ConcurrentStack<MyDecompressor> s)
-            {
-                S = s;
-            }
-            readonly ConcurrentStack<MyDecompressor> S;
-            public new void Dispose()
-            {
-                S.Push(this);
-            }
-        }
+        public int Decompress(Stream from, Span<Byte> to) => Codec.Decompress(from, to);
 
-        static readonly ConcurrentStack<MyDecompressor> Decompressors = new ConcurrentStack<MyDecompressor>();
+        public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to) => Codec.Decompress(from, to);
 
+        public void Decompress(ReadOnlySpan<Byte> from, Stream to) => Codec.Decompress(from, to);
 
-        static MyDecompressor GetDecomp()
-        {
-            var s = Decompressors;
-            if (s.TryPop(out var c))
-                return c;
-            c = new MyDecompressor(s);
-            return c;
+        public Task DecompressAsync(Stream from, Stream to) => Codec.DecompressAsync(from, to);
 
-        }
-        public void Decompress(Stream from, Stream to)
-        {
-            using var cs = new DecompressionStream(from);
-            cs.CopyTo(to);
-        }
+        public Task<int> DecompressAsync(Stream from, Memory<Byte> to) => Codec.DecompressAsync(from, to);
 
-        public int Decompress(Stream from, Span<Byte> to)
-        {
-            using var cs = new DecompressionStream(from);
-            var size = cs.Read(to);
-            if (cs.Read(to) > 0)
-                throw new ArgumentException(CompHelpers.DecDestTooSmall, nameof(to));
-            return size;
-        }
-
-        public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to)
-        {
-            using var c = GetDecomp();
-            return c.Unwrap(from, to);
-        }
-
-        public void Decompress(ReadOnlySpan<Byte> from, Stream to)
-        {
-            unsafe
-            {
-                fixed (byte* bp = from)
-                {
-                    using var ms = new UnmanagedMemoryStream(bp, from.Length);
-                    Decompress(ms, to);
-                }
-            }
-        }
-
-        public async Task DecompressAsync(Stream from, Stream to)
-        {
-            using var cs = new DecompressionStream(from);
-            await cs.CopyToAsync(to).ConfigureAwait(false);
-        }
-
-        public async Task<int> DecompressAsync(Stream from, Memory<Byte> to)
-        {
-            using var cs = new DecompressionStream(from);
-            var size = await cs.ReadAsync(to).ConfigureAwait(false);
-            if (await cs.ReadAsync(to).ConfigureAwait(false) > 0)
-                throw new ArgumentException(CompHelpers.DecDestTooSmall, nameof(to));
-            return size;
-        }
-
-        public async Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to)
-        {
-            using var ms = from.AsStream();
-            await DecompressAsync(ms, to).ConfigureAwait(false);
-        }
-
+        public Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to) => Codec.DecompressAsync(from, to);
 
         #endregion//Decompress
 

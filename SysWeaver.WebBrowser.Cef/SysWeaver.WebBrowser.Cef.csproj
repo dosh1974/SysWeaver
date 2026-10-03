@@ -10,7 +10,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="CefSharp.OffScreen.NETCore" Version="152.0.60" />
+	  <PackageReference Include="CefSharp.OffScreen.NETCore" Version="152.0.100" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -20,14 +20,14 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <PackageReference Update="chromiumembeddedframework.runtime.win-arm64" Version="152.0.6" />
+	  <PackageReference Update="chromiumembeddedframework.runtime.win-arm64" Version="152.0.10" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <PackageReference Update="chromiumembeddedframework.runtime.win-x64" Version="152.0.6" />
+	  <PackageReference Update="chromiumembeddedframework.runtime.win-x64" Version="152.0.10" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <PackageReference Update="chromiumembeddedframework.runtime.win-x86" Version="152.0.6" />
+	  <PackageReference Update="chromiumembeddedframework.runtime.win-x86" Version="152.0.10" />
 	</ItemGroup>
 </Project>

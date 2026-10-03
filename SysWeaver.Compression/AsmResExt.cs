@@ -3,6 +3,7 @@ using System.Buffers;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using SysWeaver.Compression;
 
@@ -10,6 +11,25 @@ namespace SysWeaver
 {
     public static class AsmResExt
     {
+        /// <summary>
+        /// The resource names of an assembly (GetManifestResourceNames returns a new array every time)
+        /// </summary>
+        static readonly ConditionalWeakTable<Assembly, String[]> ResourceNames = new();
+
+        static String[] GetResourceNames(Assembly asm) => ResourceNames.GetValue(asm, static a => a.GetManifestResourceNames());
+
+        /// <summary>
+        /// Read all data of a stream into an array of the exact size
+        /// </summary>
+        static Byte[] ReadAllBytes(Stream s)
+        {
+            var len = checked((int)(s.Length - s.Position));
+            if (len <= 0)
+                return Array.Empty<Byte>();
+            var ret = GC.AllocateUninitializedArray<Byte>(len);
+            s.ReadExactly(ret);
+            return ret;
+        }
 
         /// <summary>
         /// Given an uncompressed resource name, find the compressed version (if any) and modify to the true resource name
@@ -19,39 +39,39 @@ namespace SysWeaver
         /// <returns>The compression type or null</returns>
         public static ICompType FindResource(this Assembly asm, ref String uncompressedName)
         {
-            var allRes = asm.GetManifestResourceNames();
+            var allRes = GetResourceNames(asm);
             foreach (var t in allRes)
             {
                 if (!t.StartsWith(uncompressedName, StringComparison.Ordinal))
                     continue;
                 if (t.FastEquals(uncompressedName))
                     return null;
-                var comp = CompManager.GetFromExt(t.Substring(uncompressedName.Length + 1));
+                var comp = CompManager.GetFromExt(t.AsSpan(uncompressedName.Length + 1));
                 if (comp == null)
                     continue;
                 uncompressedName = t;
                 return comp;
             }
-            String prefix = null;
+            String prefixed = null;
             foreach (var t in allRes)
             {
                 var k = t.FastIndexOf(".data.");
                 if (k >= 0)
                 {
-                    prefix = t.Substring(0, k + 6);
+                    prefixed = String.Concat(t.AsSpan(0, k + 6), uncompressedName);
                     break;
                 }
             }
-            if (prefix != null)
+            if (prefixed != null)
             {
-                uncompressedName = prefix + uncompressedName;
+                uncompressedName = prefixed;
                 foreach (var t in allRes)
                 {
                     if (!t.StartsWith(uncompressedName, StringComparison.Ordinal))
                         continue;
                     if (t.FastEquals(uncompressedName))
                         return null;
-                    var comp = CompManager.GetFromExt(t.Substring(uncompressedName.Length + 1));
+                    var comp = CompManager.GetFromExt(t.AsSpan(uncompressedName.Length + 1));
                     if (comp == null)
                         continue;
                     uncompressedName = t;
@@ -74,7 +94,7 @@ namespace SysWeaver
             var f = compressedName.LastIndexOf('.');
             if (f < 0)
                 return null;
-            var comp = CompManager.GetFromExt(compressedName.Substring(f + 1));
+            var comp = CompManager.GetFromExt(compressedName.AsSpan(f + 1));
             if (comp != null)
                 compressedName = compressedName.Substring(0, f);
             return comp;
@@ -96,17 +116,7 @@ namespace SysWeaver
                     ?
                     new UnmanagedMemoryManager<Byte>(x.PositionPointer, checked((int)x.Length)).ReadOnlyMemory
                     : comp.GetDecompressed(new ReadOnlySpan<byte>(x.PositionPointer, checked((int)x.Length)));
-            if (comp == null)
-            {
-                using var ms = new MemoryStream((int)s.Length);
-                s.CopyTo(ms);
-                return new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
-            }else
-            {
-                using var ms = new MemoryStream((int)s.Length * 4);
-                comp.Decompress(s, ms);
-                return new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
-            }
+            return comp == null ? ReadAllBytes(s) : comp.GetDecompressed(s);
         }
 
 
@@ -125,18 +135,7 @@ namespace SysWeaver
                     ?
                     new UnmanagedMemoryManager<Byte>(x.PositionPointer, checked((int)x.Length)).ReadOnlyMemory
                     : comp.GetDecompressed(new ReadOnlySpan<byte>(x.PositionPointer, checked((int)x.Length)));
-            if (comp == null)
-            {
-                using var ms = new MemoryStream((int)s.Length);
-                s.CopyTo(ms);
-                return new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
-            }
-            else
-            {
-                using var ms = new MemoryStream((int)s.Length * 4);
-                comp.Decompress(s, ms);
-                return new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
-            }
+            return comp == null ? ReadAllBytes(s) : comp.GetDecompressed(s);
         }
 
         /// <summary>
@@ -150,9 +149,7 @@ namespace SysWeaver
             using var s = asm.GetManifestResourceStream(name);
             if (s is UnmanagedMemoryStream x)
                 return new UnmanagedMemoryManager<Byte>(x.PositionPointer, checked((int)x.Length)).ReadOnlyMemory;
-            using var ms = new MemoryStream((int)s.Length);
-            s.CopyTo(ms);
-            return new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
+            return ReadAllBytes(s);
         }
 
         /// <summary>
@@ -171,9 +168,7 @@ namespace SysWeaver
                 new ReadOnlySpan<byte>(x.PositionPointer, sl).CopyTo(ret.AsSpan());
                 return ret;
             }
-            using var ms = new MemoryStream((int)s.Length);
-            s.CopyTo(ms);
-            return ms.ToArray();
+            return ReadAllBytes(s);
         }
 
         /// <summary>
@@ -198,12 +193,7 @@ namespace SysWeaver
                     ?
                     new UnmanagedMemoryManager<Byte>(x.PositionPointer, checked((int)x.Length)).ReadOnlyMemory
                     : comp.GetDecompressed(new ReadOnlySpan<byte>(x.PositionPointer, checked((int)x.Length)));
-            using var ms = new MemoryStream((int)s.Length);
-            if (comp == null)
-                s.CopyTo(ms);
-            else
-                comp.Decompress(s, ms);
-            return new ReadOnlyMemory<byte>(ms.GetBuffer(), 0, (int)ms.Length);
+            return comp == null ? ReadAllBytes(s) : comp.GetDecompressed(s);
         }
 
         /// <summary>
@@ -232,18 +222,9 @@ namespace SysWeaver
                     new ReadOnlySpan<byte>(x.PositionPointer, sl).CopyTo(ret.AsSpan());
                     return ret;
                 }
-                using (var cms = new MemoryStream(sl))
-                {
-                    comp.Decompress(new ReadOnlySpan<byte>(x.PositionPointer, sl), cms);
-                    return cms.ToArray();
-                }
+                return comp.GetDecompressedArray(new ReadOnlySpan<byte>(x.PositionPointer, sl));
             }
-            using var ms = new MemoryStream((int)s.Length);
-            if (comp == null)
-                s.CopyTo(ms);
-            else
-                comp.Decompress(s, ms);
-            return ms.ToArray();
+            return comp == null ? ReadAllBytes(s) : comp.GetDecompressedArray(s);
         }
 
 

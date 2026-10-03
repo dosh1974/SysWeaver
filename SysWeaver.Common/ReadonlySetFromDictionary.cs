@@ -386,23 +386,26 @@ namespace SysWeaver
         /// <summary>
         /// Get an empty dictionary with a comparer
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static EmptyReadonlyDictionary<K, V> Get(IEqualityComparer<K> comparer)
         {
-            if (comparer == Default.Comp)
-                return Default;
             // The last used comparer is cached (it's typically the same comparer every time)
             var last = Last;
-            if (last?.Comp == comparer)
-                return last;
-            last = Others.GetValue(comparer, c => new EmptyReadonlyDictionary<K, V>(c));
+            return last.Comp == comparer ? last : GetSlow(comparer);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static EmptyReadonlyDictionary<K, V> GetSlow(IEqualityComparer<K> comparer)
+        {
+            var last = comparer == Default.Comp ? Default : Others.GetValue(comparer, c => new EmptyReadonlyDictionary<K, V>(c));
             Last = last;
             return last;
         }
 
         /// <summary>
-        /// The last empty dictionary returned for another comparer than the default
+        /// The last empty dictionary returned (starts with the default comparer)
         /// </summary>
-        static EmptyReadonlyDictionary<K, V> Last;
+        static EmptyReadonlyDictionary<K, V> Last = Default;
 
         EmptyReadonlyDictionary(IEqualityComparer<K> comparer)
         {

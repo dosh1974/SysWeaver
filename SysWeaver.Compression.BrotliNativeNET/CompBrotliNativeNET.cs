@@ -1,13 +1,12 @@
 using System;
+using System.Buffers;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Threading.Tasks;
-using CommunityToolkit.HighPerformance;
+using Brotli;
 
-using CompStream = Brotli.BrotliStream;
-using DeCompStream = Brotli.BrotliStream;
+using Codec = SysWeaver.Compression.CompStreamCodec<SysWeaver.Compression.CompBrotliNativeNET.NativeEncoder, SysWeaver.Compression.CompBrotliNativeNET.NativeDecoder>;
 
 namespace SysWeaver.Compression
 {
@@ -62,141 +61,185 @@ namespace SysWeaver.Compression
 
         #endregion//Info
 
-        #region Compress
+        #region Encoder / decoder
 
-        static readonly uint[] Quality =
+        static ReadOnlySpan<uint> Quality =>
         [
             1, 4, 11
         ];
 
-        public void Compress(Stream from, Stream to, CompEncoderLevels level)
-        {
-            using var cs = new CompStream(to, CompressionMode.Compress, true);
-            cs.SetQuality(Quality[(int)level]);
-            from.CopyTo(cs);
-        }
+        /// <summary>
+        /// The window size (log2), same as the Brotli.NET BrotliStream
+        /// </summary>
+        const uint Window = 22;
 
-        public int Compress(Stream from, Span<Byte> to, CompEncoderLevels level)
+        /// <summary>
+        /// A native brotli encoder (the Brotli.NET native functions are called directly, using pooled buffers instead of the managed buffers of the Brotli.NET BrotliStream)
+        /// </summary>
+        public unsafe struct NativeEncoder : ICompStreamEncoder<NativeEncoder>
         {
-            var l = to.Length;
-            unsafe
+            IntPtr State;
+
+            public static NativeEncoder Create(CompEncoderLevels level)
             {
-                fixed (byte* bp = to)
+                var state = Brolib.BrotliEncoderCreateInstance();
+                if (state == IntPtr.Zero)
+                    throw new InvalidOperationException("Failed to create a brotli encoder");
+                Brolib.BrotliEncoderSetParameter(state, BrotliEncoderParameter.Quality, Quality[(int)level]);
+                Brolib.BrotliEncoderSetParameter(state, BrotliEncoderParameter.LGWin, Window);
+                return new NativeEncoder
                 {
-                    using var ms = new UnmanagedMemoryStream(bp, l, l, FileAccess.Write);
-                    Compress(from, ms, level);
-                    return (int)ms.Position;
+                    State = state,
+                };
+            }
+
+            public static int GetMaxCompressedLength(int inputSize) => System.IO.Compression.BrotliEncoder.GetMaxCompressedLength(inputSize);
+
+            public static bool TryCompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten, CompEncoderLevels level)
+            {
+                var enc = Create(level);
+                try
+                {
+                    return Codec.TryCompress(ref enc, source, destination, out bytesWritten);
                 }
+                finally
+                {
+                    enc.Dispose();
+                }
+            }
+
+            public OperationStatus Compress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
+            {
+                fixed (Byte* src = source)
+                fixed (Byte* dst = destination)
+                {
+                    uint availIn = (uint)source.Length;
+                    IntPtr nextIn = (IntPtr)src;
+                    uint availOut = (uint)destination.Length;
+                    IntPtr nextOut = (IntPtr)dst;
+                    var ok = Brolib.BrotliEncoderCompressStream(State, isFinalBlock ? BrotliEncoderOperation.Finish : BrotliEncoderOperation.Process, ref availIn, ref nextIn, ref availOut, ref nextOut, out _);
+                    bytesConsumed = source.Length - (int)availIn;
+                    bytesWritten = destination.Length - (int)availOut;
+                    if (!ok)
+                        return OperationStatus.InvalidData;
+                    if (isFinalBlock)
+                        return Brolib.BrotliEncoderIsFinished(State) ? OperationStatus.Done : OperationStatus.DestinationTooSmall;
+                    return (availIn == 0) && (availOut > 0) ? OperationStatus.Done : OperationStatus.DestinationTooSmall;
+                }
+            }
+
+            public void Dispose()
+            {
+                var s = State;
+                if (s == IntPtr.Zero)
+                    return;
+                State = IntPtr.Zero;
+                Brolib.BrotliEncoderDestroyInstance(s);
             }
         }
 
-        public int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level)
+        /// <summary>
+        /// A native brotli decoder (the Brotli.NET native functions are called directly, using pooled buffers instead of the managed buffers of the Brotli.NET BrotliStream)
+        /// </summary>
+        public unsafe struct NativeDecoder : ICompStreamDecoder<NativeDecoder>
         {
-            var l = to.Length;
-            unsafe
+            IntPtr State;
+
+            public static NativeDecoder Create()
             {
-                fixed (byte* bp = to)
+                var state = Brolib.BrotliDecoderCreateInstance();
+                if (state == IntPtr.Zero)
+                    throw new InvalidOperationException("Failed to create a brotli decoder");
+                return new NativeDecoder
                 {
-                    using var ms = new UnmanagedMemoryStream(bp, l, l, FileAccess.Write);
-                    Compress(from, ms, level);
-                    return (int)ms.Position;
+                    State = state,
+                };
+            }
+
+            /// <summary>
+            /// There is no one-shot api, the streaming decoder is used
+            /// </summary>
+            public static bool TryDecompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten)
+            {
+                bytesWritten = 0;
+                return false;
+            }
+
+            /// <summary>
+            /// Concatenated brotli streams are not supported
+            /// </summary>
+            public static int NextHeaderSize => 0;
+
+            public bool BeginNext(ReadOnlySpan<Byte> next) => false;
+
+            public OperationStatus Decompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten)
+            {
+                fixed (Byte* src = source)
+                fixed (Byte* dst = destination)
+                {
+                    uint availIn = (uint)source.Length;
+                    IntPtr nextIn = (IntPtr)src;
+                    uint availOut = (uint)destination.Length;
+                    IntPtr nextOut = (IntPtr)dst;
+                    var res = Brolib.BrotliDecoderDecompressStream(State, ref availIn, ref nextIn, ref availOut, ref nextOut, out _);
+                    bytesConsumed = source.Length - (int)availIn;
+                    bytesWritten = destination.Length - (int)availOut;
+                    return res switch
+                    {
+                        BrotliDecoderResult.Success => OperationStatus.Done,
+                        BrotliDecoderResult.NeedsMoreInput => OperationStatus.NeedMoreData,
+                        BrotliDecoderResult.NeedsMoreOutput => OperationStatus.DestinationTooSmall,
+                        _ => OperationStatus.InvalidData,
+                    };
                 }
+            }
+
+            public void Dispose()
+            {
+                var s = State;
+                if (s == IntPtr.Zero)
+                    return;
+                State = IntPtr.Zero;
+                Brolib.BrotliDecoderDestroyInstance(s);
             }
         }
 
-        public void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level)
-        {
-            using var cs = new CompStream(to, CompressionMode.Compress, true);
-            cs.SetQuality(Quality[(int)level]);
-            cs.Write(from);
-        }
+        #endregion//Encoder / decoder
 
-        public async Task CompressAsync(Stream from, Stream to, CompEncoderLevels level)
-        {
-            using var cs = new CompStream(to, CompressionMode.Compress, true);
-            cs.SetQuality(Quality[(int)level]);
-            await from.CopyToAsync(cs).ConfigureAwait(false);
-        }
+        #region Compress
 
-        public async Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level)
-        {
-            using var ms = to.AsStream();
-            await CompressAsync(from, ms, level).ConfigureAwait(false);
-            return (int)ms.Position;
-        }
+        public void Compress(Stream from, Stream to, CompEncoderLevels level) => Codec.Compress(from, to, level);
 
-        public async Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level)
-        {
-            using var cs = new CompStream(to, CompressionMode.Compress, true);
-            cs.SetQuality(Quality[(int)level]);
-            await cs.WriteAsync(from).ConfigureAwait(false);
-        }
+        public int Compress(Stream from, Span<Byte> to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level) => Codec.Compress(from, to, level);
+
+        public Task CompressAsync(Stream from, Stream to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
+
+        public Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
+
+        public Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
 
         #endregion//Compress
 
 
         #region Decompress
 
-        public void Decompress(Stream from, Stream to)
-        {
-            using var cs = new DeCompStream(from, CompressionMode.Decompress, true);
-            cs.CopyTo(to);
-        }
+        public void Decompress(Stream from, Stream to) => Codec.Decompress(from, to);
 
-        public int Decompress(Stream from, Span<Byte> to)
-        {
-            using var cs = new DeCompStream(from, CompressionMode.Decompress, true);
-            var size = cs.Read(to);
-            if (cs.Read(to) > 0)
-                throw new ArgumentException(CompHelpers.DecDestTooSmall, nameof(to));
-            return size;
-        }
+        public int Decompress(Stream from, Span<Byte> to) => Codec.Decompress(from, to);
 
-        public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to)
-        {
-            unsafe
-            {
-                fixed (byte* bp = from)
-                {
-                    using var ms = new UnmanagedMemoryStream(bp, from.Length);
-                    return Decompress(ms, to);
-                }
-            }
-        }
+        public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to) => Codec.Decompress(from, to);
 
-        public void Decompress(ReadOnlySpan<Byte> from, Stream to)
-        {
-            unsafe
-            {
-                fixed (byte* bp = from)
-                {
-                    using var ms = new UnmanagedMemoryStream(bp, from.Length);
-                    Decompress(ms, to);
-                }
-            }
-        }
+        public void Decompress(ReadOnlySpan<Byte> from, Stream to) => Codec.Decompress(from, to);
 
-        public async Task DecompressAsync(Stream from, Stream to)
-        {
-            using var cs = new DeCompStream(from, CompressionMode.Decompress, true);
-            await cs.CopyToAsync(to).ConfigureAwait(false);
-        }
+        public Task DecompressAsync(Stream from, Stream to) => Codec.DecompressAsync(from, to);
 
-        public async Task<int> DecompressAsync(Stream from, Memory<Byte> to)
-        {
-            using var cs = new DeCompStream(from, CompressionMode.Decompress, true);
-            var size = await cs.ReadAsync(to).ConfigureAwait(false);
-            if (await cs.ReadAsync(to).ConfigureAwait(false) > 0)
-                throw new ArgumentException(CompHelpers.DecDestTooSmall, nameof(to));
-            return size;
-        }
+        public Task<int> DecompressAsync(Stream from, Memory<Byte> to) => Codec.DecompressAsync(from, to);
 
-        public async Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to)
-        {
-            using var ms = from.AsStream();
-            await DecompressAsync(ms, to).ConfigureAwait(false);
-        }
-
+        public Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to) => Codec.DecompressAsync(from, to);
 
         #endregion//Decompress
 

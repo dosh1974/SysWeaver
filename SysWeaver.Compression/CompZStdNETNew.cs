@@ -7,29 +7,29 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
-using Codec = SysWeaver.Compression.CompStreamCodec<SysWeaver.Compression.CompDeflateNETNew.DeflateEncoder, SysWeaver.Compression.CompDeflateNETNew.DeflateDecoder>;
+using Codec = SysWeaver.Compression.CompStreamCodec<SysWeaver.Compression.CompZStdNETNew.ZstdEncoder, SysWeaver.Compression.CompZStdNETNew.ZstdDecoder>;
 
 namespace SysWeaver.Compression
 {
     /// <summary>
-    /// A compression type that uses Deflate (the .NET 11+ System.IO.Compression.DeflateEncoder / DeflateDecoder) for compression
+    /// A compression type that uses Zstandard (the .NET 11+ System.IO.Compression.ZstandardEncoder / ZstandardDecoder) for compression
     /// </summary>
-    public sealed class CompDeflateNETNew : ICompType
+    public sealed class CompZStdNETNew : ICompType
     {
-        const String CompName = ".NET deflate";
+        const String CompName = ".NET zstd";
 
-        const String CompHttpCode = "deflate";
+        const String CompHttpCode = "zstd";
 
         const int CompPrio = 0;
 
         static readonly IReadOnlySet<String> CompExtensions = new HashSet<string>(StringComparer.Ordinal)
         {
-            "deflate",
+            "zstd",
         }.ToFrozenSet(StringComparer.Ordinal);
 
         #region Lifetime
 
-        CompDeflateNETNew()
+        CompZStdNETNew()
         {
         }
 
@@ -41,7 +41,7 @@ namespace SysWeaver.Compression
         /// <summary>
         /// The instance of the compressor
         /// </summary>
-        public static readonly ICompType Instance = new CompDeflateNETNew();
+        public static readonly ICompType Instance = new CompZStdNETNew();
 
         static readonly String CompTS = String.Concat('[', CompHttpCode, "] ", CompName, " @ prio ", CompPrio, " for extensions: ", String.Join(", ", CompExtensions));
 
@@ -65,29 +65,24 @@ namespace SysWeaver.Compression
         #region Encoder / decoder
 
         /// <summary>
-        /// zlib quality (0-9) for each level
+        /// Zstandard quality (1-22) for each level
         /// </summary>
         static ReadOnlySpan<int> Quality =>
         [
-            1, 6, 9
+            1, 9, 22
         ];
-
-        /// <summary>
-        /// zlib window size (8-15)
-        /// </summary>
-        const int EncoderWindow = 15;
 
         /// <summary>
         /// The encoders and decoders are classes holding native state that is expensive to create, so they are pooled and reused
         /// </summary>
-        static readonly CompInstancePool<System.IO.Compression.DeflateEncoder>[] EncoderPools = [new(), new(), new()];
+        static readonly CompInstancePool<System.IO.Compression.ZstandardEncoder>[] EncoderPools = [new(), new(), new()];
 
-        static readonly CompInstancePool<System.IO.Compression.DeflateDecoder> DecoderPool = new();
+        static readonly CompInstancePool<System.IO.Compression.ZstandardDecoder> DecoderPool = new();
 
-        static System.IO.Compression.DeflateEncoder RentEncoder(CompEncoderLevels level)
-            => EncoderPools[(int)level].TryRent() ?? new System.IO.Compression.DeflateEncoder(Quality[(int)level], EncoderWindow);
+        static System.IO.Compression.ZstandardEncoder RentEncoder(CompEncoderLevels level)
+            => EncoderPools[(int)level].TryRent() ?? new System.IO.Compression.ZstandardEncoder(Quality[(int)level]);
 
-        static void ReturnEncoder(CompEncoderLevels level, System.IO.Compression.DeflateEncoder enc)
+        static void ReturnEncoder(CompEncoderLevels level, System.IO.Compression.ZstandardEncoder enc)
         {
             try
             {
@@ -101,9 +96,9 @@ namespace SysWeaver.Compression
             EncoderPools[(int)level].Return(enc);
         }
 
-        static System.IO.Compression.DeflateDecoder RentDecoder() => DecoderPool.TryRent() ?? new System.IO.Compression.DeflateDecoder();
+        static System.IO.Compression.ZstandardDecoder RentDecoder() => DecoderPool.TryRent() ?? new System.IO.Compression.ZstandardDecoder();
 
-        static void ReturnDecoder(System.IO.Compression.DeflateDecoder dec)
+        static void ReturnDecoder(System.IO.Compression.ZstandardDecoder dec)
         {
             try
             {
@@ -118,35 +113,31 @@ namespace SysWeaver.Compression
         }
 
         /// <summary>
-        /// A pooled .NET deflate encoder
+        /// A pooled .NET zstd encoder
         /// </summary>
-        public struct DeflateEncoder : ICompStreamEncoder<DeflateEncoder>
+        public struct ZstdEncoder : ICompStreamEncoder<ZstdEncoder>
         {
-            System.IO.Compression.DeflateEncoder E;
+            System.IO.Compression.ZstandardEncoder E;
             CompEncoderLevels Level;
 
-            /// <summary>
-            /// True when the encoder completed a stream (the last block was compressed).
-            /// Only completed encoders are reused, DeflateEncoder.Reset() doesn't reset an encoder that didn't complete a stream (.NET 11 RC1), the next stream is corrupted.
-            /// </summary>
-            bool Completed;
-
-            public static DeflateEncoder Create(CompEncoderLevels level) => new DeflateEncoder
+            public static ZstdEncoder Create(CompEncoderLevels level) => new ZstdEncoder
             {
                 E = RentEncoder(level),
                 Level = level,
             };
 
-            public static int GetMaxCompressedLength(int inputSize) => (int)Math.Min(System.IO.Compression.DeflateEncoder.GetMaxCompressedLength(inputSize), Array.MaxLength);
+            public static int GetMaxCompressedLength(int inputSize) => (int)Math.Min(System.IO.Compression.ZstandardEncoder.GetMaxCompressedLength(inputSize), Array.MaxLength);
 
             /// <summary>
-            /// Not using DeflateEncoder.TryCompress since it creates (allocates) a new encoder on every call
+            /// Not using ZstandardEncoder.TryCompress since it creates (allocates) a new encoder on every call
             /// </summary>
             public static bool TryCompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten, CompEncoderLevels level)
             {
                 var enc = Create(level);
                 try
                 {
+                    //  Lets zstd select the parameters for the size, a lot faster for small data at high levels
+                    enc.E.SetSourceLength(source.Length);
                     return Codec.TryCompress(ref enc, source, destination, out bytesWritten);
                 }
                 finally
@@ -156,11 +147,7 @@ namespace SysWeaver.Compression
             }
 
             public OperationStatus Compress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
-            {
-                var status = E.Compress(source, destination, out bytesConsumed, out bytesWritten, isFinalBlock);
-                Completed = isFinalBlock && (status == OperationStatus.Done);
-                return status;
-            }
+                => E.Compress(source, destination, out bytesConsumed, out bytesWritten, isFinalBlock);
 
             public void Dispose()
             {
@@ -168,27 +155,24 @@ namespace SysWeaver.Compression
                 if (e == null)
                     return;
                 E = null;
-                if (Completed)
-                    ReturnEncoder(Level, e);
-                else
-                    e.Dispose();
+                ReturnEncoder(Level, e);
             }
         }
 
         /// <summary>
-        /// A pooled .NET deflate decoder
+        /// A pooled .NET zstd decoder
         /// </summary>
-        public struct DeflateDecoder : ICompStreamDecoder<DeflateDecoder>
+        public struct ZstdDecoder : ICompStreamDecoder<ZstdDecoder>
         {
-            System.IO.Compression.DeflateDecoder D;
+            System.IO.Compression.ZstandardDecoder D;
 
-            public static DeflateDecoder Create() => new DeflateDecoder
+            public static ZstdDecoder Create() => new ZstdDecoder
             {
                 D = RentDecoder(),
             };
 
             /// <summary>
-            /// Not using DeflateDecoder.TryDecompress since it creates (allocates) a new decoder on every call, the (pooled) streaming decoder is used instead
+            /// Not using ZstandardDecoder.TryDecompress since it creates (allocates) a new decoder on every call, the (pooled) streaming decoder is used instead
             /// </summary>
             public static bool TryDecompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten)
             {
@@ -197,11 +181,17 @@ namespace SysWeaver.Compression
             }
 
             /// <summary>
-            /// Concatenated raw deflate streams are not supported
+            /// Concatenated zstd frames are valid zstd data
             /// </summary>
-            public static int NextHeaderSize => 0;
+            public static int NextHeaderSize => 4;
 
-            public bool BeginNext(ReadOnlySpan<Byte> next) => false;
+            public bool BeginNext(ReadOnlySpan<Byte> next)
+            {
+                if (!CompHelpers.IsZstdFrame(next))
+                    return false;
+                D.Reset();
+                return true;
+            }
 
             public OperationStatus Decompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten)
                 => D.Decompress(source, destination, out bytesConsumed, out bytesWritten);

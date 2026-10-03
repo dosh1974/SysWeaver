@@ -166,22 +166,25 @@ namespace SysWeaver
         static readonly ConditionalWeakTable<IEqualityComparer<K>, EmptyReadonlySet<K>> Others = new();
 
         /// <summary>
-        /// The last empty set returned for another comparer than the default
+        /// The last empty set returned (starts with the default comparer)
         /// </summary>
-        static EmptyReadonlySet<K> Last;
+        static EmptyReadonlySet<K> Last = Default;
 
         /// <summary>
         /// Get an empty set with a comparer
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static EmptyReadonlySet<K> Get(IEqualityComparer<K> comparer)
         {
-            if (comparer == Default.Comp)
-                return Default;
             // The last used comparer is cached (it's typically the same comparer every time)
             var last = Last;
-            if (last?.Comp == comparer)
-                return last;
-            last = Others.GetValue(comparer, c => new EmptyReadonlySet<K>(c));
+            return last.Comp == comparer ? last : GetSlow(comparer);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static EmptyReadonlySet<K> GetSlow(IEqualityComparer<K> comparer)
+        {
+            var last = comparer == Default.Comp ? Default : Others.GetValue(comparer, c => new EmptyReadonlySet<K>(c));
             Last = last;
             return last;
         }
@@ -313,6 +316,7 @@ namespace SysWeaver
 
         public bool Overlaps(IEnumerable<K> other) => IsSubsetOf(other);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool SetEquals(IEnumerable<K> other)
         {
             // Not empty, and only the key (any number of times)

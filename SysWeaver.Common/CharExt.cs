@@ -8,37 +8,23 @@ namespace SysWeaver
 
     public static class CharExt
     {
-        const int SafeLowerCount = 256;
-        const int SafeUpperCount = 181;
+        /// <summary>
+        /// The number of chars in the case conversion tables (same as the IsLower / IsUpper bit tables), covers Latin, Greek, Cyrillic etc
+        /// </summary>
+        const int TableCount = 256 * 8;
 
         static CharExt()
         {
-            var upper = GC.AllocateUninitializedArray<Byte>(SafeUpperCount);
-            for (int i = 0; i < SafeUpperCount; ++ i)
+            var upper = GC.AllocateUninitializedArray<Char>(TableCount);
+            var lower = GC.AllocateUninitializedArray<Char>(TableCount);
+            for (int i = 0; i < TableCount; ++i)
             {
                 var c = (Char)i;
-                var cu = Char.ToUpperInvariant(c);
-#if DEBUG
-                if (cu >= 256)
-                    throw new Exception("Internal error!");
-#endif//DEBUG
-                upper[i] = (Byte)cu;
+                upper[i] = Char.ToUpperInvariant(c);
+                lower[i] = Char.ToLowerInvariant(c);
             }
             TableUpper = upper;
-
-            var lower = GC.AllocateUninitializedArray<Byte>(SafeLowerCount);
-            for (int i = 0; i < SafeLowerCount; ++i)
-            {
-                var c = (Char)i;
-                var cl = Char.ToLowerInvariant(c);
-#if DEBUG
-                if (cl >= 256)
-                    throw new Exception("Internal error!");
-#endif//DEBUG
-                lower[i] = (Byte)cl;
-            }
             TableLower = lower;
-
 
             var isLower = new Byte[256];
             var isUpper = new Byte[256];
@@ -62,8 +48,8 @@ namespace SysWeaver
             TableIsUpper = isUpper;
         }
 
-        static readonly Byte[] TableLower;
-        static readonly Byte[] TableUpper;
+        static readonly Char[] TableLower;
+        static readonly Char[] TableUpper;
         static readonly Byte[] TableIsLower;
         static readonly Byte[] TableIsUpper;
 
@@ -89,7 +75,7 @@ namespace SysWeaver
                 ?
                 ((TableIsLower[i >> 3] & (1 << (i & 7))) != 0)
                 :
-                c == FastLower(c)
+                c == Char.ToLowerInvariant(c)
                 ;
         }
 
@@ -107,7 +93,7 @@ namespace SysWeaver
                 ?
                 ((TableIsUpper[i >> 3] & (1 << (i & 7))) != 0)
                 :
-                c == FastUpper(c)
+                c == Char.ToUpperInvariant(c)
                 ;
         }
 
@@ -119,7 +105,7 @@ namespace SysWeaver
         /// <returns>Culture invariant lower case char</returns>
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Char FastToLower(this Char c) => c < SafeLowerCount ? (Char)TableLower[c] : FastLower(c);
+        public static Char FastToLower(this Char c) => c < TableCount ? TableLower[c] : Char.ToLowerInvariant(c);
 
         /// <summary>
         /// Make an culture invariant upper case version of a char
@@ -127,7 +113,7 @@ namespace SysWeaver
         /// <param name="c">The char to transform into a culture invariant upper case</param>
         /// <returns>Culture invariant upper case char</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Char FastToUpper(this Char c) => c < SafeUpperCount ? (Char)TableUpper[c] : FastUpper(c);
+        public static Char FastToUpper(this Char c) => c < TableCount ? TableUpper[c] : Char.ToUpperInvariant(c);
 
 
         /// <summary>
