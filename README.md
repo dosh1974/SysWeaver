@@ -438,6 +438,7 @@ flowchart LR
 |---|---|
 | [SysWeaver.AI](SysWeaver.AI/README.md) | API agnostic AI functionality: chat provider, tool calling, AI memory and the base classes / interfaces used by the AI provider projects. |
 | [SysWeaver.AI.Google](SysWeaver.AI.Google/README.md) | LLM integration for SysWeaver using the Google Gemini API: chat provider with tool calling, image generation and AI memory. |
+| [SysWeaver.AI.LlamaSharp](SysWeaver.AI.LlamaSharp/README.md) | Local LLM integration for SysWeaver using LLamaSharp (llama.cpp): chat provider running GGUF models in process, with tool calling and AI memory. |
 | [SysWeaver.AI.OpenAI](SysWeaver.AI.OpenAI/README.md) | LLM integration for SysWeaver: an OpenAI-API chat provider that can call methods of your services as tools, generate images, tokenize text and keep an AI memory — usable with OpenAI or any compatible endpoint. |
 | [SysWeaver.AI.LlmTranslator](SysWeaver.AI.LlmTranslator/README.md) | A translation back-end that uses a large language model through the OpenAI service. |
 | [SysWeaver.Chat](SysWeaver.Chat/README.md) | A chat framework: rooms/sessions with pluggable providers (simple in-memory rooms, MySQL-persisted rooms, AI assistants), real-time delivery, translation, file and link sharing and a web chat UI. |
