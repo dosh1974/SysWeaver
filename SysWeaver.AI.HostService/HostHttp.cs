@@ -74,8 +74,8 @@ namespace SysWeaver.AI
     /// </summary>
     static class HostHttp
     {
-        const String JsonMime = "application/json; charset=utf-8";
-        const String EventStreamMime = "text/event-stream; charset=utf-8";
+        public const String JsonMime = "application/json; charset=utf-8";
+        public const String EventStreamMime = "text/event-stream; charset=utf-8";
 
         static readonly JsonWriterOptions WriterOptions = new JsonWriterOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
@@ -193,12 +193,13 @@ namespace SysWeaver.AI
         /// <param name="r">The request</param>
         /// <param name="producer">The function that writes the events</param>
         /// <param name="onError">Called if the producer throws an exception (the stream is still open)</param>
+        /// <param name="mime">The mime type of the response</param>
         /// <returns>The response data</returns>
-        public static HttpRequestData EventStream(HttpServerRequest r, Func<SseWriter, Task> producer, Func<SseWriter, Exception, Task> onError)
+        public static HttpRequestData EventStream(HttpServerRequest r, Func<SseWriter, Task> producer, Func<SseWriter, Exception, Task> onError, String mime = EventStreamMime)
         {
             var pipe = new Pipe();
             r.SetResStatusCode(200);
-            r.SetResMime(EventStreamMime);
+            r.SetResMime(mime);
             r.SetResHeader("X-Accel-Buffering", "no");
             var sse = new SseWriter(pipe.Writer);
             _ = Task.Run(async () =>
@@ -283,6 +284,17 @@ namespace SysWeaver.AI
             W.Write(DataPrefix);
             W.Write(json);
             W.Write(End);
+            return Flush();
+        }
+
+        /// <summary>
+        /// Write raw data (not an event)
+        /// </summary>
+        public Task Raw(Byte[] data)
+        {
+            if (IsClosed)
+                return Task.CompletedTask;
+            W.Write(data);
             return Flush();
         }
 

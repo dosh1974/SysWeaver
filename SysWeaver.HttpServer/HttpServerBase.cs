@@ -1081,7 +1081,8 @@ namespace SysWeaver.Net
                 var h = data.GetReqHeader("Authorization");
                 if (h == null)
                 {
-                    h = data.GetReqHeader("x-api-key");
+                    //  API keys (x-goog-api-key is used by the Google Gemini API)
+                    h = data.GetReqHeader("x-api-key") ?? data.GetReqHeader("x-goog-api-key");
                     if (h != null)
                         h = "*key " + h;
                 }

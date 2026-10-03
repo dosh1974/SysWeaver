@@ -10,10 +10,13 @@ using SysWeaver.Net;
 namespace SysWeaver.AI
 {
     /// <summary>
-    /// Hosts one or more AI services (IAiService) using an OpenAI compatible API (Chat Completions and Responses).
+    /// Hosts one or more AI services (IAiService) using OpenAI compatible APIs (Chat Completions and Responses) and Google compatible APIs (Gemini API and Vertex AI).
     /// Requests are forwarded to the AI service that provides the requested model.
-    /// Endpoints (relative to the prefix):
+    /// OpenAI end points (relative to the OpenAI prefix):
     /// GET models, GET models/{model}, POST chat/completions, POST responses
+    /// Google end points (relative to the Google prefix):
+    /// GET {version}/models, GET {version}/models/{model}, POST {version}/models/{model}:generateContent (and streamGenerateContent),
+    /// POST {version}/projects/{project}/locations/{location}/publishers/{publisher}/models/{model}:generateContent (Vertex AI, and streamGenerateContent).
     /// </summary>
     [OptionalDep<IAiService>]
     public sealed partial class HostService : IHttpServerModule, IPerfMonitored, IDisposable
@@ -34,16 +37,26 @@ namespace SysWeaver.AI
             Instances = (p.Instances ?? []).Where(x => !String.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToArray();
             Auth = Authorization.GetRequiredTokens(p.Auth);
             MaxRequestSize = Math.Max(1024, p.MaxRequestSize);
-            var prefix = (p.Prefix ?? "").Trim().TrimStart('/');
-            if ((prefix.Length > 0) && (!prefix.EndsWith('/')))
-                prefix += '/';
+            var prefix = GetPrefix(p.OpenAiPrefix);
+            var googlePrefix = GetPrefix(p.GooglePrefix);
             Prefix = prefix;
-            OnlyForPrefixes =
+            GooglePrefix = googlePrefix;
+            String[] openAiPrefixes = prefix == null ? [] :
             [
                 prefix + ModelsPath,
                 prefix + ChatCompletionsPath,
                 prefix + ResponsesPath
             ];
+            //  All Gemini API and Vertex AI paths starts with a version, ex: "v1beta/models/..." or "v1/projects/..."
+            //  The Google GenAI SDK adds a '/' after the base url, so a base url ending with a '/' gives a double slash
+            String[] googlePrefixes = googlePrefix == null ? [] : [googlePrefix + GoogleVersionStart, googlePrefix + "/" + GoogleVersionStart];
+            foreach (var a in openAiPrefixes)
+                foreach (var b in googlePrefixes)
+                    if (a.StartsWith(b, StringComparison.Ordinal) || b.StartsWith(a, StringComparison.Ordinal))
+                        throw new ArgumentException(String.Concat("The OpenAI prefix ", prefix.ToQuoted(), " and the Google prefix ", googlePrefix.ToQuoted(), " are in conflict, the end points ", a.ToQuoted(), " and ", b.ToQuoted(), " overlaps"));
+            OnlyForPrefixes = openAiPrefixes.Concat(googlePrefixes).ToArray();
+            if (OnlyForPrefixes.Length <= 0)
+                Msg?.AddMessage(LogPrefix + "Both the OpenAI and the Google API are disabled", MessageLevels.Warning);
             ModelsHandler = new HostRequestHandler(nameof(GetModels), Auth, GetModels);
             ModelHandler = new HostRequestHandler(nameof(GetModel), Auth, GetModel);
             ChatCompletionsHandler = new HostRequestHandler(nameof(ChatCompletions), Auth, ChatCompletions);
@@ -71,7 +84,31 @@ namespace SysWeaver.AI
         readonly String[] Instances;
         readonly IReadOnlyList<String> Auth;
         readonly int MaxRequestSize;
+
+        /// <summary>
+        /// The prefix of the OpenAI API, null if disabled
+        /// </summary>
         readonly String Prefix;
+
+        /// <summary>
+        /// The prefix of the Google Gemini API and Vertex AI, null if disabled
+        /// </summary>
+        readonly String GooglePrefix;
+
+        /// <summary>
+        /// Normalize a prefix
+        /// </summary>
+        /// <param name="prefix">The prefix</param>
+        /// <returns>The prefix (with a trailing '/'), "" for root, null if disabled</returns>
+        static String GetPrefix(String prefix)
+        {
+            if (prefix == null)
+                return null;
+            prefix = prefix.Trim().TrimStart('/');
+            if ((prefix.Length > 0) && (!prefix.EndsWith('/')))
+                prefix += '/';
+            return prefix;
+        }
 
         public PerfMonitor PerfMon { get; } = new PerfMonitor("AiHost");
 
@@ -318,14 +355,29 @@ namespace SysWeaver.AI
 
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
-            var url = context.LocalUrl;
-            var path = url.AsSpan(Prefix.Length).TrimEnd('/');
+            var url = context.LocalUrl.AsSpan();
             //  The server adds "index.html" to urls ending with a '/'
-            if (context.DidIndex && path.EndsWith(IndexSuffix, StringComparison.Ordinal))
-                path = path.Slice(0, path.Length - IndexSuffix.Length);
+            if (context.DidIndex && url.EndsWith(IndexSuffix, StringComparison.Ordinal))
+                url = url.Slice(0, url.Length - IndexSuffix.Length);
             var method = context.HttpMethod;
             var isGet = (method == HttpServerMethods.GET) || (method == HttpServerMethods.HEAD);
             var isPost = method == HttpServerMethods.POST;
+            //  The prefixes doesn't overlap, so a url can only match one of the APIs
+            var prefix = Prefix;
+            if ((prefix != null) && url.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                var h = OpenAiHandler(url.Slice(prefix.Length).TrimEnd('/'), isGet, isPost);
+                if (h != null)
+                    return h;
+            }
+            var googlePrefix = GooglePrefix;
+            if ((googlePrefix != null) && url.StartsWith(googlePrefix, StringComparison.Ordinal))
+                return GoogleHandler(context, url.Slice(googlePrefix.Length).Trim('/'), isGet, isPost);
+            return null;
+        }
+
+        IHttpRequestHandler OpenAiHandler(ReadOnlySpan<Char> path, bool isGet, bool isPost)
+        {
             if (path.Equals(ChatCompletionsPath, StringComparison.Ordinal))
                 return isPost ? ChatCompletionsHandler : MethodNotAllowedHandler;
             if (path.Equals(ResponsesPath, StringComparison.Ordinal))
