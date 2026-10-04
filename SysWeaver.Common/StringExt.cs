@@ -232,9 +232,17 @@ namespace SysWeaver
         /// </summary>
         /// <param name="str">The string to transform into a culture invariant lower case</param>
         /// <returns>Culture invariant lower case string</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String FastToLower(this String str)
-            => InternalFastIsLower(str.AsSpan(), str.Length) ? str : String.Create(str.Length, str, LowerCasedString);
+        {
+            //  One scan for the first char that must change (or isn't ASCII), the string is returned as is if there are none
+            var i = AsciiCase.FindChangeOrNonAscii(str, AsciiCase.ToLower);
+            if (i < 0)
+                return str;
+            //  A non ASCII char before any upper case ASCII letter (everything before it is ok)
+            if ((str[i] >= 0x80) && InternalFastIsLower(str.AsSpan(i), str.Length - i))
+                return str;
+            return String.Create(str.Length, str, LowerCasedString);
+        }
 
         /// <summary>
         /// Lower case a whole string, ASCII is converted using SIMD, the rest (if any) is converted using the invariant culture (exactly like TextInfo.ToLower)
@@ -432,9 +440,17 @@ namespace SysWeaver
         /// </summary>
         /// <param name="str">The string to transform into a culture invariant upper case</param>
         /// <returns>Culture invariant upper case string</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String FastToUpper(this String str)
-            => InternalFastIsUpper(str.AsSpan(), str.Length) ? str : String.Create(str.Length, str, UpperCasedString);
+        {
+            //  One scan for the first char that must change (or isn't ASCII), the string is returned as is if there are none
+            var i = AsciiCase.FindChangeOrNonAscii(str, AsciiCase.ToUpper);
+            if (i < 0)
+                return str;
+            //  A non ASCII char before any lower case ASCII letter (everything before it is ok)
+            if ((str[i] >= 0x80) && InternalFastIsUpper(str.AsSpan(i), str.Length - i))
+                return str;
+            return String.Create(str.Length, str, UpperCasedString);
+        }
 
         /// <summary>
         /// Upper case a whole string, ASCII is converted using SIMD, the rest (if any) is converted using the invariant culture (exactly like TextInfo.ToUpper)

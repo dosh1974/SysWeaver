@@ -110,26 +110,28 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <returns>True if the end was reached</returns>
         public static bool SkipWhite(ref Byte* d, Byte* e)
         {
-            while (d < e)
+            //  A local copy of the position, so that it can be kept in a register (d usually points to a field)
+            var p = d;
+            while (p < e)
             {
-                uint t = *d;
-                if (t >= 128)
-                {
-                    if (IsUtf8White(t, ref d, e))
-                        continue;
-                    break;
-                }
-                if (t == '/')
-                {
-                    if (IsBlockWhite(ref d, e))
-                        continue;
-                    break;
-                }
+                uint t = *p;
                 if (t > 32)
-                    break;
-                ++d;
+                {
+                    if ((t < 128) && (t != '/'))
+                        break;
+                    //  Rare: non ascii white space or a comment
+                    d = p;
+                    if (t >= 128 ? IsUtf8White(t, ref d, e) : IsBlockWhite(ref d, e))
+                    {
+                        p = d;
+                        continue;
+                    }
+                    return d >= e;
+                }
+                ++p;
             }
-            return d >= e;
+            d = p;
+            return p >= e;
         }
 
 
@@ -146,16 +148,19 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 ReadException.ThrowOnlyAsciiInParameter(u);
 #endif//DEBUG
             var s = d;
-            while (d < e)
+            var p = s;
+            while (p < e)
             {
-                uint t = *d;
-                ++d;
+                uint t = *p;
+                ++p;
                 if (t == u)
                 {
-                    ret = new ReadOnlySpan<byte>(s, (int)(d - s - 1));
+                    d = p;
+                    ret = new ReadOnlySpan<byte>(s, (int)(p - s - 1));
                     return;
                 }
             }
+            d = p;
             ReadException.ThrowEndOfData(until);
         }
 
@@ -206,15 +211,18 @@ namespace SysWeaver.Serialization.SwJson.Reader
             if (tbl != null)
             {
                 ref var t = ref MemoryMarshal.GetArrayDataReference(tbl);
-                while (d < e)
+                var p = s;
+                while (p < e)
                 {
-                    if (Unsafe.Add(ref t, *d) != 0)
+                    if (Unsafe.Add(ref t, *p) != 0)
                     {
-                        ret = new ReadOnlySpan<byte>(s, (int)(d - s));
+                        d = p;
+                        ret = new ReadOnlySpan<byte>(s, (int)(p - s));
                         return;
                     }
-                    ++d;
+                    ++p;
                 }
+                d = p;
                 ReadException.ThrowEndOfData();
             }
             while (d < e)
@@ -242,20 +250,26 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 ReadException.ThrowOnlyAsciiInParameter(u);
 #endif//DEBUG
             var s = d;
-            while (d < e)
+            var p = s;
+            while (p < e)
             {
-                uint t = *d;
-                ++d;
+                uint t = *p;
+                ++p;
                 if (t == u)
                 {
-                    ret = new ReadOnlySpan<byte>(s, (int)(d - s) - 1);
+                    d = p;
+                    ret = new ReadOnlySpan<byte>(s, (int)(p - s) - 1);
                     return;
                 }
 #if VALIDATE
                 if (t >= 128)
+                {
+                    d = p;
                     ReadException.ThrowUnexpectedCharacter();
+                }
 #endif//VALIDATE
             }
+            d = p;
             ReadException.ThrowEndOfData(until);
         }
 
@@ -269,17 +283,22 @@ namespace SysWeaver.Serialization.SwJson.Reader
             if (tbl != null)
             {
                 ref var t = ref MemoryMarshal.GetArrayDataReference(tbl);
-                while (d < e)
+                var p = s;
+                while (p < e)
                 {
-                    uint c = *d;
+                    uint c = *p;
                     if (Unsafe.Add(ref t, c) != 0)
                         break;
 #if VALIDATE
                     if (c >= 128)
+                    {
+                        d = p;
                         ReadException.ThrowUnexpectedCharacter();
+                    }
 #endif//VALIDATE
-                    ++d;
+                    ++p;
                 }
+                d = p;
                 ret = new ReadOnlySpan<byte>(s, (int)(d - s));
                 return;
             }
@@ -398,18 +417,23 @@ namespace SysWeaver.Serialization.SwJson.Reader
         public static String ReadAsciiString(ref Byte* d, Byte* e, Char until)
         {
             var s = d;
-            while (d < e)
+            var p = s;
+            while (p < e)
             {
-                var c = *d;
-                ++d;
+                var c = *p;
+                ++p;
                 if (c == until)
                     break;
 #if VALIDATE
                 if (c >= 128)
+                {
+                    d = p;
                     ReadException.ThrowUnexpectedCharacter();
+                }
 #endif//VALIDATE
             }
-            var l = (int)(d - s - 1);
+            d = p;
+            var l = (int)(p - s - 1);
             return l <= 0 ? String.Empty : String.Create(l, new IntPtr(s), WriteAciiStringAction);
         }
 
@@ -427,17 +451,22 @@ namespace SysWeaver.Serialization.SwJson.Reader
             if (tbl != null)
             {
                 ref var t = ref MemoryMarshal.GetArrayDataReference(tbl);
-                while (d < e)
+                var p = s;
+                while (p < e)
                 {
-                    uint c = *d;
+                    uint c = *p;
                     if (Unsafe.Add(ref t, c) != 0)
                         break;
 #if VALIDATE
                     if (c >= 128)
+                    {
+                        d = p;
                         ReadException.ThrowUnexpectedCharacter();
+                    }
 #endif//VALIDATE
-                    ++d;
+                    ++p;
                 }
+                d = p;
                 var tl = (int)(d - s);
                 return tl <= 0 ? String.Empty : String.Create(tl, new IntPtr(s), WriteAciiStringAction);
             }
@@ -550,14 +579,62 @@ namespace SysWeaver.Serialization.SwJson.Reader
         public static String ReadJsonString(ref Char[] buf, ref Byte* d, Byte* e)
         {
             var rem = new ReadOnlySpan<Byte>(d, (int)(e - d));
-            var i = rem.IndexOfAny((Byte)'"', (Byte)'\\');
+            // One vectorized search for the end quote, an escape or a non ASCII byte
+            var i = rem.IndexOfAny(QuoteEscapeOrNonAscii);
             if ((i >= 0) && (rem[i] == '"'))
             {
+                // ASCII without escapes (the common case)
                 var s = i == 0 ? String.Empty : UTF8.GetString(d, i);
                 d += i + 1;
                 return s;
             }
+            if ((i >= 0) && (rem[i] >= 0x80))
+            {
+                // Non ASCII, find the end quote (or an escape) from there
+                var j = rem.Slice(i).IndexOfAny((Byte)'"', (Byte)'\\');
+                if ((j >= 0) && (rem[i + j] == '"'))
+                {
+                    j += i;
+                    var s = DecodeUtf8(d, j);
+                    d += j + 1;
+                    return s;
+                }
+            }
             return ReadEscapedUtf8String(ref buf, ref d, e, '"');
+        }
+
+        /// <summary>
+        /// The end of a json string ('"'), an escape ('\\') and the bytes of non ASCII chars
+        /// </summary>
+        static readonly SearchValues<Byte> QuoteEscapeOrNonAscii = SearchValues.Create(CreateQuoteEscapeOrNonAscii());
+
+        static Byte[] CreateQuoteEscapeOrNonAscii()
+        {
+            var b = new Byte[2 + 128];
+            b[0] = (Byte)'"';
+            b[1] = (Byte)'\\';
+            for (int i = 0; i < 128; ++i)
+                b[2 + i] = (Byte)(0x80 + i);
+            return b;
+        }
+
+        /// <summary>
+        /// UTF8 strings up to this number of bytes are decoded on the stack (max one char per byte, 2 KB)
+        /// </summary>
+        const int MaxStackDecodeBytes = 1024;
+
+        /// <summary>
+        /// Decode UTF8 (with non ASCII chars) to a string (invalid sequences are replaced with U+FFFD, like Encoding.UTF8.GetString).
+        /// Short strings are decoded to a stack buffer and copied to the string, that is much faster than Encoding.GetString for non ASCII text (it counts the chars in a separate pass).
+        /// </summary>
+        [SkipLocalsInit]
+        static String DecodeUtf8(Byte* d, int length)
+        {
+            if (length > MaxStackDecodeBytes)
+                return UTF8.GetString(d, length);
+            Span<Char> chars = stackalloc Char[length];
+            System.Text.Unicode.Utf8.ToUtf16(new ReadOnlySpan<Byte>(d, length), chars, out _, out var written, true, true);
+            return new String(chars.Slice(0, written));
         }
 
         /// <summary>

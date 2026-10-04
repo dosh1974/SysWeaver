@@ -57,7 +57,16 @@ namespace SysWeaver
                     x = others[i];
                     if (x == null)
                         continue;
-                    ns.UnionWith(x);
+                    // A HashSet is enumerated without boxing the enumerator
+                    if (x is HashSet<T> hs)
+                    {
+                        foreach (var item in hs)
+                            ns.Add(item);
+                    }
+                    else
+                    {
+                        ns.UnionWith(x);
+                    }
                 }
                 if (freeze)
                     return ns.Freeze();
@@ -119,6 +128,9 @@ namespace SysWeaver
                 var f = d.First();
                 return new SingleReadonlySet<K>(f, comparer);
             }
+            // A few integer keys: faster than a FrozenSet (a linear search) and a HashSet
+            if (SmallValueKeys<K>.CanUse(l, comparer))
+                return d as SmallValueKeyReadonlySet<K> ?? new SmallValueKeyReadonlySet<K>(d);
             if ((d as FrozenSet<K>)?.Comparer == comparer)
                 return d;
             return d.ToFrozenSet(comparer);
@@ -238,11 +250,14 @@ namespace SysWeaver
             Key = key;
             Comp = comp;
             IsDefault = typeof(K).IsValueType && (comp == EqualityComparer<K>.Default);
-            Ke = [key];
         }
 
         readonly K Key;
-        readonly IEnumerable<K> Ke;
+
+        /// <summary>
+        /// The key as an array, created on first use (enumeration is rare, lookups are the common case), so that freezing a single item set is a single allocation
+        /// </summary>
+        K[] Ke;
 
         /// <summary>
         /// True if the key is a value type and the comparer is the default comparer (devirtualized)
@@ -261,7 +276,7 @@ namespace SysWeaver
         public bool Contains(K key)
             => IsKey(key);
 
-        public IEnumerator<K> GetEnumerator() => Ke.GetEnumerator();
+        public IEnumerator<K> GetEnumerator() => ((IEnumerable<K>)(Ke ??= [Key])).GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
@@ -322,6 +337,9 @@ namespace SysWeaver
             // Not empty, and only the key (any number of times)
             if (other is K[] arr)
             {
+                // The common case: a single item
+                if (arr.Length == 1)
+                    return IsKey(arr[0]);
                 if (arr.Length == 0)
                     return false;
                 foreach (var x in arr)

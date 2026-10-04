@@ -73,7 +73,94 @@ namespace SysWeaver.AI
         /// <summary>
         /// A candidate input to match, Tag and Input are the names used for matching, PTag and PInput are the actual tag and input to set
         /// </summary>
-        sealed record Cand(String Tag, String Input, JsonValueKind Kind, String Target, String PTag, String PInput);
+        internal sealed record Cand(String Tag, String Input, JsonValueKind Kind, String Target, String PTag, String PInput);
+
+        /// <summary>
+        /// All inputs of a workflow that members can be matched against
+        /// </summary>
+        internal sealed class Candidates
+        {
+            public Candidates(ComfyUiWorkflow wf)
+            {
+                Workflow = wf;
+                var inputs = wf.Inputs;
+                var targets = wf.InputTargets;
+                String TargetOf(String key) => targets.TryGetValue(key, out var target) ? target : key;
+                //  The actual tag inputs
+                var all = inputs.SelectMany(x => x.Value.Select(y =>
+                {
+                    var key = String.Concat(x.Key, '.', y.Key);
+                    return new Cand(x.Key, y.Key, y.Value, TargetOf(key), x.Key, y.Key);
+                })).ToList();
+                //  Subgraph inputs, the subgraph node tag and input label (behaves like a normal annotated node)
+                foreach (var sg in wf.SubgraphInputs)
+                {
+                    foreach (var si in sg.Value)
+                    {
+                        var dot = si.Value.IndexOf('.');
+                        var pTag = si.Value.Substring(0, dot);
+                        var pInput = si.Value.Substring(dot + 1);
+                        if (inputs.TryGetValue(pTag, out var ti) && ti.TryGetValue(pInput, out var kind))
+                            all.Add(new Cand(sg.Key, si.Key, kind, TargetOf(si.Value), pTag, pInput));
+                    }
+                }
+                All = all;
+                //  Number of distinct inputs per (logical) tag
+                TagInputCount = all.GroupBy(x => x.Tag, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.Select(y => y.Target).Distinct(StringComparer.Ordinal).Count(), StringComparer.Ordinal);
+            }
+
+            public readonly ComfyUiWorkflow Workflow;
+            public readonly IReadOnlyList<Cand> All;
+            public readonly IReadOnlyDictionary<String, int> TagInputCount;
+
+            public String Available() => All.Count == 0 ? "none" : String.Join(", ", All.Select(x => String.Concat(x.Tag, '.', x.Input)).Distinct(StringComparer.Ordinal));
+
+            //  Different tags can expose the same node input (ex: a manual and a subgraph annotation), these are not ambiguous
+            static List<Cand> Distinct(IEnumerable<Cand> c)
+                => c.GroupBy(x => x.Target, StringComparer.Ordinal).Select(x => x.First()).ToList();
+
+            /// <summary>
+            /// Find the input(s) that a member name (without a [ComfyUiName] attribute) matches, the rules are tried in order:
+            ///   1. Tag and input name, ex: "SamplerSeed" or "Sampler_Seed" => "sampler.seed"
+            ///   2. A tag with a single input, ex: "Seed" => "seed.seed" (subgraph inputs are annotated like this) or "Sampler" => "sampler.sampler_name"
+            ///   3. A bool matching a tag name, false => bypass the node(s)
+            ///   4. A (unique) input name, ex: "Seed" => "sampler.seed"
+            /// </summary>
+            /// <param name="memberName">The member name</param>
+            /// <param name="isBool">True if the member is a bool</param>
+            /// <param name="tags">The matching tags if rule 3 applies (and no inputs are returned), else null</param>
+            /// <param name="rule">The rule that matched, 0 if nothing matched</param>
+            /// <returns>The matching inputs, more than one if ambiguous</returns>
+            public List<Cand> Match(String memberName, bool isBool, out List<String> tags, out int rule)
+            {
+                tags = null;
+                var n = Norm(memberName);
+                var all = All;
+                rule = 1;
+                var c = Distinct(all.Where(x => (Norm(x.Tag) + Norm(x.Input)) == n));
+                if (c.Count > 0)
+                    return c;
+                rule = 2;
+                c = Distinct(all.Where(x => (Norm(x.Tag) == n) && (TagInputCount[x.Tag] == 1) && (!isBool || (x.Kind == JsonValueKind.True))));
+                if (c.Count > 0)
+                    return c;
+                if (isBool)
+                {
+                    var tc = Workflow.Tags.Where(x => Norm(x) == n).ToList();
+                    if (tc.Count > 0)
+                    {
+                        rule = 3;
+                        tags = tc;
+                        return c;
+                    }
+                }
+                rule = 4;
+                c = Distinct(all.Where(x => Norm(x.Input) == n));
+                if (c.Count == 0)
+                    rule = 0;
+                return c;
+            }
+        }
 
         public static Func<T, ComfyUiRunContext, Task<R>> Build<T, R>(ComfyUiWorkflow wf, IMessageHost msg) where R : new()
         {
@@ -100,7 +187,7 @@ namespace SysWeaver.AI
         /// <summary>
         /// Normalize a name for matching, only letters and digits are used and case is ignored, "my-sampler" and "MySampler" are equal
         /// </summary>
-        static String Norm(String s)
+        internal static String Norm(String s)
         {
             var sb = new StringBuilder(s.Length);
             foreach (var c in s)
@@ -192,38 +279,11 @@ namespace SysWeaver.AI
         static Action<T, Utf8JsonWriter> BuildWriter<T>(ComfyUiWorkflow wf, IMessageHost msg, String prefix)
         {
             var type = typeof(T);
-            var inputs = wf.Inputs;
-            var targets = wf.InputTargets;
-            String TargetOf(String key) => targets.TryGetValue(key, out var target) ? target : key;
-            //  The actual tag inputs
-            var allInputs = inputs.SelectMany(x => x.Value.Select(y =>
-            {
-                var key = String.Concat(x.Key, '.', y.Key);
-                return new Cand(x.Key, y.Key, y.Value, TargetOf(key), x.Key, y.Key);
-            })).ToList();
-            //  Subgraph inputs, the subgraph node tag and input label (behaves like a normal annotated node)
-            foreach (var sg in wf.SubgraphInputs)
-            {
-                foreach (var si in sg.Value)
-                {
-                    var dot = si.Value.IndexOf('.');
-                    var pTag = si.Value.Substring(0, dot);
-                    var pInput = si.Value.Substring(dot + 1);
-                    if (inputs.TryGetValue(pTag, out var ti) && ti.TryGetValue(pInput, out var kind))
-                        allInputs.Add(new Cand(sg.Key, si.Key, kind, TargetOf(si.Value), pTag, pInput));
-                }
-            }
-            //  Number of distinct inputs per (logical) tag
-            var tagInputCount = allInputs.GroupBy(x => x.Tag, StringComparer.Ordinal).ToDictionary(x => x.Key, x => x.Select(y => y.Target).Distinct(StringComparer.Ordinal).Count(), StringComparer.Ordinal);
+            var cands = new Candidates(wf);
+            var allInputs = cands.All;
             var inputMaps = new List<InputMap>();
             var tagMaps = new List<TagMap>();
             var used = new Dictionary<String, MemberInfo>(StringComparer.Ordinal);
-
-            String Available() => allInputs.Count == 0 ? "none" : String.Join(", ", allInputs.Select(x => String.Concat(x.Tag, '.', x.Input)).Distinct(StringComparer.Ordinal));
-
-            //  Different tags can expose the same node input (ex: a manual and a subgraph annotation), these are not ambiguous
-            List<Cand> Distinct(IEnumerable<Cand> c)
-                => c.GroupBy(x => x.Target, StringComparer.Ordinal).Select(x => x.First()).ToList();
 
             void AddInput(MemberInfo m, Type t, Cand c)
             {
@@ -281,16 +341,14 @@ namespace SysWeaver.AI
                         var match = allInputs.FirstOrDefault(x => String.Equals(x.Tag, tagName, StringComparison.OrdinalIgnoreCase) && String.Equals(x.Input, inputName, StringComparison.OrdinalIgnoreCase));
                         if (match == null)
                         {
-                            msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " maps to ", name.ToQuoted(), " that doesn't exist in the workflow, ignored! Available inputs: ", Available()), MessageLevels.Warning);
+                            msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " maps to ", name.ToQuoted(), " that doesn't exist in the workflow, ignored! Available inputs: ", cands.Available()), MessageLevels.Warning);
                             continue;
                         }
                         AddInput(m, t, match);
                     }
                     continue;
                 }
-                var n = Norm(m.Name);
-                //  1. Tag and input name, ex: "SamplerSeed" or "Sampler_Seed" => "sampler.seed"
-                var c = Distinct(allInputs.Where(x => (Norm(x.Tag) + Norm(x.Input)) == n));
+                var c = cands.Match(m.Name, IsBool(t), out var tc, out var rule);
                 if (c.Count == 1)
                 {
                     AddInput(m, t, c[0]);
@@ -298,49 +356,18 @@ namespace SysWeaver.AI
                 }
                 if (c.Count > 1)
                 {
-                    msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " is ambiguous, matches: ", String.Join(", ", c.Select(x => String.Concat(x.Tag, '.', x.Input))), ", ignored! Use the [ComfyUiName] attribute"), MessageLevels.Warning);
+                    msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " is ambiguous, matches: ", String.Join(", ", c.Select(x => String.Concat(x.Tag, '.', x.Input))), rule == 4 ? ", ignored! Prefix the name with the tag name or use the [ComfyUiName] attribute" : ", ignored! Use the [ComfyUiName] attribute"), MessageLevels.Warning);
                     continue;
                 }
-                //  2. A tag with a single input, ex: "Seed" => "seed.seed" (subgraph inputs are annotated like this) or "Sampler" => "sampler.sampler_name"
-                c = Distinct(allInputs.Where(x => (Norm(x.Tag) == n) && (tagInputCount[x.Tag] == 1) && (!IsBool(t) || (x.Kind == JsonValueKind.True))));
-                if (c.Count == 1)
+                if (tc != null)
                 {
-                    AddInput(m, t, c[0]);
-                    continue;
-                }
-                if (c.Count > 1)
-                {
-                    msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " is ambiguous, matches: ", String.Join(", ", c.Select(x => String.Concat(x.Tag, '.', x.Input))), ", ignored! Use the [ComfyUiName] attribute"), MessageLevels.Warning);
-                    continue;
-                }
-                //  3. A bool matching a tag name, false => bypass the node(s)
-                if (IsBool(t))
-                {
-                    var tc = wf.Tags.Where(x => Norm(x) == n).ToList();
                     if (tc.Count == 1)
-                    {
                         AddTag(m, t, tc[0]);
-                        continue;
-                    }
-                    if (tc.Count > 1)
-                    {
+                    else
                         msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " is ambiguous, matches the tags: ", String.Join(", ", tc), ", ignored! Use the [ComfyUiName] attribute"), MessageLevels.Warning);
-                        continue;
-                    }
-                }
-                //  4. A (unique) input name, ex: "Seed" => "sampler.seed"
-                c = Distinct(allInputs.Where(x => Norm(x.Input) == n));
-                if (c.Count == 1)
-                {
-                    AddInput(m, t, c[0]);
                     continue;
                 }
-                if (c.Count > 1)
-                {
-                    msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " is ambiguous, matches: ", String.Join(", ", c.Select(x => String.Concat(x.Tag, '.', x.Input))), ", ignored! Prefix the name with the tag name or use the [ComfyUiName] attribute"), MessageLevels.Warning);
-                    continue;
-                }
-                msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " can't be mapped to any input, ignored! Available inputs: ", Available()), MessageLevels.Warning);
+                msg?.AddMessage(String.Concat(prefix, "Property ", MemberName(type, m), " can't be mapped to any input, ignored! Available inputs: ", cands.Available()), MessageLevels.Warning);
             }
             if (msg != null)
             {

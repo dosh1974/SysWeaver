@@ -377,42 +377,16 @@ namespace SysWeaver.Net
 
 
 
+        //public static IReadOnlyDictionary<String, String> ParseCookieString(String newCookieStr)
+            //=> CookieCache.GetOrUpdate(newCookieStr ?? "", IntParseCookieString);
+
         /// <summary>
         /// Parses the cookies found in the supplied strings and created a dictionary
         /// </summary>
         /// <param name="newCookieStr"></param>
-        //public static IReadOnlyDictionary<String, String> ParseCookieString(String newCookieStr)
-            //=> CookieCache.GetOrUpdate(newCookieStr ?? "", IntParseCookieString);
-
-        public static unsafe IReadOnlyDictionary<String, String> ParseCookieString(String newCookieStr)
-        {
-            var cookies = new Dictionary<String, String>(StringComparer.Ordinal);
-            var sp = newCookieStr.AsSpan();
-            fixed (Char* s = sp)
-            {
-                var start = s;
-                var end = s + sp.Length;
-                for (; ; )
-                {
-                    var e = CharPtrTools.IndexOf('=', start, end);
-                    if (e == null)
-                        break;
-                    var key = CharPtrTools.ToTrimmedString(start, e);
-                    start = e + 1;
-                    e = CharPtrTools.IndexOf(';', start, end);
-                    if (e == null)
-                    {
-                        var value = CharPtrTools.ToTrimmedString(start, end);
-                        cookies[key] = value;
-                        break;
-                    }
-                    var val = CharPtrTools.ToTrimmedString(start, e);
-                    cookies[key] = val;
-                    start = e + 1;
-                }
-            }
-            return cookies.Freeze();
-        }
+        /// <remarks>Nothing is parsed up front, looking up a cookie scans the header and only allocates the value (see <see cref="CookieStringDictionary"/>)</remarks>
+        public static IReadOnlyDictionary<String, String> ParseCookieString(String newCookieStr)
+            => CookieStringDictionary.Create(newCookieStr);
 
 
         /// <summary>

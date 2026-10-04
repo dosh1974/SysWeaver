@@ -27,13 +27,23 @@ namespace SysWeaver
             public KeySet(IReadOnlyDictionary<K, V> d)
             {
                 D = d;
+                Dict = d as Dictionary<K, V>;
             }
 
             readonly IReadOnlyDictionary<K, V> D;
 
+            /// <summary>
+            /// The dictionary if it's a Dictionary (called directly, no interface call), else null
+            /// </summary>
+            readonly Dictionary<K, V> Dict;
+
             public int Count => D.Count;
 
-            public bool Contains(K item) => D.ContainsKey(item);
+            public bool Contains(K item)
+            {
+                var d = Dict;
+                return d != null ? d.ContainsKey(item) : D.ContainsKey(item);
+            }
 
             /// <summary>
             /// The keys as a set (using the comparer of the dictionary, the default comparer if it's unknown)
@@ -97,7 +107,16 @@ namespace SysWeaver
         {
             if (dictionary is Dictionary<K, V> d)
             {
-                // One lookup per key
+                // One lookup per key, a Dictionary is enumerated without boxing the enumerator
+                if (with is Dictionary<K, V> wd)
+                {
+                    foreach (var v in wd)
+                    {
+                        ref var e = ref CollectionsMarshal.GetValueRefOrAddDefault(d, v.Key, out var exists);
+                        e = exists ? func(e, v.Value) : v.Value;
+                    }
+                    return dictionary;
+                }
                 foreach (var v in with)
                 {
                     ref var e = ref CollectionsMarshal.GetValueRefOrAddDefault(d, v.Key, out var exists);
@@ -320,6 +339,9 @@ namespace SysWeaver
                 var f = d.First();
                 return new SingleReadonlyDictionary<K, V>(f.Key, f.Value, comparer);
             }
+            // A few integer keys: faster than a FrozenDictionary (a linear search) and a Dictionary
+            if (SmallValueKeys<K>.CanUse(l, comparer))
+                return d as SmallValueKeyReadonlyDictionary<K, V> ?? new SmallValueKeyReadonlyDictionary<K, V>(d);
             if ((d as FrozenDictionary<K, V>)?.Comparer == comparer)
                 return d;
             return d.ToFrozenDictionary(comparer);
@@ -451,14 +473,15 @@ namespace SysWeaver
             Value = value;
             Comp = comp;
             IsDefault = typeof(K).IsValueType && (comp == EqualityComparer<K>.Default);
-            Keys = [key];
-            Values = [value];
-            KVe = [new KeyValuePair<K, V>(key, value)];
         }
 
         readonly K Key;
         readonly V Value;
-        readonly IEnumerable<KeyValuePair<K, V>> KVe;
+
+        /// <summary>
+        /// The item as an array, created on first use (enumeration is rare, lookups are the common case)
+        /// </summary>
+        KeyValuePair<K, V>[] KVe;
 
         /// <summary>
         /// True if the key is a value type and the comparer is the default comparer (devirtualized)
@@ -482,9 +505,13 @@ namespace SysWeaver
 
         }
 
-        public IEnumerable<K> Keys { get; init; }
+        // Created on first use (rare), so that freezing a single item dictionary is a single allocation
+        public IEnumerable<K> Keys => KeyArray ??= [Key];
 
-        public IEnumerable<V> Values { get; init; }
+        public IEnumerable<V> Values => ValueArray ??= [Value];
+
+        K[] KeyArray;
+        V[] ValueArray;
 
         public int Count => 1;
 
@@ -493,7 +520,7 @@ namespace SysWeaver
             => IsKey(key);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => KVe.GetEnumerator();
+        public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => ((IEnumerable<KeyValuePair<K, V>>)(KVe ??= [new KeyValuePair<K, V>(Key, Value)])).GetEnumerator();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(K key, [MaybeNullWhen(false)] out V value)

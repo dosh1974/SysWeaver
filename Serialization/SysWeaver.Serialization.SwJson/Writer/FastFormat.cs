@@ -631,7 +631,7 @@ namespace SysWeaver.Serialization.SwJson.Writer
                         else
                         {
                             // Usually there is room already (only call Ensure when needed)
-                            if (((d - org) + (end - src) * 3 + 16) > w.Data.Length)
+                            if (((d - org) + (end - src) * 3 + 16) > w.Capacity)
                             {
                                 d = ReserveEscape(ref w, (int)(d - org), (int)(end - src));
                                 org = w.DataPtr;

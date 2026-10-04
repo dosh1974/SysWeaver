@@ -49,17 +49,22 @@ namespace SysWeaver.Net
             {
                 Key = key;
                 Host = host;
+                RootIndexUrl = String.Concat(key, "/", IndexFile);
             }
             public readonly String Key;
             public readonly HttpServerHostInfo Host;
+            /// <summary>
+            /// The url of a root request ("scheme://host:port/") with index.html inserted, so that root requests doesn't allocate a new url
+            /// </summary>
+            public readonly String RootIndexUrl;
         }
 
         /// <summary>
         /// Find a known host
         /// </summary>
         /// <param name="hostName">The "scheme://host:port" part of the url (may contain upper case chars)</param>
-        /// <returns>The host or null if it's not known (or there are too many hosts)</returns>
-        HttpServerHostInfo FindHost(ReadOnlySpan<char> hostName)
+        /// <returns>The host entry or null if it's not known (or there are too many hosts)</returns>
+        HostEntry FindHost(ReadOnlySpan<char> hostName)
         {
             var hosts = Volatile.Read(ref HostArray);
             if (hosts == null)
@@ -67,7 +72,7 @@ namespace SysWeaver.Net
             // Host names are typically lower case already
             foreach (var h in hosts)
                 if (hostName.SequenceEqual(h.Key))
-                    return h.Host;
+                    return h;
             var l = hostName.Length;
             if (l > MaxStackHostChars)
                 return null;
@@ -84,7 +89,7 @@ namespace SysWeaver.Net
                 return null;
             foreach (var h in hosts)
                 if (lower.SequenceEqual(h.Key))
-                    return h.Host;
+                    return h;
             return null;
         }
 
@@ -213,7 +218,8 @@ namespace SysWeaver.Net
             start = start < 0 ? 0 : start + 3;
             var end = u[start..].IndexOfAny('/', '?');
             end = end < 0 ? ul : end + start;
-            var host = FindHost(u[..end]);
+            var entry = FindHost(u[..end]);
+            var host = entry?.Host;
             if (host == null)
             {
                 // Slow path (new host or many hosts)
@@ -243,8 +249,12 @@ namespace SysWeaver.Net
             didIndex = insertAt >= 0;
             if (didIndex)
             {
-                // A single allocation, even if the url was decoded
-                newUrl = u[..insertAt].ConcatToString(IndexFile, u[insertAt..]);
+                // A root request (no query) to a known host with the same casing: the cached url (no allocation)
+                if ((entry != null) && (insertAt == ul) && (ul == entry.Key.Length + 1) && u.StartsWith(entry.Key))
+                    newUrl = entry.RootIndexUrl;
+                else
+                    // A single allocation, even if the url was decoded
+                    newUrl = u[..insertAt].ConcatToString(IndexFile, u[insertAt..]);
             }
             else
             {

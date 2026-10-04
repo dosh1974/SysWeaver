@@ -32,14 +32,37 @@ namespace SysWeaver
         /// <param name="trim">True to trim whitespaces from every line</param>
         /// <param name="removeEmpty">True to remove empty lines</param>
         /// <returns></returns>
+        [SkipLocalsInit]
         public static String[] ToStringArray(this ReadOnlySpan<Byte> bytes, Encoding encoding = null, bool trim = false, bool removeEmpty = false)
         {
             encoding ??= Encoding.UTF8;
             var preamble = encoding.Preamble;
             if ((preamble.Length > 0) && bytes.StartsWith(preamble))
                 bytes = bytes.Slice(preamble.Length);
-            return encoding.GetString(bytes).GetLines(trim, removeEmpty);
+            // The text is decoded to a temporary buffer (on the stack or pooled), only the lines are allocated
+            var max = encoding.GetMaxCharCount(bytes.Length);
+            if (max <= MaxStackChars)
+            {
+                Span<Char> buffer = stackalloc Char[max];
+                var n = encoding.GetChars(bytes, buffer);
+                return StringTools.GetLines(buffer.Slice(0, n), trim, removeEmpty);
+            }
+            var rented = ArrayPool<Char>.Shared.Rent(max);
+            try
+            {
+                var n = encoding.GetChars(bytes, rented);
+                return StringTools.GetLines(rented.AsSpan(0, n), trim, removeEmpty);
+            }
+            finally
+            {
+                ArrayPool<Char>.Shared.Return(rented);
+            }
         }
+
+        /// <summary>
+        /// Temporary buffers up to this number of chars are allocated on the stack (4 KB)
+        /// </summary>
+        const int MaxStackChars = 2048;
 
 
         /// <summary>

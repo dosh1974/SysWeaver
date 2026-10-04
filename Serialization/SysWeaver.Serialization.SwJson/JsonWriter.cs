@@ -82,11 +82,14 @@ namespace SysWeaver.Serialization.SwJson
         /// <returns>The number of bytes written to the buffer</returns>
         public static int ToJsonBytes<T>(ref Byte[] dest, T value, int destOffset = 0, bool typeIsOptional = true)
         {
-            var b = dest ?? GC.AllocateUninitializedArray<Byte>(4096);
+            //  Without a destination (or if it's too small), the writer uses (and grows with) rented buffers,
+            //  only the final buffer is allocated (as big as needed, so that it can be reused for the same data without growing)
+            var rented = dest == null;
+            var b = rented ? ArrayPoolStream.Rent(InitialRentSize) : dest;
             //  Pinning with fixed is cheaper than a GCHandle
             fixed (Byte* p = b)
             {
-                var w = new BufferWriter(b, p, destOffset)
+                var w = new BufferWriter(b, p, destOffset, rented, rented ? InitialCapacity : b.Length)
                 {
                     TypeIsOptional = typeIsOptional,
                 };
@@ -95,7 +98,7 @@ namespace SysWeaver.Serialization.SwJson
                     //  Primitives are written without an Ensure (the caller ensures the bounded size)
                     w.Ensure(64);
                     InternalMaybeBoxed(ref w, value);
-                    dest = w.GetBuffer();
+                    dest = w.DetachBuffer();
                     return w.Position;
                 }
                 finally
@@ -115,13 +118,13 @@ namespace SysWeaver.Serialization.SwJson
         /// <returns>The object as UTF8 encoded json</returns>
         public static Memory<Byte> ToJsonBytes<T>(T value, Byte[] dest = null, bool typeIsOptional = true)
         {
-            Byte[] temp = null;
-            if (dest == null)
-                temp = dest = ArrayPoolStream.Rent(4096);
+            //  Without a destination (or if it's too small), the writer uses (and grows with) rented buffers, the result is then copied to an array of the exact size
+            var rented = dest == null;
+            var b = rented ? ArrayPoolStream.Rent(InitialRentSize) : dest;
             //  Pinning with fixed is cheaper than a GCHandle
-            fixed (Byte* p = dest)
+            fixed (Byte* p = b)
             {
-                var w = new BufferWriter(dest, p, 0)
+                var w = new BufferWriter(b, p, 0, rented, rented ? InitialRentSize : b.Length)
                 {
                     TypeIsOptional = typeIsOptional,
                 };
@@ -130,11 +133,12 @@ namespace SysWeaver.Serialization.SwJson
                     //  Primitives are written without an Ensure (the caller ensures the bounded size)
                     w.Ensure(64);
                     InternalMaybeBoxed(ref w, value);
-                    var d = w.GetBuffer();
-                    // temp is null if the caller supplied the buffer
-                    if ((temp != null) && (d != temp))
-                        ArrayPoolStream.Return(temp);
-                    return new Memory<byte>(d, 0, w.Offset);
+                    var l = w.Offset;
+                    if (!w.Rented)
+                        return new Memory<byte>(w.Data, 0, l);
+                    var d = GC.AllocateUninitializedArray<Byte>(l);
+                    new ReadOnlySpan<Byte>(w.DataPtr, l).CopyTo(d);
+                    return d;
                 }
                 finally
                 {
@@ -152,34 +156,39 @@ namespace SysWeaver.Serialization.SwJson
         /// <returns>The object as a json string</returns>
         public static String ToJsonString<T>(T value, bool typeIsOptional = true)
         {
-            var temp = ArrayPoolStream.Rent(4096);
-            try
+            //  The writer uses (and grows with) rented buffers, only the string is allocated
+            var temp = ArrayPoolStream.Rent(InitialRentSize);
+            //  Pinning with fixed is cheaper than a GCHandle
+            fixed (Byte* p = temp)
             {
-                //  Pinning with fixed is cheaper than a GCHandle
-                fixed (Byte* p = temp)
+                var w = new BufferWriter(temp, p, 0, true, InitialRentSize)
                 {
-                    var w = new BufferWriter(temp, p, 0)
-                    {
-                        TypeIsOptional = typeIsOptional
-                    };
-                    try
-                    {
-                        //  Primitives are written without an Ensure (the caller ensures the bounded size)
-                        w.Ensure(64);
-                        InternalMaybeBoxed(ref w, value);
-                        return Encoding.UTF8.GetString(w.GetBuffer(), 0, w.Offset);
-                    }
-                    finally
-                    {
-                        w.Dispose();
-                    }
+                    TypeIsOptional = typeIsOptional
+                };
+                try
+                {
+                    //  Primitives are written without an Ensure (the caller ensures the bounded size)
+                    w.Ensure(64);
+                    InternalMaybeBoxed(ref w, value);
+                    return Encoding.UTF8.GetString(w.DataPtr, w.Offset);
+                }
+                finally
+                {
+                    //  Returns the rented buffer
+                    w.Dispose();
                 }
             }
-            finally
-            {
-                ArrayPoolStream.Return(temp);
-            }
         }
+
+        /// <summary>
+        /// The size of the buffer that is rented when the caller doesn't supply one
+        /// </summary>
+        const int InitialRentSize = 4096;
+
+        /// <summary>
+        /// The initial capacity of a rented buffer that is copied to the caller (ToJsonBytes with a null dest), the size of the copy is the capacity (it grows in small steps)
+        /// </summary>
+        const int InitialCapacity = 256;
 
 
         #region Internal

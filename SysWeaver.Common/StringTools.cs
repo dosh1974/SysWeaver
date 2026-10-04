@@ -3,7 +3,10 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using System.Text;
 
 namespace SysWeaver
@@ -2048,6 +2051,117 @@ namespace SysWeaver
             return lines;
         }
 
+
+        /// <summary>
+        /// Split chars into lines, the same result as <see cref="GetLines(String, bool, bool)"/> (only the lines and the returned array are allocated)
+        /// </summary>
+        /// <param name="s">The chars</param>
+        /// <param name="trim">True to trim whitespaces from every line</param>
+        /// <param name="removeEmpty">True to remove empty lines (after removing '\r' and trimming)</param>
+        /// <returns>The lines</returns>
+        [SkipLocalsInit]
+        internal static String[] GetLines(ReadOnlySpan<Char> s, bool trim, bool removeEmpty)
+        {
+            if (s.IsEmpty)
+                return Array.Empty<String>();
+            // The index of every '\n', found in one vectorized pass (cheaper than one IndexOf call per line for short lines)
+            Span<int> stackEnds = stackalloc int[MaxStackLineEnds];
+            int[] rentedEnds = null;
+            var ends = stackEnds;
+            int count = 0;
+            var l = s.Length;
+            ref var c = ref Unsafe.As<Char, ushort>(ref MemoryMarshal.GetReference(s));
+            nuint i = 0;
+            if (Vector128.IsHardwareAccelerated)
+            {
+                var nlv = Vector128.Create((ushort)'\n');
+                for (; i + 8 <= (nuint)l; i += 8)
+                {
+                    var m = Vector128.Equals(Vector128.LoadUnsafe(ref c, i), nlv).ExtractMostSignificantBits();
+                    while (m != 0)
+                    {
+                        if (count == ends.Length)
+                            ends = GrowLineEnds(ref rentedEnds, ends, count);
+                        ends[count++] = (int)i + BitOperations.TrailingZeroCount(m);
+                        m &= m - 1;
+                    }
+                }
+            }
+            for (; i < (nuint)l; ++i)
+            {
+                if (Unsafe.Add(ref c, i) == '\n')
+                {
+                    if (count == ends.Length)
+                        ends = GrowLineEnds(ref rentedEnds, ends, count);
+                    ends[count++] = (int)i;
+                }
+            }
+            try
+            {
+                var total = count + 1;
+                if (!removeEmpty)
+                {
+                    // Every line is kept, the number of lines is known
+                    var all = new String[total];
+                    int st = 0;
+                    for (int k = 0; k < total; ++k)
+                    {
+                        var end = k < count ? ends[k] : l;
+                        var seg = s[st..end];
+                        // Trimming white space also removes '\r' (like String.Split with TrimEntries), else only '\r' is removed
+                        all[k] = (trim ? seg.Trim() : seg.Trim('\r')).ToString();
+                        st = end + 1;
+                    }
+                    return all;
+                }
+                // The lines are collected in a pooled array, so that the returned array has the exact size (one allocation, even if empty lines are removed)
+                var pool = ArrayPool<String>.Shared;
+                var lines = pool.Rent(total);
+                try
+                {
+                    int n = 0;
+                    int start = 0;
+                    for (int k = 0; k < total; ++k)
+                    {
+                        var end = k < count ? ends[k] : l;
+                        var seg = s[start..end];
+                        var line = trim ? seg.Trim() : seg.Trim('\r');
+                        if (line.Length > 0)
+                            lines[n++] = line.ToString();
+                        start = end + 1;
+                    }
+                    if (n <= 0)
+                        return Array.Empty<String>();
+                    var result = new String[n];
+                    Array.Copy(lines, result, n);
+                    return result;
+                }
+                finally
+                {
+                    pool.Return(lines, true);
+                }
+            }
+            finally
+            {
+                if (rentedEnds != null)
+                    ArrayPool<int>.Shared.Return(rentedEnds);
+            }
+        }
+
+        /// <summary>
+        /// Line ends up to this number are kept on the stack (1 KB)
+        /// </summary>
+        const int MaxStackLineEnds = 256;
+
+        static Span<int> GrowLineEnds(ref int[] rented, Span<int> ends, int count)
+        {
+            var n = ArrayPool<int>.Shared.Rent(count * 2);
+            ends.Slice(0, count).CopyTo(n);
+            if (rented != null)
+                ArrayPool<int>.Shared.Return(rented);
+            rented = n;
+            return n;
+        }
 
         /// <summary>
         /// Create a new string with a repeated string

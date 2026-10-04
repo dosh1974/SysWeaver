@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using System.Threading;
 
 namespace SysWeaver
@@ -19,13 +21,15 @@ namespace SysWeaver
     /// The keys are split into segments, each segment is an open addressing hash table protected by a spin lock.
     /// All modifications are done while holding the segment lock.
     /// Reads are lock free, they are validated using a per segment version (seqlock) and retried if a write happened during the read.
+    /// Writes also search for the key lock free before taking the lock (so that the cache misses don't happen while holding it),
+    /// the result is used if the segment version is the same when the lock is taken.
     /// </summary>
     /// <typeparam name="TKey"></typeparam>
     /// <typeparam name="TValue"></typeparam>
     public sealed class LowAllocConcurrentDictionary<TKey, TValue> : IDictionary<TKey, TValue>
     {
         const int SegmentBits = 6;
-        const int SegmentCount = 1 << SegmentBits;
+        const int SegmentCount = LowAllocDictionarySegments.Count;
         const int BlockBits = 4;
         const int BlockSize = 1 << BlockBits;
         /// <summary>
@@ -53,7 +57,10 @@ namespace SysWeaver
         /// </summary>
         const int MaxProbeBlocks = 256;
 
-        readonly LowAllocDictionarySegment[] Segments;
+        /// <summary>
+        /// The segments are stored inline (no array, so no bounds or null checks when selecting a segment)
+        /// </summary>
+        LowAllocDictionarySegments Segments;
         /// <summary>
         /// The comparer, null for value types using the default comparer (so that calls can be devirtualized and inlined).
         /// For fast string keys this is the (randomized) ordinal comparer used as a fallback.
@@ -81,17 +88,17 @@ namespace SysWeaver
                 FastStrings = true;
                 Comparer = (IEqualityComparer<TKey>)(object)StringComparer.Ordinal;
             }
-            Segments = new LowAllocDictionarySegment[SegmentCount];
             // Room for capacity items in total without growing (taking the max load factor into account)
             var perSegment = (Math.Max(0L, capacity) + SegmentCount - 1) / SegmentCount;
             // Keys are randomly distributed between segments, for large capacities add 4 standard deviations of headroom (~1% at 10M items),
             // else about half the segments would have to grow (doubling their size)
+            Debug.Assert(SegmentCount == 1 << SegmentBits);
             if (perSegment >= 1024)
                 perSegment += 4 * (long)Math.Sqrt(perSegment);
             var slots = perSegment * 8 / 7 + 1;
             var blocks = (int)Math.Clamp((slots + BlockSize - 1) >> BlockBits, 1, MaxBlocks);
             for (int i = 0; i < SegmentCount; i++)
-                Segments[i].Table = new Table(blocks);
+                GetSegmentAt(i).Table = new Table(blocks);
         }
 
         public LowAllocConcurrentDictionary(IEqualityComparer<TKey> comparer)
@@ -123,9 +130,8 @@ namespace SysWeaver
             get
             {
                 int total = 0;
-                var segs = Segments;
                 for (int s = 0; s < SegmentCount; s++)
-                    total += Volatile.Read(ref GetTable(ref segs[s]).Live);
+                    total += Volatile.Read(ref GetSegmentAt(s).Live);
                 return total;
             }
         }
@@ -135,8 +141,10 @@ namespace SysWeaver
 
         public ICollection<TValue> Values => GetValuesCollection();
 
-        // The public operations selects the comparer strategy (devirtualized default comparer for value types, fast strings or a comparer instance)
-        // and the probing strategy (constant for the JIT), so that the core operations are specialized without any runtime checks
+        // The public operations select how keys are hashed and compared (see LowAllocKeyMode): the default comparer for value types (devirtualized and inlined),
+        // fast ordinal strings or a comparer instance. The core operations are inlined with the mode as a constant, so that they are specialized without any runtime checks.
+        // The mode isn't a generic type argument: all reference type keys share the same code, and calling (or inlining) generic methods
+        // from shared code requires runtime lookups.
 
         /// <summary>
         /// True if the default comparer is used for a value type key (all calls can be devirtualized and inlined)
@@ -161,10 +169,8 @@ namespace SysWeaver
         {
             if (IsNull(key)) ThrowKeyNull();
             if (UseDefaultComparer)
-                return Add<DefaultKeyComparer>(key, value, false);
-            if (UseFastStrings)
-                return Add<FastStringKeyComparer>(key, value, false);
-            return Add<CustomKeyComparer>(key, value, false);
+                return AddDefault(key, value, false);
+            return AddOther(key, value, false);
         }
 
         /// <summary>
@@ -175,31 +181,38 @@ namespace SysWeaver
         {
             if (IsNull(key)) ThrowKeyNull();
             if (UseDefaultComparer)
-                Add<DefaultKeyComparer>(key, value, true);
-            else if (UseFastStrings)
-                Add<FastStringKeyComparer>(key, value, true);
+                AddDefault(key, value, true);
             else
-                Add<CustomKeyComparer>(key, value, true);
+                AddOther(key, value, true);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        bool Add<TCmp>(TKey key, TValue value, bool overwrite) where TCmp : struct, IKeyComparer
-            => Vector128.IsHardwareAccelerated ? AddCore<VectorProbe, TCmp>(key, value, overwrite) : AddCore<FallbackProbe, TCmp>(key, value, overwrite);
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool AddDefault(TKey key, TValue value, bool overwrite)
+            => AddInline(key, value, overwrite, LowAllocKeyMode.Default);
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool AddOther(TKey key, TValue value, bool overwrite)
+            => UseFastStrings ? AddInline(key, value, overwrite, LowAllocKeyMode.FastString) : AddInline(key, value, overwrite, LowAllocKeyMode.Custom);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
         {
             if (IsNull(key)) ThrowKeyNull();
             if (UseDefaultComparer)
-                return Get<DefaultKeyComparer>(key, out value);
-            if (UseFastStrings)
-                return Get<FastStringKeyComparer>(key, out value);
-            return Get<CustomKeyComparer>(key, out value);
+                return TryGetValueDefault(key, out value);
+            return TryGetValueOther(key, out value);
         }
 
+        /// <summary>
+        /// Lookup for value type keys with the default comparer, inlined into the caller (the lookup fast path is small and has no calls, the slow paths are calls)
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        bool Get<TCmp>(TKey key, [MaybeNullWhen(false)] out TValue value) where TCmp : struct, IKeyComparer
-            => Vector128.IsHardwareAccelerated ? TryGetValueCore<VectorProbe, TCmp>(key, out value) : TryGetValueCore<FallbackProbe, TCmp>(key, out value);
+        bool TryGetValueDefault(TKey key, [MaybeNullWhen(false)] out TValue value)
+            => TryGetValueInline(key, out value, LowAllocKeyMode.Default);
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool TryGetValueOther(TKey key, [MaybeNullWhen(false)] out TValue value)
+            => UseFastStrings ? TryGetValueInline(key, out value, LowAllocKeyMode.FastString) : TryGetValueInline(key, out value, LowAllocKeyMode.Custom);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryRemove(TKey key, [MaybeNullWhen(false)] out TValue value)
@@ -210,15 +223,29 @@ namespace SysWeaver
         {
             if (IsNull(key)) ThrowKeyNull();
             if (UseDefaultComparer)
-                return Remove<DefaultKeyComparer>(key, out value, matchValue, expected);
-            if (UseFastStrings)
-                return Remove<FastStringKeyComparer>(key, out value, matchValue, expected);
-            return Remove<CustomKeyComparer>(key, out value, matchValue, expected);
+                return RemoveDefault(key, out value, matchValue, expected);
+            return RemoveOther(key, out value, matchValue, expected);
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool RemoveDefault(TKey key, [MaybeNullWhen(false)] out TValue value, bool matchValue, TValue expected)
+            => RemoveInline(key, out value, matchValue, expected, LowAllocKeyMode.Default);
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool RemoveOther(TKey key, [MaybeNullWhen(false)] out TValue value, bool matchValue, TValue expected)
+            => UseFastStrings ? RemoveInline(key, out value, matchValue, expected, LowAllocKeyMode.FastString) : RemoveInline(key, out value, matchValue, expected, LowAllocKeyMode.Custom);
+
+        /// <summary>
+        /// The key comparison part of a mode (without the flags)
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        bool Remove<TCmp>(TKey key, [MaybeNullWhen(false)] out TValue value, bool matchValue, TValue expected) where TCmp : struct, IKeyComparer
-            => Vector128.IsHardwareAccelerated ? RemoveCore<VectorProbe, TCmp>(key, out value, matchValue, expected) : RemoveCore<FallbackProbe, TCmp>(key, out value, matchValue, expected);
+        static LowAllocKeyMode KeyMode(LowAllocKeyMode mode) => mode & LowAllocKeyMode.KeyMask;
+
+        /// <summary>
+        /// True if the tags are probed using SIMD
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static bool UseVector(LowAllocKeyMode mode) => Vector128.IsHardwareAccelerated && ((mode & LowAllocKeyMode.Scalar) == 0);
 
         [DoesNotReturn]
         static void ThrowKeyNull() => throw new ArgumentNullException("key");
@@ -227,112 +254,67 @@ namespace SysWeaver
         #region Hashing
 
         /// <summary>
-        /// How keys are hashed and compared
-        /// </summary>
-        interface IKeyComparer
-        {
-            /// <summary>
-            /// Get the 64 bit hash used for selecting the segment (and the slot, unless the table is randomized)
-            /// </summary>
-            static abstract ulong GetHash(IEqualityComparer<TKey> comparer, TKey key);
-
-            /// <summary>
-            /// Get the 64 bit hash used for selecting the slot in a table (the tag and home block)
-            /// </summary>
-            /// <param name="table">The table</param>
-            /// <param name="hash">The hash from GetHash</param>
-            /// <param name="key">The key</param>
-            /// <param name="comparer">The comparer instance</param>
-            static abstract ulong GetTableHash(Table table, ulong hash, TKey key, IEqualityComparer<TKey> comparer);
-
-            static abstract bool Equals(IEqualityComparer<TKey> comparer, TKey a, TKey b);
-
-            /// <summary>
-            /// True if tables can be switched to a randomized hash when collisions are detected
-            /// </summary>
-            static abstract bool CanRandomize { get; }
-        }
-
-        /// <summary>
-        /// The default comparer for value types (devirtualized and inlined by the JIT), the comparer argument is null
-        /// </summary>
-        struct DefaultKeyComparer : IKeyComparer
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static ulong GetHash(IEqualityComparer<TKey> comparer, TKey key) => Mix(EqualityComparer<TKey>.Default.GetHashCode(key));
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static ulong GetTableHash(Table table, ulong hash, TKey key, IEqualityComparer<TKey> comparer) => hash;
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static bool Equals(IEqualityComparer<TKey> comparer, TKey a, TKey b) => EqualityComparer<TKey>.Default.Equals(a, b);
-
-            public static bool CanRandomize => false;
-        }
-
-        /// <summary>
-        /// A comparer instance
-        /// </summary>
-        struct CustomKeyComparer : IKeyComparer
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static ulong GetHash(IEqualityComparer<TKey> comparer, TKey key) => Mix(comparer.GetHashCode(key));
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static ulong GetTableHash(Table table, ulong hash, TKey key, IEqualityComparer<TKey> comparer) => hash;
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static bool Equals(IEqualityComparer<TKey> comparer, TKey a, TKey b) => comparer.Equals(a, b);
-
-            public static bool CanRandomize => false;
-        }
-
-        /// <summary>
-        /// Ordinal string keys (TKey is string), using a fast seeded hash.
-        /// If collisions are detected in a table, it's rebuilt using the (randomized) ordinal comparer for the slots, 
-        /// the fast hash is still used for selecting the segment (an attack can at worst put all keys in the same segment).
-        /// </summary>
-        struct FastStringKeyComparer : IKeyComparer
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static ulong GetHash(IEqualityComparer<TKey> comparer, TKey key) => LowAllocStringHash.GetHash(Unsafe.As<TKey, string>(ref key));
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static ulong GetTableHash(Table table, ulong hash, TKey key, IEqualityComparer<TKey> comparer)
-                => table.Randomized ? Mix(comparer.GetHashCode(key)) : hash;
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static bool Equals(IEqualityComparer<TKey> comparer, TKey a, TKey b) => string.Equals(Unsafe.As<TKey, string>(ref a), Unsafe.As<TKey, string>(ref b));
-
-            public static bool CanRandomize => true;
-        }
-
-        /// <summary>
         /// Mix a hash code into a 64 bit hash (fibonacci hashing), the high bits depends on all bits of the hash code.
-        /// Bits 58-63 selects the segment, bits 50-57 is the tag and bits 18-49 selects the home block.
+        /// Bits 58-63 selects the segment, bits 50-57 is the tag and bits 0-49 selects the home block (mostly the high bits).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static ulong Mix(int hashCode) => unchecked((uint)hashCode * 0x9E3779B97F4A7C15UL);
 
+        /// <summary>
+        /// Get the 64 bit hash used for selecting the segment (and the slot, unless the table is randomized)
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        ulong GetHash<TCmp>(TKey key) where TCmp : struct, IKeyComparer => TCmp.GetHash(Comparer, key);
+        ulong GetHash(TKey key, LowAllocKeyMode mode)
+        {
+            if (KeyMode(mode) == LowAllocKeyMode.Default)
+                return Mix(EqualityComparer<TKey>.Default.GetHashCode(key));
+            if (KeyMode(mode) == LowAllocKeyMode.FastString)
+                return LowAllocStringHash.GetHash(Unsafe.As<TKey, string>(ref key));
+            return Mix(Comparer.GetHashCode(key));
+        }
 
         /// <summary>
-        /// Get the hash used for the slots of a table, without a comparer strategy (for the slow paths)
+        /// Get the 64 bit hash used for selecting the slot in a table (the tag and home block)
+        /// </summary>
+        /// <param name="table">The table</param>
+        /// <param name="hash">The hash from GetHash</param>
+        /// <param name="key">The key</param>
+        /// <param name="mode">How keys are hashed and compared</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        ulong GetTableHash(Table table, ulong hash, TKey key, LowAllocKeyMode mode)
+            => (KeyMode(mode) == LowAllocKeyMode.FastString) && table.Randomized ? Mix(Comparer.GetHashCode(key)) : hash;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        bool KeyEquals(TKey a, TKey b, LowAllocKeyMode mode)
+        {
+            if (KeyMode(mode) == LowAllocKeyMode.Default)
+                return EqualityComparer<TKey>.Default.Equals(a, b);
+            if (KeyMode(mode) == LowAllocKeyMode.FastString)
+                return string.Equals(Unsafe.As<TKey, string>(ref a), Unsafe.As<TKey, string>(ref b));
+            return Comparer.Equals(a, b);
+        }
+
+        /// <summary>
+        /// Get the hash used for the slots of a table (for the slow paths)
         /// </summary>
         ulong GetSlotHash(TKey key, bool randomized)
         {
             if (UseDefaultComparer)
-                return GetHash<DefaultKeyComparer>(key);
+                return GetHash(key, LowAllocKeyMode.Default);
             if (UseFastStrings)
-                return randomized ? Mix(Comparer.GetHashCode(key)) : GetHash<FastStringKeyComparer>(key);
-            return GetHash<CustomKeyComparer>(key);
+                return randomized ? Mix(Comparer.GetHashCode(key)) : GetHash(key, LowAllocKeyMode.FastString);
+            return GetHash(key, LowAllocKeyMode.Custom);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         ref LowAllocDictionarySegment GetSegment(ulong h)
             // The index is always less than SegmentCount (no bounds check needed)
-            => ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(Segments), GetSegmentIndex(h));
+            => ref Unsafe.Add(ref Unsafe.As<LowAllocDictionarySegments, LowAllocDictionarySegment>(ref Segments), (nuint)(h >> (64 - SegmentBits)));
+
+        /// <summary>
+        /// Get a segment by index (0 to SegmentCount - 1)
+        /// </summary>
+        ref LowAllocDictionarySegment GetSegmentAt(int index) => ref Segments[index];
 
         static readonly bool KeyIsNullable = Nullable.GetUnderlyingType(typeof(TKey)) != null;
 
@@ -342,24 +324,45 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static bool IsNull(TKey key) => typeof(TKey).IsValueType ? (KeyIsNullable && (key == null)) : (key == null);
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static int GetSegmentIndex(ulong h) => (int)(h >> (64 - SegmentBits));
+        /// <summary>
+        /// The smallest tag of a key, 0 and 1 are reserved for empty and tombstone
+        /// </summary>
+        const byte MinKeyTag = TagTombstone + 1;
 
         /// <summary>
-        /// 0 and 1 are reserved for empty and tombstone
+        /// Get the tag of a key (0, 1 and 2 are all mapped to 2, since 0 and 1 are reserved for empty and tombstone)
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static byte GetKeyTag(ulong h)
-        {
-            byte tag = (byte)(h >> (56 - SegmentBits));
-            return tag <= TagTombstone ? (byte)(tag + 2) : tag;
-        }
+        static byte GetKeyTag(ulong h) => Math.Max((byte)(h >> (56 - SegmentBits)), MinKeyTag);
+
+        /// <summary>
+        /// Get the tag of a key in all lanes (same as <see cref="GetKeyTag"/>)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static Vector128<byte> GetKeyTagVector(ulong h) => Vector128.Max(Vector128.Create((byte)(h >> (56 - SegmentBits))), Vector128.Create(MinKeyTag));
 
         /// <summary>
         /// Map the hash to a block, works for any number of blocks (not just a power of two)
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static int GetHomeBlock(ulong h, int blocks) => (int)((((h >> 18) & 0xffffffffUL) * (uint)blocks) >> 32);
+        static int GetHomeBlock(ulong h, int blocks) => (int)MultiplyHigh(h << (8 + SegmentBits), (uint)blocks);
+
+        /// <summary>
+        /// Get the first slot of the home block
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static nuint GetHomeSlot(ulong h, int blocks) => (nuint)MultiplyHigh(h << (8 + SegmentBits), (uint)blocks) << BlockBits;
+
+        /// <summary>
+        /// The high 64 bits of the 128 bit product
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ulong MultiplyHigh(ulong a, ulong b)
+        {
+            if (Bmi2.X64.IsSupported)
+                return Bmi2.X64.MultiplyNoFlags(a, b);
+            return Math.BigMul(a, b, out _);
+        }
 
         #endregion//Hashing
 
@@ -374,6 +377,7 @@ namespace SysWeaver
         /// <summary>
         /// The storage of a segment, the tags and entries are always consistent with each other.
         /// A table is never resized, a new table is created and published instead.
+        /// The fields are never modified (the counters are in the segment), so that writers never invalidate the cache line that all readers of the segment use.
         /// </summary>
         sealed class Table
         {
@@ -391,17 +395,9 @@ namespace SysWeaver
             /// </summary>
             public readonly int MaxUsed;
             /// <summary>
-            /// True if the slots are selected using the randomized fallback hash (see <see cref="FastStringKeyComparer"/>)
+            /// True if the slots are selected using the randomized fallback hash (see <see cref="LowAllocKeyMode.FastString"/>)
             /// </summary>
             public readonly bool Randomized;
-            /// <summary>
-            /// Number of live entries (only modified while holding the segment lock)
-            /// </summary>
-            public int Live;
-            /// <summary>
-            /// Number of non empty slots, live + tombstones (only modified while holding the segment lock)
-            /// </summary>
-            public int Used;
 
             public Table(int blocks, bool randomized = false)
             {
@@ -431,10 +427,10 @@ namespace SysWeaver
             var old = Unsafe.As<Table>(seg.Table);
             var oldSlots = old.Blocks << BlockBits;
             // Only grow if there are many live entries, else just get rid of the tombstones
-            long newBlocks = (grow || (old.Live >= (oldSlots >> 1))) ? old.Blocks * 2L : old.Blocks;
+            long newBlocks = (grow || (seg.Live >= (oldSlots >> 1))) ? old.Blocks * 2L : old.Blocks;
             if (newBlocks > MaxBlocks)
             {
-                if ((old.Blocks < MaxBlocks) || (!grow && (old.Live < old.MaxUsed)))
+                if ((old.Blocks < MaxBlocks) || (!grow && (seg.Live < old.MaxUsed)))
                     newBlocks = MaxBlocks;
                 else
                     throw new InvalidOperationException("Dictionary segment is full");
@@ -464,9 +460,9 @@ namespace SysWeaver
                 newEntries[idx] = e;
                 ++live;
             }
-            t.Live = live;
-            t.Used = live;
             Volatile.Write(ref seg.Table, t);
+            seg.Live = live;
+            seg.Used = live;
             return t;
         }
 
@@ -474,116 +470,252 @@ namespace SysWeaver
 
         #region Probing
 
+        // The probe sequence of a key starts at the beginning of its home block and is linear (wrapping around),
+        // a key is always located before the first empty slot of its probe sequence.
+        // With SIMD (SSE2, AdvSimd etc) the tags of a block (16 slots) are checked at a time, else one slot at a time (same probe order).
+        // A table always has empty slots (the max load factor is 7/8), so a probe always ends at an empty slot (but the probes are bounded anyway).
+
         /// <summary>
-        /// Probing strategy, both strategies must use the same probe order.
-        /// A key is always located before the first empty slot of its probe sequence,
-        /// the probe sequence starts at the beginning of the home block and is linear (wrapping around).
+        /// Check if a key read from a slot (with a matching tag) is the key.
+        /// May be called without holding the lock.
         /// </summary>
-        interface IProbe
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        bool IsKey(TKey slotKey, TKey key, LowAllocKeyMode mode)
         {
-            /// <summary>
-            /// Find the index of the key, -1 if not found.
-            /// May be called without holding the lock (the result must then be validated).
-            /// </summary>
-            static abstract int Find<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer) where TCmp : struct, IKeyComparer;
-
-            /// <summary>
-            /// Same as Find, but also measures the probe (to detect hash collision attacks).
-            /// Must hold the lock.
-            /// </summary>
-            /// <param name="table">The table to search</param>
-            /// <param name="homeBlock">The block where the probe sequence starts</param>
-            /// <param name="tag">The tag of the key</param>
-            /// <param name="key">The key to find</param>
-            /// <param name="comparer">The comparer instance (null for the default comparer)</param>
-            /// <param name="falseTagMatches">The number of slots with a matching tag but a different key</param>
-            /// <param name="blocksScanned">The number of blocks scanned</param>
-            static abstract int FindForInsert<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer, out int falseTagMatches, out int blocksScanned) where TCmp : struct, IKeyComparer;
-
-            /// <summary>
-            /// Find the first free (empty or tombstone) slot, -1 if none exist.
-            /// Must hold the lock.
-            /// </summary>
-            static abstract int FindFree(Table table, int homeBlock);
+            // A concurrent remove may have cleared the key (lock free read), the read is then retried.
+            // The default comparer and string.Equals handles null, a comparer instance may not
+            if ((KeyMode(mode) == LowAllocKeyMode.Custom) && IsNull(slotKey))
+                return false;
+            return KeyEquals(slotKey, key, mode);
         }
 
         /// <summary>
-        /// Checks the tags of a block (16 slots) at a time using SIMD (SSE2, AdvSimd etc)
+        /// Find the index of the key, -1 if not found.
+        /// May be called without holding the lock (the result must then be validated).
+        /// The home block is checked inline (where almost all keys are), the rest of the probe sequence in <see cref="FindInNextBlocks"/>.
         /// </summary>
-        struct VectorProbe : IProbe
+        /// <param name="table">The table to search</param>
+        /// <param name="th">The table hash of the key</param>
+        /// <param name="key">The key to find</param>
+        /// <param name="mode">How keys are hashed and compared</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        int Find(Table table, ulong th, TKey key, LowAllocKeyMode mode)
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static int Find<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer) where TCmp : struct, IKeyComparer
+            if (!UseVector(mode))
+                return FindFallback(table, th, key, mode);
+            nuint first = GetHomeSlot(th, table.Blocks);
+            var loaded = Vector128.LoadUnsafe(ref MemoryMarshal.GetArrayDataReference(table.Tags), first);
+            uint matches = Vector128.Equals(loaded, GetKeyTagVector(th)).ExtractMostSignificantBits();
+            while (matches != 0)
             {
-                ref byte tags = ref MemoryMarshal.GetArrayDataReference(table.Tags);
-                ref Entry entries = ref MemoryMarshal.GetArrayDataReference(table.Entries);
-                int blocks = table.Blocks;
-                int block = homeBlock;
-                var tagVector = Vector128.Create(tag);
-                for (int attempts = 0; attempts < blocks; ++attempts)
-                {
-                    int first = block << BlockBits;
-                    var loaded = Vector128.LoadUnsafe(ref tags, (nuint)first);
-                    uint matchMask = Vector128.Equals(loaded, tagVector).ExtractMostSignificantBits();
-                    while (matchMask != 0)
-                    {
-                        int idx = first + BitOperations.TrailingZeroCount(matchMask);
-                        var k = Unsafe.Add(ref entries, idx).Key;
-                        // A concurrent remove may have cleared the key (lock free read), the read is retried in that case
-                        if (!IsNull(k) && TCmp.Equals(comparer, k, key))
-                            return idx;
-                        matchMask &= matchMask - 1;
-                    }
-                    if (Vector128.Equals(loaded, Vector128<byte>.Zero).ExtractMostSignificantBits() != 0)
-                        return -1;
-                    if (++block == blocks)
-                        block = 0;
-                }
-                return -1;
+                nuint idx = first + (uint)BitOperations.TrailingZeroCount(matches);
+                if (IsKey(Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Entries), idx).Key, key, mode))
+                    return (int)idx;
+                matches &= matches - 1;
             }
+            if (Vector128.Equals(loaded, Vector128<byte>.Zero).ExtractMostSignificantBits() != 0)
+                return -1;
+            return FindInNextBlocks(table, (int)first, th, key, mode);
+        }
 
-            public static int FindForInsert<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer, out int falseTagMatches, out int blocksScanned) where TCmp : struct, IKeyComparer
+        /// <summary>
+        /// Continue a probe after the home block (rare)
+        /// </summary>
+        /// <param name="table">The table to search</param>
+        /// <param name="first">The first slot of the home block</param>
+        /// <param name="th">The table hash of the key</param>
+        /// <param name="key">The key to find</param>
+        /// <param name="mode">How keys are hashed and compared</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        int FindInNextBlocks(Table table, int first, ulong th, TKey key, LowAllocKeyMode mode)
+        {
+            ref byte tags = ref MemoryMarshal.GetArrayDataReference(table.Tags);
+            ref Entry entries = ref MemoryMarshal.GetArrayDataReference(table.Entries);
+            int slots = table.Tags.Length;
+            var tagVector = GetKeyTagVector(th);
+            for (int remaining = table.Blocks - 1; remaining > 0; --remaining)
             {
-                ref byte tags = ref MemoryMarshal.GetArrayDataReference(table.Tags);
-                ref Entry entries = ref MemoryMarshal.GetArrayDataReference(table.Entries);
-                int blocks = table.Blocks;
-                int block = homeBlock;
-                var tagVector = Vector128.Create(tag);
-                int falseMatches = 0;
-                int attempts = 0;
-                int result = -1;
-                while (attempts < blocks)
+                first += BlockSize;
+                if (first == slots)
+                    first = 0;
+                var loaded = Vector128.LoadUnsafe(ref tags, (nuint)first);
+                uint matches = Vector128.Equals(loaded, tagVector).ExtractMostSignificantBits();
+                while (matches != 0)
                 {
-                    ++attempts;
+                    int idx = first + BitOperations.TrailingZeroCount(matches);
+                    if (IsKey(Unsafe.Add(ref entries, idx).Key, key, mode))
+                        return idx;
+                    matches &= matches - 1;
+                }
+                if (Vector128.Equals(loaded, Vector128<byte>.Zero).ExtractMostSignificantBits() != 0)
+                    return -1;
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// Same as <see cref="Find"/>, for platforms without SIMD
+        /// </summary>
+        int FindFallback(Table table, ulong th, TKey key, LowAllocKeyMode mode)
+        {
+            var tags = table.Tags;
+            var entries = table.Entries;
+            int slots = tags.Length;
+            byte tag = GetKeyTag(th);
+            int idx = GetHomeBlock(th, table.Blocks) << BlockBits;
+            for (int attempts = 0; attempts < slots; ++attempts)
+            {
+                byte t = tags[idx];
+                if (t == TagEmpty)
+                    return -1;
+                if ((t == tag) && IsKey(entries[idx].Key, key, mode))
+                    return idx;
+                if (++idx == slots)
+                    idx = 0;
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// Find the index of the key (-1 if not found), and the first free slot of its probe sequence (where it should be inserted).
+        /// May be called without holding the lock (the result must then be validated).
+        /// </summary>
+        /// <param name="table">The table to search</param>
+        /// <param name="th">The table hash of the key</param>
+        /// <param name="key">The key to find</param>
+        /// <param name="mode">How keys are hashed and compared</param>
+        /// <param name="free">The first free (empty or tombstone) slot of the probe sequence, -1 if there are none (only valid if the key isn't found)</param>
+        /// <param name="collisions">True if the probe found many slots with the same tag (but a different key) or was very long, the hash function is then assumed to be under attack (only checked for fast strings in a table that isn't randomized)</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        int FindForInsert(Table table, ulong th, TKey key, LowAllocKeyMode mode, out int free, out bool collisions)
+        {
+            if (UseVector(mode))
+            {
+                // The home block (the common case), the probe ends there if it has an empty slot
+                nuint first = GetHomeSlot(th, table.Blocks);
+                var loaded = Vector128.LoadUnsafe(ref MemoryMarshal.GetArrayDataReference(table.Tags), first);
+                uint matches = Vector128.Equals(loaded, GetKeyTagVector(th)).ExtractMostSignificantBits();
+                while (matches != 0)
+                {
+                    nuint idx = first + (uint)BitOperations.TrailingZeroCount(matches);
+                    if (IsKey(Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Entries), idx).Key, key, mode))
+                    {
+                        free = -1;
+                        collisions = false;
+                        return (int)idx;
+                    }
+                    matches &= matches - 1;
+                }
+                if (Vector128.Equals(loaded, Vector128<byte>.Zero).ExtractMostSignificantBits() != 0)
+                {
+                    // tag <= 1 <=> min(tag, 1) == tag
+                    uint freeMask = Vector128.Equals(Vector128.Min(loaded, Vector128.Create(TagTombstone)), loaded).ExtractMostSignificantBits();
+                    free = (int)first + BitOperations.TrailingZeroCount(freeMask);
+                    // A single block can't have enough false matches
+                    collisions = false;
+                    return -1;
+                }
+            }
+            // Copied, so that the caller's variables aren't address exposed
+            int result = FindForInsertSlow(table, th, key, mode, out var f, out var c);
+            free = f;
+            collisions = c;
+            return result;
+        }
+
+        /// <summary>
+        /// Same as <see cref="FindForInsert"/>, searches the whole probe sequence
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        int FindForInsertSlow(Table table, ulong th, TKey key, LowAllocKeyMode mode, out int free, out bool collisions)
+        {
+            ref byte tags = ref MemoryMarshal.GetArrayDataReference(table.Tags);
+            ref Entry entries = ref MemoryMarshal.GetArrayDataReference(table.Entries);
+            int freeIdx = -1;
+            int falseMatches = 0;
+            int result = -1;
+            int scanned = 0;
+            if (UseVector(mode))
+            {
+                int blocks = table.Blocks;
+                int block = GetHomeBlock(th, blocks);
+                var tagVector = GetKeyTagVector(th);
+                while (scanned < blocks)
+                {
+                    ++scanned;
                     int first = block << BlockBits;
                     var loaded = Vector128.LoadUnsafe(ref tags, (nuint)first);
-                    uint matchMask = Vector128.Equals(loaded, tagVector).ExtractMostSignificantBits();
-                    while (matchMask != 0)
+                    uint matches = Vector128.Equals(loaded, tagVector).ExtractMostSignificantBits();
+                    while (matches != 0)
                     {
-                        int idx = first + BitOperations.TrailingZeroCount(matchMask);
-                        if (TCmp.Equals(comparer, Unsafe.Add(ref entries, idx).Key, key))
+                        int idx = first + BitOperations.TrailingZeroCount(matches);
+                        if (IsKey(Unsafe.Add(ref entries, idx).Key, key, mode))
                         {
                             result = idx;
                             goto done;
                         }
                         ++falseMatches;
-                        matchMask &= matchMask - 1;
+                        matches &= matches - 1;
+                    }
+                    if (freeIdx < 0)
+                    {
+                        // tag <= 1 <=> min(tag, 1) == tag
+                        uint freeMask = Vector128.Equals(Vector128.Min(loaded, Vector128.Create(TagTombstone)), loaded).ExtractMostSignificantBits();
+                        if (freeMask != 0)
+                            freeIdx = first + BitOperations.TrailingZeroCount(freeMask);
                     }
                     if (Vector128.Equals(loaded, Vector128<byte>.Zero).ExtractMostSignificantBits() != 0)
                         break;
                     if (++block == blocks)
                         block = 0;
                 }
-            done:
-                falseTagMatches = falseMatches;
-                blocksScanned = attempts;
-                return result;
             }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static int FindFree(Table table, int homeBlock)
+            else
             {
-                ref byte tags = ref MemoryMarshal.GetArrayDataReference(table.Tags);
+                int slots = table.Tags.Length;
+                int idx = GetHomeBlock(th, table.Blocks) << BlockBits;
+                byte tag = GetKeyTag(th);
+                int slotsScanned = 0;
+                while (slotsScanned < slots)
+                {
+                    ++slotsScanned;
+                    byte t = Unsafe.Add(ref tags, idx);
+                    if (t <= TagTombstone)
+                    {
+                        if (freeIdx < 0)
+                            freeIdx = idx;
+                        if (t == TagEmpty)
+                            break;
+                    }
+                    else if (t == tag)
+                    {
+                        if (IsKey(Unsafe.Add(ref entries, idx).Key, key, mode))
+                        {
+                            result = idx;
+                            break;
+                        }
+                        ++falseMatches;
+                    }
+                    if (++idx == slots)
+                        idx = 0;
+                }
+                scanned = (slotsScanned + BlockSize - 1) >> BlockBits;
+            }
+        done:
+            free = freeIdx;
+            collisions = (KeyMode(mode) == LowAllocKeyMode.FastString) && !table.Randomized && ((falseMatches >= MaxFalseTagMatches) || (scanned >= MaxProbeBlocks));
+            return result;
+        }
+
+        /// <summary>
+        /// Find the first free (empty or tombstone) slot, -1 if none exist.
+        /// Must hold the lock.
+        /// </summary>
+        static int FindFree(Table table, int homeBlock, LowAllocKeyMode mode)
+        {
+            ref byte tags = ref MemoryMarshal.GetArrayDataReference(table.Tags);
+            if (UseVector(mode))
+            {
                 int blocks = table.Blocks;
                 int block = homeBlock;
                 var tombstone = Vector128.Create(TagTombstone);
@@ -600,86 +732,16 @@ namespace SysWeaver
                 }
                 return -1;
             }
-        }
-
-        /// <summary>
-        /// Checks one slot at a time (for platforms without SIMD)
-        /// </summary>
-        struct FallbackProbe : IProbe
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static int Find<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer) where TCmp : struct, IKeyComparer
+            int slots = table.Tags.Length;
+            int idx = homeBlock << BlockBits;
+            for (int attempts = 0; attempts < slots; ++attempts)
             {
-                var tags = table.Tags;
-                var entries = table.Entries;
-                int slots = tags.Length;
-                int idx = homeBlock << BlockBits;
-                for (int attempts = 0; attempts < slots; ++attempts)
-                {
-                    byte t = tags[idx];
-                    if (t == TagEmpty)
-                        return -1;
-                    if (t == tag)
-                    {
-                        var k = entries[idx].Key;
-                        // A concurrent remove may have cleared the key (lock free read), the read is retried in that case
-                        if (!IsNull(k) && TCmp.Equals(comparer, k, key))
-                            return idx;
-                    }
-                    if (++idx == slots)
-                        idx = 0;
-                }
-                return -1;
+                if (Unsafe.Add(ref tags, idx) <= TagTombstone)
+                    return idx;
+                if (++idx == slots)
+                    idx = 0;
             }
-
-            public static int FindForInsert<TCmp>(Table table, int homeBlock, byte tag, TKey key, IEqualityComparer<TKey> comparer, out int falseTagMatches, out int blocksScanned) where TCmp : struct, IKeyComparer
-            {
-                var tags = table.Tags;
-                var entries = table.Entries;
-                int slots = tags.Length;
-                int start = homeBlock << BlockBits;
-                int idx = start;
-                int falseMatches = 0;
-                int scanned = 0;
-                int result = -1;
-                while (scanned < slots)
-                {
-                    ++scanned;
-                    byte t = tags[idx];
-                    if (t == TagEmpty)
-                        break;
-                    if (t == tag)
-                    {
-                        if (TCmp.Equals(comparer, entries[idx].Key, key))
-                        {
-                            result = idx;
-                            break;
-                        }
-                        ++falseMatches;
-                    }
-                    if (++idx == slots)
-                        idx = 0;
-                }
-                falseTagMatches = falseMatches;
-                blocksScanned = (scanned + BlockSize - 1) >> BlockBits;
-                return result;
-            }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public static int FindFree(Table table, int homeBlock)
-            {
-                var tags = table.Tags;
-                int slots = tags.Length;
-                int idx = homeBlock << BlockBits;
-                for (int attempts = 0; attempts < slots; ++attempts)
-                {
-                    if (tags[idx] <= TagTombstone)
-                        return idx;
-                    if (++idx == slots)
-                        idx = 0;
-                }
-                return -1;
-            }
+            return -1;
         }
 
         #endregion//Probing
@@ -687,24 +749,85 @@ namespace SysWeaver
         #region Operations
 
         /// <summary>
-        /// Add a key
+        /// True if the version is even (no write in progress) and still the current version of the segment (no write happened since it was read).
+        /// If the version is odd, version &amp; ~1 is a version before it (the version only increases), so it never equals the current version.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static bool IsValid(ref LowAllocDictionarySegment seg, int version)
+            => Volatile.Read(ref seg.Version) == (version & ~1);
+
+        /// <summary>
+        /// Add a key.
+        /// The key is first searched for without holding the lock, so that the cache misses happens before taking the lock (shorter lock hold times).
+        /// If the segment isn't modified before the lock is taken (same version), the result of that search is still valid.
+        /// The common case can't throw, so it doesn't need a try/finally (that makes the JIT keep variables on the stack), everything else is done by <see cref="AddLocked"/>.
         /// </summary>
         /// <param name="key">The key to add</param>
         /// <param name="value">The value to add</param>
         /// <param name="overwrite">If true, an existing value is overwritten (and true is returned)</param>
+        /// <param name="mode">How keys are hashed and compared</param>
         /// <returns>True if the value was added (or overwritten), false if the key exists (and overwrite is false)</returns>
-        bool AddCore<TProbe, TCmp>(TKey key, TValue value, bool overwrite) where TProbe : struct, IProbe where TCmp : struct, IKeyComparer
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        bool AddInline(TKey key, TValue value, bool overwrite, LowAllocKeyMode mode)
         {
-            var comparer = Comparer;
-            var h = GetHash<TCmp>(key);
+            var h = GetHash(key, mode);
             ref var seg = ref GetSegment(h);
-
+            int version = Volatile.Read(ref seg.Version);
+            var table = GetTable(ref seg);
+            var th = GetTableHash(table, h, key, mode);
+            int idx = FindForInsert(table, th, key, mode, out var free, out var collisions);
+            if ((idx >= 0) && !overwrite)
+            {
+                // The key exists, no need to take the lock (unless a write happened during the search)
+                Volatile.ReadBarrier();
+                if (IsValid(ref seg, version))
+                    return false;
+            }
             seg.EnterLock();
+            if (IsValid(ref seg, version) && ReferenceEquals(seg.Table, table) && !collisions)
+            {
+                if (idx >= 0)
+                {
+                    if (overwrite)
+                    {
+                        seg.BeginWrite();
+                        Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Entries), idx).Value = value;
+                        seg.EndWrite();
+                        seg.ExitLock();
+                        return true;
+                    }
+                }
+                else if ((free >= 0) && (seg.Used < table.MaxUsed))
+                {
+                    seg.BeginWrite();
+                    ref var e = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Entries), free);
+                    e.Key = key;
+                    e.Value = value;
+                    ref var t = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Tags), free);
+                    if (t == TagEmpty)
+                        ++seg.Used;
+                    t = GetKeyTag(th);
+                    ++seg.Live;
+                    seg.EndWrite();
+                    seg.ExitLock();
+                    return true;
+                }
+            }
+            return AddLocked(ref seg, key, value, overwrite, mode);
+        }
+
+        /// <summary>
+        /// Add a key while holding the lock (the lock is released), when the table was modified concurrently or must be rebuilt
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool AddLocked(ref LowAllocDictionarySegment seg, TKey key, TValue value, bool overwrite, LowAllocKeyMode mode)
+        {
             try
             {
+                var h = GetHash(key, mode);
                 var table = Unsafe.As<Table>(seg.Table);
-                var th = TCmp.GetTableHash(table, h, key, comparer);
-                int idx = TProbe.FindForInsert<TCmp>(table, GetHomeBlock(th, table.Blocks), GetKeyTag(th), key, comparer, out var falseTagMatches, out var blocksScanned);
+                var th = GetTableHash(table, h, key, mode);
+                int idx = FindForInsertSlow(table, th, key, mode, out var free, out var collisions);
                 if (idx >= 0)
                 {
                     if (!overwrite)
@@ -714,32 +837,33 @@ namespace SysWeaver
                     seg.EndWrite();
                     return true;
                 }
-                if (TCmp.CanRandomize && !table.Randomized && ((falseTagMatches >= MaxFalseTagMatches) || (blocksScanned >= MaxProbeBlocks)))
+                if (collisions)
                 {
                     // Hash collisions (an attack?), switch the table to the randomized hash
                     table = Rebuild(ref seg, false, true);
-                    th = TCmp.GetTableHash(table, h, key, comparer);
+                    th = GetTableHash(table, h, key, mode);
+                    free = -1;
                 }
-                else if (table.Used >= table.MaxUsed)
+                else if (seg.Used >= table.MaxUsed)
                 {
                     table = Rebuild(ref seg, false, table.Randomized);
+                    free = -1;
                 }
-                for (; ; )
+                while (free < 0)
                 {
-                    idx = TProbe.FindFree(table, GetHomeBlock(th, table.Blocks));
-                    if (idx >= 0)
-                        break;
-                    table = Rebuild(ref seg, true, table.Randomized);
+                    free = FindFree(table, GetHomeBlock(th, table.Blocks), mode);
+                    if (free < 0)
+                        table = Rebuild(ref seg, true, table.Randomized);
                 }
                 seg.BeginWrite();
-                ref var e = ref table.Entries[idx];
+                ref var e = ref table.Entries[free];
                 e.Key = key;
                 e.Value = value;
-                ref var t = ref table.Tags[idx];
+                ref var t = ref table.Tags[free];
                 if (t == TagEmpty)
-                    ++table.Used;
+                    ++seg.Used;
                 t = GetKeyTag(th);
-                ++table.Live;
+                ++seg.Live;
                 seg.EndWrite();
                 return true;
             }
@@ -750,43 +874,68 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// The lookup fast path, a single lock free attempt (the common case), retries are done in <see cref="TryGetValueSlow"/>.
-        /// Kept small, so that the JIT doesn't need to save and spill many registers.
+        /// The lookup fast path: a single lock free attempt, only checking the home block (where almost all keys are).
+        /// Everything else is done by <see cref="TryGetValueSlow"/>, so that the fast path doesn't need to preserve many values across calls.
         /// </summary>
-        bool TryGetValueCore<TProbe, TCmp>(TKey key, [MaybeNullWhen(false)] out TValue value) where TProbe : struct, IProbe where TCmp : struct, IKeyComparer
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        bool TryGetValueInline(TKey key, [MaybeNullWhen(false)] out TValue value, LowAllocKeyMode mode)
         {
-            var h = GetHash<TCmp>(key);
-            ref var seg = ref GetSegment(h);
-            int version = Volatile.Read(ref seg.Version);
-            var table = GetTable(ref seg);
-            var comparer = Comparer;
-            var th = TCmp.GetTableHash(table, h, key, comparer);
-            // The table is always consistent (never torn), so it's safe to search even if a write is in progress (the result is then discarded)
-            int idx = TProbe.Find<TCmp>(table, GetHomeBlock(th, table.Blocks), GetKeyTag(th), key, comparer);
-            value = idx >= 0 ? Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Entries), idx).Value : default;
-            // Make sure that all reads above are done before validating the version
-            Volatile.ReadBarrier();
-            if (((version & 1) == 0) && (Volatile.Read(ref seg.Version) == version))
-                return idx >= 0;
-            return TryGetValueSlow<TProbe, TCmp>(ref seg, h, key, out value);
+            if (UseVector(mode))
+            {
+                var h = GetHash(key, mode);
+                ref var seg = ref GetSegment(h);
+                int version = Volatile.Read(ref seg.Version);
+                var table = GetTable(ref seg);
+                // The table is always consistent (never torn), so it's safe to search even if a write is in progress (the result is then discarded)
+                var th = GetTableHash(table, h, key, mode);
+                nuint first = GetHomeSlot(th, table.Blocks);
+                var loaded = Vector128.LoadUnsafe(ref MemoryMarshal.GetArrayDataReference(table.Tags), first);
+                uint matches = Vector128.Equals(loaded, GetKeyTagVector(th)).ExtractMostSignificantBits();
+                while (matches != 0)
+                {
+                    ref var e = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Entries), first + (uint)BitOperations.TrailingZeroCount(matches));
+                    if (IsKey(e.Key, key, mode))
+                    {
+                        value = e.Value;
+                        // Make sure that all reads above are done before validating the version
+                        Volatile.ReadBarrier();
+                        if (IsValid(ref seg, version))
+                            return true;
+                        goto slow;
+                    }
+                    matches &= matches - 1;
+                }
+                if (Vector128.Equals(loaded, Vector128<byte>.Zero).ExtractMostSignificantBits() != 0)
+                {
+                    Volatile.ReadBarrier();
+                    if (IsValid(ref seg, version))
+                    {
+                        value = default;
+                        return false;
+                    }
+                }
+            }
+        slow:
+            return TryGetValueSlow(key, out value, mode);
         }
 
         /// <summary>
-        /// A write happened during the lock free read, retry (and eventually read under the lock)
+        /// The key wasn't in its home block, or a write happened during the lock free read: search the whole probe sequence, retry (and eventually read under the lock)
         /// </summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        bool TryGetValueSlow<TProbe, TCmp>(ref LowAllocDictionarySegment seg, ulong h, TKey key, [MaybeNullWhen(false)] out TValue value) where TProbe : struct, IProbe where TCmp : struct, IKeyComparer
+        bool TryGetValueSlow(TKey key, [MaybeNullWhen(false)] out TValue value, LowAllocKeyMode mode)
         {
-            var comparer = Comparer;
+            var h = GetHash(key, mode);
+            ref var seg = ref GetSegment(h);
             for (int attempt = 0; attempt < MaxOptimisticReads; ++attempt)
             {
-                Thread.SpinWait(attempt + 1);
+                if (attempt > 0)
+                    Thread.SpinWait(attempt);
                 int version = Volatile.Read(ref seg.Version);
                 if ((version & 1) == 0)
                 {
                     var table = GetTable(ref seg);
-                    var th = TCmp.GetTableHash(table, h, key, comparer);
-                    int idx = TProbe.Find<TCmp>(table, GetHomeBlock(th, table.Blocks), GetKeyTag(th), key, comparer);
+                    int idx = Find(table, GetTableHash(table, h, key, mode), key, mode);
                     value = idx >= 0 ? table.Entries[idx].Value : default;
                     Volatile.ReadBarrier();
                     if (Volatile.Read(ref seg.Version) == version)
@@ -798,8 +947,7 @@ namespace SysWeaver
             try
             {
                 var table = Unsafe.As<Table>(seg.Table);
-                var th = TCmp.GetTableHash(table, h, key, comparer);
-                int idx = TProbe.Find<TCmp>(table, GetHomeBlock(th, table.Blocks), GetKeyTag(th), key, comparer);
+                int idx = Find(table, GetTableHash(table, h, key, mode), key, mode);
                 value = idx >= 0 ? table.Entries[idx].Value : default;
                 return idx >= 0;
             }
@@ -810,25 +958,66 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Remove a key
+        /// Remove a key.
+        /// The key is first searched for without holding the lock, so that the cache misses happens before taking the lock (shorter lock hold times),
+        /// and a missing key doesn't need the lock at all.
+        /// If the segment isn't modified before the lock is taken (same version), the result of that search is still valid.
+        /// The common case can't throw, so it doesn't need a try/finally (that makes the JIT keep variables on the stack), everything else is done by <see cref="RemoveLocked"/>.
         /// </summary>
         /// <param name="key">The key to remove</param>
         /// <param name="value">The value of the removed key</param>
         /// <param name="matchValue">If true, the key is only removed if the current value equals the expected value</param>
         /// <param name="expected">The expected value (if matchValue is true)</param>
+        /// <param name="mode">How keys are hashed and compared</param>
         /// <returns>True if the key was removed</returns>
-        bool RemoveCore<TProbe, TCmp>(TKey key, [MaybeNullWhen(false)] out TValue value, bool matchValue, TValue expected) where TProbe : struct, IProbe where TCmp : struct, IKeyComparer
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        bool RemoveInline(TKey key, [MaybeNullWhen(false)] out TValue value, bool matchValue, TValue expected, LowAllocKeyMode mode)
         {
-            var comparer = Comparer;
-            var h = GetHash<TCmp>(key);
+            var h = GetHash(key, mode);
             ref var seg = ref GetSegment(h);
-
+            int version = Volatile.Read(ref seg.Version);
+            var table = GetTable(ref seg);
+            int idx = Find(table, GetTableHash(table, h, key, mode), key, mode);
+            if (idx < 0)
+            {
+                // The key doesn't exist, no need to take the lock (unless a write happened during the search)
+                Volatile.ReadBarrier();
+                if (IsValid(ref seg, version))
+                {
+                    value = default;
+                    return false;
+                }
+            }
             seg.EnterLock();
+            // Comparing the values may throw, so it's done by RemoveLocked
+            if ((idx >= 0) && !matchValue && IsValid(ref seg, version) && ReferenceEquals(seg.Table, table))
+            {
+                seg.BeginWrite();
+                ref var e = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Entries), idx);
+                value = e.Value;
+                Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(table.Tags), idx) = TagTombstone;
+                // Release the references, so that the key and value can be collected
+                if (RuntimeHelpers.IsReferenceOrContainsReferences<Entry>())
+                    e = default;
+                --seg.Live;
+                seg.EndWrite();
+                seg.ExitLock();
+                return true;
+            }
+            return RemoveLocked(ref seg, key, out value, matchValue, expected, mode);
+        }
+
+        /// <summary>
+        /// Remove a key while holding the lock (the lock is released), when the table was modified concurrently or the value must match
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool RemoveLocked(ref LowAllocDictionarySegment seg, TKey key, [MaybeNullWhen(false)] out TValue value, bool matchValue, TValue expected, LowAllocKeyMode mode)
+        {
             try
             {
+                var h = GetHash(key, mode);
                 var table = Unsafe.As<Table>(seg.Table);
-                var th = TCmp.GetTableHash(table, h, key, comparer);
-                int idx = TProbe.Find<TCmp>(table, GetHomeBlock(th, table.Blocks), GetKeyTag(th), key, comparer);
+                int idx = Find(table, GetTableHash(table, h, key, mode), key, mode);
                 if (idx < 0)
                 {
                     value = default;
@@ -846,7 +1035,7 @@ namespace SysWeaver
                 // Release the references, so that the key and value can be collected
                 if (RuntimeHelpers.IsReferenceOrContainsReferences<Entry>())
                     e = default;
-                --table.Live;
+                --seg.Live;
                 seg.EndWrite();
                 return true;
             }
@@ -855,6 +1044,29 @@ namespace SysWeaver
                 seg.ExitLock();
             }
         }
+
+        /// <summary>
+        /// The current table of a segment (only used by the unit tests, through reflection)
+        /// </summary>
+        object GetSegmentTable(int index) => GetSegmentAt(index).Table;
+
+        /// <summary>
+        /// Rebuild the table of a segment, optionally switching it to the randomized hash (only used by the unit tests, through reflection)
+        /// </summary>
+        void RebuildSegment(int index, bool randomized)
+        {
+            ref var seg = ref GetSegmentAt(index);
+            seg.EnterLock();
+            try
+            {
+                Rebuild(ref seg, false, randomized);
+            }
+            finally
+            {
+                seg.ExitLock();
+            }
+        }
+
         /// <summary>
         /// Read a slot of a table, the result is consistent (not torn) even if the slot is modified concurrently
         /// </summary>
@@ -1028,7 +1240,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Find an alternate key (same probe sequence as <see cref="VectorProbe.Find"/> / <see cref="FallbackProbe.Find"/>), -1 if not found
+        /// Find an alternate key (same probe sequence as <see cref="Find"/> / <see cref="FindFallback"/>), -1 if not found
         /// </summary>
         int FindAlternate<TAlternate>(Table table, int homeBlock, byte tag, TAlternate key, IAlternateEqualityComparer<TAlternate, TKey> comparer) where TAlternate : notnull, allows ref struct
         {
@@ -1080,7 +1292,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Lookup using an alternate key, lock free (validated using the segment version, like <see cref="TryGetValueCore"/>)
+        /// Lookup using an alternate key, lock free (validated using the segment version, like <see cref="TryGetValueInline"/>)
         /// </summary>
         bool TryGetValueAlternate<TAlternate>(TAlternate key, IAlternateEqualityComparer<TAlternate, TKey> comparer, [MaybeNullWhen(false)] out TKey actualKey, [MaybeNullWhen(false)] out TValue value) where TAlternate : notnull, allows ref struct
         {
@@ -1130,23 +1342,22 @@ namespace SysWeaver
         public void Clear()
         {
             var clearEntries = RuntimeHelpers.IsReferenceOrContainsReferences<Entry>();
-            var segs = Segments;
             for (int s = 0; s < SegmentCount; s++)
             {
-                ref var seg = ref segs[s];
+                ref var seg = ref GetSegmentAt(s);
                 seg.EnterLock();
                 try
                 {
                     var table = Unsafe.As<Table>(seg.Table);
-                    if (table.Used <= 0)
+                    if (seg.Used <= 0)
                         continue;
                     seg.BeginWrite();
                     table.Tags.AsSpan().Clear();
                     // Release the references, so that the keys and values can be collected
                     if (clearEntries)
                         table.Entries.AsSpan().Clear();
-                    table.Live = 0;
-                    table.Used = 0;
+                    seg.Live = 0;
+                    seg.Used = 0;
                     seg.EndWrite();
                 }
                 finally
@@ -1214,7 +1425,7 @@ namespace SysWeaver
 
             public bool MoveNext()
             {
-                var segs = Dict.Segments;
+                var dict = Dict;
                 for (; ; )
                 {
                     var table = CurrentTable;
@@ -1223,7 +1434,7 @@ namespace SysWeaver
                         if (SegmentIdx >= SegmentCount)
                             return false;
                         // A table is either the current one or an old one (never modified), so items never move while enumerating it
-                        table = GetTable(ref segs[SegmentIdx]);
+                        table = GetTable(ref dict.GetSegmentAt(SegmentIdx));
                         CurrentTable = table;
                         SlotIdx = -1;
                     }
@@ -1233,7 +1444,7 @@ namespace SysWeaver
                     {
                         if (tags[idx] <= TagTombstone)
                             continue;
-                        if (TryReadSlot(ref segs[SegmentIdx], table, idx, out C))
+                        if (TryReadSlot(ref dict.GetSegmentAt(SegmentIdx), table, idx, out C))
                         {
                             SlotIdx = idx;
                             return true;
@@ -1285,6 +1496,37 @@ namespace SysWeaver
 
 
     /// <summary>
+    /// How the keys of a <see cref="LowAllocConcurrentDictionary{TKey, TValue}"/> are hashed and compared (and flags).
+    /// The core operations are inlined with a constant mode, so that all checks of it are removed by the JIT.
+    /// </summary>
+    enum LowAllocKeyMode
+    {
+        /// <summary>
+        /// The default comparer for value types (devirtualized and inlined by the JIT)
+        /// </summary>
+        Default,
+        /// <summary>
+        /// Ordinal string keys (TKey is string), using a fast seeded hash.
+        /// If collisions are detected in a table, it's rebuilt using the (randomized) ordinal comparer for the slots,
+        /// the fast hash is still used for selecting the segment (an attack can at worst put all keys in the same segment).
+        /// </summary>
+        FastString,
+        /// <summary>
+        /// A comparer instance
+        /// </summary>
+        Custom,
+        /// <summary>
+        /// The key comparison part of a mode
+        /// </summary>
+        KeyMask = 3,
+        /// <summary>
+        /// A flag: probe one slot at a time even if SIMD is available (only used by the unit tests, so that the scalar probing can be tested on any hardware)
+        /// </summary>
+        Scalar = 4,
+    }
+
+
+    /// <summary>
     /// A fast (non cryptographic) ordinal string hash, randomly seeded per process (wyhash style, 128 bit multiply mixing).
     /// The secret seed is mixed into every multiplication, so that inputs that zero a multiplier can't be crafted without knowing it.
     /// A seed alone doesn't guarantee that collisions can't be found, so dictionaries using it must detect collisions and fall back to a randomized hash.
@@ -1307,6 +1549,9 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static ulong Mum(ulong a, ulong b)
         {
+            // Math.BigMul returns the low part through memory (a store and a load in the dependency chain), two multiplications are faster
+            if (Bmi2.X64.IsSupported)
+                return Bmi2.X64.MultiplyNoFlags(a, b) ^ (a * b);
             ulong hi = Math.BigMul(a, b, out ulong lo);
             return hi ^ lo;
         }
@@ -1323,17 +1568,26 @@ namespace SysWeaver
         /// <param name="s">The string to hash (not null)</param>
         /// <returns>A 64 bit hash, only valid during the life time of the process</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ulong GetHash(string s) => GetHash(s.AsSpan());
+        public static ulong GetHash(string s) => GetHash(ref MemoryMarshal.GetReference(s.AsSpan()), s.Length);
 
         /// <summary>
         /// Get a 64 bit hash of the chars (all bits are well mixed), the same as for a string with the same chars
         /// </summary>
         /// <param name="s">The chars to hash</param>
         /// <returns>A 64 bit hash, only valid during the life time of the process</returns>
-        public static ulong GetHash(ReadOnlySpan<char> s)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ulong GetHash(ReadOnlySpan<char> s) => GetHash(ref MemoryMarshal.GetReference(s), s.Length);
+
+        /// <summary>
+        /// Get a 64 bit hash of the chars (all bits are well mixed)
+        /// </summary>
+        /// <param name="c">The first char</param>
+        /// <param name="length">The number of chars</param>
+        /// <returns>A 64 bit hash, only valid during the life time of the process</returns>
+        static ulong GetHash(ref char c, int length)
         {
-            ref byte p = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(s));
-            nuint len = (nuint)s.Length << 1;
+            ref byte p = ref Unsafe.As<char, byte>(ref c);
+            nuint len = (nuint)length << 1;
             ulong h = S0 ^ len;
             ulong a, b;
             if (len <= 16)
@@ -1385,6 +1639,21 @@ namespace SysWeaver
 
 
     /// <summary>
+    /// The segments of a LowAllocConcurrentDictionary, stored inline in the dictionary object
+    /// </summary>
+    [InlineArray(Count)]
+    struct LowAllocDictionarySegments
+    {
+        /// <summary>
+        /// The number of segments, must be 1 &lt;&lt; LowAllocConcurrentDictionary.SegmentBits
+        /// </summary>
+        public const int Count = 64;
+
+        LowAllocDictionarySegment Segment;
+    }
+
+
+    /// <summary>
     /// A segment of a LowAllocConcurrentDictionary (not generic, since generic types can't have an explicit layout).
     /// Each segment occupies 128 bytes, with the hot fields in the middle, so that different segments never share a cache line (no false sharing).
     /// </summary>
@@ -1403,6 +1672,16 @@ namespace SysWeaver
         public int Version;
         [FieldOffset(76)]
         int LockState;
+        /// <summary>
+        /// Number of live entries in the current table (only modified while holding the lock)
+        /// </summary>
+        [FieldOffset(80)]
+        public int Live;
+        /// <summary>
+        /// Number of non empty slots in the current table, live + tombstones (only modified while holding the lock)
+        /// </summary>
+        [FieldOffset(84)]
+        public int Used;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void EnterLock()
@@ -1447,3 +1726,4 @@ namespace SysWeaver
     }
 
 }
+

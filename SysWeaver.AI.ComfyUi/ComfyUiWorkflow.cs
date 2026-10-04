@@ -25,7 +25,7 @@ namespace SysWeaver.AI
         public readonly String Name;
 
         /// <summary>
-        /// The full file name of the workflow
+        /// The full file name of the workflow (null if loaded using FromJson)
         /// </summary>
         public readonly String FileName;
 
@@ -102,8 +102,28 @@ namespace SysWeaver.AI
                 throw new FileNotFoundException("Workflow " + name.ToQuoted() + " not found!", fileName);
             var fi = new FileInfo(fileName);
             var cacheKey = String.Join('|', fileName, fi.LastWriteTimeUtc.Ticks, fi.Length);
-            var data = StripBom(File.ReadAllBytes(fileName));
-            var p = Parse(data, fileName);
+            return Load(name, fileName, File.ReadAllBytes(fileName), cacheKey, uiJson, msg);
+        }
+
+        /// <summary>
+        /// Load a workflow from some json
+        /// </summary>
+        /// <param name="name">The workflow name</param>
+        /// <param name="json">The API format workflow json (utf8)</param>
+        /// <param name="uiJson">Optional UI format workflow, used to annotate all subgraph inputs</param>
+        /// <param name="msg">Optional message host, the automatic annotations are reported here</param>
+        /// <returns>The workflow</returns>
+        public static ComfyUiWorkflow FromJson(String name, byte[] json, byte[] uiJson = null, IMessageHost msg = null)
+        {
+            ArgumentNullException.ThrowIfNull(json);
+            var cacheKey = String.Concat("json|", name, "|", Convert.ToHexStringLower(SHA256.HashData(json), 0, 16));
+            return Load(name, null, json, cacheKey, uiJson, msg);
+        }
+
+        static ComfyUiWorkflow Load(String name, String fileName, byte[] data, String cacheKey, byte[] uiJson, IMessageHost msg)
+        {
+            data = StripBom(data);
+            var p = Parse(data, fileName ?? name);
             Dictionary<String, String> subgraphTags = new(StringComparer.Ordinal);
             Dictionary<String, Dictionary<String, String>> subgraphInputs = new(StringComparer.Ordinal);
             if (uiJson != null)
@@ -114,7 +134,7 @@ namespace SysWeaver.AI
                 if (annotated != null)
                 {
                     data = annotated;
-                    p = Parse(data, fileName);
+                    p = Parse(data, fileName ?? name);
                     var prefix = String.Concat("ComfyUi workflow ", name.ToQuoted(), ": ");
                     foreach (var a in annotations)
                     {
