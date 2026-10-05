@@ -2,9 +2,10 @@
 
 namespace SysWeaver
 {
-    public sealed class List<TKey, TValue>
+
+    public sealed class DictionaryList<TKey, TValue>
     {
-        public List(IEqualityComparer<TKey> comparer = null)
+        public DictionaryList(IEqualityComparer<TKey> comparer = null)
         {
             Values = comparer == null ? new Dictionary<TKey, List<TValue>>() : new Dictionary<TKey, List<TValue>>(comparer);
         }
@@ -41,4 +42,6 @@ namespace SysWeaver
 
         public readonly Dictionary<TKey, List<TValue>> Values;
     }
+
+
 }

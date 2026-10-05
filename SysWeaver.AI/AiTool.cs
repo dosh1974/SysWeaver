@@ -80,6 +80,119 @@ namespace SysWeaver.AI
             => new AiTool(name, endPoint, tool, exposeApi);
 
         /// <summary>
+        /// Check if a method should be used as a tool (have an AiToolAttribute or an OpenAiUseAttribute)
+        /// </summary>
+        /// <param name="method">The method</param>
+        /// <returns>True if the method is a tool</returns>
+        public static bool IsTool(MethodInfo method)
+            => (method.GetCustomAttribute<AiToolAttribute>() != null) || (method.GetCustomAttribute<OpenAiUseAttribute>()?.Use ?? false);
+
+        /// <summary>
+        /// Get all tool methods (have an AiToolAttribute or an OpenAiUseAttribute) of a type, including private methods declared in base types
+        /// </summary>
+        /// <param name="type">The type</param>
+        /// <returns>The tool methods</returns>
+        public static IEnumerable<MethodInfo> GetToolMethods(Type type)
+        {
+            HashSet<MethodInfo> seen = new();
+            for (var t = type; t != null; t = t.BaseType)
+            {
+                foreach (var mm in t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+                {
+                    //  Overridden methods are only returned once (the most derived)
+                    if (!seen.Add(mm.GetBaseDefinition()))
+                        continue;
+                    if (IsTool(mm))
+                        yield return mm;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Get the name of a tool (as seen by the AI), uses the AiToolPrefixAttribute and the AiToolNameAttribute
+        /// </summary>
+        /// <param name="method">The method</param>
+        /// <returns>The name of the tool</returns>
+        public static String GetToolName(MethodInfo method)
+        {
+            var type = method.DeclaringType;
+            var prefix = type.GetCustomAttribute<AiToolPrefixAttribute>(true)?.ToolPrefix ?? type.Name;
+            var name = method.GetCustomAttribute<AiToolNameAttribute>(true)?.ToolName;
+            if (String.IsNullOrEmpty(name))
+                name = "{0}{1}";
+            name = String.Format(name, prefix, method.Name);
+            return name;
+        }
+
+        /// <summary>
+        /// Create a tool from an end point, the function description and parameter schema is created from the end point (and the XML documentation)
+        /// </summary>
+        /// <param name="fn">The name of the tool</param>
+        /// <param name="a">The end point</param>
+        /// <param name="exposeApi">If true, the REST API url is added to the description</param>
+        /// <returns>A tool</returns>
+        public static AiTool FromEndPoint(String fn, IApiHttpServerEndPoint a, bool exposeApi = true)
+        {
+            a.GetDesc(out var argType, out var retType, out var methodDesc, out var argDesc, out var retDesc, out var argName);
+            BinaryData p = null;
+            if (argType != null)
+                p = JsonSchemaCache.GetBinaryDataParam(argType, argName, false, argDesc);
+            if (retType != null)
+            {
+                bool isArray = retType.IsArray;
+                String prefix = "Return type is a";
+                if (isArray)
+                {
+                    retType = retType.GetElementType();
+                    prefix = "Return type is an array of";
+                }
+                if (JsonSchema.TryGetPrim(retType, out var jtype))
+                {
+                    if (String.IsNullOrEmpty(retDesc))
+                        retDesc = String.Concat(prefix, ' ', jtype.ToQuoted());
+                    else
+                        retDesc = String.Concat(retDesc, ".\n", prefix, ' ', jtype.ToQuoted());
+                }
+                else
+                {
+                    retDesc = String.Concat(prefix, isArray ? " objects" : "n object", " with JSON schema:  \n\n```json\n", JsonSchema.ToString(JsonSchema.Get(retType, true, retDesc), true), "\n```\n");
+                }
+                retDesc = String.Concat("## Tool returns  \n", retDesc);
+                methodDesc = String.IsNullOrEmpty(methodDesc) ? retDesc : String.Join(".\n", methodDesc, retDesc);
+            }
+            if (exposeApi)
+            {
+                var api = a.Uri;
+                if (api != null)
+                {
+                    methodDesc = methodDesc.Trim().LimitLength(900, "");
+                    methodDesc = String.Concat(methodDesc, "\n\n### REST API  \n" + api + "  \n");
+                }
+            }
+            var ct = new AiToolFunction(fn, methodDesc.Trim().LimitLength(1024, ""), p, false);
+            return Create(fn, a, ct, exposeApi);
+        }
+
+        /// <summary>
+        /// Create a tool from a method
+        /// </summary>
+        /// <param name="instance">Object instance (null for static methods)</param>
+        /// <param name="method">The method</param>
+        /// <param name="fn">Optional function name, default is computed using GetToolName</param>
+        /// <param name="perfMonitor">An optional performance monitor</param>
+        /// <param name="defaultAuth">The default auth to use if there is no WebApiAuthAttribute on the method</param>
+        /// <param name="defaultCachedCompression">The default compression when there is no WebApiCompressionAttribute on the method</param>
+        /// <param name="defaultCompression">The default compression for uncached cached methods when there is no WebApiCompressionAttribute on the method</param>
+        /// <param name="locationPrefix">The location prefix</param>
+        /// <returns>A tool</returns>
+        public static AiTool FromMethod(Object instance, MethodInfo method, String fn = null, PerfMonitor perfMonitor = null, String defaultAuth = ApiHttpEntry.DefaultAuth, String defaultCachedCompression = ApiHttpEntry.DefaultCachedCompression, String defaultCompression = ApiHttpEntry.DefaultCompression, String locationPrefix = ApiHttpEntry.DefaultLocationPrefix)
+        {
+            fn = String.IsNullOrEmpty(fn) ? GetToolName(method) : fn;
+            var endPoint = ApiHttpEntry.Create(AiServiceBase.IoParams, instance, method, fn, perfMonitor, defaultAuth, defaultCachedCompression, defaultCompression, locationPrefix);
+            return FromEndPoint(fn, endPoint, false);
+        }
+
+        /// <summary>
         /// Create a tool that is defined (and executed) by a caller, used to describe the tool to the model only (it can't be invoked)
         /// </summary>
         /// <param name="tool">The function definition</param>

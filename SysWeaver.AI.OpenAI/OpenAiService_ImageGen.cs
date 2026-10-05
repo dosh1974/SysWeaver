@@ -44,9 +44,10 @@ namespace SysWeaver.AI
         /// <param name="request"></param>
         /// <returns>An url to the generated png image</returns>
         [AiTool("🖼️✨")]
+        [WebApiAuth("Debug,Content")]
         async Task<String> GenerateImage(OpenAiImagePrompt prompt, HttpServerRequest request)
         {
-            var c = request.Properties[RequestAiToolContext] as AiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return null;
             var bin = await ImageGenerate(prompt, request).ConfigureAwait(false);
@@ -62,9 +63,10 @@ namespace SysWeaver.AI
         /// <param name="request"></param>
         /// <returns>An url to the generated png image</returns>
         [AiTool("🖼️✂️")]
+        [WebApiAuth("Debug,Content")]
         async Task<String> EditImage(OpenAiImageEditPrompt prompt, HttpServerRequest request)
         {
-            var c = request.Properties[RequestAiToolContext] as AiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return null;
             var bin = await ImageEdit(prompt, request).ConfigureAwait(false);

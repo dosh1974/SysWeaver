@@ -65,7 +65,8 @@ namespace SysWeaver.MicroService
             var qp = HttpServerTools.GetQueryParamsLowerKey(HttpUtility.ParseQueryString(pp));
             if (!qp.TryGetValue("q", out var q))
                 return null;
-            q = HttpServerTools.CleanupPaths(context.Prefix + "chart/" + q);
+            if (q.FastIndexOf("://") < 0)
+                q = HttpServerTools.CleanupPaths(context.Prefix + "chart/" + q);
             var data = await context.Server.InternalRead(q, context.Session).ConfigureAwait(false);
             var ds = JsonSer.Create<ChartJsConfig>(data.Item1);
             var mem = await s.Export(ds, context).ConfigureAwait(false);
@@ -112,6 +113,7 @@ namespace SysWeaver.MicroService
         /// <returns>An url to a html page containing the generated chart</returns>
         [OpenAiUse]
         [AiTool("📊✨")]
+        [AiHideMcp]
         String BuildAdvancedChart(ChartJsConfig chart, HttpServerRequest request)
         {
             var c = ChartSerialize(chart);
@@ -128,6 +130,7 @@ namespace SysWeaver.MicroService
         /// <returns>True if successful</returns>
         [OpenAiUse]
         [AiTool("📊🖥️")]
+        [AiHideMcp]
         bool DisplayAdvancedChart(ChartJsConfig chart, HttpServerRequest request)
         {
             var url = BuildAdvancedChart(chart, request);
@@ -355,6 +358,17 @@ namespace SysWeaver.MicroService
 
             var c = ChartSerialize(cc);
             var uri = request.OpenAiAddMessageFile(HttpServerTools.JsonMime, c, chart.Title ?? "Chart");
+            if (uri.FastIndexOf("://") > 0)
+            {
+                var baseStart = uri.FastIndexOf("/mcp/files/");
+                if (baseStart < 0)
+                    baseStart = uri.FastIndexOf("/storage/");
+                if (baseStart > 0)
+                {
+                    uri = uri.Substring(0, baseStart) + "/chart/chart.html?q=" + uri;
+                    return uri;
+                }
+            }
             uri = "../chart/chart.html?q=../chat/" + uri;
             return uri;
         }
@@ -368,6 +382,7 @@ namespace SysWeaver.MicroService
         /// <returns>True if successful</returns>
         [OpenAiUse]
         [AiTool("📊🖥️")]
+        [AiHideMcp]
         bool DisplayChart(Chart chart, HttpServerRequest request)
         {
             var url = BuildChart(chart, request);

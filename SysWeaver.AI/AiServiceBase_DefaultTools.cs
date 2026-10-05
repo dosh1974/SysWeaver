@@ -42,7 +42,7 @@ namespace SysWeaver.AI
         [AiTool("🖼️📥")]
         String GetPredefinedImage(AiImages type, HttpServerRequest request)
         {
-            var c = request.Properties[RequestAiToolContext] as AiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return null;
             var aip = AiTools.IconRoot;
@@ -53,7 +53,10 @@ namespace SysWeaver.AI
                 case AiImages.ApplicationIcon:
                     return "../icon.svg";
                 case AiImages.AgentLogo:
-                    return c.Session.AgentImageUrl;
+                    //  The agent is only known in an AI chat (not when the tool is used by an external client, ex: over MCP)
+                    if (c is AiToolContext ac)
+                        return ac.Session.AgentImageUrl;
+                    throw new Exception("The agent logo is only available in an AI chat");
                 case AiImages.AngrySmiley:
                     return aip + "Smiley_Angry.svg";
                 case AiImages.HappySmiley:
@@ -114,7 +117,7 @@ namespace SysWeaver.AI
         [AiTool("🏷️✨")]
         String BuildLogo(AiLogo logo, HttpServerRequest request)
         {
-            var c = request.Properties[RequestAiToolContext] as AiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return null;
             var enc = Encoding.UTF8;
@@ -136,7 +139,7 @@ namespace SysWeaver.AI
         [AiTool("🔗✨")]
         String BuildQrCode(String qrCodeContent, HttpServerRequest request)
         {
-            var c = request.Properties[RequestAiToolContext] as AiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return null;
             var qr = QrCode;
@@ -158,7 +161,7 @@ namespace SysWeaver.AI
                 [AiTool("🛢️✨")]
         String BuildData(AiData data, HttpServerRequest request)
         {
-            var c = request.Properties[RequestAiToolContext] as AiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return null;
             FixData(data);
@@ -181,9 +184,10 @@ namespace SysWeaver.AI
         /// <param name="request"></param>
         /// <returns>True when sucessful</returns>
         [AiTool("🛢️🖥️")]
+        [AiHideMcp]
         bool DisplayData(AiData data, HttpServerRequest request)
         {
-            var c = request.Properties[RequestAiToolContext] as AiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return false;
             FixData(data);
@@ -201,9 +205,10 @@ namespace SysWeaver.AI
         /// <param name="request"></param>
         /// <returns>True when successful</returns>
         [AiTool("🔗🖥️")]
+        [AiHideMcp]
         bool DisplayUrl(String url, HttpServerRequest request)
         {
-            var c = request.Properties[RequestAiToolContext] as AiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return false;
             c.AddLink(url);
@@ -401,7 +406,7 @@ namespace SysWeaver.AI
         [AiTool("📅✨")]
         String BuildTable(AiTable table, HttpServerRequest request)
         {
-            var c = request.Properties[RequestAiToolContext] as AiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return null;
             var srcCols = table.Columns;
@@ -616,8 +621,11 @@ namespace SysWeaver.AI
                         Array.Resize(ref rows[i], colCount);
                 }
             }
+            //  Outside of an AI chat (ex: over MCP) the table can't be stored in the chat session, attach it as a csv file
+            if (c is not AiToolContext ac)
+                return c.AddMessageFile("text/csv", ToCsv(cols, rows), table.Title ?? "Table");
             var getter = TableDataTools.GetStaticTableFn(cols.ToArray(), rows, table.Title);
-            var name = c.AddMessageData(getter);
+            var name = ac.AddMessageData(getter);
             var url = "../explore/table.html?q=" + AiTools.WebRoot + "MessageTable&p=" + name;
             //c.AddLink(url);
             return url;
@@ -631,16 +639,44 @@ namespace SysWeaver.AI
         /// <param name="request"></param>
         /// <returns>True if successful</returns>
         [AiTool("📅🖥️")]
+        [AiHideMcp]
         bool DisplayTable(AiTable table, HttpServerRequest request)
         {
             var url = BuildTable(table, request);
             if (url == null)
                 return false;
-            var c = request.Properties[RequestAiToolContext] as AiToolContext;
+            var c = request.Properties[RequestAiToolContext] as IAiToolContext;
             if (c == null)
                 return false;
             c.AddLink(url);
             return true;
+        }
+
+        static String ToCsv(List<TableDataColumn> cols, Object[][] rows)
+        {
+            var sb = new StringBuilder();
+            void Add(String v, bool first)
+            {
+                if (!first)
+                    sb.Append(',');
+                v ??= "";
+                if (v.IndexOfAny([',', '"', '\r', '\n']) >= 0)
+                    sb.Append('"').Append(v.Replace("\"", "\"\"")).Append('"');
+                else
+                    sb.Append(v);
+            }
+            var cc = cols.Count;
+            for (int i = 0; i < cc; ++i)
+                Add(cols[i].Title ?? cols[i].Name, i == 0);
+            sb.Append("\r\n");
+            var ci = CultureInfo.InvariantCulture;
+            foreach (var row in rows)
+            {
+                for (int i = 0; i < cc; ++i)
+                    Add(i < row.Length ? Convert.ToString(row[i], ci) : null, i == 0);
+                sb.Append("\r\n");
+            }
+            return sb.ToString();
         }
 
         /// <summary>

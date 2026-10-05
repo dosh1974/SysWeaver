@@ -153,7 +153,7 @@ namespace SysWeaver.AI
                     continue;
                 }
                 var fn = GetToolName(mm);
-                var endPoint = ApiHttpEntry.Create(IoParams, a, mm, fn, perfMonitor, ApiHttpEntry.DefaultAuth, ApiHttpEntry.DefaultCachedCompression, ApiHttpEntry.DefaultLocationPrefix);
+                var endPoint = ApiHttpEntry.Create(IoParams, a, mm, fn, perfMonitor, ApiHttpEntry.DefaultAuth, ApiHttpEntry.DefaultCachedCompression, ApiHttpEntry.DefaultCompression, ApiHttpEntry.DefaultLocationPrefix);
                 GetTool(fn, endPoint, false);
             }
         }
@@ -273,16 +273,19 @@ namespace SysWeaver.AI
         /// <param name="png">The png image data</param>
         /// <param name="title">The title of the image (used as the filename)</param>
         /// <returns>An url to the image</returns>
-        protected async Task<String> StoreGeneratedImage(AiToolContext c, HttpServerRequest request, ReadOnlyMemory<Byte> png, String title)
+        protected async Task<String> StoreGeneratedImage(IAiToolContext c, HttpServerRequest request, ReadOnlyMemory<Byte> png, String title)
         {
             var us = UserStorage;
             var filename = title ?? "Image";
+            //  Outside of an AI chat (ex: over MCP) there is no chat session, the image is attached to the tool result
+            if (c is not AiToolContext ac)
+                return c.AddMessageFile("image/png", png, filename);
             if (us == null)
             {
                 var data = "data:image/png;base64," + Convert.ToBase64String(png.Span);
                 return c.AddMessageFile("image/png", data, filename);
             }
-            var s = c.Session;
+            var s = ac.Session;
             if (s.IsPrivate)
                 return "../" + await us.StorePrivateFile(request, filename + ".png", png).ConfigureAwait(false);
             return "../" + await us.StorePublicFile(request, filename + ".png", png, String.Join(',', s.JoinAuth)).ConfigureAwait(false);

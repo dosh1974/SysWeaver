@@ -35,15 +35,7 @@ namespace SysWeaver.AI
         }
 
         static String GetToolName(MethodInfo method)
-        {
-            var type = method.DeclaringType;
-            var prefix = type.GetCustomAttribute<AiToolPrefixAttribute>(true)?.ToolPrefix ?? type.Name;
-            var name = method.GetCustomAttribute<AiToolNameAttribute>(true)?.ToolName;
-            if (String.IsNullOrEmpty(name))
-                name = "{0}{1}";
-            name = String.Format(name, prefix, method.Name);
-            return name;
-        }
+            => AiTool.GetToolName(method);
 
         public AiTool GetTool(Object instance, MethodInfo method, String fn = null, PerfMonitor perfMonitor = null, String defaultAuth = ApiHttpEntry.DefaultAuth, String defaultCachedCompression = ApiHttpEntry.DefaultCachedCompression, String defaultCompression = ApiHttpEntry.DefaultCompression, String locationPrefix = ApiHttpEntry.DefaultLocationPrefix)
         {
@@ -68,64 +60,7 @@ namespace SysWeaver.AI
                 return tool;
 //            if (a.Serializer.Extension != "json")
 //                throw new ArgumentException("Only json api's are currently supported" + fn.ToQuoted(), nameof(fn));
-            a.GetDesc(out var argType, out var retType, out var methodDesc, out var argDesc, out var retDesc, out var argName);
-            BinaryData p = null;
-            if (argType != null)
-                p = JsonSchemaCache.GetBinaryDataParam(argType, argName, false, argDesc);
-            /*
-            if ((retType == typeof(TableDataReference)) || (retType == typeof(Task<TableDataReference>)))
-            {
-                var rta = a.MethodInfo.GetCustomAttributes<OpenAiTableRowTypeAttribute>(true)?.FirstOrDefault();
-                if (rta != null)
-                {
-                    var rowType = rta.RowType;
-                    if (rowType != null)
-                    {
-                        var sb = new StringBuilder();
-                        sb.AppendLine("Returns a table data reference with columns:");
-                        foreach (var col in TableDataTools.GetCols(rowType))
-                            sb.Append(col.Type.Replace("System.", "")).Append(',').Append(col.Name).Append(',').AppendLine((col.Desc ?? "").Split('\n')[0]);
-                        retDesc = sb.ToString();
-                        methodDesc = retDesc.LimitLength(1024, "**Incomplete**");
-                    }
-                }
-            }
-            */
-
-            if (retType != null)
-            {
-                bool isArray = retType.IsArray;
-                String prefix = "Return type is a";
-                if (isArray)
-                {
-                    retType = retType.GetElementType();
-                    prefix = "Return type is an array of";
-                }
-                if (JsonSchema.TryGetPrim(retType, out var jtype))
-                {
-                    if (String.IsNullOrEmpty(retDesc))
-                        retDesc = String.Concat(prefix, ' ', jtype.ToQuoted());
-                    else
-                        retDesc = String.Concat(retDesc, ".\n", prefix, ' ', jtype.ToQuoted());
-                }
-                else
-                {
-                    retDesc = String.Concat(prefix, isArray ? " objects" : "n object", " with JSON schema:  \n\n```json\n", JsonSchema.ToString(JsonSchema.Get(retType, true, retDesc), true), "\n```\n");
-                }
-                retDesc = String.Concat("## Tool returns  \n", retDesc);
-                methodDesc = String.IsNullOrEmpty(methodDesc) ? retDesc : String.Join(".\n", methodDesc, retDesc);
-            }
-            if (exposeApi)
-            {
-                var api = a.Uri;
-                if (api != null)
-                {
-                    methodDesc = methodDesc.Trim().LimitLength(900, "");
-                    methodDesc = String.Concat(methodDesc, "\n\n### REST API  \n" + api + "  \n");
-                }
-            }
-            var ct = new AiToolFunction(fn, methodDesc.Trim().LimitLength(1024, ""), p, false);
-            tool = AiTool.Create(fn, a, ct, exposeApi);
+            tool = AiTool.FromEndPoint(fn, a, exposeApi);
             if (!cache.TryAdd(fn, tool))
                 tool = cache[fn];
             return tool;

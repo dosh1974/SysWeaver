@@ -1142,7 +1142,7 @@ namespace SysWeaver.Db
 
             //  Get existing indices
             Dictionary<String, ExistingIndex> existingIndexes = new Dictionary<String, ExistingIndex>(StringComparer.Ordinal);
-            var fullTexts = new List<String, IndexInfo>(StringComparer.Ordinal);
+            var fullTexts = new DictionaryList<String, IndexInfo>(StringComparer.Ordinal);
             await con.OnResultAsync<IndexInfo>(x =>
             {
                 if (x.IndexType == "FULLTEXT")
