@@ -18,25 +18,25 @@ namespace SysWeaver
 
         public static int Mix(int h1, int h2)
         {
-            return (h1 * 17) ^ h2;
+            return (h1 * -1640531535) ^ h2;
         }
 
         public static int Mix(int h1, int h2, int h3)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             return (h3 * 524287) ^ h1;
         }
 
         public static int Mix(int h1, int h2, int h3, int h4)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             return (h1 * 31) ^ h2;
         }
 
         public static int Mix(int h1, int h2, int h3, int h4, int h5)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             h1 = (h5 * 31) ^ h1;
             return (h2 * 131071) ^ h1;
@@ -44,7 +44,7 @@ namespace SysWeaver
 
         public static int Mix(int h1, int h2, int h3, int h4, int h5, int h6)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             h3 = (h5 * 31) ^ h6;
             h1 = (h1 * 131071) ^ h2;
@@ -53,7 +53,7 @@ namespace SysWeaver
 
         public static int Mix(int h1, int h2, int h3, int h4, int h5, int h6, int h7)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             h3 = (h5 * 31) ^ h6;
             h1 = (h7 * 131071) ^ h1;
@@ -63,7 +63,7 @@ namespace SysWeaver
 
         public static int Mix(int h1, int h2, int h3, int h4, int h5, int h6, int h7, int h8)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             h3 = (h5 * 31) ^ h6;
             h4 = (h7 * 131071) ^ h8;
@@ -74,7 +74,7 @@ namespace SysWeaver
 
         public static int Mix(int h1, int h2, int h3, int h4, int h5, int h6, int h7, int h8, int h9)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             h3 = (h5 * 31) ^ h6;
             h4 = (h7 * 131071) ^ h8;
@@ -86,7 +86,7 @@ namespace SysWeaver
 
         public static int Mix(int h1, int h2, int h3, int h4, int h5, int h6, int h7, int h8, int h9, int h10)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             h3 = (h5 * 31) ^ h6;
             h4 = (h7 * 131071) ^ h8;
@@ -99,7 +99,7 @@ namespace SysWeaver
 
         public static int Mix(int h1, int h2, int h3, int h4, int h5, int h6, int h7, int h8, int h9, int h10, int h11)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             h3 = (h5 * 31) ^ h6;
             h4 = (h7 * 131071) ^ h8;
@@ -113,7 +113,7 @@ namespace SysWeaver
 
         public static int Mix(int h1, int h2, int h3, int h4, int h5, int h6, int h7, int h8, int h9, int h10, int h11, int h12)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             h3 = (h5 * 31) ^ h6;
             h4 = (h7 * 131071) ^ h8;
@@ -128,7 +128,7 @@ namespace SysWeaver
 
         public static int Mix(int h1, int h2, int h3, int h4, int h5, int h6, int h7, int h8, int h9, int h10, int h11, int h12, int h13)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             h3 = (h5 * 31) ^ h6;
             h4 = (h7 * 131071) ^ h8;
@@ -138,13 +138,13 @@ namespace SysWeaver
             h1 = (h1 * 8191) ^ h2;
             h2 = (h3 * 5) ^ h4;
             h3 = (h5 * 7) ^ h6;
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             return (h3 * 524287) ^ h1;
         }
 
         public static int Mix(int h1, int h2, int h3, int h4, int h5, int h6, int h7, int h8, int h9, int h10, int h11, int h12, int h13, int h14)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             h3 = (h5 * 31) ^ h6;
             h4 = (h7 * 131071) ^ h8;
@@ -161,7 +161,7 @@ namespace SysWeaver
 
         public static int Mix(int h1, int h2, int h3, int h4, int h5, int h6, int h7, int h8, int h9, int h10, int h11, int h12, int h13, int h14, int h15)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             h3 = (h5 * 31) ^ h6;
             h4 = (h7 * 131071) ^ h8;
@@ -179,7 +179,7 @@ namespace SysWeaver
 
         public static int Mix(int h1, int h2, int h3, int h4, int h5, int h6, int h7, int h8, int h9, int h10, int h11, int h12, int h13, int h14, int h15, int h16)
         {
-            h1 = (h1 * 17) ^ h2;
+            h1 = (h1 * -1640531535) ^ h2;
             h2 = (h3 * 524287) ^ h4;
             h3 = (h5 * 31) ^ h6;
             h4 = (h7 * 131071) ^ h8;

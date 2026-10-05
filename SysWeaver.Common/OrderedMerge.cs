@@ -18,12 +18,15 @@ namespace SysWeaver
         /// <returns>A new merged ordered list</returns>
         public static List<T> Merge<T>(Func<T, T, bool> isBetter, int maxLength, params IReadOnlyList<T>[] lists)
         {
-            var o = new List<T>(maxLength);
             var l = lists.Length;
+            if ((maxLength <= 0) || (l <= 0))
+                return new List<T>();
             if (l == 1)
-                o.AddRange(lists[0].Take(maxLength));
-            if (l <= 1)
-                return o;
+                return new List<T>(lists[0].Take(maxLength));
+            long total = 0;
+            foreach (var x in lists)
+                total += x.Count;
+            var o = new List<T>((int)Math.Min(maxLength, total));
             var pos = new int[l];
             var length = new int[l];
             for (int i = 0; i < l; ++i)
@@ -107,7 +110,7 @@ namespace SysWeaver
         /// <param name="lists">Array of lists to merge</param>
         /// <returns>A new merged ordered list</returns>
         public static List<T> Merge<T>(int maxLength, params IReadOnlyList<T>[] lists) where T : IComparable<T>
-            => Merge<T>((a, b) => a.CompareTo(b) > 0, maxLength, lists);
+            => Merge<T>((a, b) => a.CompareTo(b) < 0, maxLength, lists);
 
         /// <summary>
         /// Merge any number of ordered lists, resulting in a new ordered list in reverse order using O(N) complexity.
@@ -118,7 +121,7 @@ namespace SysWeaver
         /// <param name="lists">Array of lists to merge</param>
         /// <returns>A new merged ordered list</returns>
         public static List<T> MergeDesc<T>(int maxLength, params IReadOnlyList<T>[] lists) where T : IComparable<T>
-            => Merge<T>((a, b) => a.CompareTo(b) < 0, maxLength, lists);
+            => Merge<T>((a, b) => a.CompareTo(b) > 0, maxLength, lists);
 
         /// <summary>
         /// Merge any number of ordered lists, resulting in a new ordered list using O(N) complexity.
@@ -128,7 +131,7 @@ namespace SysWeaver
         /// <param name="lists">Array of lists to merge</param>
         /// <returns>A new merged ordered list</returns>
         public static List<T> Merge<T>(params IReadOnlyList<T>[] lists) where T : IComparable<T>
-            => Merge<T>((a, b) => a.CompareTo(b) > 0, int.MaxValue, lists);
+            => Merge<T>((a, b) => a.CompareTo(b) < 0, int.MaxValue, lists);
 
         /// <summary>
         /// Merge any number of ordered lists, resulting in a new ordered list in reverse order using O(N) complexity.
@@ -138,7 +141,7 @@ namespace SysWeaver
         /// <param name="lists">Array of lists to merge</param>
         /// <returns>A new merged ordered list</returns>
         public static List<T> MergeDesc<T>(params IReadOnlyList<T>[] lists) where T : IComparable<T>
-            => Merge<T>((a, b) => a.CompareTo(b) < 0, int.MaxValue, lists);
+            => Merge<T>((a, b) => a.CompareTo(b) > 0, int.MaxValue, lists);
 
 
     }

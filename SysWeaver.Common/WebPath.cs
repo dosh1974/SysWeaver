@@ -39,16 +39,23 @@ namespace SysWeaver
             SplitServerLocal(out var server, out var local, webPath);
             var p = local.Split('/');
             var pl = p.Length - 1;
+            // An absolute local path has an empty root segment at index 0 that must never be removed
+            int min = (pl > 0 && p[0].Length == 0) ? 1 : 0;
             int o = 0;
             for (int i = 0; i < pl; ++i)
             {
                 var pp = p[i];
                 if (pp == ".")
                     continue;
-                if ((pp == "..") && (o > 0))
+                if (pp == "..")
                 {
-                    --o;
-                    continue;
+                    if ((o > min) && (p[o - 1] != ".."))
+                    {
+                        --o;
+                        continue;
+                    }
+                    if (min == 1)   // "/.." == "/"
+                        continue;
                 }
                 p[o] = pp;
                 ++o;

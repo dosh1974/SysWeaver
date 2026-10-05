@@ -85,7 +85,8 @@ namespace SysWeaver
         /// <param name="mimeType">The variable to store the MIME type.</param>
         /// <param name="withCharset">Adds a charset=UTF-8 to text documents</param>
         /// <returns>The MIME type and if the type is compressible</returns>
-        public static bool TryGetMimeType(string str, out Tuple<string, bool> mimeType, bool withCharset = true) => (withCharset ? MapWithCharSet : Map).TryGetValue(str, out mimeType);
+        /// <remarks>The lookup is case insensitive</remarks>
+        public static bool TryGetMimeType(string str, out Tuple<string, bool> mimeType, bool withCharset = true) => (withCharset ? MapWithCharSet : Map).TryGetValue(str.FastToLower(), out mimeType);
 
         /// <summary>
         /// Gets the type of the MIME from the provided file extension.
@@ -93,9 +94,10 @@ namespace SysWeaver
         /// <param name="str">The file extension.</param>
         /// <param name="withCharset">Adds a charset=UTF-8 to text documents</param>
         /// <returns>The MIME type and if the type is compressible</returns>
+        /// <remarks>The lookup is case insensitive</remarks>
         public static Tuple<string, bool> GetMimeType(string str, bool withCharset = true)
         {
-            (withCharset ? MapWithCharSet : Map).TryGetValue(str, out var result);
+            (withCharset ? MapWithCharSet : Map).TryGetValue(str.FastToLower(), out var result);
             return result ?? DefaultMimeType;
         }
 
@@ -931,7 +933,7 @@ namespace SysWeaver
             }
             foreach (var x in mappings)
             {
-                var ext = x.Key;
+                var ext = x.Key.ToLowerInvariant();
                 var mime = x.Value;
                 var comp = Compressable(mime);
 
@@ -939,19 +941,22 @@ namespace SysWeaver
                 if (AssumeUtf8(mime))
                     mimeChar = mime + Utf8Suffix;
                 var d = Tuple.Create(mime, comp);
+                //  Lookups are case insensitive (the input is lower cased), so all keys are lower case
+                var mimeKey = mime.ToLowerInvariant();
+                var mimeCharKey = mimeChar.ToLowerInvariant();
 
                 mimes.TryAdd(ext, d);
                 mimes.TryAdd(ext.TrimStart('.'), d);
-                mimes.TryAdd(mime, d);
-                mimes.TryAdd(mimeChar, d);
+                mimes.TryAdd(mimeKey, d);
+                mimes.TryAdd(mimeCharKey, d);
                 addMime(mime, ext);
 
 
                 d = Tuple.Create(mimeChar, comp);
                 mimesWithCharSet.TryAdd(ext, d);
                 mimesWithCharSet.TryAdd(ext.TrimStart('.'), d);
-                mimesWithCharSet.TryAdd(mime, d);
-                mimesWithCharSet.TryAdd(mimeChar, d);
+                mimesWithCharSet.TryAdd(mimeKey, d);
+                mimesWithCharSet.TryAdd(mimeCharKey, d);
                 addMime(mimeChar, ext);
             }
 
@@ -974,8 +979,8 @@ namespace SysWeaver
             {
                 Mime = x.Key,
                 Extensions = String.Join(", ", x.Value),
-                Compressed = s[x.Key].Item2,
-                MimeCharSet = s[x.Key].Item1
+                Compressed = s[x.Key.ToLowerInvariant()].Item2,
+                MimeCharSet = s[x.Key.ToLowerInvariant()].Item1
             }).ToArray();
 
         }

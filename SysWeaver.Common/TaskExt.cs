@@ -434,6 +434,7 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
+            onException = onException ?? OnEventException;
             if (lc == 1)
             {
                 try
@@ -446,7 +447,6 @@ namespace SysWeaver
                 }
                 return;
             }
-            onException = onException ?? OnEventException;
             var tasks = ArrayPool<Task>.Shared.Rent(lc);
             try
             {
@@ -466,11 +466,11 @@ namespace SysWeaver
                     }
                     tasks[i] = Fn();
                 }
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                await Task.WhenAll(new ReadOnlySpan<Task>(tasks, 0, lc)).ConfigureAwait(false);
             }
             finally
             {
-                ArrayPool<Task>.Shared.Return(tasks);
+                ArrayPool<Task>.Shared.Return(tasks, true);
             }
         }
 
@@ -489,6 +489,7 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
+            onException = onException ?? OnEventException;
             if (lc == 1)
             {
                 try
@@ -501,7 +502,6 @@ namespace SysWeaver
                 }
                 return;
             }
-            onException = onException ?? OnEventException;
             var tasks = ArrayPool<Task>.Shared.Rent(lc);
             try
             {
@@ -521,11 +521,11 @@ namespace SysWeaver
                     }
                     tasks[i] = Fn();
                 }
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                await Task.WhenAll(new ReadOnlySpan<Task>(tasks, 0, lc)).ConfigureAwait(false);
             }
             finally
             {
-                ArrayPool<Task>.Shared.Return(tasks);
+                ArrayPool<Task>.Shared.Return(tasks, true);
             }
         }
 
@@ -545,6 +545,7 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
+            onException = onException ?? OnEventException;
             if (lc == 1)
             {
                 try
@@ -557,7 +558,6 @@ namespace SysWeaver
                 }
                 return;
             }
-            onException = onException ?? OnEventException;
             var tasks = ArrayPool<Task>.Shared.Rent(lc);
             try
             {
@@ -577,11 +577,11 @@ namespace SysWeaver
                     }
                     tasks[i] = Fn();
                 }
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                await Task.WhenAll(new ReadOnlySpan<Task>(tasks, 0, lc)).ConfigureAwait(false);
             }
             finally
             {
-                ArrayPool<Task>.Shared.Return(tasks);
+                ArrayPool<Task>.Shared.Return(tasks, true);
             }
         }
 
@@ -603,6 +603,7 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
+            onException = onException ?? OnEventException;
             if (lc == 1)
             {
                 try
@@ -615,7 +616,6 @@ namespace SysWeaver
                 }
                 return;
             }
-            onException = onException ?? OnEventException;
             var tasks = ArrayPool<Task>.Shared.Rent(lc);
             try
             {
@@ -635,11 +635,11 @@ namespace SysWeaver
                     }
                     tasks[i] = Fn();
                 }
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                await Task.WhenAll(new ReadOnlySpan<Task>(tasks, 0, lc)).ConfigureAwait(false);
             }
             finally
             {
-                ArrayPool<Task>.Shared.Return(tasks);
+                ArrayPool<Task>.Shared.Return(tasks, true);
             }
         }
 
@@ -662,6 +662,7 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
+            onException = onException ?? OnEventException;
             if (lc == 1)
             {
                 try
@@ -674,7 +675,6 @@ namespace SysWeaver
                 }
                 return;
             }
-            onException = onException ?? OnEventException;
             var tasks = ArrayPool<Task>.Shared.Rent(lc);
             try
             {
@@ -694,11 +694,11 @@ namespace SysWeaver
                     }
                     tasks[i] = Fn();
                 }
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                await Task.WhenAll(new ReadOnlySpan<Task>(tasks, 0, lc)).ConfigureAwait(false);
             }
             finally
             {
-                ArrayPool<Task>.Shared.Return(tasks);
+                ArrayPool<Task>.Shared.Return(tasks, true);
             }
         }
 
@@ -782,11 +782,12 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
+            onException = onException ?? OnEventException;
             if (lc == 1)
             {
                 try
                 {
-                    await ((Func<Task>)l[0])().ConfigureAwait(false);
+                    await ((Func<ValueTask>)l[0])().ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
@@ -794,13 +795,12 @@ namespace SysWeaver
                 }
                 return;
             }
-            onException = onException ?? OnEventException;
             var tasks = ArrayPool<Task>.Shared.Rent(lc);
             try
             {
                 for (int i = 0; i < lc; i++)
                 {
-                    var del = (Func<Task>)l[i];
+                    var del = (Func<ValueTask>)l[i];
                     async Task Fn()
                     {
                         try
@@ -814,11 +814,11 @@ namespace SysWeaver
                     }
                     tasks[i] = Fn();
                 }
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                await Task.WhenAll(new ReadOnlySpan<Task>(tasks, 0, lc)).ConfigureAwait(false);
             }
             finally
             {
-                ArrayPool<Task>.Shared.Return(tasks);
+                ArrayPool<Task>.Shared.Return(tasks, true);
             }
         }
 
@@ -837,11 +837,12 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
+            onException = onException ?? OnEventException;
             if (lc == 1)
             {
                 try
                 {
-                    await ((Func<A0, Task>)l[0])(a0).ConfigureAwait(false);
+                    await ((Func<A0, ValueTask>)l[0])(a0).ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
@@ -849,13 +850,12 @@ namespace SysWeaver
                 }
                 return;
             }
-            onException = onException ?? OnEventException;
             var tasks = ArrayPool<Task>.Shared.Rent(lc);
             try
             {
                 for (int i = 0; i < lc; i++)
                 {
-                    var del = (Func<A0, Task>)l[i];
+                    var del = (Func<A0, ValueTask>)l[i];
                     async Task Fn()
                     {
                         try
@@ -869,11 +869,11 @@ namespace SysWeaver
                     }
                     tasks[i] = Fn();
                 }
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                await Task.WhenAll(new ReadOnlySpan<Task>(tasks, 0, lc)).ConfigureAwait(false);
             }
             finally
             {
-                ArrayPool<Task>.Shared.Return(tasks);
+                ArrayPool<Task>.Shared.Return(tasks, true);
             }
         }
 
@@ -893,11 +893,12 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
+            onException = onException ?? OnEventException;
             if (lc == 1)
             {
                 try
                 {
-                    await ((Func<A0, A1, Task>)l[0])(a0, a1).ConfigureAwait(false);
+                    await ((Func<A0, A1, ValueTask>)l[0])(a0, a1).ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
@@ -905,13 +906,12 @@ namespace SysWeaver
                 }
                 return;
             }
-            onException = onException ?? OnEventException;
             var tasks = ArrayPool<Task>.Shared.Rent(lc);
             try
             {
                 for (int i = 0; i < lc; i++)
                 {
-                    var del = (Func<A0, A1, Task>)l[i];
+                    var del = (Func<A0, A1, ValueTask>)l[i];
                     async Task Fn()
                     {
                         try
@@ -925,11 +925,11 @@ namespace SysWeaver
                     }
                     tasks[i] = Fn();
                 }
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                await Task.WhenAll(new ReadOnlySpan<Task>(tasks, 0, lc)).ConfigureAwait(false);
             }
             finally
             {
-                ArrayPool<Task>.Shared.Return(tasks);
+                ArrayPool<Task>.Shared.Return(tasks, true);
             }
         }
 
@@ -950,11 +950,12 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
+            onException = onException ?? OnEventException;
             if (lc == 1)
             {
                 try
                 {
-                    await ((Func<A0, A1, A2, Task>)l[0])(a0, a1, a2).ConfigureAwait(false);
+                    await ((Func<A0, A1, A2, ValueTask>)l[0])(a0, a1, a2).ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
@@ -962,13 +963,12 @@ namespace SysWeaver
                 }
                 return;
             }
-            onException = onException ?? OnEventException;
             var tasks = ArrayPool<Task>.Shared.Rent(lc);
             try
             {
                 for (int i = 0; i < lc; i++)
                 {
-                    var del = (Func<A0, A1, A2, Task>)l[i];
+                    var del = (Func<A0, A1, A2, ValueTask>)l[i];
                     async Task Fn()
                     {
                         try
@@ -982,11 +982,11 @@ namespace SysWeaver
                     }
                     tasks[i] = Fn();
                 }
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                await Task.WhenAll(new ReadOnlySpan<Task>(tasks, 0, lc)).ConfigureAwait(false);
             }
             finally
             {
-                ArrayPool<Task>.Shared.Return(tasks);
+                ArrayPool<Task>.Shared.Return(tasks, true);
             }
         }
 
@@ -1008,11 +1008,12 @@ namespace SysWeaver
             var lc = l.Length;
             if (lc <= 0)
                 return;
+            onException = onException ?? OnEventException;
             if (lc == 1)
             {
                 try
                 {
-                    await ((Func<A0, A1, A2, A3, Task>)l[0])(a0, a1, a2, a3).ConfigureAwait(false);
+                    await ((Func<A0, A1, A2, A3, ValueTask>)l[0])(a0, a1, a2, a3).ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
@@ -1020,13 +1021,12 @@ namespace SysWeaver
                 }
                 return;
             }
-            onException = onException ?? OnEventException;
             var tasks = ArrayPool<Task>.Shared.Rent(lc);
             try
             {
                 for (int i = 0; i < lc; i++)
                 {
-                    var del = (Func<A0, A1, A2, A3, Task>)l[i];
+                    var del = (Func<A0, A1, A2, A3, ValueTask>)l[i];
                     async Task Fn()
                     {
                         try
@@ -1040,11 +1040,11 @@ namespace SysWeaver
                     }
                     tasks[i] = Fn();
                 }
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                await Task.WhenAll(new ReadOnlySpan<Task>(tasks, 0, lc)).ConfigureAwait(false);
             }
             finally
             {
-                ArrayPool<Task>.Shared.Return(tasks);
+                ArrayPool<Task>.Shared.Return(tasks, true);
             }
         }
 
@@ -1286,7 +1286,7 @@ namespace SysWeaver
             for (var i = 0; i < tl; i++)
             {
                 var t = tasks[i];
-                if (!t.IsCompleted)
+                if (!t.IsCompletedSuccessfully)
                     return InternalWhenAll(tasks, results, i, tl);
                 results[i] = t.GetAwaiter().GetResult();
             }
@@ -1296,27 +1296,30 @@ namespace SysWeaver
         static async ValueTask<T[]> InternalWhenAll<T>(IReadOnlyList<ValueTask<T>> tasks, T[] results, int i, int tl)
         {
             List<Exception> exceptions = null;
+            bool canceled = false;
             for (; i < tl; i++)
             {
                 var t = tasks[i];
-                if (t.IsCompleted)
-                {
-                    results[i] = t.GetAwaiter().GetResult();
-                    continue;
-                }
                 try
                 {
                     results[i] = await t.ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
+                    if (t.IsCanceled)
+                    {
+                        canceled = true;
+                        continue;
+                    }
                     exceptions ??= new(tl);
                     exceptions.Add(ex);
                 }
             }
-            return exceptions is null
-                ? results
-                : throw new AggregateException(exceptions);
+            if (exceptions != null)
+                throw new AggregateException(exceptions);
+            if (canceled)
+                throw new TaskCanceledException();
+            return results;
         }
 
 
@@ -1425,7 +1428,7 @@ namespace SysWeaver
             for (var i = 0; i < tl; i++)
             {
                 var t = tasks[i];
-                if (!t.IsCompleted)
+                if (!t.IsCompletedSuccessfully)
                     return InternalWhenAll(tasks, i, tl);
             }
             return ValueTask.CompletedTask;
@@ -1434,23 +1437,29 @@ namespace SysWeaver
         static async ValueTask InternalWhenAll(IReadOnlyList<ValueTask> tasks, int i, int tl)
         {
             List<Exception> exceptions = null;
+            bool canceled = false;
             for (; i < tl; i++)
             {
                 var t = tasks[i];
-                if (t.IsCompleted)
-                    continue;
                 try
                 {
                     await t.ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
+                    if (t.IsCanceled)
+                    {
+                        canceled = true;
+                        continue;
+                    }
                     exceptions ??= new(tl);
                     exceptions.Add(ex);
                 }
             }
             if (exceptions != null)
                 throw new AggregateException(exceptions);
+            if (canceled)
+                throw new TaskCanceledException();
         }
 
 

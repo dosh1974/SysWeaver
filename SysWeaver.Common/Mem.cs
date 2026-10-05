@@ -76,7 +76,9 @@ namespace SysWeaver.Memory
         {
             fixed (T* bp = mem)
             {
-                using var ms = new UnmanagedMemoryStream((byte*)bp, mem.Length * Marshal.SizeOf<T>());
+                // fixed gives a null pointer for an empty span, UnmanagedMemoryStream doesn't accept that
+                byte d0;
+                using var ms = new UnmanagedMemoryStream(bp == null ? &d0 : (byte*)bp, mem.Length * Marshal.SizeOf<T>());
                 onStream(ms);
             }
         }
@@ -93,7 +95,9 @@ namespace SysWeaver.Memory
         {
             fixed (T* bp = mem)
             {
-                using var ms = new UnmanagedMemoryStream((byte*)bp, mem.Length * Marshal.SizeOf<T>());
+                // fixed gives a null pointer for an empty span, UnmanagedMemoryStream doesn't accept that
+                byte d0;
+                using var ms = new UnmanagedMemoryStream(bp == null ? &d0 : (byte*)bp, mem.Length * Marshal.SizeOf<T>());
                 return onStream(ms);
             }
         }
@@ -110,7 +114,9 @@ namespace SysWeaver.Memory
         {
             fixed (T* bp = mem)
             {
-                using var ms = new UnmanagedMemoryStream((byte*)bp, mem.Length * Marshal.SizeOf<T>());
+                // fixed gives a null pointer for an empty span, UnmanagedMemoryStream doesn't accept that
+                byte d0;
+                using var ms = new UnmanagedMemoryStream(bp == null ? &d0 : (byte*)bp, mem.Length * Marshal.SizeOf<T>());
                 onStream(ms, arg);
             }
         }
@@ -129,7 +135,9 @@ namespace SysWeaver.Memory
         {
             fixed (T* bp = mem)
             {
-                using var ms = new UnmanagedMemoryStream((byte*)bp, mem.Length * Marshal.SizeOf<T>());
+                // fixed gives a null pointer for an empty span, UnmanagedMemoryStream doesn't accept that
+                byte d0;
+                using var ms = new UnmanagedMemoryStream(bp == null ? &d0 : (byte*)bp, mem.Length * Marshal.SizeOf<T>());
                 return onStream(ms, arg);
             }
         }

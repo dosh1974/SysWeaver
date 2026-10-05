@@ -160,10 +160,15 @@ namespace SysWeaver
             var isNeg = value < 0;
             if (isNeg)
                 value = -value;
+            if (decimalCount < 0)
+                decimalCount = 0;
+            // Banker's rounding, done without scaling the value (can't overflow)
+            value = Math.Round(value, Math.Min(decimalCount, 28));
             var pl = prefix?.Length ?? 0;
             var prefixPad = (pl + minPadLeft + 3) & ~3;
             var sl = suffix?.Length ?? 0;
-            int p = prefixPad + 32 + sl;
+            // 29 digits + 9 thousand separators + sign = 39 chars (must be a multiple of 4 for the separator logic)
+            int p = prefixPad + 40 + sl;
             if (decimalCount > 0)
                 p += (decimalCount + 1);
             var start = p;
@@ -176,19 +181,19 @@ namespace SysWeaver
             }
             if (decimalCount > 0)
             {
+                var intPart = Math.Truncate(value);
+                var frac = value - intPart;
+                p -= decimalCount;
                 for (int i = 0; i < decimalCount; ++i)
-                    value *= 10;
-                value = Math.Round(value);
-                while (decimalCount > 0)
                 {
-                    --decimalCount;
-                    var dnewValue = Math.Truncate(value / 10);
-                    --p;
-                    c[p] = (Char)(value - (dnewValue * 10) + 48);
-                    value = dnewValue;
+                    frac *= 10;
+                    var d = Math.Truncate(frac);
+                    c[p + i] = (Char)(d + 48);
+                    frac -= d;
                 }
                 --p;
-                c[p] = '.';
+                c[p] = decimalChar;
+                value = intPart;
             }
             var newValue = Math.Truncate(value / 10);
             --p;

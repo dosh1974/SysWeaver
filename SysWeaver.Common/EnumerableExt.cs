@@ -305,7 +305,7 @@ namespace SysWeaver
         /// </param>
         /// <returns></returns>
         public static Task ProcessAsyncValue<T>(this IEnumerable<T> enumerable, Func<T, Task> action, int maxConcurrency = 0)
-            => ProcessAsyncValue(enumerable.ToList(), action, maxConcurrency);
+            => ProcessAsync(enumerable.ToList(), action, maxConcurrency);
 
 
 

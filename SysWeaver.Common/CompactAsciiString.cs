@@ -15,7 +15,10 @@ namespace SysWeaver
     public sealed class CompactAsciiString
     {
 
-        public static IReadOnlySet<Char> InvalidDefaults = ReadOnlyData.Set("\\/'\"´`|%_".ToCharArray());
+        /// <summary>
+        /// Chars that are escaped in common formats (json, sql, paths etc), DEL (127) is escaped by json serializers
+        /// </summary>
+        public static IReadOnlySet<Char> InvalidDefaults = ReadOnlyData.Set("\\/'\"´`|%_\x7F".ToCharArray());
 
         /// <summary>
         /// Should contain chars that doesn't expand "in transit" (such as serialized json strings, sql requests etc).
@@ -72,6 +75,8 @@ namespace SysWeaver
                 vals.Add(c, (uint)valid.Count);
                 valid.Add(c);
             }
+            if (valid.Count < 2)
+                throw new ArgumentException("At least 2 chars must be valid", nameof(invalid));
             Valid = valid.ToArray();
             Values = vals.Freeze();
         }
@@ -142,7 +147,8 @@ namespace SysWeaver
         {
             var v = Valid;
             var vl = (UInt32)Valid.Count;
-            Span<Char> temp = stackalloc char[32];
+            // A 64 bit value needs at most 64 digits (base 2)
+            Span<Char> temp = stackalloc char[64];
             for (int i = 0; ;)
             {
                 var n = value / vl;

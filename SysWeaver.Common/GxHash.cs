@@ -128,6 +128,11 @@ namespace SysWeaver
 
             int len = bytes.Length;
 
+            // An empty span may have a null reference (default / ReadOnlySpan<byte>.Empty), don't read through it.
+            // An empty input always produces a zero vector (same as GetPartialVector with 0 bytes).
+            if (len == 0)
+                return Vector128<byte>.Zero;
+
             if (len <= VECTOR_SIZE)
             {
                 // Input fits on a single SIMD vector, however we might read beyond the input message

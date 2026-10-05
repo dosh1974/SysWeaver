@@ -59,11 +59,11 @@ namespace SysWeaver
 
         public void Dispose()
         {
-            if (!(typeof(T) is IDisposable))
+            if (!typeof(IDisposable).IsAssignableFrom(typeof(T)))
                 return;
             var os = Objs;
-            if (os.TryPop(out var v))
-                (v.O as IDisposable).Dispose();
+            while (os.TryPop(out var v))
+                (v.O as IDisposable)?.Dispose();
         }
     }
 
@@ -87,11 +87,11 @@ namespace SysWeaver
 
         public void Dispose()
         {
-            if (!(typeof(T) is IDisposable))
+            if (!typeof(IDisposable).IsAssignableFrom(typeof(T)))
                 return;
             var os = Objs;
-            if (os.TryPop(out var v))
-                (v.O as IDisposable).Dispose();
+            while (os.TryPop(out var v))
+                (v.O as IDisposable)?.Dispose();
         }
     }
 

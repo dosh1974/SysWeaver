@@ -57,7 +57,7 @@ namespace SysWeaver
                 value = -value;
             if (value < 0.5)
                 return 0;
-            int scale = 1;
+            long scale = 1;
             double nmd = niceMax;
             while ((value / scale) > nmd)
                 scale *= 10;
@@ -88,7 +88,7 @@ namespace SysWeaver
                 value = -value;
             if (value < 0.5M)
                 return 0;
-            int scale = 1;
+            long scale = 1;
             decimal nmd = niceMax;
             while ((value / scale) > nmd)
                 scale *= 10;
@@ -118,7 +118,7 @@ namespace SysWeaver
                 value = -value;
             if (value < 1)
                 return 0;
-            int scale = 1;
+            long scale = 1;
             double nmd = niceMax;
             while ((value / scale) > nmd)
                 scale *= 10;

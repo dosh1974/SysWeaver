@@ -113,7 +113,7 @@ namespace SysWeaver
                 else
                     max = mid - 1;
             }
-            if ((min >= length) || (comparer.Compare(valueAt(min), value) != 0))
+            if ((min >= index + length) || (comparer.Compare(valueAt(min), value) != 0))
                 min = ~min;
             return min;
         }
@@ -133,7 +133,7 @@ namespace SysWeaver
                 else
                     max = mid - 1;
             }
-            if ((min >= length) || (comparer.Compare(valueAt(min), value) != 0))
+            if ((min >= index + length) || (comparer.Compare(valueAt(min), value) != 0))
                 min = ~min;
             return min;
         }
@@ -163,9 +163,10 @@ namespace SysWeaver
                 else
                     max = mid - 1;
             }
-            if ((min >= length) || (comparer.Compare(valueAt(min), value) != 0))
-                min = ~min;
-            return min;
+            // min is the first element greater than the value, the found value is the element before it
+            if ((min > index) && (comparer.Compare(valueAt(min - 1), value) == 0))
+                return min - 1;
+            return ~min;
         }
 
         public static long Upper<E>(long index, long length, E value, Func<long, E> valueAt, IComparer<E> comparer = null)
@@ -183,9 +184,10 @@ namespace SysWeaver
                 else
                     max = mid - 1;
             }
-            if ((min >= length) || (comparer.Compare(valueAt(min), value) != 0))
-                min = ~min;
-            return min;
+            // min is the first element greater than the value, the found value is the element before it
+            if ((min > index) && (comparer.Compare(valueAt(min - 1), value) == 0))
+                return min - 1;
+            return ~min;
         }
 
         public static int Upper<E>(IList<E> container, int index, int length, E value, IComparer<E> comparer = null)

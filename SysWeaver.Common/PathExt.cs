@@ -29,7 +29,8 @@ namespace SysWeaver
         public static String StripExtension(String path)
         {
             var e = path.LastIndexOf('.');
-            return e < 0 ? path : path.Substring(0, e);
+            // A '.' in a directory name is not an extension
+            return e < 0 || e < path.LastIndexOfAny(['/', '\\']) ? path : path.Substring(0, e);
         }
 
         /// <summary>
@@ -204,7 +205,7 @@ namespace SysWeaver
         public static String GetFullDirectoryName(String directoryName)
         {
             var di = new DirectoryInfo(directoryName);
-            return di.FullName;
+            return FixCase(di.FullName);
         }
 
         /// <summary>
@@ -215,7 +216,32 @@ namespace SysWeaver
         public static String GetFullFileName(String fileName)
         {
             var di = new FileInfo(fileName);
-            return di.FullName;
+            return FixCase(di.FullName);
+        }
+
+        /// <summary>
+        /// Use the casing of the file system for all existing parts of a full path (the root is kept as is)
+        /// </summary>
+        /// <param name="full">A full path</param>
+        /// <returns>The path with the casing of the existing parts fixed</returns>
+        static String FixCase(String full)
+        {
+            try
+            {
+                var t = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var parent = Path.GetDirectoryName(t);
+                if (String.IsNullOrEmpty(parent))
+                    return full;
+                var p = FixCase(parent);
+                var name = Path.GetFileName(t);
+                var di = new DirectoryInfo(p);
+                var m = di.Exists ? di.EnumerateFileSystemInfos(name).FirstOrDefault() : null;
+                return Path.Combine(p, m?.Name ?? name) + full.Substring(t.Length);
+            }
+            catch
+            {
+                return full;
+            }
         }
 
 
@@ -266,7 +292,7 @@ namespace SysWeaver
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <returns>Null if the folder exists, else the exception</returns>
-        public static Exception EnsureCanWriteFile(String filename, int retryCount = 10, int delayInMs = 100) => EnsureFolderExist(Path.GetDirectoryName(filename), retryCount);
+        public static Exception EnsureCanWriteFile(String filename, int retryCount = 10, int delayInMs = 100) => EnsureFolderExist(Path.GetDirectoryName(filename), retryCount, delayInMs);
 
 
         /// <summary>
@@ -316,7 +342,7 @@ namespace SysWeaver
         /// <param name="retryCount">Number of times to retry the operation (create folder)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <returns>Null if the folder exists, else the exception</returns>
-        public static Task<Exception> EnsureCanWriteFileAsync(String filename, int retryCount = 10, int delayInMs = 100) => EnsureFolderExistAsync(Path.GetDirectoryName(filename), retryCount);
+        public static Task<Exception> EnsureCanWriteFileAsync(String filename, int retryCount = 10, int delayInMs = 100) => EnsureFolderExistAsync(Path.GetDirectoryName(filename), retryCount, delayInMs);
 
 
         /// <summary>
@@ -431,7 +457,7 @@ namespace SysWeaver
                 dir.Create();
             using (var src = fi.OpenRead())
             {
-                using var dst = di.OpenWrite();
+                using var dst = di.Create();
                 using var x = new GZipStream(dst, level);
                 src.CopyTo(x);
             }
@@ -455,7 +481,7 @@ namespace SysWeaver
                 dir.Create();
             using (var src = fi.OpenRead())
             {
-                using var dst = di.OpenWrite();
+                using var dst = di.Create();
                 using var x = new GZipStream(dst, level);
                 await src.CopyToAsync(x).ConfigureAwait(false);
             }
@@ -785,21 +811,28 @@ namespace SysWeaver
         /// <returns>Null if the clean up was successful, else the first exception</returns>
         public static Exception TryRemoveEmptyFolders(String directory, bool deleteDirectoryIfEmpty = true, int retryCount = 10, int delayInMs = 100)
         {
-            var dirs = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories);
-            Array.Sort(dirs, (a, b) => b.Length - a.Length);
-            if (deleteDirectoryIfEmpty)
-                dirs = dirs.Push(directory);
-            Exception ex = null;
-            foreach (var dir in dirs)
+            try
             {
-                if (Directory.GetFiles(dir, "*").Length > 0)
-                    continue;
-                if (Directory.GetDirectories(dir, "*").Length > 0)
-                    continue;
-                var e = TryDeleteDirectory(dir, true, retryCount, delayInMs);
-                ex = ex ?? e;
+                var dirs = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories);
+                Array.Sort(dirs, (a, b) => b.Length - a.Length);
+                if (deleteDirectoryIfEmpty)
+                    dirs = dirs.Push(directory);
+                Exception ex = null;
+                foreach (var dir in dirs)
+                {
+                    if (Directory.GetFiles(dir, "*").Length > 0)
+                        continue;
+                    if (Directory.GetDirectories(dir, "*").Length > 0)
+                        continue;
+                    var e = TryDeleteDirectory(dir, true, retryCount, delayInMs);
+                    ex = ex ?? e;
+                }
+                return ex;
             }
-            return ex;
+            catch (Exception ex)
+            {
+                return ex;
+            }
         }
 
 
@@ -813,21 +846,28 @@ namespace SysWeaver
         /// <returns>Null if the clean up was successful, else the first exception</returns>
         public static async Task<Exception> TryRemoveEmptyFoldersAsync(String directory, bool deleteDirectoryIfEmpty = true, int retryCount = 10, int delayInMs = 100)
         {
-            var dirs = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories);
-            Array.Sort(dirs, (a, b) => b.Length - a.Length);
-            if (deleteDirectoryIfEmpty)
-                dirs = dirs.Push(directory);
-            Exception ex = null;
-            foreach (var dir in dirs)
+            try
             {
-                if (Directory.GetFiles(dir, "*").Length > 0)
-                    continue;
-                if (Directory.GetDirectories(dir, "*").Length > 0)
-                    continue;
-                var e = await TryDeleteDirectoryAsync(dir, true, retryCount, delayInMs).ConfigureAwait(false);
-                ex = ex ?? e;
+                var dirs = Directory.GetDirectories(directory, "*", SearchOption.AllDirectories);
+                Array.Sort(dirs, (a, b) => b.Length - a.Length);
+                if (deleteDirectoryIfEmpty)
+                    dirs = dirs.Push(directory);
+                Exception ex = null;
+                foreach (var dir in dirs)
+                {
+                    if (Directory.GetFiles(dir, "*").Length > 0)
+                        continue;
+                    if (Directory.GetDirectories(dir, "*").Length > 0)
+                        continue;
+                    var e = await TryDeleteDirectoryAsync(dir, true, retryCount, delayInMs).ConfigureAwait(false);
+                    ex = ex ?? e;
+                }
+                return ex;
             }
-            return ex;
+            catch (Exception ex)
+            {
+                return ex;
+            }
         }
 
 
@@ -923,8 +963,11 @@ namespace SysWeaver
         static void DirectoryCopy(String from, String to)
         {
             var t = Path.GetFullPath(from).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var tl = t.Length + 1; 
-            foreach (var f in Directory.GetFiles(t, "*", SearchOption.AllDirectories))
+            var tl = t.Length + 1;
+            var files = Directory.GetFiles(t, "*", SearchOption.AllDirectories);
+            // Make sure that the destination exists (even if the source folder is empty)
+            Directory.CreateDirectory(to);
+            foreach (var f in files)
             {
                 var dest = Path.Combine(to, f.Substring(tl));
                 var dir = Path.GetDirectoryName(dest);

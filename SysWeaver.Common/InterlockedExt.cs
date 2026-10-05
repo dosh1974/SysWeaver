@@ -86,7 +86,7 @@ namespace SysWeaver
             for (;;)
             {
                 var r = Interlocked.CompareExchange(ref value, 0, 0);
-                if (c <= r)
+                if ((c <= r) || double.IsNaN(c))
                     return r;
                 Interlocked.CompareExchange(ref value, c, r);
             }
@@ -103,7 +103,7 @@ namespace SysWeaver
             for (;;)
             {
                 var r = Interlocked.CompareExchange(ref value, 0, 0);
-                if (c >= r)
+                if ((c >= r) || double.IsNaN(c))
                     return r;
                 Interlocked.CompareExchange(ref value, c, r);
             }
@@ -120,7 +120,7 @@ namespace SysWeaver
             for (;;)
             {
                 var r = Interlocked.CompareExchange(ref value, 0, 0);
-                if (c <= r)
+                if ((c <= r) || float.IsNaN(c))
                     return r;
                 Interlocked.CompareExchange(ref value, c, r);
             }
@@ -137,7 +137,7 @@ namespace SysWeaver
             for (;;)
             {
                 var r = Interlocked.CompareExchange(ref value, 0, 0);
-                if (c >= r)
+                if ((c >= r) || float.IsNaN(c))
                     return r;
                 Interlocked.CompareExchange(ref value, c, r);
             }

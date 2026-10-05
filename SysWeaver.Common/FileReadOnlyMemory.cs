@@ -50,7 +50,7 @@ namespace SysWeaver
         /// This is the safest method to use.
         /// </summary>
         /// <param name="fileStream">The file stream, must be open for reading</param>
-        /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
+        /// <param name="leaveOpen">If true, the stream is left open (positioned at the end of the read data), else it's disposed (when the returned memory is disposed if the file is mapped)</param>
         /// <returns>The content of the file</returns>
         public static async Task<Byte[]> ReadAllBytesAsync(FileStream fileStream, bool leaveOpen = false)
         {
@@ -69,7 +69,7 @@ namespace SysWeaver
         /// This is the safest method to use.
         /// </summary>
         /// <param name="fileStream">The file stream, must be open for reading</param>
-        /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
+        /// <param name="leaveOpen">If true, the stream is left open (positioned at the end of the read data), else it's disposed (when the returned memory is disposed if the file is mapped)</param>
         /// <returns>The content of the file</returns>
         public static Byte[] ReadAllBytes(FileStream fileStream, bool leaveOpen = false)
         {
@@ -100,25 +100,25 @@ namespace SysWeaver
         /// This is the safest method to use.
         /// </summary>
         /// <param name="fileStream">The file stream, must be open for reading</param>
-        /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
+        /// <param name="leaveOpen">If true, the stream is left open (positioned at the end of the read data), else it's disposed (when the returned memory is disposed if the file is mapped)</param>
         /// <returns>The content of the file</returns>
         public static async Task<IUnmanagedReadOnlyMemory<Byte>> ReadAsync(FileStream fileStream, bool leaveOpen = false)
         {
             try
             {
-                if (TryMap<Byte>(out var mem, fileStream, leaveOpen))
+                var pos = fileStream.Position;
+                var l = fileStream.Length - pos;
+                if (l <= 0)
                 {
-                    fileStream = null;
-                    return mem;
+                    if (!leaveOpen)
+                        fileStream.Dispose();
+                    return UnmanagedMemory<Byte>.EmptyReadOnlyMemory;
                 }
+                if (l <= int.MaxValue)
+                    return new MappedFileMemoryHandler<Byte>(fileStream, (int)l, pos, leaveOpen);
             }
             catch
             {
-            }
-            finally
-            {
-                if (!leaveOpen)
-                    fileStream?.Dispose();
             }
             using var x = leaveOpen ? null : fileStream;
             using var ms = new ArrayPoolStream();
@@ -146,25 +146,25 @@ namespace SysWeaver
         /// This is the safest method to use.
         /// </summary>
         /// <param name="fileStream">The file stream, must be open for reading</param>
-        /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
+        /// <param name="leaveOpen">If true, the stream is left open (positioned at the end of the read data), else it's disposed (when the returned memory is disposed if the file is mapped)</param>
         /// <returns>The content of the file</returns>
         public static IUnmanagedReadOnlyMemory<Byte> Read(FileStream fileStream, bool leaveOpen = false)
         {
             try
             {
-                if (TryMap<Byte>(out var mem, fileStream, leaveOpen))
+                var pos = fileStream.Position;
+                var l = fileStream.Length - pos;
+                if (l <= 0)
                 {
-                    fileStream = null;
-                    return mem;
+                    if (!leaveOpen)
+                        fileStream.Dispose();
+                    return UnmanagedMemory<Byte>.EmptyReadOnlyMemory;
                 }
+                if (l <= int.MaxValue)
+                    return new MappedFileMemoryHandler<Byte>(fileStream, (int)l, pos, leaveOpen);
             }
             catch
             {
-            }
-            finally
-            {
-                if (!leaveOpen)
-                    fileStream?.Dispose();
             }
             using var x = leaveOpen ? null : fileStream;
             using var ms = new ArrayPoolStream();
@@ -292,6 +292,9 @@ namespace SysWeaver
                 if (l <= 0)
                 {
                     mem = UnmanagedMemory<T>.EmptyReadOnlyMemory;
+                    // On success the stream is always disposed (see leaveOpen)
+                    fileStream.Dispose();
+                    fileStream = null;
                     return true;
                 }
                 mem = new MappedFileMemoryHandler<T>(fileStream, (int)l, pos);
@@ -337,6 +340,8 @@ namespace SysWeaver
                         byte* ptr = (byte*)0;
                         var h = view.SafeMemoryMappedViewHandle;
                         h.AcquirePointer(ref ptr);
+                        // The view starts at an allocation granularity boundary, the requested position is at PointerOffset
+                        ptr += view.PointerOffset;
                         F = file;
                         V = view;
                         H = h;

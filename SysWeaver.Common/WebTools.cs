@@ -66,7 +66,7 @@ namespace SysWeaver
                         (ignoreCertErrors ? NoCertDefHandlerAutoDecomp : DefHandlerAutoDecomp)
                     :
                         (ignoreCertErrors ? NoCertDefHandler : DefHandler)
-                    );
+                    , disposeHandler: false); // The handlers are static and shared by all clients, never dispose them
             }
             client.DefaultRequestHeaders.UserAgent.Add(UserAgent);
             return client;

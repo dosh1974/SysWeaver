@@ -49,16 +49,15 @@ namespace SysWeaver
             {
                 try
                 {
-                    s.Wait(0);
-                }
-                catch (TimeoutException)
-                {
-                    while (i > 0)
+                    if (!s.Wait(0))
                     {
-                        --i;
-                        s.Release();
+                        while (i > 0)
+                        {
+                            --i;
+                            s.Release();
+                        }
+                        return null;
                     }
-                    return null;
                 }
                 catch
                 {

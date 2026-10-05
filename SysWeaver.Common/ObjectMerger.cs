@@ -59,15 +59,26 @@ namespace SysWeaver
             public Key(Object exp)
             {
                 Type = exp.GetType();
-                var p = Type.GetTypeInfo().FindProperties(ReflectionFlags.IsPublic, ReflectionFlags.IsStatic).ToArray();
-                var pp = GC.AllocateUninitializedArray<Object>(p.Length);
+                //  Indexer properties can't be read without arguments
+                var p = Type.GetTypeInfo().FindProperties(ReflectionFlags.IsPublic, ReflectionFlags.IsStatic)
+                    .Where(x => x.GetIndexParameters().Length == 0).ToArray();
+                //  The content of an enumerable (strings, lists etc) is part of the key (compared element wise)
+                var self = exp is IEnumerable;
+                var pc = p.Length;
+                var pp = GC.AllocateUninitializedArray<Object>(pc + (self ? 1 : 0));
                 int h = Type.GetHashCode();
-                for (int i = 0; i < p.Length; ++i)
+                for (int i = 0; i < pc; ++i)
                 {
                     h = (h * 31) ^ (h >> 24);
                     var obj = p[i].GetValue(exp, null);
                     pp[i] = obj;
                     h ^= ExtendedHashCode(obj);
+                }
+                if (self)
+                {
+                    h = (h * 31) ^ (h >> 24);
+                    pp[pc] = exp;
+                    h ^= ExtendedHashCode(exp);
                 }
                 Properties = pp;
                 HashCode = h;

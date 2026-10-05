@@ -29,8 +29,11 @@ namespace SysWeaver
                     var xx = x[i];
                     var yy = y[i];
                     if (xx == null)
+                    {
                         if (yy != null)
                             return false;
+                        continue;
+                    }
                     if (yy == null)
                         return false;
                     if (!cmp.Equals(xx, yy))

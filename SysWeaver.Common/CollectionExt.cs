@@ -57,7 +57,7 @@ namespace SysWeaver
         {
             var e = t.GetEnumerator();
             using (e as IDisposable)
-                return e.MoveNext();
+                return !e.MoveNext();
         }
 
 

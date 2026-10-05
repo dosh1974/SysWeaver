@@ -185,9 +185,9 @@ namespace SysWeaver
         /// <exception cref="Exception"></exception>
         public static ICodeGenerator Get(int strLen)
         {
-            if (strLen <= 0)
-                throw new Exception("Invalid length!");
             var gens = Gens;
+            if ((strLen <= 0) || (strLen >= gens.Length))
+                throw new Exception("Invalid length!");
             var gen = gens[strLen];
             if (gen != null)
                 return gen;
@@ -199,9 +199,11 @@ namespace SysWeaver
         AlphaNumericCodeGenerator(int strLen)
         {
             StrLen = strLen;
-            MaxValue = CodeGeneratorHelper.Pow(SymbolCount, strLen);
-            MaxBits = CodeGeneratorHelper.Log2(MaxValue);
-            MaxInput = 1L << MaxBits;
+            // SymbolCount ^ strLen = 1 << (BitsPerChar * strLen), capped to 62 bits to stay a positive long
+            var bits = Math.Min(BitsPerChar * strLen, 62);
+            MaxBits = bits;
+            MaxValue = 1L << bits;
+            MaxInput = 1L << bits;
             InputMask = MaxInput - 1;
             GroupStrLen = SepLens[strLen];
         }
@@ -385,7 +387,7 @@ namespace SysWeaver
         /// <summary>
         /// Cached instances
         /// </summary>
-        static readonly ICodeGenerator[] Gens = new ICodeGenerator[16];
+        static readonly ICodeGenerator[] Gens = new ICodeGenerator[22];
         static readonly int[] SepMasks;
         static readonly int[] SepLens;
 
@@ -448,9 +450,9 @@ namespace SysWeaver
         /// <exception cref="Exception"></exception>
         public static ICodeGenerator Get(int strLen)
         {
-            if (strLen <= 0)
-                throw new Exception("Invalid length!");
             var gens = Gens;
+            if ((strLen <= 0) || (strLen >= gens.Length))
+                throw new Exception("Invalid length!");
             var gen = gens[strLen];
             if (gen != null)
                 return gen;
@@ -462,9 +464,11 @@ namespace SysWeaver
         NumericCodeGenerator(int strLen)
         {
             StrLen = strLen;
-            MaxValue = CodeGeneratorHelper.Pow(SymbolCount, strLen);
-            MaxBits = CodeGeneratorHelper.Log2(MaxValue);
-            MaxInput = 1L << MaxBits;
+            // SymbolCount ^ strLen = 1 << (BitsPerChar * strLen), capped to 62 bits to stay a positive long
+            var bits = Math.Min(BitsPerChar * strLen, 62);
+            MaxBits = bits;
+            MaxValue = 1L << bits;
+            MaxInput = 1L << bits;
             InputMask = MaxInput - 1;
             GroupStrLen = SepLens[strLen];
         }

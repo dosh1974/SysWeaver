@@ -234,13 +234,8 @@ namespace SysWeaver
         {
             if (array == null)
                 return array;
-            var c = array.Length;
-            var t = new T[c];
-            var sizeZ = Marshal.SizeOf<T>();
-            var sr = array.AsSpan().GetPinnableReference();
-            var dr = t.AsSpan().GetPinnableReference();
-            var size = sizeZ * c;
-            Buffer.MemoryCopy((byte*)Unsafe.AsPointer(ref sr), (byte*)Unsafe.AsPointer(ref dr), size, size);
+            var t = new T[array.Length];
+            array.AsSpan().CopyTo(t);
             return t;
         }
 
@@ -256,19 +251,8 @@ namespace SysWeaver
                 return array;
             var c = array.Length;
             var t = new T[c];
-            if (typeof(T).IsPrimitive)
-            {
-                var sizeZ = Marshal.SizeOf<T>();
-                var sr = array.AsSpan().GetPinnableReference();
-                var dr = t.AsSpan().GetPinnableReference();
-                var size = sizeZ * c;
-                Buffer.MemoryCopy((byte*)Unsafe.AsPointer(ref sr), (byte*)Unsafe.AsPointer(ref dr), size, size);
-            }
-            else
-            {
-                for (int i = 0; i < c; ++i)
-                    t[i] = array[i];
-            }
+            for (int i = 0; i < c; ++i)
+                t[i] = array[i];
             return t;
         }
 
@@ -834,17 +818,22 @@ namespace SysWeaver
                 var c = fn(list[a], a, list[b], b);
                 return c == 0 ? a.CompareTo(b) : c;
             });
-            for (int i = 0; i < count; ++ i)
+            for (int i = 0; i < count; ++i)
             {
-                var t = temp[i];
-                if (t == i)
+                var s = temp[i];
+                if (s == i)
                     continue;
-                var tv = list[t];
-                list[t] = list[i];
-                list[i] = tv;
-                temp[i] = temp[t];
-                temp[t] = t;
-                --i;
+                var v = list[i];
+                var j = i;
+                while (s != i)
+                {
+                    list[j] = list[s];
+                    temp[j] = j;
+                    j = s;
+                    s = temp[j];
+                }
+                list[j] = v;
+                temp[j] = j;
             }
         }
 
@@ -871,15 +860,20 @@ namespace SysWeaver
             });
             for (int i = 0; i < count; ++i)
             {
-                var t = temp[i];
-                if (t == i)
+                var s = temp[i];
+                if (s == i)
                     continue;
-                var tv = list[t];
-                list[t] = list[i];
-                list[i] = tv;
-                temp[i] = temp[t];
-                temp[t] = t;
-                --i;
+                var v = list[i];
+                var j = i;
+                while (s != i)
+                {
+                    list[j] = list[s];
+                    temp[j] = j;
+                    j = s;
+                    s = temp[j];
+                }
+                list[j] = v;
+                temp[j] = j;
             }
         }
 

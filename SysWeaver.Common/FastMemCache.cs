@@ -89,7 +89,12 @@ namespace SysWeaver
             {
                 var val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 if (!c.TryAdd(key, val))
-                    return false;
+                {
+                    //  An expired entry (not pruned yet) is missing (like TryGet), replace it
+                    if (c.TryGetValue(key, out var existing) && (DateTime.UtcNow < existing.Item1))
+                        return false;
+                    c[key] = val;
+                }
                 Q.Enqueue(ValueTuple.Create(val.Item1, key));
                 return true;
             }

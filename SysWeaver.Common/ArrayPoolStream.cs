@@ -62,13 +62,29 @@ namespace SysWeaver
             /// </summary>
             Released,
             /// <summary>
-            /// The buffer have been handed out by GetMemory, the receiver will return it to the pool.
+            /// The buffer have been handed out by GetMemory, it's shared by the stream and the receiver (see <see cref="CurrentLease"/>),
+            /// and returned to the pool when both are done with it.
             /// It must not be handed out again, and must not be modified (copy on write).
             /// </summary>
             Lent,
         }
 
         BufferState State;
+
+        /// <summary>
+        /// The lease of the buffer when the state is Lent (the stream holds one reference), else null
+        /// </summary>
+        Lease CurrentLease;
+
+        /// <summary>
+        /// Release the stream's reference to a lent buffer (the buffer is returned to the pool when the receiver is done too)
+        /// </summary>
+        void ReleaseLease()
+        {
+            var l = CurrentLease;
+            CurrentLease = null;
+            l?.Release();
+        }
 
         /// <summary>
         /// Internal buffer, never set manually.
@@ -284,6 +300,8 @@ namespace SysWeaver
                 new ReadOnlySpan<Byte>(data, 0, len).CopyTo(next.AsSpan());
             if (State == BufferState.Owned)
                 Return(data);
+            else if (State == BufferState.Lent)
+                ReleaseLease();
             State = BufferState.Owned;
             Data = next;
         }
@@ -420,28 +438,46 @@ namespace SysWeaver
             return d.AsMemory().Slice(0, len);
         }
 
-        struct S : IUnmanagedReadOnlyMemory<Byte>
+        /// <summary>
+        /// Memory handed out by GetMemory, the buffer is returned to the pool when all references are released.
+        /// A lent stream buffer has two references (the stream and the receiver), so it stays valid for the stream after the receiver disposes it.
+        /// </summary>
+        sealed class Lease : IUnmanagedReadOnlyMemory<Byte>
         {
-            public S(Byte[] buffer, int size)
+            public Lease(Byte[] buffer, int size, int references)
             {
                 Buffer = buffer;
                 Memory = new ReadOnlyMemory<byte>(buffer, 0, size);
+                References = references;
             }
-            Byte[] Buffer;
-            public ReadOnlyMemory<Byte> Memory { get; init; }
+            readonly Byte[] Buffer;
+            int References;
+            int Disposed;
 
+            public ReadOnlyMemory<Byte> Memory { get; }
 
+            /// <summary>
+            /// Release one reference, the last one returns the buffer to the pool
+            /// </summary>
+            public void Release()
+            {
+                if (Interlocked.Decrement(ref References) == 0)
+                    ArrayPoolStream.Return(Buffer);
+            }
+
+            /// <summary>
+            /// Release the receiver's reference (only once)
+            /// </summary>
             public void Dispose()
             {
-                var b = Interlocked.Exchange(ref Buffer, null);
-                if (b != null)
-                    ArrayPoolStream.Return(b);
+                if (Interlocked.Exchange(ref Disposed, 1) == 0)
+                    Release();
             }
         }
 
         /// <summary>
         /// Get the data as memory, dispose the returned object when done to return the buffer to the pool.
-        /// The stream may still be read until the returned object is disposed, writes are safe (the buffer is copied).
+        /// The stream can still be used (also after the returned object is disposed), writes are safe (the buffer is copied).
         /// </summary>
         /// <returns></returns>
         public IUnmanagedReadOnlyMemory<Byte> GetMemory()
@@ -456,10 +492,13 @@ namespace SysWeaver
                 //  Someone else already have the buffer, hand out a copy
                 var c = Rent(l);
                 new ReadOnlySpan<Byte>(d, 0, l).CopyTo(c.AsSpan());
-                return new S(c, l);
+                return new Lease(c, l, 1);
             }
+            //  Shared by the stream and the receiver
+            var lease = new Lease(d, l, 2);
+            CurrentLease = lease;
             State = BufferState.Lent;
-            return new S(d, l);
+            return lease;
         }
 
         public Byte[] ToArray()
@@ -487,6 +526,8 @@ namespace SysWeaver
             Data = null;
             if (State == BufferState.Owned)
                 Return(d);
+            else if (State == BufferState.Lent)
+                ReleaseLease();
             State = BufferState.Released;
         }
 

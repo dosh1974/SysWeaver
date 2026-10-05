@@ -30,19 +30,7 @@ namespace SysWeaver
         /// <param name="kind">New kind</param>
         /// <returns>New DateTime with the specific kind</returns>
         public static DateTime AsKind(this DateTime t, DateTimeKind kind)
-        {
-            if (kind == t.Kind)
-                return t;
-            var y = t.Year;
-            var m = t.Month;
-            var d = t.Day;
-            var hh = t.Hour;
-            var mm = t.Minute;
-            var ss = t.Second;
-            var ms = t.Millisecond;
-            var mq = t.Microsecond;
-            return new DateTime(y, m, d, hh, mm, ss, ms, mq, kind);
-        }
+            => DateTime.SpecifyKind(t, kind);
 
 
         /// <summary>
@@ -82,7 +70,7 @@ namespace SysWeaver
             var ss = t.Second;
             var ms = t.Millisecond;
             var mq = t.Microsecond;
-            return new DateTime(y, m, d, hh, mm, ss, ms, mq, kind);
+            return new DateTime(y, m, d, hh, mm, ss, ms, mq, kind).AddTicks(t.Ticks % TimeSpan.TicksPerMicrosecond);
         }
 
         /// <summary>
@@ -102,7 +90,7 @@ namespace SysWeaver
             var ss = t.Second;
             var ms = t.Millisecond;
             var mq = t.Microsecond;
-            return new DateTime(y, m, d, hh, mm, ss, ms, mq, kind);
+            return new DateTime(y, m, d, hh, mm, ss, ms, mq, kind).AddTicks(t.Ticks % TimeSpan.TicksPerMicrosecond);
         }
 
         /// <summary>

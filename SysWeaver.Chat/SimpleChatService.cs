@@ -217,7 +217,7 @@ namespace SysWeaver.Chat
                                 while (i > 0)
                                 {
                                     --i;
-                                    var msg = m[ml];
+                                    var msg = m[i];
                                     if (msg.IsFor(guid))
                                     {
                                         ret.Add(msg);
@@ -235,7 +235,7 @@ namespace SysWeaver.Chat
                             {
                                 while (i < ml)
                                 {
-                                    var msg = m[ml];
+                                    var msg = m[i];
                                     if (msg.IsFor(guid))
                                     {
                                         ret.Add(msg);

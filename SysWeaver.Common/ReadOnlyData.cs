@@ -12,7 +12,7 @@ namespace SysWeaver
         public static IReadOnlySet<T> Set<T>(IEqualityComparer<T> comparer, IEnumerable<T> data)
         {
             var t = comparer == null ? new HashSet<T>(data) : new HashSet<T>(data, comparer);
-            return t.Freeze(comparer);
+            return t.Freeze(t.Comparer);
         }
 
         public static IReadOnlySet<T> Set<T>(IEnumerable<T> data)
@@ -24,7 +24,7 @@ namespace SysWeaver
         public static IReadOnlySet<T> Set<T>(IEqualityComparer<T> comparer, params T[] data)
         {
             var t = comparer == null ? new HashSet<T>(data) : new HashSet<T>(data, comparer);
-            return t.Freeze(comparer);
+            return t.Freeze(t.Comparer);
         }
 
         public static IReadOnlySet<T> Set<T>(params T[] data)
@@ -37,7 +37,7 @@ namespace SysWeaver
         public static IReadOnlyDictionary<K, V> Dictionary<K, V>(IEqualityComparer<K> comparer, IEnumerable<KeyValuePair<K, V>> data)
         {
             var t = comparer == null ? new Dictionary<K, V>(data) : new Dictionary<K, V>(data, comparer);
-            return t.Freeze(comparer);
+            return t.Freeze(t.Comparer);
         }
 
         public static IReadOnlyDictionary<K, V> Dictionary<K, V>(IEnumerable<KeyValuePair<K, V>> data)
@@ -49,7 +49,7 @@ namespace SysWeaver
         public static IReadOnlyDictionary<K, V> Dictionary<K, V>(IEqualityComparer<K> comparer, params KeyValuePair<K, V>[] data)
         {
             var t = comparer == null ? new Dictionary<K, V>(data) : new Dictionary<K, V>(data, comparer);
-            return t.Freeze(comparer);
+            return t.Freeze(t.Comparer);
         }
 
         public static IReadOnlyDictionary<K, V> Dictionary<K, V>(params KeyValuePair<K, V>[] data)

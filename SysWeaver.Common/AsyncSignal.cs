@@ -16,7 +16,7 @@ namespace SysWeaver
         /// <summary>
         /// True if the async signal have been raised
         /// </summary>
-        public bool IsRaised { get; private set; }
+        public bool IsRaised => S.Task.IsCompleted;
 
         /// <summary>
         /// Get a task that wait's until the signal is raised
@@ -28,13 +28,7 @@ namespace SysWeaver
         /// Raise the signal (allow waiter's to continue)
         /// </summary>
         /// <returns></returns>
-        public bool Raise()
-        {
-            var s = S.TrySetResult();
-            if (s)
-                IsRaised = true;
-            return s;
-        }
+        public bool Raise() => S.TrySetResult();
 
     } 
 

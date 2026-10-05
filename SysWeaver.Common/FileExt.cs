@@ -119,7 +119,8 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Read byte content of a file, allowing shared read/write
+        /// Read byte content of a file.
+        /// The file is opened with shared read only (FileShare.Read), so this fails while another process has the file open for writing.
         /// </summary>
         /// <param name="filename">Name of the file to read</param>
         /// <returns>Empty on error</returns>
@@ -128,7 +129,8 @@ namespace SysWeaver
             => FileReadOnlyMemory.ReadAllBytesAsync(filename);
 
         /// <summary>
-        /// Read byte content of a file, allowing shared read/write
+        /// Read byte content of a file.
+        /// The file is opened with shared read only (FileShare.Read), so this fails while another process has the file open for writing.
         /// </summary>
         /// <param name="filename">Name of the file to read</param>
         /// <returns>Empty on error</returns>
@@ -307,7 +309,8 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Read byte content of a file, allowing shared read/write with retying
+        /// Read byte content of a file, with retrying.
+        /// The file is opened with shared read only (FileShare.Read), so a read fails (and is retried) while another process has the file open for writing.
         /// </summary>
         /// <param name="filename">Name of the file to read</param>
         /// <param name="retryCount">Number of times to retry the operation</param>
@@ -340,7 +343,8 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Read byte content of a file, allowing shared read/write with retying
+        /// Read byte content of a file, with retrying.
+        /// The file is opened with shared read only (FileShare.Read), so a read fails (and is retried) while another process has the file open for writing.
         /// </summary>
         /// <param name="filename">Name of the file to read</param>
         /// <param name="retryCount">Number of times to retry the operation</param>

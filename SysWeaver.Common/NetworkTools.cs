@@ -155,6 +155,10 @@ namespace SysWeaver
             {
                 return false;
             }
+            else if (IPAddress.IsLoopback(addr) || addr.Equals(IPAddress.Any) || addr.Equals(IPAddress.IPv6Any))
+            {   // Loopback (127/8, ::1) or unspecified (0.0.0.0, ::)
+                return false;
+            }
             else if (addr.AddressFamily == AddressFamily.InterNetworkV6)
             {
                 return !addr.IsIPv6LinkLocal && !addr.IsIPv6SiteLocal;
@@ -175,6 +179,10 @@ namespace SysWeaver
                 }
                 else if (b0 == 192 && bytes[1] == 168)
                 {   // Class C network
+                    return false;
+                }
+                else if ((b0 == 169 && bytes[1] == 254) || b0 == 0)
+                {   // Link local or "this" network
                     return false;
                 }
                 else
