@@ -118,21 +118,34 @@ namespace SysWeaver
                 return null;
             if (comparer == null)
                 throw new Exception("Must specify a comparer!");
+            // Already frozen with the same comparer
+            if ((d is IHaveComparere<K> h) && (h.Comp == comparer))
+                return d;
             var l = d.Count;
             if (l <= 0)
                 return EmptyReadonlySet<K>.Get(comparer);
             if (l == 1)
             {
-                if ((d as SingleReadonlySet<K>)?.Comp == comparer)
-                    return d;
-                var f = d.First();
-                return new SingleReadonlySet<K>(f, comparer);
+                var f = FrozenCopy.First(d);
+                return KeyEquality<K>.IsDefault(comparer)
+                    ? new SingleReadonlySet<K, DefaultKeyEquality<K>>(f, comparer)
+                    : new SingleReadonlySet<K, ComparerKeyEquality<K>>(f, comparer);
             }
             // A few integer keys: faster than a FrozenSet (a linear search) and a HashSet
             if (SmallValueKeys<K>.CanUse(l, comparer))
-                return d as SmallValueKeyReadonlySet<K> ?? new SmallValueKeyReadonlySet<K>(d);
+                return new SmallValueKeyReadonlySet<K>(d);
             if ((d as FrozenSet<K>)?.Comparer == comparer)
                 return d;
+            // More integer keys: an open addressing table, faster than a FrozenSet
+            if (ValueKeyTable<K>.CanUse(l, comparer))
+                return new ValueKeyTableReadonlySet<K>(d);
+            // String keys (ordinal): a lookup on a fingerprint of the keys (a few chars where the keys differ), faster than a FrozenSet
+            if (OrdinalStringKeys.IsOrdinal(comparer))
+            {
+                var s = OrdinalStringKeys.TryCreateSet((IReadOnlySet<string>)(object)d, (IEqualityComparer<string>)(object)comparer);
+                if (s != null)
+                    return (IReadOnlySet<K>)(object)s;
+            }
             return d.ToFrozenSet(comparer);
         }
 
@@ -243,13 +256,12 @@ namespace SysWeaver
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
-    sealed class SingleReadonlySet<K> : IReadOnlySet<K>, IHaveComparere<K>
+    sealed class SingleReadonlySet<K, TEq> : IReadOnlySet<K>, IHaveComparere<K> where TEq : struct, IKeyEquality<K>
     {
         public SingleReadonlySet(K key, IEqualityComparer<K> comp)
         {
             Key = key;
             Comp = comp;
-            IsDefault = typeof(K).IsValueType && (comp == EqualityComparer<K>.Default);
         }
 
         readonly K Key;
@@ -259,18 +271,13 @@ namespace SysWeaver
         /// </summary>
         K[] Ke;
 
-        /// <summary>
-        /// True if the key is a value type and the comparer is the default comparer (devirtualized)
-        /// </summary>
-        readonly bool IsDefault;
-
         public IEqualityComparer<K> Comp { get; init; }
 
         public int Count => 1;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool IsKey(K key)
-            => IsDefault ? EqualityComparer<K>.Default.Equals(key, Key) : Comp.Equals(key, Key);
+            => TEq.Equals(Comp, key, Key);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Contains(K key)

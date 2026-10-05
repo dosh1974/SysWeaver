@@ -511,6 +511,33 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
+        /// Same result as req.GetDisplayUrl() but with a single allocation (GetDisplayUrl uses a StringBuilder)
+        /// </summary>
+        static String GetDisplayUrl(HttpRequest req)
+        {
+            var scheme = req.Scheme ?? String.Empty;
+            var host = req.Host.Value ?? String.Empty;
+            var pathBase = req.PathBase.Value ?? String.Empty;
+            var path = req.Path.Value ?? String.Empty;
+            var query = req.QueryString.Value ?? String.Empty;
+            var len = scheme.Length + 3 + host.Length + pathBase.Length + path.Length + query.Length;
+            return String.Create(len, (scheme, host, pathBase, path, query), static (span, s) =>
+            {
+                s.scheme.CopyTo(span);
+                var p = s.scheme.Length;
+                "://".CopyTo(span.Slice(p));
+                p += 3;
+                s.host.CopyTo(span.Slice(p));
+                p += s.host.Length;
+                s.pathBase.CopyTo(span.Slice(p));
+                p += s.pathBase.Length;
+                s.path.CopyTo(span.Slice(p));
+                p += s.path.Length;
+                s.query.CopyTo(span.Slice(p));
+            });
+        }
+
+        /// <summary>
         /// Handles a single incoming request
         /// </summary>
         /// <param name="c"></param>
@@ -528,7 +555,7 @@ namespace SysWeaver.Net
                     await HandlePause(req, res).ConfigureAwait(false);
                     return;
                 }
-                var rawUrl = req.GetDisplayUrl();
+                var rawUrl = GetDisplayUrl(req);
                 var url = rawUrl;
                 var host = GetHost(out var prefix, out var queryStart, out var didIndex, ref url);
                 if (prefix == null)

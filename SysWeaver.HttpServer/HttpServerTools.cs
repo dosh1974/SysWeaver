@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Data.SqlTypes;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -307,18 +308,33 @@ namespace SysWeaver.Net
             return d.Freeze();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        /// <summary>
+        /// Make a Set-Cookie value: "name=value;Max-Age=maxAge;Path=path".
+        /// Built on the stack, the only allocation is the returned string.
+        /// </summary>
+        [SkipLocalsInit]
         public static String MakeCookie(String name, String value, long maxAge, String path)
         {
-            return String.Concat(
-                name,
-                '=',
-                value,
-                ";Max-Age=",
-                maxAge,
-                ";Path=",
-                path);
+            var h = new DefaultInterpolatedStringHandler(16, 4, CultureInfo.InvariantCulture, stackalloc Char[256]);
+            h.AppendFormatted(name);
+            h.AppendLiteral("=");
+            h.AppendFormatted(value);
+            h.AppendLiteral(";Max-Age=");
+            h.AppendFormatted(maxAge);
+            h.AppendLiteral(";Path=");
+            h.AppendFormatted(path);
+            return h.ToStringAndClear();
         }
+
+        /// <summary>
+        /// Get the value of a cookie directly from a cookie header string, without parsing or allocating anything but the returned value.
+        /// Same result as ParseCookieString(cookieHeader).TryGetValue(name, out var value).
+        /// </summary>
+        /// <param name="cookieHeader">The cookie header, may be null</param>
+        /// <param name="name">The name of the cookie</param>
+        /// <returns>The value of the cookie (the last value if the cookie is present multiple times) or null if the cookie wasn't found</returns>
+        public static String GetCookie(String cookieHeader, String name)
+            => CookieStringDictionary.TryGetValue(cookieHeader, name, out var value) ? value : null;
 
 
         /*

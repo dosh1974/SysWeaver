@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -787,62 +788,133 @@ namespace SysWeaver.Net
 
 
 
-        async Task<IHttpRequestHandler> GetHandler(HttpServerRequest data, IHttpServerModule ignoreThis = null)
+        /// <summary>
+        /// Find the handler for a request.
+        /// Runs synchronously (no allocations) until a module returns an incomplete task, then the rest of the search continues in GetHandlerAsync
+        /// </summary>
+        ValueTask<IHttpRequestHandler> GetHandler(HttpServerRequest data, IHttpServerModule ignoreThis = null)
         {
-            var pm = PerfMon;
-            using var _ = pm.Track(nameof(GetHandler));
-            var prefixes = PrefixMods;
-            if (prefixes != null)
+            var tracker = PerfMon.Track(nameof(GetHandler));
+            try
             {
-                var local = data.LocalUrl;
-/*                var t = await prefixes.EnumPrefixesOf(local, CheckModuleAsync, data, ignoreThis).ConfigureAwait(false);
-                if (t != null)
-                    return t;
-*/
-                var prefixModules = prefixes.PrefixesOf(local);
+                var prefixes = PrefixMods;
+                if (prefixes != null)
+                {
+                    var prefixModules = prefixes.PrefixesOf(data.LocalUrl);
+                    var prefixModuleLen = prefixModules.Count;
+                    for (int pmi = 0; pmi < prefixModuleLen; ++pmi)
+                    {
+                        var modules = prefixModules[pmi];
+                        var moduleLen = modules.Count;
+                        for (int mi = 0; mi < moduleLen; ++mi)
+                        {
+                            var module = modules[mi];
+                            if (module == ignoreThis)
+                                continue;
+                            IHttpRequestHandler t;
+                            var a = module.AsyncHandler;
+                            if (a != null)
+                            {
+                                var task = a(data);
+                                if (!task.IsCompletedSuccessfully)
+                                    return GetHandlerAsync(task, data, ignoreThis, prefixModules, pmi, null, mi, tracker);
+                                t = task.Result;
+                            }
+                            else
+                            {
+                                t = module.Handler(data);
+                            }
+                            if (t != null)
+                            {
+                                tracker.Dispose();
+                                return new ValueTask<IHttpRequestHandler>(t);
+                            }
+                        }
+                    }
+                }
+                var orderedMods = OrderedMods;
+                var oml = orderedMods.Length;
+                for (int mi = 0; mi < oml; ++mi)
+                {
+                    var module = orderedMods[mi];
+                    if (module == ignoreThis)
+                        continue;
+                    IHttpRequestHandler t;
+                    var a = module.AsyncHandler;
+                    if (a != null)
+                    {
+                        var task = a(data);
+                        if (!task.IsCompletedSuccessfully)
+                            return GetHandlerAsync(task, data, ignoreThis, null, 0, orderedMods, mi, tracker);
+                        t = task.Result;
+                    }
+                    else
+                    {
+                        t = module.Handler(data);
+                    }
+                    if (t != null)
+                    {
+                        tracker.Dispose();
+                        return new ValueTask<IHttpRequestHandler>(t);
+                    }
+                }
+            }
+            catch
+            {
+                tracker.Dispose();
+                throw;
+            }
+            tracker.Dispose();
+            return default;
+        }
+
+        /// <summary>
+        /// Continue a handler search after a module returned an incomplete task.
+        /// </summary>
+        /// <param name="pending">The incomplete task</param>
+        /// <param name="data">The request</param>
+        /// <param name="ignoreThis">Module to ignore</param>
+        /// <param name="prefixModules">The prefix modules being searched, null if the pending task is from the ordered modules</param>
+        /// <param name="pmi">The prefix module list index of the module that returned the pending task</param>
+        /// <param name="orderedMods">The ordered modules being searched, null if the pending task is from the prefix modules</param>
+        /// <param name="mi">The module index of the module that returned the pending task</param>
+        /// <param name="tracker">The perf tracker to dispose when done</param>
+        async ValueTask<IHttpRequestHandler> GetHandlerAsync(Task<IHttpRequestHandler> pending, HttpServerRequest data, IHttpServerModule ignoreThis, IReadOnlyList<IReadOnlyList<IHttpServerModule>> prefixModules, int pmi, IHttpServerModule[] orderedMods, int mi, PerfMesurement tracker)
+        {
+            using var _ = tracker;
+            var t = await pending.ConfigureAwait(false);
+            if (t != null)
+                return t;
+            ++mi;
+            if (prefixModules != null)
+            {
                 var prefixModuleLen = prefixModules.Count;
-                for (int pmi = 0; pmi < prefixModuleLen; ++ pmi)
+                for (; pmi < prefixModuleLen; ++pmi, mi = 0)
                 {
                     var modules = prefixModules[pmi];
                     var moduleLen = modules.Count;
-                    for (int mi = 0; mi < moduleLen; ++ mi) 
+                    for (; mi < moduleLen; ++mi)
                     {
                         var module = modules[mi];
                         if (module == ignoreThis)
                             continue;
-                        //using var __ = pm.Track(n + module.Name);
-                        IHttpRequestHandler t;
                         var a = module.AsyncHandler;
-                        if (a != null)
-                        {
-                            t = await a(data).ConfigureAwait(false);
-                        }
-                        else
-                        {
-                            t = module.Handler(data);
-                        }
+                        t = a != null ? await a(data).ConfigureAwait(false) : module.Handler(data);
                         if (t != null)
                             return t;
                     }
                 }
+                mi = 0;
             }
-            var orderedMods = OrderedMods;
+            orderedMods ??= OrderedMods;
             var oml = orderedMods.Length;
-            for (int mi = 0; mi < oml; ++ mi)
+            for (; mi < oml; ++mi)
             {
                 var module = orderedMods[mi];
                 if (module == ignoreThis)
                     continue;
-//                using var __ = pm.Track(n + module.Name);
-                IHttpRequestHandler t;
                 var a = module.AsyncHandler;
-                if (a != null)
-                {
-                    t = await a(data).ConfigureAwait(false);
-                }else
-                {
-                    t = module.Handler(data);
-                }
+                t = a != null ? await a(data).ConfigureAwait(false) : module.Handler(data);
                 if (t != null)
                     return t;
             }
@@ -1175,6 +1247,133 @@ namespace SysWeaver.Net
             return false;
 
         }
+
+        /// <summary>
+        /// Perf monitor names for handlers ("Handle." + handler name), cached so that a request doesn't allocate a new name
+        /// </summary>
+        readonly LowAllocConcurrentDictionary<String, String> HandlePerfNames = new(64, StringComparer.Ordinal);
+
+        /// <summary>
+        /// Start tracking a handler, nothing is computed if perf monitoring is disabled
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        PerfMesurement TrackHandle(String handlerName)
+        {
+            var pm = PerfMon;
+            if ((pm == null) || (!PerfMonitor.EnableAny) || (!pm.Enabled))
+                return default;
+            return pm.Track(GetHandlePerfName(handlerName ?? String.Empty));
+        }
+
+        String GetHandlePerfName(String handlerName)
+        {
+            var names = HandlePerfNames;
+            if (names.TryGetValue(handlerName, out var name))
+                return name;
+            name = String.Concat(nameof(Handle), ".", handlerName);
+            names.TryAdd(handlerName, name);
+            return name;
+        }
+
+        /// <summary>
+        /// Lower cased file extensions, keyed by the extension as found in the url (so that a request doesn't allocate a new extension string)
+        /// </summary>
+        static readonly LowAllocConcurrentDictionary<String, String> LowerExtCache = new(256, StringComparer.Ordinal);
+        static readonly LowAllocConcurrentDictionary<String, String>.AlternateLookup<ReadOnlySpan<Char>> LowerExtLookup = LowerExtCache.GetAlternateLookup<ReadOnlySpan<Char>>();
+
+        /// <summary>
+        /// The max number of cached extensions (a bound, since the urls are controlled by the clients), the cache is cleared when full
+        /// </summary>
+        const int MaxCachedExts = 1024;
+
+        /// <summary>
+        /// Longer extensions are never cached
+        /// </summary>
+        const int MaxCachedExtLength = 16;
+
+        /// <summary>
+        /// Get the lower cased extension of an url (same result as url.FastToLower(start))
+        /// </summary>
+        /// <param name="url">The url</param>
+        /// <param name="start">Index of the first char of the extension</param>
+        static String GetLowerExt(String url, int start)
+        {
+            var raw = url.AsSpan(start);
+            var l = raw.Length;
+            if (l == 0)
+                return String.Empty;
+            if (l > MaxCachedExtLength)
+                return url.FastToLower(start);
+            if (LowerExtLookup.TryGetValue(raw, out var ext))
+                return ext;
+            ext = url.FastToLower(start);
+            var cache = LowerExtCache;
+            if (cache.Count >= MaxCachedExts)
+                cache.Clear();
+            cache.TryAdd(raw.SequenceEqual(ext) ? ext : new String(raw), ext);
+            return ext;
+        }
+
+        /// <summary>
+        /// Build a cache key: key \n requestType \n accept \n method [\n lang] (a single allocation)
+        /// </summary>
+        [SkipLocalsInit]
+        static String MakeCacheKey(String key, String requestType, String accept, String method, String lang)
+        {
+            accept ??= String.Empty;
+            method ??= String.Empty;
+            var len = key.Length + requestType.Length + accept.Length + method.Length + 3;
+            if (lang != null)
+                len += lang.Length + 1;
+            return String.Create(len, (key, requestType, accept, method, lang), static (span, s) =>
+            {
+                s.key.CopyTo(span);
+                var p = s.key.Length;
+                span[p++] = '\n';
+                s.requestType.CopyTo(span.Slice(p));
+                p += s.requestType.Length;
+                span[p++] = '\n';
+                s.accept.CopyTo(span.Slice(p));
+                p += s.accept.Length;
+                span[p++] = '\n';
+                s.method.CopyTo(span.Slice(p));
+                var lang = s.lang;
+                if (lang == null)
+                    return;
+                p += s.method.Length;
+                span[p++] = '\n';
+                lang.CopyTo(span.Slice(p));
+            });
+        }
+
+        /// <summary>
+        /// Cache-Control header values, keyed by max age (the max ages are controlled by the handlers, so the set is small)
+        /// </summary>
+        static readonly LowAllocConcurrentDictionary<int, String> CacheControlValues = new(64);
+
+        /// <summary>
+        /// Max number of cached Cache-Control values, the cache is cleared when full
+        /// </summary>
+        const int MaxCachedCacheControlValues = 256;
+
+        /// <summary>
+        /// Get the Cache-Control header value for a client cache duration
+        /// </summary>
+        /// <param name="maxAge">Duration in seconds, zero or negative for no caching</param>
+        static String GetCacheControl(int maxAge)
+        {
+            if (maxAge <= 0)
+                return "no-cache";
+            var c = CacheControlValues;
+            if (c.TryGetValue(maxAge, out var v))
+                return v;
+            v = String.Concat("max-age=", maxAge.ToString(CultureInfo.InvariantCulture));
+            if (c.Count >= MaxCachedCacheControlValues)
+                c.Clear();
+            c.TryAdd(maxAge, v);
+            return v;
+        }
+
         public async Task Handle(HttpServerRequest data)
         {
             RequestStats.Add(data.ReqContentLength);
@@ -1268,7 +1467,7 @@ namespace SysWeaver.Net
                 if (auth != null)
                     if (await HandleAuth(auth, data, session, localUrl, url, isHead).ConfigureAwait(false))
                         return;
-                using var __ = PerfMon.Track(String.Concat(nameof(Handle), ".", t.Name));
+                using var __ = TrackHandle(t.Name);
                 var etag = t.GetEtag(out bool useAsync, data);
                 var ee = data.Etag;
                 if (ee != null)
@@ -1277,7 +1476,7 @@ namespace SysWeaver.Net
 
                 //  Get template and prevent caching for dynamic templates 
                 var extPos = localUrl.LastIndexOf('.');
-                var ext = extPos < 0 ? "" : localUrl.FastToLower(extPos + 1);
+                var ext = extPos < 0 ? "" : GetLowerExt(localUrl, extPos + 1);
 
                 //  Auto translation based on file extensions (todo: use mime instead?)
                 LanguageTemplate.ExtBuilders.TryGetValue(ext, out var langTemplateBuilder);
@@ -1349,22 +1548,12 @@ namespace SysWeaver.Net
                     cache = ((rcd < 0) || isDynamicTemplate) ? session.SaveCache : Cache;
                     if (rcd < 0)
                         rcd = -rcd;
-                    var key = (await t.GetCacheKey(data).ConfigureAwait(false)) ?? url;
+                    var keyTask = t.GetCacheKey(data);
+                    var key = (keyTask.IsCompletedSuccessfully ? keyTask.Result : await keyTask.ConfigureAwait(false)) ?? url;
                     if (key.Length > 0)
                     {
-                        key = String.Concat(key, '\n', data.GetType().Name);
                         Interlocked.Increment(ref CacheTotal);
-                        // Optimize cache key construction to reduce allocations
-                        var accept = data.AcceptEncoding;
-                        var method = data.Method;
-                        if (useLanguageCache && haveTranslator)
-                        {
-                            cacheKey = String.Concat(key, '\n', accept, '\n', method, '\n', lang);
-                        }
-                        else
-                        {
-                            cacheKey = String.Concat(key, '\n', accept, '\n', method);
-                        }
+                        cacheKey = MakeCacheKey(key, data.GetType().Name, data.AcceptEncoding, data.Method, (useLanguageCache && haveTranslator) ? lang : null);
                         if (cache.TryGetValue(cacheKey, out var ce))
                         {
                             if (nowT < ce.Expires)
@@ -1537,7 +1726,7 @@ namespace SysWeaver.Net
                     if (isDynamicTemplate)
                         if (ccd > 1)
                             ccd = 1;
-                    data.SetResHeader("Cache-Control", ccd > 0 ? ("max-age=" + ccd) : "no-cache"/*"must-revalidate"*/);
+                    data.SetResHeader("Cache-Control", GetCacheControl(ccd));
  
                     //  Determine compression
                     var acc = data.AcceptEncoding;
@@ -2205,12 +2394,6 @@ namespace SysWeaver.Net
         readonly long SessionCookieLifetime;
         readonly long SessionExtendLifetime;
 
-        static String GetSessionGuid()
-        {
-            using (var rng = SecureRng.Get())
-                return rng.GetGuid24();
-        }
-
 
         /// <summary>
         /// Total number of session that have been established since the service started
@@ -2350,7 +2533,6 @@ namespace SysWeaver.Net
                 return default;
             var cookieString = req.GetReqHeader("Cookie");
             var sessionTokenMemory = ExtractSessionCookie(cookieString);// req.GetReqCookie(sn, cookieString);
-            String sessionToken = null;
             if (!sessionTokenMemory.IsEmpty)
             {
                 if (Sessions.TryGetValue(sessionTokenMemory, out var session))
@@ -2358,48 +2540,62 @@ namespace SysWeaver.Net
                     session.Touch(DateTime.UtcNow.Ticks, req);
                     return ValueTask.FromResult(session);
                 }
-                sessionToken = sessionTokenMemory.ToString();
             }
-            return CreateSession(req, cookieString, sessionToken);
+            return CreateSession(req, cookieString);
 
         }
 
+        /// <summary>
+        /// Cached delegate for HttpSession.OnAuthLogout (a method group conversion allocates a new delegate every time)
+        /// </summary>
+        Action<HttpSession, String> RunOnLogoutAction;
 
-        async ValueTask<HttpSession> CreateSession(HttpServerRequest req, String cookieString, String sessionToken)
+        /// <summary>
+        /// Create a new session, may be called for every request by clients that doesn't store cookies, so keep it lean.
+        /// Doesn't allocate a task unless the accept language lookup is incomplete.
+        /// </summary>
+        [SkipLocalsInit]
+        async ValueTask<HttpSession> CreateSession(HttpServerRequest req, String cookieString)
         {
+            var langTask = GetAcceptLanguage(req.GetReqHeader("Accept-Language"));
+            var lang = langTask.IsCompletedSuccessfully ? langTask.Result : await langTask.ConfigureAwait(false);
             var ip = req.GetIpAddress();
             var dn = DeviceIdCookieName;
             String deviceId = req.GetReqCookie(dn, cookieString);
             var cookieOpt = CookieOptions;
-            if (deviceId == null)
-            {
-                Span<Byte> span = stackalloc Byte[16 + 8];
-                using (var rng = SecureRng.Get())
-                    rng.GetBytes(span[..16]);
-                BitConverter.TryWriteBytes(span[16..], DateTime.UtcNow.Ticks);
-                deviceId = Convert.ToBase64String(span);
-                req.UpdateCookie(HttpServerTools.MakeCookie(dn, deviceId, DateTime.MaxValue, cookieOpt));
-            }
             var ua = req.GetReqHeader("User-Agent") ?? "";
             var prot = req.ProtocolVersion;
             var extLife = SessionExtendLifetime;
             var rateLimiterParams = SessionLimits;
+            var onLogout = RunOnLogoutAction ??= RunOnLogout;
+            var prefix = req.Prefix;
             HttpSession session;
+            String sessionToken;
             var now = DateTime.UtcNow;
             var nowTicks = now.Ticks;
             var sessions = Sessions;
-            var langTask = GetAcceptLanguage(req.GetReqHeader("Accept-Language"));
-            var lang = langTask.IsCompleted ? langTask.GetAwaiter().GetResult() : await langTask.ConfigureAwait(false);
-            do
+            //  One rng for both the device id and session token
+            using (var rng = SecureRng.Get())
             {
-                sessionToken = GetSessionGuid();
-                session = new HttpSession(rateLimiterParams, sessionToken, nowTicks, extLife, ua, ip, prot, deviceId, req.Prefix)
+                if (deviceId == null)
                 {
-                    LanguageTimeStamp = now,
-                    Language = lang,
-                };
-                session.OnAuthLogout += RunOnLogout;
-            } while (!sessions.TryAdd(sessionToken.AsMemory(), session));
+                    Span<Byte> span = stackalloc Byte[16 + 8];
+                    rng.GetBytes(span[..16]);
+                    BitConverter.TryWriteBytes(span[16..], nowTicks);
+                    deviceId = Convert.ToBase64String(span);
+                    req.UpdateCookie(HttpServerTools.MakeCookie(dn, deviceId, DateTime.MaxValue, cookieOpt));
+                }
+                do
+                {
+                    sessionToken = rng.GetGuid24();
+                    session = new HttpSession(rateLimiterParams, sessionToken, nowTicks, extLife, ua, ip, prot, deviceId, prefix)
+                    {
+                        LanguageTimeStamp = now,
+                        Language = lang,
+                    };
+                    session.OnAuthLogout += onLogout;
+                } while (!sessions.TryAdd(sessionToken.AsMemory(), session));
+            }
             var exp = new DateTime(nowTicks + SessionCookieLifetime, DateTimeKind.Utc);
             req.UpdateCookie(HttpServerTools.MakeCookie(SessionCookieName, sessionToken, exp, cookieOpt));
             try

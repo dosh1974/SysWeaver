@@ -329,21 +329,32 @@ namespace SysWeaver
                 return null;
             if (comparer == null)
                 throw new Exception("Must specify a comparer!");
+            // Already frozen with the same comparer
+            if ((d is IHaveComparere<K> f) && (f.Comp == comparer))
+                return d;
             var l = d.Count;
             if (l <= 0)
                 return EmptyReadonlyDictionary<K, V>.Get(comparer);
             if (l == 1)
             {
-                if ((d as SingleReadonlyDictionary<K, V>)?.Comp == comparer)
-                    return d;
-                var f = d.First();
-                return new SingleReadonlyDictionary<K, V>(f.Key, f.Value, comparer);
+                var e = FrozenCopy.First(d);
+                return Single(e.Key, e.Value, comparer);
             }
             // A few integer keys: faster than a FrozenDictionary (a linear search) and a Dictionary
             if (SmallValueKeys<K>.CanUse(l, comparer))
-                return d as SmallValueKeyReadonlyDictionary<K, V> ?? new SmallValueKeyReadonlyDictionary<K, V>(d);
+                return new SmallValueKeyReadonlyDictionary<K, V>(d);
             if ((d as FrozenDictionary<K, V>)?.Comparer == comparer)
                 return d;
+            // More integer keys: an open addressing table, faster than a FrozenDictionary
+            if (ValueKeyTable<K>.CanUse(l, comparer))
+                return new ValueKeyTableReadonlyDictionary<K, V>(d);
+            // String keys (ordinal): a lookup on a fingerprint of the keys (a few chars where the keys differ), faster than a FrozenDictionary
+            if (OrdinalStringKeys.IsOrdinal(comparer))
+            {
+                var s = OrdinalStringKeys.TryCreateDictionary((IReadOnlyDictionary<string, V>)(object)d, (IEqualityComparer<string>)(object)comparer);
+                if (s != null)
+                    return (IReadOnlyDictionary<K, V>)(object)s;
+            }
             return d.ToFrozenDictionary(comparer);
         }
 
@@ -358,7 +369,12 @@ namespace SysWeaver
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IReadOnlyDictionary<K, V> Single<K, V>(K key, V value, IEqualityComparer<K> comp = null)
-            => new SingleReadonlyDictionary<K, V>(key, value, comp ?? EqualityComparer<K>.Default);
+        {
+            comp ??= EqualityComparer<K>.Default;
+            return KeyEquality<K>.IsDefault(comp)
+                ? new SingleReadonlyDictionary<K, V, DefaultKeyEquality<K>>(key, value, comp)
+                : new SingleReadonlyDictionary<K, V, ComparerKeyEquality<K>>(key, value, comp);
+        }
 
 
         /// <summary>
@@ -465,14 +481,49 @@ namespace SysWeaver
     }
 
 
-    sealed class SingleReadonlyDictionary<K, V> : IReadOnlyDictionary<K, V>, IHaveComparere<K>
+    /// <summary>
+    /// How the key of a single item container is compared (a struct, so that the code is specialized and the compare is devirtualized)
+    /// </summary>
+    interface IKeyEquality<K>
+    {
+        static abstract bool Equals(IEqualityComparer<K> comparer, K a, K b);
+    }
+
+    /// <summary>
+    /// The default comparer of a value type (devirtualized and inlined by the JIT)
+    /// </summary>
+    struct DefaultKeyEquality<K> : IKeyEquality<K>
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool Equals(IEqualityComparer<K> comparer, K a, K b) => EqualityComparer<K>.Default.Equals(a, b);
+    }
+
+    /// <summary>
+    /// Any comparer
+    /// </summary>
+    struct ComparerKeyEquality<K> : IKeyEquality<K>
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool Equals(IEqualityComparer<K> comparer, K a, K b) => comparer.Equals(a, b);
+    }
+
+    static class KeyEquality<K>
+    {
+        /// <summary>
+        /// True if the key is a value type and the comparer is the default comparer (use <see cref="DefaultKeyEquality{K}"/>)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsDefault(IEqualityComparer<K> comparer)
+            => typeof(K).IsValueType && ReferenceEquals(comparer, EqualityComparer<K>.Default);
+    }
+
+    sealed class SingleReadonlyDictionary<K, V, TEq> : IReadOnlyDictionary<K, V>, IHaveComparere<K> where TEq : struct, IKeyEquality<K>
     {
         public SingleReadonlyDictionary(K key, V value, IEqualityComparer<K> comp)
         {
             Key = key;
             Value = value;
             Comp = comp;
-            IsDefault = typeof(K).IsValueType && (comp == EqualityComparer<K>.Default);
         }
 
         readonly K Key;
@@ -483,16 +534,11 @@ namespace SysWeaver
         /// </summary>
         KeyValuePair<K, V>[] KVe;
 
-        /// <summary>
-        /// True if the key is a value type and the comparer is the default comparer (devirtualized)
-        /// </summary>
-        readonly bool IsDefault;
-
         public IEqualityComparer<K> Comp { get; init; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool IsKey(K key)
-            => IsDefault ? EqualityComparer<K>.Default.Equals(key, Key) : Comp.Equals(key, Key);
+            => TEq.Equals(Comp, key, Key);
 
         public V this[K key]
         {

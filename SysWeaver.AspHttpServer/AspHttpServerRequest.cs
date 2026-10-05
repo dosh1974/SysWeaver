@@ -30,8 +30,17 @@ namespace SysWeaver.Net
         public override IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllResHeaders => Res.Headers.Select(x => new KeyValuePair<String, IReadOnlyList<String>>(x.Key, x.Value.ToList()));
 
 
-        public override String IfNoneMatch => Req.Headers["If-None-Match"].FirstOrDefault()?.Trim();
-        public override string AcceptEncoding => Req.Headers["Accept-Encoding"];
+        public override String IfNoneMatch
+        {
+            get
+            {
+                // StringValues indexing (FirstOrDefault boxes the StringValues and allocates an enumerator)
+                var v = Req.Headers.IfNoneMatch;
+                return v.Count > 0 ? v[0]?.Trim() : null;
+            }
+        }
+
+        public override string AcceptEncoding => Req.Headers.AcceptEncoding;
 
         public override Stream InputStream => Req.Body;
         public override Stream OutputStream => Res.Body;
@@ -43,42 +52,30 @@ namespace SysWeaver.Net
 
         public override String GetResMime() => Res.ContentType;
 
-        public override void SetResMime(String mime)
-        {
-            Res.ContentType = mime;
-            Mime = mime;
-        }
+        public override void SetResMime(String mime) => Res.ContentType = mime;
 
-        String Mime;
-       
         public override String ProtocolVersion => Req.Protocol;
 
-        public override void SetResContentLength(long length)
-        {
-            Res.ContentLength = length;
-            Cl = length;
-        }
-
-        long Cl;
+        public override void SetResContentLength(long length) => Res.ContentLength = length;
 
         public override void SetResStatusCode(int statusCode) => Res.StatusCode = statusCode;
         public override int GetResStatusCode() => Res.StatusCode;
 
 
 
-        IReadOnlyDictionary<String, String> Cookies;
-
-        IReadOnlyDictionary<String, String> ReadCookies(String cookieString)
-        {
-            var t = HttpServerTools.ParseCookieString(cookieString ?? Req.Headers.Cookie.FirstOrDefault());
-            Cookies = t;
-            return t;
-        }
-
+        /// <summary>
+        /// The cookie header is scanned for every lookup (nothing is parsed or cached, only the value is allocated)
+        /// </summary>
         public override String GetReqCookie(String name, String cookieString = null)
         {
-            (Cookies ?? ReadCookies(cookieString)).TryGetValue(name, out var cookie);
-            return cookie;
+            if (cookieString == null)
+            {
+                var c = Req.Headers.Cookie;
+                if (c.Count <= 0)
+                    return null;
+                cookieString = c[0];
+            }
+            return HttpServerTools.GetCookie(cookieString, name);
         }
 
 
@@ -88,8 +85,6 @@ namespace SysWeaver.Net
         }
 
 
-
-        Dictionary<String, String> Head;
 
         public override void SetResBody(ReadOnlySpan<Byte> data)
         {
@@ -119,17 +114,7 @@ namespace SysWeaver.Net
         }
 
 
-        public override void SetResHeader(String header, String value)
-        {
-            Res.Headers[header] = value;
-            var h = Head;
-            if (h == null)
-            {
-                h = new Dictionary<string, string>(StringComparer.Ordinal);
-                Head = h;
-            }
-            h[header] = value;  
-        }
+        public override void SetResHeader(String header, String value) => Res.Headers[header] = value;
 
         public override IPAddress GetIP()
         {
@@ -187,7 +172,7 @@ namespace SysWeaver.Net
 
         public override HttpServerRequest ReplaceUrl(string newUrl, HttpServerHostInfo host, String prefix, int queryStart, HttpServerBase server, String newMethod = null)
         {
-            var h = new AspHttpServerRequest(Context, newUrl, prefix, prefix, server as AspHttpServer, host, queryStart, false, newMethod);
+            var h = new AspHttpServerRequest(Context, newUrl, newUrl, prefix, server as AspHttpServer, host, queryStart, false, newMethod);
             h.Init(Session);
             return h;
         }

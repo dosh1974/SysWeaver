@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -42,29 +43,44 @@ namespace SysWeaver
             => Supported && (count >= 2) && (count <= MaxCount) && ReferenceEquals(comparer, EqualityComparer<K>.Default);
 
         /// <summary>
-        /// Create the padded key array
+        /// Pad the keys: the unused slots are set to the first key
         /// </summary>
-        /// <param name="keys">The keys (2 to 8, unique)</param>
-        /// <returns>An array of 8 keys, the unused slots are set to the first key</returns>
-        public static K[] Pad(K[] keys)
+        /// <param name="padded">The 8 slots, the first count slots contains the keys</param>
+        /// <param name="count">The number of keys (2 to 8, unique)</param>
+        public static void Pad(Span<K> padded, int count)
         {
-            var p = new K[MaxCount];
-            keys.CopyTo(p, 0);
-            for (int i = keys.Length; i < MaxCount; ++i)
-                p[i] = keys[0];
-            return p;
+            var first = padded[0];
+            for (int i = count; i < MaxCount; ++i)
+                padded[i] = first;
         }
 
         /// <summary>
         /// Find a key
         /// </summary>
-        /// <param name="padded">The padded keys</param>
+        /// <param name="k">The first of the 8 padded keys</param>
         /// <param name="key">The key to find</param>
         /// <returns>The index of the key (always less than the number of keys, since the padding is the first key), -1 if not found</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int IndexOf(K[] padded, K key)
+        public static int IndexOf(ref K k, K key)
         {
-            ref var k = ref MemoryMarshal.GetArrayDataReference(padded);
+            if (Vector256.IsHardwareAccelerated)
+            {
+                // 8 keys of 4 bytes in one compare, 8 keys of 8 bytes in two compares
+                uint m;
+                if (Unsafe.SizeOf<K>() == 4)
+                {
+                    ref var p = ref Unsafe.As<K, uint>(ref k);
+                    m = Vector256.Equals(Vector256.LoadUnsafe(ref p), Vector256.Create(Unsafe.As<K, uint>(ref key))).ExtractMostSignificantBits();
+                }
+                else
+                {
+                    ref var p = ref Unsafe.As<K, ulong>(ref k);
+                    var x = Vector256.Create(Unsafe.As<K, ulong>(ref key));
+                    m = Vector256.Equals(Vector256.LoadUnsafe(ref p), x).ExtractMostSignificantBits()
+                        | (Vector256.Equals(Vector256.LoadUnsafe(ref p, 4), x).ExtractMostSignificantBits() << 4);
+                }
+                return m == 0 ? -1 : BitOperations.TrailingZeroCount(m);
+            }
             if (Vector128.IsHardwareAccelerated)
             {
                 uint m;
@@ -94,6 +110,75 @@ namespace SysWeaver
     }
 
     /// <summary>
+    /// 8 items stored in the containing object or on the stack (no array), used for the keys and values of the small containers (one allocation)
+    /// </summary>
+    [InlineArray(SmallValueKeys<int>.MaxCount)]
+    struct Inline8<T>
+    {
+        T First;
+    }
+
+    /// <summary>
+    /// Copies the items of the containers that are frozen (a Dictionary / HashSet is enumerated without boxing the enumerator)
+    /// </summary>
+    static class FrozenCopy
+    {
+        public static void To<K, V>(IReadOnlyDictionary<K, V> d, Span<K> keys, Span<V> values)
+        {
+            int i = 0;
+            if (d is Dictionary<K, V> dd)
+            {
+                foreach (var x in dd)
+                {
+                    keys[i] = x.Key;
+                    values[i] = x.Value;
+                    ++i;
+                }
+                return;
+            }
+            foreach (var x in d)
+            {
+                keys[i] = x.Key;
+                values[i] = x.Value;
+                ++i;
+            }
+        }
+
+        public static void To<K>(IReadOnlySet<K> s, Span<K> keys)
+        {
+            int i = 0;
+            if (s is HashSet<K> hs)
+            {
+                foreach (var x in hs)
+                    keys[i++] = x;
+                return;
+            }
+            foreach (var x in s)
+                keys[i++] = x;
+        }
+
+        public static KeyValuePair<K, V> First<K, V>(IReadOnlyDictionary<K, V> d)
+        {
+            if (d is Dictionary<K, V> dd)
+            {
+                foreach (var x in dd)
+                    return x;
+            }
+            return d.First();
+        }
+
+        public static K First<K>(IReadOnlySet<K> s)
+        {
+            if (s is HashSet<K> hs)
+            {
+                foreach (var x in hs)
+                    return x;
+            }
+            return s.First();
+        }
+    }
+
+    /// <summary>
     /// A frozen dictionary with a few (2 to 8) keys of a 4 or 8 byte integer (or enum) type, using the default comparer (see <see cref="SmallValueKeys{K}"/>)
     /// </summary>
     sealed class SmallValueKeyReadonlyDictionary<K, V> : IReadOnlyDictionary<K, V>, IHaveComparere<K>
@@ -101,27 +186,20 @@ namespace SysWeaver
         public SmallValueKeyReadonlyDictionary(IReadOnlyDictionary<K, V> d)
         {
             var l = d.Count;
-            var keys = new K[l];
-            var values = new V[l];
-            var kv = new KeyValuePair<K, V>[l];
-            int i = 0;
-            foreach (var x in d)
-            {
-                keys[i] = x.Key;
-                values[i] = x.Value;
-                kv[i] = x;
-                ++i;
-            }
-            Padded = SmallValueKeys<K>.Pad(keys);
-            KeyArray = keys;
-            ValueArray = values;
-            Items = kv;
+            FrozenCopy.To(d, Padded, ValueSlots);
+            SmallValueKeys<K>.Pad(Padded, l);
+            Count = l;
         }
 
-        readonly K[] Padded;
-        readonly K[] KeyArray;
-        readonly V[] ValueArray;
-        readonly KeyValuePair<K, V>[] Items;
+        /// <summary>
+        /// The keys (the first Count slots) and the padding
+        /// </summary>
+        Inline8<K> Padded;
+
+        /// <summary>
+        /// The values (the first Count slots)
+        /// </summary>
+        Inline8<V> ValueSlots;
 
         public IEqualityComparer<K> Comp => EqualityComparer<K>.Default;
 
@@ -129,37 +207,56 @@ namespace SysWeaver
         {
             get
             {
-                var i = SmallValueKeys<K>.IndexOf(Padded, key);
+                var i = SmallValueKeys<K>.IndexOf(ref Padded[0], key);
                 if (i < 0)
                     throw new KeyNotFoundException();
-                return ValueArray[i];
+                return Unsafe.Add(ref ValueSlots[0], i);
             }
         }
 
-        public IEnumerable<K> Keys => KeyArray;
+        public IEnumerable<K> Keys
+        {
+            get
+            {
+                for (int i = 0; i < Count; ++i)
+                    yield return Padded[i];
+            }
+        }
 
-        public IEnumerable<V> Values => ValueArray;
+        public IEnumerable<V> Values
+        {
+            get
+            {
+                for (int i = 0; i < Count; ++i)
+                    yield return ValueSlots[i];
+            }
+        }
 
-        public int Count => KeyArray.Length;
+        public int Count { get; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool ContainsKey(K key)
-            => SmallValueKeys<K>.IndexOf(Padded, key) >= 0;
+            => SmallValueKeys<K>.IndexOf(ref Padded[0], key) >= 0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(K key, [MaybeNullWhen(false)] out V value)
         {
-            var i = SmallValueKeys<K>.IndexOf(Padded, key);
+            var i = SmallValueKeys<K>.IndexOf(ref Padded[0], key);
             if (i < 0)
             {
                 value = default;
                 return false;
             }
-            value = ValueArray[i];
+            value = Unsafe.Add(ref ValueSlots[0], i);
             return true;
         }
 
-        public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => ((IEnumerable<KeyValuePair<K, V>>)Items).GetEnumerator();
+        public IEnumerator<KeyValuePair<K, V>> GetEnumerator()
+        {
+            // Enumeration is rare (lookups are the common case), so the items are not stored
+            for (int i = 0; i < Count; ++i)
+                yield return new KeyValuePair<K, V>(Padded[i], ValueSlots[i]);
+        }
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
@@ -171,26 +268,30 @@ namespace SysWeaver
     {
         public SmallValueKeyReadonlySet(IReadOnlySet<K> s)
         {
-            var keys = new K[s.Count];
-            int i = 0;
-            foreach (var x in s)
-                keys[i++] = x;
-            Padded = SmallValueKeys<K>.Pad(keys);
-            KeyArray = keys;
+            var l = s.Count;
+            FrozenCopy.To(s, Padded);
+            SmallValueKeys<K>.Pad(Padded, l);
+            Count = l;
         }
 
-        readonly K[] Padded;
-        readonly K[] KeyArray;
+        /// <summary>
+        /// The keys (the first Count slots) and the padding
+        /// </summary>
+        Inline8<K> Padded;
 
         public IEqualityComparer<K> Comp => EqualityComparer<K>.Default;
 
-        public int Count => KeyArray.Length;
+        public int Count { get; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Contains(K item)
-            => SmallValueKeys<K>.IndexOf(Padded, item) >= 0;
+            => SmallValueKeys<K>.IndexOf(ref Padded[0], item) >= 0;
 
-        public IEnumerator<K> GetEnumerator() => ((IEnumerable<K>)KeyArray).GetEnumerator();
+        public IEnumerator<K> GetEnumerator()
+        {
+            for (int i = 0; i < Count; ++i)
+                yield return Padded[i];
+        }
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
@@ -212,7 +313,7 @@ namespace SysWeaver
             return false;
         }
 
-        HashSet<K> ToSet() => new HashSet<K>(KeyArray);
+        HashSet<K> ToSet() => new HashSet<K>(this);
 
         public bool IsProperSubsetOf(IEnumerable<K> other) => ToSet().IsProperSubsetOf(other);
 

@@ -71,7 +71,7 @@ namespace SysWeaver.Serialization
         };
 
         public ReadOnlyMemory<byte> Serialize<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
-            => ToString(obj).ToUTF8();
+            => ToString(obj, options).ToUTF8();
 
 
         static Func<Action<PooledJsonSerializer>, PooledJsonSerializer> DeserCreate = d =>

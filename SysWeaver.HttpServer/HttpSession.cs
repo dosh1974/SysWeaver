@@ -63,16 +63,36 @@ namespace SysWeaver.Net
                 if (value == InternalLanguageTimeStamp)
                     return;
                 InternalLanguageTimeStamp = value;
-                LanguageTimeStampText = HttpServerTools.ToEtag(value);
             }
         }
 
         DateTime InternalLanguageTimeStamp;
 
         /// <summary>
-        /// When the language was changed (time stamp) as text
+        /// When the language was changed (time stamp) as text, null if the time stamp was never set
         /// </summary>
-        public String LanguageTimeStampText { get; private set; }
+        public String LanguageTimeStampText
+        {
+            get
+            {
+                //  Computed on demand (every new session sets the time stamp, but the text is rarely used)
+                var ts = InternalLanguageTimeStamp;
+                var ticks = ts.Ticks;
+                if (ticks == 0)
+                    return null;
+                var c = LazyLanguageTimeStampText;
+                if ((c != null) && (c.Item1 == ticks))
+                    return c.Item2;
+                c = Tuple.Create(ticks, HttpServerTools.ToEtag(ts));
+                LazyLanguageTimeStampText = c;
+                return c.Item2;
+            }
+        }
+
+        /// <summary>
+        /// The time stamp ticks and text, the ticks are stored so that a text is never used for a different time stamp
+        /// </summary>
+        Tuple<long, String> LazyLanguageTimeStampText;
 
 
         public readonly String DeviceId;

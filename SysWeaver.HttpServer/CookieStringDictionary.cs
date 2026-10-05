@@ -76,9 +76,19 @@ namespace SysWeaver.Net
         }
 
         public bool TryGetValue(String key, [MaybeNullWhen(false)] out String value)
+            => TryGetValue(Header, key, out value);
+
+        /// <summary>
+        /// Get the value of a cookie directly from a cookie header (same result as Create(header).TryGetValue(key, out value), without allocating a dictionary)
+        /// </summary>
+        /// <param name="header">The cookie header, may be null</param>
+        /// <param name="key">The name of the cookie</param>
+        /// <param name="value">The value of the cookie (the last value if the cookie is present multiple times)</param>
+        /// <returns>True if the cookie was found</returns>
+        public static bool TryGetValue(String header, String key, [MaybeNullWhen(false)] out String value)
         {
             ArgumentNullException.ThrowIfNull(key);
-            var reader = new Reader(Header);
+            var reader = new Reader(header);
             ReadOnlySpan<Char> found = default;
             bool any = false;
             while (reader.Next(out var n, out var v))

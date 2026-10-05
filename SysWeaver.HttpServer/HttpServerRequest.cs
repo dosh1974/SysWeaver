@@ -351,25 +351,16 @@ namespace SysWeaver.Net
         /// <returns></returns>
         public String GetIpAddress()
         {
-
-            var fw = GetReqHeader("Forwarded");
-            if (fw != null)
-            {
-                // "Forwarded"      https://datatracker.ietf.org/doc/html/rfc7239
-
-            }
-            fw = GetReqHeader("X-Forwarded-For");
-            if (fw != null)
-            {
-                //"X-Forwarded-For"   https://en.wikipedia.org/wiki/X-Forwarded-For
-            }
+            // TODO: Use "Forwarded" (https://datatracker.ietf.org/doc/html/rfc7239) and "X-Forwarded-For" (https://en.wikipedia.org/wiki/X-Forwarded-For) from trusted proxies.
+            // The headers were read but not used, the lookups are removed until implemented.
             var ip = GetIP()?.ToString();
             if (ip == null)
                 return "?";
             bool isV6 = ip.StartsWith('[');
             if (isV6)
             {
-                ip = ip.Split(']')[0].Substring(1);
+                var e = ip.IndexOf(']');
+                ip = e < 0 ? ip.Substring(1) : ip.Substring(1, e - 1);
             }
             else
             {
