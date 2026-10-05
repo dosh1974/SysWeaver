@@ -52,7 +52,7 @@ namespace SysWeaver.Media
                 sampleCount /= TimeSpan.TicksPerSecond;
                 sampleCount += (countPerSec * 3);
                 buffer = new float[(int)sampleCount];
-                read = str.Read(buffer, 0, (int)sampleCount);
+                read = str.Read(buffer.AsSpan(0, (int)sampleCount));
             }
 
             var screen = filename + ".png";
