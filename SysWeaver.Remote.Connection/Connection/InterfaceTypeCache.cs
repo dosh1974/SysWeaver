@@ -125,7 +125,7 @@ namespace SysWeaver.Remote.Connection
             /// </summary>
             ReturnTask,
             /// <summary>
-            /// ValueTask'1 (NOTE: the selected base methods return Task'1, so this is not usable in practice)
+            /// ValueTask'1 (the selected base methods return Task'1, the generated method wraps it in a ValueTask'1)
             /// </summary>
             ReturnValueTask,
             /// <summary>
@@ -133,7 +133,7 @@ namespace SysWeaver.Remote.Connection
             /// </summary>
             Void,
             /// <summary>
-            /// ValueTask (NOTE: the selected base methods return Task, so this is not usable in practice)
+            /// ValueTask (the selected base methods return Task, the generated method wraps it in a ValueTask)
             /// </summary>
             ValueVoid
 
@@ -221,7 +221,7 @@ namespace SysWeaver.Remote.Connection
     /// without a <see cref="RemoteEndPointAttribute"/>, methods without parameters use GET and others POST.
     /// GET/DELETE format the path as a <see cref="UriParamsEncoder{T}"/> template using the parameter(s); POST/PUT send the parameter(s) as the payload.
     /// Methods with more than one parameter pass an object[] (or, with <see cref="ParamAsObjectAttribute"/>, a generated object with one field per parameter).
-    /// Only method level <see cref="RemoteCacheAttribute"/>, <see cref="RemoteSerializerAttribute"/> and <see cref="RemoteTimeoutAttribute"/> are read here.
+    /// <see cref="RemoteCacheAttribute"/> is read from the method, or else from the interface; only method level <see cref="RemoteSerializerAttribute"/> and <see cref="RemoteTimeoutAttribute"/> are read here.
     /// </remarks>
     static class InterfaceTypeCache<T> where T : class, IDisposable
     {
@@ -328,7 +328,7 @@ namespace SysWeaver.Remote.Connection
                 {
                     cacheDuration = RemoteCacheAttribute.UseConnection;
                     maxCachedItems = RemoteCacheAttribute.UseConnection;
-                    var cacheAttr = mi.GetCustomAttribute<RemoteCacheAttribute>();
+                    var cacheAttr = mi.GetCustomAttribute<RemoteCacheAttribute>() ?? t.GetCustomAttribute<RemoteCacheAttribute>(false);
                     if (cacheAttr != null)
                     {
                         cacheDuration = Math.Max(RemoteCacheAttribute.UseConnection, cacheAttr.Duration);
@@ -559,6 +559,12 @@ namespace SysWeaver.Remote.Connection
 
                         }
                         break;
+                }
+                //  The Value* helpers return a Task / Task'1, wrap it in the ValueTask / ValueTask'1 declared by the interface
+                if ((retType == RetTypes.ReturnValueTask) || (retType == RetTypes.ValueVoid))
+                {
+                    var taskType = isReturningVoid ? typeof(Task) : typeof(Task<>).MakeGenericType(returnType);
+                    il.Emit(OpCodes.Newobj, mi.ReturnType.GetConstructor([taskType]));
                 }
                 il.Emit(OpCodes.Ret);
             }

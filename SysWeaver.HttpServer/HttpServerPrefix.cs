@@ -25,11 +25,10 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// https on port 443 with any certificate provider, intended to be accessible only by this computer.
-        /// Note: the host name is misspelled as "locahost" so this prefix doesn't match "localhost" requests.
         /// </summary>
         public static HttpServerPrefix DefaultLocalHttps => new HttpServerPrefix
         {
-            Prefix = "https://locahost:443",
+            Prefix = "https://localhost:443",
             Certificate = "*",
         };
 
@@ -44,11 +43,10 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// http on port 80, intended to be accessible only by this computer.
-        /// Note: the host name is misspelled as "locahost" so this prefix doesn't match "localhost" requests.
         /// </summary>
         public static HttpServerPrefix DefaultLocalHttp => new HttpServerPrefix
         {
-            Prefix = "http://locahost:80",
+            Prefix = "http://localhost:80",
         };
 
         /// <summary>

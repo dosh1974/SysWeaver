@@ -10,7 +10,7 @@ namespace SysWeaver
     /// </summary>
     /// <remarks>
     /// A chunk is considered fully read when a read from it returns 0 bytes, so any kind of chunk stream (including network, pipe and decompression streams that may return short reads) can be used.
-    /// Seeking, writing, <see cref="Length"/> and <see cref="Flush"/> are not supported (throws <see cref="NotImplementedException"/>).
+    /// Seeking, writing and <see cref="Length"/> are not supported (throws <see cref="NotImplementedException"/>), <see cref="Flush"/> does nothing.
     /// The stream is not thread safe.
     /// Used by CompressedChunkedStream (SysWeaver.Storage) to read content defined chunks as one stream.
     /// </remarks>
@@ -45,19 +45,20 @@ namespace SysWeaver
         public override void Write(byte[] buffer, int offset, int count) => throw new NotImplementedException();
 
         /// <summary>
-        /// Not supported, always throws (note that this differs from most read only streams where Flush does nothing)
+        /// Does nothing (read only stream)
         /// </summary>
-        /// <exception cref="NotImplementedException">Always</exception>
-        public override void Flush() => throw new NotImplementedException();
+        public override void Flush()
+        {
+        }
 
         /// <summary>
         /// Dispose the current chunk stream, subsequent reads returns 0 (end of stream).
-        /// Note that the base implementation isn't called (so Dispose(bool) of a derived class isn't invoked by Close / Dispose).
         /// </summary>
         public override void Close()
         {
             Current?.Dispose();
             Current = null;
+            base.Close();
         }
 
   

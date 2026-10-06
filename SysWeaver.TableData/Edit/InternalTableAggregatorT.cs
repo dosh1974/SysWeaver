@@ -19,10 +19,6 @@ namespace SysWeaver.Data
         /// average if it also implements <see cref="IDivisionOperators{TSelf, TOther, TResult}"/>.
         /// </summary>
         /// <returns>The aggregation functions, unsupported operations are null</returns>
-        /// <remarks>
-        /// NOTE: Min/max are only created when <typeparamref name="T"/> implements <see cref="IComparer{T}"/> (should be <see cref="IComparable{T}"/>),
-        /// so in practice they are always null for custom types.
-        /// </remarks>
         public static InternalTableAggregatorType Create()
         {
             var type = typeof(T);
@@ -31,7 +27,7 @@ namespace SysWeaver.Data
             Func<IEnumerable<Object>, Object> sum = null;
             Func<IEnumerable<Object>, Object> avg = null;
             var vals = InternalTableAggregator.Inp;
-            if (type.IsAssignableTo(typeof(IComparer<T>)))
+            if (type.IsAssignableTo(typeof(IComparable<T>)))
             {
                 min = Expression.Lambda<Func<IEnumerable<Object>, Object>>(Expression.Call(InternalTableAggregator.Min.MakeGenericMethod(type), vals), vals).Compile();
                 max = Expression.Lambda<Func<IEnumerable<Object>, Object>>(Expression.Call(InternalTableAggregator.Max.MakeGenericMethod(type), vals), vals).Compile();

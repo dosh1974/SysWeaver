@@ -16,7 +16,7 @@ namespace SysWeaver.Remote.Connection
     /// <remarks>
     /// Supported member types: integer types, <see cref="float"/>, <see cref="double"/>, <see cref="decimal"/>, <see cref="TimeSpan"/>, <see cref="DateTime"/>, <see cref="Guid"/>,
     /// <see cref="bool"/>, <see cref="char"/> and <see cref="string"/>; members of other types (including enums and nullables) are silently skipped.
-    /// Only names, strings and chars are url escaped. Not thread safe.
+    /// Only names, strings, chars and <see cref="DateTime"/> values are url escaped. Not thread safe.
     /// </remarks>
     sealed class FormUrlWriter
     {
@@ -276,7 +276,8 @@ namespace SysWeaver.Remote.Connection
 
         static void WriteDateTime(FormUrlWriter w, DateTime value)
         {
-            var t = value.ToString("o", CultureInfo.InvariantCulture);
+            //  The "o" format may contain a '+' (time zone offset) that must be escaped
+            var t = Uri.EscapeDataString(value.ToString("o", CultureInfo.InvariantCulture));
             w.WriteAsciiString(t);
         }
 

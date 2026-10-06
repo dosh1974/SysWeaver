@@ -474,11 +474,17 @@ namespace SysWeaver.Data
         /// <param name="name">The name of the column.</param>
         /// <returns>The source table data.</returns>
         /// <exception cref="KeyNotFoundException">No column with that name exists in <typeparamref name="T"/>.</exception>
-        /// <remarks>The index is looked up among all columns of <typeparamref name="T"/>, while typed tables only contain the writable columns;
-        /// the wrong column is removed if any read only or computed column precedes the named one.</remarks>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        /// <remarks>The column is looked up by name in the table's <see cref="CommonTableData.Cols"/>, if it isn't present there (but exists in <typeparamref name="T"/>) nothing is removed.</remarks>
         public static TypedTableData<T> RemoveColumn<T>(this TypedTableData<T> data, String name)
-            => RemoveColumnIndex(data, TableDataType<T>.NameToColumnIndex[name]);
+        {
+            var cols = data.Cols;
+            var index = cols == null ? -1 : Array.FindIndex(cols, c => c.Name == name);
+            if (index >= 0)
+                return RemoveColumnIndex(data, index);
+            if (!TableDataType<T>.NameToColumnIndex.ContainsKey(name))
+                throw new KeyNotFoundException("No column named \"" + name + "\" exists in " + typeof(T).FullName);
+            return data;
+        }
 
         /// <summary>
         /// Hide a column in some table data (sets <see cref="TableDataColumnProps.Hide"/>).
@@ -569,8 +575,8 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Intended to set the description of a column using a function.
-        /// Note: the current implementation assigns the result to <see cref="TableDataColumn.Title"/>, not <see cref="TableDataBaseColumn.Desc"/>.
+        /// Set the description of a column using a function.
+        /// The column objects are modified in place, use <see cref="ModifyColumns{T}(T, out TableDataColumn[], int)"/> first if they are shared.
         /// </summary>
         /// <typeparam name="T">The table type.</typeparam>
         /// <param name="data">The table data to manipulate</param>
@@ -585,7 +591,7 @@ namespace SysWeaver.Data
             foreach (var x in c)
             {
                 if (x.Name == name)
-                    x.Title = getDesc(x);
+                    x.Desc = getDesc(x);
             }
             return data;
         }
@@ -1198,14 +1204,14 @@ namespace SysWeaver.Data
         /// <param name="data">The static data, enumerated once into a list (later changes to the source are not seen, but the row objects are shared).</param>
         /// <param name="columns">Optionally override the description, format, title and the hide/key/chart flags of the columns derived from the type.
         /// Must have the same number of columns, in the same order, as the type. Name and type are always taken from the type.</param>
-        /// <param name="title">Optional title, only used when <paramref name="columns"/> is given.</param>
+        /// <param name="title">Optional title.</param>
         /// <returns>A function that can be used to get the static data</returns>
         /// <exception cref="Exception">The number of <paramref name="columns"/> doesn't match the type.</exception>
         public static Func<TableDataRequest, TableData> GetStaticTableFn<T>(IEnumerable<T> data, TableDataColumn[] columns = null, String title = null)
         {
             var d = data.ToList();
             if (columns == null)
-                return r => Get(r, d);
+                return r => Get(r, d, title);
             var cols = TableDataType<T>.Cols;
             var cl = cols.Length;
             if (columns.Length != cl)
@@ -1290,7 +1296,8 @@ namespace SysWeaver.Data
         public static Func<TableDataRequest, TableData> GetStaticTableFn(TableDataColumn[] columns, IEnumerable<object[]> rows, String title = null)
         {
             var type = GetDynType(out var createFn, columns);
-            return createFn(rows.GetEnumerator(), columns, title);
+            using var it = rows.GetEnumerator();
+            return createFn(it, columns, title);
         }
 
         static readonly ParameterExpression InputRows = Expression.Parameter(typeof(IEnumerator<object[]>), "rows");
@@ -1560,7 +1567,7 @@ namespace SysWeaver.Data
                     var ff = f[i];
                     if (ff.Value == null)
                         continue;
-                    if (!cindex.TryGetValue(ff.ColName, out var ci))
+                    if (!cindex.TryGetValue(ff.ColName ?? "", out var ci))
                         continue;
                     var p = rowIndices[ci];
                     if (p >= filters.Count)

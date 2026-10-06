@@ -92,11 +92,11 @@ sequenceDiagram
 
 ### Template variables
 
-- Query string parameters are available as variables and take precedence over the other sources.
+- Only server defined variables are replaced; query string parameters are never used as template variables, and any other `${...}` text (e.g. JavaScript template literals) is kept as is.
 - Dynamic (per request): `Server.UTC`, `Request.Prefix`, `Request.IP`, `Session.Lang` and, with a logged in user, `Session.User`, `Session.UserName`, `Session.Email`, `Session.Domain`, `Session.NickName`.
 - Static: `Color.Background`, `Color.Color`, `Color.Acc1`, `Color.Acc2` and the `Key=Value` pairs of `HttpServerBaseParams.Variables`.
 - Groups: `Env.*` (environment variables) and `EnvInfo.*` (e.g. `${EnvInfo.AppName}`); services can add their own groups.
-- Values are inserted as is unless the template uses an encoding modifier.
+- Values are inserted as is unless the template uses an encoding modifier; always use the one matching the context (`#` html text, `@` attributes, `$` inside JavaScript / JSON strings, `£` JavaScript values).
 
 ### Session lifetime
 

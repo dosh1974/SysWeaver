@@ -213,6 +213,7 @@ namespace SysWeaver.Auth
                 Interlocked.Exchange(ref Auths, a.Freeze());
                 Interlocked.Exchange(ref BearerAuths, bearerAuths.Freeze());
                 Interlocked.Exchange(ref AuthGuids, guidMap.Freeze());
+                Interlocked.Increment(ref InternalChangeCounter);
                 foreach (var x in changed)
                     x.Value.Item2.RequestLogout("Password or tokens have changed!");
             }
@@ -377,9 +378,12 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Always 0, user changes are signalled by <see cref="Authorization.RequestLogout(string)"/> on the old authorizations instead.
+        /// Incremented every time the users (including API keys) are updated, so cached authorizations are re-validated.
+        /// Changed users are also signalled by <see cref="Authorization.RequestLogout(string)"/> on the old authorizations.
         /// </summary>
-        public override long ChangeCounter => 0;
+        public override long ChangeCounter => Interlocked.Read(ref InternalChangeCounter);
+
+        long InternalChangeCounter;
 
 
         /// <inheritdoc/>

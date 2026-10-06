@@ -27,17 +27,7 @@ namespace SysWeaver
         }
 
         ConCount Get(TKey key)
-        {
-            var c = Counts;
-            if (c.TryGetValue(key, out var cc))
-                return cc;
-            cc = new ConCount();
-            if (c.TryAdd(key, cc))
-                return cc;
-            if (!c.TryGetValue(key, out cc))
-                throw new Exception("Internal error!");
-            return cc;
-        }
+            => Counts.GetOrAdd(key, static _ => new ConCount());
 
 
         sealed class ConCount

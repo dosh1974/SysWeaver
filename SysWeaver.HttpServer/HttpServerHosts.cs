@@ -117,8 +117,11 @@ namespace SysWeaver.Net
                 {
                     var pr = Prefixes;
                     var start = hostName.FastIndexOf("://") + 3;
-                    var end = hostName.IndexOf(':', start);
-                    if (end < 0)
+                    // An IPv6 host is enclosed in brackets (ex: "[::1]"), the port starts after the ']'
+                    var end = ((start < hostName.Length) && (hostName[start] == '['))
+                        ? hostName.IndexOf(']', start) + 1
+                        : hostName.IndexOf(':', start);
+                    if (end <= 0)
                         end = hostName.Length;
                     String wild = hostName.Substring(start, end - start);
                     if (pr.Length == 1)

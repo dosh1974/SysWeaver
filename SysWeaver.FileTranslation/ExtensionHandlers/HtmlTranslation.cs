@@ -265,7 +265,7 @@ namespace SysWeaver.MicroService.ExtensionHandlers
             {
                 var html = doc.DocumentNode.SelectSingleNode("/html");
                 if (html != null)
-                    html.SetAttributeValue("lang", "${Session.Lang}");
+                    html.SetAttributeValue("lang", "${@Session.Lang}");
                 if (!allowBrowserTranslation)
                 {
                     var body = doc.DocumentNode.SelectSingleNode("//body");

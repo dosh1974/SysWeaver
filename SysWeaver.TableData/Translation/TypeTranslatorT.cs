@@ -114,8 +114,7 @@ namespace SysWeaver.Translation
     /// </summary>
     /// <typeparam name="T">The type to translate</typeparam>
     /// <remarks>
-    /// Supports classes / structs (public instance fields and properties), arrays, <see cref="IEnumerable{T}"/> and dictionaries (values only),
-    /// note that generic collections with translatable elements currently fail (see <c>BuildEnumerable</c>).
+    /// Supports classes / structs (public instance fields and properties), arrays, <see cref="IEnumerable{T}"/> and dictionaries (values only).
     /// Translations of struct members are written to a copy and are lost.
     /// All translations of an object are started concurrently and awaited using <see cref="Task.WhenAll(IEnumerable{Task})"/>.
     /// Invalid attribute usage (ex: unknown context member names) throws while generating the code, i.e. a <see cref="TypeInitializationException"/>.
@@ -292,21 +291,21 @@ namespace SysWeaver.Translation
                         var fi = tt.GetField(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
                         if (fi != null)
                         {
-                            read = Expression.Field(p, fi);
+                            read = Expression.Field(fi.IsStatic ? null : p, fi);
                         }
                         else
                         {
                             var pi = tt.GetProperty(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy);
                             if (pi != null)
                             {
-                                read = Expression.Property(p, pi);
+                                read = Expression.Property((pi.GetMethod?.IsStatic ?? false) ? null : p, pi);
                             }
                             else
                             {
                                 var mi = tt.GetMethod(name, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy, Array.Empty<Type>());
                                 if (TypeTranslator.IsValidContextMethod(mi))
                                 {
-                                    read = Expression.Call(p, mi);
+                                    read = Expression.Call(mi.IsStatic ? null : p, mi);
                                 }
                                 else
                                 {
@@ -571,12 +570,11 @@ namespace SysWeaver.Translation
         /// Builds code that enumerates a sequence and translates every element (or the value selected by <paramref name="getVal"/>),
         /// null if the element type have nothing to translate.
         /// </summary>
-        /// <remarks>NOTE: Currently throws for any element type that have something to translate (wrong Func arity, see bug report).</remarks>
         static Expression BuildEnumerable(Type t, Type enumerableType, Type et, ParameterExpression p, Func<Expression, Expression> getVal)
         {
             if (!TypeTranslator.TryGetTranslator(et, out var vt))
                 return null;
-            var elFunc = Expression.Variable(typeof(Func<,,,,,>).MakeGenericType(typeof(ITranslator), typeof(String), et, typeof(Task)), "fn");
+            var elFunc = Expression.Variable(typeof(Func<,,,,,>).MakeGenericType(typeof(ITranslator), typeof(String), et, typeof(TranslationEffort), typeof(TranslationCacheRetention), typeof(Task)), "fn");
             var taskList = TypeTranslator.VarTaskList;
             var enumeratorType = typeof(IEnumerator<>).MakeGenericType(enumerableType);
             var enumMethod = typeof(IEnumerable<>).MakeGenericType(enumerableType).GetMethod(nameof(IEnumerable<int>.GetEnumerator), BindingFlags.Public | BindingFlags.Instance, Array.Empty<Type>());

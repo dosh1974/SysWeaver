@@ -16,9 +16,16 @@ namespace SysWeaver
         /// <summary>
         /// Format as "CUR value", with space separated thousand groups and up to 7 decimals (invariant culture).
         /// </summary>
-        /// <remarks>Intended for display / debugging only, the literal spaces in the format pattern may produce extra padding before the value.</remarks>
+        /// <remarks>Intended for display / debugging only.</remarks>
         /// <returns>A display string.</returns>
-        public override string ToString() => String.Join(' ', Currency, Value.ToString("### ### ### ### ### ##0.#######", CultureInfo.InvariantCulture));
+        public override string ToString() => String.Join(' ', Currency, Value.ToString("#,0.#######", DisplayFormat));
+
+        static readonly NumberFormatInfo DisplayFormat = NumberFormatInfo.ReadOnly(new NumberFormatInfo
+        {
+            NumberGroupSeparator = " ",
+            NumberDecimalSeparator = ".",
+            NumberGroupSizes = [3],
+        });
 
         /// <summary>
         /// The value part of the amount

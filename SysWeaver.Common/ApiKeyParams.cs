@@ -52,8 +52,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="mustBeValid">If true, throw if the key file doesn't exist or if the inline key is empty</param>
         /// <returns>The API key (trimmed), or null / empty if no key is available and <paramref name="mustBeValid"/> is false</returns>
-        /// <exception cref="Exception">The key file doesn't exist (only if <paramref name="mustBeValid"/> is true), the key file contains no non-comment line (regardless of <paramref name="mustBeValid"/>),
-        /// or no file is specified, the inline key is empty and <paramref name="mustBeValid"/> is true.</exception>
+        /// <exception cref="Exception"><paramref name="mustBeValid"/> is true and the key file doesn't exist, the key file contains no non-comment line,
+        /// or no file is specified and the inline key is empty.</exception>
         public String GetApiKey(bool mustBeValid = true)
         {
             var fn = CredFile;
@@ -69,7 +69,11 @@ namespace SysWeaver
                 }
                 var t = FileExt.ReadNonCommentString(fn);
                 if (t == null)
-                    throw new Exception("Credentials file " + fn.ToFilename() + " must contain at least one line of text!");
+                {
+                    if (mustBeValid)
+                        throw new Exception("Credentials file " + fn.ToFilename() + " must contain at least one line of text!");
+                    return null;
+                }
                 return t;
             }
             else

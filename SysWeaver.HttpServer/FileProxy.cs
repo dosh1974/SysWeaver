@@ -119,18 +119,18 @@ namespace SysWeaver.Net
         /// <summary>
         /// Proxy a request.
         /// </summary>
-        /// <exception cref="UserNotAllowedException">Thrown if the session lacks the required tokens (for any request that reaches this module, even if it doesn't match the web root)</exception>
+        /// <exception cref="UserNotAllowedException">Thrown if the session lacks the required tokens</exception>
         async Task<IHttpRequestHandler> HandleAsync(HttpServerRequest context)
         {
             using var __ = PerfMon.Track(nameof(HandleAsync));
-            if (!(context.Session?.IsValid(Auth) ?? true))
-                throw new UserNotAllowedException();
             var fp = ForPrefix;
             if (fp != null)
             {
                 if (!context.Prefix.FastEquals(fp))
                     return null;
             }
+            if (!(context.Session?.IsValid(Auth) ?? true))
+                throw new UserNotAllowedException();
             var u = context.LocalUrl;
             var req = SourceRoot + u.Substring(WebRootLen);
             var p = context.QueryStringStart;

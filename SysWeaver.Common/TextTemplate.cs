@@ -63,6 +63,22 @@ namespace SysWeaver
         /// </param>
         /// <exception cref="NullReferenceException"><paramref name="text"/>, <paramref name="varBegin"/> or <paramref name="varEnd"/> is null.</exception>
         public TextTemplate(String text, String varBegin = "$(", String varEnd = ")", bool caseInSensitive = false, bool allowTransforms = true)
+            : this(text, varBegin, varEnd, null, caseInSensitive, allowTransforms)
+        {
+        }
+
+        /// <summary>
+        /// Creates a text template, only the variables accepted by <paramref name="isVariable"/> are replaced, other tokens are kept as is (static text).
+        /// Useful when the text can contain the variable syntax for other purposes, ex: javascript template literals "${x}".
+        /// </summary>
+        /// <param name="text">The original text (may not be null)</param>
+        /// <param name="varBegin">Variable begin with this</param>
+        /// <param name="varEnd">Variables end with this</param>
+        /// <param name="isVariable">Called with the variable name (without any transform prefix), return true if it's a variable, false to keep the token as static text. Null accepts all names</param>
+        /// <param name="caseInSensitive">If true, the variable is case insensitive</param>
+        /// <param name="allowTransforms">If true, the variable can be transformed, see <see cref="TextTemplate(string, string, string, bool, bool)"/></param>
+        /// <exception cref="NullReferenceException"><paramref name="text"/>, <paramref name="varBegin"/> or <paramref name="varEnd"/> is null.</exception>
+        public TextTemplate(String text, String varBegin, String varEnd, Func<String, bool> isVariable, bool caseInSensitive = false, bool allowTransforms = true)
         {
             var beginLen = varBegin.Length;
             var endLen = varEnd.Length;
@@ -76,24 +92,18 @@ namespace SysWeaver
             if (allowTransforms)
                 transformedVars = caseInSensitive ? new Dictionary<string, Tuple<string, Func<string, string>>>(StringComparer.InvariantCultureIgnoreCase) : new Dictionary<string, Tuple<string, Func<string, string>>>(StringComparer.Ordinal);
             var fmt = Transforms;
-            while (start < len)
+            int search = 0;
+            while (search < len)
             {
-                var f = text.IndexOf(varBegin, start, StringComparison.Ordinal);
+                var f = text.IndexOf(varBegin, search, StringComparison.Ordinal);
                 if (f < 0)
                     break;
                 var e = text.IndexOf(varEnd, f + beginLen, StringComparison.Ordinal);
                 if (e < 0)
                     break;
-                if (f > start)
-                {
-                    var flen = f - start;
-                    blocks.Add(new Block(start, flen));
-                    staticLen += flen;
-                }
-                f += beginLen;
-                var key = text.Substring(f, e - f);
-                start = e + endLen;
+                var key = text.Substring(f + beginLen, e - f - beginLen);
                 Func<String, String> format = null;
+                String name = key;
                 if (allowTransforms)
                 {
                     var kl = key.Length;
@@ -101,13 +111,13 @@ namespace SysWeaver
                     {
                         if (fmt.TryGetValue(key.Substring(0, 2), out format))
                         {
-                            transformedVars[key] = Tuple.Create(key.Substring(2), format);
+                            name = key.Substring(2);
                         }
                         else
                         {
                             if (fmt.TryGetValue(key.Substring(0, 1), out format))
                             {
-                                transformedVars[key] = Tuple.Create(key.Substring(1), format);
+                                name = key.Substring(1);
                             }
                         }
                     }else
@@ -116,11 +126,27 @@ namespace SysWeaver
                         {
                             if (fmt.TryGetValue(key.Substring(0, 1), out format))
                             {
-                                transformedVars[key] = Tuple.Create(key.Substring(1), format);
+                                name = key.Substring(1);
                             }
                         }
                     }
                 }
+                //  Not a variable, keep the token as static text (continue searching after the begin token)
+                if ((isVariable != null) && !isVariable(name))
+                {
+                    search = f + beginLen;
+                    continue;
+                }
+                if (format != null)
+                    transformedVars[key] = Tuple.Create(name, format);
+                if (f > start)
+                {
+                    var flen = f - start;
+                    blocks.Add(new Block(start, flen));
+                    staticLen += flen;
+                }
+                start = e + endLen;
+                search = start;
                 bool isTransformed = format != null;
                 blocks.Add(new Block(key, isTransformed));
                 vars.TryGetValue(key, out var v);

@@ -62,12 +62,12 @@ namespace SysWeaver.Net
         /// The external root uri, used for building absolute links outside of a request (ex: in emails).
         /// Initialized from <see cref="HttpServerBaseParams.ExternalRootUri"/> (or the local prefix by the implementation).
         /// </summary>
-        /// <remarks>Unless <see cref="ExternalRootUriFromRequest"/> is set, the value is replaced by the prefix of the first request that is handled
+        /// <remarks>If no value is set, the prefix of the first request that is handled is used
         /// (with a wildcard listener prefix that prefix contains the client supplied Host header).</remarks>
         public String ExternalRootUri { get; protected set; }
 
         /// <summary>
-        /// True once <see cref="ExternalRootUri"/> has been set from a request prefix (the first handled request sets it).
+        /// True once <see cref="ExternalRootUri"/> has been set from a request prefix (the first handled request sets it if no value was set).
         /// </summary>
         protected bool ExternalRootUriFromRequest;
 
@@ -1054,7 +1054,7 @@ namespace SysWeaver.Net
             var p = data.QueryParamsLowercase;
             if (!p.TryGetValue("u", out var url))
                 throw new Exception("No 'u' query parameter found, expecting a redirect url");
-            Msg.AddMessage("url=" + url, MessageLevels.Warning);
+            Msg?.AddMessage("url=" + url, MessageLevels.Warning);
             if (a == null)
             {
                 if (!p.TryGetValue("t", out var token))
@@ -1078,7 +1078,7 @@ namespace SysWeaver.Net
                         const String message = "Unauthorized - The token is invalid!";
                         if (!data.IsHead)
                             data.SetResText(await Translator.TranslateSafe(message, session.Language, "en", "An error message that is displayed when an authorization token is invalid").ConfigureAwait(false));
-                        audit.OnApiException(trackId, data, api, new Exception(message));
+                        audit?.OnApiException(trackId, data, api, new Exception(message));
                         return;
                     }
                     session.SetAuth(user);
@@ -1088,7 +1088,7 @@ namespace SysWeaver.Net
                 }
                 catch (Exception ex)
                 {
-                    audit.OnApiException(trackId, data, api, ex);
+                    audit?.OnApiException(trackId, data, api, ex);
                 }
             }
             data.SetResHeader("Location", url);
@@ -1780,7 +1780,9 @@ namespace SysWeaver.Net
                                     langTemplate = langTemplateBuilder(text, haveTranslator, false); // TODO: Build 2 templates ans use different depending on allowing browser translation
                                     text = langTemplate.Text;
                                 }
-                                cachedTemplate = new TextTemplate(text, "${", "}");
+                                //  Only server defined variables (and the generated translation variables) are replaced, other "${...}" tokens (ex: javascript template literals) are kept as is
+                                var langVarNames = langTemplate == null ? null : ReadOnlyData.Set(StringComparer.Ordinal, langTemplate.Vars.Select(x => x.VarName));
+                                cachedTemplate = new TextTemplate(text, "${", "}", name => IsTemplateVariable(name) || (langVarNames?.Contains(name) ?? false));
                                 if (cachedTemplate.HaveVars)
                                 {
                                     isDynamicTemplate = IsDynamic(cachedTemplate);
@@ -2004,8 +2006,10 @@ namespace SysWeaver.Net
                                 var take = skip;
                                 if (take > blen)
                                     take = blen;
-                                await s.ReadAsync(buf, 0, (int)take).ConfigureAwait(false);
-                                skip -= take;
+                                var n = await s.ReadAsync(buf, 0, (int)take).ConfigureAwait(false);
+                                if (n <= 0)
+                                    break;
+                                skip -= n;
                             }
                         }
                         if (limit >= 0)
@@ -2020,9 +2024,11 @@ namespace SysWeaver.Net
                                     var take = limit - read;
                                     if (take > bufferSize)
                                         take = bufferSize;
-                                    await s.ReadAsync(buffer, 0, (int)take).ConfigureAwait(false);
-                                    read += take;
-                                    await output.WriteAsync(buffer, 0, (int)take).ConfigureAwait(false);
+                                    var n = await s.ReadAsync(buffer, 0, (int)take).ConfigureAwait(false);
+                                    if (n <= 0)
+                                        break;
+                                    read += n;
+                                    await output.WriteAsync(buffer, 0, n).ConfigureAwait(false);
                                 }
                             }
                             finally
@@ -2133,7 +2139,7 @@ namespace SysWeaver.Net
 #endif//DEBUG
                     data.SetResStatusCode(500);
                     if (!isHead)
-                        data.SetResText(await translator.TranslateSafe(ex.Message + " [500]", session.Language, "en", "This is an exception message thrown by a web server", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false));
+                        data.SetResText(await translator.TranslateSafe(ex.Message + " [500]", session?.Language, "en", "This is an exception message thrown by a web server", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false));
                 }
             }
 

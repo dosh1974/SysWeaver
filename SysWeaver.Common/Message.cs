@@ -28,7 +28,7 @@ namespace SysWeaver
         /// <summary>
         /// Log format string for debugging (very verbose)
         /// </summary>
-        public const String Debug = "#{0,-7} {4:HH:mm::ss} {3,7}: {1}";
+        public const String Debug = "#{0,-7} {4:HH:mm:ss} {3,7}: {1}";
         /// <summary>
         /// Log format string for interactive user sessions (not too verbose)
         /// </summary>
@@ -36,7 +36,7 @@ namespace SysWeaver
         /// <summary>
         /// Log format string for long running, non-interactive sessions
         /// </summary>
-        public const String ServerConsole = "{4:HH:mm::ss} {3,7}: {1}";
+        public const String ServerConsole = "{4:HH:mm:ss} {3,7}: {1}";
 
         /// <summary>
         /// Returns a formatted log message string, using a composite format string (as used by <see cref="String.Format(string, object[])"/>).

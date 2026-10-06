@@ -5,15 +5,15 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, viewport-fit=cover" />
-    <link rel="icon" type="image/x-icon" href="${ToRoot}favicon.ico" sizes="any">
-    <link rel="icon" type="image/svg+xml" href="${ToRoot}icon.svg">
-    <link rel="apple-touch-icon" type="image/png" href="${ToRoot}apple-touch-icon.png">
-    <link rel="manifest" href="${ToRoot}app/manifest.json">
+    <link rel="icon" type="image/x-icon" href="${@ToRoot}favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="${@ToRoot}icon.svg">
+    <link rel="apple-touch-icon" type="image/png" href="${@ToRoot}apple-touch-icon.png">
+    <link rel="manifest" href="${@ToRoot}app/manifest.json">
     <script>
         async function main() {
-            const getVersionUrl = "${GetVersion}";
-            const src = "${Url}";
-            const autoReload = parseInt("${AutoReload}");
+            const getVersionUrl = "${$GetVersion}";
+            const src = "${$Url}";
+            const autoReload = parseInt("${$AutoReload}");
             const f = document.createElement("iframe");
             f.src = src;
             f.onload = e => {

@@ -26,12 +26,10 @@ namespace SysWeaver
         /// <summary>
         /// Apply the application information.
         /// </summary>
-        /// <param name="m">Optional message host used for logging.
-        /// Note: currently required (not null) if <paramref name="p"/> is not null, since the thread pool messages are logged without a null check.</param>
+        /// <param name="m">Optional message host used for logging (may be null).</param>
         /// <param name="p">The parameters to apply, if null a warning is logged and nothing is changed.
         /// Name, display name, description and language support <see cref="PathTemplate"/> variables.
         /// If the name changes and no display name is given, the display name is derived from the name (camel case split).</param>
-        /// <exception cref="NullReferenceException"><paramref name="m"/> is null and <paramref name="p"/> is not null.</exception>
         public AppInfo(IMessageHost m, AppInfoParams p = null)
         {
             if (p == null)
@@ -105,23 +103,23 @@ namespace SysWeaver
             var s = p.ThreadPoolWorkerThreads;
             if (s == 0)
             {
-                m.AddMessage(LogPrefix + "Using default minimum number of ThreadPool worker threads: " + workerThreads);
+                m?.AddMessage(LogPrefix + "Using default minimum number of ThreadPool worker threads: " + workerThreads);
             }
             else
             {
                 workerThreads = Math.Max(workerThreads, s > 0 ? s : (Environment.ProcessorCount * -s + 50) / 100);
-                m.AddMessage(LogPrefix + "Setting the minimum number of ThreadPool worker threads to " + workerThreads + " (default: " + DefWorkerThreads + ")");
+                m?.AddMessage(LogPrefix + "Setting the minimum number of ThreadPool worker threads to " + workerThreads + " (default: " + DefWorkerThreads + ")");
             }
 
             s = p.ThreadPoolIoThreads;
             if (s == 0)
             {
-                m.AddMessage(LogPrefix + "Using default minimum number of ThreadPool IO threads: " + ioThreads);
+                m?.AddMessage(LogPrefix + "Using default minimum number of ThreadPool IO threads: " + ioThreads);
             }
             else
             {
                 ioThreads = Math.Max(ioThreads, s > 0 ? s : (Environment.ProcessorCount * -s + 50) / 100);
-                m.AddMessage(LogPrefix + "Setting the minimum number of ThreadPool IO threads to " + ioThreads + " (default: " + DefIoThreads + ")");
+                m?.AddMessage(LogPrefix + "Setting the minimum number of ThreadPool IO threads to " + ioThreads + " (default: " + DefIoThreads + ")");
             }
             if (workerThreads != DefWorkerThreads || ioThreads != DefIoThreads)
                 ThreadPool.SetMinThreads(workerThreads, ioThreads);

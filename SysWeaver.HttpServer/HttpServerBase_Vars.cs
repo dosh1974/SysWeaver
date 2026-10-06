@@ -36,6 +36,27 @@ namespace SysWeaver.Net
         /// <summary>
         /// Check if a variable is dynamic (prefix "Session.", "Server.", "Request." or a dynamic variable group).
         /// </summary>
+        /// <summary>
+        /// The names of the per request (dynamic) variables, see <see cref="GetVars"/>
+        /// </summary>
+        static readonly IReadOnlySet<String> DynamicVarNames = ReadOnlyData.Set(StringComparer.Ordinal,
+            "Server.UTC", "Request.Prefix", "Request.IP", "Session.Lang", "Session.User", "Session.UserName", "Session.Email", "Session.Domain", "Session.NickName"
+        );
+
+        /// <summary>
+        /// Check if a name is a server defined template variable: a static variable, a per request variable (see <see cref="GetVars"/>) or a member of a variable group (ex: "EnvInfo.AppName").
+        /// Templates only replace these, any other "${...}" token is kept as is.
+        /// </summary>
+        /// <param name="name">The variable name (without any transform prefix)</param>
+        /// <returns>True if the name is a template variable</returns>
+        public bool IsTemplateVariable(String name)
+        {
+            if (TempVars.ContainsKey(name) || DynamicVarNames.Contains(name))
+                return true;
+            var k = name.IndexOf('.');
+            return (k > 0) && TempVarGroups.ContainsKey(name.Substring(0, k));
+        }
+
         bool IsDynamic(String s)
         {
             var k = s.IndexOf('.');
@@ -66,25 +87,21 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// Get the per request template variables.
-        /// All query string parameters are included (decoded) as variables with the parameter name as key.
-        /// If <paramref name="isDynamic"/> is true, "Server.UTC", "Request.Prefix", "Request.IP", "Session.Lang" and (if a user is logged in) "Session.User", "Session.UserName", "Session.Email", "Session.Domain" and "Session.NickName" are added (overriding query parameters with the same name).
+        /// If <paramref name="isDynamic"/> is true, "Server.UTC", "Request.Prefix", "Request.IP", "Session.Lang" and (if a user is logged in) "Session.User", "Session.UserName", "Session.Email", "Session.Domain" and "Session.NickName" are added.
+        /// Query string parameters are never used as template variables.
         /// </summary>
         /// <param name="isDynamic">True to include the dynamic variables</param>
         /// <param name="request">The request</param>
         /// <returns>A new dictionary</returns>
-        /// <remarks>These variables take precedence over static variables and variable groups when a template is applied, so a query parameter can override for example "EnvInfo.AppDisplayName".
+        /// <remarks>These variables take precedence over static variables and variable groups when a template is applied.
         /// Values are inserted as is unless the template uses an encoding modifier.
-        /// "Server.UTC" is formatted using a 12 hour clock without AM/PM.</remarks>
+        /// "Server.UTC" is formatted as "yyyy-MM-dd HH:mm:ss" (24 hour clock, invariant culture).</remarks>
         public static Dictionary<String, String> GetVars(bool isDynamic, HttpServerRequest request)
         {
             Dictionary<String, String> vars = new Dictionary<string, string>(StringComparer.Ordinal);
-            var q = request.QueryParameters;
-            foreach (String key in q)
-                if (key != null)
-                    vars[key] = q.Get(key);
             if (isDynamic)
             {
-                vars["Server.UTC"] = DateTime.UtcNow.ToString("yyyy-MM-dd hh:mm:ss");
+                vars["Server.UTC"] = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
                 vars["Request.Prefix"] = request.Prefix;
                 vars["Request.IP"] = request.GetIpAddress();
                 var s = request.Session;

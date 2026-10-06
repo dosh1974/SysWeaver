@@ -20,14 +20,17 @@ namespace SysWeaver
         /// - If a type is supplied and an embedded resource exist (raw or compressed using any of the supported compressors), the embedded data is read as UTF8.
         /// - The string is the input string.
         /// </param>
-        /// <param name="embeddedResourceType">A type in the assembly where the embedded resource exists.
-        /// Note: currently ignored, embedded resources are only searched for in this assembly (using the <see cref="ManagedTextTemplate"/> type).</param>
+        /// <param name="embeddedResourceType">A type in the assembly where the embedded resource exists (the namespace of the type is used as a prefix).
+        /// If null, embedded resources are searched for in this assembly (using the <see cref="ManagedTextTemplate"/> type).</param>
         /// <param name="vars">The variables that the template may use, if null, the EnvInfo.TextVarsCaseInsensitive keys surrounded by [], ex: [AppDisplayName]</param>
         public ManagedTextTemplate(String location, Type embeddedResourceType = null, IReadOnlySet<String> vars = null)
         {
             Location = location ?? "";
+            EmbeddedResourceType = embeddedResourceType;
             Vars = (vars ?? GetDefVarKeys()).Freeze();
         }
+
+        readonly Type EmbeddedResourceType;
 
         /// <summary>
         /// Get the current EnvInfo.TextVarsCaseInsensitive variables with the keys surrounded by [], ex: [AppDisplayName].
@@ -84,7 +87,7 @@ namespace SysWeaver
                 t = CachedTemplate;
                 if (t != null)
                     return t;
-                t = ManagedTools.GetTemplate(Location, Vars, GetType(), () => CachedTemplate = null);
+                t = ManagedTools.GetTemplate(Location, Vars, EmbeddedResourceType ?? GetType(), () => CachedTemplate = null);
                 CachedTemplate = t;
                 return t;
             }

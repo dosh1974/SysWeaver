@@ -328,9 +328,6 @@ namespace SysWeaver.Data
         /// <returns>A new table with the selected columns, an empty table (no columns or rows) if <paramref name="columnNames"/> is empty</returns>
         /// <exception cref="Exception">If the row counts differ or a table have no columns</exception>
         /// <exception cref="KeyNotFoundException">If a column name isn't found</exception>
-        /// <remarks>
-        /// NOTE: The '-' / '+' prefix is currently NOT stripped before the lookup, so prefixed names always throw <see cref="KeyNotFoundException"/> (see bug report).
-        /// </remarks>
         public static BaseTableData MergeColumns(this BaseTableData data, BaseTableData other, params String[] columnNames)
         {
             var rows1 = data.Rows;
@@ -354,14 +351,14 @@ namespace SysWeaver.Data
                 {
                     case '-':
                         {
-                            var colD = lookup1[name];
+                            var colD = lookup1[name.Substring(1)];
                             sourceIndices[i] = colD.Item2;
                             newCols[i] = colD.Item1;
                         }
                         break;
                     case '+':
                         {
-                            var colD = lookup2[name];
+                            var colD = lookup2[name.Substring(1)];
                             sourceIndices[i] = colD.Item2;
                             newCols[i] = colD.Item1;
                             usedOther[i] = true;

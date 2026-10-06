@@ -664,17 +664,14 @@ namespace SysWeaver.Serialization.SwJson
 
 
         /// <summary>
-        /// True if a member is serialized: public properties with a getter and a setter (of any accessibility) and public fields that aren't readonly
+        /// True if a member is serialized: public properties with a getter and a setter (of any accessibility, indexers are excluded) and public fields that aren't readonly
         /// </summary>
-        /// <remarks>
-        /// Indexers are not excluded (a read / write indexer makes the writer creation fail).
-        /// </remarks>
         static bool IsValidMember(MemberInfo m)
         {
             {
                 var p = m as PropertyInfo;
                 if (p != null)
-                    return p.CanRead && p.CanWrite;
+                    return p.CanRead && p.CanWrite && (p.GetIndexParameters().Length == 0);
             }
             {
                 var f = m as FieldInfo;
@@ -1784,7 +1781,7 @@ namespace SysWeaver.Serialization.SwJson
 
         /// <summary>
         /// Write a char as a json string (escaped if needed).
-        /// A surrogate char is encoded as is (3 bytes, not valid UTF8), unlike strings where lone surrogates are written as U+FFFD.
+        /// A surrogate char is written as a \uXXXX escape (it can't be encoded as valid UTF8 on its own).
         /// </summary>
         static void WriteChar(ref BufferWriter w, Char value)
         {
@@ -1807,7 +1804,7 @@ namespace SysWeaver.Serialization.SwJson
                     d = WriteEscape(d, x, e);
                 }
             }else {
-                d = WriteUtf8(d, x);
+                d = Char.IsSurrogate(value) ? WriteEscape(d, x, 1) : WriteUtf8(d, x);
             }
             *d = SepQuote;
             ++d;

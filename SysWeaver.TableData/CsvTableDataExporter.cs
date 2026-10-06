@@ -175,7 +175,7 @@ namespace SysWeaver.Data
                         if (didFirst)
                             sb.Append(sep);
                         didFirst = true;
-                        sb.Append(col.Title.Replace(sep, rep));
+                        sb.Append((col.Title ?? col.Name ?? "").Replace(sep, rep));
                     }
                 }
                 if (headers)

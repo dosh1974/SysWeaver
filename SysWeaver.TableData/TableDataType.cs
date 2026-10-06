@@ -566,7 +566,8 @@ namespace SysWeaver.Data
             var ww = x.GetCustomAttribute<TableDataWordWrapAttribute>()?.WordWrap ?? false;  
 
             colTypes.Add(mt);
-            members.Add(x, cols.Count);
+            //  The same member can be added multiple times when a type is expanded through multiple members (only the first one is used for translation)
+            members.TryAdd(x, cols.Count);
             cols.Add(new TableDataColumn
             {
                 Name = name,
@@ -1013,9 +1014,11 @@ namespace SysWeaver.Data
             var lookAhead = request.LookAheadCount;
             if (lookAhead < 0)
                 lookAhead = 0;
-            limit += lookAhead;
+            limit = limit > (long.MaxValue - lookAhead) ? long.MaxValue : (limit + lookAhead);
             if (limit > maxAllowedRows)
                 limit = maxAllowedRows;
+            if (limit > int.MaxValue)
+                limit = int.MaxValue;
             data = data.Take((int)limit);
             return data;
         }
@@ -1049,9 +1052,11 @@ namespace SysWeaver.Data
             var lookAhead = request.LookAheadCount;
             if (lookAhead < 0)
                 lookAhead = 0;
-            limit += lookAhead;
+            limit = limit > (long.MaxValue - lookAhead) ? long.MaxValue : (limit + lookAhead);
             if (limit > maxAllowedRows)
                 limit = maxAllowedRows;
+            if (limit > int.MaxValue)
+                limit = int.MaxValue;
             data = data.Take((int)limit);
             return data;
         }
@@ -1073,7 +1078,7 @@ namespace SysWeaver.Data
                 limit = long.MaxValue;
             List<TableDataRow> rows = (limit <= (1L << 16)) ? new((int)limit) : new();
             var e = Extract;
-            var it = data.GetEnumerator();
+            using var it = data.GetEnumerator();
             while ((limit > 0) && it.MoveNext())
             {
                 rows.Add(new TableDataRow
@@ -1110,7 +1115,7 @@ namespace SysWeaver.Data
             if (limit <= 0)
                 limit = long.MaxValue;
             List<T> rows = (limit <= (1L << 16)) ? new((int)limit) : new();
-            var it = data.GetEnumerator();
+            using var it = data.GetEnumerator();
             while ((limit > 0) && it.MoveNext())
             {
                 rows.Add(it.Current);

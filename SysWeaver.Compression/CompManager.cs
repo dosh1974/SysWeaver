@@ -37,6 +37,7 @@ namespace SysWeaver.Compression
                 if (!Unique.Add(type))
                     return false;
                 CompTypes.Add(type);
+                AllArray = CompTypes.ToArray();
                 var key = type.HttpCode;
                 var f = FromHttpCode;
                 if (!f.TryGetValue(key, out var val) || (val.Prio <= type.Prio))
@@ -89,8 +90,8 @@ namespace SysWeaver.Compression
         /// <summary>
         /// Get all added compression types in the order that they were added
         /// </summary>
-        /// <remarks>This is the live list, don't enumerate it while types may be added concurrently.</remarks>
-        public static IReadOnlyList<ICompType> All => CompTypes;
+        /// <remarks>A copy-on-write snapshot, safe to enumerate while types are added concurrently.</remarks>
+        public static IReadOnlyList<ICompType> All => AllArray;
 
         /// <summary>
         /// Get all supported HTTP codes
@@ -138,6 +139,7 @@ namespace SysWeaver.Compression
 
         static readonly HashSet<ICompType> Unique = new ();
         static readonly List<ICompType> CompTypes = new ();
+        static volatile ICompType[] AllArray = [];
         static readonly SemiFrozenDictionary<String, ICompType> FromHttpCode = new (StringComparer.Ordinal);
         static readonly SemiFrozenDictionary<String, ICompType> FromExts = new (StringComparer.Ordinal);
     }

@@ -30,10 +30,10 @@ namespace SysWeaver
         /// Test if an integer value is a power of two
         /// </summary>
         /// <param name="v">The value to test</param>
-        /// <returns>True if the value is a power of two, else false. Note that 0 also returns true</returns>
+        /// <returns>True if the value is a power of two, else false (0 returns false)</returns>
         public static bool IsPow2(this UInt64 v)
         {
-            return (v & (v - 1)) == 0;
+            return (v != 0) && ((v & (v - 1)) == 0);
         }
 
         /// <summary>
@@ -94,10 +94,10 @@ namespace SysWeaver
         /// Test if an integer value is a power of two
         /// </summary>
         /// <param name="v">The value to test</param>
-        /// <returns>True if the value is a power of two, else false. Note that 0 also returns true</returns>
+        /// <returns>True if the value is a power of two, else false (0 returns false)</returns>
         public static bool IsPow2(this UInt32 v)
         {
-            return (v & (v - 1)) == 0;
+            return (v != 0) && ((v & (v - 1)) == 0);
         }
 
         /// <summary>
@@ -156,11 +156,11 @@ namespace SysWeaver
         /// Test if an integer value is a power of two
         /// </summary>
         /// <param name="vv">The value to test</param>
-        /// <returns>True if the value is a power of two, else false. Note that 0 and Int64.MinValue (a single bit set) also returns true</returns>
+        /// <returns>True if the value is a power of two, else false (zero and negative values returns false)</returns>
         public static bool IsPow2(this Int64 vv)
         {
             var v = unchecked ((UInt64)vv);
-            return (v & (v - 1)) == 0;
+            return (vv > 0) && ((v & (v - 1)) == 0);
         }
 
         /// <summary>
@@ -224,11 +224,11 @@ namespace SysWeaver
         /// Test if an integer value is a power of two
         /// </summary>
         /// <param name="vv">The value to test</param>
-        /// <returns>True if the value is a power of two, else false. Note that 0 and Int32.MinValue (a single bit set) also returns true</returns>
+        /// <returns>True if the value is a power of two, else false (zero and negative values returns false)</returns>
         public static bool IsPow2(this Int32 vv)
         {
             var v = unchecked((UInt32)vv);
-            return (v & (v - 1)) == 0;
+            return (vv > 0) && ((v & (v - 1)) == 0);
         }
 
         /// <summary>

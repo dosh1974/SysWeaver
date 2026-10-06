@@ -61,7 +61,6 @@ namespace SysWeaver.Serialization
         /// <inheritdoc/>
         public ReadOnlyMemory<byte> Serialize<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
         {
-            var text = ToString(obj);
             var s = new XmlSerializer(typeof(T));
             using (var ms = new MemoryStream())
             {

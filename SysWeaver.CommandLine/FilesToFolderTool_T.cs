@@ -50,8 +50,7 @@ namespace SysWeaver
         public static int OnFiles<T>(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, Task<int>> doOnFile, Func<T, int> validateParams = null) where T : class, new() => FilesToFolderTool<T>.Instance.OnFiles(commandLineArgs, doOnFile, validateParams);
 
         /// <summary>
-        /// Intended to process some input file(s) in parallel, with an optional separate output folder.
-        /// NOTE: currently forwards to the sequential <see cref="OnFiles{T}(string[], Func{IMessageHost, T, string, string, string, Task{int}}, Func{T, int})"/> overload, so files are processed one at a time.
+        /// Process some input file(s) in parallel, with an optional separate output folder (see <see cref="FilesToFolderTool{T}.OnFilesParallel(string[], Func{IMessageHost, T, string, string, string, Task{int}}, Func{T, int}, int)"/>).
         /// </summary>
         /// <typeparam name="T">The type containing optional options</typeparam>
         /// <param name="commandLineArgs">The command line args (as passed to main)</param>
@@ -61,12 +60,12 @@ namespace SysWeaver
         /// A non-zero return value stops the processing and becomes the return value.
         /// </param>
         /// <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
-        /// <param name="threadCount">Maximum number of concurrent files (currently ignored)</param>
+        /// <param name="threadCount">Maximum number of concurrent files, if 0 or less it's computed from the number of CPU threads (see <see cref="FilesToFolderTool{T}.OnFilesParallel(string[], Func{IMessageHost, T, string, string, string, Task{int}}, Func{T, int}, int)"/>)</param>
         /// <returns>
         /// 0 if successful, 1 if help was requested, -1 if the command line was invalid, -2 if processing threw an exception,
         /// otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
         /// </returns>
-        public static int OnFilesParallel<T>(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, Task<int>> doOnFile, Func<T, int> validateParams = null, int threadCount = -1) where T : class, new() => FilesToFolderTool<T>.Instance.OnFiles(commandLineArgs, doOnFile, validateParams);
+        public static int OnFilesParallel<T>(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, Task<int>> doOnFile, Func<T, int> validateParams = null, int threadCount = -1) where T : class, new() => FilesToFolderTool<T>.Instance.OnFilesParallel(commandLineArgs, doOnFile, validateParams, threadCount);
 
 
         /// <summary>

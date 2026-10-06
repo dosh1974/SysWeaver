@@ -24,6 +24,7 @@ namespace SysWeaver.Serialization.ProtobufNet
         static readonly Dictionary<Type, HashSet<Type>> SubTypes = new Dictionary<Type, HashSet<Type>>();
         static readonly ConcurrentDictionary<Type, int> BuiltTypes = new ConcurrentDictionary<Type, int>();
         static readonly Type ObjectType = typeof(object);
+        static readonly Object BuildLock = new Object();
 
         /// <summary>
         /// Add <typeparamref name="T"/> (and all types it depends on) to the model, if not already done.
@@ -67,7 +68,8 @@ namespace SysWeaver.Serialization.ProtobufNet
                 return;
             }
 
-            lock (type)
+            //  One lock for all types, building a type mutates the shared SubTypes (and the base types in the model)
+            lock (BuildLock)
             {
                 if (model.CanSerialize(type))
                 {

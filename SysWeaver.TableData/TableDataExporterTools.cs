@@ -94,7 +94,11 @@ namespace SysWeaver.Data
         {
             if (data == null)
                 return "";
-            return ApplyTextFormat(data.ToString(), nextData, col);
+            var s = ApplyTextFormat(data.ToString(), nextData, col);
+            //  A leading (Char)1 is used by exporters to signal pre-formatted markup, so it may never come from a plain value
+            if ((s != null) && (s.Length > 0) && (s[0] == (Char)1))
+                s = s.TrimStart((Char)1);
+            return s;
         };
 
         static readonly Formatter SingleToString = (data, nextData, col) =>

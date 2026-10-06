@@ -75,7 +75,9 @@ namespace SysWeaver.HttpTransformer
             var text = Encoding.UTF8.GetString(inputData.Span);
             var tr = info.State.Request.Translator;
             var langTemp = Handler(text, tr != null, tr == null);
-            var tt = new TextTemplate(langTemp.Text, "${", "}", false, false);
+            //  Only the generated variables (and the language) are replaced, other "${...}" tokens (ex: javascript template literals) are kept as is
+            var varNames = ReadOnlyData.Set(StringComparer.Ordinal, langTemp.Vars.Select(x => x.VarName).Append("Session.Lang"));
+            var tt = new TextTemplate(langTemp.Text, "${", "}", varNames.Contains);
             FileHttpRequestHandler file = null;
             if (tt.HaveVars)
             {
@@ -105,6 +107,7 @@ namespace SysWeaver.HttpTransformer
                         d[x.VarName] = x.Text;
                     }
                 }
+                d["Session.Lang"] = language;
                 text = tt.Get(d);
 
                 var tempName = name + CachedTransformer.TempExt;

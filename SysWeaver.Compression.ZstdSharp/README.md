@@ -23,7 +23,6 @@ Adds the Zstandard format to [SysWeaver.Compression](../SysWeaver.Compression/RE
 ## Limitations and considerations
 
 - Browser support for `zstd` content encoding is newer than for Brotli/GZip; the server falls back to other codecs when a client does not accept it.
-- Invalid data can surface as a `ZstdSharp.ZstdException` rather than the `InvalidDataException` thrown by the other codecs.
 - The `Best` level (22) is very slow and memory hungry for large inputs; use it for offline compression only.
 
 ## Using it

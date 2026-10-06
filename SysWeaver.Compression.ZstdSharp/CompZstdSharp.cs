@@ -18,7 +18,6 @@ namespace SysWeaver.Compression
     /// Uses zstd level 1 / 9 / 22 for <see cref="CompEncoderLevels.Fast"/> / <see cref="CompEncoderLevels.Balanced"/> / <see cref="CompEncoderLevels.Best"/>.
     /// The <see cref="Compressor"/> / <see cref="Decompressor"/> contexts are pooled (per level for compressors) and reset between uses.
     /// Concatenated (and skippable) zstd frames are decompressed.
-    /// Invalid data may throw a <see cref="ZstdException"/> (from the streaming decoder) rather than an <see cref="InvalidDataException"/>.
     /// </remarks>
     public class CompZstdSharp : ICompType
     {
@@ -221,7 +220,18 @@ namespace SysWeaver.Compression
 
             /// <inheritdoc/>
             public OperationStatus Decompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten)
-                => D.UnwrapStream(source, destination, out bytesConsumed, out bytesWritten);
+            {
+                try
+                {
+                    return D.UnwrapStream(source, destination, out bytesConsumed, out bytesWritten);
+                }
+                catch (ZstdException)
+                {
+                    bytesConsumed = 0;
+                    bytesWritten = 0;
+                    return OperationStatus.InvalidData;
+                }
+            }
 
             /// <inheritdoc/>
             public void Dispose()

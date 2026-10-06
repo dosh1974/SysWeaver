@@ -90,8 +90,8 @@ namespace SysWeaver
         /// <param name="repo">The repository</param>
         /// <param name="urlFix">An optional url part added to the remote connections base url (to get to the server root url)</param>
         /// <param name="info">The files as returned by <see cref="SysWeaverFileUploadPrepare"/></param>
-        /// <returns>True if the upload request(s) were performed. True does NOT mean that the file(s) were uploaded successfully.
-        /// NOTE: the per file upload status is currently NOT written back to <paramref name="info"/>.</returns>
+        /// <returns>True if the upload request(s) were performed. True does NOT mean that the file(s) were uploaded successfully,
+        /// the per file upload status is written back to <paramref name="info"/>.</returns>
         public static Task<bool> SysWeaverFileUploadPrepared(this IRemoteApi connection, String repo, String urlFix, SysWeaverHttpClientExt.FileInfo[] info)
         {
             var b = connection as RemoteConnectionBase;

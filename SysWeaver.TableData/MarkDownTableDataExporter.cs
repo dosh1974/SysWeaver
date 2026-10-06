@@ -154,7 +154,7 @@ namespace SysWeaver.Data
             else
             {
                 //  Without meta data
-                coll = tableData.Rows.FirstOrDefault()?.Values?.Length ?? 0;
+                coll = tableData.Rows?.FirstOrDefault()?.Values?.Length ?? 0;
                 colNbsps = new bool[coll];
                 for (int i = 0; i < coll; ++i)
                 {
@@ -169,14 +169,16 @@ namespace SysWeaver.Data
             Span<int> colWidths = stackalloc int[coll];
             foreach (var row in tableData.Rows.Nullable())
             {
+                var rowValues = row.Values;
+                var rowLen = rowValues?.Length ?? 0;
                 for (int i = 0; i < coll; ++i)
                 {
                     if (hide.Contains(i))
                         continue;
 
                     var ni = i + 1;
-                    var value = row.Values[i];
-                    var nextValue = ni < coll ? row.Values[ni] : null;
+                    var value = i < rowLen ? rowValues[i] : null;
+                    var nextValue = (ni < coll) && (ni < rowLen) ? rowValues[ni] : null;
                     var (fmt, rightAlign) = colToStrings[i];
                     if (fmt == null)
                         (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);
@@ -228,6 +230,8 @@ namespace SysWeaver.Data
             //  Rows
             foreach (var row in tableData.Rows.Nullable())
             {
+                var rowValues = row.Values;
+                var rowLen = rowValues?.Length ?? 0;
                 sb.Append(linePrefix);
                 for (int i = 0; i < coll; ++i)
                 {
@@ -235,8 +239,8 @@ namespace SysWeaver.Data
                         continue;
 
                     var ni = i + 1;
-                    var value = row.Values[i];
-                    var nextValue = ni < coll ? row.Values[ni] : null;
+                    var value = i < rowLen ? rowValues[i] : null;
+                    var nextValue = (ni < coll) && (ni < rowLen) ? rowValues[ni] : null;
                     var (fmt, rightAlign) = colToStrings[i];
                     if (fmt == null)
                         (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);

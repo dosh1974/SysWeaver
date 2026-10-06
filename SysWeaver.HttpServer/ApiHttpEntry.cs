@@ -193,6 +193,11 @@ namespace SysWeaver.Net
                 pi = p[0];
                 serType = pi.ParameterType;
             }
+#if DEBUG
+            //  Would fail anyway when the call expression is built (with a less clear message)
+            if (pl > 1)
+                throw new ArgumentException("WebApi methods may take at most one parameter (plus an optional trailing " + nameof(HttpServerRequest) + "), found in method \"" + method + "\" of \"" + method.DeclaringType?.FullName + "\"", nameof(method));
+#endif//DEBUG
             if (serType == null)
                 if (pl > 1)
                     serType = typeof(Object[]);
@@ -484,14 +489,14 @@ namespace SysWeaver.Net
                             //  Is async call
                             if (hasContext)
                             {
-                                var ft = typeof(Func<HttpServerRequest, Task>);
+                                var ft = typeof(Func<HttpServerRequest, ValueTask>);
                                 var lambda = Expression.Lambda(ft, Expression.Call(objExp, method, contextParam), contextParam).Compile();
                                 getAsync = Activator.CreateInstance(typeof(ContextGetAsyncValueTaskA0), lambda) as IInvokeApi;
                                 postAsync = Activator.CreateInstance(typeof(ContextPostAsyncValueTaskA0), lambda) as IInvokeApi;
                             }
                             else
                             {
-                                var ft = typeof(Func<Task>);
+                                var ft = typeof(Func<ValueTask>);
                                 var lambda = Expression.Lambda(ft, Expression.Call(objExp, method)).Compile();
                                 getAsync = Activator.CreateInstance(typeof(GetAsyncValueTaskA0), lambda) as IInvokeApi;
                                 postAsync = Activator.CreateInstance(typeof(PostAsyncValueTaskA0), lambda) as IInvokeApi;

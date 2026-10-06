@@ -52,7 +52,7 @@ flowchart TB
 - Password hashes are a single SHA256 (fast to brute force if leaked); keep user files and configuration private.
 - API keys are stored in clear text in the application key/value store.
 - Only successful Authorization header results are cached, for `CacheDuration` seconds (default 30) and at most `MaxCachedHeaders` (default 10 000) entries, keyed by a SHA256 hash of the header.
-  `SimpleAuthorizer.ChangeCounter` is always 0, so a removed API key or a changed password can still be used with a cached header until the entry expires (at most `CacheDuration` seconds).
+  Cached results are re-validated when the owning authorizer's `ChangeCounter` changes (`SimpleAuthorizer` increments it whenever users or API keys are updated).
 
 ## Using it
 

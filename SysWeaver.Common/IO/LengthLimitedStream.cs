@@ -55,13 +55,13 @@ namespace SysWeaver.IO
         /// <summary>
         /// The position relative to the start of this view
         /// </summary>
-        /// <exception cref="ArgumentOutOfRangeException">The new position is greater than <see cref="Length"/> (negative values are not checked)</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The new position is outside of [0, Length]</exception>
         public override long Position
         {
             get => S.Position - Start;
             set
             {
-                if (value > Length)
+                if ((value < 0) || (value > Length))
                     throw new ArgumentOutOfRangeException();
                 S.Position = value + Start;
             }
@@ -77,23 +77,21 @@ namespace SysWeaver.IO
 
         /// <summary>
         /// Set the position within this view.
-        /// Note: <see cref="SeekOrigin.End"/> treats a positive offset as the distance back from the end (Length - offset),
-        /// and the returned value is the position of the underlying stream plus the start position (not the position within this view).
         /// </summary>
         /// <param name="offset">The offset relative to the origin</param>
         /// <param name="origin">The origin of the offset</param>
-        /// <returns>The underlying stream position + the start position</returns>
+        /// <returns>The new position within this view</returns>
         /// <exception cref="ArgumentOutOfRangeException">The new position is outside of [0, Length]</exception>
         public override long Seek(long offset, SeekOrigin origin)
         {
             if (origin == SeekOrigin.Current)
                 offset += S.Position - Start;
             if (origin == SeekOrigin.End)
-                offset = Length - offset;
+                offset = Length + offset;
             if ((offset < 0) || (offset > Length))
                 throw new ArgumentOutOfRangeException();
             offset -= Position;
-            return S.Seek(offset, SeekOrigin.Current) + Start;
+            return S.Seek(offset, SeekOrigin.Current) - Start;
         }
 
         /// <summary>

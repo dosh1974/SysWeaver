@@ -92,7 +92,7 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// The external root uri (ex: "https://www.mydomain.com/"), used when building absolute links for use outside of a request (ex: in emails).
-        /// Note: the server currently replaces this with the prefix of the first request it handles (see <see cref="HttpServerBase.ExternalRootUri"/>).
+        /// If null, the local prefix (set by the implementation) or the prefix of the first request that is handled is used (see <see cref="HttpServerBase.ExternalRootUri"/>).
         /// </summary>
         public String ExternalRootUri;
 

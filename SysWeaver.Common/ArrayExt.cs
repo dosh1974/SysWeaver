@@ -162,7 +162,17 @@ namespace SysWeaver
             ConcurrencyLimiter.LimitConcurrency(ref getValue, maxConcurrency, count);
             var tt = GC.AllocateUninitializedArray<Task<T>>(count);
             for (int i = 0; i < count; ++i)
-                tt[i] = getValue(i);
+            {
+                try
+                {
+                    tt[i] = getValue(i);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = Task.FromException<T>(ex);
+                }
+            }
             // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
             await Task.WhenAll((Task[])tt).ConfigureAwait(false);
             return GetResults(tt);
@@ -193,7 +203,17 @@ namespace SysWeaver
             ConcurrencyLimiter.LimitConcurrency(ref getValue, maxConcurrency, count);
             var tt = GC.AllocateUninitializedArray<ValueTask<T>>(count);
             for (int i = 0; i < count; ++i)
-                tt[i] = getValue(i);
+            {
+                try
+                {
+                    tt[i] = getValue(i);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = ValueTask.FromException<T>(ex);
+                }
+            }
             return TaskExt.WhenAll(tt);
         }
 
@@ -521,7 +541,17 @@ namespace SysWeaver
             ConcurrencyLimiter.LimitConcurrency(ref func, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<Task<T>>(l);
             for (int i = 0; i < l; ++i)
-                tt[i] = func(array[i]);
+            {
+                try
+                {
+                    tt[i] = func(array[i]);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = Task.FromException<T>(ex);
+                }
+            }
             // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
             await Task.WhenAll((Task[])tt).ConfigureAwait(false);
             return GetResults(tt);
@@ -560,7 +590,17 @@ namespace SysWeaver
             ConcurrencyLimiter.LimitConcurrency(ref func, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<ValueTask<T>>(l);
             for (int i = 0; i < l; ++i)
-                tt[i] = func(array[i]);
+            {
+                try
+                {
+                    tt[i] = func(array[i]);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = ValueTask.FromException<T>(ex);
+                }
+            }
             return TaskExt.WhenAll(tt);
         }
 
@@ -638,7 +678,17 @@ namespace SysWeaver
             ConcurrencyLimiter.LimitConcurrency(ref func, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<Task<T>>(l);
             for (int i = 0; i < l; ++i)
-                tt[i] = func(array[i], i);
+            {
+                try
+                {
+                    tt[i] = func(array[i], i);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = Task.FromException<T>(ex);
+                }
+            }
             // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
             await Task.WhenAll((Task[])tt).ConfigureAwait(false);
             return GetResults(tt);
@@ -677,7 +727,17 @@ namespace SysWeaver
             ConcurrencyLimiter.LimitConcurrency(ref func, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<ValueTask<T>>(l);
             for (int i = 0; i < l; ++i)
-                tt[i] = func(array[i], i);
+            {
+                try
+                {
+                    tt[i] = func(array[i], i);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = ValueTask.FromException<T>(ex);
+                }
+            }
             return TaskExt.WhenAll(tt);
         }
 
@@ -748,7 +808,15 @@ namespace SysWeaver
             int i = 0;
             foreach (var kv in dict)
             {
-                tt[i] = func(kv.Key, kv.Value, i);
+                try
+                {
+                    tt[i] = func(kv.Key, kv.Value, i);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = Task.FromException<T>(ex);
+                }
                 ++i;
             }
             // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
@@ -792,7 +860,15 @@ namespace SysWeaver
             int i = 0;
             foreach (var kv in dict)
             {
-                tt[i] = func(kv.Key, kv.Value, i);
+                try
+                {
+                    tt[i] = func(kv.Key, kv.Value, i);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = ValueTask.FromException<T>(ex);
+                }
                 ++i;
             }
             return TaskExt.WhenAll(tt);
@@ -860,7 +936,15 @@ namespace SysWeaver
             int i = 0;
             foreach (var kv in col)
             {
-                tt[i] = func(kv, i);
+                try
+                {
+                    tt[i] = func(kv, i);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = Task.FromException<T>(ex);
+                }
                 ++i;
             }
             // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
@@ -900,7 +984,15 @@ namespace SysWeaver
             int i = 0;
             foreach (var kv in col)
             {
-                tt[i] = func(kv, i);
+                try
+                {
+                    tt[i] = func(kv, i);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = ValueTask.FromException<T>(ex);
+                }
                 ++i;
             }
             return TaskExt.WhenAll(tt);

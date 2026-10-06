@@ -65,7 +65,7 @@ namespace SysWeaver
             var f = Url;
             try
             {
-                var r = new HttpRequestMessage(HttpMethod.Post, FileUrl);
+                using var r = new HttpRequestMessage(HttpMethod.Post, FileUrl);
                 if (P.GetUserPassword(out var user, out var password, false))
                     r.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(String.Join(":", user, password))));
                 var lt = LastTime;
@@ -75,7 +75,7 @@ namespace SysWeaver
                 if (et != null)
                     r.Headers.IfNoneMatch.Add(new EntityTagHeaderValue(et));
 
-                var res = await C.SendAsync(r).ConfigureAwait(false);
+                using var res = await C.SendAsync(r).ConfigureAwait(false);
                 var s = res.StatusCode;
                 if (s == HttpStatusCode.NotModified)
                     return null;

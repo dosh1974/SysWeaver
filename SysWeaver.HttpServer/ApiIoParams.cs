@@ -67,7 +67,7 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Cache of raw Accept header value -> serializer (unbounded, keyed by client supplied header values).
+        /// Cache of raw Accept header value -> serializer (keyed by client supplied header values, limited to <see cref="MaxCachedAccept"/> entries).
         /// </summary>
         readonly ConcurrentDictionary<String, ISerializer> Ac = new ConcurrentDictionary<string, ISerializer>(StringComparer.Ordinal);
 
@@ -76,7 +76,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="accept">The raw Accept header value, can be null.</param>
         /// <returns>The first enabled serializer in the order listed by the header (quality values are ignored), or <see cref="DefaultOutput"/>.</returns>
-        /// <remarks>Results are cached per distinct header value (ordinal), the cache is never pruned.</remarks>
+        /// <remarks>Results are cached per distinct header value (ordinal), up to <see cref="MaxCachedAccept"/> distinct values (the cache is never pruned).</remarks>
         public ISerializer GetSerializer(String accept)
         {
             if (accept == null)
@@ -93,9 +93,16 @@ namespace SysWeaver.Net
                     break;
             }
             s = s ?? DefaultOutput;
-            c.TryAdd(accept, s);
+            //  The header values are client supplied, so limit the cache size
+            if (c.Count < MaxCachedAccept)
+                c.TryAdd(accept, s);
             return s;
         }
+
+        /// <summary>
+        /// The maximum number of distinct Accept header values to cache.
+        /// </summary>
+        const int MaxCachedAccept = 1024;
 
         /// <summary>
         /// Build a lookup keyed by mime, mime header and extension (the first serializer wins for an extension, the last for a mime).
@@ -254,8 +261,8 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// Decode base64 or base64url (padding optional) starting at <paramref name="start"/>.
-        /// Invalid input currently yields an empty result rather than an exception.
         /// </summary>
+        /// <exception cref="Exception">The text isn't valid base64.</exception>
         static ReadOnlyMemory<Byte> FromText(String text, int start)
         {
             var ttl = text.Length;
@@ -284,7 +291,8 @@ namespace SysWeaver.Net
             tl += 7;
             tl >>= 2;
             var temp = GC.AllocateUninitializedArray<Byte>(tl);
-            Convert.TryFromBase64Chars(text.AsSpan().Slice(start), temp.AsSpan(), out var b);
+            if (!Convert.TryFromBase64Chars(text.AsSpan().Slice(start), temp.AsSpan(), out var b))
+                throw new Exception("Invalid base64 data in binary API parameter");
             return new ReadOnlyMemory<Byte>(temp, 0, b);
         }
 
@@ -293,6 +301,10 @@ namespace SysWeaver.Net
         /// </summary>
         T GetBinary<T>(String text)
         {
+#if DEBUG
+            if (text.Length < 2)
+                throw new Exception("Binary API parameter is missing the type char");
+#endif//DEBUG
             if (!Decomp.TryGetValue(text[1], out var z))
                 throw new Exception(String.Concat("Don't know how to handle binary data of type '", text[1], '\''));
             int i = 2;

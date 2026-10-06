@@ -120,9 +120,6 @@ namespace SysWeaver
         /// <returns>The remaining content of the file, dispose it when done (a shared empty instance if there is no remaining data)</returns>
         /// <exception cref="NullReferenceException"><paramref name="fileStream"/> is null</exception>
         /// <exception cref="IOException">An I/O error occurred, or the remaining data is too large to be read into memory</exception>
-        /// <remarks>
-        /// If mapping fails after the mapping took ownership of the stream (leaveOpen is false), the stream is already disposed and the fallback read throws an <see cref="ObjectDisposedException"/>.
-        /// </remarks>
         public static async Task<IUnmanagedReadOnlyMemory<Byte>> ReadAsync(FileStream fileStream, bool leaveOpen = false)
         {
             try
@@ -175,9 +172,6 @@ namespace SysWeaver
         /// <returns>The remaining content of the file, dispose it when done (a shared empty instance if there is no remaining data)</returns>
         /// <exception cref="NullReferenceException"><paramref name="fileStream"/> is null</exception>
         /// <exception cref="IOException">An I/O error occurred, or the remaining data is too large to be read into memory</exception>
-        /// <remarks>
-        /// If mapping fails after the mapping took ownership of the stream (leaveOpen is false), the stream is already disposed and the fallback read throws an <see cref="ObjectDisposedException"/>.
-        /// </remarks>
         public static IUnmanagedReadOnlyMemory<Byte> Read(FileStream fileStream, bool leaveOpen = false)
         {
             try
@@ -401,10 +395,11 @@ namespace SysWeaver
             /// <param name="fs">The file stream to map</param>
             /// <param name="byteSize">The number of bytes to map</param>
             /// <param name="pos">The file offset of the first byte to map</param>
-            /// <param name="leaveOpen">If true, the stream isn't disposed by the mapping and is positioned at the end of the mapped region, else the mapping owns the stream</param>
+            /// <param name="leaveOpen">If true, the stream isn't disposed by the mapping and is positioned at the end of the mapped region, else the mapping owns the stream (if the constructor throws, the stream is never disposed, so the caller can still use it)</param>
             public MappedFileMemoryHandler(FileStream fs, int byteSize, long pos = 0, bool leaveOpen = false)
             {
-                var file = MemoryMappedFile.CreateFromFile(fs, null, 0, MemoryMappedFileAccess.Read, HandleInheritability.None, leaveOpen);
+                // Always leave the stream open in the mapping, so that a failure here doesn't dispose the stream (the callers falls back to reading it), the stream is disposed in Dispose instead (unless leaveOpen)
+                var file = MemoryMappedFile.CreateFromFile(fs, null, 0, MemoryMappedFileAccess.Read, HandleInheritability.None, true);
                 try
                 {
                     var view = file.CreateViewAccessor(pos, byteSize, MemoryMappedFileAccess.Read);
@@ -423,6 +418,8 @@ namespace SysWeaver
                         ReadOnlyMemory = Memory;
                         if (leaveOpen)
                             fs.Position = pos + byteSize;
+                        else
+                            Fs = fs;
                     }
                     catch
                     {
@@ -453,9 +450,11 @@ namespace SysWeaver
                 }
                 Interlocked.Exchange(ref V, null)?.Dispose();
                 Interlocked.Exchange(ref F, null)?.Dispose();
+                Interlocked.Exchange(ref Fs, null)?.Dispose();
             }
 
 
+            FileStream Fs;
             MemoryMappedFile F;
             MemoryMappedViewAccessor V;
             SafeMemoryMappedViewHandle H;
@@ -471,7 +470,7 @@ namespace SysWeaver
             /// </summary>
             public override MemoryHandle Pin(int elementIndex = 0)
             {
-                if (elementIndex < 0 || elementIndex >= _length)
+                if (elementIndex < 0 || elementIndex > _length)
                     throw new ArgumentOutOfRangeException(nameof(elementIndex));
                 return new MemoryHandle(_pointer + elementIndex);
             }

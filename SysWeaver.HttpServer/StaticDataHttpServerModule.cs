@@ -244,8 +244,8 @@ namespace SysWeaver.Net
             }
             if (location == null)
                 location = GetLocation("Stream");
-            var d = new StaticStreamHttpRequestHandler(url, LocationPrefix + location, len, openStream, mime, compression, dur, requestCacheDuration, lastModified, etag, preCompressedFormat, authTokens, order);
             url = HttpServerTools.CombinePaths(RootUri, url.Trim('/'));
+            var d = new StaticStreamHttpRequestHandler(url, LocationPrefix + location, len, openStream, mime, compression, dur, requestCacheDuration, lastModified, etag, preCompressedFormat, authTokens, order);
             return AddHandler(url, d, replace);
         }
 
@@ -273,8 +273,8 @@ namespace SysWeaver.Net
             var authTokens = auth == null ? null : Authorization.GetRequiredTokens(auth);
             if (location == null)
                 location = GetLocation("Memory");
-            var d = new StaticMemoryHttpRequestHandler(url, LocationPrefix + location, data, mime, compression, dur, HttpServerTools.MaxRequestCache, lastModified, etag, preCompressedFormat, authTokens, order);
             url = HttpServerTools.CombinePaths(RootUri, url.Trim('/'));
+            var d = new StaticMemoryHttpRequestHandler(url, LocationPrefix + location, data, mime, compression, dur, HttpServerTools.MaxRequestCache, lastModified, etag, preCompressedFormat, authTokens, order);
             return AddHandler(url, d, replace);
         }
 
@@ -311,8 +311,8 @@ namespace SysWeaver.Net
                 comp = Comp;
                 data = comp.GetCompressed(data.Span, CompEncoderLevels.Best);
             }
-            var d = new StaticMemoryHttpRequestHandler(url, LocationPrefix + location, data, mime, compression, dur, HttpServerTools.MaxRequestCache, lastModified, etag, comp, authTokens, order);
             url = HttpServerTools.CombinePaths(RootUri, url.Trim('/'));
+            var d = new StaticMemoryHttpRequestHandler(url, LocationPrefix + location, data, mime, compression, dur, HttpServerTools.MaxRequestCache, lastModified, etag, comp, authTokens, order);
             return AddHandler(url, d, replace);
         }
 
@@ -342,14 +342,15 @@ namespace SysWeaver.Net
         public IStaticHttpRequestHandler TryGetHandler(String localUrl) => Handlers.TryGetValue(localUrl, out var d) ? d : null;
 
         /// <summary>
-        /// Returns the handler registered for the local url of a GET request, else null (note: HEAD requests are not handled).
+        /// Returns the handler registered for the local url of a GET or HEAD request, else null.
         /// </summary>
         /// <param name="context">The request</param>
         /// <returns>The handler or null</returns>
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             Handlers.TryGetValue(context.LocalUrl, out var handler);
-            return context.HttpMethod == HttpServerMethods.GET ? handler : null;
+            var m = context.HttpMethod;
+            return ((m == HttpServerMethods.GET) || (m == HttpServerMethods.HEAD)) ? handler : null;
         }
 
         /// <inheritdoc/>

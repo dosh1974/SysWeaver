@@ -39,10 +39,6 @@ namespace SysWeaver.Remote
         /// <summary>
         /// Invoked after any request completes (before response payload deserialization).
         /// </summary>
-        /// <remarks>
-        /// Not invoked when the server responds with a non-200 status code and a non-empty text body (that exception is thrown directly),
-        /// so it is NOT guaranteed to be called for every <see cref="OnCallBegin"/>.
-        /// </remarks>
         public event RemoteApiCallEnd OnCallEnd;
 
         /// <summary>
@@ -165,7 +161,7 @@ namespace SysWeaver.Remote
         /// The base url is resolved using <see cref="PathTemplate.Resolve(string, System.Collections.Generic.IReadOnlyDictionary{string, string}, bool, bool)"/>; if it then points to an existing file, the first non-comment line is used as the url.
         /// Auth: a non-empty <see cref="RemoteConnection.BearerToken"/> is sent as a Bearer token. Otherwise, for <see cref="RemoteAuthMethod.HttpAuth"/>, credentials with the user name
         /// "bearer" are sent as a Bearer token, a user name starting with '*' sends the password in a custom header named by the rest of the user name (lower cased),
-        /// and anything else uses Basic auth (ASCII encoded). For <see cref="RemoteAuthMethod.SysWeaverLogin"/> a login is performed synchronously (blocking) during construction.
+        /// and anything else uses Basic auth (UTF-8 encoded). For <see cref="RemoteAuthMethod.SysWeaverLogin"/> a login is performed synchronously (blocking) during construction.
         /// </remarks>
         /// <exception cref="Exception">Unknown compression, both a proxy and Tor specified, Tor unavailable, an empty base url file or a failed SysWeaver login.</exception>
         /// <exception cref="ArgumentException"><see cref="RemoteConnection.BaseUrl"/> is null.</exception>
@@ -301,7 +297,7 @@ namespace SysWeaver.Remote
                                     auth = ", auth: " + lu;
                                 }
                                 else {
-                                    var byteArray = Encoding.ASCII.GetBytes(String.Join(":", user, password));
+                                    var byteArray = Encoding.UTF8.GetBytes(String.Join(":", user, password));
                                     c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
                                     auth = ", auth: Basic";
                                 }
@@ -731,7 +727,7 @@ namespace SysWeaver.Remote
                 try
                 {
                     using (var req = new HttpRequestMessage(HttpMethod.Delete, apiUrl))
-                        await WaitResponse(req, opt, HttpEndPointTypes.Get, null, ReadOnlyMemory<Byte>.Empty).ConfigureAwait(false);
+                        await WaitResponse(req, opt, HttpEndPointTypes.Delete, null, ReadOnlyMemory<Byte>.Empty).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -877,7 +873,7 @@ namespace SysWeaver.Remote
                 try
                 {
                     using (var req = new HttpRequestMessage(HttpMethod.Delete, apiUrl))
-                        await WaitResponse(req, opt, HttpEndPointTypes.Get, null, ReadOnlyMemory<Byte>.Empty).ConfigureAwait(false);
+                        await WaitResponse(req, opt, HttpEndPointTypes.Delete, null, ReadOnlyMemory<Byte>.Empty).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -1067,7 +1063,11 @@ namespace SysWeaver.Remote
                     {
                     }
                     if (fromText != null)
+                    {
+                        if (ce != null)
+                            ce?.Invoke(rid, fromText, icode, null, ref data);
                         throw fromText;
+                    }
                     var sex = new HttpResponseException(icode, String.Concat(req.Method, " \"", GetCleanUrl(req.RequestUri.ToString()), "\", responded with [", code, ']'));
                     if (ce != null)
                         ce?.Invoke(rid, sex, icode, null, ref data);
@@ -1134,7 +1134,11 @@ namespace SysWeaver.Remote
                     {
                     }
                     if (fromText != null)
+                    {
+                        if (ce != null)
+                            ce?.Invoke(rid, fromText, icode, null, ref data);
                         throw fromText;
+                    }
                     var sex = new HttpResponseException(icode, String.Concat(req.Method, " \"", GetCleanUrl(req.RequestUri.ToString()), "\", responded with [", code, ']'));
                     if (ce != null)
                         ce?.Invoke(rid, sex, icode, null, ref data);

@@ -87,7 +87,8 @@ namespace SysWeaver.HttpTransformer
             CompExt = '.' + compMethod.FileExtensions.FirstOrDefault().TrimStart('.');
 
 
-            DataFolders = p.Folders ?? Folders.AllAppFolders.Convert(x => Path.Combine(x, "TransformerCache"));
+            var pf = p.Folders;
+            DataFolders = (pf?.Length > 0) ? pf : Folders.AllAppFolders.Convert(x => Path.Combine(x, "TransformerCache"));
             BuildLock = new AsyncLock(threadCount);
             BuildTasks = Enumerable.Range(0, threadCount).Select(x => new PeriodicTask(Build, 100)).ToArray();
             PruneTask = new PeriodicTask(Prune, 15 * 60 * 1000, true);
@@ -294,7 +295,18 @@ namespace SysWeaver.HttpTransformer
                 }
                 return e;
             }
-            var data = await state.ReadAllData().ConfigureAwait(false);
+            ReadOnlyMemory<Byte> data;
+            try
+            {
+                data = await state.ReadAllData().ConfigureAwait(false);
+            }
+            catch
+            {
+                //  Complete and unregister the entry, else other requests for the same key would wait for (or never start) a build that never happens
+                e.Completed = true;
+                ScheduledJobs.TryRemove(new KeyValuePair<String, CachedTransformerEntry>(key, e));
+                throw;
+            }
             e.OrgSize = data.Length;
             var job = new CachedTransformerJob(info, data, e);
             if (defer)

@@ -427,7 +427,6 @@ namespace SysWeaver
             var getTicks = PerfMonitor.ToTicks;
             var d = getTicks(total);
             IntTotal = TimeSpan.FromTicks(d);
-            Decimal tot = d;
             if (count == 0)
                 count = 1;
             d += (count >> 1);
@@ -438,13 +437,17 @@ namespace SysWeaver
             IntLastDuration = TimeSpan.FromTicks(getTicks(lastDuration));
             IntLastExecution = new DateTime(last, DateTimeKind.Utc);
 
+            //  Avoid a division by zero if enumerated in the same stopwatch tick as the creation / reset
+            if (runningFor <= 0)
+                runningFor = 1;
             Decimal fr = Stopwatch.Frequency;
             Decimal rate = count;
             rate *= fr;
             rate /= runningFor;
             Interlocked.Exchange(ref IntCountPerMinute, (float)rate);
 
-            Decimal timePer = 100M * tot;
+            //  Both in stopwatch ticks
+            Decimal timePer = 100M * total;
             timePer /= runningFor;
             Interlocked.Exchange(ref IntPercentage, (float)timePer);
         }

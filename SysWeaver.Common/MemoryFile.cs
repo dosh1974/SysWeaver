@@ -44,22 +44,20 @@ namespace SysWeaver
         /// <summary>
         /// Get a summary of this file (without the data)
         /// </summary>
-        /// <returns>A new audit object</returns>
-        /// <exception cref="NullReferenceException"><see cref="Data"/> is null (a link)</exception>
+        /// <returns>A new audit object (the length is 0 for a link)</returns>
         public MemoryFileAudit GetAudit()
             => new MemoryFileAudit
             {
                 Name = Name,
                 Mime = Mime,
-                Length = Data.Length,
+                Length = Data?.Length ?? 0,
             };
 
         /// <summary>
-        /// A short description, ex: "image.png" [1234] as image/png
+        /// A short description, ex: "image.png" [1234] as image/png (the length is 0 for a link)
         /// </summary>
         /// <returns>A short description of the file</returns>
-        /// <exception cref="NullReferenceException"><see cref="Data"/> is null (a link)</exception>
-        public override string ToString() => String.Concat(Name.ToQuoted(), " [", Data.Length, "] as ", Mime);
+        public override string ToString() => String.Concat(Name.ToQuoted(), " [", Data?.Length ?? 0, "] as ", Mime);
 
         /// <summary>
         /// Recomended filename

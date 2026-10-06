@@ -40,7 +40,7 @@ namespace SysWeaver.Compression
                 offset += 2;
                 if (offset > l)
                     throw new Exception(Invalid);
-                int extraLen = ((int)data[offset - 2 + 1]) | ((int)data[offset - 2 + 0]);
+                int extraLen = ((int)data[offset - 2]) | (((int)data[offset - 1]) << 8);
                 offset += extraLen;
                 if (offset > l)
                     throw new Exception(Invalid);
@@ -91,7 +91,7 @@ namespace SysWeaver.Compression
                 Span<Byte> tempData = stackalloc Byte[10];
                 var tempData1 = tempData.Slice(0, 1);
                 var tempData2 = tempData.Slice(0, 2);
-                if (gzipData.Read(tempData) != 10)
+                if (gzipData.ReadAtLeast(tempData, 10, false) != 10)
                     throw new Exception(Invalid);
                 if ((tempData[0] != 0x1f) || (tempData[1] != 0x8b))
                     throw new Exception("Input stream does not contain gzip compressed data!");
@@ -100,9 +100,9 @@ namespace SysWeaver.Compression
                 var flags = tempData[3];
                 if ((flags & 0x4) != 0) // FEXTRA 
                 {
-                    if (gzipData.Read(tempData2) != 2)
+                    if (gzipData.ReadAtLeast(tempData2, 2, false) != 2)
                         throw new Exception(Invalid);
-                    int extraLen = ((int)tempData2[1]) | ((int)tempData2[0]);
+                    int extraLen = ((int)tempData2[0]) | (((int)tempData2[1]) << 8);
                     gzipData.Position += extraLen;
                 }
                 if ((flags & 0x8) != 0) // FNAME
@@ -203,13 +203,13 @@ namespace SysWeaver.Compression
             {
                 case SeekOrigin.Begin:
                     Position = offset;
-                    break;
+                    return Position;
                 case SeekOrigin.Current:
                     Position += offset;
-                    break;
+                    return Position;
                 case SeekOrigin.End:
-                    Position = InternalLength - offset;
-                    break;
+                    Position = InternalLength + offset;
+                    return Position;
             }
             throw new ArgumentException("Invalid SeekOrigin", nameof(origin));
         }

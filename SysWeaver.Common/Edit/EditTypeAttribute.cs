@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Globalization;
+using System.Text;
 
 namespace SysWeaver
 {
@@ -32,7 +34,7 @@ namespace SysWeaver
     /// The condition is a javascript expression that is evaluated by the web client (encoded as an editor type starting with "Hide:").
     /// </summary>
     /// <remarks>
-    /// Values are inserted as javascript literals without escaping, so string values must not contain double quotes or backslashes (and char values must not be a single quote or a backslash).
+    /// String and char values are inserted as (escaped) javascript string literals.
     /// </remarks>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
     public sealed class EditHideIfAttribute : EditTypeAttribute
@@ -46,15 +48,37 @@ namespace SysWeaver
             "<=",
             ];
 
+        static String Quote(String value, Char quote)
+        {
+            var sb = new StringBuilder(value.Length + 2);
+            sb.Append(quote);
+            foreach (var c in value)
+            {
+                if ((c == quote) || (c == '\\'))
+                {
+                    sb.Append('\\').Append(c);
+                    continue;
+                }
+                if ((c < 32) || (c == '\u2028') || (c == '\u2029'))
+                {
+                    sb.Append("\\u").Append(((int)c).ToString("x4", CultureInfo.InvariantCulture));
+                    continue;
+                }
+                sb.Append(c);
+            }
+            sb.Append(quote);
+            return sb.ToString();
+        }
+
         static String Val(Object value)
         {
             if (value == null)
                 return "null";
             var t = value.GetType();
             if (t == typeof(String))
-                return String.Join(value.ToString(), '"', '"');
+                return Quote(value.ToString(), '"');
             if (t == typeof(Char))
-                return String.Join(value.ToString(), (Char)39, (Char)39);
+                return Quote(value.ToString(), (Char)39);
             return value.ToString();
         }
 

@@ -22,7 +22,6 @@ namespace SysWeaver.Data
         /// </summary>
         /// <remarks>
         /// A name without a prefix that exists in both tables is taken from the first table.
-        /// NOTE: The '-' / '+' prefix is currently not stripped before the column lookup, so prefixed names fail (see bug report).
         /// </remarks>
         public String[] SelectColumns;
     }

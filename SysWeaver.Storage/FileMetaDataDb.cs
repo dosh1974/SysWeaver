@@ -78,7 +78,7 @@ namespace SysWeaver
                             comp.Decompress(s, ms);
                         data = ser.Create<T>(ms.GetBuffer().AsSpan().Slice(0, (int)ms.Length));
                         FileMetaData.Touch(fi);
-                        cache.TryAdd(dataName, Tuple.Create(lwt, (Object)data));
+                        cache[dataName] = Tuple.Create(lwt, (Object)data);
                     }
                     catch
                     {
@@ -93,7 +93,8 @@ namespace SysWeaver
             {
                 using (var o = new FileStream(dataName, FileMode.Create))
                     comp.Compress(ser.Serialize(data).Span, o, CompEncoderLevels.Balanced);
-                cache.TryAdd(dataName, Tuple.Create(fi.LastWriteTimeUtc, (Object)data));
+                fi.Refresh();
+                cache[dataName] = Tuple.Create(fi.LastWriteTimeUtc, (Object)data);
             }
             catch
             {

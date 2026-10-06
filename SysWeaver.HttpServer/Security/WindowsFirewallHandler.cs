@@ -43,7 +43,6 @@ namespace SysWeaver.Security
         /// <param name="protocol">The protocol(s)</param>
         /// <param name="direction">The direction</param>
         /// <returns>True if a valid rule exists or was added / updated</returns>
-        /// <exception cref="NullReferenceException">Thrown if <paramref name="msg"/> is null and the rule already exists and is valid</exception>
         public bool AddOrSet(string ruleName, int port, IMessageHost msg = null, string messagePrefix = null, FirewallProtcols protocol = FirewallProtcols.Tcp, FirewallDirections direction = FirewallDirections.Inbound)
         {
             var p = messagePrefix ?? FirewallHandler.Prefix;
@@ -102,7 +101,7 @@ namespace SysWeaver.Security
                 ok &= isOk("Action", "Allow");
                 if (ok)
                 {
-                    msg.AddMessage(p + qn + " exists and is valid");
+                    msg?.AddMessage(p + qn + " exists and is valid");
                     return true;
                 }
                 msg?.AddMessage(p + "Updating existing firewall rule " + name, MessageLevels.Debug);

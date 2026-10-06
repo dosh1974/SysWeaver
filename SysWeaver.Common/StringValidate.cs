@@ -364,7 +364,6 @@ namespace SysWeaver
 
         /// <summary>
         /// Validate that a string only contains hexadecimal digits ('0' - '9', 'a' - 'f', 'A' - 'F') and optionally is within some interval.
-        /// Note: the max check is currently broken (it checks val &lt; max), so <paramref name="max"/> only rejects values below it.
         /// </summary>
         /// <param name="s">The string to test</param>
         /// <param name="errPrefix">A prefix to add to any exception texts</param>
@@ -393,7 +392,7 @@ namespace SysWeaver
             if (max != null)
             {
                 var m = max ?? 0;
-                if (val < m)
+                if (val > m)
                     throw new Exception(errPrefix + "may not be greater than " + m);
             }
         }

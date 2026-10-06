@@ -266,9 +266,10 @@ namespace SysWeaver.Data
                                 if (fmt == null)
                                     (fmt, rightAlign) = TableDataExporterTools.GetDefault(value);
                                 var cl = x < colMax ? classes[x] : "";
-                                var valueText = fmt(value, nextValue, cols == null ? null : cols[x]);
+                                var col = (cols != null) && (x < cols.Length) ? cols[x] : null;
+                                var valueText = fmt(value, nextValue, col);
                                 var isFormatted = (!String.IsNullOrEmpty(valueText)) && (valueText[0] == 1);
-                                var wordWrap = cols != null && ((cols[x].Props & TableDataColumnProps.WordWrap) != 0);
+                                var wordWrap = col != null && ((col.Props & TableDataColumnProps.WordWrap) != 0);
                                 vals["Title"] = value?.ToString() ?? "";
                                 vals["Text"] = isFormatted ? "" : (valueText ?? "");
                                 vals["TextFmt"] = isFormatted ? valueText.Substring(1) : "";

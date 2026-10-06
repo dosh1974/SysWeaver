@@ -15,8 +15,8 @@ namespace SysWeaver.Serialization.SwJson.Reader
     /// <remarks>
     /// All parsing is culture invariant. Fast paths handle the common formats directly, anything else uses the .NET parse methods
     /// (with <see cref="NumberStyles.Float"/>, <see cref="CultureInfo.InvariantCulture"/> and <see cref="DateTimeStyles.RoundtripKind"/>).
-    /// Integer parsing is NOT validated in release builds and never range checked: a sign or any non digit (".", "e") produces garbage, and out of range values wrap.
-    /// The date/time/guid fallbacks copy the text to a stack buffer of the same length.
+    /// Integers must be [-]digits (no fraction or exponent), out of range values throw an <see cref="OverflowException"/>.
+    /// The date/time/guid fallbacks copy the text to a buffer of the same length (on the stack for short texts).
     /// </remarks>
     static class SpanParsers
     {
@@ -41,8 +41,10 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
 
         /// <summary>
-        /// Parse decimal digits (no sign), empty is 0. Not range checked, digits are only validated in VALIDATE (debug) builds.
+        /// Parse decimal digits (no sign), empty is 0.
         /// </summary>
+        /// <exception cref="Exception">A char isn't a digit</exception>
+        /// <exception cref="OverflowException">The value is out of range</exception>
         public static UInt32 ToUInt32(ReadOnlySpan<Byte> d)
         {
             var l = d.Length;
@@ -52,22 +54,22 @@ namespace SysWeaver.Serialization.SwJson.Reader
             for (int o = 0; ; )
             {
                 var i = d[o];
-#if VALIDATE
                 if ((i < '0') || (i > '9'))
                     ReadException.ThrowExpectedNumberChar(i);
-#endif//VALIDATE
                 ++o;
-                v += (UInt32)(i - '0');
+                v = checked(v + (UInt32)(i - '0'));
                 if (o >= l)
                     break;
-                v *= 10;
+                v = checked(v * 10);
             }
             return v;
         }
 
         /// <summary>
-        /// Parse decimal digits (no sign), empty is 0. Not range checked, digits are only validated in VALIDATE (debug) builds.
+        /// Parse decimal digits (no sign), empty is 0.
         /// </summary>
+        /// <exception cref="Exception">A char isn't a digit</exception>
+        /// <exception cref="OverflowException">The value is out of range</exception>
         public static UInt64 ToUInt64(ReadOnlySpan<Byte> d)
         {
             var l = d.Length;
@@ -77,23 +79,23 @@ namespace SysWeaver.Serialization.SwJson.Reader
             for (int o = 0; ;)
             {
                 var i = d[o];
-#if VALIDATE
                 if ((i < '0') || (i > '9'))
                     ReadException.ThrowExpectedNumberChar(i);
-#endif//VALIDATE
                 ++o;
-                v += (UInt64)(i - '0');
+                v = checked(v + (UInt64)(i - '0'));
                 if (o >= l)
                     break;
-                v *= 10;
+                v = checked(v * 10);
             }
             return v;
         }
 
 
         /// <summary>
-        /// Parse [-]digits, empty is 0. Not range checked, digits are only validated in VALIDATE (debug) builds.
+        /// Parse [-]digits, empty is 0.
         /// </summary>
+        /// <exception cref="Exception">A char isn't a digit</exception>
+        /// <exception cref="OverflowException">The value is out of range</exception>
         public static Int32 ToInt32(ReadOnlySpan<Byte> d)
         {
             var l = d.Length;
@@ -103,18 +105,21 @@ namespace SysWeaver.Serialization.SwJson.Reader
             var sign = d[0];
             if (sign == '-')
             {
-#if VALIDATE
                 if (l < 2)
                     ReadException.ThrowExpectedNumberChar(sign);
-#endif//VALIDATE
-                return -(Int32)ToUInt32(d.Slice(1));
+                var n = ToUInt32(d.Slice(1));
+                if (n > 0x80000000U)
+                    throw new OverflowException();
+                return unchecked(-(Int32)n);
             }
-            return (Int32)ToUInt32(d);
+            return checked((Int32)ToUInt32(d));
         }
 
         /// <summary>
-        /// Parse [-]digits, empty is 0. Not range checked, digits are only validated in VALIDATE (debug) builds.
+        /// Parse [-]digits, empty is 0.
         /// </summary>
+        /// <exception cref="Exception">A char isn't a digit</exception>
+        /// <exception cref="OverflowException">The value is out of range</exception>
         public static Int64 ToInt64(ReadOnlySpan<Byte> d)
         {
             var l = d.Length;
@@ -124,13 +129,14 @@ namespace SysWeaver.Serialization.SwJson.Reader
             var sign = d[0];
             if (sign == '-')
             {
-#if VALIDATE
                 if (l < 2)
                     ReadException.ThrowExpectedNumberChar(sign);
-#endif//VALIDATE
-                return -(Int64)ToUInt64(d.Slice(1));
+                var n = ToUInt64(d.Slice(1));
+                if (n > 0x8000000000000000UL)
+                    throw new OverflowException();
+                return unchecked(-(Int64)n);
             }
-            return (Int64)ToUInt64(d);
+            return checked((Int64)ToUInt64(d));
         }
 
         #region Fast paths
@@ -312,6 +318,11 @@ namespace SysWeaver.Serialization.SwJson.Reader
         #endregion//Fast paths
 
         /// <summary>
+        /// The fallback parsers copy texts up to this length to a stack buffer, longer texts are copied to a heap buffer
+        /// </summary>
+        const int MaxStackChars = 256;
+
+        /// <summary>
         /// Parse a <see cref="DateTime"/> like <see cref="DateTime.Parse(string, IFormatProvider, DateTimeStyles)"/> with the invariant culture and <see cref="DateTimeStyles.RoundtripKind"/>.
         /// "yyyy-MM-ddTHH:mm:ss[.fffffff][Z]" is parsed directly.
         /// </summary>
@@ -327,7 +338,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                     return DateTime.SpecifyKind(dt, DateTimeKind.Utc);
             }
             var l = d.Length;
-            Span<Char> t = stackalloc Char[l];
+            Span<Char> t = l <= MaxStackChars ? stackalloc Char[l] : new Char[l];
             for (int i = 0; i < l; ++i)
                 t[i] = (Char)d[i];
             return DateTime.Parse(t, ParseCulture, DateTimeStyle);
@@ -383,7 +394,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 }
             }
             var l = d.Length;
-            Span<Char> t = stackalloc Char[l];
+            Span<Char> t = l <= MaxStackChars ? stackalloc Char[l] : new Char[l];
             for (int i = 0; i < l; ++i)
                 t[i] = (Char)d[i];
             return TimeSpan.Parse(t, ParseCulture);
@@ -398,7 +409,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
             if ((d.Length == 10) && TryDate(d, out var date))
                 return DateOnly.FromDateTime(date);
             var l = d.Length;
-            Span<Char> t = stackalloc Char[l];
+            Span<Char> t = l <= MaxStackChars ? stackalloc Char[l] : new Char[l];
             for (int i = 0; i < l; ++i)
                 t[i] = (Char)d[i];
             return DateOnly.Parse(t, ParseCulture, DateTimeStyles.AllowWhiteSpaces);
@@ -417,7 +428,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                     return new TimeOnly(time + fraction);
             }
             var l = d.Length;
-            Span<Char> t = stackalloc Char[l];
+            Span<Char> t = l <= MaxStackChars ? stackalloc Char[l] : new Char[l];
             for (int i = 0; i < l; ++i)
                 t[i] = (Char)d[i];
             return TimeOnly.Parse(t, ParseCulture, DateTimeStyles.AllowWhiteSpaces);
@@ -449,7 +460,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 }
             }
             var l = d.Length;
-            Span<Char> t = stackalloc Char[l];
+            Span<Char> t = l <= MaxStackChars ? stackalloc Char[l] : new Char[l];
             for (int i = 0; i < l; ++i)
                 t[i] = (Char)d[i];
             return DateTimeOffset.Parse(t, ParseCulture, DateTimeStyle);
@@ -465,7 +476,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
             if ((d.Length == 36) && System.Buffers.Text.Utf8Parser.TryParse(d, out Guid g, out var consumed, 'D') && (consumed == 36))
                 return g;
             var l = d.Length;
-            Span<Char> t = stackalloc Char[l];
+            Span<Char> t = l <= MaxStackChars ? stackalloc Char[l] : new Char[l];
             for (int i = 0; i < l; ++i)
                 t[i] = (Char)d[i];
             return Guid.Parse(t);
@@ -570,20 +581,20 @@ namespace SysWeaver.Serialization.SwJson.Reader
             };
             if (Environment.Is64BitProcess)
             {
-                d[typeof(Byte)] = e => Expression.Convert(Expression.Call(u64, e), typeof(Byte));
-                d[typeof(UInt16)] = e => Expression.Convert(Expression.Call(u64, e), typeof(UInt16));
-                d[typeof(UInt32)] = e => Expression.Convert(Expression.Call(u64, e), typeof(UInt32));
-                d[typeof(SByte)] = e => Expression.Convert(Expression.Call(s64, e), typeof(SByte));
-                d[typeof(Int16)] = e => Expression.Convert(Expression.Call(s64, e), typeof(Int16));
-                d[typeof(Int32)] = e => Expression.Convert(Expression.Call(s64, e), typeof(Int32));
+                d[typeof(Byte)] = e => Expression.ConvertChecked(Expression.Call(u64, e), typeof(Byte));
+                d[typeof(UInt16)] = e => Expression.ConvertChecked(Expression.Call(u64, e), typeof(UInt16));
+                d[typeof(UInt32)] = e => Expression.ConvertChecked(Expression.Call(u64, e), typeof(UInt32));
+                d[typeof(SByte)] = e => Expression.ConvertChecked(Expression.Call(s64, e), typeof(SByte));
+                d[typeof(Int16)] = e => Expression.ConvertChecked(Expression.Call(s64, e), typeof(Int16));
+                d[typeof(Int32)] = e => Expression.ConvertChecked(Expression.Call(s64, e), typeof(Int32));
             }
             else
             {
-                d[typeof(Byte)] = e => Expression.Convert(Expression.Call(u32, e), typeof(Byte));
-                d[typeof(UInt16)] = e => Expression.Convert(Expression.Call(u32, e), typeof(UInt16));
+                d[typeof(Byte)] = e => Expression.ConvertChecked(Expression.Call(u32, e), typeof(Byte));
+                d[typeof(UInt16)] = e => Expression.ConvertChecked(Expression.Call(u32, e), typeof(UInt16));
                 d[typeof(UInt32)] = e => Expression.Call(u32, e);
-                d[typeof(SByte)] = e => Expression.Convert(Expression.Call(s32, e), typeof(Byte));
-                d[typeof(Int16)] = e => Expression.Convert(Expression.Call(s32, e), typeof(UInt16));
+                d[typeof(SByte)] = e => Expression.ConvertChecked(Expression.Call(s32, e), typeof(SByte));
+                d[typeof(Int16)] = e => Expression.ConvertChecked(Expression.Call(s32, e), typeof(Int16));
                 d[typeof(Int32)] = e => Expression.Call(s32, e);
             }
             TypeToExp = d.ToFrozenDictionary();

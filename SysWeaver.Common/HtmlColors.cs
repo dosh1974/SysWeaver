@@ -16,16 +16,15 @@ namespace SysWeaver
         /// </summary>
         /// <param name="argColor">The color as 0xaarrggbb</param>
         /// <param name="htmlColor">A html color, can be a name [Red], a hex value [#f00] or [#ff0000], rgb [rgb(255,0,0)] or rgba [rgba(255,0,0,1.0)]</param>
-        /// <returns>True if the input in understood and a hex colour value is returned, false if the format isn't recognized</returns>
+        /// <returns>True if the input in understood and a hex colour value is returned, false if the format isn't recognized or is malformed (or <paramref name="htmlColor"/> is null)</returns>
         /// <remarks>
-        /// Despite the name, malformed input in a recognized format throws (ex: "#ggg" or "rgb(a,b,c)").
-        /// Components are not range checked, so values above 255 corrupt the other channels.
+        /// Components in "rgb(..)" / "rgba(..)" are clamped to [0, 255] and the alpha to [0, 1].
         /// </remarks>
-        /// <exception cref="NullReferenceException"><paramref name="htmlColor"/> is null.</exception>
-        /// <exception cref="FormatException">A hex digit or number in the color is invalid.</exception>
-        /// <exception cref="OverflowException">A component in "rgb(..)" / "rgba(..)" is negative or too large.</exception>
         public static bool TryGetArgb(out uint argColor, String htmlColor)
         {
+            argColor = 0;
+            if (htmlColor == null)
+                return false;
             htmlColor = htmlColor.Trim();
             if (NameToHex.TryGetValue(htmlColor, out argColor))
             {
@@ -37,9 +36,12 @@ namespace SysWeaver
                 var cl = htmlColor.Length;
                 if (cl == 4)
                 {
-                    var r = uint.Parse(htmlColor.Substring(1, 1), NumberStyles.HexNumber);
-                    var g = uint.Parse(htmlColor.Substring(2, 1), NumberStyles.HexNumber);
-                    var b = uint.Parse(htmlColor.Substring(3, 1), NumberStyles.HexNumber);
+                    if (!TryParseHex(htmlColor, 1, 1, out var r))
+                        return false;
+                    if (!TryParseHex(htmlColor, 2, 1, out var g))
+                        return false;
+                    if (!TryParseHex(htmlColor, 3, 1, out var b))
+                        return false;
                     r |= (r << 4);
                     g |= (g << 4);
                     b |= (b << 4);
@@ -50,9 +52,12 @@ namespace SysWeaver
                 }
                 if (cl == 7)
                 {
-                    var r = uint.Parse(htmlColor.Substring(1, 2), NumberStyles.HexNumber);
-                    var g = uint.Parse(htmlColor.Substring(3, 2), NumberStyles.HexNumber);
-                    var b = uint.Parse(htmlColor.Substring(5, 2), NumberStyles.HexNumber);
+                    if (!TryParseHex(htmlColor, 1, 2, out var r))
+                        return false;
+                    if (!TryParseHex(htmlColor, 3, 2, out var g))
+                        return false;
+                    if (!TryParseHex(htmlColor, 5, 2, out var b))
+                        return false;
                     r <<= 16;
                     g <<= 8;
                     argColor = r | g | b | 0xff000000U;
@@ -66,10 +71,19 @@ namespace SysWeaver
                 var comp = t.Split(',');
                 if (comp.Length != 4)
                     return false;
-                var r = uint.Parse(comp[0].Trim());
-                var g = uint.Parse(comp[1].Trim());
-                var b = uint.Parse(comp[2].Trim());
-                var a = (uint)Math.Round(double.Parse(comp[3].Trim(), CultureInfo.InvariantCulture) * 255.0);
+                if (!TryParseComponent(comp[0], out var r))
+                    return false;
+                if (!TryParseComponent(comp[1], out var g))
+                    return false;
+                if (!TryParseComponent(comp[2], out var b))
+                    return false;
+                if (!double.TryParse(comp[3].Trim(), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var da))
+                    return false;
+                if (!(da >= 0))
+                    da = 0;
+                if (da > 1)
+                    da = 1;
+                var a = (uint)Math.Round(da * 255.0);
                 a <<= 24;
                 r <<= 16;
                 g <<= 8;
@@ -82,15 +96,32 @@ namespace SysWeaver
                 var comp = t.Split(',');
                 if (comp.Length != 3)
                     return false;
-                var r = uint.Parse(comp[0].Trim());
-                var g = uint.Parse(comp[1].Trim());
-                var b = uint.Parse(comp[2].Trim());
+                if (!TryParseComponent(comp[0], out var r))
+                    return false;
+                if (!TryParseComponent(comp[1], out var g))
+                    return false;
+                if (!TryParseComponent(comp[2], out var b))
+                    return false;
                 r <<= 16;
                 g <<= 8;
                 argColor = r | g | b | 0xff000000U;
                 return true;
             }
             return false;
+        }
+
+        static bool TryParseHex(String s, int start, int length, out uint value)
+            => uint.TryParse(s.AsSpan(start, length), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
+
+        static bool TryParseComponent(String s, out uint value)
+        {
+            if (!int.TryParse(s.AsSpan().Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
+            {
+                value = 0;
+                return false;
+            }
+            value = (uint)(v < 0 ? 0 : (v > 255 ? 255 : v));
+            return true;
         }
 
 
@@ -102,7 +133,7 @@ namespace SysWeaver
         /// <param name="g">[0, 255] Green component</param>
         /// <param name="b">[0, 255] Blue component</param>
         /// <param name="a">[0, 1] Alpha component</param>
-        /// <returns>True if the input in understood (see <see cref="TryGetArgb(out uint, string)"/> for exceptions on malformed input)</returns>
+        /// <returns>True if the input in understood, false if the format isn't recognized or is malformed</returns>
         public static bool ParseHtmlColor(String htmlColor, out int r, out int g, out int b, out double a)
         {
             if (!TryGetArgb(out var col, htmlColor))
@@ -266,7 +297,6 @@ namespace SysWeaver
         /// <param name="htmlColorB">A html color, can be a name [Red], a hex value [#f00] or [#ff0000], rgb [rgb(255,0,0)] or rgba [rgba(255,0,0,1.0)]</param>
         /// <param name="distance">The distance to move from A to B, 0 = A, 1 = B (not clamped)</param>
         /// <returns>The resulting color, or the unparsable input color (A is checked first). Null if either input is null.</returns>
-        /// <remarks>Note: the interpolated alpha is currently rounded to 0 or 1, so the result is either fully opaque or "transparent".</remarks>
         public static String MakeTransparentLerp(String htmlColorA, String htmlColorB, double distance = 0.5)
         {
             if (htmlColorA == null)
@@ -297,9 +327,8 @@ namespace SysWeaver
             dr = Math.Round(dr);
             dg = Math.Round(dg);
             db = Math.Round(db);
-            da = Math.Round(da);
 
-            return MakeHtmlColor((int)dr, (int)dg, (int)db, (int)da);
+            return MakeHtmlColor((int)dr, (int)dg, (int)db, da);
         }
 
 

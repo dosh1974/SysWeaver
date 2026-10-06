@@ -99,9 +99,9 @@ namespace SysWeaver.Security
                     Msg?.AddMessage(Prefix + "Can't get public certificate from " + RootFilename.ToFilename() + " since the file doesn't exist!", MessageLevels.Warning);
                     return false;
                 }
-                var lwt = fi.LastAccessTimeUtc;
+                var lwt = fi.LastWriteTimeUtc;
                 var etag = HttpServerTools.ToEtag(lwt);
-                var c = await CertificateTools.Load(RootFilename, RootPassword).ConfigureAwait(false);
+                using var c = await CertificateTools.Load(RootFilename, RootPassword).ConfigureAwait(false);
                 var pem = Encoding.UTF8.GetBytes(c.ExportCertificatePem());
                 var fileTemp = FileTemplate;
                 Dictionary<String, String> extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -168,12 +168,12 @@ namespace SysWeaver.Security
                 return c;
             var l = Lock;
             await l.WaitAsync().ConfigureAwait(false);
-            Interlocked.Exchange(ref ExpireAction, null)?.Dispose();
             try
             {
                 c = C;
                 if (c != null)
                     return c;
+                Interlocked.Exchange(ref ExpireAction, null)?.Dispose();
                 var p = P;
                 var f = Filename;
                 var rootFile = RootFilename;

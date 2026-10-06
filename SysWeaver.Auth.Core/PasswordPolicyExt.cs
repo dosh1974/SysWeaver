@@ -9,8 +9,7 @@ namespace SysWeaver.Auth
     public static class PasswordPolicyExt
     {
         /// <summary>
-        /// Returns a new policy that combines two policies: the smallest minimum length, the smallest maximum length and only the character class requirements that both have.
-        /// Note: unlike <see cref="Min(IEnumerable{PasswordPolicy})"/> the maximum length is the more restrictive (smaller) value.
+        /// Returns a new policy with the lowest common restriction of two policies: the smallest minimum length, the largest maximum length and only the character class requirements that both have.
         /// </summary>
         /// <param name="a">The first policy</param>
         /// <param name="b">The second policy</param>
@@ -20,7 +19,7 @@ namespace SysWeaver.Auth
             return new PasswordPolicy
             {
                 MinLength = Math.Min(a.MinLength, b.MinLength),
-                MaxLength = Math.Min(a.MaxLength, b.MaxLength),
+                MaxLength = Math.Max(a.MaxLength, b.MaxLength),
                 MixedCase = a.MixedCase & b.MixedCase,
                 MixedNumerical = a.MixedNumerical & b.MixedNumerical,
                 MixedSpecial = a.MixedSpecial & b.MixedSpecial,

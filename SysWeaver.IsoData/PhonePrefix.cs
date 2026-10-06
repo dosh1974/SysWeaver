@@ -163,10 +163,7 @@ namespace SysWeaver
             {
                 var nexts = node.Next;
                 if (nexts == null)
-                {
-                    --i;
                     break;
-                }
                 var c = internationalNumber[i];
                 if (c < '0')
                     continue;

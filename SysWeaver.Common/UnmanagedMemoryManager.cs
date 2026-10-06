@@ -80,10 +80,10 @@ namespace SysWeaver.Memory
         /// </summary>
         /// <param name="elementIndex">The index of the element to get a pointer to</param>
         /// <returns>A handle with the address of the element (disposing it does nothing)</returns>
-        /// <exception cref="ArgumentOutOfRangeException"><paramref name="elementIndex"/> is negative or not less than the length (so pinning empty memory throws)</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="elementIndex"/> is negative or greater than the length</exception>
         public override MemoryHandle Pin(int elementIndex = 0)
         {
-            if (elementIndex < 0 || elementIndex >= _length)
+            if (elementIndex < 0 || elementIndex > _length)
                 throw new ArgumentOutOfRangeException(nameof(elementIndex));
             return new MemoryHandle(_pointer + elementIndex);
         }

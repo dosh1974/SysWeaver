@@ -590,8 +590,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Make a copy of a tree (all nodes are copied).
-        /// Note that the value lists are NOT copied, they are shared with the original tree, so adding a value to an existing string in one of the trees also adds it to the other
+        /// Make a copy of a tree (all nodes and value lists are copied, the values themselves are not cloned)
         /// </summary>
         /// <returns>The copy</returns>
         public StringTreeList<T> Clone()
@@ -604,7 +603,8 @@ namespace SysWeaver
                 foreach (var n in en)
                     nodes.Add(n.Key, n.Value.Clone());
             }
-            return new StringTreeList<T>(Leaf, nodes);
+            var leaf = Leaf;
+            return new StringTreeList<T>((leaf == null) || (leaf == LeafList) ? leaf : new List<T>(leaf), nodes);
         }
 
 

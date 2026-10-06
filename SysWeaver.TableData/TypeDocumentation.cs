@@ -69,10 +69,9 @@ namespace SysWeaver.Data
         /// </summary>
         /// <param name="type">The type to test</param>
         /// <returns>True if a table should be created for the type</returns>
-        /// <remarks>Throws a <see cref="NullReferenceException"/> for types without a namespace.</remarks>
         public static bool DefaultMakeFn(Type type)
         {
-            var ns = type.Namespace;
+            var ns = type.Namespace ?? "";
             if (ns.StartsWith("System."))
                 return false;
             if (ns.StartsWith("Microsoft."))

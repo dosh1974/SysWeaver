@@ -165,13 +165,12 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// Skip the value of an unknown member.
         /// </summary>
         /// <remarks>
-        /// Strings are skipped to the next quote char without considering escapes (so a string containing <c>\"</c> isn't skipped correctly).
-        /// Object and array values are not supported.
+        /// Strings are skipped considering escapes, objects and arrays are skipped to the matching end char (strings and comments inside are skipped too).
         /// </remarks>
         /// <param name="d">The position (at the value), set to after the value</param>
         /// <param name="e">The end of the data</param>
         /// <param name="endOn">The end condition for an unquoted value</param>
-        /// <exception cref="Exception">The value is an object or an array, or a string isn't terminated</exception>
+        /// <exception cref="Exception">A string, object or array isn't terminated</exception>
         public static void SkipUnknown(ref Byte* d, Byte* e, Func<Char, bool> endOn)
         {
             var c = (Char)(*d);
@@ -179,23 +178,61 @@ namespace SysWeaver.Serialization.SwJson.Reader
             if (c == Quote)
             {
                 ++d;
-#if VALIDATE
-                Utf8Parser.GetUtf8Range(ref dummy, ref d, e, c);
-#else//VALIDATE
-                Utf8Parser.GetAsciiRange(ref dummy, ref d, e, c);
-#endif//VALIDATE
+                Utf8Parser.DetectUtf8RangeEscaped(ref d, e, Quote);
                 return;
             }
-            //  TODO: Handle objects? Arrays?
-            if (c == '{')
-                ReadException.ThrowUnhandledUknownObject();
-            if (c == '[')
-                ReadException.ThrowUnhandledUknownArray();
+            if ((c == '{') || (c == '['))
+            {
+                SkipUnknownContainer(ref d, e);
+                return;
+            }
 #if VALIDATE
             Utf8Parser.GetUtf8RangeNoLast(ref dummy, ref d, e, endOn);
 #else//VALIDATE
             Utf8Parser.GetAsciiRangeNoLast(ref dummy, ref d, e, endOn);
 #endif//VALIDATE
+        }
+
+        /// <summary>
+        /// Skip an object or array value (nested objects, arrays, strings and comments are skipped too).
+        /// </summary>
+        /// <param name="d">The position (at the opening '{' or '['), set to after the matching end char</param>
+        /// <param name="e">The end of the data</param>
+        /// <exception cref="Exception">The object or array isn't terminated</exception>
+        static void SkipUnknownContainer(ref Byte* d, Byte* e)
+        {
+            int depth = 0;
+            while (d < e)
+            {
+                var t = *d;
+                if (t == '/')
+                {
+                    //  A comment (or a lone '/')
+                    var p = d;
+                    Utf8Parser.SkipWhite(ref d, e);
+                    if (d == p)
+                        ++d;
+                    continue;
+                }
+                ++d;
+                if (t == '"')
+                {
+                    Utf8Parser.DetectUtf8RangeEscaped(ref d, e, Quote);
+                    continue;
+                }
+                if ((t == '{') || (t == '['))
+                {
+                    ++depth;
+                    continue;
+                }
+                if ((t == '}') || (t == ']'))
+                {
+                    --depth;
+                    if (depth <= 0)
+                        return;
+                }
+            }
+            ReadException.ThrowEndOfData();
         }
 
 

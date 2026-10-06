@@ -26,10 +26,10 @@ namespace SysWeaver
     public sealed class CommandLine
     {
         /// <summary>
-        /// The primary option prefix, checked first by <see cref="IsOption(ref string)"/> and used when generating help text. Default is "-".
+        /// The primary option prefix, accepted by <see cref="IsOption(ref string)"/> and used when generating help text. Default is "-".
         /// </summary>
         /// <remarks>
-        /// Because this prefix is tested before <see cref="AdditionalOptionPrefixes"/>, a token starting with "--" only gets a single "-" removed (with the default settings).
+        /// When several prefixes match a token, the longest one is removed (so "--help" is the option "help" with the default settings).
         /// </remarks>
         public static String DefaultOptionsPrefix = "-";
         /// <summary>
@@ -70,10 +70,9 @@ namespace SysWeaver
         public static String MakeTag(String v) => String.Concat(TagStart, v, TagEnd);
 
         /// <summary>
-        /// Other option prefixes accepted by <see cref="IsOption(ref string)"/>, checked (ordinal) after <see cref="DefaultOptionsPrefix"/>: "--" and "/".
+        /// Other option prefixes accepted by <see cref="IsOption(ref string)"/>, checked (ordinal) together with <see cref="DefaultOptionsPrefix"/>: "--" and "/".
         /// </summary>
         /// <remarks>
-        /// With the default prefix "-", the "--" entry is never reached (see <see cref="DefaultOptionsPrefix"/>).
         /// The "/" prefix means that any token starting with "/" (ex: an absolute Unix path) is treated as an option.
         /// </remarks>
         public static readonly IReadOnlySet<String> AdditionalOptionPrefixes = ReadOnlyData.Set(StringComparer.Ordinal,
@@ -361,23 +360,21 @@ namespace SysWeaver
         /// </summary>
         /// <param name="v">The token, replaced with the option name (prefix removed) if it is an option.</param>
         /// <returns>True if the token is an option.</returns>
-        /// <remarks>Only the first matching prefix is removed. Tokens such as negative numbers ("-5") or paths starting with "/" are also treated as options.</remarks>
+        /// <remarks>Only the longest matching prefix is removed. Tokens such as negative numbers ("-5") or paths starting with "/" are also treated as options.</remarks>
         public static bool IsOption(ref String v)
         {
+            int prefixLen = -1;
             if (v.StartsWith(DefaultOptionsPrefix, StringComparison.Ordinal))
-            {
-                v = v.Substring(DefaultOptionsPrefix.Length);
-                return true;
-            }
+                prefixLen = DefaultOptionsPrefix.Length;
             foreach (var x in AdditionalOptionPrefixes)
             {
-                if (v.StartsWith(x, StringComparison.Ordinal))
-                {
-                    v = v.Substring(x.Length);
-                    return true;
-                }
+                if ((x.Length > prefixLen) && v.StartsWith(x, StringComparison.Ordinal))
+                    prefixLen = x.Length;
             }
-            return false;
+            if (prefixLen < 0)
+                return false;
+            v = v.Substring(prefixLen);
+            return true;
         }
 
         #region Type options
@@ -471,7 +468,7 @@ namespace SysWeaver
         /// <returns>The parse result. If one of the help options is found, parsing stops and the result has null <see cref="Arguments"/>.</returns>
         /// <remarks>
         /// Options may appear anywhere; each option consumes the following tokens as its arguments.
-        /// When fewer arguments than declared are given, optional arguments before the last required one are meant to be skipped so that required arguments get values.
+        /// When fewer arguments than declared are given, optional arguments before the last required one are skipped so that required arguments get values.
         /// </remarks>
         /// <exception cref="ArgumentException">An option is unknown, an option is missing parameters, there are too few/many arguments, or two options have the same name.</exception>
         public static CommandLine ParseOptions(String[] commandLineArgs, IEnumerable<CommandLineArgument> arguments, IEnumerable<CommandLineOption> options, StringComparer optionsComparer)
@@ -491,7 +488,7 @@ namespace SysWeaver
             if (anyNumberOfArgs)
             {
                 --maxArgCount;
-                if (maxArgCount > 0)
+                if (maxArgCount >= 0)
                     validArgs.RemoveAt(maxArgCount);
                 maxArgCount = int.MaxValue;
             }
@@ -555,7 +552,6 @@ namespace SysWeaver
                         arg = validArgs[so];
                         --skip;
                     }
-                    --skip;
                     ++so;
                     aa[s] = new Tuple<CommandLineArgument, object>(arg, arg.ParseValue(outArgs[s]));
                 }else
@@ -783,8 +779,8 @@ namespace SysWeaver
         /// <summary>
         /// Generates help text lines: a syntax line, the arguments with their tags and help, and the options with their arguments.
         /// </summary>
-        /// <param name="arguments">The valid positional arguments (a null element means "any number of arguments"); must not be null.</param>
-        /// <param name="options">The valid options; must contain at least one option.</param>
+        /// <param name="arguments">The valid positional arguments (a null element means "any number of arguments"), null means any number of arguments.</param>
+        /// <param name="options">The valid options.</param>
         /// <param name="commandPrefix">Text starting the syntax line, null for "Use: {executable name} ".</param>
         /// <param name="linePrefix">Text prefixed to every line.</param>
         /// <param name="levelInset">Indentation for each nesting level.</param>
@@ -795,7 +791,7 @@ namespace SysWeaver
             levelInset = levelInset ?? "";
             linePrefix = linePrefix ?? "";
             var baseLen = levelInset.Length + linePrefix.Length;
-            yield return String.Concat(linePrefix, commandPrefix, OptionalArgumentStart, "Options", OptionalArgumentEnd, ' ', String.Join(' ', arguments.Select(x => x == null ? String.Concat(OptionalArgumentStart + "..." + OptionalArgumentEnd) : String.Concat(x.Optional ? OptionalArgumentStart : RequiredArgumentStart, x.Name, x.Optional ? OptionalArgumentEnd : RequiredArgumentEnd))));
+            yield return String.Concat(linePrefix, commandPrefix, OptionalArgumentStart, "Options", OptionalArgumentEnd, ' ', String.Join(' ', (arguments ?? new CommandLineArgument[] { null }).Select(x => x == null ? String.Concat(OptionalArgumentStart + "..." + OptionalArgumentEnd) : String.Concat(x.Optional ? OptionalArgumentStart : RequiredArgumentStart, x.Name, x.Optional ? OptionalArgumentEnd : RequiredArgumentEnd))));
             yield return String.Concat(linePrefix, "Arguments:");
             var validArgs = arguments?.ToList() ?? [];
             var maxArgCount = validArgs.Count;
@@ -808,7 +804,7 @@ namespace SysWeaver
             }
             else
             {
-                pad = validArgs.Select(x => x == null ? 3 : x.Name.Length).Max() + 1;
+                pad = validArgs.Select(x => x == null ? 3 : x.Name.Length).DefaultIfEmpty(0).Max() + 1;
                 foreach (var x in validArgs)
                     yield return x == null ?
                         String.Concat(linePrefix, levelInset, "...".PadRight(pad), "Optional arguments")
@@ -817,7 +813,7 @@ namespace SysWeaver
                         ;
             }
             yield return String.Concat(linePrefix, "Options ", MakeTag(OptionalTag), ':');
-            pad = options.Select(x => x.Syntax.Length).Max() + 1;
+            pad = options.Select(x => x.Syntax.Length).DefaultIfEmpty(0).Max() + 1;
             ++baseLen;
             var baseLen2 = levelInset.Length + baseLen;
             foreach (var x in options)

@@ -112,10 +112,13 @@ namespace SysWeaver.IsoData
 
         String ApplyThousandSeparator(Decimal a, String over)
         {
-            var t = a.ToString(ThousandsSeparatorFormat).TrimStart(ThousandsSeparatorTrim);
+            var neg = a < 0;
+            var t = Math.Abs(a).ToString(ThousandsSeparatorFormat).TrimStart(ThousandsSeparatorTrim);
             if (over != null)
                 t = t.Replace(ThousandsSeparator, over);
-            return String.IsNullOrEmpty(t) ? "0" : t;
+            if (String.IsNullOrEmpty(t))
+                t = "0";
+            return neg ? String.Concat(System.Globalization.NumberFormatInfo.CurrentInfo.NegativeSign, t) : t;
         }
 
         /// <summary>
@@ -145,8 +148,9 @@ namespace SysWeaver.IsoData
                 if ((f != 0) || ((options & CurrencyFormatOptions.AutomaticRounding) == 0))
                 {
                     var fs = f.ToString(new string('0', DecimalNumbers));
-                    a *= sign;
                     value = (options & CurrencyFormatOptions.ApplyThousandsSeparator) != 0 ? String.Join(decimalSeparator, ApplyThousandSeparator(a, thousandSeparatorOverride), fs) : String.Join(decimalSeparator, a, fs);
+                    if ((sign < 0) && ((a != 0) || (f != 0)))
+                        value = String.Concat(System.Globalization.NumberFormatInfo.CurrentInfo.NegativeSign, value);
                 }
             }
             if (value == null)

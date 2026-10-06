@@ -632,7 +632,10 @@ namespace SysWeaver.Net
 #if DEBUG
 //            Console.WriteLine("Pushing message: " + b);
 #endif//DEBUG
-            m.Enqueue(new Message(now, Auth?.Guid, b, onlyLatest, Interlocked.Increment(ref MessageId), validateAuth));
+            var auth = Auth?.Guid;
+            // The id must be assigned and the message enqueued atomically, else a poller may see a newer id first and skip this message
+            lock (m)
+                m.Enqueue(new Message(now, auth, b, onlyLatest, Interlocked.Increment(ref MessageId), validateAuth));
             MessagesAdded.Change();
         }
 

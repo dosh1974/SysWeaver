@@ -17,6 +17,8 @@ namespace SysWeaver
     /// Values are not reference counted, so a replaced value is disposed even if another thread obtained it just before (and may still be using it),
     /// don't use auto dispose for values that may be in use when they expire (dispose them some time after they are replaced instead).
     /// Exceptions thrown by the get function are propagated and nothing is cached.
+    /// The async methods have overloads with a waitUntilReady argument: when false, a caller that finds the value missing or expired starts an update in the background
+    /// (unless one is already running) and gets default until the value is ready, instead of waiting.
     /// </remarks>
     public sealed class CachedValue<T> : IDisposable
     {
@@ -615,6 +617,118 @@ namespace SysWeaver
             DisposeOld(old, val);
             return val;
         }
+
+
+        #region Optional waiting
+
+        /// <summary>
+        /// Get the cached value (update invoked if invalid or non-existing).
+        /// </summary>
+        /// <param name="getFn">The function to call to get the original value (the value is cached for <see cref="DefaultCacheDuration"/>)</param>
+        /// <param name="waitUntilReady">If true, wait for the update (same as <see cref="GetOrUpdate(Func{Task{T}})"/>), else the update is started in the background (if not already running) and default is returned until it's ready</param>
+        /// <returns>The cached value, or default if <paramref name="waitUntilReady"/> is false and the value isn't ready</returns>
+        /// <remarks>Only one update runs at a time. Exceptions thrown by a background update are ignored (the next call starts a new update).</remarks>
+        public ValueTask<T> GetOrUpdate(Func<Task<T>> getFn, bool waitUntilReady)
+            => waitUntilReady ? GetOrUpdate(getFn) : GetOrStartUpdate(() => InternalGetOrUpdate(getFn));
+
+        /// <summary>
+        /// Get the cached value (update invoked if invalid or non-existing).
+        /// </summary>
+        /// <param name="getFn">The function to call to get the original value and the time when it expires (UTC)</param>
+        /// <param name="waitUntilReady">If true, wait for the update (same as <see cref="GetOrUpdate(Func{Task{Tuple{DateTime, T}}})"/>), else the update is started in the background (if not already running) and default is returned until it's ready</param>
+        /// <returns>The cached value, or default if <paramref name="waitUntilReady"/> is false and the value isn't ready</returns>
+        /// <remarks>Only one update runs at a time. Exceptions thrown by a background update are ignored (the next call starts a new update).</remarks>
+        public ValueTask<T> GetOrUpdate(Func<Task<Tuple<DateTime, T>>> getFn, bool waitUntilReady)
+            => waitUntilReady ? GetOrUpdate(getFn) : GetOrStartUpdate(() => InternalGetOrUpdate(getFn));
+
+        /// <summary>
+        /// Get the cached value (update invoked if invalid or non-existing).
+        /// </summary>
+        /// <param name="getFn">The function to call to get the original value and the time when it expires (UTC)</param>
+        /// <param name="waitUntilReady">If true, wait for the update (same as <see cref="GetOrUpdate(Func{Task{ValueTuple{DateTime, T}}})"/>), else the update is started in the background (if not already running) and default is returned until it's ready</param>
+        /// <returns>The cached value, or default if <paramref name="waitUntilReady"/> is false and the value isn't ready</returns>
+        /// <remarks>Only one update runs at a time. Exceptions thrown by a background update are ignored (the next call starts a new update).</remarks>
+        public ValueTask<T> GetOrUpdate(Func<Task<ValueTuple<DateTime, T>>> getFn, bool waitUntilReady)
+            => waitUntilReady ? GetOrUpdate(getFn) : GetOrStartUpdate(() => InternalGetOrUpdate(getFn));
+
+        /// <summary>
+        /// Get the cached value (update invoked if invalid or non-existing).
+        /// </summary>
+        /// <param name="getFn">The function to call to get the original value (the value is cached for <see cref="DefaultCacheDuration"/>)</param>
+        /// <param name="waitUntilReady">If true, wait for the update (same as <see cref="GetOrUpdateValue(Func{ValueTask{T}})"/>), else the update is started in the background (if not already running) and default is returned until it's ready</param>
+        /// <returns>The cached value, or default if <paramref name="waitUntilReady"/> is false and the value isn't ready</returns>
+        /// <remarks>Only one update runs at a time. Exceptions thrown by a background update are ignored (the next call starts a new update).</remarks>
+        public ValueTask<T> GetOrUpdateValue(Func<ValueTask<T>> getFn, bool waitUntilReady)
+            => waitUntilReady ? GetOrUpdateValue(getFn) : GetOrStartUpdate(() => InternalGetOrUpdateValue(getFn));
+
+        /// <summary>
+        /// Get the cached value (update invoked if invalid or non-existing).
+        /// </summary>
+        /// <param name="getFn">The function to call to get the original value and the time when it expires (UTC)</param>
+        /// <param name="waitUntilReady">If true, wait for the update (same as <see cref="GetOrUpdateValue(Func{ValueTask{Tuple{DateTime, T}}})"/>), else the update is started in the background (if not already running) and default is returned until it's ready</param>
+        /// <returns>The cached value, or default if <paramref name="waitUntilReady"/> is false and the value isn't ready</returns>
+        /// <remarks>Only one update runs at a time. Exceptions thrown by a background update are ignored (the next call starts a new update).</remarks>
+        public ValueTask<T> GetOrUpdateValue(Func<ValueTask<Tuple<DateTime, T>>> getFn, bool waitUntilReady)
+            => waitUntilReady ? GetOrUpdateValue(getFn) : GetOrStartUpdate(() => InternalGetOrUpdateValue(getFn));
+
+        /// <summary>
+        /// Get the cached value (update invoked if invalid or non-existing).
+        /// </summary>
+        /// <param name="getFn">The function to call to get the original value and the time when it expires (UTC)</param>
+        /// <param name="waitUntilReady">If true, wait for the update (same as <see cref="GetOrUpdateValue(Func{ValueTask{ValueTuple{DateTime, T}}})"/>), else the update is started in the background (if not already running) and default is returned until it's ready</param>
+        /// <returns>The cached value, or default if <paramref name="waitUntilReady"/> is false and the value isn't ready</returns>
+        /// <remarks>Only one update runs at a time. Exceptions thrown by a background update are ignored (the next call starts a new update).</remarks>
+        public ValueTask<T> GetOrUpdateValue(Func<ValueTask<ValueTuple<DateTime, T>>> getFn, bool waitUntilReady)
+            => waitUntilReady ? GetOrUpdateValue(getFn) : GetOrStartUpdate(() => InternalGetOrUpdateValue(getFn));
+
+        /// <summary>
+        /// Return the value if it's valid, else start an update in the background (unless one is already running) and return default (or the value if the update completed synchronously).
+        /// </summary>
+        /// <param name="update">Runs the update (takes the lock, so it never runs concurrently with any other update)</param>
+        ValueTask<T> GetOrStartUpdate(Func<ValueTask<T>> update)
+        {
+            var d = Data;
+            if ((d != null) && (DateTime.UtcNow < d.Item1))
+            {
+                Interlocked.Increment(ref HitCount);
+                return ValueTask.FromResult(d.Item2);
+            }
+            var p = PendingUpdate;
+            if ((p == null) || p.IsCompleted)
+            {
+                var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                if (Interlocked.CompareExchange(ref PendingUpdate, tcs.Task, p) == p)
+                    _ = RunUpdate(update, tcs);
+            }
+            //  The update may have completed synchronously
+            d = Data;
+            if ((d != null) && (DateTime.UtcNow < d.Item1))
+                return ValueTask.FromResult(d.Item2);
+            return default;
+        }
+
+        static async Task RunUpdate(Func<ValueTask<T>> update, TaskCompletionSource tcs)
+        {
+            try
+            {
+                await update().ConfigureAwait(false);
+            }
+            catch
+            {
+                //  Ignored, the next call starts a new update
+            }
+            finally
+            {
+                tcs.TrySetResult();
+            }
+        }
+
+        /// <summary>
+        /// The running background update (started by a caller that doesn't wait), null or completed if none is running
+        /// </summary>
+        Task PendingUpdate;
+
+        #endregion//Optional waiting
 
 
         volatile Tuple<DateTime, T> Data;

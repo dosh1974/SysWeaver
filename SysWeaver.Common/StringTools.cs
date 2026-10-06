@@ -2069,7 +2069,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="data">The encoded text, a byte order mark (of the encoding) is skipped</param>
         /// <param name="trim">True to trim whitespaces from every line</param>
-        /// <param name="removeEmpty">True to remove empty lines. Note: unless trim is true, empty lines are removed BEFORE the '\r' is removed (so a "\r\n" line is kept as an empty line)</param>
+        /// <param name="removeEmpty">True to remove empty lines (after removing '\r' and trimming)</param>
         /// <param name="encoding">optional string encoding to use, default is UTF-8</param>
         /// <returns>The lines</returns>
         public static String[] GetLines(ReadOnlySpan<Byte> data, bool trim = false, bool removeEmpty = false, Encoding encoding = null)
@@ -2077,6 +2077,9 @@ namespace SysWeaver
             if (data.Length <= 0)
                 return Array.Empty<String>();
             var s = encoding.GetStringWithoutBom(data);
+            // Empty lines must be removed after the '\r' is removed
+            if (removeEmpty && !trim)
+                return GetLines(s.AsSpan(), false, true);
             var opt = StringSplitOptions.None;
             if (trim)
                 opt |= StringSplitOptions.TrimEntries;

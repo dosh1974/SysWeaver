@@ -10,8 +10,8 @@ namespace SysWeaver.IO
     /// Contains method that create BinaryReader's with specific endianness requirements.
     /// </summary>
     /// <remarks>
-    /// Note that the standard <see cref="BinaryReader"/> always reads little endian (regardless of the machine endianness),
-    /// so on a big endian machine the readers for <see cref="Endianess.Big"/> and <see cref="Endianess.Current"/> actually reads little endian data.
+    /// The standard <see cref="BinaryReader"/> always reads little endian (regardless of the machine endianness),
+    /// so little endian data is read using a <see cref="BinaryReader"/> and big endian data is read using a <see cref="ReversedEndianBinaryReader"/>.
     /// </remarks>
     public static class EndianAwareBinaryReader
     {
@@ -22,7 +22,7 @@ namespace SysWeaver.IO
         /// <param name="leaveOpen">Optionally leave the <paramref name="stream"/> open when the binary reader is disposed</param>
         /// <returns>A binary reader that reads data stored as little endian</returns>
         public static BinaryReader OpenLittleEndian(Stream stream, bool leaveOpen = false)
-            => BitConverter.IsLittleEndian ? new BinaryReader(stream, Encoding.UTF8, leaveOpen) : new ReversedEndianBinaryReader(stream, leaveOpen);
+            => new BinaryReader(stream, Encoding.UTF8, leaveOpen);
 
         /// <summary>
         /// Creates a BinaryReader that reads data stored in little endian
@@ -32,7 +32,7 @@ namespace SysWeaver.IO
         /// <param name="leaveOpen">Optionally leave the <paramref name="stream"/> open when the binary reader is disposed</param>
         /// <returns>A binary reader that reads data stored as little endian</returns>
         public static BinaryReader OpenLittleEndian(Stream stream, Encoding encoding, bool leaveOpen = false)
-            => BitConverter.IsLittleEndian ? new BinaryReader(stream, encoding, leaveOpen) : new ReversedEndianBinaryReader(stream, encoding, leaveOpen);
+            => new BinaryReader(stream, encoding, leaveOpen);
 
         /// <summary>
         /// Creates a BinaryReader that reads data stored in big endian
@@ -41,7 +41,7 @@ namespace SysWeaver.IO
         /// <param name="leaveOpen">Optionally leave the <paramref name="stream"/> open when the binary reader is disposed</param>
         /// <returns>A binary reader that reads data stored as big endian</returns>
         public static BinaryReader OpenBigEndian(Stream stream, bool leaveOpen = false)
-            => BitConverter.IsLittleEndian ? new ReversedEndianBinaryReader(stream, leaveOpen) : new BinaryReader(stream, Encoding.UTF8, leaveOpen);
+            => new ReversedEndianBinaryReader(stream, leaveOpen);
 
         /// <summary>
         /// Creates a BinaryReader that reads data stored in big endian
@@ -51,7 +51,7 @@ namespace SysWeaver.IO
         /// <param name="leaveOpen">Optionally leave the <paramref name="stream"/> open when the binary reader is disposed</param>
         /// <returns>A binary reader that reads data stored as big endian</returns>
         public static BinaryReader OpenBigEndian(Stream stream, Encoding encoding, bool leaveOpen = false)
-            => BitConverter.IsLittleEndian ? new ReversedEndianBinaryReader(stream, encoding, leaveOpen) : new BinaryReader(stream, encoding, leaveOpen);
+            => new ReversedEndianBinaryReader(stream, encoding, leaveOpen);
 
         /// <summary>
         /// Creates a BinaryReader that reads data using the current endian (of the current process)
@@ -87,7 +87,7 @@ namespace SysWeaver.IO
             switch (endian)
             {
                 case Endianess.Current:
-                    return new BinaryReader(stream, encoding, leaveOpen);
+                    return BitConverter.IsLittleEndian ? OpenLittleEndian(stream, encoding, leaveOpen) : OpenBigEndian(stream, encoding, leaveOpen);
                 case Endianess.Big:
                     return OpenBigEndian(stream, encoding, leaveOpen);
                 case Endianess.Little:

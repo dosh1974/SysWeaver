@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -171,7 +172,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="cpuUsage">Receives the CPU usage in percent [0, 100], 0 on failure.</param>
         /// <returns>True if successful, false on failure (the exception is tracked in the stats).</returns>
-        /// <remarks>Starts a process on every call, so it is relatively expensive. The number is parsed using the current culture.</remarks>
+        /// <remarks>Starts a process on every call, so it is relatively expensive. The process runs with LC_ALL=C and the number is parsed using the invariant culture.</remarks>
         public bool GetCpuUsage(out double cpuUsage)
         {
             try
@@ -180,6 +181,7 @@ namespace SysWeaver
                 pi.FileName = "/bin/bash";
                 pi.Arguments = "-c \"top -b -n 1\"";
                 pi.RedirectStandardOutput = true;
+                pi.Environment["LC_ALL"] = "C";
                 String output;
                 using (var process = Process.Start(pi))
                     output = process.StandardOutput.ReadToEnd();
@@ -189,7 +191,7 @@ namespace SysWeaver
                     {
                         var times = x.Substring(8).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                         var idleS = times[3];
-                        var idle = double.Parse(idleS.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0]);
+                        var idle = double.Parse(idleS.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0], CultureInfo.InvariantCulture);
                         var c = 100.0 - idle;
                         if (c < 0)
                             c = 0;

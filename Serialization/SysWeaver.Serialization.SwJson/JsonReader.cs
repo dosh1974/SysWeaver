@@ -310,7 +310,7 @@ namespace SysWeaver.Serialization.SwJson
             if (typeof(T) == typeof(Int32))
             {
                 if (Is64BitProcess)
-                    return (T)(Object)(Int32)SpanParsers.ToInt64(Utf8JsonParser.ReadAsciiReadOnlyMemoryMaybeQuoted(state, endOn));
+                    return (T)(Object)checked((Int32)SpanParsers.ToInt64(Utf8JsonParser.ReadAsciiReadOnlyMemoryMaybeQuoted(state, endOn)));
             }
             else if (typeof(T) == typeof(Int64))
             {
@@ -451,7 +451,7 @@ namespace SysWeaver.Serialization.SwJson
         /// Read a value declared as <see cref="Object"/>.
         /// Objects must have a <c>"$type"</c> member (else a plain new <see cref="Object"/> is returned and all members are skipped).
         /// For Newtonsoft compatibility: strings that <see cref="DateTime.TryParse(string, IFormatProvider, DateTimeStyles, out DateTime)"/> accepts (using the current culture) become a <see cref="DateTime"/>,
-        /// <c>true</c>/<c>false</c> a <see cref="Boolean"/>, integral numbers an <see cref="Int64"/> and other numbers a <see cref="Double"/> (numbers are parsed as <see cref="Decimal"/>, so exponents are not supported).
+        /// <c>true</c>/<c>false</c> a <see cref="Boolean"/>, integral numbers (in the <see cref="Int64"/> range, without an exponent) an <see cref="Int64"/> and other numbers a <see cref="Double"/>.
         /// </summary>
         /// <param name="state">The parser state, positioned at the value</param>
         /// <param name="endOn">The end condition of the enclosing container</param>
@@ -476,8 +476,11 @@ namespace SysWeaver.Serialization.SwJson
                 var vv = Utf8Parser.ReadAsciiStringNoLast(ref d, e, Utf8JsonParser.EndOnObject);
                 if (Boolean.TryParse(vv, out var br))
                     return br;
+                //  Numbers with an exponent can't be parsed as a Decimal (and may be out of its range)
+                if (vv.AsSpan().IndexOfAny('e', 'E') >= 0)
+                    return Double.Parse(vv, NumberStyles.Float, CultureInfo.InvariantCulture);
                 var val = Decimal.Parse(vv, CultureInfo.InvariantCulture);
-                if (Math.Round(val) == val)
+                if ((Math.Round(val) == val) && (val >= Int64.MinValue) && (val <= Int64.MaxValue))
                     return (Int64)val;
                 return (Double)val;
             }
@@ -749,31 +752,33 @@ namespace SysWeaver.Serialization.SwJson
         #region Exception details
 
         /// <summary>
-        /// Create a description of the current position: "(row,col) : Near ==&gt;text before^text after&lt;==".
+        /// Create a description of the current position: "[filename](row,col) : Near ==&gt;text before^text after&lt;==".
         /// </summary>
-        /// <remarks>Rows are counted on CR characters only. The <paramref name="filename"/> is not used.
-        /// The byte offset is used as a char index into the decoded text, so the position is off (and this can throw) when the text before the error contains non ASCII chars.</remarks>
+        /// <remarks>Rows are counted on LF characters.</remarks>
         static String GetThrowDetails(JsonParserState state, String filename)
         {
             var start = state.S;
-            var s = Utf8Parser.UTF8.GetString(start, (int)(state.E - start));
-            var o = (int)(state.D - start);
+            var len = (int)(state.E - start);
+            var s = Utf8Parser.UTF8.GetString(start, len);
+            //  The byte offset to a char offset (clamped, the position may be outside of the data)
+            var bo = Math.Clamp((int)(state.D - start), 0, len);
+            var o = Math.Min(Utf8Parser.UTF8.GetCharCount(start, bo), s.Length);
             int row = 1;
             int col = o + 1;
             int p = o;
             while (p > 0)
             {
                 --p;
-                if (s[p] == 13)
+                if (s[p] == 10)
                 {
                     if (col > o)
-                        col = (o - p) + 1;
+                        col = o - p;
                     ++row;
                 }
             }
             var sp = Math.Max(0, o - 24);
             var ep = Math.Min(s.Length, o + 8);
-            var loc = "(" + row + "," + col + ") : Near ==>" + Filter(s.Substring(sp, o - sp)) + "^" + Filter(s.Substring(o, ep - o)) + "<==";
+            var loc = filename + "(" + row + "," + col + ") : Near ==>" + Filter(s.Substring(sp, o - sp)) + "^" + Filter(s.Substring(o, ep - o)) + "<==";
             return loc;
         }
 

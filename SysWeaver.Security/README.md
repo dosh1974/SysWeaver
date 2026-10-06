@@ -53,7 +53,6 @@ flowchart LR
 - Providers must be registered before the HTTP server service.
 - Generated certificates are RSA (SHA256) with a fixed 4 day back-dating; the cached `.pfx` password defaults to the application name, so protect the cache folder with file system permissions.
 - Certificates are loaded with machine key storage (`MachineKeySet | PersistKeySet`), which typically requires elevated rights on Windows.
-- `SignedCertificateProvider` currently issues every certificate with the same serial number, which some clients reject when they have seen an earlier certificate from the same CA.
 - With `IncludeLanIPs` enabled, a change of the local IP addresses causes a new certificate to be generated.
 
 ## Using it

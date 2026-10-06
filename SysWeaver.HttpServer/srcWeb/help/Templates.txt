@@ -2,13 +2,15 @@
 Files are assumed to be UTF-8 text.
 
 What files are considered templates can be specified by the per disc folder using the Templates array (array of string templates).
-Patterns can use wildcards '*' (matches one or more) or '?' (matches one).
+Patterns can use wildcards '*' (matches zero or more) or '?' (matches one).
 If the pattern starts with '$' the rest of the pattern is a regular expression.
 If the pattern starts with '#' the match should be case insensitive.
 If the pattern starts with '$#' the rest of the pattern is a regular expression matched case insensitive.
 
 Variables are of the format ${VarName}.
 Variable names are case sensitive.
+Only server defined variables are replaced (the built in variables below and the variables from the server configuration),
+any other ${...} text (ex: javascript template literals) is kept as is.
 Templates can be deemed as dynamic or static depending on what variables they use.
 Dynamic templates is not cached (client or server side) while static will be cached according to the folders cache policies.
 Other things like runtime compression / auth will be handled like any file.
@@ -22,13 +24,16 @@ _ = Make lower case, ex: ${_VarName} will result in "hello world! & have fun!".
 # = Make html value safe (HttpUtility.HtmlEncode), ex: ${#VarName} will result in "Hello world! \&amp; have FUN!".
 % = Make URL safe (HttpUtility.UrlEncode), ex: ${%VarName} will result in "Hello+world!+%26+have+FUN!".
 $ = Make javascript string safe (HttpUtility.JavaScriptStringEncode), ex: ${$VarName} will result in "Hello world! \\u0026 have FUN!".
-Only one of _ and ^ may be used.
-Only one of @, #, % and $ may be used.
-_ or ^ can be combined with one of @, #, % and $, ex: _#, ^$
+£ = Make javascript string safe with quotes, ex: var x = ${£VarName}; will result in var x = "Hello world! \\u0026 have FUN!";
+¤ = Make javascript string safe with quotes of html content, ex: var x = ${¤VarName}; will result in var x = "Hello world! \&amp; have FUN!";
+~ = Remove camel case, ex: "MyCoolType" will result in "My cool type".
+* = Make file/path safe (PathExt.SafeFilename).
+Only one of _, ^ and ~ may be used.
+Only one of @, #, %, $, £, ¤ and * may be used.
+_, ^ or ~ can be combined with one of @, #, %, $, £, ¤ and *, ex: _#, ^$
+Always use the transform that matches where the variable is inserted: # in html text, @ in html attributes, $ inside javascript / json strings, £ for javascript values.
 
-You set variables by using the query paramaters, ex: "xyz/Welcome.html?Name=John Doe&Mail=John.Doe@gmail.com":
-${Name} in Welcome.html will now be replaced with "John Doe".
-${Mail} in Welcome.html will now be replaced with "John.Doe@gmail.com".
+Variables can't be set using query parameters, custom variables are defined in the server configuration (Variables, "Key=Value" strings).
 
 There are some built in variables:
 Env.* will expose all system environment variables.

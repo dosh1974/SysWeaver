@@ -29,7 +29,7 @@ namespace SysWeaver
         /// <returns>The union of all sets.
         /// If at most one of the sets is non-empty, that set instance is returned as is (no copy is made, may be null if all sets are null), else a new <see cref="HashSet{T}"/>.
         /// The input sets are never modified.</returns>
-        /// <exception cref="Exception">Thrown if <paramref name="others"/> is non-null and the comparer of <paramref name="t"/> (or, if <paramref name="t"/> is null or empty, of the first non-empty other set) can't be determined (see <see cref="GetComparer{T}(IReadOnlySet{T})"/>)</exception>
+        /// <exception cref="Exception">Thrown if more than one of the sets is non-empty (a new set is created) and the comparer of <paramref name="t"/> (or, if <paramref name="t"/> is null, of the first non-empty other set) can't be determined (see <see cref="GetComparer{T}(IReadOnlySet{T})"/>)</exception>
         public static IReadOnlySet<T> Merge<T>(this IReadOnlySet<T> t, params IReadOnlySet<T>[] others)
             => Merge<T>(t, false, others);
 
@@ -46,12 +46,13 @@ namespace SysWeaver
         /// <returns>The union of all sets.
         /// If at most one of the sets is non-empty, that set instance (or its frozen version) is returned, else a new set.
         /// The input sets are never modified.</returns>
-        /// <exception cref="Exception">Thrown if <paramref name="others"/> is non-null and the comparer of <paramref name="t"/> (or, if <paramref name="t"/> is null or empty, of the first non-empty other set) can't be determined (see <see cref="GetComparer{T}(IReadOnlySet{T})"/>)</exception>
+        /// <exception cref="Exception">Thrown if more than one of the sets is non-empty (a new set is created) and the comparer of <paramref name="t"/> (or, if <paramref name="t"/> is null, of the first non-empty other set) can't be determined (see <see cref="GetComparer{T}(IReadOnlySet{T})"/>)</exception>
         public static IReadOnlySet<T> Merge<T>(this IReadOnlySet<T> t, bool freeze, params IReadOnlySet<T>[] others)
         {
             if (others == null)
                 return freeze ? TryFreeze(t) : t;
-            var cmp = t?.GetComparer();
+            //  The comparer is only needed (and resolved) when a new set must be created
+            var org = t;
             var l = others.Length;
             for (int i = 0; i < l; ++i)
             {
@@ -63,9 +64,9 @@ namespace SysWeaver
                 if ((t == null) || (t.Count <= 0))
                 {
                     t = x;
-                    cmp = cmp ?? x.GetComparer();
                     continue;
                 }
+                var cmp = (org ?? t).GetComparer();
                 // Copying a HashSet with the same comparer is fast (the buckets are copied)
                 var ns = new HashSet<T>(t, cmp);
                 for (; i < l; ++i)

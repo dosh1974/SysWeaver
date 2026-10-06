@@ -59,7 +59,7 @@ namespace SysWeaver
         /// <returns>The resolved path (null or empty if <paramref name="template"/> is null or empty). The result is not made absolute (see <see cref="EnvInfo.MakeAbsoulte(string, bool)"/>).</returns>
         /// <remarks>
         /// Lookup order: special folders (<see cref="Environment.SpecialFolder"/> names), then <paramref name="extra"/>, then env info variables.
-        /// Note: <paramref name="extra"/> is currently only used when <paramref name="useEnv"/> is true.
+        /// Only defined special folder names are resolved as folders (numeric values are not).
         /// How unknown variables are handled is defined by <see cref="TextTemplate"/>.
         /// Parsed templates are cached per template string (thread safe, unbounded), the variables are evaluated on every call.
         /// </remarks>
@@ -83,8 +83,8 @@ namespace SysWeaver
                 {
                     return t.Get(key =>
                     {
-                        if (Enum.TryParse<Environment.SpecialFolder>(key, true, out var e))
-                            return Environment.GetFolderPath(e);
+                        if (TryGetFolder(key, true, out var folder))
+                            return folder;
                         var lk = key.FastToLower();
                         if (extra.TryGetValue(lk, out var val))
                             return val;
@@ -97,8 +97,8 @@ namespace SysWeaver
                 {
                     return t.Get(key =>
                     {
-                        if (Enum.TryParse<Environment.SpecialFolder>(key, false, out var e))
-                            return Environment.GetFolderPath(e);
+                        if (TryGetFolder(key, false, out var folder))
+                            return folder;
                         if (extra.TryGetValue(key, out var val))
                             return val;
                         if (env.TryGetValue(key, out val))
@@ -115,8 +115,8 @@ namespace SysWeaver
                 {
                     return t.Get(key =>
                     {
-                        if (Enum.TryParse<Environment.SpecialFolder>(key, true, out var e))
-                            return Environment.GetFolderPath(e);
+                        if (TryGetFolder(key, true, out var folder))
+                            return folder;
                         if (env.TryGetValue(key.FastToLower(), out var val))
                             return val;
                         return null;
@@ -126,9 +126,35 @@ namespace SysWeaver
                 {
                     return t.Get(key =>
                     {
-                        if (Enum.TryParse<Environment.SpecialFolder>(key, false, out var e))
-                            return Environment.GetFolderPath(e);
+                        if (TryGetFolder(key, false, out var folder))
+                            return folder;
                         if (env.TryGetValue(key, out var val))
+                            return val;
+                        return null;
+                    });
+                }
+            }
+            if (extra != null)
+            {
+                //  extra
+                if (caseInSensitive)
+                {
+                    return t.Get(key =>
+                    {
+                        if (TryGetFolder(key, true, out var folder))
+                            return folder;
+                        if (extra.TryGetValue(key.FastToLower(), out var val))
+                            return val;
+                        return null;
+                    });
+                }
+                else
+                {
+                    return t.Get(key =>
+                    {
+                        if (TryGetFolder(key, false, out var folder))
+                            return folder;
+                        if (extra.TryGetValue(key, out var val))
                             return val;
                         return null;
                     });
@@ -139,8 +165,8 @@ namespace SysWeaver
             {
                 return t.Get(key =>
                 {
-                    if (Enum.TryParse<Environment.SpecialFolder>(key, true, out var e))
-                        return Environment.GetFolderPath(e);
+                    if (TryGetFolder(key, true, out var folder))
+                        return folder;
                     return null;
                 });
             }
@@ -148,11 +174,26 @@ namespace SysWeaver
             {
                 return t.Get(key =>
                 {
-                    if (Enum.TryParse<Environment.SpecialFolder>(key, false, out var e))
-                        return Environment.GetFolderPath(e);
+                    if (TryGetFolder(key, false, out var folder))
+                        return folder;
                     return null;
                 });
             }
+        }
+
+        static bool TryGetFolder(String key, bool ignoreCase, out String folder)
+        {
+            folder = null;
+            //  Only accept names (Enum.TryParse also accepts numbers and comma separated combinations)
+            var k = key.AsSpan().TrimStart();
+            if ((k.Length <= 0) || !Char.IsLetter(k[0]))
+                return false;
+            if (!Enum.TryParse<Environment.SpecialFolder>(key, ignoreCase, out var e))
+                return false;
+            if (!Enum.IsDefined(e))
+                return false;
+            folder = Environment.GetFolderPath(e);
+            return true;
         }
 
         static readonly ConcurrentDictionary<String, TextTemplate> Cache = new ConcurrentDictionary<String, TextTemplate>(StringComparer.Ordinal);

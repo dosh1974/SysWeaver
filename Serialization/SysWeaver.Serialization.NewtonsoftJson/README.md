@@ -37,7 +37,7 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 ## Limitations and considerations
 
 - Slower and more allocation-heavy than the span-based serializers.
-- **Security:** `$type` names in the input are resolved with `TypeFinder.GetForData`: only types allowed by the `DataTypePolicy` (SysWeaver and the application's own types, simple values, collections, plus assemblies marked with `[assembly: SerializableTypes]`) can be instantiated, known gadget types are always denied, and the type must be assignable to the declared type.
+- **Security:** `$type` names in the input are resolved with `TypeFinder.GetForData`: only types in loaded assemblies (or assemblies in the executable folder) can be named, the `DataTypePolicy` deny list of known gadget types, delegates and reflection types are always rejected, and the type must be assignable to the declared type.
 - `FromString(string)` throws `NullReferenceException` when the text deserializes to null but isn't the literal `null` (e.g. empty text), unlike the other overloads which return null.
 - Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / Jil / SpanJson / Utf8Json -5).
 

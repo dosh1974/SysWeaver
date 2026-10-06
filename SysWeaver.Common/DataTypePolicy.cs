@@ -1,24 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using System.Reflection;
 
 namespace SysWeaver
 {
     /// <summary>
     /// Decides which types (serialized) data may name, ex: using "$type" in json, see <see cref="TypeFinder.GetForData"/>.
-    /// Deny by default, a type is allowed if it's not denied (see <see cref="IsDenied"/>) and it's:
+    /// Any type that <see cref="TypeFinder"/> can resolve (in a loaded assembly, or an assembly in the executable folder) is allowed, except:
     /// <list type="bullet">
-    /// <item>A primitive, an enum, <see cref="String"/>, <see cref="Decimal"/>, a date / time type, <see cref="Guid"/>, <see cref="Version"/>, <see cref="Uri"/>, <see cref="BigInteger"/>, <see cref="Half"/>, <see cref="Int128"/>, <see cref="UInt128"/> or <see cref="Object"/>.</item>
-    /// <item>An array of an allowed type.</item>
-    /// <item>A collection from the System.Collections* namespaces, a <see cref="Nullable{T}"/>, a tuple or a value tuple (all generic arguments must be allowed).</item>
-    /// <item>Defined in an allowed assembly: SysWeaver*, the entry assembly, assemblies marked with <see cref="SerializableTypesAttribute"/> or added using <see cref="AllowAssembly"/> (all generic arguments must be allowed).</item>
-    /// <item>Explicitly allowed using <see cref="AllowType"/>.</item>
+    /// <item>Denied types (see <see cref="Denied"/> and <see cref="IsDenied"/>), also as an array element or generic argument (ex: List&lt;Process&gt;).</item>
+    /// <item>Delegates and reflection types (<see cref="MemberInfo"/> including <see cref="Type"/>, <see cref="Assembly"/>, <see cref="Module"/>, <see cref="ParameterInfo"/>), unless explicitly allowed using <see cref="AllowType"/>.</item>
     /// </list>
-    /// Delegates, reflection types (<see cref="MemberInfo"/>, <see cref="Assembly"/>, <see cref="Module"/>, <see cref="ParameterInfo"/>) and <see cref="IDisposable"/> types
-    /// (they own resources such as files, handles or processes) are never allowed, unless explicitly allowed using <see cref="AllowType"/>.
     /// A denied type is never allowed (not even if explicitly allowed).
+    /// <see cref="AllowAssembly"/> and <see cref="SerializableTypesAttribute"/> are kept for compatibility, all assemblies are allowed.
     /// </summary>
     /// <remarks>
     /// The decision is cached per type (at most <see cref="TypeFinder.MaxCachedNames"/> types).
@@ -57,8 +52,9 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Allow all types in an assembly (except denied types, delegates, reflection types and <see cref="IDisposable"/> types).
+        /// Allow all types in an assembly (except denied types, delegates and reflection types).
         /// </summary>
+        /// <remarks>Kept for compatibility, all assemblies are allowed.</remarks>
         /// <param name="assembly">The assembly</param>
         public static void AllowAssembly(Assembly assembly)
         {
@@ -70,7 +66,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Allow a type (if it's not denied), also allows delegates, reflection types and <see cref="IDisposable"/> types.
+        /// Allow a type (if it's not denied), also allows delegates and reflection types.
         /// For a generic type definition, all constructed types (with allowed type arguments) are allowed.
         /// </summary>
         /// <param name="type">The type</param>
@@ -181,60 +177,25 @@ namespace SysWeaver
                 foreach (var a in t.GetGenericArguments())
                     if (!IsAllowed(a))
                         return false;
-                var def = t.GetGenericTypeDefinition();
-                if (AllowedTypes.Contains(def))
+                if (AllowedTypes.Contains(t.GetGenericTypeDefinition()))
                     return true;
-                if (IsDangerousKind(t))
-                    return false;
-                return IsCollectionNamespace(def.Namespace) || GenericValueTypes.Contains(def) || IsAllowedAssembly(def.Assembly);
             }
-            if (AllowedTypes.Contains(t))
+            else if (AllowedTypes.Contains(t))
                 return true;
-            if (IsDangerousKind(t))
-                return false;
-            if (t.IsEnum || t.IsPrimitive || SimpleTypes.Contains(t))
-                return true;
-            return IsCollectionNamespace(t.Namespace) || IsAllowedAssembly(t.Assembly);
+            return !IsDangerousKind(t);
         }
 
         /// <summary>
-        /// Delegates, reflection types and disposable types
+        /// Delegates and reflection types
         /// </summary>
         static bool IsDangerousKind(Type t)
             => typeof(Delegate).IsAssignableFrom(t)
             || typeof(MemberInfo).IsAssignableFrom(t)
             || typeof(Assembly).IsAssignableFrom(t)
             || typeof(Module).IsAssignableFrom(t)
-            || typeof(ParameterInfo).IsAssignableFrom(t)
-            || typeof(IDisposable).IsAssignableFrom(t);
-
-        static bool IsCollectionNamespace(String ns)
-            => (ns != null) && (ns.Equals("System.Collections", StringComparison.Ordinal) || ns.StartsWith("System.Collections.", StringComparison.Ordinal));
-
-        static bool IsAllowedAssembly(Assembly a)
-        {
-            if (AllowedAssemblies.Contains(a))
-                return true;
-            if (a == EntryAssembly)
-                return true;
-            var name = a.GetName().Name;
-            if ((name != null) && (name.Equals("SysWeaver", StringComparison.Ordinal) || name.StartsWith("SysWeaver.", StringComparison.Ordinal)))
-                return true;
-            return a.IsDefined(typeof(SerializableTypesAttribute), false);
-        }
+            || typeof(ParameterInfo).IsAssignableFrom(t);
 
         static void Reset() => Decisions.Clear();
-
-        static readonly Assembly EntryAssembly = Assembly.GetEntryAssembly();
-
-        static readonly IReadOnlySet<Type> SimpleTypes = ReadOnlyData.Set(
-            typeof(Object), typeof(String), typeof(Decimal), typeof(DateTime), typeof(DateTimeOffset), typeof(DateOnly), typeof(TimeOnly), typeof(TimeSpan),
-            typeof(Guid), typeof(Version), typeof(Uri), typeof(BigInteger), typeof(Half), typeof(Int128), typeof(UInt128));
-
-        static readonly IReadOnlySet<Type> GenericValueTypes = ReadOnlyData.Set(
-            typeof(Nullable<>),
-            typeof(Tuple<>), typeof(Tuple<,>), typeof(Tuple<,,>), typeof(Tuple<,,,>), typeof(Tuple<,,,,>), typeof(Tuple<,,,,,>), typeof(Tuple<,,,,,,>), typeof(Tuple<,,,,,,,>),
-            typeof(ValueTuple<>), typeof(ValueTuple<,>), typeof(ValueTuple<,,>), typeof(ValueTuple<,,,>), typeof(ValueTuple<,,,,>), typeof(ValueTuple<,,,,,>), typeof(ValueTuple<,,,,,,>), typeof(ValueTuple<,,,,,,,>));
 
         /// <summary>
         /// The decision per type
@@ -252,8 +213,9 @@ namespace SysWeaver
 
 
     /// <summary>
-    /// Allows (serialized) data to name the types in this assembly, see <see cref="DataTypePolicy"/>.
+    /// Marks an assembly whose types (serialized) data may name, see <see cref="DataTypePolicy"/>.
     /// Usage: [assembly: SerializableTypes]
+    /// Kept for compatibility: the policy currently allows all assemblies (except denied types, delegates and reflection types).
     /// </summary>
     [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false)]
     public sealed class SerializableTypesAttribute : Attribute

@@ -200,15 +200,15 @@ namespace SysWeaver.Serialization
             => JsonConvert.DeserializeObject<T>(new String(text), DeserFormats);
 
         /// <inheritdoc/>
-        /// <exception cref="NullReferenceException">The text deserialized to null but is not null or exactly "null" (ex: an empty or white space string).</exception>
+        /// <exception cref="NullReferenceException">The text deserialized to null but is not null or "null" (surrounding white space is allowed), ex: an empty or white space string.</exception>
         public T FromString<T>(String text)
         {
             var t = JsonConvert.DeserializeObject<T>(text, DeserFormats);
             if (t != null)
                 return t;
-            if (text == null) 
+            if (text == null)
                 return t;
-            if (text.AsSpan().SequenceEqual("null".AsSpan()))
+            if (text.AsSpan().Trim().SequenceEqual("null".AsSpan()))
                 return t;
             throw new NullReferenceException();
         }

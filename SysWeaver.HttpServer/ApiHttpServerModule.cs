@@ -59,20 +59,20 @@ namespace SysWeaver.Net
         /// Create a new, empty API module.
         /// </summary>
         /// <param name="p">Module configuration (root, default auth, compression, serializers, performance monitoring).</param>
-        /// <exception cref="NullReferenceException">No serializers are registered at all, or <paramref name="p"/> is null (the parameters are dereferenced directly in a few places, so the default value does not currently work).</exception>
+        /// <exception cref="NullReferenceException">No serializers are registered at all.</exception>
         public ApiHttpServerModule(ApiHttpServerModuleParams p = null)
         {
             var pp = p ?? new ApiHttpServerModuleParams();
             var dn = pp.DefaultSerializer?.Trim();
             var def = SerManager.Get(String.IsNullOrEmpty(dn) ? "json" : dn) ?? SerManager.ExtensionHandlers?.FirstOrDefault().Value ?? throw new NullReferenceException("No serializers found!");
-            PerfMon.Enabled = p.PerMon;
+            PerfMon.Enabled = pp.PerMon;
             Root = pp.Root;
             Auth = pp.Auth;
             CachedCompression = pp.CachedCompression;
             Compression = pp.Compression;
             IoParams = new ApiIoParams(
-                GetSers<IDeserializer>(p.InputSerializers, def),
-                GetSers<ISerializer>(p.OutputSerializers, def),
+                GetSers<IDeserializer>(pp.InputSerializers, def),
+                GetSers<ISerializer>(pp.OutputSerializers, def),
                 def,
                 def
                 );
@@ -276,7 +276,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Invoked before an audited API is invoked.
         /// The value has been passed through the API's <see cref="WebApiAuditFilterParamsAttribute"/> filter, if any
-        /// (if the filter throws, the unfiltered value is passed).
+        /// (if the filter throws, the string "[Audit filter failed]" is passed instead of the unfiltered value).
         /// </summary>
         /// <remarks>Handlers run synchronously on the request path; an exception thrown by a handler fails the API call.</remarks>
         public event AuditBeginDel OnAuditBegin;
@@ -284,7 +284,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Invoked after an audited API is invoked (if no exception in thrown).
         /// The value has been passed through the API's <see cref="WebApiAuditFilterReturnAttribute"/> filter, if any
-        /// (if the filter throws, the unfiltered value is passed).
+        /// (if the filter throws, the string "[Audit filter failed]" is passed instead of the unfiltered value).
         /// </summary>
         /// <remarks>Handlers run synchronously on the request path; an exception thrown by a handler fails the API call.</remarks>
         public event AuditEndDel OnAuditEnd;
@@ -295,7 +295,7 @@ namespace SysWeaver.Net
         public event AuditExceptionDel OnAuditException;
 
         /// <summary>
-        /// Applies the entry's audit parameter filter (exceptions in the filter are swallowed) and raises <see cref="OnAuditBegin"/>.
+        /// Applies the entry's audit parameter filter (if the filter throws, <see cref="AuditFilterFailed"/> is used as the value) and raises <see cref="OnAuditBegin"/>.
         /// </summary>
         void AuditBegin(long id, HttpServerRequest r, ApiHttpEntry api, Object value)
         {
@@ -308,13 +308,15 @@ namespace SysWeaver.Net
                 }
                 catch
                 {
+                    //  Never pass the unfiltered value (the filter is typically used to redact secrets)
+                    value = AuditFilterFailed;
                 }
             }
             OnAuditBegin?.Invoke(id, r, api, value);
         }
 
         /// <summary>
-        /// Applies the entry's audit return filter (exceptions in the filter are swallowed) and raises <see cref="OnAuditEnd"/>.
+        /// Applies the entry's audit return filter (if the filter throws, <see cref="AuditFilterFailed"/> is used as the value) and raises <see cref="OnAuditEnd"/>.
         /// </summary>
         void AuditEnd(long id, HttpServerRequest r, ApiHttpEntry api, Object value)
         {
@@ -327,10 +329,17 @@ namespace SysWeaver.Net
                 }
                 catch
                 {
+                    //  Never pass the unfiltered value (the filter is typically used to redact secrets)
+                    value = AuditFilterFailed;
                 }
             }
             OnAuditEnd?.Invoke(id, r, api, value);
         }
+
+        /// <summary>
+        /// The value passed to the audit events when an audit filter throws (so that an unfiltered value, possibly containing secrets, is never audited).
+        /// </summary>
+        const String AuditFilterFailed = "[Audit filter failed]";
 
         void AuditException(long id, HttpServerRequest r, ApiHttpEntry api, Exception ex)
         {

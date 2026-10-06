@@ -401,9 +401,7 @@ namespace SysWeaver
                     return Tuple.Create(k, (Object)null);
                 case JsonValueKind.Number:
                     var text = val.GetRawText().Trim();
-                    var signed = text.StartsWith("-");
-                    var isDec = text.Contains('.') || text.Contains('e');
-                    if (text.Contains('.') || text.Contains('e'))
+                    if (text.AsSpan().IndexOfAny('.', 'e', 'E') >= 0)
                         return Tuple.Create(k, (Object)val.GetDecimal());
                     if (text.StartsWith("-"))
                         return Tuple.Create(k, (Object)val.GetInt64());
@@ -419,10 +417,10 @@ namespace SysWeaver
 
         static readonly IReadOnlyDictionary<Type, Func<JsonValueKind, Object, Func<Object, bool>, bool>> Setters = new Dictionary<Type, Func<JsonValueKind, Object, Func<Object, bool>, bool>>
         {
-            { typeof(Byte), (k, d, s) => TryParseUInt32(k, d, out var v) && s((Byte)v) },
-            { typeof(SByte), (k, d, s) => TryParseInt32(k, d, out var v) && s((SByte)v) },
-            { typeof(UInt16), (k, d, s) => TryParseUInt32(k, d, out var v) && s((UInt16)v) },
-            { typeof(Int16), (k, d, s) => TryParseInt32(k, d, out var v) && s((Int16)v) },
+            { typeof(Byte), (k, d, s) => TryParseUInt32(k, d, out var v) && (v <= Byte.MaxValue) && s((Byte)v) },
+            { typeof(SByte), (k, d, s) => TryParseInt32(k, d, out var v) && (v >= SByte.MinValue) && (v <= SByte.MaxValue) && s((SByte)v) },
+            { typeof(UInt16), (k, d, s) => TryParseUInt32(k, d, out var v) && (v <= UInt16.MaxValue) && s((UInt16)v) },
+            { typeof(Int16), (k, d, s) => TryParseInt32(k, d, out var v) && (v >= Int16.MinValue) && (v <= Int16.MaxValue) && s((Int16)v) },
             { typeof(UInt32), (k, d, s) => TryParseUInt32(k, d, out var v) && s(v) },
             { typeof(Int32), (k, d, s) => TryParseInt32(k, d, out var v) && s(v) },
             { typeof(UInt64), (k, d, s) => TryParseUInt64(k, d, out var v) && s(v) },

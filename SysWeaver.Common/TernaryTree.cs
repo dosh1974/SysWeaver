@@ -73,7 +73,8 @@ namespace SysWeaver
         /// The number of keys in the tree.
         /// </summary>
         /// <remarks>
-        /// Not accurate: it's based on <see cref="Contains(string)"/>, so adding a key that is a prefix of an already added key isn't counted
+        /// Based on <see cref="Contains(string)"/>, so a key added with a null value is counted on every add.
+        /// For non nullable value types every node counts as having a value, so adding a key that is a prefix of an already added key isn't counted
         /// </remarks>
         public int Length
         {
@@ -84,16 +85,15 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Check if a node exists for a key.
+        /// Check if a key (with a non null value) exists.
         /// </summary>
         /// <param name="key">The key, may not be null or empty (if the tree isn't empty)</param>
-        /// <returns>True if a node exists for the key. Note that this is also true if the key is only a prefix of an added key (the node doesn't need to have a value)</returns>
+        /// <returns>True if the key exists (with a non null value), a key that is only a prefix of an added key doesn't exist</returns>
         /// <exception cref="IndexOutOfRangeException">The key is empty (and the tree isn't empty)</exception>
         public bool Contains(string key)
         {
             var node = Get(root, key, 0);
-            if (node == null) return false;
-            return true;
+            return (node != null) && (node.value != null);
         }
 
         /// <summary>

@@ -335,7 +335,17 @@ namespace SysWeaver
             ConcurrencyLimiter.LimitConcurrency(ref action, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<Task>(l);
             for (int i = 0; i < l; ++i)
-                tt[i] = action(list[i]);
+            {
+                try
+                {
+                    tt[i] = action(list[i]);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = Task.FromException(ex);
+                }
+            }
             return Task.WhenAll(tt);
         }
 
@@ -397,7 +407,17 @@ namespace SysWeaver
             ConcurrencyLimiter.LimitConcurrency(ref action, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<ValueTask>(l);
             for (int i = 0; i < l; ++i)
-                tt[i] = action(list[i]);
+            {
+                try
+                {
+                    tt[i] = action(list[i]);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = ValueTask.FromException(ex);
+                }
+            }
             return TaskExt.WhenAll(tt);
         }
 
@@ -458,7 +478,17 @@ namespace SysWeaver
             ConcurrencyLimiter.LimitConcurrency(ref action, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<Task>(l);
             for (int i = 0; i < l; ++i)
-                tt[i] = action(list[i], i);
+            {
+                try
+                {
+                    tt[i] = action(list[i], i);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = Task.FromException(ex);
+                }
+            }
             return Task.WhenAll(tt);
         }
 
@@ -517,7 +547,17 @@ namespace SysWeaver
             ConcurrencyLimiter.LimitConcurrency(ref action, maxConcurrency, l);
             var tt = GC.AllocateUninitializedArray<Task>(l);
             for (int i = 0; i < l; ++i)
-                tt[i] = action(list[i], i);
+            {
+                try
+                {
+                    tt[i] = action(list[i], i);
+                }
+                catch (Exception ex) when (i > 0)
+                {
+                    //  Earlier items are already running, so fault the result (after all items have completed) instead of throwing and leaving them unobserved
+                    tt[i] = Task.FromException(ex);
+                }
+            }
             return Task.WhenAll(tt);
         }
 

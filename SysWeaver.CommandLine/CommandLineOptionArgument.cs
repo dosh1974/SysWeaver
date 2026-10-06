@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 
 namespace SysWeaver
@@ -240,8 +241,7 @@ namespace SysWeaver
         /// Returns "Type Name Tags - HelpText".
         /// </summary>
         /// <returns>A string describing the argument.</returns>
-        /// <remarks>The tags are currently rendered as the enumerable's type name rather than the tag texts.</remarks>
-        public override string ToString() => String.Join(String.IsNullOrEmpty(HelpText) ? "" : " - ", String.Concat(Type.Name, ' ', Name, ' ', Tags), HelpText ?? "");
+        public override string ToString() => String.Join(String.IsNullOrEmpty(HelpText) ? "" : " - ", String.Concat(Type.Name, ' ', Name, ' ', String.Join(' ', Tags.Select(CommandLine.MakeTag))), HelpText ?? "");
 
     }
 

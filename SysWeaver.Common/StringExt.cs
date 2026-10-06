@@ -355,12 +355,11 @@ namespace SysWeaver
         /// Make a culture invariant upper case version of the first N chars of a string
         /// </summary>
         /// <param name="str">The string to transform into a culture invariant upper case</param>
-        /// <param name="length">The number of characters to convert, must not be greater than the length of the string (unlike <see cref="FastStartToLower(string, int)"/>)</param>
+        /// <param name="length">The number of characters to convert (if it's greater than or equal to the length of the string, the whole string is converted)</param>
         /// <returns>Culture invariant upper case string</returns>
-        /// <exception cref="ArgumentOutOfRangeException">The length is greater than the length of the string</exception>
         public static String FastStartToUpper(this String str, int length)
         {
-            if (length == str.Length)
+            if (length >= str.Length)
                 return str.FastToUpper();
             // Always allocates, so convert while copying (no need to test if it's already upper cased)
             return String.Create(length, str.AsSpan(), UpperCasedSubString);
@@ -886,7 +885,7 @@ namespace SysWeaver
         /// Check if a word is found in some text, the char before the word may not be a letter, and the char after the word may not be a letter (digits are allowed).
         /// </summary>
         /// <param name="sentence">The text to search, may not be null</param>
-        /// <param name="word">The word to find, may not be null or empty (an empty word loops forever if the text starts with a letter)</param>
+        /// <param name="word">The word to find, may not be null (an empty word matches any position that isn't surrounded by letters)</param>
         /// <param name="cmp">The comparison to use (default is ordinal ignore case)</param>
         /// <returns>True if the word was found</returns>
         public static bool ContainsWord(this String sentence, String word, StringComparison cmp = StringComparison.OrdinalIgnoreCase)
@@ -896,16 +895,19 @@ namespace SysWeaver
             int s = 0;
             for (; ; )
             {
+                if (s > sl)
+                    return false;
                 s = sentence.IndexOf(word, s, cmp);
                 if (s < 0)
                     return false;
                 var o = s - 1;
-                s += wl;
+                var e = s + wl;
+                s = wl == 0 ? (s + 1) : e;
                 if (o >= 0)
                     if (Char.IsLetter(sentence[o]))
                         continue;
-                if (s < sl)
-                    if (Char.IsLetter(sentence[s]))
+                if (e < sl)
+                    if (Char.IsLetter(sentence[e]))
                         continue;
                 return true;
             }

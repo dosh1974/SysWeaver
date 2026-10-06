@@ -15,7 +15,6 @@ namespace SysWeaver.Net
         /// Copy the values of this instance to another instance.
         /// </summary>
         /// <param name="dest">The instance to copy to.</param>
-        /// <remarks>Note: <see cref="PerSession"/> and <see cref="Assembly"/> are currently NOT copied.</remarks>
         public void CopyTo(ApiInfoBase dest)
         {
             dest.Uri = Uri;
@@ -24,7 +23,9 @@ namespace SysWeaver.Net
             dest.Desc = Desc;
             dest.ClientCacheDuration = ClientCacheDuration;
             dest.RequestCacheDuration = RequestCacheDuration;
+            dest.PerSession = PerSession;
             dest.CompPreference = CompPreference;
+            dest.Assembly = Assembly;
             dest.Translated = Translated;
         }
 

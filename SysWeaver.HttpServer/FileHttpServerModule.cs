@@ -91,17 +91,18 @@ namespace SysWeaver.Net
         /// <summary>
         /// Change the disc path of an already added disc folder (keeping all other options).
         /// </summary>
-        /// <param name="webFolder">The web folder that the disc folder is mapped to (ex: "site/"), a trailing '/' is added if missing</param>
+        /// <param name="webFolder">The web folder that the disc folder is mapped to (ex: "site/"), leading and trailing '/' are handled as in <see cref="AddFolder"/> ("" is the root web folder)</param>
         /// <param name="currentDiscFolder">The current full path of the disc folder (as stored, without a trailing separator)</param>
         /// <param name="newDiscFolder">The new full path (no trailing separator)</param>
         /// <returns>True if the folder was found and changed</returns>
         /// <remarks>
-        /// The disc-to-web lookup used by <see cref="LocalToWeb(string)"/> and the handler cache are not updated.
-        /// Note that the root web folder ("") can't be targeted, since a '/' is always appended.
+        /// The disc-to-web lookup used by <see cref="LocalToWeb(string)"/> is updated and the handler cache is cleared.
         /// </remarks>
         public bool ChangeDiscFolder(String webFolder, String currentDiscFolder, String newDiscFolder)
         {
-            webFolder = webFolder.TrimEnd('/') + '/';
+            webFolder = (webFolder ?? "").Trim('/');
+            if (webFolder.Length > 0)
+                webFolder += '/';
             var r = WebFolders;
             lock (r)
             {
@@ -111,8 +112,26 @@ namespace SysWeaver.Net
                 if (wt == null)
                     return false;
                 wt.Path = newDiscFolder;
+                UpdateFolderLookups(r);
             }
             return true;
+        }
+
+        /// <summary>
+        /// Rebuild the ordered folders and the disc-to-web lookups from all web folders, and clear the handler cache.
+        /// Must be called while holding the <see cref="WebFolders"/> lock.
+        /// </summary>
+        void UpdateFolderLookups(ConcurrentDictionary<String, WebFolder> r)
+        {
+            var ordered = r.OrderByDescending(x => x.Key.Length).ToArray();
+            Dictionary<String, String> discToWeb = new(StringComparer.Ordinal);
+            foreach (var x in ordered)
+                foreach (var y in x.Value.DiscFolders)
+                    discToWeb.TryAdd(y.Path + Path.DirectorySeparatorChar, x.Value.Url);
+            OrderedFolders = ordered;
+            DiscToWeb = discToWeb;
+            DiscToWebPrefix = StringTree.Build(discToWeb.Keys);
+            Cache?.Clear();
         }
 
         /// <summary>
@@ -121,7 +140,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="folder">The folder to add, a null <see cref="FileHttpServerModuleFolder.DiscFolder"/> means "web" (relative to the current directory)</param>
         /// <returns>True if the folder was added, false if the disc folder doesn't exist</returns>
-        /// <remarks>Thread safe. Cached handler lookups are not invalidated (they expire within seconds).</remarks>
+        /// <remarks>Thread safe. Cached handler lookups are cleared.</remarks>
         public bool AddFolder(FileHttpServerModuleFolder folder)
         {
             var df = folder.DiscFolder ?? "web";
@@ -140,17 +159,8 @@ namespace SysWeaver.Net
                     rs = new WebFolder(webFolder);
                     r[webFolder] = rs;
                 }
-                var t = rs.DiscFolders.PushFront(new DiscFolder(df, folder));
-                Dictionary<String, String> discToWeb = new (StringComparer.Ordinal);
-                HashSet<String> seen = new (StringComparer.Ordinal);
-                var tree = StringTree.Build(r.SelectMany(x => t.Select(a => a.Path + Path.DirectorySeparatorChar).Where(b => seen.Add(b))));
-                foreach (var x in r.Values)
-                    foreach (var y in t)
-                        discToWeb[y.Path + Path.DirectorySeparatorChar] = x.Url;
-                rs.DiscFolders = t;
-                OrderedFolders = r.OrderByDescending(x => x.Key.Length).ToArray();
-                DiscToWeb = discToWeb;
-                DiscToWebPrefix = tree;
+                rs.DiscFolders = rs.DiscFolders.PushFront(new DiscFolder(df, folder));
+                UpdateFolderLookups(r);
             }
             return true;
         }
@@ -163,7 +173,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="folder">The folder to remove</param>
         /// <returns>True if the folder was found and removed</returns>
-        /// <remarks>Thread safe. Cached handler lookups are not invalidated, so files may still be served for a few seconds.</remarks>
+        /// <remarks>Thread safe. Cached handler lookups are cleared.</remarks>
         public bool RemoveFolder(FileHttpServerModuleFolder folder)
         {
             if (folder == null)
@@ -184,18 +194,10 @@ namespace SysWeaver.Net
                 if (i < 0)
                     return false;
                 t = t.RemoveAt(i);
-                if (t.Length <= 0)
-                    r.TryRemove(webFolder, out rs);
-                Dictionary<String, String> discToWeb = new (StringComparer.Ordinal);
-                HashSet<String> seen = new (StringComparer.Ordinal);
-                var tree = StringTree.Build(r.SelectMany(x => t.Select(a => a.Path + Path.DirectorySeparatorChar).Where(b => seen.Add(b))));
-                foreach (var x in r.Values)
-                    foreach (var y in t)
-                        discToWeb[y.Path + Path.DirectorySeparatorChar] = x.Url;
                 rs.DiscFolders = t;
-                OrderedFolders = r.OrderByDescending(x => x.Key.Length).ToArray();
-                DiscToWeb = discToWeb;
-                DiscToWebPrefix = tree;
+                if (t.Length <= 0)
+                    r.TryRemove(webFolder, out _);
+                UpdateFolderLookups(r);
             }
             return true;
         }
@@ -285,7 +287,20 @@ namespace SysWeaver.Net
             if (((ValidMethods >> (int)context.HttpMethod) & 1) == 0)
                 return null;
             var url = context.LocalUrl;
-            return await Cache.GetOrUpdateAsync(url, async _ =>
+            //  The handler depends on the file transformer (selected by the query string), so include the query in the key when it selects one (the local url never contains a '?')
+            //  QueryStringStart is 0 when there is no query string
+            var qs = context.QueryStringStart;
+            var cacheKey = url;
+            String ftKey = null;
+            FtDel fileTransformer = null;
+            if (qs > 0)
+            {
+                ftKey = context.Url.Substring(qs);
+                if (FileTransformers.TryGetValue(ftKey, out fileTransformer))
+                    cacheKey = String.Concat(url, "?", ftKey);
+            }
+            fileTransformer = fileTransformer ?? NoFT;
+            return await Cache.GetOrUpdateAsync(cacheKey, async _ =>
             {
                 var f = OrderedFolders;
                 if (f == null)
@@ -322,9 +337,6 @@ namespace SysWeaver.Net
                         if (!fi.Exists)
                             continue;
                         var mime = MimeTypeMap.GetMimeType(ext.FastToLower());
-                        var ftKey = context.Url.Substring(context.QueryStringStart);
-                        FileTransformers.TryGetValue(ftKey, out var fileTransformer);
-                        fileTransformer = fileTransformer ?? NoFT;
                         return await fileTransformer(ftKey, mime, fi, discFolder, isAccepted, decoder, discFolder.UpdateAccessTime, discFolder.IsDynamic).ConfigureAwait(false);
                     }
                 }
@@ -372,8 +384,11 @@ namespace SysWeaver.Net
                     if (!fi.Exists)
                         continue;
                     var mime = MimeTypeMap.GetMimeType(ext.FastToLower());
-                    var ftKey = context.Url.Substring(context.QueryStringStart);
-                    FileTransformers.TryGetValue(ftKey, out var fileTransformer);
+                    //  QueryStringStart is 0 when there is no query string
+                    var ftKey = context.QueryStringStart > 0 ? context.Url.Substring(context.QueryStringStart) : null;
+                    FtDel fileTransformer = null;
+                    if (ftKey != null)
+                        FileTransformers.TryGetValue(ftKey, out fileTransformer);
                     fileTransformer = fileTransformer ?? NoFT;
                     return await fileTransformer(ftKey, mime, fi, discFolder, isAccepted, decoder, discFolder.UpdateAccessTime, discFolder.IsDynamic).ConfigureAwait(false);
                 }

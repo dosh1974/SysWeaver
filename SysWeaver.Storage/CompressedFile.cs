@@ -87,8 +87,9 @@ namespace SysWeaver
                         return null;
                 }
                 using (var s = fn.OpenRead())
-                using (var d = fi.OpenWrite())
+                using (var d = fi.Open(FileMode.Create, FileAccess.Write, FileShare.None))
                     compType.Compress(s, d, level);
+                fi.Refresh();
                 return new CompFile
                 {
                     Filename = compName,
@@ -113,8 +114,9 @@ namespace SysWeaver
                         return null;
                 }
                 using (var s = fn.OpenRead())
-                using (var d = fi.OpenWrite())
+                using (var d = fi.Open(FileMode.Create, FileAccess.Write, FileShare.None))
                     await compType.CompressAsync(s, d, level).ConfigureAwait(false);
+                fi.Refresh();
                 return new CompFile
                 {
                     Filename = compName,

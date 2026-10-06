@@ -224,12 +224,12 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Average of <see cref="DateTime"/> values computed by summing ticks (unchecked, can overflow for more than ~14 values),
+        /// Average of <see cref="DateTime"/> values computed by summing ticks (using a 128 bit accumulator),
         /// the <see cref="DateTimeKind"/> of the first value is used. Throws <see cref="DivideByZeroException"/> on an empty sequence.
         /// </summary>
         static Object DateTimeAvg(IEnumerable<Object> values)
         {
-            long c = default;
+            Int128 c = default;
             long count = 0;
             DateTimeKind ff = default;
             bool first = true;
@@ -247,7 +247,7 @@ namespace SysWeaver.Data
                 ++count;
                 first = false;
             }
-            var res = c / count;
+            var res = (long)(c / count);
             return new DateTime(res, ff);
         }
 

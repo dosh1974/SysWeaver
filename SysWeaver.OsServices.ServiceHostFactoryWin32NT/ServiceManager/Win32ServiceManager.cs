@@ -47,10 +47,6 @@ namespace SysWeaver.OsServices.ServiceManager
         /// <summary>
         /// Configure the failure actions of a service to restart it on the first, second and subsequent failures.
         /// </summary>
-        /// <remarks>
-        /// NOTE: <paramref name="resetSeconds"/> is multiplied by 1000 before being passed as the reset period, but Win32 expects seconds,
-        /// so the effective reset period is 1000 times longer than requested.
-        /// </remarks>
         /// <param name="serviceName">The windows service name to enable restart on fail</param>
         /// <param name="failSilent">If true, return false on error, else throw exceptions</param>
         /// <param name="restartDelaySeconds">Number of seconds to wait on first and second fails</param>
@@ -61,7 +57,7 @@ namespace SysWeaver.OsServices.ServiceManager
         {
             var t0 = (uint)Math.Max(1, restartDelaySeconds) * 1000;
             var t1 = (uint)Math.Max(1, restartDelayLastSeconds) * 1000;
-            var t2 = Math.Max(1, resetSeconds) * 1000;
+            var t2 = Math.Max(1, resetSeconds);
             ScAction[] actions = 
                 [
                     new ScAction

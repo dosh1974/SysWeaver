@@ -71,9 +71,9 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Warning: this is null (default), NOT a completed task. Use <see cref="Task.CompletedTask"/> instead.
+        /// A completed task (same as <see cref="Task.CompletedTask"/>), can be returned from <see cref="Add(Message)"/>.
         /// </summary>
-        protected static readonly Task CompletedTask = default;
+        protected static readonly Task CompletedTask = Task.CompletedTask;
 
         async Task ProcessMessageQueue()
         {
@@ -102,7 +102,7 @@ namespace SysWeaver
             Messages.Enqueue(m);
             if (Interlocked.Increment(ref ProcessingCount) != 1)
                 return null;
-            var t = Task.Run(() => ProcessMessageQueue().ConfigureAwait(false));
+            var t = Task.Run(ProcessMessageQueue);
             CurrentTask = t;
             return (Mode == Modes.Async) || t.IsCompleted ? null : t;
         }

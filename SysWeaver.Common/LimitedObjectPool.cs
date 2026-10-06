@@ -92,9 +92,8 @@ namespace SysWeaver
                         {
                         }
                     }
-                    // There is a small chance that an object was disposed before after the Interlocked.Exchange happened.
-                    // But the disposed object was pushed to the cache after this clearing of the cache.
-                    // Sleep a bit and re-try, this makes the Dispose slower than it need but it's better to play it safe than having undisposed resources
+                    // An object returned concurrently (pushed after this clearing of the cache) is disposed by the returning thread itself (see OnDisposeFn).
+                    // Sleep a bit and re-try anyway, this makes the Dispose slower than it need but it's better to play it safe than having undisposed resources
                     Thread.Sleep(5);
                 } while (cache.TryPeek(out var _));
             }else
@@ -104,9 +103,7 @@ namespace SysWeaver
                     Interlocked.Decrement(ref InternalInCache);
                     Interlocked.Increment(ref InternalDisposed);
                 }
-                // There is a small chance that an object was disposed before after the Interlocked.Exchange happened.
-                // But the disposed object was pushed to the cache after this clearing of the cache.
-                // Since we don't have a dispose we simply keep a reference to these objects (possible prevent GC'ing if there is a reference to LimitedObjectPool instance after it's disposal).
+                // An object returned concurrently (pushed after this clearing of the cache) is popped by the returning thread itself (see OnDisposeFn).
             }
         }
 
@@ -145,7 +142,26 @@ namespace SysWeaver
                 return;
             }
             Interlocked.Increment(ref InternalInCache);
-            Cached.Push(t);
+            var cache = Cached;
+            cache.Push(t);
+            // If the pool was disposed concurrently, Dispose may already have drained the cache (before our push), so drain it here (else the object would never be disposed)
+            if (InternalMaxCached != 0)
+                return;
+            var od = Disposer;
+            while (cache.TryPop(out var p))
+            {
+                Interlocked.Decrement(ref InternalInCache);
+                Interlocked.Increment(ref InternalDisposed);
+                if (od == null)
+                    continue;
+                try
+                {
+                    od.Invoke(p);
+                }
+                catch
+                {
+                }
+            }
         }
 
         readonly Action<T> OnDispose;

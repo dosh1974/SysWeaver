@@ -88,7 +88,7 @@ namespace SysWeaver.Docs
             var cache = TypeCache;
             if (cache.TryGetValue(type, out var docType))
                 return docType;
-
+            var key = type;
             if (type.IsByRef)
                 type = type.GetElementType() ?? throw new NullReferenceException();
             if (type.IsArray)
@@ -104,7 +104,7 @@ namespace SysWeaver.Docs
                     break;
                 }
             }
-            cache.TryAdd(type, docType);
+            cache.TryAdd(key, docType);
             return docType;
         }
 

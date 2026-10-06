@@ -293,18 +293,17 @@ namespace SysWeaver
         /// <param name="name">The name of the field</param>
         /// <param name="flags">The binding flags used for each type</param>
         /// <returns>The first matching field, or null if not found</returns>
-        /// <exception cref="NullReferenceException"><paramref name="type"/> is an interface (or another type whose base type chain doesn't end in <see cref="Object"/>) and the field isn't found.</exception>
         public static FieldInfo GetFieldWithBase(this Type type, String name, BindingFlags flags)
         {
-            for(; ;)
+            do
             {
                 var i = type.GetField(name, flags);
                 if (i != null)
                     return i;
-                if (type == typeof(Object))
-                    return null;
                 type = type.BaseType;
             }
+            while (type != null);
+            return null;
         }
 
         /// <summary>
@@ -315,18 +314,17 @@ namespace SysWeaver
         /// <param name="flags">The binding flags used for each type</param>
         /// <returns>The first matching property, or null if not found</returns>
         /// <exception cref="AmbiguousMatchException">More than one property with the name is found on a type (ex: indexers).</exception>
-        /// <exception cref="NullReferenceException"><paramref name="type"/> is an interface (or another type whose base type chain doesn't end in <see cref="Object"/>) and the property isn't found.</exception>
         public static PropertyInfo GetPropertyWithBase(this Type type, String name, BindingFlags flags)
         {
-            for (; ; )
+            do
             {
                 var i = type.GetProperty(name, flags);
                 if (i != null)
                     return i;
-                if (type == typeof(Object))
-                    return null;
                 type = type.BaseType;
             }
+            while (type != null);
+            return null;
         }
 
 

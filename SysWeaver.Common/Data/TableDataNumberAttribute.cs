@@ -30,10 +30,9 @@ namespace SysWeaver.Data
         /// {2} = Value before formatting.
         /// {3} = The text (after formatting). 
         /// </param>
-        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.
-        /// Note: The web client currently treats any present value as true, so false doesn't disable copy on click.</param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
         public TableDataNumberAttribute(int decimals = -2, String textFormat = "{0}", String titleFormat = "Raw: {2}", bool copyOnClick = true)
-            : base(TableDataFormats.Number, decimals, textFormat ?? "{0}", titleFormat ?? "Raw: {2}", copyOnClick)
+            : base(TableDataFormats.Number, decimals, textFormat ?? "{0}", titleFormat ?? "Raw: {2}", copyOnClick ? "True" : "")
         {
         }
 
@@ -122,10 +121,9 @@ namespace SysWeaver.Data
         /// {2} = Value before formatting.
         /// {3} = The text (after formatting). 
         /// </param>
-        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.
-        /// Note: The web client currently treats any present value as true, so false doesn't disable copy on click.</param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
         public TableDataAmountUSDAttribute(String titleFormat = "USD {2}", bool copyOnClick = true)
-            : base(TableDataFormats.Number, 2, "$ {0}", titleFormat ?? "USD {2}", copyOnClick)
+            : base(TableDataFormats.Number, 2, "$ {0}", titleFormat ?? "USD {2}", copyOnClick ? "True" : "")
         {
         }
     }

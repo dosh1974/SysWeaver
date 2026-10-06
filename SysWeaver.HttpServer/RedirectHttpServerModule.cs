@@ -231,6 +231,11 @@ namespace SysWeaver.Net
         Dictionary<String, Tuple<String, int>> Redirs;
         readonly ConcurrentDictionary<String, Tuple<Dictionary<String, Tuple<String, int>>, StringTree>> Cache;
 
+        /// <summary>
+        /// The maximum number of host names in <see cref="Cache"/>, the cache is cleared when full.
+        /// </summary>
+        const int MaxCachedHosts = 1024;
+
 
         static readonly String This = "[Implicit folder] from Redirect Module";
 
@@ -339,6 +344,9 @@ namespace SysWeaver.Net
                             map[x.Key.Replace("*", host)] = Tuple.Create(rd.Item1.Replace("*", host), rd.Item2);
                         }
                         fn = Tuple.Create(map, StringTree.Build(map.Keys, cs));
+                        //  The host name may be client controlled (wild card prefixes), so limit the cache size
+                        if (c.Count >= MaxCachedHosts)
+                            c.Clear();
                         c[host] = fn;
                     }
                 }

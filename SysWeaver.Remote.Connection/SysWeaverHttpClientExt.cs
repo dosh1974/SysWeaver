@@ -310,8 +310,8 @@ namespace SysWeaver
         /// <param name="server">The base address to a SysWeaver service</param>
         /// <param name="repo">The repository</param>
         /// <param name="info">The files as returned by <see cref="SysWeaverFileUploadPrepare"/>, only files with the status <see cref="FileStatus.Upload"/> are uploaded (concurrently)</param>
-        /// <returns>True if the upload request(s) were performed, false if <paramref name="info"/> is empty. True does NOT mean that the file(s) were uploaded successfully.
-        /// NOTE: the per file upload result is currently NOT written back to the file info(s).</returns>
+        /// <returns>True if the upload request(s) were performed, false if <paramref name="info"/> is empty. True does NOT mean that the file(s) were uploaded successfully,
+        /// the per file upload result is written back to the file info(s) (see <see cref="FileInfo.GetStatus"/>).</returns>
         public async static Task<bool> SysWeaverFileUploadPrepared(this HttpClient client, String server, String repo, FileInfo[] info)
         {
             var urlbase = server.TrimEnd('/') + '/';
@@ -319,7 +319,7 @@ namespace SysWeaver
             if (count <= 0)
                 return false;
             urlbase = urlbase + "upload/Upload?repo=" + repo;
-            await info.Where(f => f.Status == FileStatus.Upload).ProcessAsync(f => UploadOne(client, urlbase, f)).ConfigureAwait(false);
+            await info.Where(f => f.Status == FileStatus.Upload).ProcessAsync(async f => f.Status = await UploadOne(client, urlbase, f).ConfigureAwait(false)).ConfigureAwait(false);
             return true;
         }
 
@@ -334,6 +334,8 @@ namespace SysWeaver
         public async static Task<FileInfo[]> SysWeaverFileUpload(this HttpClient client, String server, String repo, params String[] filenames)
         {
             var info = await SysWeaverFileUploadPrepare(client, server, repo, filenames).ConfigureAwait(false);
+            if (info == null)
+                return null;
             bool needUpload = false;
             foreach (var x in info)
             {
@@ -359,7 +361,7 @@ namespace SysWeaver
                 s.Headers.ContentLength = fi.Length;
                 s.Headers.ContentType = Mt;
                 baseUrl = String.Concat(baseUrl, "&name=", fi.Name, "&length=" + fi.Length + "&hash=" + fi.Hash + "&time=" + fi.LastModified);
-                var res = await client.PostAsync(baseUrl, s).ConfigureAwait(false);
+                using var res = await client.PostAsync(baseUrl, s).ConfigureAwait(false);
                 if (res.StatusCode != System.Net.HttpStatusCode.OK)
                     return FileStatus.UploadFailed;
                 var val = await res.Content.ReadAsStringAsync().ConfigureAwait(false);

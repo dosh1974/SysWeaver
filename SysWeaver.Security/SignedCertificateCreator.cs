@@ -406,7 +406,7 @@ namespace SysWeaver.Security
         /// <param name="parentCert">The parent certificate to use for signing (must have a private key).</param>
         /// <returns>A new certificate including the private key, the caller owns it and should dispose it.</returns>
         /// <remarks>
-        /// Every certificate is issued with the same fixed serial number (01 02 03 04).
+        /// Every certificate is issued with a random 128 bit serial number.
         /// </remarks>
         public X509Certificate2 Create(X509Certificate2 parentCert)
         {
@@ -431,7 +431,10 @@ namespace SysWeaver.Security
                     from = parentCert.NotBefore;
                 if (to > parentCert.NotAfter)
                     to = parentCert.NotAfter;
-                using (var temp = req.Create(parentCert, from, to, [1, 2, 3, 4]))
+                //  Random positive serial number (unique per issuer as required by RFC 5280), the leading byte is kept in 0x40-0x7F for a minimal DER encoding
+                var serial = RandomNumberGenerator.GetBytes(16);
+                serial[0] = (Byte)((serial[0] & 0x7f) | 0x40);
+                using (var temp = req.Create(parentCert, from, to, serial))
                 using (var tc = temp.CopyWithPrivateKey(rsa))
                 {
                     var wk = X509CertificateLoader.LoadPkcs12(tc.Export(X509ContentType.Pfx), (String)null, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);

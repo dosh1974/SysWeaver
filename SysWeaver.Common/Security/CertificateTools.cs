@@ -90,11 +90,15 @@ namespace SysWeaver.Security
                 }
                 else if (type == 160) // upn
                 {
-                    // not sure how to parse the part before \f
-                    var index = data.IndexOf((byte)'\f') + 1;
-                    var upnData = data.Slice(index);
-                    var upnLength = ReadLength(ref upnData);
-                    result.Add(Encoding.UTF8.GetString(upnData.Slice(0, upnLength)));
+                    // not sure how to parse the part before \f (only search within this entry, skip the entry if there is no UTF8String)
+                    var upnData = data.Slice(0, partLength);
+                    var index = upnData.IndexOf((byte)'\f');
+                    if (index >= 0)
+                    {
+                        upnData = upnData.Slice(index + 1);
+                        var upnLength = ReadLength(ref upnData);
+                        result.Add(Encoding.UTF8.GetString(upnData.Slice(0, upnLength)));
+                    }
                 }
                 else // all other
                 {
@@ -253,10 +257,10 @@ namespace SysWeaver.Security
         /// <summary>
         /// Get the DER encoded bytes of a PEM encoded certificate.
         /// </summary>
-        /// <param name="cert">The PEM text, everything between the first "-----BEGIN CERTIFICATE-----" and the last "-----END CERTIFICATE-----" is decoded,
-        /// so the text must only contain a single certificate</param>
+        /// <param name="cert">The PEM text, the first certificate (everything between the first "-----BEGIN CERTIFICATE-----" and the following "-----END CERTIFICATE-----") is decoded,
+        /// any following certificates (ex: in a full chain file) are ignored</param>
         /// <returns>The DER encoded certificate</returns>
-        /// <exception cref="Exception">The text doesn't contain a certificate header or footer</exception>
+        /// <exception cref="Exception">The text doesn't contain a certificate header or a footer after the header</exception>
         /// <exception cref="FormatException">The text between the header and footer isn't valid base64</exception>
         public static Byte[] GetCertBytes(String cert)
         {
@@ -267,7 +271,7 @@ namespace SysWeaver.Security
                 throw new Exception("Not a valid certificate (no header)!");
             start += header.Length;
 
-            var end = cert.LastIndexOf(footer, StringComparison.OrdinalIgnoreCase);
+            var end = cert.IndexOf(footer, start, StringComparison.OrdinalIgnoreCase);
             if (end < 0)
                 throw new Exception("Not a valid certificate (no footer)!");
             var sb = new StringBuilder(cert.Length);

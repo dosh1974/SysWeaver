@@ -471,31 +471,15 @@ namespace SysWeaver.Net
         /// Forwarded / X-Forwarded-For headers are not used (yet), so this is the address of the closest peer.
         /// </summary>
         /// <returns>The address as text</returns>
-        /// <remarks>An attempt is made to strip a port suffix, which also truncates IPv6 addresses whose last group isn't preceded by "::" (ex: "2001:db8::1:2" becomes "2001:db8::1").</remarks>
+        /// <remarks>IPv4 addresses mapped to IPv6 (ex: "::ffff:192.168.1.5") are returned as IPv4 addresses (ex: "192.168.1.5").</remarks>
         public String GetIpAddress()
         {
             // TODO: Use "Forwarded" (https://datatracker.ietf.org/doc/html/rfc7239) and "X-Forwarded-For" (https://en.wikipedia.org/wiki/X-Forwarded-For) from trusted proxies.
             // The headers were read but not used, the lookups are removed until implemented.
-            var ip = GetIP()?.ToString();
+            var ip = GetIP();
             if (ip == null)
                 return "?";
-            bool isV6 = ip.StartsWith('[');
-            if (isV6)
-            {
-                var e = ip.IndexOf(']');
-                ip = e < 0 ? ip.Substring(1) : ip.Substring(1, e - 1);
-            }
-            else
-            {
-                var t = ip.LastIndexOf(':');
-                if (t >= 0)
-                {
-
-                    if ((t == 0) || (ip[t - 1] != ':'))
-                        ip = ip.Substring(0, t);
-                }
-            }
-            return ip;
+            return ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4().ToString() : ip.ToString();
         }
 
 

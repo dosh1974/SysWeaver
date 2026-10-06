@@ -38,7 +38,7 @@ namespace SysWeaver.Security
         /// The default (the application name) is not a secret, it only prevents casual use of the file; protect the file using file system permissions.
         /// Can use EnvInfo variables:
         ///             $(AppName) = Application name.
-        ///             $(AppStart) = Application start time as "yyyy-MM-hh hh:mm:ss".
+        ///             $(AppStart) = Application start time (UTC) as "yyyy-MM-dd HH:mm:ss".
         ///             $(Is64BitProcess) = "True" if the process is running as a 64-bit process, else "False"
         ///             $(OSVersion) = The version of the OS
         ///             $(Platform) = The platform, ex "WinNT", "Unix".

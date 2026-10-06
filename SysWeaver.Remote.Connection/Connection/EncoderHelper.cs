@@ -64,10 +64,10 @@ namespace SysWeaver.Remote.Connection
 
         /// <summary>
         /// Per type converters from a value expression to a url string expression (invariant culture, round-trippable formats).
-        /// Only strings are url escaped (null becomes an empty string); other values are emitted as formatted.
+        /// Only strings and <see cref="DateTime"/> values are url escaped (a null string becomes an empty string); other values are emitted as formatted.
         /// </summary>
         /// <remarks>
-        /// NOTE: <see cref="DateTime"/> uses the "o" format which may include a '+' (time zone offset) that isn't escaped.
+        /// <see cref="DateTime"/> uses the "o" format which may include a '+' (time zone offset), so it's escaped.
         /// Enums, nullable types and <see cref="char"/> are not supported.
         /// </remarks>
         public static readonly IReadOnlyDictionary<Type, Func<Expression, Expression>> ToStrings = new Dictionary<Type, Func<Expression, Expression>>
@@ -86,7 +86,7 @@ namespace SysWeaver.Remote.Connection
                 { typeof(Double), x => Expression.Call(x, typeof(Double).GetMethod(nameof(Double.ToString), RinvTypes), R, Inv) },
                 { typeof(Decimal), x => Expression.Call(x, typeof(Decimal).GetMethod(nameof(Decimal.ToString), InvTypes), Inv) },
                 { typeof(TimeSpan), x => Expression.Call(x, typeof(TimeSpan).GetMethod(nameof(TimeSpan.ToString), RinvTypes), C, Inv) },
-                { typeof(DateTime), x => Expression.Call(x, typeof(DateTime).GetMethod(nameof(DateTime.ToString), RinvTypes), O, Inv) },
+                { typeof(DateTime), x => Secure(Expression.Call(x, typeof(DateTime).GetMethod(nameof(DateTime.ToString), RinvTypes), O, Inv)) },
                 { typeof(Guid), DefaultToString },
             }.Freeze();
 

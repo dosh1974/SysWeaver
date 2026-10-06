@@ -275,7 +275,6 @@ namespace SysWeaver.Collections
             var data = BuildBlock(Build);
             RawByteCount += data.Length;
             Blocks.Add(data);
-            RawByteCount += data.Length;
         }
 
         static int CommonPrefixLen(String prev, String current)
@@ -303,28 +302,38 @@ namespace SysWeaver.Collections
             for (int i = 0; i < sl; ++i)
                 maxLen += s[i].Length;
             maxLen += (BlockSize << 1);
-            Span<Byte> temp = stackalloc byte[maxLen];
-            String prev = "";
-            int dest = 0;
-            for (int i = 0; i < sl; ++i)
+            const int MaxStackAlloc = 1024;
+            Byte[] rented = null;
+            Span<Byte> temp = maxLen <= MaxStackAlloc ? stackalloc byte[maxLen] : (rented = ArrayPool<Byte>.Shared.Rent(maxLen));
+            try
             {
-                var c = s[i];
-                var plen = CommonPrefixLen(prev, c);
-                temp[dest] = (byte)plen;
-                ++dest;
-                var l = c.Length;
-                for (int j = plen; j < l; ++ j)
+                String prev = "";
+                int dest = 0;
+                for (int i = 0; i < sl; ++i)
                 {
-                    int a = c[j];
-                    temp[dest] = (byte)a;
+                    var c = s[i];
+                    var plen = CommonPrefixLen(prev, c);
+                    temp[dest] = (byte)plen;
                     ++dest;
+                    var l = c.Length;
+                    for (int j = plen; j < l; ++ j)
+                    {
+                        int a = c[j];
+                        temp[dest] = (byte)a;
+                        ++dest;
+                    }
+                    prev = c;
                 }
-                prev = c;
+                --dest;
+                var bl = GC.AllocateUninitializedArray<Byte>(dest);
+                temp.Slice(1, dest).CopyTo(bl.AsSpan());
+                return bl;
             }
-            --dest;
-            var bl = GC.AllocateUninitializedArray<Byte>(dest);
-            temp.Slice(1, dest).CopyTo(bl.AsSpan());
-            return bl;
+            finally
+            {
+                if (rented != null)
+                    ArrayPool<Byte>.Shared.Return(rented);
+            }
         }
 
         /// <summary>

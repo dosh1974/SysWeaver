@@ -48,7 +48,7 @@ namespace SysWeaver.Data
         /// <summary>
         /// Mime search
         /// </summary>
-        public const String MimeSearchFormat = "Information about the \".{0}\" mime type";
+        public const String MimeSearchFormat = "Information about the \"{0}\" mime type";
 
         /// <summary>
         /// Text encoding search

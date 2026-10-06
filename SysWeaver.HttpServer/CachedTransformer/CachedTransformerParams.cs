@@ -26,7 +26,7 @@ namespace SysWeaver.HttpTransformer
 
         /// <summary>
         /// Optionally specify the folders where transformed data is stored (files are distributed among them by hash).
-        /// Null to use a "TransformerCache" sub folder in all application data folders. Must not be empty.
+        /// Null or empty to use a "TransformerCache" sub folder in all application data folders.
         /// </summary>
         public String[] Folders;
 

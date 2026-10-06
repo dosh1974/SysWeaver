@@ -108,7 +108,7 @@ namespace SysWeaver.OsServices
             var disp = p.DisplayName ?? p.Name;
             var desc = p.Description;
             if (!String.IsNullOrEmpty(desc))
-                disp += "\n# Description:       " + desc.Replace("\r", "\r#                    ");
+                disp += "\n# Description:       " + desc.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "\n#                    ");
 
             Dictionary<String, String> vars = new Dictionary<string, string>(StringComparer.Ordinal)
             {
@@ -508,12 +508,12 @@ case ""$1"" in
         status_of_proc -p ""$PIDFILE"" ""$DAEMON"" && exit 0 || exit $?
         ;;
   restart|reload|condrestart)
-        log_daemon_msg ""Restarting service: $(DisplayName)"" ""$Name)""
+        log_daemon_msg ""Restarting service: $(DisplayName)"" ""$(Name)""
         stop
         start
         ;;
   *)
-        log_action_msg ""Usage: /etc/init.d/${Name} {start|stop|status|restart|reload|force-reload}""
+        log_action_msg ""Usage: /etc/init.d/${NAME} {start|stop|status|restart|reload|force-reload}""
         exit 1
 esac
 

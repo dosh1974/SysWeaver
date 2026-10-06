@@ -190,6 +190,8 @@ namespace SysWeaver
                 InternalAppName = String.IsNullOrEmpty(value) ? ExeAppName : value;
                 InternalTextVarsCaseInsensitive = null;
                 InternalTextVars = null;
+                StaticCache.Clear();
+                StaticCachInSens.Clear();
             }
         }
         static String InternalAppName = ExeAppName;
@@ -206,6 +208,8 @@ namespace SysWeaver
                 InternalAppDisplayName = String.IsNullOrEmpty(value) ? ExeAppDisplayName : value;
                 InternalTextVarsCaseInsensitive = null;
                 InternalTextVars = null;
+                StaticCache.Clear();
+                StaticCachInSens.Clear();
             }
         }
         static String InternalAppDisplayName = ExeAppDisplayName;
@@ -222,6 +226,8 @@ namespace SysWeaver
                 InternalAppDescription = String.IsNullOrEmpty(value) ? ExeAppDescription : value;
                 InternalTextVarsCaseInsensitive = null;
                 InternalTextVars = null;
+                StaticCache.Clear();
+                StaticCachInSens.Clear();
             }
         }
         static String InternalAppDescription = ExeAppDescription;
@@ -275,7 +281,7 @@ namespace SysWeaver
         ///             "AppName" = Application name.
         ///             "AppDisplayName" = Application display name.
         ///             "AppDescription" = Application description name.
-        ///             "AppStart" = Application start time (UTC) formatted using "yyyy-MM-hh hh:mm:ss" (note: month followed by a 12-hour clock hour, not the day).
+        ///             "AppStart" = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
         ///             "AppAssemblyName" = Application assembly name (typically the exe name), "ExchangeRateService".
         ///             "AppGuid" = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
         ///             "UserName" = The environment user name, ex: "John Doe".
@@ -300,7 +306,7 @@ namespace SysWeaver
                     { nameof(AppName), AppName },
                     { nameof(AppDisplayName), AppDisplayName },
                     { nameof(AppDescription), AppDescription },
-                    { nameof(AppStart), AppStart.ToString("yyyy-MM-hh hh:mm:ss") },
+                    { nameof(AppStart), AppStart.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) },
                     { nameof(AppAssemblyName), AppAssemblyName },
                     { nameof(AppGuid), AppGuid },
                     { nameof(Environment.UserName), Environment.UserName },
@@ -328,7 +334,7 @@ namespace SysWeaver
         ///             "appname" = Application name.
         ///             "appdisplayname" = Application display name.
         ///             "appdescription" = Application description name.
-        ///             "appstart" = Application start time (UTC) formatted using "yyyy-MM-hh hh:mm:ss" (note: month followed by a 12-hour clock hour, not the day).
+        ///             "appstart" = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
         ///             "appassemblyname" = Application assembly name (typically the exe name), "ExchangeRateService".
         ///             "appguid" = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
         ///             "username" = The environment user name, ex: "John Doe".
@@ -352,7 +358,7 @@ namespace SysWeaver
                     { nameof(AppName).FastToLower(), AppName },
                     { nameof(AppDisplayName).FastToLower(), AppDisplayName },
                     { nameof(AppDescription).FastToLower(), AppDescription },
-                    { nameof(AppStart).FastToLower(), AppStart.ToString("yyyy-MM-hh hh:mm:ss") },
+                    { nameof(AppStart).FastToLower(), AppStart.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) },
                     { nameof(AppAssemblyName).FastToLower(), AppAssemblyName },
                     { nameof(AppGuid).FastToLower(), AppGuid },
                     { nameof(Environment.UserName).FastToLower(), Environment.UserName },
@@ -381,7 +387,7 @@ namespace SysWeaver
         ///             $(AppName) = Application name.
         ///             $(AppDisplayName) = Application display name.
         ///             $(AppDescription) = Application description name.
-        ///             $(AppStart) = Application start time (UTC) formatted using "yyyy-MM-hh hh:mm:ss" (note: month followed by a 12-hour clock hour, not the day).
+        ///             $(AppStart) = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
         ///             $(AppAssemblyName) = Application assembly name (typically the exe name), "ExchangeRateService".
         ///             $(AppGuid) = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
         ///             $(UserName) = The environment user name, ex: "John Doe".
@@ -395,7 +401,7 @@ namespace SysWeaver
         ///             $(AppName) = Application name.
         ///             $(AppDisplayName) = Application display name.
         ///             $(AppDescription) = Application description name.
-        ///             $(AppStart) = Application start time (UTC) formatted using "yyyy-MM-hh hh:mm:ss" (note: month followed by a 12-hour clock hour, not the day).
+        ///             $(AppStart) = Application start time (UTC) formatted using "yyyy-MM-dd HH:mm:ss".
         ///             $(AppAssemblyName) = Application assembly name (typically the exe name), "ExchangeRateService".
         ///             $(AppGuid) = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
         ///             $(UserName) = The environment user name, ex: "John Doe".
@@ -410,8 +416,8 @@ namespace SysWeaver
         /// When case insensitive, the lookup in <paramref name="extra"/> uses its own comparer.</param>
         /// <returns>The resolved text (null or empty if <paramref name="template"/> is null or empty)</returns>
         /// <remarks>
-        /// Thread safe. When no <paramref name="extra"/> variables are given, the resolved result is cached per template (forever),
-        /// so a later change of <see cref="AppName"/>, <see cref="AppDisplayName"/> or <see cref="AppDescription"/> is not reflected for templates resolved before the change.
+        /// Thread safe. When no <paramref name="extra"/> variables are given, the resolved result is cached per template
+        /// (the cache is cleared when <see cref="AppName"/>, <see cref="AppDisplayName"/> or <see cref="AppDescription"/> changes).
         /// Caches are unbounded, so don't use with an unbounded set of templates.
         /// </remarks>
         public static String ResolveText(String template, bool caseInSensitive = true, IReadOnlyDictionary<String, String> extra = null)

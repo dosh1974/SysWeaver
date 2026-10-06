@@ -418,6 +418,7 @@ namespace SysWeaver.OsServices
             { 31, '-' },
             { 34, '_' },
             { 37, '_' },
+            { 40, '_' },
         }.Freeze();
         static bool NewIsConfigBackupName(String filename, out string orgName)
         {
@@ -428,10 +429,10 @@ namespace SysWeaver.OsServices
                 return false;
             var bak = filename.SplitFirst('.', out orgName);
             var len = bak.Length;
-            if (len < 40)
+            if (len < 43)
                 return false;
             var bl = NewBackLocs;
-            for (int i = 4; i < 40; ++ i)
+            for (int i = 4; i < 43; ++ i)
             {
                 var c = filename[i];
                 if (bl.TryGetValue(i, out var m))
@@ -444,11 +445,11 @@ namespace SysWeaver.OsServices
                 if (c > '9')
                     return false;
             }
-            if (len == 40)
+            if (len == 43)
                 return true;
-            if (filename[40] != '_')
+            if (filename[43] != '_')
                 return false;
-            for (int i = 41; i < len; ++i)
+            for (int i = 44; i < len; ++i)
             {
                 var c = filename[i];
                 if (c < '0')
@@ -460,15 +461,12 @@ namespace SysWeaver.OsServices
         }
 
         /// <summary>
-        /// Check if a file name is a backup name created by <see cref="GetConfigBackupName"/> ("Bak_[yyyy-MM-dd_HH_mm_ss]_[yyyy-MM-dd_HH_mm_ss].Name.ext"),
+        /// Check if a file name is a backup name created by <see cref="GetConfigBackupName"/> ("Bak_[yyyy-MM-dd_HH_mm_ss]_[yyyy-MM-dd_HH_mm_ss]{_N}.Name.ext"),
         /// or a legacy backup name ("Name.[yyyy-MM-dd_HH_mm_ss].ext" or "Name.LastGood.ext").
         /// </summary>
         /// <param name="filename">The file name (no directory).</param>
         /// <param name="orgName">If a backup name, the original file name, else undefined (may be non-null).</param>
         /// <returns>True if the name is a backup name.</returns>
-        /// <remarks>
-        /// NOTE: new style names with a uniqueness suffix ("Bak_..._0.Name.ext") are currently NOT recognized.
-        /// </remarks>
         public static bool IsConfigBackupName(String filename, out string orgName)
         {
             if (NewIsConfigBackupName(filename, out orgName))

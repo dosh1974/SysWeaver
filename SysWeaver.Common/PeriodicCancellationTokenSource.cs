@@ -39,14 +39,25 @@ namespace SysWeaver
             catch
             {
             }
+            // If the timer is already gone, Dispose (or another callback) got there first
+            var t = Interlocked.Exchange(ref T, null);
+            if (t == null)
+                return;
             try
             {
-                Interlocked.Exchange(ref T, null)?.Dispose();
+                t.Dispose();
             }
             catch
             {
             }
-            Cancel();
+            try
+            {
+                Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Disposed concurrently, an unhandled exception on a timer thread would terminate the process
+            }
         }
 
         Timer T;

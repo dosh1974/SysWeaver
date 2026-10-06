@@ -122,7 +122,7 @@ namespace SysWeaver.Net
         static readonly IReadOnlySet<String> Empty = new HashSet<String>().Freeze();
 
         /// <summary>
-        /// Parse an Accept-Encoding header value into a set of lower cased encoding names (parameters such as "q=" are stripped).
+        /// Parse an Accept-Encoding header value into a set of lower cased encoding names (parameters are stripped, encodings with a zero quality value, ex: "gzip;q=0", are excluded).
         /// </summary>
         /// <param name="supported">The header value, may be null</param>
         /// <returns>The (cached, shared) set, empty if <paramref name="supported"/> is null</returns>
@@ -138,7 +138,22 @@ namespace SysWeaver.Net
                 return Empty;
             HashSet<String> sup = new(StringComparer.Ordinal);
             foreach (var x in d)
-                sup.Add(x.Split(';')[0].FastTrimToLower());
+            {
+                var p = x.Split(';');
+                // An encoding with a quality value of zero is not acceptable (ex: "gzip;q=0")
+                bool notAccepted = false;
+                for (int i = 1; i < p.Length; ++i)
+                {
+                    var param = p[i].AsSpan().Trim();
+                    if ((param.Length < 2) || ((param[0] != 'q') && (param[0] != 'Q')) || (param[1] != '='))
+                        continue;
+                    if (Double.TryParse(param.Slice(2), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var q) && (q <= 0))
+                        notAccepted = true;
+                }
+                if (notAccepted)
+                    continue;
+                sup.Add(p[0].FastTrimToLower());
+            }
             cs = sup.Freeze();
             s[supported] = cs;
             return cs;

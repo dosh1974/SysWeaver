@@ -200,7 +200,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Copy some memory to a lowercased version (the same as Char.ToLowerInvariant of every char), the source and destination can be the same memory.
-        /// Partially overlapping memory is processed from the end to the start, which is only correct if the destination is after the source.
+        /// Partially overlapping memory is supported (memmove semantics).
         /// </summary>
         /// <param name="dest">The destination</param>
         /// <param name="source">The source</param>
@@ -216,7 +216,13 @@ namespace SysWeaver
             }
             if (Overlaps(dest, source, length))
             {
-                // Partially overlapping, use the original algorithm (end to start)
+                // Partially overlapping, process in the direction that reads every source char before it's overwritten (memmove semantics)
+                if (dest < source)
+                {
+                    for (int i = 0; i < length; ++i)
+                        dest[i] = Char.ToLowerInvariant(source[i]);
+                    return;
+                }
                 while (length > 0)
                 {
                     --length;
@@ -229,7 +235,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Copy some memory to an uppercased version (the same as Char.ToUpperInvariant of every char), the source and destination can be the same memory.
-        /// Partially overlapping memory is processed from the end to the start, which is only correct if the destination is after the source.
+        /// Partially overlapping memory is supported (memmove semantics).
         /// </summary>
         /// <param name="dest">The destination</param>
         /// <param name="source">The source</param>
@@ -245,7 +251,13 @@ namespace SysWeaver
             }
             if (Overlaps(dest, source, length))
             {
-                // Partially overlapping, use the original algorithm (end to start)
+                // Partially overlapping, process in the direction that reads every source char before it's overwritten (memmove semantics)
+                if (dest < source)
+                {
+                    for (int i = 0; i < length; ++i)
+                        dest[i] = Char.ToUpperInvariant(source[i]);
+                    return;
+                }
                 while (length > 0)
                 {
                     --length;

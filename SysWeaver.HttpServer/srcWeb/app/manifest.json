@@ -1,7 +1,7 @@
 ﻿{
-  "start_url": "${Request.Prefix}",
-  "short_name": "${EnvInfo.AppName}",
-  "name": "${EnvInfo.AppDisplayName}",
+  "start_url": "${$Request.Prefix}",
+  "short_name": "${$EnvInfo.AppName}",
+  "name": "${$EnvInfo.AppDisplayName}",
   "icons": [
     {
       "src": "../icon-180.png",
@@ -16,9 +16,9 @@
   ],
   "display": "fullscreen",
   "orientation": "any",
-  "description": "${EnvInfo.AppDescription}",
-  "theme_color": "${Color.Color}",
-  "background_color": "${Color.Background}",
+  "description": "${$EnvInfo.AppDescription}",
+  "theme_color": "${$Color.Color}",
+  "background_color": "${$Color.Background}",
   "screenshots": [
     {
       "src": "../logo.svg",

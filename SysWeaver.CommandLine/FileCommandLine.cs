@@ -44,7 +44,6 @@ namespace SysWeaver
         /// The key is the full path and the value is the path relative to the searched folder (includes sub folders for recursive searches).
         /// </returns>
         /// <exception cref="DirectoryNotFoundException">The folder of a mask doesn't exist.</exception>
-        /// <exception cref="ArgumentException">The same file is found more than once (ex: by overlapping masks, or a sequence file also matched by the mask).</exception>
         public static IList<KeyValuePair<String, String>> ParseMultipleExisting(String values, bool allowSequences = false)
         {
             var fileMasks = values.Split(';');
@@ -68,7 +67,8 @@ namespace SysWeaver
                         ++fl;
                     foreach (var f in Directory.GetFiles(folder, mask, rec ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly))
                     {
-                        allFiles.Add(f, f.Substring(fl));
+                        if (!allFiles.TryAdd(f, f.Substring(fl)))
+                            continue;
                         if (allowSequences)
                         {
                             var test = StringTools.CountUp(f);

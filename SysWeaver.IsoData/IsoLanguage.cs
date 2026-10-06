@@ -91,8 +91,7 @@ namespace SysWeaver.IsoData
         /// <param name="regionalCode">A two letter ISO 639-1 language code or a three letter ISO 639-2 language code, optionally combined with a two letter ISO 3166-A2 country code using a hyphen.</param>
         /// <returns>Information about the language if it's known, or null if it's unknown or if a country part is present but unknown.</returns>
         /// <remarks>
-        /// The country part is case insensitive, but unlike <see cref="TryGet(string)"/> the language part is matched case sensitively,
-        /// so it must be lower case (ex: "EN-GB" returns null). Everything after the first hyphen is treated as the country part.
+        /// Both the language part and the country part are case insensitive. Everything after the first hyphen is treated as the country part.
         /// </remarks>
         public static IsoLanguage TryGet(out IsoCountry country, String regionalCode)
         {
@@ -107,7 +106,7 @@ namespace SysWeaver.IsoData
                     return null;
                 regionalCode = regionalCode.Substring(0, t);
             }
-            return IsoToInfo.TryGetValue(regionalCode, out var i) ? i : null;
+            return IsoToInfo.TryGetValue(regionalCode.FastToLower(), out var i) ? i : null;
         }
 
         /// <summary>
@@ -391,6 +390,8 @@ namespace SysWeaver.IsoData
                 foreach (var x in c.Languages.Split(','))
                 {
                     var key = x.FastTrimToLower();
+                    if (key.Length == 0)
+                        continue;
                     if (!cmap.TryGetValue(key, out var l))
                     {
                         l = new List<Tuple<IsoCountry, decimal>>();

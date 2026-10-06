@@ -77,7 +77,7 @@ namespace SysWeaver
                     totalBytes = ms.ullTotalPhys;
                 }else
                 {
-                    throw new Exception(String.Concat(nameof(GlobalMemoryStatusEx), " failed with error code: ", GetLastError()));
+                    throw new Exception(String.Concat(nameof(GlobalMemoryStatusEx), " failed with error code: ", Marshal.GetLastPInvokeError()));
                 }
                 return true;
             }

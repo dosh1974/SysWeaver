@@ -40,9 +40,9 @@ The service manager registers the console message handler automatically when a c
 ## Limitations and considerations
 
 - Designed for the SysWeaver conventions (option prefix, option naming); not a general replacement for full-featured CLI frameworks with sub-command trees.
-- Options are recognised by the prefixes `-`, `--` and `/`; since `-` is tested first, `--name` is looked up as `-name`, and positional values starting with `-` or `/` (negative numbers, absolute Unix paths) are taken as options.
+- Options are recognised by the prefixes `-`, `--` and `/` (the longest matching prefix is removed, so `--name` is looked up as `name`); positional values starting with `-` or `/` (negative numbers, absolute Unix paths) are taken as options.
+- Known issue: min/max limits are only enforced for option arguments, not positional arguments.
 - Help quality depends on XML comments being present and deployed; only the plain text of `<summary>` is used.
-- Known issues: the static non-async `OnFilesParallel` helper runs sequentially - prefer `OnFilesParallelAsync`; `Wildcard.Match` with `unixStyle: true` swaps pattern and file name; min/max limits are only enforced for option arguments, not positional arguments.
 - Configuration (prefixes, tags, parsers) is global static state; set it up once at startup.
 
 ## Using it

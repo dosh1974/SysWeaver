@@ -87,16 +87,17 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <summary>
         /// Check if a non ASCII char is white space (see <see cref="Char.IsWhiteSpace(char)"/>).
         /// </summary>
-        /// <remarks>Decodes from the lead byte itself (the position isn't advanced past it first), so multi byte chars are decoded wrongly and the position is not set to after the char.</remarks>
+        /// <param name="t">The lead byte</param>
+        /// <param name="d">The position of the lead byte, set to after the char if it's white space (else unchanged)</param>
+        /// <param name="e">The end of the data</param>
         static bool IsUtf8White(uint t, ref Byte* d, Byte* e)
         {
-            var test = d;
-            ++d;
+            var test = d + 1;
             t = CompleteUtf8Char(t, ref test, e);
-            if (Char.IsWhiteSpace((Char)t))
-                return true;
+            if ((t > 0xffff) || (!Char.IsWhiteSpace((Char)t)))
+                return false;
             d = test;
-            return false;
+            return true;
         }
 
         /// <summary>
@@ -526,8 +527,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <summary>
         /// Read chars into the buffer until the supplied char (or the end of data, no exception) is found, decoding JSON escapes (\ is the escape char), position is set to after the found char
         /// </summary>
-        /// <remarks>Supports \" \\ \/ \' \b \f \n \r \t and \uXXXX (surrogate pairs are two escapes, each decoded to one char).
-        /// A \uXXXX escape must be followed by at least one more byte before <paramref name="e"/>.</remarks>
+        /// <remarks>Supports \" \\ \/ \' \b \f \n \r \t and \uXXXX (surrogate pairs are two escapes, each decoded to one char).</remarks>
         /// <param name="buf">A temp buffer, replaced by a larger one if needed</param>
         /// <param name="d">The position</param>
         /// <param name="e">The end of the data</param>
@@ -711,12 +711,11 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <summary>
         /// Read a byte array from a Base64 encoded string (standard alphabet with padding, no white space or escapes)
         /// </summary>
-        /// <remarks>Invalid base64 chars are only detected in VALIDATE (debug) builds, in release builds they silently produce wrong bytes.</remarks>
         /// <param name="d">The position (after the opening quote), set to after the end char</param>
         /// <param name="e">The end of the data</param>
         /// <param name="until">The char that stops the reading</param>
         /// <returns>The data read</returns>
-        /// <exception cref="Exception">The length isn't a multiple of 4, or a non ASCII char was found</exception>
+        /// <exception cref="Exception">The length isn't a multiple of 4, or an invalid char was found</exception>
         public static Byte[] ReadBase64Bytes(ref Byte* d, Byte* e, Char until)
         {
             var rem = new ReadOnlySpan<Byte>(d, (int)(e - d));
@@ -776,6 +775,8 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 if (*k != '=')
                     break;
                 ++pad;
+                if (pad > 2)
+                    ReadException.ThrowInvalidBase64Char('=');
             }
             var blen = (len * 3) >> 2;
             blen -= pad;
@@ -788,33 +789,25 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 while (blen > 0)
                 {
                     uint b = to[*s];
-#if VALIDATE
-                if (b >= 64)
-                    ReadException.ThrowInvalidBase64Char(*s);
-#endif//VALIDATE
+                    if (b >= 64)
+                        ReadException.ThrowInvalidBase64Char(*s);
                     ++s;
                     b <<= 6;
                     uint c = to[*s];
-#if VALIDATE
-                if (c >= 64)
-                    ReadException.ThrowInvalidBase64Char(*s);
-#endif//VALIDATE
+                    if (c >= 64)
+                        ReadException.ThrowInvalidBase64Char(*s);
                     b |= c;
                     ++s;
                     b <<= 6;
                     c = to[*s];
-#if VALIDATE
-                if (c >= 64)
-                    ReadException.ThrowInvalidBase64Char(*s);
-#endif//VALIDATE
+                    if (c >= 64)
+                        ReadException.ThrowInvalidBase64Char(*s);
                     b |= c;
                     ++s;
                     b <<= 6;
                     c = to[*s];
-#if VALIDATE
-                if (c >= 64)
-                    ReadException.ThrowInvalidBase64Char(*s);
-#endif//VALIDATE
+                    if (c >= 64)
+                        ReadException.ThrowInvalidBase64Char(*s);
                     ++s;
                     b |= c;
 
@@ -855,7 +848,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
             utd &= 3;
             while (utd > 0)
             {
-                if (ptr > end)
+                if (ptr >= end)
                     ReadException.ThrowEndOfDataUtf8();
                 t <<= 6;
                 a = *ptr;
@@ -968,7 +961,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 case 't':
                     return;
                 case 'u':
-                    if ((d + 4) >= end)
+                    if ((d + 4) > end)
                         ReadException.ThrowEndOfDataEscape();
                     d += 4;
                     return;
@@ -1005,7 +998,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 case 't':
                     return (Char)0x9;
                 case 'u':
-                    if ((d + 4) >= end)
+                    if ((d + 4) > end)
                         ReadException.ThrowEndOfDataEscape();
                     uint v = 0;
                     for (int j = 0; j < 4; ++j)

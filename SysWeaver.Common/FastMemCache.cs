@@ -23,10 +23,11 @@ namespace SysWeaver
     /// Pruning walks a queue in insertion order and stops at the first item that hasn't expired, so it works best when the expiration times are (roughly) increasing,
     /// like with a fixed duration.
     /// Updates of the same key are serialized using a per key spin lock (a lock entry in a concurrent dictionary), so a value factory is only executed once for a key at the same time.
-    /// Callers waiting for the key lock spin / sleep (they block a thread, even in the async methods).
+    /// The synchronous methods hold the key lock while the value factory runs (other callers for the key spin / sleep).
+    /// The async methods only hold the key lock while starting an update: a running update is a pending entry, callers with waitUntilReady = true await it (without blocking a thread),
+    /// callers with waitUntilReady = false get default until it's ready.
     /// Keys can't be null.
-    /// Async methods with waitUntilReady = false store a pending entry while the value is created in the background,
-    /// the synchronous methods (GetOrUpdate etc) treat that entry as a cache hit and return default until the value is ready.
+    /// The synchronous methods (GetOrUpdate etc) treat a pending entry as a cache hit and return default until the value is ready.
     /// </remarks>
     /// <typeparam name="K">The type of the key</typeparam>
     /// <typeparam name="V">The type of the value</typeparam>
@@ -348,10 +349,10 @@ namespace SysWeaver
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
-        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// Only one update per key runs at a time, other callers wait for it (without blocking a thread) or get default (see <paramref name="waitUntilReady"/>). <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
         /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
         /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
-        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// If an update fails, the caller that started it gets the exception, other callers waiting for it try again (one at a time), or get the exception if it was a background update.
         /// </remarks>
         public ValueTask<V> GetOrUpdateWithExistingAsync(K key, Func<K, V, Task<V>> func, bool waitUntilReady = true)
         {
@@ -359,14 +360,13 @@ namespace SysWeaver
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
+                    var task = val.Item3;
+                    //  A running update is waited for (and retried if it fails) by the internal method
+                    if ((!waitUntilReady) || (task == null) || task.IsCompletedSuccessfully)
                     {
-                        var task = val.Item3;
-                        if ((task != null) && (!task.IsCompleted))
-                            return WaitUntilReady(task);
+                        Interlocked.Increment(ref HitCount);
+                        return ValueTask.FromResult(((task != null) && task.IsCompletedSuccessfully) ? task.Result : val.Item2);
                     }
-                    return ValueTask.FromResult(val.Item2);
                 }
             }
             return InternalGetOrUpdateAsync(key, func, waitUntilReady);
@@ -386,10 +386,10 @@ namespace SysWeaver
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
-        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// Only one update per key runs at a time, other callers wait for it (without blocking a thread) or get default (see <paramref name="waitUntilReady"/>). <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
         /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
         /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
-        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// If an update fails, the caller that started it gets the exception, other callers waiting for it try again (one at a time), or get the exception if it was a background update.
         /// </remarks>
         public ValueTask<V> GetOrUpdateWithExistingAsync<A>(K key, Func<K, V, A, Task<V>> func, A arg, bool waitUntilReady = true)
         {
@@ -397,14 +397,13 @@ namespace SysWeaver
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
+                    var task = val.Item3;
+                    //  A running update is waited for (and retried if it fails) by the internal method
+                    if ((!waitUntilReady) || (task == null) || task.IsCompletedSuccessfully)
                     {
-                        var task = val.Item3;
-                        if ((task != null) && (!task.IsCompleted))
-                            return WaitUntilReady(task);
+                        Interlocked.Increment(ref HitCount);
+                        return ValueTask.FromResult(((task != null) && task.IsCompletedSuccessfully) ? task.Result : val.Item2);
                     }
-                    return ValueTask.FromResult(val.Item2);
                 }
             }
             return InternalGetOrUpdateAsync(key, func, arg, waitUntilReady);
@@ -427,10 +426,10 @@ namespace SysWeaver
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
-        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// Only one update per key runs at a time, other callers wait for it (without blocking a thread) or get default (see <paramref name="waitUntilReady"/>). <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
         /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
         /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
-        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// If an update fails, the caller that started it gets the exception, other callers waiting for it try again (one at a time), or get the exception if it was a background update.
         /// </remarks>
         public ValueTask<V> GetOrUpdateWithExistingAsync<A0, A1>(K key, Func<K, V, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
         {
@@ -438,14 +437,13 @@ namespace SysWeaver
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
+                    var task = val.Item3;
+                    //  A running update is waited for (and retried if it fails) by the internal method
+                    if ((!waitUntilReady) || (task == null) || task.IsCompletedSuccessfully)
                     {
-                        var task = val.Item3;
-                        if ((task != null) && (!task.IsCompleted))
-                            return WaitUntilReady(task);
+                        Interlocked.Increment(ref HitCount);
+                        return ValueTask.FromResult(((task != null) && task.IsCompletedSuccessfully) ? task.Result : val.Item2);
                     }
-                    return ValueTask.FromResult(val.Item2);
                 }
             }
             return InternalGetOrUpdateAsync(key, func, arg0, arg1, waitUntilReady);
@@ -467,10 +465,10 @@ namespace SysWeaver
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
-        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// Only one update per key runs at a time, other callers wait for it (without blocking a thread) or get default (see <paramref name="waitUntilReady"/>). <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
         /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
         /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
-        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// If an update fails, the caller that started it gets the exception, other callers waiting for it try again (one at a time), or get the exception if it was a background update.
         /// </remarks>
         public ValueTask<V> GetOrUpdateWithExistingValueAsync(K key, Func<K, V, ValueTask<V>> func, bool waitUntilReady = true)
         {
@@ -478,14 +476,13 @@ namespace SysWeaver
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
+                    var task = val.Item3;
+                    //  A running update is waited for (and retried if it fails) by the internal method
+                    if ((!waitUntilReady) || (task == null) || task.IsCompletedSuccessfully)
                     {
-                        var task = val.Item3;
-                        if ((task != null) && (!task.IsCompleted))
-                            return WaitUntilReady(task);
+                        Interlocked.Increment(ref HitCount);
+                        return ValueTask.FromResult(((task != null) && task.IsCompletedSuccessfully) ? task.Result : val.Item2);
                     }
-                    return ValueTask.FromResult(val.Item2);
                 }
             }
             return InternalGetOrUpdateAsync(key, func, waitUntilReady);
@@ -505,10 +502,10 @@ namespace SysWeaver
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
-        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// Only one update per key runs at a time, other callers wait for it (without blocking a thread) or get default (see <paramref name="waitUntilReady"/>). <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
         /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
         /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
-        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// If an update fails, the caller that started it gets the exception, other callers waiting for it try again (one at a time), or get the exception if it was a background update.
         /// </remarks>
         public ValueTask<V> GetOrUpdateWithExistingValueAsync<A>(K key, Func<K, V, A, ValueTask<V>> func, A arg, bool waitUntilReady = true)
         {
@@ -516,14 +513,13 @@ namespace SysWeaver
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
+                    var task = val.Item3;
+                    //  A running update is waited for (and retried if it fails) by the internal method
+                    if ((!waitUntilReady) || (task == null) || task.IsCompletedSuccessfully)
                     {
-                        var task = val.Item3;
-                        if ((task != null) && (!task.IsCompleted))
-                            return WaitUntilReady(task);
+                        Interlocked.Increment(ref HitCount);
+                        return ValueTask.FromResult(((task != null) && task.IsCompletedSuccessfully) ? task.Result : val.Item2);
                     }
-                    return ValueTask.FromResult(val.Item2);
                 }
             }
             return InternalGetOrUpdateAsync(key, func, arg, waitUntilReady);
@@ -546,10 +542,10 @@ namespace SysWeaver
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
-        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// Only one update per key runs at a time, other callers wait for it (without blocking a thread) or get default (see <paramref name="waitUntilReady"/>). <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
         /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
         /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
-        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// If an update fails, the caller that started it gets the exception, other callers waiting for it try again (one at a time), or get the exception if it was a background update.
         /// </remarks>
         public ValueTask<V> GetOrUpdateWithExistingValueAsync<A0, A1>(K key, Func<K, V, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
         {
@@ -557,14 +553,13 @@ namespace SysWeaver
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
+                    var task = val.Item3;
+                    //  A running update is waited for (and retried if it fails) by the internal method
+                    if ((!waitUntilReady) || (task == null) || task.IsCompletedSuccessfully)
                     {
-                        var task = val.Item3;
-                        if ((task != null) && (!task.IsCompleted))
-                            return WaitUntilReady(task);
+                        Interlocked.Increment(ref HitCount);
+                        return ValueTask.FromResult(((task != null) && task.IsCompletedSuccessfully) ? task.Result : val.Item2);
                     }
-                    return ValueTask.FromResult(val.Item2);
                 }
             }
             return InternalGetOrUpdateAsync(key, func, arg0, arg1, waitUntilReady);
@@ -755,9 +750,9 @@ namespace SysWeaver
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
-        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// Only one update per key runs at a time, other callers wait for it (without blocking a thread) or get default (see <paramref name="waitUntilReady"/>). <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
         /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
-        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// If an update fails, the caller that started it gets the exception, other callers waiting for it try again (one at a time), or get the exception if it was a background update.
         /// </remarks>
         public ValueTask<V> GetOrUpdateAsync(K key, Func<K, Task<V>> func, bool waitUntilReady = true)
         {
@@ -765,14 +760,13 @@ namespace SysWeaver
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
+                    var task = val.Item3;
+                    //  A running update is waited for (and retried if it fails) by the internal method
+                    if ((!waitUntilReady) || (task == null) || task.IsCompletedSuccessfully)
                     {
-                        var task = val.Item3;
-                        if ((task != null) && (!task.IsCompleted))
-                            return WaitUntilReady(task);
+                        Interlocked.Increment(ref HitCount);
+                        return ValueTask.FromResult(((task != null) && task.IsCompletedSuccessfully) ? task.Result : val.Item2);
                     }
-                    return ValueTask.FromResult(val.Item2);
                 }
             }
             return InternalGetOrUpdateAsync(key, func, waitUntilReady);
@@ -792,9 +786,9 @@ namespace SysWeaver
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
-        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// Only one update per key runs at a time, other callers wait for it (without blocking a thread) or get default (see <paramref name="waitUntilReady"/>). <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
         /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
-        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// If an update fails, the caller that started it gets the exception, other callers waiting for it try again (one at a time), or get the exception if it was a background update.
         /// </remarks>
         public ValueTask<V> GetOrUpdateAsync<A>(K key, Func<K, A, Task<V>> func, A arg, bool waitUntilReady = true)
         {
@@ -802,14 +796,13 @@ namespace SysWeaver
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
+                    var task = val.Item3;
+                    //  A running update is waited for (and retried if it fails) by the internal method
+                    if ((!waitUntilReady) || (task == null) || task.IsCompletedSuccessfully)
                     {
-                        var task = val.Item3;
-                        if ((task != null) && (!task.IsCompleted))
-                            return WaitUntilReady(task);
+                        Interlocked.Increment(ref HitCount);
+                        return ValueTask.FromResult(((task != null) && task.IsCompletedSuccessfully) ? task.Result : val.Item2);
                     }
-                    return ValueTask.FromResult(val.Item2);
                 }
             }
             return InternalGetOrUpdateAsync(key, func, arg, waitUntilReady);
@@ -832,9 +825,9 @@ namespace SysWeaver
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
-        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// Only one update per key runs at a time, other callers wait for it (without blocking a thread) or get default (see <paramref name="waitUntilReady"/>). <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
         /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
-        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// If an update fails, the caller that started it gets the exception, other callers waiting for it try again (one at a time), or get the exception if it was a background update.
         /// </remarks>
         public ValueTask<V> GetOrUpdateAsync<A0, A1>(K key, Func<K, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
         {
@@ -842,14 +835,13 @@ namespace SysWeaver
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
+                    var task = val.Item3;
+                    //  A running update is waited for (and retried if it fails) by the internal method
+                    if ((!waitUntilReady) || (task == null) || task.IsCompletedSuccessfully)
                     {
-                        var task = val.Item3;
-                        if ((task != null) && (!task.IsCompleted))
-                            return WaitUntilReady(task);
+                        Interlocked.Increment(ref HitCount);
+                        return ValueTask.FromResult(((task != null) && task.IsCompletedSuccessfully) ? task.Result : val.Item2);
                     }
-                    return ValueTask.FromResult(val.Item2);
                 }
             }
             return InternalGetOrUpdateAsync(key, func, arg0, arg1, waitUntilReady);
@@ -871,9 +863,9 @@ namespace SysWeaver
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
-        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// Only one update per key runs at a time, other callers wait for it (without blocking a thread) or get default (see <paramref name="waitUntilReady"/>). <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
         /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
-        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// If an update fails, the caller that started it gets the exception, other callers waiting for it try again (one at a time), or get the exception if it was a background update.
         /// </remarks>
         public ValueTask<V> GetOrUpdateValueAsync(K key, Func<K, ValueTask<V>> func, bool waitUntilReady = true)
         {
@@ -881,14 +873,13 @@ namespace SysWeaver
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
+                    var task = val.Item3;
+                    //  A running update is waited for (and retried if it fails) by the internal method
+                    if ((!waitUntilReady) || (task == null) || task.IsCompletedSuccessfully)
                     {
-                        var task = val.Item3;
-                        if ((task != null) && (!task.IsCompleted))
-                            return WaitUntilReady(task);
+                        Interlocked.Increment(ref HitCount);
+                        return ValueTask.FromResult(((task != null) && task.IsCompletedSuccessfully) ? task.Result : val.Item2);
                     }
-                    return ValueTask.FromResult(val.Item2);
                 }
             }
             return InternalGetOrUpdateAsync(key, func, waitUntilReady);
@@ -908,9 +899,9 @@ namespace SysWeaver
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
-        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// Only one update per key runs at a time, other callers wait for it (without blocking a thread) or get default (see <paramref name="waitUntilReady"/>). <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
         /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
-        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// If an update fails, the caller that started it gets the exception, other callers waiting for it try again (one at a time), or get the exception if it was a background update.
         /// </remarks>
         public ValueTask<V> GetOrUpdateValueAsync<A>(K key, Func<K, A, ValueTask<V>> func, A arg, bool waitUntilReady = true)
         {
@@ -918,14 +909,13 @@ namespace SysWeaver
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
+                    var task = val.Item3;
+                    //  A running update is waited for (and retried if it fails) by the internal method
+                    if ((!waitUntilReady) || (task == null) || task.IsCompletedSuccessfully)
                     {
-                        var task = val.Item3;
-                        if ((task != null) && (!task.IsCompleted))
-                            return WaitUntilReady(task);
+                        Interlocked.Increment(ref HitCount);
+                        return ValueTask.FromResult(((task != null) && task.IsCompletedSuccessfully) ? task.Result : val.Item2);
                     }
-                    return ValueTask.FromResult(val.Item2);
                 }
             }
             return InternalGetOrUpdateAsync(key, func, arg, waitUntilReady);
@@ -948,9 +938,9 @@ namespace SysWeaver
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
-        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// Only one update per key runs at a time, other callers wait for it (without blocking a thread) or get default (see <paramref name="waitUntilReady"/>). <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
         /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
-        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// If an update fails, the caller that started it gets the exception, other callers waiting for it try again (one at a time), or get the exception if it was a background update.
         /// </remarks>
         public ValueTask<V> GetOrUpdateValueAsync<A0, A1>(K key, Func<K, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
         {
@@ -958,14 +948,13 @@ namespace SysWeaver
             {
                 if (DateTime.UtcNow < val.Item1)
                 {
-                    Interlocked.Increment(ref HitCount);
-                    if (waitUntilReady)
+                    var task = val.Item3;
+                    //  A running update is waited for (and retried if it fails) by the internal method
+                    if ((!waitUntilReady) || (task == null) || task.IsCompletedSuccessfully)
                     {
-                        var task = val.Item3;
-                        if ((task != null) && (!task.IsCompleted))
-                            return WaitUntilReady(task);
+                        Interlocked.Increment(ref HitCount);
+                        return ValueTask.FromResult(((task != null) && task.IsCompletedSuccessfully) ? task.Result : val.Item2);
                     }
-                    return ValueTask.FromResult(val.Item2);
                 }
             }
             return InternalGetOrUpdateAsync(key, func, arg0, arg1, waitUntilReady);
@@ -1223,17 +1212,113 @@ namespace SysWeaver
 
         #region Update
 
-        static async ValueTask<V> WaitUntilReady(Task<V> task)
-            => await task.ConfigureAwait(false);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static ValueTask<V> AsValueTask(Task<V> task) => new ValueTask<V>(task);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static ValueTask<V> AsValueTask(ValueTask<V> task) => task;
+        /// <summary>
+        /// The core of all async updates.
+        /// Only one update per key runs at a time: the key lock is only held while the cache entry is inspected and the update is started (never while awaiting),
+        /// a running update is represented by a pending entry (expires never, value is default, Item3 is the task of the update).
+        /// Callers with <paramref name="waitUntilReady"/> = false gets the value of the pending entry (default) while the update runs,
+        /// callers with <paramref name="waitUntilReady"/> = true awaits the update (without blocking a thread).
+        /// If an update fails, the caller that started it gets the exception, a failed waited update restores the previous (expired) entry, a failed background update removes the entry.
+        /// Callers waiting for a failed update started by a waiting caller try again (one at a time, like when they waited for the key lock),
+        /// callers waiting for a failed background update (started with <paramref name="waitUntilReady"/> = false) get the exception.
+        /// </summary>
+        /// <typeparam name="S">The type of the state passed to <paramref name="start"/></typeparam>
+        /// <param name="key">The key</param>
+        /// <param name="func">The value factory supplied by the user (only used for a null check)</param>
+        /// <param name="state">The state passed to <paramref name="start"/></param>
+        /// <param name="start">Starts the value factory: (key, existing (expired) value or default, state)</param>
+        /// <param name="waitUntilReady">If true, wait for the update, else return default while the update runs</param>
+        /// <returns>The value</returns>
+        async ValueTask<V> CoreGetOrUpdateAsync<S>(K key, Delegate func, S state, Func<K, V, S, ValueTask<V>> start, bool waitUntilReady)
+        {
+            for (; ; )
+            {
+                Task<V> wait = null;
+                Task<V> own = null;
+                Lock(key);
+                try
+                {
+                    var c = C;
+                    var exists = c.TryGetValue(key, out var val);
+                    if (exists && (DateTime.UtcNow < val.Item1))
+                    {
+                        //  Someone else added this cache entry (or an update is running)
+                        Interlocked.Increment(ref SemiHitCount);
+                        var task = val.Item3;
+                        if (task == null)
+                            return val.Item2;
+                        if (task.IsCompletedSuccessfully)
+                            return task.Result;
+                        if (!waitUntilReady)
+                            return val.Item2;
+                        if (!task.IsCompleted)
+                            wait = task;
+                        //  else: the update failed (the entry is about to be restored), try again
+                    }
+                    else
+                    {
+                        Interlocked.Increment(ref MissCount);
+                        ArgumentNullException.ThrowIfNull(func);
+                        ValueTask<V> work;
+                        V r;
+                        try
+                        {
+                            work = start(key, exists ? val.Item2 : default, state);
+                            //  Completed synchronously
+                            r = work.IsCompleted ? work.GetAwaiter().GetResult() : default;
+                        }
+                        catch
+                        {
+                            //  A failed background update removes the (expired) entry, a failed waited update leaves it
+                            if (!waitUntilReady)
+                                c.TryRemove(key, out var _);
+                            throw;
+                        }
+                        if (work.IsCompleted)
+                        {
+                            Store(key, r);
+                            return r;
+                        }
+                        //  Write the pending entry before the update can complete, so that the update only replaces / restores its own pending entry
+                        var tcs = waitUntilReady ? new TaskCompletionSource<V>(WaitedUpdate, TaskCreationOptions.RunContinuationsAsynchronously) : new TaskCompletionSource<V>(TaskCreationOptions.RunContinuationsAsynchronously);
+                        var pending = ValueTuple.Create(DateTime.MaxValue, default(V), tcs.Task);
+                        c[key] = pending;
+                        _ = UpdateAsync(key, work, pending, exists ? val : default, exists && waitUntilReady, tcs);
+                        if (!waitUntilReady)
+                            return default;
+                        own = tcs.Task;
+                    }
+                }
+                finally
+                {
+                    Unlock(key);
+                }
+                //  Our own update, exceptions are propagated to the caller
+                if (own != null)
+                    return await own.ConfigureAwait(false);
+                if (wait != null)
+                {
+                    try
+                    {
+                        return await wait.ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        //  A failed background update is reported to the waiting callers, a failed waited update is retried
+                        if (!ReferenceEquals(wait.AsyncState, WaitedUpdate))
+                            throw;
+                    }
+                }
+            }
+        }
 
         /// <summary>
-        /// Store a new value in the cache (the key lock must be held, or the value must be the result of a build started while holding the lock)
+        /// The state of the task of an update started by a waiting caller (callers waiting for it retry if it fails)
+        /// </summary>
+        static readonly Object WaitedUpdate = new Object();
+
+        /// <summary>
+        /// Store a new value in the cache (the key lock must be held)
         /// </summary>
         /// <param name="key">The key</param>
         /// <param name="value">The value</param>
@@ -1245,64 +1330,37 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Await the work and store the result in the cache, if the work fails the entry is removed
+        /// Await the update and replace the pending entry with the result.
+        /// If the update fails the previous (expired) entry is restored if <paramref name="hadPrevious"/> is true, else the pending entry is removed.
+        /// If the pending entry have been replaced or removed (Set, Remove etc) while the update was running, the cache is left untouched.
         /// </summary>
         /// <param name="key">The key</param>
-        /// <param name="work">The pending value</param>
-        /// <returns>The value</returns>
-        async Task<V> BuildAsync(K key, ValueTask<V> work)
+        /// <param name="work">The running update</param>
+        /// <param name="pending">The pending entry (already written to the cache)</param>
+        /// <param name="previous">The previous (expired) entry</param>
+        /// <param name="hadPrevious">True if the previous entry should be restored if the update fails (waited updates only)</param>
+        /// <param name="tcs">The completion source of the pending entry's task</param>
+        async Task UpdateAsync(K key, ValueTask<V> work, ValueTuple<DateTime, V, Task<V>> pending, ValueTuple<DateTime, V, Task<V>> previous, bool hadPrevious, TaskCompletionSource<V> tcs)
         {
             V v;
+            ValueTuple<DateTime, V, Task<V>> val;
             try
             {
                 v = await work.ConfigureAwait(false);
+                val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
             }
-            catch
+            catch (Exception ex)
             {
-                C.TryRemove(key, out var _);
-                throw;
-            }
-            Store(key, v);
-            return v;
-        }
-
-        /// <summary>
-        /// Start a background build (waitUntilReady = false), must be called while holding the key lock.
-        /// </summary>
-        /// <param name="key">The key</param>
-        /// <param name="work">The pending value (as returned by the value factory)</param>
-        /// <returns>The value if it completed synchronously, else default</returns>
-        V StartBuild(K key, ValueTask<V> work)
-        {
-            if (work.IsCompletedSuccessfully)
-            {
-                var r = work.Result;
-                Store(key, r);
-                return r;
-            }
-            var task = BuildAsync(key, work);
-            if (task.IsCompleted)
-                return task.GetAwaiter().GetResult();
-            var c = C;
-            var pending = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-            c[key] = pending;
-            if (task.IsCompleted)
-            {
-                //  The build completed before the pending entry was written, so the pending entry may have overwritten the result (or the removal of a failed build).
-                //  Replace / remove the pending entry (unless the build already did it).
-                if (task.IsCompletedSuccessfully)
-                {
-                    var r = task.Result;
-                    var val = ValueTuple.Create(GetExpirationDate(r), r, (Task<V>)null);
-                    if (c.TryUpdate(key, val, pending))
-                        Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                }
+                if (hadPrevious)
+                    C.TryUpdate(key, previous, pending);
                 else
-                {
-                    c.TryRemove(new KeyValuePair<K, ValueTuple<DateTime, V, Task<V>>>(key, pending));
-                }
+                    C.TryRemove(new KeyValuePair<K, ValueTuple<DateTime, V, Task<V>>>(key, pending));
+                tcs.SetException(ex);
+                return;
             }
-            return default;
+            if (C.TryUpdate(key, val, pending))
+                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+            tcs.SetResult(v);
         }
 
 
@@ -1310,653 +1368,57 @@ namespace SysWeaver
 
         #region Task
 
-        async ValueTask<V> InternalGetOrUpdateAsync<A>(K key, Func<K, V, A, Task<V>> func, A arg, bool waitUntilReady)
-        {
-            Lock(key);
-            try
-            {
-                var c = C;
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out var val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if ((task != null) && (!task.IsCompleted))
-                                return await task.ConfigureAwait(false);
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                ArgumentNullException.ThrowIfNull(func);
-                if (waitUntilReady)
-                {
-                    var value = await func(key, val.Item2, arg).ConfigureAwait(false);
-                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    ValueTask<V> work;
-                    try
-                    {
-                        work = AsValueTask(func(key, val.Item2, arg));
-                    }
-                    catch
-                    {
-                        c.TryRemove(key, out var _);
-                        throw;
-                    }
-                    return StartBuild(key, work);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
+        ValueTask<V> InternalGetOrUpdateAsync<A>(K key, Func<K, V, A, Task<V>> func, A arg, bool waitUntilReady)
+            => CoreGetOrUpdateAsync(key, func, (func, arg), static (k, v, s) => new ValueTask<V>(s.func(k, v, s.arg)), waitUntilReady);
 
-        async ValueTask<V> InternalGetOrUpdateAsync<A0, A1>(K key, Func<K, V, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady)
-        {
-            Lock(key);
-            try
-            {
-                var c = C;
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out var val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if ((task != null) && (!task.IsCompleted))
-                                return await task.ConfigureAwait(false);
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                ArgumentNullException.ThrowIfNull(func);
-                if (waitUntilReady)
-                {
-                    var value = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
-                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    ValueTask<V> work;
-                    try
-                    {
-                        work = AsValueTask(func(key, val.Item2, arg0, arg1));
-                    }
-                    catch
-                    {
-                        c.TryRemove(key, out var _);
-                        throw;
-                    }
-                    return StartBuild(key, work);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
+        ValueTask<V> InternalGetOrUpdateAsync<A0, A1>(K key, Func<K, V, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady)
+            => CoreGetOrUpdateAsync(key, func, (func, arg0, arg1), static (k, v, s) => new ValueTask<V>(s.func(k, v, s.arg0, s.arg1)), waitUntilReady);
 
-        async ValueTask<V> InternalGetOrUpdateAsync(K key, Func<K, V, Task<V>> func, bool waitUntilReady)
-        {
-            Lock(key);
-            try
-            {
-                var c = C;
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out var val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if ((task != null) && (!task.IsCompleted))
-                                return await task.ConfigureAwait(false);
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                ArgumentNullException.ThrowIfNull(func);
-                if (waitUntilReady)
-                {
-                    var value = await func(key, val.Item2).ConfigureAwait(false);
-                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    ValueTask<V> work;
-                    try
-                    {
-                        work = AsValueTask(func(key, val.Item2));
-                    }
-                    catch
-                    {
-                        c.TryRemove(key, out var _);
-                        throw;
-                    }
-                    return StartBuild(key, work);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
+        ValueTask<V> InternalGetOrUpdateAsync(K key, Func<K, V, Task<V>> func, bool waitUntilReady)
+            => CoreGetOrUpdateAsync(key, func, func, static (k, v, f) => new ValueTask<V>(f(k, v)), waitUntilReady);
 
         #endregion//Task
 
-
-
         #region ValueTask
 
-        async ValueTask<V> InternalGetOrUpdateAsync<A>(K key, Func<K, V, A, ValueTask<V>> func, A arg, bool waitUntilReady)
-        {
-            Lock(key);
-            try
-            {
-                var c = C;
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out var val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if ((task != null) && (!task.IsCompleted))
-                                return await task.ConfigureAwait(false);
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                ArgumentNullException.ThrowIfNull(func);
-                if (waitUntilReady)
-                {
-                    var value = await func(key, val.Item2, arg).ConfigureAwait(false);
-                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    ValueTask<V> work;
-                    try
-                    {
-                        work = AsValueTask(func(key, val.Item2, arg));
-                    }
-                    catch
-                    {
-                        c.TryRemove(key, out var _);
-                        throw;
-                    }
-                    return StartBuild(key, work);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
+        ValueTask<V> InternalGetOrUpdateAsync<A>(K key, Func<K, V, A, ValueTask<V>> func, A arg, bool waitUntilReady)
+            => CoreGetOrUpdateAsync(key, func, (func, arg), static (k, v, s) => s.func(k, v, s.arg), waitUntilReady);
 
-        async ValueTask<V> InternalGetOrUpdateAsync<A0, A1>(K key, Func<K, V, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady)
-        {
-            Lock(key);
-            try
-            {
-                var c = C;
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out var val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if ((task != null) && (!task.IsCompleted))
-                                return await task.ConfigureAwait(false);
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                ArgumentNullException.ThrowIfNull(func);
-                if (waitUntilReady)
-                {
-                    var value = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
-                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    ValueTask<V> work;
-                    try
-                    {
-                        work = AsValueTask(func(key, val.Item2, arg0, arg1));
-                    }
-                    catch
-                    {
-                        c.TryRemove(key, out var _);
-                        throw;
-                    }
-                    return StartBuild(key, work);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
+        ValueTask<V> InternalGetOrUpdateAsync<A0, A1>(K key, Func<K, V, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady)
+            => CoreGetOrUpdateAsync(key, func, (func, arg0, arg1), static (k, v, s) => s.func(k, v, s.arg0, s.arg1), waitUntilReady);
 
-        async ValueTask<V> InternalGetOrUpdateAsync(K key, Func<K, V, ValueTask<V>> func, bool waitUntilReady)
-        {
-            Lock(key);
-            try
-            {
-                var c = C;
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out var val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if ((task != null) && (!task.IsCompleted))
-                                return await task.ConfigureAwait(false);
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                ArgumentNullException.ThrowIfNull(func);
-                if (waitUntilReady)
-                {
-                    var value = await func(key, val.Item2).ConfigureAwait(false);
-                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    ValueTask<V> work;
-                    try
-                    {
-                        work = AsValueTask(func(key, val.Item2));
-                    }
-                    catch
-                    {
-                        c.TryRemove(key, out var _);
-                        throw;
-                    }
-                    return StartBuild(key, work);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
+        ValueTask<V> InternalGetOrUpdateAsync(K key, Func<K, V, ValueTask<V>> func, bool waitUntilReady)
+            => CoreGetOrUpdateAsync(key, func, func, static (k, v, f) => f(k, v), waitUntilReady);
 
         #endregion//ValueTask
 
         #endregion//With existing
 
-
-
         #region Without existing
 
         #region Task
 
-        async ValueTask<V> InternalGetOrUpdateAsync<A>(K key, Func<K, A, Task<V>> func, A arg, bool waitUntilReady)
-        {
-            Lock(key);
-            try
-            {
-                var c = C;
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out var val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if ((task != null) && (!task.IsCompleted))
-                                return await task.ConfigureAwait(false);
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                ArgumentNullException.ThrowIfNull(func);
-                if (waitUntilReady)
-                {
-                    var value = await func(key, arg).ConfigureAwait(false);
-                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    ValueTask<V> work;
-                    try
-                    {
-                        work = AsValueTask(func(key, arg));
-                    }
-                    catch
-                    {
-                        c.TryRemove(key, out var _);
-                        throw;
-                    }
-                    return StartBuild(key, work);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
+        ValueTask<V> InternalGetOrUpdateAsync<A>(K key, Func<K, A, Task<V>> func, A arg, bool waitUntilReady)
+            => CoreGetOrUpdateAsync(key, func, (func, arg), static (k, _, s) => new ValueTask<V>(s.func(k, s.arg)), waitUntilReady);
 
-        async ValueTask<V> InternalGetOrUpdateAsync<A0, A1>(K key, Func<K, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady)
-        {
-            Lock(key);
-            try
-            {
-                var c = C;
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out var val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if ((task != null) && (!task.IsCompleted))
-                                return await task.ConfigureAwait(false);
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                ArgumentNullException.ThrowIfNull(func);
-                if (waitUntilReady)
-                {
-                    var value = await func(key, arg0, arg1).ConfigureAwait(false);
-                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    ValueTask<V> work;
-                    try
-                    {
-                        work = AsValueTask(func(key, arg0, arg1));
-                    }
-                    catch
-                    {
-                        c.TryRemove(key, out var _);
-                        throw;
-                    }
-                    return StartBuild(key, work);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
+        ValueTask<V> InternalGetOrUpdateAsync<A0, A1>(K key, Func<K, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady)
+            => CoreGetOrUpdateAsync(key, func, (func, arg0, arg1), static (k, _, s) => new ValueTask<V>(s.func(k, s.arg0, s.arg1)), waitUntilReady);
 
-        async ValueTask<V> InternalGetOrUpdateAsync(K key, Func<K, Task<V>> func, bool waitUntilReady)
-        {
-            Lock(key);
-            try
-            {
-                var c = C;
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out var val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if ((task != null) && (!task.IsCompleted))
-                                return await task.ConfigureAwait(false);
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                ArgumentNullException.ThrowIfNull(func);
-                if (waitUntilReady)
-                {
-                    var value = await func(key).ConfigureAwait(false);
-                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    ValueTask<V> work;
-                    try
-                    {
-                        work = AsValueTask(func(key));
-                    }
-                    catch
-                    {
-                        c.TryRemove(key, out var _);
-                        throw;
-                    }
-                    return StartBuild(key, work);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
+        ValueTask<V> InternalGetOrUpdateAsync(K key, Func<K, Task<V>> func, bool waitUntilReady)
+            => CoreGetOrUpdateAsync(key, func, func, static (k, _, f) => new ValueTask<V>(f(k)), waitUntilReady);
 
         #endregion//Task
 
-
-
-
-
         #region ValueTask
 
-        async ValueTask<V> InternalGetOrUpdateAsync<A>(K key, Func<K, A, ValueTask<V>> func, A arg, bool waitUntilReady)
-        {
-            Lock(key);
-            try
-            {
-                var c = C;
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out var val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if ((task != null) && (!task.IsCompleted))
-                                return await task.ConfigureAwait(false);
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                ArgumentNullException.ThrowIfNull(func);
-                if (waitUntilReady)
-                {
-                    var value = await func(key, arg).ConfigureAwait(false);
-                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    ValueTask<V> work;
-                    try
-                    {
-                        work = AsValueTask(func(key, arg));
-                    }
-                    catch
-                    {
-                        c.TryRemove(key, out var _);
-                        throw;
-                    }
-                    return StartBuild(key, work);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
+        ValueTask<V> InternalGetOrUpdateAsync<A>(K key, Func<K, A, ValueTask<V>> func, A arg, bool waitUntilReady)
+            => CoreGetOrUpdateAsync(key, func, (func, arg), static (k, _, s) => s.func(k, s.arg), waitUntilReady);
 
-        async ValueTask<V> InternalGetOrUpdateAsync<A0, A1>(K key, Func<K, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady)
-        {
-            Lock(key);
-            try
-            {
-                var c = C;
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out var val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if ((task != null) && (!task.IsCompleted))
-                                return await task.ConfigureAwait(false);
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                ArgumentNullException.ThrowIfNull(func);
-                if (waitUntilReady)
-                {
-                    var value = await func(key, arg0, arg1).ConfigureAwait(false);
-                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    ValueTask<V> work;
-                    try
-                    {
-                        work = AsValueTask(func(key, arg0, arg1));
-                    }
-                    catch
-                    {
-                        c.TryRemove(key, out var _);
-                        throw;
-                    }
-                    return StartBuild(key, work);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
+        ValueTask<V> InternalGetOrUpdateAsync<A0, A1>(K key, Func<K, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady)
+            => CoreGetOrUpdateAsync(key, func, (func, arg0, arg1), static (k, _, s) => s.func(k, s.arg0, s.arg1), waitUntilReady);
 
-        async ValueTask<V> InternalGetOrUpdateAsync(K key, Func<K, ValueTask<V>> func, bool waitUntilReady)
-        {
-            Lock(key);
-            try
-            {
-                var c = C;
-                //  Test if someone else added this cache entry
-                if (c.TryGetValue(key, out var val))
-                {
-                    if (DateTime.UtcNow < val.Item1)
-                    {
-                        Interlocked.Increment(ref SemiHitCount);
-                        if (waitUntilReady)
-                        {
-                            var task = val.Item3;
-                            if ((task != null) && (!task.IsCompleted))
-                                return await task.ConfigureAwait(false);
-                        }
-                        return val.Item2;
-                    }
-                }
-                Interlocked.Increment(ref MissCount);
-                ArgumentNullException.ThrowIfNull(func);
-                if (waitUntilReady)
-                {
-                    var value = await func(key).ConfigureAwait(false);
-                    val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
-                    c[key] = val;
-                    Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                    return val.Item2;
-                }
-                else
-                {
-                    ValueTask<V> work;
-                    try
-                    {
-                        work = AsValueTask(func(key));
-                    }
-                    catch
-                    {
-                        c.TryRemove(key, out var _);
-                        throw;
-                    }
-                    return StartBuild(key, work);
-                }
-            }
-            finally
-            {
-                Unlock(key);
-            }
-        }
+        ValueTask<V> InternalGetOrUpdateAsync(K key, Func<K, ValueTask<V>> func, bool waitUntilReady)
+            => CoreGetOrUpdateAsync(key, func, func, static (k, _, f) => f(k), waitUntilReady);
 
         #endregion//ValueTask
 

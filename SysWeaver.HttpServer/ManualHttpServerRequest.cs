@@ -74,7 +74,7 @@ namespace SysWeaver.Net
         /// </summary>
         public IPAddress _IP = IPAddress.Loopback;
         /// <summary>
-        /// The request cookies, must be set before <see cref="GetReqCookie"/> is used (null throws).
+        /// The request cookies, null means no cookies.
         /// </summary>
         public IReadOnlyDictionary<String, String> ReqCookies;
         /// <summary>
@@ -178,9 +178,13 @@ namespace SysWeaver.Net
         /// <param name="name">The cookie name</param>
         /// <param name="cookieString">Ignored</param>
         /// <returns>The value or null if not found</returns>
-        /// <exception cref="NullReferenceException">Thrown if <see cref="ReqCookies"/> is null</exception>
         public override string GetReqCookie(string name, string cookieString = null)
-            => ReqCookies.TryGetValue(name, out var v) ? v : null;
+        {
+            var c = ReqCookies;
+            if (c == null)
+                return null;
+            return c.TryGetValue(name, out var v) ? v : null;
+        }
 
         /// <inheritdoc/>
         public override string GetReqHeader(string name)
