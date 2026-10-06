@@ -6,11 +6,19 @@ using SysWeaver.Data;
 namespace SysWeaver.IsoData
 {
 
+    /// <summary>
+    /// Contains information about a country or territory (ISO 3166 Alpha 2 code, names, currency, population, area and languages).
+    /// Use <see cref="TryGet(string)"/> to look up by ISO code, <see cref="TryGetName(string)"/> to look up by (fuzzy) name, or enumerate <see cref="Countries"/>.
+    /// </summary>
+    /// <remarks>
+    /// All instances are created once from built-in static data and are immutable, so the type is thread safe.
+    /// Population and area figures are approximate (around 2020) and zero when unknown.
+    /// </remarks>
     [TableDataPrimaryKey(nameof(CommonName))]
     public sealed class IsoCountry
     {
         /// <summary>
-        /// Flag
+        /// The flag of the country (same value as <see cref="Iso3166a2"/>, rendered as a flag in table data views).
         /// </summary>
         [TableDataIsoCountryImage]
         [TableDataOrder(-1)]
@@ -34,7 +42,7 @@ namespace SysWeaver.IsoData
         [TableDataWikipedia]
         public readonly String CommonName;
         /// <summary>
-        /// ISO 4217 currency code of the most common currency used in the country
+        /// ISO 4217 currency code of the most common currency used in the country, or null if none (ex: Antarctica).
         /// </summary>
         [TableDataIsoCurrency]
         public readonly String Currency;
@@ -58,11 +66,15 @@ namespace SysWeaver.IsoData
         public decimal PopDense => LandArea <= 0 ? 0M : ((Decimal)Population / (Decimal)LandArea);
 
         /// <summary>
-        /// The languages spoken in the country as a comma seprated list of ISO 639-1 language codes.
+        /// The languages spoken in the country as a comma separated list of ISO 639-1 language codes (most important first), empty if unknown.
         /// </summary>
         [TableDataOrder(2)]
         public readonly String Languages;
 
+        /// <summary>
+        /// Returns a debug friendly description, ex: "SE Sweden [SEK]".
+        /// </summary>
+        /// <returns>The ISO code, official name and currency (if any) of the country.</returns>
         public override string ToString()
         {
             if (String.IsNullOrEmpty(Currency))
@@ -82,26 +94,36 @@ namespace SysWeaver.IsoData
             Nicks = nicks;
         }
 
+        /// <summary>
+        /// Optional comma separated list of alternative names (nick names, abbreviations) for the country, used by <see cref="TryGetName(string)"/>.
+        /// Null if the country has no alternative names.
+        /// </summary>
         public readonly String Nicks;
         
         /// <summary>
-        /// Get information about a country from a two letter ISO 3166-A2 country code.
+        /// Get information about a country from a two letter ISO 3166-A2 country code (case insensitive, no trimming).
         /// Ex:
-        ///   "GB" => "UNITED KINGDOM"
-        ///   "SE" => "SWEDEN"
+        ///   "GB" =&gt; United Kingdom
+        ///   "se" =&gt; Sweden
         /// </summary>
-        /// <param name="iso3166a2">A two letter ISO 3166-A2 country code</param>
+        /// <param name="iso3166a2">A two letter ISO 3166-A2 country code, may be null.</param>
         /// <returns>Information about the country if it's known, or null if it's unknown</returns>
         public static IsoCountry TryGet(String iso3166a2) => IsoToInfo.TryGetValue(iso3166a2?.FastToLower() ?? "", out var i) ? i : null;
 
         /// <summary>
-        /// Get information about a country from a country name, iso code and so on
+        /// Get information about a country from a country name, nick name, ISO code or a distinctive word of the name (case and diacritics insensitive).
         /// Ex:
-        ///   "UNITED KINGDOM" => "UK"
-        ///   "SWEDEN" => "SE"
+        ///   "United Kingdom" =&gt; "GB"
+        ///   "UK" =&gt; "GB"
+        ///   "SWEDEN" =&gt; "SE"
         /// </summary>
-        /// <param name="name">The name of the country</param>
+        /// <param name="name">The name of the country, may be null.</param>
         /// <returns>Information about the country if it's known, or null if it's unknown</returns>
+        /// <remarks>
+        /// The lookup table is built once and contains full names, nick names, ISO codes, single words (4+ letters) of names, and abbreviated variants
+        /// (ex: "st" for "saint", "rep" for "republic", "is" for "island(s)", "n"/"s"/"e"/"w" for directions). When a single word matches multiple countries,
+        /// the most populous country wins. The input is not trimmed.
+        /// </remarks>
         public static IsoCountry TryGetName(String name)
         {
             var ni = NameToInfo;
@@ -112,6 +134,11 @@ namespace SysWeaver.IsoData
         }
 
 
+        /// <summary>
+        /// Normalizes a (lower cased) country name for lookup: removes diacritics and periods, and replaces hyphens with spaces.
+        /// </summary>
+        /// <param name="name">The name to normalize, must not be null.</param>
+        /// <returns>The normalized name.</returns>
         public static String FixName(String name)
         {
             name = name.RemoveDiacritics();
@@ -122,7 +149,7 @@ namespace SysWeaver.IsoData
 
 
         /// <summary>
-        /// Enumerates all aliases for a country
+        /// Enumerates all aliases (lower case lookup keys used by <see cref="TryGetName(string)"/>) and the country they map to.
         /// </summary>
         public static IEnumerable<KeyValuePair<String, IsoCountry>> Aliases => NameToInfo;
 
@@ -242,7 +269,7 @@ namespace SysWeaver.IsoData
 
 
         /// <summary>
-        /// All known countries
+        /// All known countries and territories, ordered (mostly) alphabetically by ISO 3166 Alpha 2 code.
         /// </summary>
         public static readonly IReadOnlyList<IsoCountry> Countries = new IsoCountry[]
         {

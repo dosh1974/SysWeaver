@@ -11,7 +11,7 @@ namespace SysWeaver
         /// <summary>
         /// Use to specify the order (priority) of embedded resources (when serving them as files)
         /// </summary>
-        /// <param name="order">A higher value gives it priority over the same reosurce in some other assembly with a lower order</param>
+        /// <param name="order">A higher value gives it priority over the same resource in some other assembly with a lower order</param>
         public ResourceOrderAttribute(double order)
         {
             Order = order;

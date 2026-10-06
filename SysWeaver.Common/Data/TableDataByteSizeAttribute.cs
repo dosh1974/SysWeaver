@@ -9,6 +9,9 @@ namespace SysWeaver.Data
     public class TableDataByteSizeAttribute : TableDataRawFormatAttribute
     {
 
+        /// <summary>
+        /// A shared instance (useful when a format attribute is needed in code, ex: for dynamically created columns)
+        /// </summary>
         public static readonly TableDataByteSizeAttribute Instance = new TableDataByteSizeAttribute();
 
         /// <summary>
@@ -26,6 +29,9 @@ namespace SysWeaver.Data
     public class TableDataUptimeAttribute : TableDataRawFormatAttribute
     {
 
+        /// <summary>
+        /// A shared instance (useful when a format attribute is needed in code, ex: for dynamically created columns)
+        /// </summary>
         public static readonly TableDataUptimeAttribute Instance = new TableDataUptimeAttribute();
 
         /// <summary>

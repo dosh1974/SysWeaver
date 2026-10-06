@@ -7,15 +7,24 @@ using SysWeaver.Data;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Caches a single value with an expiration time, the value is (re-)created by a supplied function when it's missing or expired.
+    /// </summary>
+    /// <typeparam name="T">The type of the cached value</typeparam>
+    /// <remarks>
+    /// Thread safe. Reading a valid value is lock free, creating a value is serialized by an <see cref="AsyncLock"/> (so the value is only created once even with concurrent callers).
+    /// If auto dispose is enabled the previous value is disposed when it's replaced, even if another thread obtained it just before (and may still be using it).
+    /// Exceptions thrown by the get function are propagated and nothing is cached.
+    /// </remarks>
     public sealed class CachedValue<T> : IDisposable
     {
 
 
-        /// <summary>1
-        /// Create a value cahce,
+        /// <summary>
+        /// Create a value cache
         /// </summary>
         /// <param name="defaultCacheDuration">The duration to keep a cached version (if no explicit expiration time is supplied)</param>
-        /// <param name="autoDispose">If true and the value is disposable, the value will be dispose</param>
+        /// <param name="autoDispose">If true and <typeparamref name="T"/> implements <see cref="IDisposable"/>, a value is disposed when it's replaced or cleared</param>
         public CachedValue(TimeSpan defaultCacheDuration, bool autoDispose = true)
         {
             autoDispose &= typeof(IDisposable).IsAssignableFrom(typeof(T));
@@ -44,15 +53,24 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Create a value cahce,
+        /// Create a value cache with a default cache duration of 5 minutes
         /// </summary>
-        /// <param name="autoDispose">If true and the value is disposable, the value will be dispose</param>
+        /// <param name="autoDispose">If true and <typeparamref name="T"/> implements <see cref="IDisposable"/>, a value is disposed when it's replaced or cleared</param>
         public CachedValue(bool autoDispose = true) : this(TimeSpan.FromMinutes(5), autoDispose)
         {
         }
 
+        /// <summary>
+        /// True if values are disposed when they are replaced or cleared (auto dispose was requested and <typeparamref name="T"/> implements <see cref="IDisposable"/>)
+        /// </summary>
         public readonly bool WillDispose;
+        /// <summary>
+        /// The duration to keep a value, used when the get function doesn't supply an explicit expiration time
+        /// </summary>
         public readonly TimeSpan DefaultCacheDuration;
+        /// <summary>
+        /// Tracks exceptions thrown when disposing replaced values (null if <see cref="WillDispose"/> is false)
+        /// </summary>
         public readonly ExceptionTracker AutoDisposeErrors;
 
 
@@ -61,7 +79,7 @@ namespace SysWeaver
         /// <summary>
         /// Get the cached value (update invoked if invalid or non-existing)
         /// </summary>
-        /// <param name="getFn">The function to call to get the original value</param>
+        /// <param name="getFn">The function to call to get the original value (the value is cached for <see cref="DefaultCacheDuration"/>)</param>
         /// <returns>The cached value</returns>
         public T GetOrUpdate(Func<T> getFn)
         {
@@ -95,7 +113,7 @@ namespace SysWeaver
         /// <summary>
         /// Get the cached value (update invoked if invalid or non-existing)
         /// </summary>
-        /// <param name="getFn">The function to call to get the original value and the expiration time</param>
+        /// <param name="getFn">The function to call to get the original value and it's expiration time (UTC)</param>
         /// <returns>The cached value</returns>
         public T GetOrUpdate(Func<Tuple<DateTime, T>> getFn)
         {
@@ -130,7 +148,7 @@ namespace SysWeaver
         /// <summary>
         /// Get the cached value (update invoked if invalid or non-existing)
         /// </summary>
-        /// <param name="getFn">The function to call to get the original value and the expiration time</param>
+        /// <param name="getFn">The function to call to get the original value and it's expiration time (UTC)</param>
         /// <returns>The cached value</returns>
         public T GetOrUpdate(Func<ValueTuple<DateTime, T>> getFn)
         {
@@ -166,7 +184,7 @@ namespace SysWeaver
         /// <summary>
         /// Get the cached value (update invoked if invalid or non-existing)
         /// </summary>
-        /// <param name="getFn">The function to call to get the original value</param>
+        /// <param name="getFn">The function to call to get the original value (the value is cached for <see cref="DefaultCacheDuration"/>)</param>
         /// <returns>The cached value</returns>
         public ValueTask<T> GetOrUpdate(Func<Task<T>> getFn)
         {
@@ -183,7 +201,7 @@ namespace SysWeaver
         /// <summary>
         /// Get the cached value (update invoked if invalid or non-existing)
         /// </summary>
-        /// <param name="getFn">The function to call to get the original value and the expiration time</param>
+        /// <param name="getFn">The function to call to get the original value and it's expiration time (UTC)</param>
         /// <returns>The cached value</returns>
         public ValueTask<T> GetOrUpdate(Func<Task<Tuple<DateTime, T>>> getFn)
         {
@@ -202,7 +220,7 @@ namespace SysWeaver
         /// <summary>
         /// Get the cached value (update invoked if invalid or non-existing)
         /// </summary>
-        /// <param name="getFn">The function to call to get the original value and the expiration time</param>
+        /// <param name="getFn">The function to call to get the original value and it's expiration time (UTC)</param>
         /// <returns>The cached value</returns>
         public ValueTask<T> GetOrUpdate(Func<Task<ValueTuple<DateTime, T>>> getFn)
         {
@@ -220,7 +238,7 @@ namespace SysWeaver
         /// <summary>
         /// Get the cached value (update invoked if invalid or non-existing)
         /// </summary>
-        /// <param name="getFn">The function to call to get the original value</param>
+        /// <param name="getFn">The function to call to get the original value (the value is cached for <see cref="DefaultCacheDuration"/>)</param>
         /// <returns>The cached value</returns>
         public ValueTask<T> GetOrUpdateValue(Func<ValueTask<T>> getFn)
         {
@@ -240,7 +258,7 @@ namespace SysWeaver
         /// <summary>
         /// Get the cached value (update invoked if invalid or non-existing)
         /// </summary>
-        /// <param name="getFn">The function to call to get the original value and the expiration time</param>
+        /// <param name="getFn">The function to call to get the original value and it's expiration time (UTC)</param>
         /// <returns>The cached value</returns>
         public ValueTask<T> GetOrUpdateValue(Func<ValueTask<Tuple<DateTime, T>>> getFn)
         {
@@ -259,7 +277,7 @@ namespace SysWeaver
         /// <summary>
         /// Get the cached value (update invoked if invalid or non-existing)
         /// </summary>
-        /// <param name="getFn">The function to call to get the original value and the expiration time</param>
+        /// <param name="getFn">The function to call to get the original value and it's expiration time (UTC)</param>
         /// <returns>The cached value</returns>
         public ValueTask<T> GetOrUpdateValue(Func<ValueTask<ValueTuple<DateTime, T>>> getFn)
         {
@@ -275,9 +293,10 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Set a new value
+        /// Set a new value, cached for <see cref="DefaultCacheDuration"/>
         /// </summary>
         /// <param name="value">The new value</param>
+        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed (exceptions thrown by it are propagated)</remarks>
         public void Set(T value)
         {
             Tuple<DateTime, T> old;
@@ -291,7 +310,8 @@ namespace SysWeaver
         /// Set a new value
         /// </summary>
         /// <param name="value">The new value</param>
-        /// <param name="expirationTime">When this value will expire</param>
+        /// <param name="expirationTime">When this value will expire (UTC)</param>
+        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed (exceptions thrown by it are propagated)</remarks>
         public void Set(T value, DateTime expirationTime)
         {
             Tuple<DateTime, T> old;
@@ -303,8 +323,9 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Clear the cache
+        /// Clear the cache (the next get will create a new value)
         /// </summary>
+        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed (exceptions thrown by it are propagated)</remarks>
         public void Clear()
         {
             Tuple<DateTime, T> old;
@@ -316,8 +337,10 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Remove the item from the cache if it's old
+        /// Remove the value from the cache if it has expired
         /// </summary>
+        /// <exception cref="NullReferenceException">The cache is empty (no value have been set, or it was cleared)</exception>
+        /// <remarks>If <see cref="WillDispose"/> is true the removed value is disposed (exceptions thrown by it are propagated)</remarks>
         public void Prune()
         {
             Tuple<DateTime, T> old;
@@ -332,6 +355,9 @@ namespace SysWeaver
                 (old.Item2 as IDisposable).Dispose();
         }
 
+        /// <summary>
+        /// If <see cref="WillDispose"/> is true the cache is cleared (and the value disposed), else nothing happens (the value remains cached)
+        /// </summary>
         public void Dispose()
         {
             if (WillDispose)
@@ -339,11 +365,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get some stats for the cache using Stats type
+        /// Get some stats for the cache using Stats type (ratios are in percent)
         /// </summary>
         /// <param name="system">A system name for the cache</param>
         /// <param name="prefix">An optional prefix to add to the stats name</param>
-        /// <returns>Stats</returns>
+        /// <returns>The total request count, followed by the hit, semi hit and miss ratios</returns>
         public IEnumerable<Stats> GetStats(String system, String prefix = "")
         {
             prefix = prefix ?? "";
@@ -404,7 +430,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Reset all stats counters
+        /// Reset all stats counters (not atomic with respect to concurrent requests)
         /// </summary>
         public void ResetStats()
         {

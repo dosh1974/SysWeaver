@@ -5,6 +5,13 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.Compression
 {
+    /// <summary>
+    /// Extension methods that compress / decompress into newly allocated memory, for when the output size isn't known in advance.
+    /// </summary>
+    /// <remarks>
+    /// Temporary buffers are stack allocated or pooled, the result is a single exact size allocation (or pooled unmanaged memory for the <c>GetUnmanagedDecompressed</c> methods).
+    /// Streams passed in are not disposed.
+    /// </remarks>
     public static class CompExt
     {
 
@@ -16,7 +23,8 @@ namespace SysWeaver.Compression
         const int MaxStackAlloc = 8192;
 
         /// <summary>
-        /// Get compressed data
+        /// Get compressed data.
+        /// Compresses into a temporary buffer (on the stack for small data) of the input size plus a small overhead, falling back to a growing stream if the data doesn't compress.
         /// </summary>
         /// <param name="c">The compression encoder</param>
         /// <param name="from">The memory to read uncompressed data from</param>
@@ -63,7 +71,9 @@ namespace SysWeaver.Compression
         }
 
         /// <summary>
-        /// Get compressed data
+        /// Get compressed data, reading from the current position to the end of the stream.
+        /// For seekable streams the remaining length is used to size a temporary buffer (if the data doesn't compress, the stream is rewound and compressed to a growing stream),
+        /// unseekable streams are compressed to a growing stream.
         /// </summary>
         /// <param name="c">The compression encoder</param>
         /// <param name="from">The stream to read the uncompressed data from</param>
@@ -114,7 +124,9 @@ namespace SysWeaver.Compression
         }
 
         /// <summary>
-        /// Get compressed data
+        /// Get compressed data asynchronously, reading from the current position to the end of the stream.
+        /// For seekable streams the remaining length is used to size a pooled temporary buffer (if the data doesn't compress, the stream is rewound and compressed to a growing stream),
+        /// unseekable streams are compressed to a growing stream.
         /// </summary>
         /// <param name="c">The compression encoder</param>
         /// <param name="from">The stream to read the uncompressed data from</param>
@@ -222,11 +234,12 @@ namespace SysWeaver.Compression
         }
 
         /// <summary>
-        /// Get compressed data
+        /// Get decompressed data (as a new array of the exact size)
         /// </summary>
         /// <param name="c">The compression decoder</param>
         /// <param name="from">The memory to read compressed data from</param>
         /// <returns>The decompressed data</returns>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static Memory<Byte> GetDecompressed(this ICompDecoder c, ReadOnlySpan<Byte> from)
         {
             using var ms = new ArrayPoolStream(GetDecompressedSizeEstimate(from.Length));
@@ -235,11 +248,12 @@ namespace SysWeaver.Compression
         }
 
         /// <summary>
-        /// Get compressed data
+        /// Get decompressed data (as a new array of the exact size), reading from the current position of the stream
         /// </summary>
         /// <param name="c">The compression decoder</param>
         /// <param name="from">The stream to read the compressed data from</param>
         /// <returns>The decompressed data</returns>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static Memory<Byte> GetDecompressed(this ICompDecoder c, Stream from)
         {
             using var ms = new ArrayPoolStream(GetDecompressedSizeEstimate(GetRemaining(from)));
@@ -248,11 +262,12 @@ namespace SysWeaver.Compression
         }
 
         /// <summary>
-        /// Get compressed data
+        /// Get decompressed data asynchronously (as a new array of the exact size), reading from the current position of the stream
         /// </summary>
         /// <param name="c">The compression decoder</param>
         /// <param name="from">The stream to read the compressed data from</param>
         /// <returns>The decompressed data</returns>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static async Task<Memory<Byte>> GetDecompressedAsync(this ICompDecoder c, Stream from)
         {
             using var ms = new ArrayPoolStream(GetDecompressedSizeEstimate(GetRemaining(from)));
@@ -266,6 +281,7 @@ namespace SysWeaver.Compression
         /// <param name="c">The compression decoder</param>
         /// <param name="from">The memory to read compressed data from</param>
         /// <returns>The decompressed data</returns>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static Byte[] GetDecompressedArray(this ICompDecoder c, ReadOnlySpan<Byte> from)
         {
             using var ms = new ArrayPoolStream(GetDecompressedSizeEstimate(from.Length));
@@ -279,6 +295,7 @@ namespace SysWeaver.Compression
         /// <param name="c">The compression decoder</param>
         /// <param name="from">The stream to read the compressed data from</param>
         /// <returns>The decompressed data</returns>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static Byte[] GetDecompressedArray(this ICompDecoder c, Stream from)
         {
             using var ms = new ArrayPoolStream(GetDecompressedSizeEstimate(GetRemaining(from)));
@@ -292,11 +309,12 @@ namespace SysWeaver.Compression
         #region Unmanaged memory decompression
 
         /// <summary>
-        /// Get compressed data
+        /// Get decompressed data in pooled memory (no exact size copy is made)
         /// </summary>
         /// <param name="c">The compression decoder</param>
         /// <param name="from">The memory to read compressed data from</param>
-        /// <returns>The decompressed data</returns>
+        /// <returns>The decompressed data, the caller must dispose it to return the memory to the pool</returns>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static IUnmanagedReadOnlyMemory<Byte> GetUnmanagedDecompressed(this ICompDecoder c, ReadOnlySpan<Byte> from)
         {
             using var ms = new ArrayPoolStream(GetDecompressedSizeEstimate(from.Length));
@@ -305,11 +323,12 @@ namespace SysWeaver.Compression
         }
 
         /// <summary>
-        /// Get compressed data
+        /// Get decompressed data in pooled memory (no exact size copy is made), reading from the current position of the stream
         /// </summary>
         /// <param name="c">The compression decoder</param>
         /// <param name="from">The stream to read the compressed data from</param>
-        /// <returns>The decompressed data</returns>
+        /// <returns>The decompressed data, the caller must dispose it to return the memory to the pool</returns>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static IUnmanagedReadOnlyMemory<Byte> GetUnmanagedDecompressed(this ICompDecoder c, Stream from)
         {
             using var ms = new ArrayPoolStream(GetDecompressedSizeEstimate(GetRemaining(from)));
@@ -318,11 +337,12 @@ namespace SysWeaver.Compression
         }
 
         /// <summary>
-        /// Get compressed data
+        /// Get decompressed data asynchronously in pooled memory (no exact size copy is made), reading from the current position of the stream
         /// </summary>
         /// <param name="c">The compression decoder</param>
         /// <param name="from">The stream to read the compressed data from</param>
-        /// <returns>The decompressed data</returns>
+        /// <returns>The decompressed data, the caller must dispose it to return the memory to the pool</returns>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static async Task<IUnmanagedReadOnlyMemory<Byte>> GetUnmanagedDecompressedAsync(this ICompDecoder c, Stream from)
         {
             using var ms = new ArrayPoolStream(GetDecompressedSizeEstimate(GetRemaining(from)));

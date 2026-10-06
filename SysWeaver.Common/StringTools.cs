@@ -11,6 +11,14 @@ using System.Text;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// General string helpers: quoting and formatting, casing of words, white space clean up, fuzzy matching (Levenstein), char classification and filtering,
+    /// hex conversions, splitting, masking ("secure") of secrets, line splitting and markdown escaping.
+    /// </summary>
+    /// <remarks>
+    /// Most methods avoid temporary allocations (stack or pooled buffers) and return the input instance if nothing changes.
+    /// Unless stated otherwise, the string arguments may not be null. All methods are thread safe.
+    /// </remarks>
     public static class StringTools
     {
         /// <summary>
@@ -29,9 +37,10 @@ namespace SysWeaver
         const int MaxStackBytes = 8192;
 
         /// <summary>
-        /// Compute a deterministic hash of the string contents
+        /// Compute a deterministic hash of the string contents (stable across processes and runs, unlike <see cref="String.GetHashCode()"/>).
+        /// Not a cryptographic hash.
         /// </summary>
-        /// <param name="s">The string to compute a hash for</param>
+        /// <param name="s">The string to compute a hash for, may not be null</param>
         /// <returns>A hash based on the string content</returns>
         public static int GetHashCode(String s)
         {
@@ -46,11 +55,11 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Make sure that a string is quoted
+        /// Make sure that a string is quoted (starts and ends with the quotation char), quotes are added if it isn't
         /// </summary>
-        /// <param name="s"></param>
-        /// <param name="quotationChar"></param>
-        /// <returns></returns>
+        /// <param name="s">The string, may be null</param>
+        /// <param name="quotationChar">The quotation char</param>
+        /// <returns>The input if it's already quoted, else a quoted copy, "null" (unquoted) if the input is null</returns>
         public static String EnsureQuoted(this String s, Char quotationChar = '"')
         {
             if (s == null)
@@ -70,7 +79,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="s">The string to add quotation chars around</param>
         /// <param name="quotationChar">The quotation char to use</param>
-        /// <returns>A quoted string</returns>
+        /// <returns>A quoted string, "null" (unquoted) if the input is null</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToQuoted(this String s, Char quotationChar = '"')
             => s == null ? "null" : String.Concat(new ReadOnlySpan<Char>(in quotationChar), s, new ReadOnlySpan<Char>(in quotationChar));
@@ -79,25 +88,25 @@ namespace SysWeaver
         /// Add quotation chars around a string. Ex: Test => "Test"
         /// </summary>
         /// <param name="s">The string to add quotation chars around</param>
-        /// <param name="quotationChars">The quotation chars to use</param>
-        /// <returns>A quoted string</returns>
+        /// <param name="quotationChars">The quotation chars to use (added both before and after)</param>
+        /// <returns>A quoted string, "null" (unquoted) if the input is null</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToQuoted(this String s, String quotationChars)
             => s == null ? "null" : String.Concat(quotationChars, s, quotationChars);
 
         /// <summary>
-        /// Format a string as a filename, typically add quotes
+        /// Format a string as a filename (for messages), ex: C:\a.txt => "file://C:\a.txt"
         /// </summary>
-        /// <param name="s">The string to format as a filename</param>
-        /// <returns>A filename formatted string</returns>
+        /// <param name="s">The string to format as a filename, may be null</param>
+        /// <returns>A filename formatted string, "null" if the input is null</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToFilename(this String s) => s == null ? "null" : String.Concat("\"file://", s, "\"");
 
         /// <summary>
-        /// Format a string as a filename, typically add quotes
+        /// Format a string as an email address (for messages), ex: a@b.com => "mailto:a@b.com"
         /// </summary>
-        /// <param name="s">The string to format as a filename</param>
-        /// <returns>A filename formatted string</returns>
+        /// <param name="s">The string to format as an email address, may be null</param>
+        /// <returns>An email formatted string, "null" if the input is null</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToMail(this String s) => s == null ? "null" : String.Concat("\"mailto:", s, "\"");
 
@@ -105,19 +114,22 @@ namespace SysWeaver
         static readonly String FolderEnd = Path.DirectorySeparatorChar + "\"";
 
         /// <summary>
-        /// Format a string as a folder name, typically add quotes
+        /// Format a string as a folder name (for messages), any trailing directory separator is replaced by a single platform separator.
+        /// Ex (windows): C:\Temp => file://"C:\Temp\" (note that the quote is placed after "file://", unlike <see cref="ToFilename(string)"/>)
         /// </summary>
-        /// <param name="s">The string to format as a folder name</param>
-        /// <returns>A folder name formatted string</returns>
+        /// <param name="s">The string to format as a folder name, may be null</param>
+        /// <returns>A folder name formatted string, "null" if the input is null</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToFolder(this String s) => s == null ? "null" : String.Concat("file://\"", Path.TrimEndingDirectorySeparator(s.AsSpan()), FolderEnd);
 
 
         /// <summary>
-        /// "Counts up" a string, ex "apa_1.png" => "apa_2.png", "apa9.txt" => "apa10.txt", "apa_1_99" => "apa_1_100", "apa" => "apa_1"
+        /// "Counts up" a string by incrementing the last number in it, or appending "_1" if there is no number (ASCII digits only),
+        /// ex "apa_1.png" => "apa_2.png", "apa9.txt" => "apa10.txt", "apa_1_99" => "apa_1_100", "apa" => "apa_1".
+        /// Typically used to create unique (file) names.
         /// </summary>
-        /// <param name="str">The string to "count up"</param>
-        /// <returns>A string that has been "incremented"</returns>
+        /// <param name="str">The string to "count up", may not be null</param>
+        /// <returns>A new string that has been "incremented"</returns>
         public static String CountUp(this String str)
         {
             var s = str.AsSpan();
@@ -132,6 +144,9 @@ namespace SysWeaver
             return String.Create(grow ? s.Length + 1 : s.Length, (str, start, end), CountUpAction);
         }
 
+        /// <summary>
+        /// Writes the counted up string (the state is the string and the start and end of the last number)
+        /// </summary>
         static readonly SpanAction<Char, (String Str, int Start, int End)> CountUpAction = (d, st) =>
         {
             var s = st.Str.AsSpan();
@@ -177,8 +192,8 @@ namespace SysWeaver
         /// "World" remains "World".
         /// "123" remains "123".
         /// </summary>
-        /// <param name="str">The text to make the first letter uppercased</param>
-        /// <returns>The original string or a new string with the first letter uppercased</returns>
+        /// <param name="str">The text to make the first letter uppercased, may be null</param>
+        /// <returns>The original string (also if null or empty) or a new string with the first letter uppercased (invariant culture)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String MakeFirstUppercase(this String str)
             => (String.IsNullOrEmpty(str) || str[0].FastIsUpperOrNonLetter()) ? str : String.Create(str.Length, str, CreateFirstUpperAction);
@@ -190,8 +205,9 @@ namespace SysWeaver
         /// "World is mine" becomes "World Is Mine".
         /// "123" remains "123".
         /// </summary>
-        /// <param name="str">The text to make the first letter in each word uppercased</param>
-        /// <returns>The original string or a new string with the first letter in each word uppercased</returns>
+        /// <param name="str">The text to make the first letter in each word uppercased, may be null.
+        /// A word starts with a letter or digit that follows a non letter or digit (same as <see cref="OnWordStart(string, Func{int, bool}, int)"/>)</param>
+        /// <returns>The original string (also if null, empty or nothing changes) or a new string with the first letter in each word uppercased (invariant culture)</returns>
         public static String MakeFirstCharInWordsUppercase(this String str)
         {
             if (String.IsNullOrEmpty(str))
@@ -236,21 +252,22 @@ namespace SysWeaver
         /// "world" remains "world".
         /// "123" remains "123".
         /// </summary>
-        /// <param name="str">The text to make the first letter lowercased</param>
-        /// <returns>The original string or a new string with the first letter lowercased</returns>
+        /// <param name="str">The text to make the first letter lowercased, may be null</param>
+        /// <returns>The original string (also if null or empty) or a new string with the first letter lowercased (invariant culture)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String MakeFirstLowercase(this String str)
             => (String.IsNullOrEmpty(str) || str[0].FastIsLowerOrNonLetter()) ? str : String.Create(str.Length, str, CreateFirstLowerAction);
 
         /// <summary>
         /// Take a camel cased string and convert it to a space separated string.
+        /// A space is inserted before an upper case letter that follows a non upper case char (so acronyms aren't split, ex: "HTMLParser" is unchanged).
         /// Ex:
         /// "MyNameIsStupid" => "My name is stupid"
         /// </summary>
         /// <param name="str">The camel cased string. Ex: "MyNameIsStupid"</param>
         /// <param name="space">The character to use for space</param>
-        /// <param name="keepFirstWordLetterCasing">If true, keep the casing of the first letter in each word</param>
-        /// <returns>The space separated string. Ex: "My name is stupid"</returns>
+        /// <param name="keepFirstWordLetterCasing">If true, keep the casing of the first letter in each word (else it's lower cased, the first word is never changed)</param>
+        /// <returns>The space separated string (the input instance if nothing changed). Ex: "My name is stupid"</returns>
         [SkipLocalsInit]
         public static String RemoveCamelCase(this String str, Char space = ' ', bool keepFirstWordLetterCasing = false)
         {
@@ -301,13 +318,14 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Levenstein distance
+        /// Levenstein (edit) distance, case sensitive (ordinal).
+        /// Inserting or removing a char costs 1, replacing a char costs the max of the mismatch cost of the two chars (letters use <paramref name="costLetter"/>, numbers use <paramref name="costNumber"/>, other chars cost 1).
         /// </summary>
-        /// <param name="source1">First string</param>
-        /// <param name="source2">Second string</param>
+        /// <param name="source1">First string (null is the same as empty)</param>
+        /// <param name="source2">Second string (null is the same as empty)</param>
         /// <param name="costLetter">Mismatched letter cost</param>
         /// <param name="costNumber">Mismatched number cost</param>
-        /// <returns>The Levenstein distance between the two strings</returns>
+        /// <returns>The Levenstein distance between the two strings (the length of the other string if one is empty)</returns>
         [SkipLocalsInit]
         public static int Levenstein(string source1, string source2, int costLetter = 1, int costNumber = 1)
         {
@@ -372,10 +390,10 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Extract all words from some text
+        /// Extract all words from some text, a word is a run of letters or digits (<see cref="Char.IsLetterOrDigit(char)"/>)
         /// </summary>
-        /// <param name="text"></param>
-        /// <returns></returns>
+        /// <param name="text">The text, may not be null</param>
+        /// <returns>The words (in order), an empty array if there are none</returns>
         [SkipLocalsInit]
         public static String[] ExtractWords(this String text)
         {
@@ -425,23 +443,45 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Levenstein distance, by considering each possible word pair of the text and match, the sum of best matches is returned
+        /// Fuzzy match two texts by their words (see <see cref="ExtractWords(string)"/> and <see cref="FuzzyMatch(string[], string[])"/>), lower is a better match
         /// </summary>
-        /// <param name="text">First string</param>
-        /// <param name="matchWith">Second string</param>
-        /// <returns>The sum of the best levenstein distance between each word pair</returns>
+        /// <param name="text">The text to search in</param>
+        /// <param name="matchWith">The search text</param>
+        /// <returns>The match error (a weighted sum of the best word matches), int.MaxValue if any of the texts have no words</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int FuzzyMatch(string text, string matchWith)
             => FuzzyMatch(ExtractWords(text), ExtractWords(matchWith));
 
 
+        /// <summary>
+        /// The Levenstein cost of a mismatched letter used by the fuzzy matching
+        /// </summary>
         public const int FuzzyLevensteinLetterCost = 3;
+
+        /// <summary>
+        /// The Levenstein cost of a mismatched number used by the fuzzy matching
+        /// </summary>
         public const int FuzzyLevensteinNumberCost = 4;
+
+        /// <summary>
+        /// The Levenstein distance of a word pair is shifted left by this many bits (weighted), when used by the fuzzy matching
+        /// </summary>
         public const int FuzzyLevensteinShiftWeight = 4;
 
 
+        /// <summary>
+        /// The length difference of a word that contains the search word is shifted left by this many bits (weighted)
+        /// </summary>
         const int FuzzyPartOfShiftWeight = 1;
+
+        /// <summary>
+        /// The number of search words that couldn't be matched (when all text words are used) is shifted left by this many bits (weighted)
+        /// </summary>
         const int FuzzyOrderShiftWeight = 0;
+
+        /// <summary>
+        /// The number of text words that wasn't matched is shifted left by this many bits (weighted)
+        /// </summary>
         const int FuzzyMissingWordsShiftWeight = 0;
 
         const int FuzzyMaxShiftWeight = FuzzyLevensteinShiftWeight > FuzzyPartOfShiftWeight
@@ -451,8 +491,21 @@ namespace SysWeaver
                                         (FuzzyPartOfShiftWeight > FuzzyOrderShiftWeight ? FuzzyPartOfShiftWeight : FuzzyOrderShiftWeight);
 
 
+        /// <summary>
+        /// The fuzzy match error threshold for a search text, results of <see cref="FuzzyMatch(string, string)"/> above this are typically considered non matches
+        /// </summary>
+        /// <param name="searchLength">The length of the search text</param>
+        /// <param name="maxError">A tolerance divisor, a higher value gives a lower (stricter) threshold</param>
+        /// <returns>The max error (at least 1)</returns>
         public static int FuzzyMaxErr(int searchLength, int maxError = 2) => Math.Max(1, (((searchLength + maxError - 1) * FuzzyLevensteinNumberCost) << FuzzyMaxShiftWeight) / maxError);
 
+        /// <summary>
+        /// Fuzzy match words, every match word (in order) is greedily paired with the best remaining text word, lower is a better match.
+        /// A text word that contains the match word (ordinal) costs the length difference (weighted), else the Levenstein distance is used (weighted).
+        /// </summary>
+        /// <param name="textWords">The words to search in (not modified), may not contain null</param>
+        /// <param name="matchWords">The search words, may not contain null</param>
+        /// <returns>The match error (the sum of the best word matches), int.MaxValue if any of the arrays are empty</returns>
         public static int FuzzyMatch(string[] textWords, string[] matchWords)
         {
             var wlen = textWords.Length;
@@ -509,7 +562,7 @@ namespace SysWeaver
         /// <summary>
         /// Inspect each char and find the first match
         /// </summary>
-        /// <param name="text">Text to search</param>
+        /// <param name="text">Text to search, null returns -1</param>
         /// <param name="isMatch">Predicate that inspects a char, return true to return this position</param>
         /// <param name="startIndex">Start position</param>
         /// <returns>Position of the first match, or -1 if none is found</returns>
@@ -529,11 +582,11 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Find the end of a word (first non letter or non digit)
+        /// Find the end of a word (the first char that isn't a letter or digit)
         /// </summary>
-        /// <param name="text">Text to search</param>
+        /// <param name="text">Text to search, null returns -1</param>
         /// <param name="startIndex">Start position</param>
-        /// <returns>Position of the first match, or -1 if none is found</returns>
+        /// <returns>Position of the first non letter or digit, or -1 if none is found (the word extends to the end of the text)</returns>
         public static int EndOfWord(this string text, int startIndex)
         {
             if (text == null)
@@ -553,9 +606,9 @@ namespace SysWeaver
         /// Limit (clamps) a string to be within a max length
         /// </summary>
         /// <param name="s">The string to limit</param>
-        /// <param name="maxLen">The maximum allowed length of the output string</param>
-        /// <param name="elipses">If the string is cut short, end it with this string (only if max len is twice as long as this string)</param>
-        /// <returns>A string that have at most max length chars</returns>
+        /// <param name="maxLen">The maximum allowed length of the output string, must not be negative</param>
+        /// <param name="elipses">If the string is cut short, end it with this string (only if max len is more than twice as long as this string, else the string is just cut)</param>
+        /// <returns>A string that have at most max length chars (the input if it's short enough, null or empty)</returns>
         public static String LimitLength(this String s, int maxLen, String elipses = "...")
         {
             if (String.IsNullOrEmpty(s))
@@ -576,8 +629,8 @@ namespace SysWeaver
         /// Find all word starts and execute a function on them
         /// </summary>
         /// <param name="text">The text to find word starts in</param>
-        /// <param name="onNewWordStart">A function that is executed for every found word start, the paramater is the start index, return false to abort further processing</param>
-        /// <param name="start">The optional first position in the string to search</param>
+        /// <param name="onNewWordStart">A function that is executed for every found word start (a letter or digit that follows a non letter or digit), the parameter is the start index, return false to abort further processing</param>
+        /// <param name="start">The optional first position in the string to search, if it's inside a word that word is skipped</param>
         public static void OnWordStart(this String text, Func<int, bool> onNewWordStart, int start = 0)
         {
             bool prevIsLetter = false;
@@ -634,11 +687,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Clean up strings, removing duplicate white-spaces, turning all white spaces to ' ' (tab's etc).
+        /// Clean up strings, removing duplicate white-spaces, turning all white spaces and control chars (below 31) to ' ' (tab's etc), and trimming the result.
         /// </summary>
-        /// <param name="s"></param>
-        /// <param name="charMap">An optional char remapper</param>
-        /// <returns>A sanitized string</returns>
+        /// <param name="s">The string, may be null</param>
+        /// <param name="charMap">An optional char remapper, applied (after trimming) before the white spaces are collapsed. A char maps to a string (null removes the char)</param>
+        /// <returns>A sanitized string, the input instance if nothing changed (or if null or empty)</returns>
         [SkipLocalsInit]
         public static String Sanitize(this String s, IReadOnlyDictionary<Char, String> charMap = null)
         {
@@ -698,6 +751,11 @@ namespace SysWeaver
 
 
 
+        /// <summary>
+        /// The default identifier char test of <see cref="CodeSanitize(string, Func{char, bool}, IReadOnlyDictionary{char, string})"/>: a letter, digit, '_' or '@'
+        /// </summary>
+        /// <param name="c">The char to test</param>
+        /// <returns>True if the char can be part of an identifier</returns>
         public static bool IsCodeIdentifierChar(char c)
         {
             if (Char.IsLetterOrDigit(c))
@@ -709,16 +767,19 @@ namespace SysWeaver
             return false;
         }
 
+        /// <summary>
+        /// A cached delegate of <see cref="IsCodeIdentifierChar(char)"/>
+        /// </summary>
         static readonly Func<Char, bool> IsCodeIdentifierCharFn = IsCodeIdentifierChar;
 
         /// <summary>
-        /// Clean up code strings, removing duplicate white-spaces, turning all white spaces to ' ' (tab's etc).
-        /// Removing redunant spaces.
+        /// Clean up code strings, removing duplicate white-spaces, turning all white spaces (and control chars below 31) to ' ' (tab's etc).
+        /// Removing redundant spaces: a white space is only kept if it separates two identifier chars, ex: "a  =  b + c" => "a=b+c", "int  x" => "int x".
         /// </summary>
-        /// <param name="s"></param>
-        /// <param name="isCodeIdentifier">An optional function that returns true if a char is a possible identifier</param>
-        /// <param name="charMap">An optional char remapper</param>
-        /// <returns>A sanitized string</returns>
+        /// <param name="s">The string, may be null</param>
+        /// <param name="isCodeIdentifier">An optional function that returns true if a char is a possible identifier char, default is <see cref="IsCodeIdentifierChar(char)"/></param>
+        /// <param name="charMap">An optional char remapper, applied (after trimming) before the white spaces are processed. A char maps to a string (null removes the char)</param>
+        /// <returns>A sanitized string, the input instance if nothing changed (or if null or empty)</returns>
         [SkipLocalsInit]
         public static String CodeSanitize(this String s, Func<Char, bool> isCodeIdentifier = null, IReadOnlyDictionary<Char, String> charMap = null)
         {
@@ -791,7 +852,7 @@ namespace SysWeaver
         /// Check if a string contains anything but ascii (7-bit).
         /// If any char in the string have a value greater or equal to 128 this method returns false.
         /// </summary>
-        /// <param name="s">The string to check</param>
+        /// <param name="s">The string to check (null or empty returns true)</param>
         /// <returns>True if all chars in the string is less than 128</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsAsciiOnly(this String s)
@@ -800,9 +861,9 @@ namespace SysWeaver
         /// <summary>
         /// Replace all non ascii chars in a string
         /// </summary>
-        /// <param name="s">The string to replace chars in</param>
-        /// <param name="replaceWith">The char to replace non-ascii chars to</param>
-        /// <returns>The original string if all ascii, or a string with replace values</returns>
+        /// <param name="s">The string to replace chars in, may be null</param>
+        /// <param name="replaceWith">The char to replace non-ascii chars to (every UTF-16 char is replaced, so a surrogate pair becomes two chars)</param>
+        /// <returns>The original string if all ascii (or null or empty), or a string with replace values</returns>
         public static String ReplaceNonAscii(this String s, Char replaceWith = ' ')
         {
             if (String.IsNullOrEmpty(s))
@@ -827,11 +888,11 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Make a string ascii, by removing diacritics, use a substitution table or replacement of non-ascii.
+        /// Make a string ascii, by removing diacritics (see <see cref="StringExt.RemoveDiacritics(string)"/>), using a (small) substitution table, or replacing the remaining non-ascii chars.
         /// </summary>
-        /// <param name="s">The string to replace chars in</param>
+        /// <param name="s">The string to replace chars in, may be null</param>
         /// <param name="subsituteUnknownWith">Unknown non-ascii chars will be replaced by this</param>
-        /// <returns>The original string if all ascii, or a string with replace values</returns>
+        /// <returns>The original string if all ascii (or null or empty), or a string with replace values</returns>
         public static String MakeAscii(this String s, Char subsituteUnknownWith = ' ')
         {
             if (String.IsNullOrEmpty(s))
@@ -859,6 +920,9 @@ namespace SysWeaver
             }
         };
 
+        /// <summary>
+        /// Substitutions of non ascii chars that doesn't have a diacritic decomposition
+        /// </summary>
         static readonly IReadOnlyDictionary<Char, Char> ToAscii = new Dictionary<Char, Char>()
         {
             {  '✕', 'x' },
@@ -873,9 +937,9 @@ namespace SysWeaver
         static readonly SearchValues<Char> HexDigitsOrSpace = SearchValues.Create("0123456789abcdefABCDEF ");
 
         /// <summary>
-        /// Check if a string is a valid "identifier", only 'a'-'z', 'A'-'Z', and numbers is accepeted (no number at the first position)
+        /// Check if a string is a valid "identifier", only 'a'-'z', 'A'-'Z', and '0'-'9' is accepted (the first char must be a letter, '_' is not allowed)
         /// </summary>
-        /// <param name="s">The string to check</param>
+        /// <param name="s">The string to check (null or empty returns false)</param>
         /// <returns>True if all chars in the string is valid</returns>
         public static bool IsIdentifier(this String s)
         {
@@ -889,12 +953,13 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Check if a string is numeric (only contains '0' to '9').
+        /// Check if a string is numeric (only contains '0' to '9', and optionally spaces, a leading '-' and a '.').
+        /// At least one digit is required.
         /// </summary>
-        /// <param name="s">The string to check</param>
-        /// <param name="allowSpace">true to allow spaces (should filter them out before converting to a number)</param>
-        /// <param name="allowNeg">true to allow a single '-' at the start</param>
-        /// <param name="allowDecimal">true to allow a '.'</param>
+        /// <param name="s">The string to check (null or empty returns false)</param>
+        /// <param name="allowSpace">true to allow spaces anywhere (should filter them out before converting to a number)</param>
+        /// <param name="allowNeg">true to allow a single '-' as the first char</param>
+        /// <param name="allowDecimal">true to allow a single '.' (anywhere)</param>
         /// <returns>True if all chars in the string is a number</returns>
         public static bool IsNumeric(this String s, bool allowSpace = true, bool allowNeg = false, bool allowDecimal = false)
         {
@@ -935,8 +1000,8 @@ namespace SysWeaver
         /// <summary>
         /// Check if a string is made up of only hexadecimal digits (only contains '0' to '9', 'a' to 'f' or 'A' to 'F').
         /// </summary>
-        /// <param name="s">The string to check</param>
-        /// <param name="allowSpace">true to allow spaces (should filter them out before converting to a number)</param>
+        /// <param name="s">The string to check (null or empty returns false)</param>
+        /// <param name="allowSpace">true to allow spaces (should filter them out before converting to a number), note that a string with only spaces returns true</param>
         /// <returns>True if all chars in the string is hexadecimal digits</returns>
         public static bool IsHex(this String s, bool allowSpace = true)
         {
@@ -947,9 +1012,9 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Check if a string is letters only.
+        /// Check if a string is letters only (<see cref="Char.IsLetter(char)"/>).
         /// </summary>
-        /// <param name="s">The string to check</param>
+        /// <param name="s">The string to check (null returns false, empty returns true)</param>
         /// <param name="allowSpace">true to allow spaces</param>
         /// <returns>True if all chars in the string is a letter (or space if allowed)</returns>
         public static bool IsLetters(this String s, bool allowSpace = true)
@@ -976,7 +1041,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Removes duplicate white spaces, with a single white space, and trims white spaces from the start and end (in place).
+        /// Replaces runs of white spaces with a single white space, and trims white spaces from the start and end (can be done in place).
         /// </summary>
         /// <param name="source">The source chars</param>
         /// <param name="destination">The destination (may be the same as the source)</param>
@@ -1010,11 +1075,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Removes duplicate white spaces, with a single white space (and trims white spaces from start and end).
+        /// Replaces runs of white spaces (<see cref="Char.IsWhiteSpace(char)"/>) with a single white space (and trims white spaces from start and end).
         /// </summary>
-        /// <param name="s">The string</param>
+        /// <param name="s">The string, may not be null</param>
         /// <param name="useAsWhiteSpace">Replace white spaces with a single of this</param>
-        /// <returns></returns>
+        /// <returns>The cleaned string, the input instance if nothing changed</returns>
         [SkipLocalsInit]
         public static String RemoveMultiWhiteSpace(String s, Char useAsWhiteSpace = ' ')
         {
@@ -1038,10 +1103,10 @@ namespace SysWeaver
         /// Nested groups are removed as a whole, ex: "a (b (c) d) e" => "a e".
         /// An unclosed group is kept as is, and an end char without a matching start char is kept.
         /// </summary>
-        /// <param name="s"></param>
-        /// <param name="groupStart"></param>
-        /// <param name="groupEnd"></param>
-        /// <returns>The original string if no group was removed, else the string with all groups removed (and white spaces cleaned up)</returns>
+        /// <param name="s">The string, may not be null</param>
+        /// <param name="groupStart">The char that starts a group</param>
+        /// <param name="groupEnd">The char that ends a group (may be the same as the start char, ex: quotes)</param>
+        /// <returns>The original string if no group was removed, else the string with all groups removed (and white spaces cleaned up, see <see cref="RemoveMultiWhiteSpace(string, char)"/>)</returns>
         [SkipLocalsInit]
         public static String RemoveGroup(String s, Char groupStart = '(', Char groupEnd = ')')
         {
@@ -1105,8 +1170,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="first">The first separators, used for all but the last</param>
         /// <param name="last">The last separator</param>
-        /// <param name="args">The strings to join</param>
-        /// <returns>The combined string</returns>
+        /// <param name="args">The strings to join, may not be null (null elements are treated as empty, except that a single null element returns null)</param>
+        /// <returns>The combined string, ex: ", " and " and " joins ["a", "b", "c"] to "a, b and c"</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String JoinWithSpecialLast(String first, String last, params String[] args)
             => JoinWithSpecialLast(first, last, (IReadOnlyList<String>)args);
@@ -1159,6 +1224,7 @@ namespace SysWeaver
         /// <summary>
         /// Join the first count strings (at least 3), only the result is allocated
         /// </summary>
+        /// <exception cref="OverflowException">The result is too long</exception>
         static String InternalJoinWithSpecialLast(String first, String last, IReadOnlyList<String> args, int count)
         {
             long total = (long)(first?.Length ?? 0) * (count - 2) + (last?.Length ?? 0);
@@ -1215,7 +1281,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="first">The first separators, used for all but the last</param>
         /// <param name="last">The last separator</param>
-        /// <param name="args">The objects to join</param>
+        /// <param name="args">The objects to join (converted using ToString, null is treated as empty)</param>
         /// <returns>The combined string</returns>
         public static String JoinWithSpecialLast<T>(String first, String last, IReadOnlyList<T> args)
         {
@@ -1247,7 +1313,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Convert a string to only hex characters, useful for turning any text into something that is safe for url's, file names etc
+        /// Convert a string to only hex characters (the lower case hex of the UTF-8 bytes), useful for turning any text into something that is safe for url's, file names etc
         /// </summary>
         /// <param name="value">The string</param>
         /// <returns>null if the input value was null. String.Empty is the input value was empty, else the hex encoded string only '0' to '9' and 'a' to 'f' is returned</returns>
@@ -1292,11 +1358,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Convert a hexadecimal string to it's original string (reverses the ToHex operation).
-        /// If the number of chars are odd, the last cxhar is ignored.
+        /// Convert a hexadecimal string to it's original string (reverses the <see cref="ToHex(string)"/> operation, the bytes are decoded as UTF-8).
+        /// If the number of chars are odd, the last char is ignored.
         /// </summary>
-        /// <param name="value"></param>
+        /// <param name="value">The hex string ('0' - '9', 'a' - 'f' or 'A' - 'F')</param>
         /// <returns>null if the input value was null. String.Empty is the input value was empty, else the original string (reverse of the ToHex operation)</returns>
+        /// <exception cref="Exception">The string contains a char that isn't a hex digit</exception>
         [SkipLocalsInit]
         public static String ToStringFromHex(this String value)
         {
@@ -1324,10 +1391,11 @@ namespace SysWeaver
 
         /// <summary>
         /// Convert a hexadecimal string to it's data representation.
-        /// If the number of chars are odd, the last cxhar is ignored.
+        /// If the number of chars are odd, the last char is ignored.
         /// </summary>
         /// <param name="value">A hexadecimal string, can only be null, empty or the characters '0' - '9', 'a' - 'f' or 'A' - 'F' (or it will throw)</param>
         /// <returns>null if input value is null, an empty array if input value is empty, else the binary data represented by the string</returns>
+        /// <exception cref="Exception">The string contains a char that isn't a hex digit</exception>
         public static Byte[] ToDataFromHex(this String value)
         {
             if (value == null)
@@ -1343,10 +1411,10 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Check if the string contains any letter
+        /// Check if the string contains any letter (<see cref="Char.IsLetter(char)"/>)
         /// </summary>
-        /// <param name="value">The string to check</param>
-        /// <returns></returns>
+        /// <param name="value">The string to check (null returns false)</param>
+        /// <returns>True if any char is a letter</returns>
         public static bool AnyLetter(this String value)
         {
             if (value == null)
@@ -1370,9 +1438,9 @@ namespace SysWeaver
         /// <summary>
         /// Filter a string, just keeping the allowed chars
         /// </summary>
-        /// <param name="value">The string to filter</param>
+        /// <param name="value">The string to filter, may be null</param>
         /// <param name="keep">The chars to keep</param>
-        /// <returns>The filtered string</returns>
+        /// <returns>The filtered string, the input instance if all chars are kept (or if null or empty)</returns>
         [SkipLocalsInit]
         public static String Filter(this String value, IReadOnlySet<Char> keep)
         {
@@ -1411,9 +1479,9 @@ namespace SysWeaver
         /// <summary>
         /// Filter a string, just keeping the allowed chars
         /// </summary>
-        /// <param name="value">The string to filter</param>
+        /// <param name="value">The string to filter, may be null</param>
         /// <param name="keepFn">A function that is called to determine if a char should be kept, return true to keep the char</param>
-        /// <returns>The filtered string</returns>
+        /// <returns>The filtered string, the input instance if all chars are kept (or if null or empty)</returns>
         [SkipLocalsInit]
         public static String Filter(this String value, Func<Char, bool> keepFn)
         {
@@ -1452,10 +1520,10 @@ namespace SysWeaver
         /// <summary>
         /// Filter a string, just keeping the allowed chars
         /// </summary>
-        /// <param name="value">The string to filter</param>
+        /// <param name="value">The string to filter, may be null</param>
         /// <param name="minInclusive">The first char in the range to keep</param>
         /// <param name="maxInclusive">The last char in the range to keep</param>
-        /// <returns>The filtered string</returns>
+        /// <returns>The filtered string, the input instance if all chars are kept (or if null or empty)</returns>
         [SkipLocalsInit]
         public static String Filter(this String value, Char minInclusive, Char maxInclusive)
         {
@@ -1500,19 +1568,20 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Filter a string, just keeping numerical digits (for parsing an unsigned integer)
+        /// Filter a string, just keeping numerical digits '0' - '9' (for parsing an unsigned integer)
         /// </summary>
-        /// <param name="value">The string to filter</param>
-        /// <returns>The filtered string</returns>
+        /// <param name="value">The string to filter, may be null</param>
+        /// <returns>The filtered string, the input instance if all chars are kept (or if null or empty)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String FilterUInt(this String value)
             => Filter(value, '0', '9');
 
         /// <summary>
-        /// Filter a string, just keeping numerical digits and allowing a leading '-' (for parsing a signed integer)
+        /// Filter a string, just keeping numerical digits '0' - '9' and a leading '-' (for parsing a signed integer).
+        /// A '-' is only kept if nothing has been kept before it, ex: "x-1-2" => "-12".
         /// </summary>
-        /// <param name="value">The string to filter</param>
-        /// <returns>The filtered string</returns>
+        /// <param name="value">The string to filter, may be null</param>
+        /// <returns>The filtered string, the input instance if all chars are kept (or if null or empty)</returns>
         [SkipLocalsInit]
         public static String FilterInt(this String value)
         {
@@ -1566,7 +1635,7 @@ namespace SysWeaver
         /// <param name="split">The character to split</param>
         /// <param name="trimOuter">If true, the string is trimmed before splitting</param>
         /// <param name="trimInner">If true, the resulting value is trimmed on the end and the right string (if available) is trimmed on the start</param>
-        /// <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned, trimmed if trimOuter is true), semantically the same as value.Split(split)[0]</returns>
+        /// <returns>null (or empty) if the value is null (or empty), else the left part (if the split char isn't found, the original string is returned, trimmed if trimOuter is true), semantically the same as value.Split(split)[0]</returns>
         /*public static String SplitFirst(this String value, Char split, bool trimOuter, bool trimInner = true)
         {
             if (String.IsNullOrEmpty(value))
@@ -1649,10 +1718,10 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The value to split into two parts</param>
         /// <param name="split">The character to split</param>
-        /// <param name="right">The right part, null if the split char isn't found</param>
+        /// <param name="right">The right part, null if the split char isn't found (or the value is null, empty or only white spaces when trimmed)</param>
         /// <param name="trimOuter">If true, the string is trimmed before splitting</param>
         /// <param name="trimInner">If true, the resulting value is trimmed on the end and the right string (if available) is trimmed on the start</param>
-        /// <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned, trimmed if trimOuter is true)</returns>
+        /// <returns>null (or empty) if the value is null (or empty), else the left part (if the split char isn't found, the original string is returned, trimmed if trimOuter is true)</returns>
         /*
         public static String SplitFirst(this String value, Char split, out String right, bool trimOuter, bool trimInner = true)
         {
@@ -1758,7 +1827,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The value to split into two parts</param>
         /// <param name="split">The character to split</param>
-        /// <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned), semantically the same as value.Split(split)[0]</returns>
+        /// <returns>null (or empty) if the value is null (or empty), else the left part (if the split char isn't found, the original string is returned), semantically the same as value.Split(split)[0]</returns>
         public static String SplitFirst(this String value, Char split)
         {
             if (String.IsNullOrEmpty(value))
@@ -1778,8 +1847,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The value to split into two parts</param>
         /// <param name="split">The character to split</param>
-        /// <param name="right">The right part, null if the split char isn't found</param>
-        /// <returns>null if the value is null, else the left part (if the split char isn't found, the original string is returned)</returns>
+        /// <param name="right">The right part, null if the split char isn't found (or the value is null or empty)</param>
+        /// <returns>null (or empty) if the value is null (or empty), else the left part (if the split char isn't found, the original string is returned)</returns>
         public static String SplitFirst(this String value, Char split, out String right)
         {
             if (String.IsNullOrEmpty(value))
@@ -1807,8 +1876,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The value to split into two parts</param>
         /// <param name="split">The character to split</param>
-        /// <param name="left">The left part, null if the split char isn't found</param>
-        /// <returns>null if the value is null, else the right part (if the split char isn't found, the original string is returned)</returns>
+        /// <param name="left">The left part, null if the split char isn't found (or the value is null or empty)</param>
+        /// <returns>null (or empty) if the value is null (or empty), else the right part (if the split char isn't found, the original string is returned)</returns>
         public static String SplitLast(this String value, Char split, out String left)
         {
             if (String.IsNullOrEmpty(value))
@@ -1835,7 +1904,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The value to split into two parts</param>
         /// <param name="split">The character to split</param>
-        /// <returns>null if the value is null, else the right part (if the split char isn't found, the original string is returned)</returns>
+        /// <returns>null (or empty) if the value is null (or empty), else the right part (if the split char isn't found, the original string is returned)</returns>
         public static String SplitLast(this String value, Char split)
         {
             if (String.IsNullOrEmpty(value))
@@ -1866,12 +1935,18 @@ namespace SysWeaver
             return value.Substring(0, p);
         }
 
+        /// <summary>
+        /// The state of the secure methods that fills with '*'
+        /// </summary>
         struct SecureCount
         {
             public String Str;
             public int Keep;
         }
 
+        /// <summary>
+        /// The state of the secure methods that uses a prefix or suffix
+        /// </summary>
         struct SecureStr
         {
             public String Str;
@@ -1922,9 +1997,9 @@ namespace SysWeaver
         /// "1234abcd5678".SecureEnd(4, "..") => "1234..";
         /// </summary>
         /// <param name="value">The value to "secure"</param>
-        /// <param name="keep">The number of chars to keep, this is capped to at most half the number of chars in the input</param>
-        /// <param name="suffix">An optional suffix to use instead of filling with *'s</param>
-        /// <returns>The "secure" string</returns>
+        /// <param name="keep">The number of chars to keep (from the start), this is capped to at most half the number of chars in the input (rounded down), must not be negative</param>
+        /// <param name="suffix">An optional suffix to use instead of filling with *'s (the length of the result is then keep + the suffix length)</param>
+        /// <returns>The "secure" string, null if the value is null or empty</returns>
         public static String SecureEnd(this String value, int keep = 4, String suffix = null)
         {
             if (String.IsNullOrEmpty(value))
@@ -1961,9 +2036,9 @@ namespace SysWeaver
         /// "1234abcd5678".SecureStart(4, "..") => "..5678";
         /// </summary>
         /// <param name="value">The value to "secure"</param>
-        /// <param name="keep">The number of chars to keep, this is capped to at most half the number of chars in the input</param>
-        /// <param name="prefix">An optional prefix to use instead of filling with *'s</param>
-        /// <returns>The "secure" string</returns>
+        /// <param name="keep">The number of chars to keep (from the end), this is capped to at most half the number of chars in the input (rounded down), must not be negative</param>
+        /// <param name="prefix">An optional prefix to use instead of filling with *'s (the length of the result is then keep + the prefix length)</param>
+        /// <returns>The "secure" string, null if the value is null or empty</returns>
         public static String SecureStart(this String value, int keep = 4, String prefix = null)
         {
             if (String.IsNullOrEmpty(value))
@@ -1990,13 +2065,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Split a string into lines
+        /// Decode text data and split it into lines (separated by '\n', any '\r' at the start or end of a line is removed)
         /// </summary>
-        /// <param name="data"></param>
+        /// <param name="data">The encoded text, a byte order mark (of the encoding) is skipped</param>
         /// <param name="trim">True to trim whitespaces from every line</param>
-        /// <param name="removeEmpty">True to remove empty lines</param>
-        /// <param name="encoding">optional string encoding to use</param>
-        /// <returns></returns>
+        /// <param name="removeEmpty">True to remove empty lines. Note: unless trim is true, empty lines are removed BEFORE the '\r' is removed (so a "\r\n" line is kept as an empty line)</param>
+        /// <param name="encoding">optional string encoding to use, default is UTF-8</param>
+        /// <returns>The lines</returns>
         public static String[] GetLines(ReadOnlySpan<Byte> data, bool trim = false, bool removeEmpty = false, Encoding encoding = null)
         {
             if (data.Length <= 0)
@@ -2019,10 +2094,10 @@ namespace SysWeaver
         /// <summary>
         /// Split a string into lines (separated by '\n', any '\r' at the start or end of a line is removed)
         /// </summary>
-        /// <param name="s"></param>
+        /// <param name="s">The text, may be null</param>
         /// <param name="trim">True to trim whitespaces from every line</param>
         /// <param name="removeEmpty">True to remove empty lines (after removing '\r' and trimming)</param>
-        /// <returns></returns>
+        /// <returns>The lines, an empty array if the text is null or empty</returns>
         public static String[] GetLines(this String s, bool trim = false, bool removeEmpty = false)
         {
             if (String.IsNullOrEmpty(s))
@@ -2153,6 +2228,9 @@ namespace SysWeaver
         /// </summary>
         const int MaxStackLineEnds = 256;
 
+        /// <summary>
+        /// Double the capacity of the line end buffer (rented from the shared pool, the previously rented buffer is returned)
+        /// </summary>
         static Span<int> GrowLineEnds(ref int[] rented, Span<int> ends, int count)
         {
             var n = ArrayPool<int>.Shared.Rent(count * 2);
@@ -2167,7 +2245,7 @@ namespace SysWeaver
         /// Create a new string with a repeated string
         /// </summary>
         /// <param name="part">The string to repeat, ex: "Hello"</param>
-        /// <param name="count">The number of times to repeat the string, ex: 3</param>
+        /// <param name="count">The number of times to repeat the string, ex: 3 (must not be negative)</param>
         /// <returns>A repeated string, ex: "HelloHelloHello"</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String Create(String part, int count)
@@ -2192,6 +2270,9 @@ namespace SysWeaver
 
 
 
+        /// <summary>
+        /// The chars that are escaped (with a '\') by <see cref="EscapeMD(string, bool)"/>
+        /// </summary>
         static readonly SearchValues<Char> EscapeChars = SearchValues.Create(
             [
                 '\\',
@@ -2217,12 +2298,13 @@ namespace SysWeaver
             ]);
 
         /// <summary>
-        /// Escape some text to work inside mark down.
+        /// Escape some text to work inside mark down, by prefixing \ ` * _ &amp; { } [ ] &lt; &gt; ( ) # $ ! | with a '\'.
         /// Doesn't escape +, - and .
+        /// A text that starts with the char 1 is considered to be markdown already, it's returned as is (without the first char).
         /// </summary>
         /// <param name="text">The text to escape</param>
-        /// <param name="nbsp">If true, any spaces are converted to non breaking spaces to prevent word wrapping</param>
-        /// <returns>Escaped text</returns>
+        /// <param name="nbsp">If true, any spaces are converted to non breaking spaces to prevent word wrapping, if false any non breaking spaces are converted to spaces</param>
+        /// <returns>Escaped text, an empty string if the text is null or empty, the input instance if nothing changed</returns>
         public static String EscapeMD(String text, bool nbsp = false)
         {
             if (String.IsNullOrEmpty(text))

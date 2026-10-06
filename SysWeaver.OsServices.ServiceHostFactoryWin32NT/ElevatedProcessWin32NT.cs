@@ -6,11 +6,14 @@ using System.Security.Principal;
 
 namespace SysWeaver.OsServices
 {
+    /// <summary>
+    /// Windows helpers for checking and requesting elevation (administrator rights).
+    /// </summary>
     public static class ElevatedProcessWin32NT
     {
 
         /// <summary>
-        /// True if the process is running elevated
+        /// True if the process is running elevated (the current identity is in the built-in Administrators role)
         /// </summary>
         public static bool IsElevated
         {
@@ -22,12 +25,13 @@ namespace SysWeaver.OsServices
         }
 
         /// <summary>
-        /// Ensure that the process runs elevated (a new process that is elevated will be spawned if required)
+        /// Start a command line elevated using the shell "runas" verb (shows a UAC prompt), optionally waiting for it to exit.
         /// </summary>
         /// <param name="commandLine">The command line to execute</param>
-        /// <param name="terminal">If true a new console windows is shown</param>
+        /// <param name="terminal">If true a new console window is shown, else the window is hidden</param>
         /// <param name="noWait">If true, this method doesn't wait for a result of the started process, it just returns 0</param>
         /// <returns>The exit code of the command or 0 if noWait is true</returns>
+        /// <exception cref="System.ComponentModel.Win32Exception">The process couldn't be started, ex: the user declined the UAC prompt.</exception>
         public static int RunElevated(String commandLine, bool terminal, bool noWait)
         {
             var cmd = SystemHelper.GetCommandAndArgs(out var args, commandLine);

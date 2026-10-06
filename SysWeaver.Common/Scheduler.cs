@@ -14,6 +14,11 @@ namespace SysWeaver
     /// Use this for low frequency tasks that should run on a schedule, once a day, once per hour and so on.
     /// For high frequency tasks use the PeriodicTask instead.
     /// </summary>
+    /// <remarks>
+    /// A single process wide <see cref="PeriodicTask"/> checks the schedule every <see cref="CheckFrequencyMs"/> ms while there are scheduled entries (it's stopped when the schedule is empty).
+    /// An entry never runs concurrently with itself. Exceptions thrown by tasks are recorded on the entry and in <see cref="TaskExceptions"/>.
+    /// Disposing an entry from within its own task will dead lock (dispose waits for the running task to complete).
+    /// </remarks>
     public static class Scheduler
     {
 
@@ -27,13 +32,15 @@ namespace SysWeaver
         /// Use this for low frequency tasks that should run on a schedule, once a day, once per hour and so on.
         /// For high frequency tasks use the PeriodicTask instead.
         /// </summary>
-        /// <param name="when">The UTC time to execute the task at, precision is fairly low so the task can be executed a few seconds later than scheduled.
+        /// <param name="when">The time to execute the task at (a non UTC time, including <see cref="DateTimeKind.Unspecified"/>, is treated as local time and converted to UTC), precision is fairly low so the task can be executed a few seconds later than scheduled.
+        /// A time in the past executes the task at the next check.
         /// </param>
-        /// <param name="task">The task to execute</param>
+        /// <param name="task">The task to execute (on the thread pool)</param>
         /// <param name="name">An optional name (for debugging)</param>
-        /// <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous execution time, returns a new execution time.</param>
-        /// <param name="runAsync">Run this task independent on other tasks</param>
-        /// <returns>An object that can be disposed to prevent execution of the task in the future</returns>
+        /// <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous scheduled execution time (UTC), returns the next execution time (that must be later).
+        /// It's called repeatedly until a time in the future is returned (so missed executions are skipped). If it returns a time that isn't later than it's input, the entry is not re-scheduled and the error is recorded in <see cref="TaskExceptions"/>.</param>
+        /// <param name="runAsync">If true the task runs in it's own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
+        /// <returns>The scheduled <see cref="Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed)</returns>
         public static IDisposable Add(DateTime when, Action task, String name = null, Func<DateTime, DateTime> repeatFn = null, bool runAsync = true)
         {
             if (when.Kind != DateTimeKind.Utc)
@@ -52,13 +59,15 @@ namespace SysWeaver
         /// Use this for low frequency tasks that should run on a schedule, once a day, once per hour and so on.
         /// For high frequency tasks use the PeriodicTask instead.
         /// </summary>
-        /// <param name="when">The UTC time to execute the task at, precision is fairly low so the task can be executed a few seconds later than scheduled.
+        /// <param name="when">The time to execute the task at (a non UTC time, including <see cref="DateTimeKind.Unspecified"/>, is treated as local time and converted to UTC), precision is fairly low so the task can be executed a few seconds later than scheduled.
+        /// A time in the past executes the task at the next check.
         /// </param>
-        /// <param name="task">The task to execute</param>
+        /// <param name="task">The task to execute (on the thread pool)</param>
         /// <param name="name">An optional name (for debugging)</param>
-        /// <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous execution time, returns a new execution time.</param>
-        /// <param name="runAsync">Run this task independent on other tasks</param>
-        /// <returns>An object that can be disposed to prevent execution of the task in the future</returns>
+        /// <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous scheduled execution time (UTC), returns the next execution time (that must be later).
+        /// It's called repeatedly until a time in the future is returned (so missed executions are skipped). If it returns a time that isn't later than it's input, the entry is not re-scheduled and the error is recorded in <see cref="TaskExceptions"/>.</param>
+        /// <param name="runAsync">If true the task runs in it's own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
+        /// <returns>The scheduled <see cref="Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed)</returns>
         public static IDisposable AddTask(DateTime when, Func<Task> task, String name = null, Func<DateTime, DateTime> repeatFn = null, bool runAsync = true)
         {
             if (when.Kind != DateTimeKind.Utc)
@@ -77,13 +86,15 @@ namespace SysWeaver
         /// Use this for low frequency tasks that should run on a schedule, once a day, once per hour and so on.
         /// For high frequency tasks use the PeriodicTask instead.
         /// </summary>
-        /// <param name="when">The UTC time to execute the task at, precision is fairly low so the task can be executed a few seconds later than scheduled.
+        /// <param name="when">The time to execute the task at (a non UTC time, including <see cref="DateTimeKind.Unspecified"/>, is treated as local time and converted to UTC), precision is fairly low so the task can be executed a few seconds later than scheduled.
+        /// A time in the past executes the task at the next check.
         /// </param>
-        /// <param name="task">The task to execute</param>
+        /// <param name="task">The task to execute (on the thread pool)</param>
         /// <param name="name">An optional name (for debugging)</param>
-        /// <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous execution time, returns a new execution time.</param>
-        /// <param name="runAsync">Run this task independent on other tasks</param>
-        /// <returns>An object that can be disposed to prevent execution of the task in the future</returns>
+        /// <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous scheduled execution time (UTC), returns the next execution time (that must be later).
+        /// It's called repeatedly until a time in the future is returned (so missed executions are skipped). If it returns a time that isn't later than it's input, the entry is not re-scheduled and the error is recorded in <see cref="TaskExceptions"/>.</param>
+        /// <param name="runAsync">If true the task runs in it's own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
+        /// <returns>The scheduled <see cref="Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed)</returns>
         public static IDisposable AddValueTask(DateTime when, Func<ValueTask> task, String name = null, Func<DateTime, DateTime> repeatFn = null, bool runAsync = true)
         {
             if (when.Kind != DateTimeKind.Utc)
@@ -101,12 +112,12 @@ namespace SysWeaver
         static readonly SortedDictionary<Entry, int> Entries = new SortedDictionary<Entry, int>();
 
         /// <summary>
-        /// Exception information
+        /// Tracks exceptions thrown by scheduled tasks and by failed re-scheduling (process wide)
         /// </summary>
         public static readonly ExceptionTracker TaskExceptions = new();
-        
+
         /// <summary>
-        /// Scheduled entries
+        /// A snapshot of all scheduled entries (including entries that are currently executing), ordered by execution time
         /// </summary>
         public static List<Entry> AllScheduled
         {
@@ -118,6 +129,9 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// The kind of function that a scheduled <see cref="Entry"/> executes
+        /// </summary>
         public enum TaskTypes
         {
             /// <summary>
@@ -136,22 +150,40 @@ namespace SysWeaver
 
 
 
+        /// <summary>
+        /// A scheduled task, returned by the Add methods of <see cref="Scheduler"/>.
+        /// Exposes execution statistics (suitable for display in a table), dispose it to remove the task from the schedule.
+        /// </summary>
+        /// <remarks>
+        /// Entries are ordered by execution time and then by id, equality and hash code are based on the unique id only.
+        /// </remarks>
         [TableDataPrimaryKey(nameof(TaskId), nameof(Name))]
         public sealed class Entry : IDisposable, IComparable<Entry>, IEquatable<Entry>
         {
 #if DEBUG
+            /// <summary>
+            /// Returns the type, id, name, schedule time and the call stack where the entry was scheduled from
+            /// </summary>
+            /// <returns>A description of the entry</returns>
             public override string ToString()
                 => Name == null ? String.Concat(Type, " #", TaskId, " @ ", Scheduled, ": ", Scheduler) : String.Concat(Type, " #", TaskId, ' ', Name, " @ ", Scheduled, ": ", Scheduler);
 #else//DEBUG
-            public override string ToString() 
+            /// <summary>
+            /// Returns the type, id and name of the entry
+            /// </summary>
+            /// <returns>A description of the entry</returns>
+            public override string ToString()
                 => Name == null ? String.Concat(Type, " #", TaskId) : String.Concat(Type, " #", TaskId, ' ', Name);
 #endif//DEBUG
 
 
+            /// <summary>
+            /// True if the task runs in it's own async chain, false if it's executed (one after another) together with other non async tasks that are due at the same time
+            /// </summary>
             public bool RunAsync { get; init; }
 
             /// <summary>
-            /// When the task will be executed
+            /// When the task will be executed next (UTC), for a task that is currently executing it's the time it was scheduled at
             /// </summary>
             public DateTime RunAt => new DateTime(Time, DateTimeKind.Utc);
 
@@ -161,24 +193,25 @@ namespace SysWeaver
             public long TaskId => Id;
 
             /// <summary>
-            /// Optional name
+            /// Optional name (for debugging / display)
             /// </summary>
             public String Name { get; init; }
 
 
             /// <summary>
-            /// The type of task to perform
+            /// The kind of function this entry executes
             /// </summary>
             public TaskTypes Type { get; init; }
 
             /// <summary>
-            /// True if the function should be repeated
+            /// True if the task is re-scheduled after each execution (a repeat function was supplied)
             /// </summary>
             public bool Repeat => RepeatFn != null;
 
             /// <summary>
             /// The repeat interval, zero if not repeating
             /// </summary>
+            /// <remarks>Computed by calling the repeat function with <see cref="RunAt"/>, so it's only accurate for fixed intervals</remarks>
             public TimeSpan RepeatFrequency
             {
                 get
@@ -193,17 +226,17 @@ namespace SysWeaver
 
 
             /// <summary>
-            /// Number of times the task have completed (exception or not)
+            /// Number of times the task have completed (successfully or with an exception)
             /// </summary>
             public long Count => Interlocked.Read(ref InternalCount);
 
             /// <summary>
-            /// True if the task is currently running
+            /// True if the task is currently running (or have been picked for execution and is about to run)
             /// </summary>
             public bool IsRunning => Interlocked.Read(ref Guard) != 0;
 
             /// <summary>
-            /// The time when the task was last started
+            /// The time when the task was last started (UTC, it's updated when the execution completes), <see cref="DateTime.MinValue"/> if it never completed
             /// </summary>
             public DateTime LastStart
             {
@@ -217,7 +250,7 @@ namespace SysWeaver
             }
 
             /// <summary>
-            /// The time when the task was last started
+            /// The time when the task was last completed (UTC), <see cref="DateTime.MinValue"/> if it never completed
             /// </summary>
             public DateTime LastEnd
             {
@@ -256,7 +289,7 @@ namespace SysWeaver
 
 
             /// <summary>
-            /// The time of the last failure
+            /// The time of the last failure (UTC), <see cref="DateTime.MinValue"/> if it never failed
             /// </summary>
             public DateTime LastException
             {
@@ -271,7 +304,7 @@ namespace SysWeaver
 
 
             /// <summary>
-            /// The last exception text
+            /// The last exception text (the result of ToString on the exception), null if it never failed
             /// </summary>
             [TableDataText(60)]
             public String LastExceptionEx { get; internal set; }
@@ -283,7 +316,7 @@ namespace SysWeaver
             #region Create
 
             /// <summary>
-            /// When this task was scheduled
+            /// When this task was created (UTC)
             /// </summary>
             public DateTime Scheduled { get; init; }
 
@@ -291,7 +324,7 @@ namespace SysWeaver
 #if DEBUG
 
             /// <summary>
-            /// Call stack to where this task was scheduled fromn
+            /// Call stack to where this task was scheduled from (only available in debug builds)
             /// </summary>
             [TableDataText(60)]
             public String Scheduler { get; init; }
@@ -303,6 +336,11 @@ namespace SysWeaver
 
 
 
+            /// <summary>
+            /// Compare by execution time and then by id
+            /// </summary>
+            /// <param name="other">The entry to compare with (must not be null)</param>
+            /// <returns>A negative value if this entry should execute before <paramref name="other"/>, zero if it's the same entry, else a positive value</returns>
             public int CompareTo(Entry other)
             {
                 var i = Time.CompareTo(other.Time);
@@ -311,8 +349,18 @@ namespace SysWeaver
                 return Id.CompareTo(other.Id);
             }
 
+            /// <summary>
+            /// Check if this is the same entry (same unique id)
+            /// </summary>
+            /// <param name="other">The entry to compare with (must not be null)</param>
+            /// <returns>True if the ids are equal</returns>
             public bool Equals(Entry other) => Id == other.Id;
 
+            /// <summary>
+            /// Check if an object is the same entry (same unique id)
+            /// </summary>
+            /// <param name="obj">The object to compare with</param>
+            /// <returns>True if the object is an entry with the same id</returns>
             public override bool Equals(object obj)
             {
                 var o = obj as Entry;
@@ -321,8 +369,17 @@ namespace SysWeaver
                 return Id == o.Id;
             }
 
+            /// <summary>
+            /// Hash code based on the unique id
+            /// </summary>
+            /// <returns>The hash code</returns>
             public override int GetHashCode() => (int)Id;
 
+            /// <summary>
+            /// Remove the task from the schedule, if it's currently executing this blocks (sleeping) until the execution has completed.
+            /// Calling it more than once does nothing.
+            /// </summary>
+            /// <remarks>Never call this from within the task itself, that will block forever. An execution that was already queued (but not started) will still run.</remarks>
             public void Dispose() => DoRemove(this);
 
 

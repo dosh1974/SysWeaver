@@ -6,13 +6,16 @@ using System.Reflection;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Extension methods for <see cref="Assembly"/>, results are cached per assembly (for the life time of the process).
+    /// </summary>
     public static class AssemblyExt
     {
         /// <summary>
-        /// Get all embedded resourves in the assembly (this cached)
+        /// Get the names of all embedded resources in the assembly (the result is cached)
         /// </summary>
-        /// <param name="assembly"></param>
-        /// <returns></returns>
+        /// <param name="assembly">The assembly of interest</param>
+        /// <returns>A frozen set of manifest resource names (case sensitive)</returns>
         public static IReadOnlySet<String> GetEmbeddedResource(this Assembly assembly)
         {
             var c = EmbeddedResources;
@@ -28,9 +31,11 @@ namespace SysWeaver
         /// <summary>
         /// Get the last write time of the assembly, if it fails it will return the application start time (EnvInfo.AppStart).
         /// It's safer to assume that the assembly was created at start.
+        /// The result is cached, so changes to the file after the first call are not detected.
+        /// Typically used for HTTP "Last-Modified" / ETag values of embedded resources.
         /// </summary>
-        /// <param name="assembly"></param>
-        /// <returns></returns>
+        /// <param name="assembly">The assembly of interest</param>
+        /// <returns>The last write time (UTC) of the assembly file, or <see cref="EnvInfo.AppStart"/> for assemblies without a file location (ex: single file or dynamic assemblies)</returns>
         public static DateTime GetLastWriteTimerUtc(this Assembly assembly)
         {
             var c = TimeCache;

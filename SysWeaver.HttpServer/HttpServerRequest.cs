@@ -17,18 +17,43 @@ using SysWeaver.Translation;
 namespace SysWeaver.Net
 {
 
+    /// <summary>
+    /// The http methods that the server distinguishes.
+    /// </summary>
     public enum HttpServerMethods
     {
+        /// <summary>
+        /// A GET request.
+        /// </summary>
         GET,
+        /// <summary>
+        /// A POST request.
+        /// </summary>
         POST,
+        /// <summary>
+        /// A HEAD request (no response body is sent).
+        /// </summary>
         HEAD,
+        /// <summary>
+        /// Any other method (see <see cref="HttpServerRequest.Method"/> for the actual method).
+        /// </summary>
         Other,
     }
 
 
+    /// <summary>
+    /// A request being handled by an <see cref="HttpServerBase"/>, an abstraction over the listener's request and response (HttpListener, Kestrel or in-memory).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Url"/> and <see cref="LocalUrl"/> are url decoded (path and query), <see cref="RawUrl"/> is the url as received from the listener.
+    /// Not thread safe unless stated, a request is normally handled by a single logical flow.
+    /// </remarks>
     public abstract class HttpServerRequest : ITranslationContext, IDisposable
     {
 
+        /// <summary>
+        /// Dispose <see cref="Custom"/> if it's disposable.
+        /// </summary>
         public virtual void Dispose()
         {
             var c = Custom as IDisposable;
@@ -36,10 +61,11 @@ namespace SysWeaver.Net
                 c.Dispose();
         }
 
+        /// <inheritdoc/>
         public override string ToString() => Url;
 
         /// <summary>
-        /// The http method used
+        /// The http method used, ex: "GET".
         /// </summary>
         public readonly String Method;
 
@@ -54,15 +80,16 @@ namespace SysWeaver.Net
         public readonly bool IsHead;
 
         /// <summary>
-        /// The absoulte url, prefer this over Uri.AbsolutePath since it has some overhead
+        /// The absolute url (url decoded, with "index.html" inserted for directory requests), ex: "https://host/folder/index.html?x=1".
         /// </summary>
         public readonly String Url;
         /// <summary>
-        /// The prefix used (one of the listening prefixes), can be used for different behaviours
+        /// The prefix used (one of the listening prefixes with any wildcard replaced by the requested host name), ex: "https://host/".
+        /// For wildcard prefixes the host part comes from the client (the Host header), so don't trust it for building links outside of the request.
         /// </summary>
         public readonly String Prefix;
         /// <summary>
-        /// The local url after stripping the prefix and query paramaters.
+        /// The local url after stripping the prefix and query parameters (url decoded), ex: "folder/index.html".
         /// </summary>
         public readonly String LocalUrl;
         /// <summary>
@@ -83,7 +110,7 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// The accepted encoders
+        /// The accepted encoders (lower cased encoding names from the Accept-Encoding header, computed on first use).
         /// </summary>
         public IReadOnlySet<String> AcceptedEncoders
         {
@@ -103,15 +130,16 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// The index in to the url string where the first query value is located, or 0 if there are no query parameters
+        /// The index in to the <see cref="Url"/> string where the first query char is located (after the '?'), or 0 if there are no query parameters.
         /// </summary>
         public readonly int QueryStringStart;
 
 
         /// <summary>
-        /// Get the query string (everything after ?) or the supplied default if no no query is present.
+        /// Get the query string (everything after '?', url decoded) or the supplied default if no query is present.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="def">The value to return if there is no query string</param>
+        /// <returns>The query string</returns>
         public virtual String GetQuery(String def = "")
         {
             var i = QueryStringStart;
@@ -121,23 +149,25 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Get the raw query string (everything after ?) or the supplied default if no no query is present.
+        /// Get the raw query string (everything after '?') or the supplied default if no query is present.
+        /// The default implementation returns the decoded query (same as <see cref="GetQuery"/>).
         /// </summary>
-        /// <returns></returns>
+        /// <param name="def">The value to return if there is no query string</param>
+        /// <returns>The query string</returns>
         public virtual String GetRawQuery(String def = "") => GetQuery(def);
 
         /// <summary>
-        /// The compression encoder and level to use, set before calling WriteStream or GetData
+        /// The compression encoder and level selected for the response (set by the server before the handler data is read), null if not compressed.
         /// </summary>
         public Tuple<ICompEncoder, CompEncoderLevels> CompEncoder;
 
         /// <summary>
-        /// Session, may be null
+        /// The session, set by the server (see <see cref="Init"/>) before any module handler is called. May be null for raw modules and manually created requests.
         /// </summary>
         public HttpSession Session { get; private set; }
 
         /// <summary>
-        /// Host information
+        /// Host information, may be null for manually created requests.
         /// </summary>
         public readonly HttpServerHostInfo Host;
 
@@ -210,10 +240,21 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// The raw url, uri encoded, zero processing from input.
+        /// The url as received from the listener (not url decoded by the server), used for parsing <see cref="QueryParameters"/>.
         /// </summary>
         public readonly String RawUrl;
 
+        /// <summary>
+        /// Create a request.
+        /// </summary>
+        /// <param name="httpMethod">The http method, ex: "GET"</param>
+        /// <param name="rawUrl">The url as received from the listener</param>
+        /// <param name="url">The decoded url (see <see cref="HttpServerBase.GetHost"/>)</param>
+        /// <param name="prefix">The prefix of the url, must not be longer than the url (path part)</param>
+        /// <param name="server">The server</param>
+        /// <param name="host">The host</param>
+        /// <param name="queryStart">The index of the '?' in the url, -1 if there is no query string</param>
+        /// <param name="didIndex">True if "index.html" was added to the url</param>
         protected HttpServerRequest(String httpMethod, String rawUrl, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart, bool didIndex)
         {
             RawUrl = rawUrl;
@@ -246,13 +287,17 @@ namespace SysWeaver.Net
         public abstract IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> AllResHeaders { get; }
 
 
+        /// <summary>
+        /// Set the session of the request (used by the server).
+        /// </summary>
+        /// <param name="session">The session</param>
         public void Init(HttpSession session)
         {
             Session = session;
         }
 
         /// <summary>
-        /// Custom data
+        /// Custom data, disposed (if disposable) when the request is disposed.
         /// </summary>
         public Object Custom;
 
@@ -261,8 +306,8 @@ namespace SysWeaver.Net
         IReadOnlyDictionary<String, String> IqpL;
 
         /// <summary>
-        /// Parse and return query paramaters.
-        /// URL encoded characters in the values are decoded.
+        /// Parse (on first use) and return the query parameters (from <see cref="RawUrl"/>).
+        /// URL encoded characters in the names and values are decoded.
         /// </summary>
         public NameValueCollection QueryParameters => IQP ?? (IQP = GetQueryParameters());
 
@@ -276,7 +321,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Parse and return query parameter dictionary (keys are all lowercase), only the last value is set if multiple keys are found.
+        /// Parse and return a query parameter dictionary (keys are all lowercase), if a key occurs multiple times the values are comma separated, if keys only differ in case the last one is used.
         /// URL encoded characters in the values are decoded.
         /// </summary>
         public IReadOnlyDictionary<String, String> QueryParamsLowercase => IqpL ?? (IqpL = HttpServerTools.GetQueryParamsLowerKey(QueryParameters));
@@ -284,9 +329,9 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Throw an exception if the client have been lost
+        /// Throw an exception if the client connection has been lost.
         /// </summary>
-        /// <exception cref="HttpListenerException"></exception>
+        /// <exception cref="HttpListenerException">Thrown if <see cref="IsDead"/> returns true</exception>
         public void ThrowIfDead()
         {
             if (IsDead())
@@ -294,61 +339,139 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// The request body.
+        /// </summary>
         public abstract Stream InputStream { get; }
+        /// <summary>
+        /// The response body stream (write after the status code and headers have been set).
+        /// </summary>
         public abstract Stream OutputStream { get; }
 
+        /// <summary>
+        /// The Content-Length of the request (implementation specific value if unknown).
+        /// </summary>
         public abstract long ReqContentLength { get; }
+        /// <summary>
+        /// Get a request header.
+        /// </summary>
+        /// <param name="name">The header name (case insensitive)</param>
+        /// <returns>The value, null if not present</returns>
         public abstract String GetReqHeader(String name);
+        /// <summary>
+        /// Get a response header that has been set.
+        /// </summary>
+        /// <param name="name">The header name (case insensitive)</param>
+        /// <returns>The value, null if not set</returns>
         public abstract String GetResHeader(String name);
 
+        /// <summary>
+        /// The http protocol version of the request, ex: "1.1".
+        /// </summary>
         public abstract String ProtocolVersion { get; } 
 
+        /// <summary>
+        /// Set the Content-Type of the response.
+        /// </summary>
+        /// <param name="mime">The mime type</param>
         public abstract void SetResMime(String mime);
 
+        /// <summary>
+        /// Get the Content-Type of the response.
+        /// </summary>
+        /// <returns>The mime type, null if not set</returns>
         public abstract String GetResMime();
 
+        /// <summary>
+        /// Set the Content-Length of the response.
+        /// </summary>
+        /// <param name="length">The length in bytes</param>
         public abstract void SetResContentLength(long length);
+        /// <summary>
+        /// Set the status code of the response.
+        /// </summary>
+        /// <param name="statusCode">The http status code</param>
         public abstract void SetResStatusCode(int statusCode);
 
+        /// <summary>
+        /// Get the status code of the response.
+        /// </summary>
+        /// <returns>The http status code</returns>
         public abstract int GetResStatusCode();
 
+        /// <summary>
+        /// Set (replace) a response header.
+        /// </summary>
+        /// <param name="header">The header name</param>
+        /// <param name="value">The value (implementations may remove the header for null or empty values)</param>
         public abstract void SetResHeader(String header, String value);
         
         /// <summary>
-        /// Prefer the Byte[] overload if possible, ASP net stream DO not implement the Span and Memory version as of now!
+        /// Write data to the response body.
+        /// Prefer the Byte[] overload if possible, ASP.NET streams do NOT implement the Span and Memory versions efficiently as of now!
         /// TODO: Check if .NET11 fixes this! If so revert code that uses workarounds!
         /// </summary>
-        /// <param name="data"></param>
+        /// <param name="data">The data to write</param>
         public abstract void SetResBody(ReadOnlySpan<Byte> data);
 
         /// <summary>
-        /// Prefer the Byte[] overload if possible, ASP net stream DO not implement the Span and Memory version as of now!
+        /// Write data to the response body.
+        /// Prefer the Byte[] overload if possible, ASP.NET streams do NOT implement the Span and Memory versions efficiently as of now!
         /// TODO: Check if .NET11 fixes this! If so revert code that uses workarounds!
         /// </summary>
-        /// <param name="data"></param>
-        /// <returns></returns>
+        /// <param name="data">The data to write</param>
+        /// <returns>A task that completes when the data has been written</returns>
         public abstract Task SetResBodyAsync(ReadOnlyMemory<Byte> data);
 
+        /// <summary>
+        /// Write data to the response body.
+        /// </summary>
+        /// <param name="data">The buffer</param>
+        /// <param name="offset">The offset of the first byte to write</param>
+        /// <param name="length">The number of bytes to write</param>
         public abstract void SetResBody(Byte[] data, int offset, int length);
+        /// <summary>
+        /// Write data to the response body.
+        /// </summary>
+        /// <param name="data">The buffer</param>
+        /// <param name="offset">The offset of the first byte to write</param>
+        /// <param name="length">The number of bytes to write</param>
+        /// <returns>A task that completes when the data has been written</returns>
         public abstract Task SetResBodyAsync(Byte[] data, int offset, int length);
 
 
+        /// <summary>
+        /// Check if the client connection has been lost.
+        /// </summary>
+        /// <returns>True if the client is gone</returns>
         public abstract bool IsDead();
 
+        /// <summary>
+        /// Get a request cookie.
+        /// </summary>
+        /// <param name="name">The cookie name</param>
+        /// <param name="cookieString">The Cookie header, if already read (avoids reading it again), else null</param>
+        /// <returns>The value, null if not present</returns>
         public abstract String GetReqCookie(String name, String cookieString = null);
 
+        /// <summary>
+        /// Add a Set-Cookie header to the response.
+        /// </summary>
+        /// <param name="str">The Set-Cookie value (see <see cref="HttpServerTools.MakeCookie(String, String, DateTime, String)"/>)</param>
         public abstract void UpdateCookie(String str);
 
         /// <summary>
-        ///  Get the IP of the current client connection (closest to the server)
+        /// Get the IP of the current client connection (closest to the server, proxies are not resolved).
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The address</returns>
         public abstract IPAddress GetIP();
 
         /// <summary>
-        /// Get the resolved client IP address (before any proxies)
+        /// Get the client IP address as text, "?" if unknown.
+        /// Forwarded / X-Forwarded-For headers are not used (yet), so this is the address of the closest peer.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The address as text</returns>
+        /// <remarks>An attempt is made to strip a port suffix, which also truncates IPv6 addresses whose last group isn't preceded by "::" (ex: "2001:db8::1:2" becomes "2001:db8::1").</remarks>
         public String GetIpAddress()
         {
             // TODO: Use "Forwarded" (https://datatracker.ietf.org/doc/html/rfc7239) and "X-Forwarded-For" (https://en.wikipedia.org/wiki/X-Forwarded-For) from trusted proxies.
@@ -376,6 +499,11 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// Set the response mime type and write a text as UTF-8 to the response body.
+        /// </summary>
+        /// <param name="text">The text, must not be null</param>
+        /// <param name="mime">The mime type</param>
         public void SetResText(String text, String mime = "text/plain; charset=UTF-8")
         {
             var tl = text.Length;
@@ -409,15 +537,32 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <summary>
+        /// Headers that <see cref="SetResHeaders"/> ignores by default (Set-Cookie, so that cached responses never replay cookies).
+        /// </summary>
         protected static readonly IReadOnlySet<String> DefaultIgnoreHeaders = ReadOnlyData.Set("Set-Cookie");
 
+        /// <summary>
+        /// Set the status code and headers of the response (used when sending cached responses).
+        /// </summary>
+        /// <param name="status">The http status code</param>
+        /// <param name="headers">The headers to set</param>
+        /// <param name="ignore">Headers to skip, null for <see cref="DefaultIgnoreHeaders"/></param>
         public abstract void SetResHeaders(int status, IEnumerable<KeyValuePair<String, IReadOnlyList<String>>> headers, IReadOnlySet<String> ignore = null);
 
+        /// <summary>
+        /// Dispose the cancellation token source (if created), implementations should call this when the request is disposed.
+        /// </summary>
         protected void OnDispose()
         {
             Interlocked.Exchange(ref Ts, null)?.Dispose();
         }
 
+        /// <summary>
+        /// Get a cancellation token that is cancelled when the client connection is lost (polled every 250 ms using <see cref="IsDead"/>).
+        /// Thread safe, created on first use.
+        /// </summary>
+        /// <returns>The cancellation token</returns>
         public CancellationToken GetRequestCancellationToken()
         {
             var ts = Ts;
@@ -441,7 +586,7 @@ namespace SysWeaver.Net
         volatile ConcurrentDictionary<String, Object> InternalCustomData;
 
         /// <summary>
-        /// A dictionary that can be used for storing request data (to pass between functions etc)
+        /// A dictionary that can be used for storing request data (to pass between functions etc), thread safe, created on first use.
         /// </summary>
         public ConcurrentDictionary<String, Object> Properties
         {
@@ -463,6 +608,10 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// Get the folder part of the local url (without the trailing '/'), empty for files in the root.
+        /// </summary>
+        /// <returns>The local folder</returns>
         public String GetLocalUrl()
         {
             var l = LocalUrl;
@@ -473,10 +622,13 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Make any relative path an absolute path
+        /// Make a path that is relative to the folder of the local url absolute ("../" segments are resolved).
+        /// Paths containing "://" are returned as is.
         /// </summary>
         /// <param name="path">The relative path</param>
-        /// <returns></returns>
+        /// <returns>The absolute url</returns>
+        /// <exception cref="Exception">Thrown if the path goes above the root</exception>
+        /// <remarks>For requests in the root folder the result contains a double slash after the prefix (ex: "https://host//path").</remarks>
         public String MakeAbsolute(String path)
         {
             if (path.FastIndexOf("://") >= 0)
@@ -489,10 +641,12 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// If the url is relative, make it absoulte (with respect to the current request URL).
+        /// If the url is relative, make it absolute (with respect to the current request <see cref="Url"/>).
+        /// Only leading "./" and "../" segments are resolved.
         /// </summary>
         /// <param name="url">An absolute or relative url</param>
         /// <returns>An absolute url</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if the url has more leading "../" segments than the request url has segments</exception>
         public String MakeRequestAbsolute(String url)
         {
             if (url.FastIndexOf("://") > 0)
@@ -519,7 +673,7 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Custom per request data can be added here
+        /// Custom per request data can be added here (thread safe, created on first use, separate from <see cref="Properties"/>).
         /// </summary>
         public ConcurrentDictionary<String, Object> Data
         {
@@ -545,7 +699,7 @@ namespace SysWeaver.Net
         #region Data References
 
         /// <summary>
-        /// Add a data table to some storage and get a reference to it
+        /// Add a data table to some storage and get a reference to it.
         /// </summary>
         /// <param name="scope">The scope of the availability of this data</param>
         /// <param name="data">The table data to add</param>
@@ -555,13 +709,18 @@ namespace SysWeaver.Net
             => Server.AddData(this, scope, data, lifeTimeInSeconds);
 
         /// <summary>
-        /// Get the reference to a data table from a given id
+        /// Get the reference to a data table from a given id.
         /// </summary>
         /// <param name="dataRefId">The id of the data</param>
-        /// <returns></returns>
+        /// <returns>The reference, null if not found or expired</returns>
         public TableDataReference GetTableData(String dataRefId)
             => Server.GetTableData(this, dataRefId);
 
+        /// <summary>
+        /// Get the data of a data table from a given id.
+        /// </summary>
+        /// <param name="dataRefId">The id of the data</param>
+        /// <returns>The data, null if not found or expired</returns>
         public BaseTableData ResolveTableData(String dataRefId)
             => Server.GetTableData(this, dataRefId)?.Get();
 
@@ -569,17 +728,17 @@ namespace SysWeaver.Net
         #endregion//Data References
 
         /// <summary>
-        /// Get the translator to use if any translation is to be done (null if no translation is requested)
+        /// Get the translator to use if any translation is to be done (null if auto translation isn't enabled).
         /// </summary>
         public ITranslator Translator => Server.Translator;
 
         /// <summary>
-        /// The language to user
+        /// The language to use (the session language, "en" if there is no session).
         /// </summary>
         public String Language => Session?.Language ?? "en";
 
         /// <summary>
-        /// Additional etag data
+        /// Additional etag data, appended to the handler's etag (use when the response depends on more than the handler data).
         /// </summary>
         public String Etag;
 
@@ -598,9 +757,15 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Replace the url (used internally)
+        /// Create a request for another url that shares the connection, headers and session of this request (used internally for internal redirects).
         /// </summary>
-        /// <returns></returns>
+        /// <param name="newUrl">The new (decoded) url</param>
+        /// <param name="host">The host of the new url</param>
+        /// <param name="prefix">The prefix of the new url</param>
+        /// <param name="queryStart">The index of the '?' in the new url, -1 if there is no query string</param>
+        /// <param name="server">The server</param>
+        /// <param name="newMethod">The new http method, null to keep the current</param>
+        /// <returns>The new request</returns>
         public abstract HttpServerRequest ReplaceUrl(string newUrl, HttpServerHostInfo host, String prefix, int queryStart, HttpServerBase server, String newMethod = null);
 
     }

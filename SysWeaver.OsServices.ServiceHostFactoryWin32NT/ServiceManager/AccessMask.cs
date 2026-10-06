@@ -4,6 +4,9 @@ using System;
 
 namespace SysWeaver.OsServices.ServiceManager
 {
+    /// <summary>
+    /// Win32 generic, standard and object specific access rights (only the GENERIC_* values are used, to define <see cref="ServiceRights"/> and <see cref="ServiceManagerRights"/>).
+    /// </summary>
     [Flags]
     enum AccessMask : uint
     {

@@ -1,5 +1,9 @@
 ﻿namespace SysWeaver.Data
 {
+    /// <summary>
+    /// The operation used by a <see cref="TableDataFilterBase"/>.
+    /// The numeric values are part of the API contract (and must match <see cref="TableDataFilterOpsProps.Count"/>).
+    /// </summary>
     public enum TableDataFilterOps
     {
         /// <summary>
@@ -51,13 +55,20 @@
         /// </summary>
         InRange,
         /// <summary>
-        /// The row value must be less than min OR greater than max (2 comma separated values in the filter value)
+        /// The row value must be less than min OR greater than max (2 comma separated values in the filter value).
+        /// Note: This isn't the inverse of <see cref="TableDataFilterOps.InRange"/>, a value equal to max matches neither.
         /// </summary>
         OutsideRange,
     }
 
+    /// <summary>
+    /// Properties of the <see cref="TableDataFilterOps"/> enum.
+    /// </summary>
     public static class TableDataFilterOpsProps
     {
+        /// <summary>
+        /// The number of values in <see cref="TableDataFilterOps"/>, must be updated if values are added.
+        /// </summary>
         public const int Count = 13;
     }
 

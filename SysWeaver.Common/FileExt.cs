@@ -8,8 +8,12 @@ using Microsoft.Win32.SafeHandles;
 namespace SysWeaver
 {
     /// <summary>
-    /// Read and write files
+    /// Read and write files (whole file operations).
     /// </summary>
+    /// <remarks>
+    /// Writes are not atomic, the file is truncated first, so a failed write leaves a partial file (write to a temp file and move it if atomicity is required).
+    /// Reads uses <see cref="FileReadOnlyMemory"/> (memory mapped io when possible).
+    /// </remarks>
     public static class FileExt
     {
 
@@ -410,11 +414,12 @@ namespace SysWeaver
         /// The file is opened with shared read only (FileShare.Read), so a read fails (and is retried) while another process has the file open for writing.
         /// </summary>
         /// <param name="filename">Name of the file to read</param>
-        /// <param name="retryCount">Number of times to retry the operation</param>
+        /// <param name="retryCount">The max number of attempts (at least one attempt is always made)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries (on error)</param>
         /// <param name="delayInMsNoExisting">Number of milli seconds to wait between any retries (when the file doesn't exist)</param>
         /// <returns>The content of the file, empty if the file couldn't be read (never throws).
         /// Note that an empty file also returns empty</returns>
+        /// <remarks>A missing file is also retried, so with the defaults a missing file takes approximately 10 short delays before returning</remarks>
         public static async Task<Memory<Byte>> TryReadBytesAsync(String filename, int retryCount = 10, int delayInMs = 100, int delayInMsNoExisting = 1)
         {
             for (; ; )
@@ -445,11 +450,12 @@ namespace SysWeaver
         /// The file is opened with shared read only (FileShare.Read), so a read fails (and is retried) while another process has the file open for writing.
         /// </summary>
         /// <param name="filename">Name of the file to read</param>
-        /// <param name="retryCount">Number of times to retry the operation</param>
+        /// <param name="retryCount">The max number of attempts (at least one attempt is always made)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries (on error)</param>
         /// <param name="delayInMsNoExisting">Number of milli seconds to wait between any retries (when the file doesn't exist)</param>
         /// <returns>The content of the file, empty if the file couldn't be read (never throws).
         /// Note that an empty file also returns empty</returns>
+        /// <remarks>A missing file is also retried, so with the defaults a missing file takes approximately 10 short delays before returning</remarks>
         public static async Task<ReadOnlyMemory<Byte>> TryReadMemoryAsync(String filename, int retryCount = 10, int delayInMs = 100, int delayInMsNoExisting = 1)
         {
             for (; ; )

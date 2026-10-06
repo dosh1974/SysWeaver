@@ -10,28 +10,44 @@ using System.Text.Json;
 namespace SysWeaver
 {
 
+    /// <summary>
+    /// Apply to a public instance field or property to exclude it from <see cref="Config.ApplyConfig(Type, object, string, string)"/>
+    /// (it's neither set from the config file nor listed in the generated config file comment).
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
     public sealed class ConfigIgnoreAttribute : Attribute
     {
+        /// <summary>
+        /// Control whether the member is ignored by the config system.
+        /// </summary>
+        /// <param name="ignore">True to ignore the member, false to treat it as if the attribute wasn't present.</param>
         public ConfigIgnoreAttribute(bool ignore = true)
         {
             Ignore = ignore;
         }
+
+        /// <summary>
+        /// True if the member should be ignored by the config system.
+        /// </summary>
         public readonly bool Ignore;
     }
 
 
+    /// <summary>
+    /// The system wide settings that can be specified in the "DefaultSystemConfig.json" and "ForcedSystemConfig.json" files
+    /// (used as a template when those files are generated, see <see cref="Config"/>).
+    /// </summary>
     public sealed class DefaultConfig
     {
         /// <summary>
         /// One or more paths to use for data (common to all users).
-        /// Separate multiple path with semi colon (;).
+        /// Separate multiple paths with the platform path separator (';' on Windows, ':' on Unix).
         /// </summary>
         public String AllFolders { get; set; } = null;
 
         /// <summary>
         /// One or more paths to use for user specific data.
-        /// Separate multiple path with semi colon (;).
+        /// Separate multiple paths with the platform path separator (';' on Windows, ':' on Unix).
         /// </summary>
         public String UserFolders { get; set; } = null;
 
@@ -43,9 +59,18 @@ namespace SysWeaver
     }
 
     /// <summary>
-    /// Get configuration settings from the ApplicationName.Config.json file.
-    /// Folders can be overridden using the key "FileHashFolders" in the ApplicationName.Config.json file.
+    /// Get process wide configuration settings (key / value pairs) from JSON files, read once when the class is first used.
+    /// Files are read in this order, later files override keys from earlier files:
+    /// 1. "[CommonApplicationData]/SysWeaver/DefaultSystemConfig.json", system wide defaults (created with a commented template if missing).
+    /// 2. "[ExecutableBase].Config.json", the application config (ex: "C:\MyApp\MyApp.Config.json").
+    /// 3. "[CommonApplicationData]/SysWeaver/ForcedSystemConfig.json", system wide forced values (created with a commented template if missing).
     /// </summary>
+    /// <remarks>
+    /// Only the top level properties of the root JSON object are used. Comments and trailing commas are allowed.
+    /// Keys are case insensitive. Supported values are strings, numbers, booleans, null and arrays of those.
+    /// Parse errors are written to the console and otherwise ignored (the file or key is skipped).
+    /// Typical keys read through this class are folder settings (see <see cref="Folders"/>), ex: "AllFolders", "UserFolders", "KeyFolder", "FileHashFolders".
+    /// </remarks>
     public static class Config
     {
         static Config()
@@ -83,6 +108,19 @@ namespace SysWeaver
         static readonly ConcurrentDictionary<Type, String> TypeComments = new ConcurrentDictionary<Type, string>();
 
 
+        /// <summary>
+        /// Read a JSON config file and assign its values to the matching public instance properties / fields of an object.
+        /// </summary>
+        /// <param name="ct">The type whose members are set (normally the type of <paramref name="config"/>).</param>
+        /// <param name="config">The instance to update.</param>
+        /// <param name="filename">The config file name, relative names are relative to "[CommonApplicationData]/SysWeaver".
+        /// If the file doesn't exist and <paramref name="comment"/> is not null, a file containing an empty object, the comment and a list of the settable members (with defaults and XML doc summaries if SysWeaver.Docs is available) is created.</param>
+        /// <param name="comment">Optional comment to write at the top of a generated file, if null no file is generated.</param>
+        /// <remarks>
+        /// Member names are matched case sensitively. Read only properties, init only fields and members marked with <see cref="ConfigIgnoreAttribute"/> are skipped.
+        /// Only primitive numeric types, <see cref="String"/>, <see cref="Boolean"/>, <see cref="Decimal"/> and single dimension arrays of those are supported, other members are silently ignored.
+        /// Values that can't be converted to the member type are ignored. Strings are converted to numbers using the current culture.
+        /// </remarks>
         public static void ApplyConfig(Type ct, object config, String filename, String comment = null)
         {
             var keys = new Dictionary<string, Tuple<JsonValueKind, Object>>(StringComparer.Ordinal);
@@ -138,6 +176,14 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Read a JSON config file and assign its values to the matching public instance properties / fields of an object,
+        /// see <see cref="ApplyConfig(Type, object, string, string)"/>.
+        /// </summary>
+        /// <typeparam name="T">The type whose members are set (the static type, not the runtime type of <paramref name="config"/>).</typeparam>
+        /// <param name="config">The instance to update.</param>
+        /// <param name="filename">The config file name, relative names are relative to "[CommonApplicationData]/SysWeaver".</param>
+        /// <param name="comment">Optional comment to write at the top of a generated file, if null no file is generated.</param>
         public static void ApplyConfig<T>(T config, String filename, String comment = null)
             => ApplyConfig(typeof(T), config, filename, comment);
 
@@ -674,6 +720,13 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Try to get a config value as a string.
+        /// Any value kind is converted to a string (null for a JSON null).
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="value">The value, or the default value if not found or not convertible.</param>
+        /// <returns>True if the key exists and the value could be converted, else false.</returns>
         public static bool TryGetString(String key, out String value)
         {
             value = default;
@@ -682,8 +735,21 @@ namespace SysWeaver
             return TryParseString(x.Item1, x.Item2, out value);
         }
 
+        /// <summary>
+        /// Get a config value as a string, see <see cref="TryGetString(string, out String)"/>.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="onFail">The value to return if the key doesn't exist or the value couldn't be converted.</param>
+        /// <returns>The config value or <paramref name="onFail"/>.</returns>
         public static String GetString(String key, String onFail = default) => TryGetString(key, out var v) ? v : onFail;
 
+        /// <summary>
+        /// Try to get a config value as a boolean.
+        /// Only JSON true / false values are accepted (not strings).
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="value">The value, or the default value if not found or not convertible.</param>
+        /// <returns>True if the key exists and the value could be converted, else false.</returns>
         public static bool TryGetBoolean(String key, out Boolean value)
         {
             value = default;
@@ -692,8 +758,21 @@ namespace SysWeaver
             return TryParseBoolean(x.Item1, x.Item2, out value);
         }
 
+        /// <summary>
+        /// Get a config value as a boolean, see <see cref="TryGetBoolean(string, out Boolean)"/>.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="onFail">The value to return if the key doesn't exist or the value couldn't be converted.</param>
+        /// <returns>The config value or <paramref name="onFail"/>.</returns>
         public static Boolean GetBoolean(String key, Boolean onFail = default) => TryGetBoolean(key, out var v) ? v : onFail;
 
+        /// <summary>
+        /// Try to get a config value as a 32-bit signed integer.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="value">The value, or the default value if not found or not convertible.</param>
+        /// <returns>True if the key exists and the value could be converted, else false.</returns>
         public static bool TryGetInt32(String key, out Int32 value)
         {
             value = default;
@@ -702,8 +781,21 @@ namespace SysWeaver
             return TryParseInt32(x.Item1, x.Item2, out value);
         }
 
+        /// <summary>
+        /// Get a config value as a 32-bit signed integer, see <see cref="TryGetInt32(string, out Int32)"/>.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="onFail">The value to return if the key doesn't exist or the value couldn't be converted.</param>
+        /// <returns>The config value or <paramref name="onFail"/>.</returns>
         public static Int32 GetInt32(String key, Int32 onFail = default) => TryGetInt32(key, out var v) ? v : onFail;
 
+        /// <summary>
+        /// Try to get a config value as a 32-bit unsigned integer.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="value">The value, or the default value if not found or not convertible.</param>
+        /// <returns>True if the key exists and the value could be converted, else false.</returns>
         public static bool TryGetUInt32(String key, out UInt32 value)
         {
             value = default;
@@ -712,8 +804,21 @@ namespace SysWeaver
             return TryParseUInt32(x.Item1, x.Item2, out value);
         }
 
+        /// <summary>
+        /// Get a config value as a 32-bit unsigned integer, see <see cref="TryGetUInt32(string, out UInt32)"/>.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="onFail">The value to return if the key doesn't exist or the value couldn't be converted.</param>
+        /// <returns>The config value or <paramref name="onFail"/>.</returns>
         public static UInt32 GetUInt32(String key, UInt32 onFail = default) => TryGetUInt32(key, out var v) ? v : onFail;
 
+        /// <summary>
+        /// Try to get a config value as a 64-bit signed integer.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="value">The value, or the default value if not found or not convertible.</param>
+        /// <returns>True if the key exists and the value could be converted, else false.</returns>
         public static bool TryGetInt64(String key, out Int64 value)
         {
             value = default;
@@ -722,8 +827,21 @@ namespace SysWeaver
             return TryParseInt64(x.Item1, x.Item2, out value);
         }
 
+        /// <summary>
+        /// Get a config value as a 64-bit signed integer, see <see cref="TryGetInt64(string, out Int64)"/>.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="onFail">The value to return if the key doesn't exist or the value couldn't be converted.</param>
+        /// <returns>The config value or <paramref name="onFail"/>.</returns>
         public static Int64 GetInt64(String key, Int64 onFail = default) => TryGetInt64(key, out var v) ? v : onFail;
 
+        /// <summary>
+        /// Try to get a config value as a 64-bit unsigned integer.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="value">The value, or the default value if not found or not convertible.</param>
+        /// <returns>True if the key exists and the value could be converted, else false.</returns>
         public static bool TryGetUInt64(String key, out UInt64 value)
         {
             value = default;
@@ -732,8 +850,22 @@ namespace SysWeaver
             return TryParseUInt64(x.Item1, x.Item2, out value);
         }
 
+        /// <summary>
+        /// Get a config value as a 64-bit unsigned integer, see <see cref="TryGetUInt64(string, out UInt64)"/>.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="onFail">The value to return if the key doesn't exist or the value couldn't be converted.</param>
+        /// <returns>The config value or <paramref name="onFail"/>.</returns>
         public static UInt64 GetUInt64(String key, UInt64 onFail = default) => TryGetUInt64(key, out var v) ? v : onFail;
 
+        /// <summary>
+        /// Try to get a config value as a decimal.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="value">The value, or the default value if not found or not convertible.</param>
+        /// <returns>True if the key exists and the value could be converted, else false.</returns>
+        /// <exception cref="InvalidCastException">The value is a non-negative JSON integer (ex: 5), currently not handled correctly.</exception>
         public static bool TryGetDecimal(String key, out Decimal value)
         {
             value = default;
@@ -742,8 +874,21 @@ namespace SysWeaver
             return TryParseDecimal(x.Item1, x.Item2, out value);
         }
 
+        /// <summary>
+        /// Get a config value as a decimal, see <see cref="TryGetDecimal(string, out Decimal)"/>.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="onFail">The value to return if the key doesn't exist or the value couldn't be converted.</param>
+        /// <returns>The config value or <paramref name="onFail"/>.</returns>
         public static Decimal GetDecimal(String key, Decimal onFail = default) => TryGetDecimal(key, out var v) ? v : onFail;
 
+        /// <summary>
+        /// Try to get a config value as a double precision floating point.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="value">The value, or the default value if not found or not convertible.</param>
+        /// <returns>True if the key exists and the value could be converted, else false.</returns>
         public static bool TryGetDouble(String key, out Double value)
         {
             value = default;
@@ -752,8 +897,21 @@ namespace SysWeaver
             return TryParseDouble(x.Item1, x.Item2, out value);
         }
 
+        /// <summary>
+        /// Get a config value as a double precision floating point, see <see cref="TryGetDouble(string, out Double)"/>.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="onFail">The value to return if the key doesn't exist or the value couldn't be converted.</param>
+        /// <returns>The config value or <paramref name="onFail"/>.</returns>
         public static Double GetDouble(String key, Double onFail = default) => TryGetDouble(key, out var v) ? v : onFail;
 
+        /// <summary>
+        /// Try to get a config value as a single precision floating point.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="value">The value, or the default value if not found or not convertible.</param>
+        /// <returns>True if the key exists and the value could be converted, else false.</returns>
         public static bool TryGetSingle(String key, out Single value)
         {
             value = default;
@@ -762,8 +920,22 @@ namespace SysWeaver
             return TryParseSingle(x.Item1, x.Item2, out value);
         }
 
+        /// <summary>
+        /// Get a config value as a single precision floating point, see <see cref="TryGetSingle(string, out Single)"/>.
+        /// </summary>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="onFail">The value to return if the key doesn't exist or the value couldn't be converted.</param>
+        /// <returns>The config value or <paramref name="onFail"/>.</returns>
         public static Single GetSingle(String key, Single onFail = default) => TryGetSingle(key, out var v) ? v : onFail;
 
+        /// <summary>
+        /// Try to get a config value as an array (the JSON value must be an array, or null which gives a null array).
+        /// </summary>
+        /// <typeparam name="T">The element type, must be one of the supported scalar types (primitive numeric, <see cref="Decimal"/>, <see cref="String"/> or <see cref="Boolean"/>).</typeparam>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="value">The array, or null if not found or not convertible.</param>
+        /// <returns>True if the key exists and the value could be converted, else false.</returns>
+        /// <remarks>Elements that can't be converted are left as the default value of <typeparamref name="T"/> (no failure is reported).</remarks>
         public static bool TryGetArray<T>(String key, out T[] value)
         {
             value = default;
@@ -772,6 +944,13 @@ namespace SysWeaver
             return TryParseArray<T>(x.Item1, x.Item2, out value);
         }
 
+        /// <summary>
+        /// Get a config value as an array, see <see cref="TryGetArray{T}(string, out T[])"/>.
+        /// </summary>
+        /// <typeparam name="T">The element type.</typeparam>
+        /// <param name="key">The config key (case insensitive).</param>
+        /// <param name="onFail">The value to return if the key doesn't exist or the value couldn't be converted.</param>
+        /// <returns>The config value or <paramref name="onFail"/>.</returns>
         public static T[] GetArray<T>(String key, T[] onFail = default) => TryGetArray<T>(key, out var v) ? v : onFail;
 
 

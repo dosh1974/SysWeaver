@@ -7,10 +7,27 @@ using System.Collections.Concurrent;
 
 namespace SysWeaver.Remote.Connection
 {
+    /// <summary>
+    /// Compiles url templates such as <c>"Get?id={Id}&amp;name={Name}"</c> into functions that format a value of type <typeparamref name="T"/> into a url.
+    /// Used by the generated remote API classes to build GET/DELETE urls from method parameters.
+    /// </summary>
+    /// <typeparam name="T">The type of the value that is used to resolve the template variables.</typeparam>
+    /// <remarks>
+    /// Variable resolution: if <typeparamref name="T"/> is a supported primitive (see <see cref="EncoderHelper.ToStrings"/>), every variable is replaced by the value itself;
+    /// if it's an array of a supported type, the variable name is the element index (ex: "{0}"); otherwise the variable names a public instance property or field.
+    /// Use "{{" to emit a literal '{'. Only string values are url escaped.
+    /// Compiled functions are cached per template (thread safe, a template may be compiled more than once under contention).
+    /// </remarks>
     public static class UriParamsEncoder<T>
     {
         static readonly ConcurrentDictionary<string, Func<T, string>> Cache = new ConcurrentDictionary<string, Func<T, string>>();
 
+        /// <summary>
+        /// Get (or compile and cache) the formatting function for a template.
+        /// </summary>
+        /// <param name="textTemplate">The url template, variables are enclosed in { and }.</param>
+        /// <returns>A function that formats a value into a url.</returns>
+        /// <exception cref="Exception">Nested '{', a variable that names a missing member, or a member of an unsupported type.</exception>
         public static Func<T, string> Get(string textTemplate)
         {
             var cache = Cache;

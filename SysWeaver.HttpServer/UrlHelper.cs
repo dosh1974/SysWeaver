@@ -3,6 +3,9 @@ using System.Buffers;
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// Url helpers.
+    /// </summary>
     public static class UrlHelper
     {
 
@@ -36,10 +39,11 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Create a string containg parent folders, level 0 = "", level 1 = "../", level 2 = "../../" and so on.
+        /// Create a string containing parent folder references, level 0 = "", level 1 = "../", level 2 = "../../" and so on.
         /// </summary>
-        /// <param name="levels">The level to get a parent folder for</param>
-        /// <returns>A prefix that can be used for referencing in a parent folder</returns>
+        /// <param name="levels">The number of levels to go up, must not be negative</param>
+        /// <returns>A prefix that can be used for referencing a file in a parent folder (levels 0 to 3 are cached, no allocation)</returns>
+        /// <exception cref="IndexOutOfRangeException">Thrown if <paramref name="levels"/> is negative</exception>
         public static String ParentFolderRef(int levels) => (levels < 4) ? CacheParentFolders[levels] : String.Create(levels * 3, levels, BuildParentAction);
 
     }

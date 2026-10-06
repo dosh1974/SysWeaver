@@ -2,12 +2,16 @@
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// A url prefix redirection rule, used by the <see cref="RedirectHttpServerModule"/> (ex: http to https upgrades).
+    /// </summary>
     public sealed class HttpRedirection
     {
+        /// <inheritdoc/>
         public override string ToString() => String.Concat(From.ToQuoted(), " => ", To.ToQuoted(), " using ", Code);
 
         /// <summary>
-        /// A http to https upgrade redirection
+        /// A http to https upgrade redirection ("http://*:80/" to "https://*:443/" using 302), a new instance is returned on every call.
         /// </summary>
         public static HttpRedirection HttpToHttps => new HttpRedirection
         {
@@ -30,7 +34,7 @@ namespace SysWeaver.Net
         public String To;
 
         /// <summary>
-        /// Redirect code, can be 301, 302, 307, 308
+        /// Redirect status code, can be 301, 302, 307 or 308.
         /// </summary>
         public int Code = 302;
 

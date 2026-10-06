@@ -11,9 +11,25 @@ using System.Threading.Tasks;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// A managed file source for a http / https url, changes are detected by polling (every <see cref="ManagedFileParams.HttpPollFrequency"/> ms)
+    /// using conditional requests (If-Modified-Since / If-None-Match).
+    /// </summary>
+    /// <remarks>
+    /// The file is requested using a POST request (not GET).
+    /// If credentials are specified in the parameters, basic authentication is used.
+    /// </remarks>
     sealed class HttpManagedFile : IManagedFileSource
     {
 
+        /// <summary>
+        /// Start polling a remote file
+        /// </summary>
+        /// <param name="manager">The owning managed file (stored in the returned data)</param>
+        /// <param name="url">The url of the file</param>
+        /// <param name="p">The parameters</param>
+        /// <param name="onChange">Invoked with the new data (or an error) when a change is detected</param>
+        /// <param name="computeHash">Computes the hash of the data (may return null if hashing is disabled)</param>
         public HttpManagedFile(ManagedFile manager, String url, ManagedFileParams p, Func<ManagedFileData, Task> onChange, Func<ReadOnlyMemory<Byte>, Byte[]> computeHash)
         {
             Manager = manager;
@@ -40,6 +56,10 @@ namespace SysWeaver
         String LastTime;
         String ETag;
 
+        /// <summary>
+        /// Request the file now
+        /// </summary>
+        /// <returns>Null if the server responded with 304 (not modified), else the data or a data object with the exception (<see cref="ManagedFileData.Ex"/>) if the request failed (never throws)</returns>
         public async Task<ManagedFileData> TryGetNow()
         {
             var f = Url;
@@ -97,6 +117,9 @@ namespace SysWeaver
             return true;
         }
 
+        /// <summary>
+        /// Stop polling and dispose the http client
+        /// </summary>
         public void Dispose()
         {
             Interlocked.Exchange(ref PollTask, null)?.Dispose();

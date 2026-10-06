@@ -9,6 +9,15 @@ using System.Reflection;
 namespace SysWeaver.Serialization.ProtobufNet
 {
 
+    /// <summary>
+    /// Adds types to a protobuf-net <see cref="RuntimeTypeModel"/> without requiring protobuf attributes.
+    /// </summary>
+    /// <remarks>
+    /// All instance fields (public and non-public, as returned by <see cref="Type.GetFields(BindingFlags)"/>) are added in reflection order (field numbers 1, 2, ..),
+    /// base classes are added with the derived types as sub types (field numbers 500 + discovery index), and field and generic argument types are added recursively.
+    /// The numbering depends on the order in which types are discovered, so it is only stable within a process.
+    /// Built types are cached in a static dictionary (shared by all models).
+    /// </remarks>
     static class SerializerBuilder
     {
         const BindingFlags Flags = BindingFlags.FlattenHierarchy | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
@@ -17,9 +26,10 @@ namespace SysWeaver.Serialization.ProtobufNet
         static readonly Type ObjectType = typeof(object);
 
         /// <summary>
-        /// Build the ProtoBuf serializer from the generic <see cref="Type">type</see>.
+        /// Add <typeparamref name="T"/> (and all types it depends on) to the model, if not already done.
         /// </summary>
-        /// <typeparam name="T">The type of build the serializer for.</typeparam>
+        /// <typeparam name="T">The type to build the serializer for.</typeparam>
+        /// <param name="model">The model to update.</param>
         public static void Build<T>(RuntimeTypeModel model)
         {
             var type = typeof(T);
@@ -27,9 +37,9 @@ namespace SysWeaver.Serialization.ProtobufNet
         }
 
         /// <summary>
-        /// Build the ProtoBuf serializer from the data's <see cref="Type">type</see>.
+        /// Add <typeparamref name="T"/> and the runtime type of <paramref name="data"/> (if different) to the model.
         /// </summary>
-        /// <typeparam name="T">The type of build the serializer for.</typeparam>
+        /// <typeparam name="T">The static type to build the serializer for.</typeparam>
         /// <param name="data">The data who's type a serializer will be made.</param>
         /// <param name="model">The model to update.</param>
         // ReSharper disable once UnusedParameter.Global
@@ -45,9 +55,10 @@ namespace SysWeaver.Serialization.ProtobufNet
         }
 
         /// <summary>
-        /// Build the ProtoBuf serializer for the <see cref="Type">type</see>.
+        /// Add a type (and all types it depends on) to the model, if not already done.
+        /// Types the model can already serialize (primitives, strings, collections etc) are not added, but their generic arguments are.
         /// </summary>
-        /// <param name="type">The type of build the serializer for.</param>
+        /// <param name="type">The type to build the serializer for.</param>
         /// <param name="model">The model to update.</param>
         public static void Build(Type type, RuntimeTypeModel model)
         {
@@ -90,7 +101,7 @@ namespace SysWeaver.Serialization.ProtobufNet
         /// Gets the fields for a type.
         /// </summary>
         /// <param name="type">The type.</param>
-        /// <returns></returns>
+        /// <returns>All public and non-public instance fields (including inherited non-private fields).</returns>
         static FieldInfo[] GetFields(Type type)
         {
             return type.GetFields(Flags);

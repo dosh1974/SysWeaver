@@ -9,6 +9,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
     /// Fast enum parsing from UTF8: exact (case sensitive) names and plain integers, like Enum.Parse&lt;T&gt;(value, false).
     /// Anything else (flags combinations, white space etc) must be parsed by Enum.Parse.
     /// </summary>
+    /// <remarks>The names and values are computed once per enum type (thread safe). Integers are limited to 18 digits and the range of the underlying type
+    /// (<see cref="UInt64"/> values above <see cref="Int64.MaxValue"/> are left to Enum.Parse).</remarks>
+    /// <typeparam name="T">The enum type</typeparam>
     static class EnumReader<T> where T : struct, Enum
     {
         static readonly Byte[][] NameBytes;
@@ -32,6 +35,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
             else { Min = Int64.MinValue; Max = Int64.MaxValue; }
         }
 
+        /// <summary>
+        /// Convert an integer to the enum (truncated to the size of the underlying type).
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static T FromInt64(long v)
         {
@@ -60,6 +66,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <summary>
         /// Try to get the value of an exact name or a plain integer (within the range of the underlying type)
         /// </summary>
+        /// <param name="text">The UTF8 text (without quotes)</param>
+        /// <param name="value">The value if found, else default</param>
+        /// <returns>True if the text is an exact name or an integer in range, false if the text must be parsed by Enum.Parse (that may still succeed)</returns>
         public static bool TryGet(ReadOnlySpan<Byte> text, out T value)
         {
             var l = text.Length;

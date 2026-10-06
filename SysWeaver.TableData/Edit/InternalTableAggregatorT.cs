@@ -5,10 +5,24 @@ using System.Numerics;
 
 namespace SysWeaver.Data
 {
+    /// <summary>
+    /// Builds aggregation functions for types that aren't pre-registered in <see cref="InternalTableAggregator"/> (invoked through reflection).
+    /// </summary>
+    /// <typeparam name="T">The column value type</typeparam>
     static class InternalTableAggregatorT<T>
     {
-        
 
+
+        /// <summary>
+        /// Create the aggregation functions for <typeparamref name="T"/> using the generic math interfaces it implements.
+        /// Sum is created if <typeparamref name="T"/> implements <see cref="IAdditionOperators{TSelf, TOther, TResult}"/>,
+        /// average if it also implements <see cref="IDivisionOperators{TSelf, TOther, TResult}"/>.
+        /// </summary>
+        /// <returns>The aggregation functions, unsupported operations are null</returns>
+        /// <remarks>
+        /// NOTE: Min/max are only created when <typeparamref name="T"/> implements <see cref="IComparer{T}"/> (should be <see cref="IComparable{T}"/>),
+        /// so in practice they are always null for custom types.
+        /// </remarks>
         public static InternalTableAggregatorType Create()
         {
             var type = typeof(T);

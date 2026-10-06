@@ -10,31 +10,43 @@ using System.Threading.Tasks;
 namespace SysWeaver.Translation
 {
 
+    /// <summary>
+    /// Translates (in place) all <see cref="String"/> members marked with <see cref="AutoTranslateAttribute"/> of an object graph
+    /// (including nested objects, arrays, collections and dictionary values) using an <see cref="ITranslator"/>.
+    /// </summary>
+    /// <remarks>
+    /// The translation code for each type is generated once using expression trees (see <see cref="TypeTranslatorT{T}"/>) and cached.
+    /// Translation context is built from the member XML doc summary, <see cref="AutoTranslateContextAttribute"/> and <see cref="AutoTranslateTypeAttribute"/>,
+    /// the source language from <see cref="AutoTranslateAttribute.FromLanguage"/> (defaults to "en") or <see cref="AutoTranslateDynLanguageAttribute"/>.
+    /// Used by the HTTP server to translate API responses and by the table data system to translate table rows.
+    /// Individual translation failures are silently ignored (the original text is kept).
+    /// </remarks>
     public static class TypeTranslator
     {
         /// <summary>
-        /// Translate the content of a type
+        /// Translate the content of an object in place (all members marked with <see cref="AutoTranslateAttribute"/>, recursively)
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The type of the object to translate</typeparam>
         /// <param name="tr">The translator to use</param>
         /// <param name="to">The target language ISO code</param>
-        /// <param name="value">The object to translate</param>
+        /// <param name="value">The object to translate, null is ignored</param>
         /// <param name="effort">The effort (cost / time) to put into the translation</param>
         /// <param name="retention">How long to cache the translation</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all members have been translated, a completed task if <typeparamref name="T"/> have nothing to translate</returns>
+        /// <remarks>Value types are passed by value, so translations of a struct <paramref name="value"/> are lost.</remarks>
         public static Task Translate<T>(ITranslator tr, String to, T value, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
             => TypeTranslatorT<T>.Translate?.Invoke(tr, to, value, effort, retention) ?? Task.CompletedTask;
 
         /// <summary>
-        /// Translate the content of a type
+        /// Get a value and translate it's content in place, the value is only retrieved if <typeparamref name="T"/> have something to translate
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The type of the object to translate</typeparam>
         /// <param name="tr">The translator to use</param>
         /// <param name="to">The target language ISO code</param>
         /// <param name="getValue">A function that returns the value, only called if translation in needed</param>
         /// <param name="effort">The effort (cost / time) to put into the translation</param>
         /// <param name="retention">How long to cache the translation</param>
-        /// <returns>null if no translation is needed, else the value returned by getValue</returns>
+        /// <returns>default (null) if <typeparamref name="T"/> have nothing to translate or if <paramref name="getValue"/> returned null, else the (translated) value returned by <paramref name="getValue"/></returns>
         public static async Task<T> Translate<T>(ITranslator tr, String to, Func<T> getValue, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
         {
             var t = TypeTranslatorT<T>.Translate;
@@ -48,17 +60,17 @@ namespace SysWeaver.Translation
         }
 
         /// <summary>
-        /// Translate the content of a type
+        /// Get a value and translate it's content in place, the value is only retrieved if <typeparamref name="T"/> have something to translate
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <typeparam name="A0"></typeparam>
+        /// <typeparam name="T">The type of the object to translate</typeparam>
+        /// <typeparam name="A0">The type of the argument passed to <paramref name="getValue"/></typeparam>
         /// <param name="tr">The translator to use</param>
         /// <param name="to">The target language ISO code</param>
         /// <param name="effort">The effort (cost / time) to put into the translation</param>
         /// <param name="retention">How long to cache the translation</param>
         /// <param name="getValue">A function that returns the value, only called if translation in needed</param>
         /// <param name="a0">Argument of the getValue function</param>
-        /// <returns>null if no translation is needed, else the value returned by getValue</returns>
+        /// <returns>default (null) if <typeparamref name="T"/> have nothing to translate or if <paramref name="getValue"/> returned null, else the (translated) value returned by <paramref name="getValue"/></returns>
         public static async Task<T> Translate<T, A0>(ITranslator tr, String to, TranslationEffort effort, TranslationCacheRetention retention, Func<A0, T> getValue, A0 a0)
         {
             var t = TypeTranslatorT<T>.Translate;
@@ -72,11 +84,11 @@ namespace SysWeaver.Translation
         }
 
         /// <summary>
-        /// Translate the content of a type
+        /// Get a value and translate it's content in place, the value is only retrieved if <typeparamref name="T"/> have something to translate
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <typeparam name="A0"></typeparam>
-        /// <typeparam name="A1"></typeparam>
+        /// <typeparam name="T">The type of the object to translate</typeparam>
+        /// <typeparam name="A0">The type of the first argument passed to <paramref name="getValue"/></typeparam>
+        /// <typeparam name="A1">The type of the second argument passed to <paramref name="getValue"/></typeparam>
         /// <param name="tr">The translator to use</param>
         /// <param name="to">The target language ISO code</param>
         /// <param name="effort">The effort (cost / time) to put into the translation</param>
@@ -84,7 +96,7 @@ namespace SysWeaver.Translation
         /// <param name="getValue">A function that returns the value, only called if translation in needed</param>
         /// <param name="a0">First argument of the getValue function</param>
         /// <param name="a1">Second argument of the getValue function</param>
-        /// <returns>null if no translation is needed, else the value returned by getValue</returns>
+        /// <returns>default (null) if <typeparamref name="T"/> have nothing to translate or if <paramref name="getValue"/> returned null, else the (translated) value returned by <paramref name="getValue"/></returns>
         public static async Task<T> Translate<T, A0, A1>(ITranslator tr, String to, TranslationEffort effort, TranslationCacheRetention retention, Func<A0, A1, T> getValue, A0 a0, A1 a1)
         {
             var t = TypeTranslatorT<T>.Translate;
@@ -101,8 +113,12 @@ namespace SysWeaver.Translation
         /// Get a translator interface for a given type (if the type have any fields that require translation)
         /// </summary>
         /// <param name="t">The type to get the translator for</param>
-        /// <param name="tr">The method used to translate the type</param>
-        /// <returns>True if the type can be translated, null if it can't</returns>
+        /// <param name="tr">The translator for the type, null if the type have nothing to translate</param>
+        /// <returns>True if the type have something to translate, else false</returns>
+        /// <remarks>
+        /// Results (including negative ones) are cached per type, thread safe.
+        /// Exceptions thrown while generating the translator (ex: invalid attribute usage) are propagated (wrapped in a <see cref="TargetInvocationException"/>).
+        /// </remarks>
         public static bool TryGetTranslator(Type t, out ITypeTranslator tr)
         {
             var c = Translators;
@@ -119,8 +135,9 @@ namespace SysWeaver.Translation
         /// <summary>
         /// Get a method that will translate a type (if the type have any fields that require translation)
         /// </summary>
-        /// <param name="tr">The method used to translate the type</param>
-        /// <returns>True if the type can be translated, null if it can't</returns>
+        /// <typeparam name="T">The type to get the translator for</typeparam>
+        /// <param name="tr">The method used to translate the type (in place), null if the type have nothing to translate</param>
+        /// <returns>True if the type have something to translate, else false</returns>
         public static bool TryGetTranslator<T>(out Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task> tr)
         {
             tr = TypeTranslatorT<T>.Translate;
@@ -130,6 +147,9 @@ namespace SysWeaver.Translation
 
         internal static readonly ParameterExpression TempVal = Expression.Parameter(typeof(String), "value");
         
+        /// <summary>
+        /// Check if a method can be used to produce a context argument (for <see cref="AutoTranslateContextAttribute"/>), i.e. it exists and isn't void or async.
+        /// </summary>
         internal static bool IsValidContextMethod(MethodInfo mi)
         {
             if (mi == null)
@@ -187,6 +207,11 @@ namespace SysWeaver.Translation
 
         internal static readonly Expression NullString = Expression.Constant(null, typeof(String));
 
+        /// <summary>
+        /// Merge multiple translation context texts into a single text, separated by new lines ('\n').
+        /// </summary>
+        /// <param name="contexts">The contexts to merge, null and empty strings are skipped</param>
+        /// <returns>The merged context, null if there are no non-empty contexts</returns>
         public static String MergeContexts(params String[] contexts)
         {
             var c = contexts.Length;
@@ -262,6 +287,9 @@ namespace SysWeaver.Translation
 
         internal static readonly MethodInfo TranslateOneMethod = typeof(TypeTranslator).GetMethod(nameof(TranslateOne), BindingFlags.Static | BindingFlags.NonPublic);
 
+        /// <summary>
+        /// Translate a single text and store the result using <paramref name="save"/>, all exceptions are swallowed (the text is left untranslated).
+        /// </summary>
         static async Task TranslateOne(ITranslator tr, String from, String to, String text, String context, Action<String> save, TranslationEffort effort, TranslationCacheRetention retention)
         {
             try
@@ -297,6 +325,9 @@ namespace SysWeaver.Translation
         internal static readonly MethodInfo MoveNextMethod = typeof(IEnumerator).GetMethod(nameof(IEnumerator.MoveNext), BindingFlags.Public | BindingFlags.Instance, Array.Empty<Type>());
 
 
+        /// <summary>
+        /// Non-primitive types that are never inspected for translatable members.
+        /// </summary>
         internal static readonly IReadOnlySet<Type> PrimTypes = ReadOnlyData.Set(
             [
                 typeof(String),
@@ -316,9 +347,18 @@ namespace SysWeaver.Translation
 
         internal static readonly MethodInfo GetFuncMethod = typeof(TypeTranslator).GetMethod(nameof(GetFunc), BindingFlags.Static | BindingFlags.NonPublic);
 
+        /// <summary>
+        /// Translation context added for members marked with <see cref="AutoTranslateTypeAttribute"/> using <see cref="TranslatorTypes.MD"/>.
+        /// </summary>
         public const String MdContext = "The text is Mark Down, urls/links are located within a '(' and ')' and should never be translated.";
+        /// <summary>
+        /// Translation context added for members marked with <see cref="AutoTranslateTypeAttribute"/> using <see cref="TranslatorTypes.Html"/>.
+        /// </summary>
         public const String HtmlContext = "The text is HTML code";
 
+        /// <summary>
+        /// The translation context to add for each <see cref="TranslatorTypes"/> value (indexed by the enum value), null for none.
+        /// </summary>
         public static readonly IReadOnlyList<String> TypeContexts = [
             null,
             MdContext,

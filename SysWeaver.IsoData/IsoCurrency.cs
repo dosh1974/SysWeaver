@@ -8,8 +8,13 @@ namespace SysWeaver.IsoData
 {
 
     /// <summary>
-    /// Contains information about a currency
+    /// Contains information about a currency (ISO 4217 code and number, symbol and formatting rules).
+    /// Use <see cref="TryGet(string)"/>, <see cref="TryGet(int)"/> or <see cref="Validate(string)"/> to look up a currency, or enumerate <see cref="Currencies"/>.
     /// </summary>
+    /// <remarks>
+    /// All instances are created once from built-in static data and are immutable, so the type is thread safe.
+    /// Also includes a non-ISO "DEM" (number 999) currency intended for demo purposes.
+    /// </remarks>
     [TableDataPrimaryKey(nameof(Iso4217))]
     public sealed class IsoCurrency
     {
@@ -21,14 +26,15 @@ namespace SysWeaver.IsoData
         public readonly String Iso4217;
 
         /// <summary>
-        /// The "biggest" country that is using this currency as ISO 3166 Alpha 2 country code, can be null or empty for special currencies
+        /// The "biggest" country that is using this currency as ISO 3166 Alpha 2 country code, can be null for special currencies (funds codes etc).
+        /// Note that "EU" is used for the Euro.
         /// </summary>
         [TableDataIsoCountry]
         [TableDataOrder(-2)]
         public readonly String Country;
 
         /// <summary>
-        /// The flag of the "biggest" country that is using this currency.
+        /// The flag of the "biggest" country that is using this currency (same value as <see cref="Country"/>, rendered as a flag in table data views).
         /// </summary>
         [TableDataIsoCountryImage]
         [TableDataOrder(-1)]
@@ -40,34 +46,36 @@ namespace SysWeaver.IsoData
         public readonly int Number;
         
         /// <summary>
-        /// The symbol of this currency (or null)
+        /// The symbol of this currency (trimmed), or null if the currency has no symbol.
         /// </summary>
         public readonly String Symbol;
         
         /// <summary>
-        /// The number of subdivisions for under units for this currency, ex: USD = 100, MGA = 2, CLF = 10000
+        /// The number of subdivisions for under units for this currency, ex: USD = 100, MGA = 5, CLF = 10000.
+        /// A value of 1 means that the currency has no under units.
         /// </summary>
         public readonly int UnderUnits;
         
         /// <summary>
-        /// The number of decimal characters (string length) for this currency
+        /// The number of characters used to display the under units of this currency (ceiling of <see cref="DecimalDigits"/>), ex: USD = 2, MGA = 1.
         /// </summary>
         public readonly int DecimalNumbers;
         
         /// <summary>
-        /// The decimal digits for under units for this currency, ex: USD = 2, MGA = 0.5, CLF = 4
+        /// The decimal digits for under units for this currency, ex: USD = 2, CLF = 4.
+        /// Values between 0 and 1 denote a non-decimal subdivision, where the number of under units is 1 / value, ex: MGA = 0.2 (5 iraimbilanja per ariary).
         /// </summary>
         public readonly Double DecimalDigits;
         
         /// <summary>
-        /// Symbol prefix to use when building a string, ex: AmountString = SymbolPrefix + ValueString + SymbolSuffix
-        /// Will use the ISO 4217 currency code if no symbol is defined
+        /// Symbol prefix to use when building a string, ex: AmountString = SymbolPrefix + ValueString + SymbolSuffix.
+        /// Includes any separating space, ex: "$ ". Is the ISO 4217 currency code followed by a space if no symbol is defined, and empty for suffix symbols.
         /// </summary>
         public readonly String SymbolPrefix;
         
         /// <summary>
-        /// Symbol suffix to use when building a string, ex: AmountString = SymbolPrefix + ValueString + SymbolSuffix
-        /// Will use the ISO 4217 currency code if no symbol is defined
+        /// Symbol suffix to use when building a string, ex: AmountString = SymbolPrefix + ValueString + SymbolSuffix.
+        /// Includes any separating space, ex: " kr". Empty for prefix symbols and for currencies without a symbol.
         /// </summary>
         public readonly String SymbolSuffix;
 
@@ -82,7 +90,7 @@ namespace SysWeaver.IsoData
         public readonly String DecimalSeparator;
 
         /// <summary>
-        /// An example of the formatting
+        /// An example of the formatting, the value 98765.4321 formatted using <see cref="CurrencyFormatOptions.Symbol"/>, <see cref="CurrencyFormatOptions.ApplyThousandsSeparator"/> and <see cref="CurrencyFormatOptions.AutomaticRounding"/>.
         /// </summary>
         public readonly String Example;
 
@@ -93,7 +101,7 @@ namespace SysWeaver.IsoData
         public readonly String Name;
 
         /// <summary>
-        /// Countries / regions where the currency is commonly used
+        /// Countries / regions where the currency is commonly used (free text).
         /// </summary>
         [TableDataGoogleSearch]
         public readonly String CommonlyUsed;
@@ -111,13 +119,18 @@ namespace SysWeaver.IsoData
         }
 
         /// <summary>
-        /// Convert an amount to a displayable string
+        /// Convert an amount to a displayable string using the formatting rules of this currency.
         /// </summary>
-        /// <param name="amount">The valut to convert</param>
-        /// <param name="options">Formatting options</param>
-        /// <param name="decimalSeparatorOverride">Optionally override the default decimal separator</param>
-        /// <param name="thousandSeparatorOverride">Optionally override the default thousand separator</param>
-        /// <returns>A displayable string</returns>
+        /// <param name="amount">The value to convert.</param>
+        /// <param name="options">Formatting options, see <see cref="CurrencyFormatOptions"/>.</param>
+        /// <param name="decimalSeparatorOverride">Optionally override the default decimal separator (<see cref="DecimalSeparator"/>).</param>
+        /// <param name="thousandSeparatorOverride">Optionally override the default thousand separator (<see cref="ThousandsSeparator"/>), only used with <see cref="CurrencyFormatOptions.ApplyThousandsSeparator"/>.</param>
+        /// <returns>A displayable string, ex: "USD 1 234.50" or "$ 1 234.50".</returns>
+        /// <remarks>
+        /// The value is rounded to the nearest under unit (banker's rounding). Under units are printed as an integer count padded to
+        /// <see cref="DecimalNumbers"/> digits, so for non-decimal currencies (ex: MGA) the digit is the number of under units, not a decimal fraction.
+        /// Without <see cref="CurrencyFormatOptions.ApplyThousandsSeparator"/> the integer part is formatted using the current culture.
+        /// </remarks>
         public String ToString(Decimal amount, CurrencyFormatOptions options = CurrencyFormatOptions.Default, String decimalSeparatorOverride = null, String thousandSeparatorOverride = null)
         {
             var decimalSeparator = decimalSeparatorOverride ?? DecimalSeparator;
@@ -152,26 +165,27 @@ namespace SysWeaver.IsoData
         }
 
         /// <summary>
-        /// Get currency information given an ISO 4217 currency code, ex: "USD"
+        /// Get currency information given an ISO 4217 currency code, ex: "USD" (case insensitive, no trimming).
         /// </summary>
-        /// <param name="iso4217">The ISO 4217 currency code, ex: "USD"</param>
-        /// <returns>Currency information or null if an invalid currency code was specified</returns>
+        /// <param name="iso4217">The ISO 4217 currency code, ex: "USD", may be null.</param>
+        /// <returns>Currency information or null if an unknown (or null) currency code was specified.</returns>
         public static IsoCurrency TryGet(String iso4217) => IsoToInfo.TryGetValue(iso4217?.FastToLower() ?? "", out var i) ? i : null;
 
         /// <summary>
         /// Get currency information given an ISO 4217 number, ex: 840
         /// </summary>
         /// <param name="number">The ISO 4217 number, ex: 840</param>
-        /// <returns>Currency information or null if an invalid currency number specified</returns>
+        /// <returns>Currency information or null if an unknown currency number was specified.</returns>
         public static IsoCurrency TryGet(int number) => NumberToInfo.TryGetValue(number, out var i) ? i : null;
 
 
 
         /// <summary>
-        /// Validate that the input is a valid language code
+        /// Validate that the input is a known currency, given as an ISO 4217 currency code (case insensitive) or an ISO 4217 number.
+        /// Leading and trailing white space is ignored.
         /// </summary>
-        /// <param name="currency">The ISO 4217 language code or number of the currency</param>
-        /// <returns>The ISO 4217 language code or null for invalid</returns>
+        /// <param name="currency">The ISO 4217 currency code (ex: "usd") or number (ex: "840") of the currency, may be null.</param>
+        /// <returns>The normalized (upper case) ISO 4217 currency code, or null if the input is null, empty or not a known currency.</returns>
         public static String Validate(string currency)
         {
             currency = currency?.Trim();
@@ -187,7 +201,7 @@ namespace SysWeaver.IsoData
         }
 
         /// <summary>
-        /// A list of all currencies known
+        /// A list of all currencies known, ordered (mostly) alphabetically by ISO 4217 code.
         /// </summary>
         public static readonly IReadOnlyList<IsoCurrency> Currencies = new IsoCurrency[]
         {
@@ -363,6 +377,10 @@ namespace SysWeaver.IsoData
             new IsoCurrency("SLE", 925, 2, ".", " ", " Le", false, "New Sierra Leonean leone", "Sierra Leone", "SL"),
         };
 
+        /// <summary>
+        /// Returns a debug friendly description, ex: "USD United States dollar [$]".
+        /// </summary>
+        /// <returns>The ISO code, name and symbol of the currency.</returns>
         public override string ToString()
         {
             return String.Concat(Iso4217, ' ', Name, " [" + Symbol + "]");
@@ -436,12 +454,13 @@ namespace SysWeaver.IsoData
         
 
         /// <summary>
-        /// All chars needed to display currency strings
+        /// All chars needed to display currency strings (digits, minus sign, ISO codes, symbols and separators of all currencies), sorted by char value.
+        /// Useful when creating font subsets.
         /// </summary>
         public static readonly IReadOnlyList<Char> CurrencyGlyphs;
 
         /// <summary>
-        /// Test if char is required to display currency string
+        /// The set of chars in <see cref="CurrencyGlyphs"/>, use to test if a char is required to display currency strings.
         /// </summary>
         public static readonly IReadOnlySet<Char> IsCurrencyGlyph;
 

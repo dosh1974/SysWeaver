@@ -1,5 +1,9 @@
 ﻿namespace SysWeaver.Net
 {
+    /// <summary>
+    /// Access scope of data stored by an <see cref="IUserStorageService"/>.
+    /// The numeric values are used as indices into retention arrays (see <see cref="UserStorageDataRetention.Get(UserStorageDataRetention)"/>).
+    /// </summary>
     public enum UserStorageScopes
     {
         /// <summary>

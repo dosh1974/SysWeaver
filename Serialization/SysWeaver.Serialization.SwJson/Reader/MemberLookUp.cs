@@ -6,13 +6,33 @@ using System.Linq;
 namespace SysWeaver.Serialization.SwJson.Reader
 {
 
+    /// <summary>
+    /// Look up of a value (a member assigner) by an UTF8 key (the member name).
+    /// </summary>
+    /// <typeparam name="T">The value type</typeparam>
     interface IMemberLookUp<T>
     {
+        /// <summary>
+        /// Find the value of a key.
+        /// </summary>
+        /// <param name="state">The parser state (supplies reusable look up objects, not modified otherwise)</param>
+        /// <param name="key">The UTF8 key (case sensitive, exact match)</param>
+        /// <param name="value">The value if found, else default</param>
+        /// <returns>True if the key was found</returns>
         bool TryGetValue(JsonParserState state, ReadOnlySpan<Byte> key, out T value);
     }
 
+    /// <summary>
+    /// Creates an <see cref="IMemberLookUp{T}"/> suited for the number of keys:
+    /// none, a single key, a linear search (up to 5 keys) or buckets by key length (each a single key, a linear search or a frozen dictionary).
+    /// </summary>
+    /// <remarks>The look ups are immutable after creation and thread safe (given a separate <see cref="JsonParserState"/> per thread).</remarks>
+    /// <typeparam name="T">The value type</typeparam>
     static class MemberLookUp<T>
     {
+        /// <summary>
+        /// Up to this number of keys a linear search is used, above it a dictionary
+        /// </summary>
         const int DictPos = 5;
 
         sealed class SingleLookup : IMemberLookUp<T>
@@ -80,6 +100,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
             }
         }
 
+        /// <summary>
+        /// A frozen dictionary look up, the key is wrapped (without copying) in the state's reusable <see cref="JsonParserState.Range"/>.
+        /// </summary>
         sealed class DictionaryLookup : IMemberLookUp<T>
         {
             public DictionaryLookup(ICollection<KeyValuePair<Utf8Range, T>> values)
@@ -103,6 +126,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         }
 
+        /// <summary>
+        /// Keys bucketed by length (an array indexed by the key length), each bucket is the best look up for the keys of that length.
+        /// </summary>
         sealed class LengthListLookup : IMemberLookUp<T>
         {
             public LengthListLookup(ICollection<KeyValuePair<Utf8Range, T>> values)
@@ -167,6 +193,11 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         static readonly EmptyLookup Empty = new EmptyLookup();
 
+        /// <summary>
+        /// Create a look up for the key-value pairs.
+        /// </summary>
+        /// <param name="values">The keys (must be unique and non empty when there are more than 5) and values, the key bytes are copied or referenced</param>
+        /// <returns>A look up (a shared empty instance if there are no values)</returns>
         public static IMemberLookUp<T> Create(ICollection<KeyValuePair<Utf8Range, T>> values)
         {
             var len = values.Count;

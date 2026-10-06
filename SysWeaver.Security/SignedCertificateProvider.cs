@@ -14,21 +14,29 @@ namespace SysWeaver.Security
 
 
     /// <summary>
-    /// A certificate provider that provides a signed certificate.
+    /// A certificate provider that provides a certificate signed by a local root (CA) certificate stored in a pfx file.
     /// The generated certificate is (optionally) cached between executions.
+    /// Optionally the public part of the root certificate is published on the HTTP server (as an <see cref="IHttpServerModule"/>) so that clients can download and trust it.
     /// </summary>
+    /// <remarks>
+    /// A cached certificate is reused if it matches the parameters, isn't about to expire and was issued by the current root certificate.
+    /// The root file is monitored, if it changes the cached certificate is disposed and <see cref="OnChanged"/> is raised.
+    /// Thread safe.
+    /// </remarks>
     public sealed class SignedCertificateProvider : ICertificateProvider, IDisposable, IHttpServerModule
     {
+        /// <inheritdoc/>
         public override string ToString() => Filename;
 
         const String Prefix = "[SignedCertificateProvider] ";
 
         /// <summary>
-        /// A certificate provider that provides a signed certificate.
-        /// The generated certificate is (optionally) cached between executions.
+        /// Create a provider that provides a certificate signed by a local root certificate.
+        /// If <see cref="SignedCertificateProviderParams.PublishRoot"/> is true, the root certificate is loaded asynchronously and its public part is exposed as http end points.
         /// </summary>
-        /// <param name="msg">Message handler</param>
-        /// <param name="p">Paramaters</param>
+        /// <param name="msg">Optional message handler, used to report problems with the root certificate.</param>
+        /// <param name="p">Parameters, null uses the defaults.</param>
+        /// <exception cref="Exception">A subject field contains an invalid character.</exception>
         public SignedCertificateProvider(IMessageHost msg = null, SignedCertificateProviderParams p = null)
         {
             p = p ?? new SignedCertificateProviderParams();
@@ -69,6 +77,10 @@ namespace SysWeaver.Security
             }
         }
 
+        /// <summary>
+        /// If the root certificate is published and the uri template contains variables, this is the fixed part before the first variable,
+        /// so that the module is only consulted for requests below that prefix. Null if not applicable.
+        /// </summary>
         public String[] OnlyForPrefixes { get; init; }
 
 
@@ -144,6 +156,11 @@ namespace SysWeaver.Security
 
         IDisposable ExpireAction;
 
+        /// <summary>
+        /// Get the certificate, loading it from the cache file or creating (and caching) a new one signed by the root certificate if needed.
+        /// </summary>
+        /// <returns>The certificate (owned by the provider, do not dispose it).</returns>
+        /// <exception cref="Exception">The root certificate file doesn't exist or couldn't be loaded.</exception>
         public async Task<X509Certificate2> GetCert()
         {
             var c = C;
@@ -248,13 +265,16 @@ namespace SysWeaver.Security
 
 
         /// <summary>
-        /// An event that is fired whenever the certificate file have changed or if the certificate is about to expire.
-        /// An application should restart (or re-init) to get the updated cert (calling GetCert again will return an updated cert).
+        /// An event that is fired whenever the root certificate file have changed or if the certificate is about to expire.
+        /// The argument is always null and the old certificate has already been disposed, call <see cref="GetCert"/> again to get the updated certificate.
         /// </summary>
         public event Action<X509Certificate2> OnChanged;
 
         IDisposable Fw;
 
+        /// <summary>
+        /// Cancel the scheduled renewal, stop monitoring the root file and dispose the current certificate.
+        /// </summary>
         public void Dispose()
         {
             var l = Lock;
@@ -265,12 +285,22 @@ namespace SysWeaver.Security
             l.Release();
         }
 
+        /// <summary>
+        /// Get the handler for a published root certificate file.
+        /// </summary>
+        /// <param name="context">The request.</param>
+        /// <returns>The handler serving the PEM encoded root certificate, or null if the local url isn't a published file.</returns>
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             Files.TryGetValue(context.LocalUrl, out var h);
             return h;
         }
 
+        /// <summary>
+        /// Enumerate the published root certificate end points (and the implicit folders leading to them).
+        /// </summary>
+        /// <param name="root">Null to enumerate all end points, else only the end points directly in this folder (ex: "certificates/").</param>
+        /// <returns>The end points.</returns>
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null)
         {
             if (root == null)

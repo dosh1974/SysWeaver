@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.Security
 {
+    /// <summary>
+    /// Parameters for <see cref="FileCertificateProvider"/>, the file location and monitoring options are inherited from <see cref="ManagedFileParams"/>.
+    /// </summary>
     public sealed class FileCertificateProviderParams : ManagedFileParams
     {
         /// <summary>

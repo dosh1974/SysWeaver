@@ -15,17 +15,44 @@ using static SysWeaver.Remote.Connection.InterfaceTypeConsts;
 namespace SysWeaver.Remote.Connection
 {
 
+    /// <summary>
+    /// Per end point meta data stored in a field of the generated remote API class (one instance per end point and connection).
+    /// </summary>
     public class ApiMeta
     {
+        /// <summary>
+        /// Creates the meta data, the cache parameters are ignored by this non-generic (void returning) version.
+        /// </summary>
+        /// <param name="name">The end point name, "METHOD path", used for perf tracking.</param>
+        /// <param name="cacheDuration">Ignored.</param>
+        /// <param name="maxCachedItems">Ignored.</param>
+        /// <param name="con">Ignored.</param>
         public ApiMeta(String name, int cacheDuration, int maxCachedItems, RemoteConnection con)
         {
             Name = name;
         }
+        /// <summary>
+        /// The end point name, "METHOD path" (ex: "GET Api/GetUser"), used for perf tracking.
+        /// </summary>
         public readonly String Name;
     }
 
+    /// <summary>
+    /// Meta data for an end point that returns a value, optionally holding a response cache.
+    /// </summary>
+    /// <typeparam name="T">The response type.</typeparam>
     public sealed class ApiMeta<T> : ApiMeta
     {
+        /// <summary>
+        /// Creates the meta data and, if caching is enabled, the response cache.
+        /// </summary>
+        /// <param name="name">The end point name, "METHOD path", used for perf tracking.</param>
+        /// <param name="cacheDuration">Seconds to keep a cached response, <see cref="RemoteCacheAttribute.UseConnection"/> to use <see cref="RemoteConnection.CacheDuration"/>, 0 for no time based expiry.</param>
+        /// <param name="maxCachedItems">Maximum number of cached responses, <see cref="RemoteCacheAttribute.UseConnection"/> to use <see cref="RemoteConnection.MaxCachedItems"/>, 0 for the default LRU capacity.</param>
+        /// <param name="con">The connection parameters.</param>
+        /// <remarks>
+        /// No cache is created if both the duration and max items resolve to 0 or less.
+        /// </remarks>
         public ApiMeta(String name, int cacheDuration, int maxCachedItems, RemoteConnection con) : base(name, cacheDuration, maxCachedItems, con)
         {
             if (cacheDuration == RemoteCacheAttribute.UseConnection)
@@ -59,19 +86,38 @@ namespace SysWeaver.Remote.Connection
             }
         }
 
+        /// <summary>
+        /// The response cache keyed by relative url (thread safe LRU), or null if caching is disabled.
+        /// Cached values are shared between callers, so returned reference types must not be mutated.
+        /// </summary>
         public readonly ICache<String, T> Cache;
     }
 
 
+    /// <summary>
+    /// Reflection data used when emitting remote API classes.
+    /// </summary>
     static class InterfaceTypeConsts
     {
+        /// <summary>
+        /// The base class of all generated classes, <see cref="RemoteConnectionBase"/>.
+        /// </summary>
         public static readonly Type BaseType = typeof(RemoteConnectionBase);
+        /// <summary>
+        /// The constructor signature of the base (and generated) class.
+        /// </summary>
         public static readonly Type[] BaseConstructorTypes = [typeof(RemoteConnection), typeof(Type)];
+        /// <summary>
+        /// The protected constructor of <see cref="RemoteConnectionBase"/>.
+        /// </summary>
         public static readonly ConstructorInfo BaseConstructor = BaseType.GetConstructor(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, BaseConstructorTypes, null);
         
         
         const BindingFlags bf = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
         
+        /// <summary>
+        /// The supported return types of a remote API method, also the first index into <see cref="RestMethods"/>.
+        /// </summary>
         public enum RetTypes
         {
             /// <summary>
@@ -79,7 +125,7 @@ namespace SysWeaver.Remote.Connection
             /// </summary>
             ReturnTask,
             /// <summary>
-            /// Task'1
+            /// ValueTask'1 (NOTE: the selected base methods return Task'1, so this is not usable in practice)
             /// </summary>
             ReturnValueTask,
             /// <summary>
@@ -87,7 +133,7 @@ namespace SysWeaver.Remote.Connection
             /// </summary>
             Void,
             /// <summary>
-            /// Task
+            /// ValueTask (NOTE: the selected base methods return Task, so this is not usable in practice)
             /// </summary>
             ValueVoid
 
@@ -101,6 +147,12 @@ namespace SysWeaver.Remote.Connection
             { typeof(ValueTask<>), RetTypes.ReturnValueTask },
         };
 
+        /// <summary>
+        /// Classifies a method return type.
+        /// </summary>
+        /// <param name="t">On input the method return type, on output the result type (the generic argument, or <c>typeof(void)</c> for non-generic tasks).</param>
+        /// <returns>The return type kind.</returns>
+        /// <exception cref="Exception">The return type isn't a Task, Task'1, ValueTask or ValueTask'1.</exception>
         public static RetTypes GetRetType(ref Type t)
         {
             var o = t;
@@ -119,6 +171,9 @@ namespace SysWeaver.Remote.Connection
         }
 
 
+        /// <summary>
+        /// The <see cref="RemoteConnectionBase"/> helper methods, indexed by [<see cref="RetTypes"/>][<see cref="HttpEndPointTypes"/>].
+        /// </summary>
         public static readonly MethodInfo[][] RestMethods =
         [
             [
@@ -157,9 +212,17 @@ namespace SysWeaver.Remote.Connection
 
 
     /// <summary>
-    /// Provides functionality for creating a remote connection instance of a specific type, this uses il emit to build a new type.
+    /// Provides functionality for creating a remote connection instance of a specific type, this uses il emit to build a new type (once per interface, in a new dynamic assembly).
     /// </summary>
-    /// <typeparam name="T"></typeparam>
+    /// <typeparam name="T">A public interface inheriting <see cref="IDisposable"/>.</typeparam>
+    /// <remarks>
+    /// Each method declared directly on the interface becomes an end point (members of inherited interfaces other than <see cref="IRemoteApi"/>/<see cref="IDisposable"/> are not implemented).
+    /// The end point path is <see cref="RemotePathPrefixAttribute"/> + <see cref="RemoteEndPointAttribute.Path"/> (default the method name);
+    /// without a <see cref="RemoteEndPointAttribute"/>, methods without parameters use GET and others POST.
+    /// GET/DELETE format the path as a <see cref="UriParamsEncoder{T}"/> template using the parameter(s); POST/PUT send the parameter(s) as the payload.
+    /// Methods with more than one parameter pass an object[] (or, with <see cref="ParamAsObjectAttribute"/>, a generated object with one field per parameter).
+    /// Only method level <see cref="RemoteCacheAttribute"/>, <see cref="RemoteSerializerAttribute"/> and <see cref="RemoteTimeoutAttribute"/> are read here.
+    /// </remarks>
     static class InterfaceTypeCache<T> where T : class, IDisposable
     {
 
@@ -516,7 +579,8 @@ namespace SysWeaver.Remote.Connection
         }
 
         /// <summary>
-        /// Creates a remote connection instance for a specific remote interface
+        /// Creates a remote connection instance for a specific remote interface, arguments are the connection parameters and the interface type.
+        /// The type is built when this class is first accessed, so any interface validation error surfaces as a <see cref="TypeInitializationException"/>.
         /// </summary>
         public static readonly Func<RemoteConnection, Type, T> Create = Build();
     }

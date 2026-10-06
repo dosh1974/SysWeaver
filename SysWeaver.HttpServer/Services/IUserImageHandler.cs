@@ -5,11 +5,11 @@ namespace SysWeaver.Net
 {
 
     /// <summary>
-    /// Used when an IUsageIMageHandler isn't found or doesn't supply an image for a user.
+    /// Used when an <see cref="IUserImageHandler"/> isn't found or doesn't supply an image for a user.
     /// Order is:
-    /// IUserImageHandler
-    /// IDefaultUserImageHandler
-    /// Internal default (based on nick).
+    /// <see cref="IUserImageHandler"/>,
+    /// <see cref="IDefaultUserImageHandler"/>,
+    /// internal default (based on nick).
     /// </summary>
     public interface IDefaultUserImageHandler
     {
@@ -17,13 +17,16 @@ namespace SysWeaver.Net
         /// Get an image of a specific size
         /// </summary>
         /// <param name="userGuid">The hexa decimal user guid</param>
-        /// <param name="size">The size (must be one from the Sizes property)</param>
+        /// <param name="size">The requested size in pixels (one of the sizes supported by the active <see cref="IUserImageHandler"/>)</param>
         /// <returns>A request handler if it exist, else null</returns>
         Task<IHttpRequestHandler> Get(String userGuid, int size);
     }
 
 
 
+    /// <summary>
+    /// A service that supplies user images (avatars) in a set of fixed sizes, used by the auth manager to serve user images.
+    /// </summary>
     public interface IUserImageHandler
     {
         /// <summary>

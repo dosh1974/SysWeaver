@@ -11,17 +11,21 @@ namespace SysWeaver
 
 
     /// <summary>
-    /// Computes and caches file hashes of the decompressed content (automatic pruning).
-    /// Folders can be overridden using the key "FileHashFolders" in the ApplicationName.Config.json file (shared with FileHash).
-    /// Default uses the Folders.AllSharedFolders locations.
+    /// Computes and caches hashes of the decompressed content of compressed files (automatic pruning).
+    /// The hash is an MD5 of the decompressed data encoded using <see cref="HashTools.GetHashString16(ReadOnlySpan{byte})"/> (not suitable for security purposes).
+    /// Cached values are stored next to the <see cref="FileHash"/> cache (same folders, same cache key with a "_d.txt" suffix).
     /// </summary>
+    /// <remarks>
+    /// The compression type is determined from the file extension using <see cref="CompManager.GetFromExt(string)"/>.
+    /// The whole decompressed file is held in memory while hashing.
+    /// </remarks>
     public static class DecompressedFileHash
     {
         /// <summary>
         /// Get a hash of the decompressed contents of the supplied file
         /// </summary>
-        /// <param name="filename">The existing file to get the hash of the content, must be in one of the known compressed formats</param>
-        /// <returns>A hash string (26 chars) or null if there is some error</returns>
+        /// <param name="filename">The existing file to get the hash of the content, must be in one of the known compressed formats (determined by the file extension)</param>
+        /// <returns>A hash string (26 chars) or null if the file doesn't exist, the extension isn't a known compression format or decompression fails</returns>
         public static String GetHash(String filename)
         {
             var keyName = FileHash.GetCacheKey(filename);
@@ -84,8 +88,8 @@ namespace SysWeaver
         /// <summary>
         /// Get a hash of the decompressed contents of the supplied file
         /// </summary>
-        /// <param name="filename">The existing file to get the hash of the content, must be in one of the known compressed formats</param>
-        /// <returns>A hash string (26 chars) or null if there is some error</returns>
+        /// <param name="filename">The existing file to get the hash of the content, must be in one of the known compressed formats (determined by the file extension)</param>
+        /// <returns>A hash string (26 chars) or null if the file doesn't exist, the extension isn't a known compression format or decompression fails</returns>
         public static async Task<String> GetHashAsync(String filename)
         {
             var keyName = await FileHash.GetCacheKeyAsync(filename).ConfigureAwait(false);

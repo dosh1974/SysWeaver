@@ -9,9 +9,23 @@ using System.Diagnostics;
 
 namespace SysWeaver.Remote.Connection
 {
+    /// <summary>
+    /// A growable byte buffer writer that serializes the public instance fields and properties of an object as application/x-www-form-urlencoded data (UTF-8).
+    /// Used by <see cref="FormUrlSerializer"/> and <see cref="IgnoreDefaultsFormUrlSerializer"/>.
+    /// </summary>
+    /// <remarks>
+    /// Supported member types: integer types, <see cref="float"/>, <see cref="double"/>, <see cref="decimal"/>, <see cref="TimeSpan"/>, <see cref="DateTime"/>, <see cref="Guid"/>,
+    /// <see cref="bool"/>, <see cref="char"/> and <see cref="string"/>; members of other types (including enums and nullables) are silently skipped.
+    /// Only names, strings and chars are url escaped. Not thread safe.
+    /// </remarks>
     sealed class FormUrlWriter
     {
 
+        /// <summary>
+        /// Creates a writer.
+        /// </summary>
+        /// <param name="initData">The initial buffer to write to, null to allocate a 4 KiB buffer.</param>
+        /// <param name="startOffset">The offset in the buffer to start writing at.</param>
         public FormUrlWriter(Byte[] initData = null, int startOffset = 0)
         {
             initData ??= GC.AllocateUninitializedArray<Byte>(4096);
@@ -23,7 +37,13 @@ namespace SysWeaver.Remote.Connection
         int S;
 
 
+        /// <summary>
+        /// The current buffer (replaced when growing), valid data is in [0, <see cref="Offset"/>).
+        /// </summary>
         public Byte[] Data;
+        /// <summary>
+        /// The current write position (the number of valid bytes when starting at 0).
+        /// </summary>
         public int Offset;
 
         [Conditional("DEBUG")]
@@ -48,6 +68,10 @@ namespace SysWeaver.Remote.Connection
         }
 
 
+        /// <summary>
+        /// Make sure that at least <paramref name="size"/> bytes can be written at the current offset, growing (and copying) the buffer if needed.
+        /// </summary>
+        /// <param name="size">The number of bytes required.</param>
         public void Ensure(int size)
         {
             var end = Offset + size;
@@ -55,6 +79,10 @@ namespace SysWeaver.Remote.Connection
                 Grow(end);
         }
 
+        /// <summary>
+        /// Copy a small byte array to the buffer, space must have been ensured.
+        /// </summary>
+        /// <param name="data">The bytes to write.</param>
         public void WriteSmall(Byte[] data)
         {
             var size = data.Length;
@@ -72,6 +100,10 @@ namespace SysWeaver.Remote.Connection
             Offset = o;
         }
 
+        /// <summary>
+        /// Write an ASCII only string as bytes (no escaping), space must have been ensured.
+        /// </summary>
+        /// <param name="s">The string, must only contain ASCII chars (only validated in DEBUG builds).</param>
         public void WriteAsciiString(String s)
         {
             Validate(s.Length);
@@ -353,6 +385,10 @@ namespace SysWeaver.Remote.Connection
         static readonly MethodInfo BlockCopy = typeof(Buffer).GetMethod(nameof(Buffer.BlockCopy));
         static readonly Expression Int32Const0 = Expression.Constant(0);
 
+        /// <summary>
+        /// Compiled (expression tree) writers for a type.
+        /// </summary>
+        /// <typeparam name="T">The type to serialize.</typeparam>
         public sealed class Cache<T>
         {
             static Action<FormUrlWriter, T> Build(bool ignoreDefaults = true)
@@ -421,7 +457,13 @@ namespace SysWeaver.Remote.Connection
                 return l.Compile();
             }
 
+            /// <summary>
+            /// Writes all supported members as "name=value" pairs separated by '&amp;'.
+            /// </summary>
             public static readonly Action<FormUrlWriter, T> Write = Build(false);
+            /// <summary>
+            /// Writes all supported members that don't have their default value, NOTE: the output may start with a '&amp;' that must be skipped by the caller.
+            /// </summary>
             public static readonly Action<FormUrlWriter, T> WriteIgnoreDefaults = Build(true);
 
 

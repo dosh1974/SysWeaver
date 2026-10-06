@@ -4,9 +4,35 @@ using System.Collections.Generic;
 
 namespace SysWeaver.Data
 {
+    /// <summary>
+    /// Shared cell formatting helpers for the text based table exporters (<see cref="HtmlTableDataExporter"/> and <see cref="MarkDownTableDataExporter"/>).
+    /// </summary>
+    /// <remarks>
+    /// Numbers are formatted using <c>ToValueString</c> (with the decimal count from a <see cref="TableDataFormats.Number"/> column format, default 3).
+    /// If the column format is <see cref="TableDataFormats.Default"/> or <see cref="TableDataFormats.Number"/> with a format string part,
+    /// the text is formatted using <see cref="String.Format(string, object, object)"/> with {0} = the value text and {1} = the next column's value.
+    /// All spaces in formatted text are replaced with non breaking spaces (U+00A0).
+    /// A formatter may return a text starting with char 1 to signal that the rest is already formatted (and escaped) markup that should be emitted as is.
+    /// </remarks>
     public static class TableDataExporterTools
     {
+        /// <summary>
+        /// Formats a cell value to text.
+        /// </summary>
+        /// <param name="value">The cell value, may be null.</param>
+        /// <param name="nextValue">The value of the next column in the same row (used by some formats), may be null.</param>
+        /// <param name="col">The column definition, may be null if the table has no column information.</param>
+        /// <returns>The formatted text, a text starting with char 1 is pre-formatted markup.</returns>
         public delegate String Formatter(Object value, Object nextValue, TableDataColumn col);
+
+        /// <summary>
+        /// A formatter for a special column format (the first ';' separated part of <see cref="TableDataColumn.Format"/>, ex: "Url").
+        /// </summary>
+        /// <param name="fmt">The default formatter for the column type, used to format the raw value.</param>
+        /// <param name="value">The cell value, may be null.</param>
+        /// <param name="nextValue">The value of the next column in the same row, may be null.</param>
+        /// <param name="col">The column definition.</param>
+        /// <returns>The formatted text, a text starting with char 1 is pre-formatted markup.</returns>
         public delegate String SpecialFormatter(Formatter fmt, Object value, Object nextValue, TableDataColumn col);
 
         static readonly String NumberFmt = TableDataFormats.Number.ToString();
@@ -17,6 +43,13 @@ namespace SysWeaver.Data
             {  TableDataFormats.Number.ToString(), 2 },
         }.Freeze();
 
+        /// <summary>
+        /// Get an element from an array, falling back to a default value if the index is out of range or the element is null.
+        /// </summary>
+        /// <param name="vars">The array (typically the ';' separated parts of a column format).</param>
+        /// <param name="index">The index of the element, must be non-negative.</param>
+        /// <param name="def">The value to return if the element doesn't exist or is null.</param>
+        /// <returns>The element or <paramref name="def"/>.</returns>
         public static String GetIndexed(String[] vars, int index, String def)
         {
             if (index >= vars.Length)
@@ -161,6 +194,13 @@ namespace SysWeaver.Data
         }.Freeze();
 
 
+        /// <summary>
+        /// Get the formatter to use for a column.
+        /// </summary>
+        /// <param name="typeName">The full type name of the column (<see cref="TableDataBaseColumn.Type"/>).</param>
+        /// <param name="headerFormat">The column format (<see cref="TableDataColumn.Format"/>), may be null.</param>
+        /// <param name="specials">Optional special formatters keyed on the first ';' separated part of the format, wrapping the type formatter.</param>
+        /// <returns>The formatter, and true if the column is numeric (should be right aligned).</returns>
         public static ValueTuple<Formatter, bool> Get(String typeName, String headerFormat, IReadOnlyDictionary<String, SpecialFormatter> specials = null)
         {
             var rightAlign = DefToStrings.TryGetValue(typeName, out var fmt);
@@ -176,6 +216,11 @@ namespace SysWeaver.Data
             return (fmt ?? ObjToString, rightAlign);
         }
 
+        /// <summary>
+        /// Get the formatter to use for a value when no column information is available, based on the runtime type of the value.
+        /// </summary>
+        /// <param name="value">The value, may be null.</param>
+        /// <returns>The formatter, and true if the value is numeric (should be right aligned).</returns>
         public static ValueTuple<Formatter, bool> GetDefault(Object value)
         {
             if (value == null)

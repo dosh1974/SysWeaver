@@ -4,12 +4,18 @@ namespace SysWeaver.Security
 {
 
     /// <summary>
-    /// Base certificate params, can be used by signed and ACME certificates
+    /// Base certificate parameters shared by locally generated (self-signed / CA-signed) and ACME certificates:
+    /// where the generated certificate is cached, the password protecting it and the subject fields.
     /// </summary>
+    /// <remarks>
+    /// The subject fields are validated by <see cref="SignedCertificateCreator"/>: they may not contain <c>'='</c> or <c>','</c>.
+    /// </remarks>
     public class CertificateBaseParams
     {
         /// <summary>
-        /// Where to store the template.
+        /// The .pfx file where the generated certificate (including private key) is cached between executions.
+        /// A PEM encoded public certificate is also written next to it using the ".crt" extension.
+        /// Null or empty disables caching (a new certificate is generated every time the process starts).
         /// Can use path variables, ex:
         ///             $(CommonApplicationData) = The directory that serves as a common repository for application-specific data that is used by all users.
         ///             $(LocalApplicationData) = The directory that serves as a common repository for application-specific data that is used by the current, non-roaming user.
@@ -28,7 +34,8 @@ namespace SysWeaver.Security
         public String Filename = @"$(CommonApplicationData)\SysWeaver_AppData_$(AppName)\Cert.pfx";
 
         /// <summary>
-        /// The password to use for the generated cert.
+        /// The password used to protect the private key of the cached .pfx file.
+        /// The default (the application name) is not a secret, it only prevents casual use of the file; protect the file using file system permissions.
         /// Can use EnvInfo variables:
         ///             $(AppName) = Application name.
         ///             $(AppStart) = Application start time as "yyyy-MM-hh hh:mm:ss".
@@ -40,37 +47,43 @@ namespace SysWeaver.Security
         public String Password = "$(AppName)";
 
         /// <summary>
-        /// Certificate country as an ISO 3166 Alpha 2 country code (C in certificate), can use EnvInfo variables:
+        /// Certificate country (C in certificate), can use EnvInfo variables.
+        /// Any value understood by <c>IsoCountry.TryGet</c> is accepted and converted to an ISO 3166 alpha-2 code, unknown values are ignored (no C is added).
+        /// Null or empty uses the region of the current culture.
         /// </summary>
         public String Country;
 
         /// <summary>
-        /// Certificate location (L in certificate), can use EnvInfo variables:
+        /// Certificate locality / city (L in certificate), can use EnvInfo variables.
         /// </summary>
         public String Locality;
 
         /// <summary>
-        /// Certificate organization (O in certificate), can use EnvInfo variables:
+        /// Certificate organization (O in certificate), can use EnvInfo variables.
         /// </summary>
         public String Organization = "SysWeaver";
 
         /// <summary>
-        /// Certificate organizational unit (OU in certificate), can use EnvInfo variables:
+        /// Certificate organizational unit (OU in certificate), can use EnvInfo variables.
         /// </summary>
         public String Unit = "Platform";
 
         /// <summary>
-        /// Certificate state or province (S in certificate), can use EnvInfo variables:
+        /// Certificate state or province (ST in certificate), can use EnvInfo variables.
         /// </summary>
         public String State;
 
         /// <summary>
-        /// Certificate email (E), can use EnvInfo variables.
+        /// Certificate email (E in certificate), can use EnvInfo variables.
         /// </summary>
         public String Email;
 
 
 
+        /// <summary>
+        /// Copy all values declared by <see cref="CertificateBaseParams"/> from another instance (shallow copy).
+        /// </summary>
+        /// <param name="p">The instance to copy from, may not be null.</param>
         public void CopyFrom(CertificateBaseParams p)
         {
 

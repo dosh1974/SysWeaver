@@ -3,6 +3,9 @@ using System;
 
 namespace SysWeaver.OsServices
 {
+    /// <summary>
+    /// Extensions for <see cref="ServiceStatus"/>.
+    /// </summary>
     public static class ServiceStatusHelper
     {
         static readonly String[] IntTexts = 
@@ -19,6 +22,12 @@ namespace SysWeaver.OsServices
         ];
 
 
+        /// <summary>
+        /// Get a human readable description of a status, including the name and numeric value.
+        /// </summary>
+        /// <param name="status">The status, must be a defined value.</param>
+        /// <returns>Ex: "The service is running [Running: 5]".</returns>
+        /// <exception cref="IndexOutOfRangeException"><paramref name="status"/> isn't a defined value.</exception>
         public static String Text(this ServiceStatus status) => String.Concat(IntTexts[(int)status], " [", status, ": ", (int)status, ']');
 
     }

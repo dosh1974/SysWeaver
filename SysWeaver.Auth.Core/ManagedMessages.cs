@@ -7,6 +7,13 @@ using System.Threading.Tasks;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Holds a set of localized text and mail message templates, loaded from a folder with one sub folder per language.
+    /// Used for account related messages (ex: by the user manager).
+    /// </summary>
+    /// <remarks>
+    /// For language codes with a region (ex: "en-GB"), the neutral language ("en") is also mapped to the first (alphabetically) regional variant if no neutral folder exists.
+    /// </remarks>
     public sealed class ManagedMessages
     {
 
@@ -23,8 +30,8 @@ namespace SysWeaver
         /// </param>
         /// <param name="names">The names/keys of messages.
         /// Text (SMS/message) files are names as "[Name]Text.txt", mail fails are named as specified in the htmlMail parameter.
-        /// If the name starts with a '*', the data is optional (will return empty strings if not found)</param>
-        /// <exception cref="Exception"></exception>
+        /// If the name starts with a '*', the data is optional (will return empty strings if not found), note that the '*' is part of the lookup key.</param>
+        /// <exception cref="Exception">A required message file doesn't exist.</exception>
         public ManagedMessages(String sourceFolder, String defaultLang, bool htmlMail, params String[] names)
             : this(sourceFolder, defaultLang, htmlMail, null, names)
         {
@@ -43,8 +50,8 @@ namespace SysWeaver
         /// </param>
         /// <param name="names">The names/keys of messages.
         /// Text (SMS/message) files are names as "[Name]Text.txt", mail fails are named as specified in the htmlMail parameter.
-        /// If the name starts with a '*', the data is optional (will return empty strings if not found)</param>
-        /// <exception cref="Exception"></exception>
+        /// If the name starts with a '*', the data is optional (will return empty strings if not found), note that the '*' is part of the lookup key.</param>
+        /// <exception cref="Exception">A required message file doesn't exist.</exception>
         public ManagedMessages(String sourceFolder, String defaultLang, bool htmlMail, IReadOnlySet<String> vars, params String[] names)
         {
             vars = vars.Freeze();
@@ -134,27 +141,37 @@ namespace SysWeaver
             Languages = languages;
         }
 
+        /// <summary>
+        /// The additional variables that the templates may use (frozen), may be null.
+        /// </summary>
         public readonly IReadOnlySet<String> Vars;
 
+        /// <inheritdoc/>
         public override string ToString() => String.Concat("Default: ", Default, ", languages: ", Languages.Count);
 
         readonly ConcurrentDictionary<String, ManagedLanguageMessages> Languages = new ConcurrentDictionary<String, ManagedLanguageMessages>(StringComparer.Ordinal);
 
 
+        /// <summary>
+        /// Add a language (typically machine translated at runtime) if it doesn't exist.
+        /// </summary>
+        /// <param name="language">The language code, should be lower case to be found by <see cref="GetLang(string)"/></param>
+        /// <param name="data">The messages</param>
+        /// <returns>True if added, false if the language already exists</returns>
         public bool TryAddTranslatedLanguage(String language, ManagedLanguageMessages data)
             => Languages.TryAdd(language, data);
 
         /// <summary>
-        /// The language used if the supplied language isn't found
+        /// The language used if the supplied language isn't found (null if there are no languages)
         /// </summary>
         public readonly ManagedLanguageMessages Default;
 
  
         /// <summary>
-        /// Get 
+        /// Get the messages for a language, falling back to the neutral language (ex: "en" for "en-US") and then to <see cref="Default"/>.
         /// </summary>
-        /// <param name="language"></param>
-        /// <returns></returns>
+        /// <param name="language">The language code (case insensitive), null returns <see cref="Default"/></param>
+        /// <returns>The messages, null only if no languages exist</returns>
         public ManagedLanguageMessages GetLang(String language)
         {
             if (language == null)

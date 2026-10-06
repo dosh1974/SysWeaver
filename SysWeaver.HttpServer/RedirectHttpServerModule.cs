@@ -13,8 +13,15 @@ namespace SysWeaver.Net
 {
 
     /// <summary>
-    /// A http module that can be used to redirect requests
+    /// A http module that redirects requests whose full url starts with a configured prefix (ex: http to https upgrades),
+    /// and that serves the "external info" redirects (country, currency, user agent, ip and mac lookups on external sites).
     /// </summary>
+    /// <remarks>
+    /// Redirections come from <see cref="RedirectHttpServerModuleParams.Redirections"/> or from a monitored text file (<see cref="RedirectHttpServerModuleParams.Filename"/>).
+    /// If no redirections are configured (and no file is used), <see cref="HttpRedirection.HttpToHttps"/> is used.
+    /// A '*' in a redirection is replaced with the host of the request, the resolved redirections are cached per host.
+    /// The redirect response is written directly (<see cref="HttpServerTools.AlreadyHandled"/>), so no auth checks are made.
+    /// </remarks>
     public sealed class RedirectHttpServerModule : IHttpServerModule, IDisposable
     {
         static readonly IReadOnlySet<int> ValidCodes = ReadOnlyData.Set(
@@ -23,6 +30,11 @@ namespace SysWeaver.Net
 
         const String Prefix = "[RedirectModule] ";
 
+        /// <summary>
+        /// Create a redirect module.
+        /// </summary>
+        /// <param name="p">Parameters (null to use defaults, i.e an http to https redirection)</param>
+        /// <param name="messageHandler">Optional message host for warnings about invalid redirections and file reloads</param>
         public RedirectHttpServerModule(RedirectHttpServerModuleParams p = null, IMessageHost messageHandler = null)
         {
             p = p ?? new RedirectHttpServerModuleParams();
@@ -81,6 +93,9 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <summary>
+        /// Stop monitoring the redirection file (if any).
+        /// </summary>
         public void Dispose()
         {
             Interlocked.Exchange(ref Fc, null)?.Dispose();
@@ -137,6 +152,9 @@ namespace SysWeaver.Net
             return t.Substring(start, pos - start);
         }
 
+        /// <summary>
+        /// Load redirections from a file, the current redirections are kept if the file doesn't exist or contains any invalid row.
+        /// </summary>
         void TryLoad(String filename)
         {
             var msg = Msg;
@@ -216,6 +234,11 @@ namespace SysWeaver.Net
 
         static readonly String This = "[Implicit folder] from Redirect Module";
 
+        /// <summary>
+        /// Enumerates the external info end points (the configured redirections are not enumerated).
+        /// </summary>
+        /// <param name="root">Null to enumerate all, else the folder to enumerate</param>
+        /// <returns>End point information</returns>
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null)
         {
             var t = This;
@@ -263,6 +286,12 @@ namespace SysWeaver.Net
             { "mac", v => "https://maclookup.app/search/result?mac=" + v },
         }.Freeze();
 
+        /// <summary>
+        /// Handles a request to the external info path ("{ExternalInfoPath}{type}/{value}") by responding with a 302 redirect to an external lookup site.
+        /// </summary>
+        /// <param name="context">The request, the local url must start with <see cref="TableDataConsts.ExternalInfoPath"/></param>
+        /// <returns><see cref="HttpServerTools.AlreadyHandled"/> if a redirect was written, else null</returns>
+        /// <remarks>The value is appended to the external url as is (it's not url encoded).</remarks>
         public IHttpRequestHandler ExternalInfoHandler(HttpServerRequest context)
         {
             var lp = context.LocalUrl.Substring(TableDataConsts.ExternalInfoPath.Length);
@@ -281,6 +310,14 @@ namespace SysWeaver.Net
 
         static readonly Char[] HostEnd = ['/', ':'];
 
+        /// <summary>
+        /// If the request url starts with a configured prefix, writes a redirect response (the matched prefix is replaced, the rest of the url is kept).
+        /// </summary>
+        /// <param name="context">The request</param>
+        /// <returns><see cref="HttpServerTools.AlreadyHandled"/> if a redirect was written, else null</returns>
+        /// <remarks>
+        /// The remainder is taken from the decoded request url (<see cref="HttpServerRequest.Url"/>), so percent encoded characters are not re-encoded.
+        /// </remarks>
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             if (context.LocalUrl.FastStartsWith(TableDataConsts.ExternalInfoPath))

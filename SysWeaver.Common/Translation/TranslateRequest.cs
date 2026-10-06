@@ -24,7 +24,8 @@ namespace SysWeaver.Translation
 
         /// <summary>
         /// The text to translate.
-        /// If it's starting with "{MD}" the text is assumed to be in the Mark Down format.
+        /// Use <see cref="ContentType"/> to specify mark down or html.
+        /// Texts starting with <see cref="TranslationTools.NoTranslatePrefix"/> are not translated.
         /// </summary>
         [EditMin(1)]
         [EditMultiline]
@@ -47,7 +48,7 @@ namespace SysWeaver.Translation
         public TranslationCacheRetention Retention { get; set; } = TranslationCacheRetention.Medium;
 
         /// <summary>
-        /// The duration to cache the translation
+        /// The type of text (plain text, mark down or html)
         /// </summary>
         public TranslationContentTypes ContentType { get; set; } = TranslationContentTypes.Text;
 

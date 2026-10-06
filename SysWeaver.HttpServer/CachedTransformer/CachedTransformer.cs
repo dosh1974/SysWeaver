@@ -14,23 +14,58 @@ using System.Globalization;
 namespace SysWeaver.HttpTransformer
 {
 
+    /// <summary>
+    /// Base class for transformer services that convert served files (by mime type or file extension) into alternative,
+    /// typically smaller, variants (pre-compressed, re-encoded images etc) that are cached on disc and selected per request.
+    /// </summary>
+    /// <remarks>
+    /// Derived classes register <see cref="ICachedTransformer"/> handlers using <see cref="Add"/>.
+    /// The server invokes <see cref="GetTransformers"/> handlers for matching files; an in-memory cache (1 hour) keyed by local url and etag
+    /// maps to a <see cref="CachedTransformerEntry"/>; misses are validated against disc and otherwise built (in the background or directly,
+    /// see <see cref="CachedTransformerBuildStrategies"/>).
+    /// Files are named by a 26 character hash of the key, distributed over the data folders, and pruned when not accessed for
+    /// <see cref="CachedTransformerParams.RemoveAfterDays"/> days (one folder is scanned every 15 minutes).
+    /// Thread safe.
+    /// </remarks>
     public partial class CachedTransformer : IHttpTransformerService, IDisposable, IPerfMonitored, IHaveStats
     {
 
+        /// <summary>
+        /// Extension appended to files while they are being written (stale temp files older than an hour are pruned).
+        /// </summary>
         public const string TempExt = ".tmp";
 
 
+        /// <summary>
+        /// The compression used for disc cached files that should be stored compressed (brotli).
+        /// </summary>
         public readonly ICompType CompType;
 
+        /// <summary>
+        /// The file extension (including the leading dot) used for files compressed with <see cref="CompType"/>.
+        /// </summary>
         public readonly String CompExt;
 
+        /// <summary>
+        /// Sort variants by file size, smallest first.
+        /// </summary>
+        /// <param name="files">The variants, a null element represents the original.</param>
+        /// <param name="originalLen">The size of the original, used as the sort key for null elements.</param>
+        /// <returns>A new sorted array.</returns>
         public static FileHttpRequestHandler[] GetValidSorted(IReadOnlyList<FileHttpRequestHandler> files, long originalLen)
             => files.OrderBy(x => x == null ? originalLen : x.Fi.Length).ToArray();
 
+        /// <summary>
+        /// Request options used for the file handlers of cached variants (no client or request caching, no on-the-fly compression, no auth of its own).
+        /// </summary>
         public static readonly RequestOptions Options = new RequestOptions(0, 0, 0, null, null);
 
 
 
+        /// <summary>
+        /// Create the transformer service and start the background build and prune tasks.
+        /// </summary>
+        /// <param name="p">Parameters, null to use defaults.</param>
         protected CachedTransformer(CachedTransformerParams p = null)
         {
             p = p ?? new CachedTransformerParams();
@@ -66,6 +101,9 @@ namespace SysWeaver.HttpTransformer
         PeriodicTask PruneTask;
         readonly PeriodicTask[] BuildTasks;
 
+        /// <summary>
+        /// Stop the background build and prune tasks (queued builds are abandoned).
+        /// </summary>
         public void Dispose()
         {
             Interlocked.Exchange(ref PruneTask, null)?.Dispose();
@@ -81,6 +119,9 @@ namespace SysWeaver.HttpTransformer
         readonly ExceptionTracker BuildErrors = new ();
         
 
+        /// <summary>
+        /// Build one job (limited by <see cref="BuildLock"/>), always completes the entry and removes it from the scheduled jobs.
+        /// </summary>
         async Task BuildOne(CachedTransformerJob job)
         {
             using var ___ = PerfMon.Track("BuildQueued");
@@ -108,6 +149,9 @@ namespace SysWeaver.HttpTransformer
             ScheduledJobs.TryRemove(info.CacheKey, out var _);
 }
 
+        /// <summary>
+        /// Periodic task body that drains the deferred build queue.
+        /// </summary>
         async Task<bool> Build()
         {
             var b = BuildJobs;
@@ -123,6 +167,13 @@ namespace SysWeaver.HttpTransformer
 
 
 
+        /// <summary>
+        /// Register a transformer for a file extension (with or without leading dot, case insensitive) or a mime type.
+        /// </summary>
+        /// <param name="fileExtension">A file extension or a mime type (contains a '/').</param>
+        /// <param name="transformHandler">The transformer to use.</param>
+        /// <returns>True if added, false if a transformer is already registered for that key.</returns>
+        /// <remarks>Must be called before the service is registered with the server (<see cref="GetTransformers"/> is only enumerated at registration).</remarks>
         protected bool Add(String fileExtension, ICachedTransformer transformHandler)
         {
             return MimeHandlers.TryAdd(fileExtension.FastTrimStartToLower('.'), transformHandler);
@@ -130,10 +181,16 @@ namespace SysWeaver.HttpTransformer
 
         readonly SemiFrozenDictionary<String, ICachedTransformer> MimeHandlers = new SemiFrozenDictionary<string, ICachedTransformer>(StringComparer.Ordinal);
 
+        /// <inheritdoc/>
         public IEnumerable<KeyValuePair<string, Func<HttpRequestTransformerState, Task<bool>>>> GetTransformers()
             => MimeHandlers.Select(x => new KeyValuePair<string, Func<HttpRequestTransformerState, Task<bool>>>(x.Key, Handle));
 
 
+        /// <summary>
+        /// Pick the first variant that the client accepts (Accept-Encoding for compressed files, Accept for webp/avif)
+        /// and set it as the handler of the state.
+        /// </summary>
+        /// <returns>True if a variant was selected, false to serve the original (not built yet, original preferred or nothing acceptable).</returns>
         async Task<bool> Handle(HttpRequestTransformerState state)
         {
             var data = state.Request;
@@ -174,6 +231,9 @@ namespace SysWeaver.HttpTransformer
             return false;
         }
 
+        /// <summary>
+        /// Mime types that are only served if explicitly listed in the request Accept header.
+        /// </summary>
         static readonly IReadOnlySet<String> AcceptMimeChecks = ReadOnlyData.Set<String>(
             "image/webp", "image/avif"
             );
@@ -183,6 +243,10 @@ namespace SysWeaver.HttpTransformer
         readonly ConcurrentDictionary<String, CachedTransformerEntry> ScheduledJobs = new (StringComparer.Ordinal);
 
 
+        /// <summary>
+        /// Register a new build for a key, or get the entry of a build already in progress.
+        /// </summary>
+        /// <returns>True if a new entry was created (the caller must build it).</returns>
         bool TryStartBuild(String key, out CachedTransformerEntry e)
         {
             var n = new CachedTransformerEntry();
@@ -196,6 +260,9 @@ namespace SysWeaver.HttpTransformer
             return true;
         }
 
+        /// <summary>
+        /// Memory cache miss: validate the disc cache, else start (or join) a build.
+        /// </summary>
         async Task<CachedTransformerEntry> GetFromCache(String key, HttpRequestTransformerState state)
         {
             var name = HashTools.GetHashString(key);
@@ -240,6 +307,7 @@ namespace SysWeaver.HttpTransformer
         }
 
 
+        /// <inheritdoc/>
         public IEnumerable<Stats> GetStats()
         {
             const string sys = nameof(CachedTransformer);
@@ -257,6 +325,7 @@ namespace SysWeaver.HttpTransformer
 
         readonly FastMemCache<String, CachedTransformerEntry> Cache = new (TimeSpan.FromHours(1), StringComparer.Ordinal);
 
+        /// <inheritdoc/>
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(CachedTransformer));
 
 
@@ -272,6 +341,10 @@ namespace SysWeaver.HttpTransformer
         long DeletedFiles;
         readonly ExceptionTracker PrunerErrors = new ExceptionTracker();
 
+        /// <summary>
+        /// Prune one data folder (round robin): delete stale temp files, and delete groups of files (same 26 char hash prefix)
+        /// where no file has been accessed within the retention period.
+        /// </summary>
         async Task<bool> Prune()
         {
             using var _ = PerfMon.Track(nameof(Prune));
@@ -334,6 +407,11 @@ namespace SysWeaver.HttpTransformer
         }
 
 
+        /// <summary>
+        /// Store the original size in a "[baseName].org" file (unless it already exists with content).
+        /// </summary>
+        /// <param name="baseName">The base name, see <see cref="CachedTransformerFile.BaseName"/>.</param>
+        /// <param name="orgLength">The size of the original in bytes.</param>
         public static async Task SaveOrg(String baseName, long orgLength)
         {
             var name = baseName + ".org";
@@ -354,6 +432,12 @@ namespace SysWeaver.HttpTransformer
         }
 
 
+        /// <summary>
+        /// Read the original size stored by <see cref="SaveOrg"/>.
+        /// </summary>
+        /// <param name="baseName">The base name, see <see cref="CachedTransformerFile.BaseName"/>.</param>
+        /// <returns>The original size, or -1 if missing, invalid or not positive.</returns>
+        /// <exception cref="IOException">The file exists but couldn't be read.</exception>
         public static long ReadOrg(String baseName)
         {
             var orgName = baseName + ".org";
@@ -372,10 +456,10 @@ namespace SysWeaver.HttpTransformer
 
 
         /// <summary>
-        /// All active cached data transformers
+        /// All active cached data transformers.
         /// </summary>
-        /// <param name="r">Paramaters</param>
-        /// <returns></returns>
+        /// <param name="r">Table request parameters.</param>
+        /// <returns>One row per registered extension or mime type.</returns>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.DevAdminOps)]
         [WebApiClientCache(30)]
@@ -385,6 +469,9 @@ namespace SysWeaver.HttpTransformer
         public TableData CachedTransformersTable(TableDataRequest r)
             => TableDataTools.Get(r, 30000, MimeHandlers.Select(x => new MimeHandler(x)));
 
+        /// <summary>
+        /// Row type for <see cref="CachedTransformersTable"/>.
+        /// </summary>
         sealed class MimeHandler
         {
             public MimeHandler(KeyValuePair<String, ICachedTransformer> d)
@@ -440,10 +527,10 @@ namespace SysWeaver.HttpTransformer
 
 
         /// <summary>
-        /// All cached transformed files that have been accessed
+        /// All transformed files currently in the memory cache (accessed within the last hour).
         /// </summary>
-        /// <param name="r">Paramaters</param>
-        /// <returns></returns>
+        /// <param name="r">Table request parameters.</param>
+        /// <returns>One row per memory cached file.</returns>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.DevAdminOps)]
         [WebApiClientCache(2)]
@@ -454,6 +541,9 @@ namespace SysWeaver.HttpTransformer
             => TableDataTools.Get(r, 2000, Cache.Select(x => new CachedFile(x)));
 
 
+        /// <summary>
+        /// Row type for <see cref="CachedRecentFilesTable"/>.
+        /// </summary>
         sealed class CachedFile
         {
             public CachedFile(ValueTuple<DateTime, String, CachedTransformerEntry> d)
@@ -522,7 +612,7 @@ namespace SysWeaver.HttpTransformer
             public DateTime Expires;
 
             /// <summary>
-            /// The size of tthe original file
+            /// The size of the original file.
             /// </summary>
             [TableDataByteSize]
             public long OrgSize;

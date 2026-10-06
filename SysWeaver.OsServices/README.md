@@ -34,21 +34,36 @@ flowchart TB
 | `debug` | Run in the console showing all message levels |
 | `execute` | Run in the console with normal verbosity |
 | `daemon` | The entry point used by the OS service manager |
-| `hash` | Utility to compute password hashes for configuration |
-| `help` (or none, in a console) | Usage |
+| `hash [user] [password]` | Utility to compute a simple password hash for configuration |
+| `help` (or none, in a console) | Usage; with no arguments and no console, `start` is used |
 
-In console mode `Esc` stops the application and `Space` pauses/resumes all services; OS signals trigger a graceful shutdown.
+In console mode `Esc` stops the application and `Space` pauses/resumes all services; OS signals (SIGINT, SIGTERM, SIGHUP, SIGQUIT) trigger a graceful shutdown. Before starting, console mode waits up to 15 seconds for other processes with the same name to exit.
+
+The process exit code is a `ServiceResponse` value (`Ok` = 1, errors are 0 or negative), or a `ServiceStatus` value for `status`.
 
 ## Key features
 
 - One executable for install, control, debugging and production.
 - OS-specific behaviour isolated in separately deployed factory assemblies.
-- Restart-on-failure policies for the installed service.
-- **Manifest auto-recovery**: after a successful start the manifest is saved as "last known good"; if a later start fails, the last good manifest is restored and the process restarted. Previous versions are kept and can be inspected from the web admin.
+- Restart-on-failure for the installed service: SCM failure actions on Windows (`RestartOnFail`, `RestartDelaySeconds`, ...), `Restart=always` in the systemd unit (SysVinit has none).
+- Start-up mode (`ServiceStarts`: disabled, manual, normal, delayed) applied when installing (Windows).
+- **Manifest auto-recovery** (`AutoRecover`): after a successful start the manifest is saved as `[Manifest].LastGood.json`; if an unhandled exception occurs during a later start-up, the current manifest is saved as `[Manifest].Replace.json`, the last good manifest is restored and the service (or console process) restarted. Overwritten manifests are backed up as `Bak_[date]_[date].[Manifest].json` (see `ServiceHost.BackupConfig` / `IsConfigBackupName`) and can be inspected from the web admin.
+
+## Key types
+
+| Type | Role |
+|---|---|
+| `ServiceHost` | `Run` entry point, plus manifest backup helpers |
+| `ServiceParams` | Service name, display name, description, start mode, restart policy, logo, auto-recover |
+| `ServiceVerbs` | The command line verbs |
+| `ServiceResponse` / `ServiceStatus` | Operation results (exit codes) and service states, with `Text()` helpers |
+| `IServiceHost` | OS specific install / control / run implementation |
+| `IServiceHostFactory` | Creates the `IServiceHost`, implemented as `SysWeaver.OsServices.ServiceHostFactory[Platform]` |
 
 ## Limitations and considerations
 
-- The OS factory assemblies are resolved by name at runtime; forgetting to reference/deploy them makes `install` and `daemon` unavailable.
+- The OS factory assemblies are resolved by name at runtime (`SysWeaver.OsServices.ServiceHostFactory[Platform]`, already loaded or as a dll next to the executable); forgetting to reference/deploy them makes all service verbs (`install`, `start`, `status`, `daemon`, `hash`, ...) unavailable, only `debug`, `execute` and `help` work.
+- Auto-recovery only reacts to unhandled exceptions during start-up, not to services that merely fail to start.
 - Installing and controlling services requires administrative rights.
 - Only Windows and Linux are implemented.
 

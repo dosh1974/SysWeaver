@@ -11,7 +11,8 @@ namespace SysWeaver.Data
     public class TableDataSortAndFilterRequest
     {
         /// <summary>
-        /// Column filtering
+        /// Column filtering, all filters must match for a row to be included.
+        /// Filters with a null value or an unknown column name are ignored.
         /// </summary>
         [EditRange(0, 10)]
         [EditAllowNull]
@@ -103,13 +104,17 @@ namespace SysWeaver.Data
     /// </summary>
     public class TableDataRequest : TableDataOrderRequest
     {
+        /// <summary>
+        /// Create a request, <see cref="TableDataOrderRequest.MaxRowCount"/> defaults to 100.
+        /// </summary>
         public TableDataRequest()
         {
             MaxRowCount = 100;
         }
 
         /// <summary>
-        /// Change counter, if this matches the internal counter, no column information will be returned (optimization)
+        /// Change counter, if this matches the internal counter, no column information will be returned (optimization).
+        /// Use -1 to never get any column information.
         /// </summary>
         [AiIgnore]
         public long Cc;
@@ -142,11 +147,20 @@ namespace SysWeaver.Data
     }
 
 
+    /// <summary>
+    /// The state of a table data view (used by the web client), see TableDataTools.StateFromRequest.
+    /// </summary>
     public class TableDataState
     {
-        
+
+        /// <summary>
+        /// The request parameters
+        /// </summary>
         public TableDataRequest RequestParams;
 
+        /// <summary>
+        /// The number of filter rows
+        /// </summary>
         public int FilterRows;
 
         /// <summary>
@@ -154,8 +168,14 @@ namespace SysWeaver.Data
         /// </summary>
         public int Expanded = 1;
 
+        /// <summary>
+        /// True to automatically compute the number of rows to display
+        /// </summary>
         public bool? AutoRowCount = true;
 
+        /// <summary>
+        /// The filters, one array per filter row (with one filter per column)
+        /// </summary>
         public TableDataFilter[][] Filters;
 
     }

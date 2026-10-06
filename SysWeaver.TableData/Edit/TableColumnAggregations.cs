@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.Data
 {
+    /// <summary>
+    /// The type of aggregation to perform on a column (see <see cref="TableColumnAggregation"/>).
+    /// </summary>
     public enum TableColumnAggregations
     {
         /// <summary>
@@ -11,7 +14,7 @@
         /// </summary>
         SelectLast,
         /// <summary>
-        /// Output's the count (type changed to Int32 or Int64)
+        /// Outputs the count (type changed to Int32 or Int64)
         /// </summary>
         Count,
         /// <summary>

@@ -6,6 +6,10 @@
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Application wide settings (name, description, language and thread pool sizes), typically loaded from the application config file
+    /// and applied once at startup (see <see cref="AppInfo"/>).
+    /// </summary>
     public sealed class AppInfoParams
     {
         /// <summary>
@@ -24,7 +28,7 @@ namespace SysWeaver
         public String AppDescription;
 
         /// <summary>
-        /// A seed (changes the automatically generated logo)
+        /// A seed (changes the automatically generated logo), stored in <see cref="EnvInfo.AppSeed"/>
         /// </summary>
         public int AppSeed;
 
@@ -38,9 +42,9 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Specify the number of worker threads.
+        /// Specify the minimum number of thread pool worker threads (see <see cref="System.Threading.ThreadPool.SetMinThreads(int, int)"/>).
         /// 0 = Use default.
-        /// greater than 0 = Use exactly this many.
+        /// greater than 0 = Use the maximum of the default and this value (the minimum is never lowered below the default).
         /// less than  0 = Use the maximum of the default and the number of CPU cores multiplied by the absolute value of this number as a percentage.
         /// Ex: -200 = Max(default, (coreCount * 200) / 100)
         /// </summary>
@@ -48,9 +52,9 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Specify the number of IO threads.
+        /// Specify the minimum number of thread pool IO completion threads (see <see cref="System.Threading.ThreadPool.SetMinThreads(int, int)"/>).
         /// 0 = Use default.
-        /// greater than 0 = Use exactly this many.
+        /// greater than 0 = Use the maximum of the default and this value (the minimum is never lowered below the default).
         /// less than  0 = Use the maximum of the default and the number of CPU cores multiplied by the absolute value of this number as a percentage.
         /// Ex: -200 = Max(default, (coreCount * 200) / 100)
         /// </summary>

@@ -6,10 +6,21 @@ namespace SysWeaver.Net
 {
     public abstract partial class HttpServerBase
     {
+        /// <summary>
+        /// A row in the active users debug table (<see cref="ActiveUsers"/>).
+        /// </summary>
+        /// <remarks>
+        /// <see cref="Sessions"/> contains the full (unredacted) session tokens of the user's sessions.
+        /// </remarks>
         [TableDataPrimaryKey(nameof(Name))]
 
         sealed class UserDebugData
         {
+            /// <summary>
+            /// Create a snapshot of a user, sessions that can expire are skipped.
+            /// </summary>
+            /// <param name="d">The user data</param>
+            /// <param name="nowTick">The current UTC time in ticks</param>
             public UserDebugData(UserData d, long nowTick)
             {
                 var a = d.Auth;
@@ -71,7 +82,7 @@ namespace SysWeaver.Net
             public int SessionCount;
 
             /// <summary>
-            /// Information about each session that the user is logged in to.
+            /// Information about each session that the user is logged in to (token, duration, address and user agent).
             /// </summary>
             [TableDataTags("{1}", "{2}\n", "Token: {1}.\n{2}", true)]
             public String Sessions;

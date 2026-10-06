@@ -80,6 +80,9 @@ namespace SysWeaver
 
         static readonly ArrayPool<Byte> Pool = ArrayPool<Byte>.Shared;
 
+        /// <summary>
+        /// The ownership state of <see cref="Data"/>
+        /// </summary>
         enum BufferState
         {
             /// <summary>
@@ -617,6 +620,12 @@ namespace SysWeaver
         /// </summary>
         sealed class Lease : IUnmanagedReadOnlyMemory<Byte>
         {
+            /// <summary>
+            /// Create a lease of a pooled buffer
+            /// </summary>
+            /// <param name="buffer">The pooled buffer (ownership is transferred to the lease)</param>
+            /// <param name="size">The number of valid bytes</param>
+            /// <param name="references">The initial number of references (1 or 2)</param>
             public Lease(Byte[] buffer, int size, int references)
             {
                 Buffer = buffer;
@@ -627,6 +636,9 @@ namespace SysWeaver
             int References;
             int Disposed;
 
+            /// <summary>
+            /// The valid bytes of the leased buffer (must not be used after the lease is disposed)
+            /// </summary>
             public ReadOnlyMemory<Byte> Memory { get; }
 
             /// <summary>
@@ -745,7 +757,8 @@ namespace SysWeaver
 
         /// <summary>
         /// Release the buffer (it's returned to the pool unless it's handed out).
-        /// Length is still valid after the stream is disposed, all other members throws an ObjectDisposedException.
+        /// Length and the Position getter are still valid after the stream is disposed, CanRead / CanSeek / CanWrite returns false,
+        /// Flush does nothing and the other members throws an ObjectDisposedException.
         /// </summary>
         /// <param name="disposing">True if called from Dispose</param>
         protected override void Dispose(bool disposing)

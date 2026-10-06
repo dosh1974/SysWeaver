@@ -24,19 +24,26 @@ flowchart LR
   SM["ServiceManager"] -->|console available| CMH["ConsoleMessageHandler"]
 ```
 
-The service manager registers the console message handler automatically when a console is attached, which is how `debug`/`execute` mode prints log messages.
+The service manager registers the console message handler automatically when a console is available (synchronous with full details in DEBUG builds, asynchronous otherwise), which is how `debug`/`execute` mode prints log messages.
 
 ## Key features
 
-- Map command line options onto the public members of any class; values are parsed for all common types and parsers are extensible.
-- Help/syntax text generated from the options class and its XML documentation.
-- Wildcards, file sequences and an input-files/output-folder tool shell with synchronous, asynchronous and parallel processing variants.
-- Console message handler with levels and colouring.
+- `CommandLine.ParseObject<T>` maps options onto the public fields/properties of any class (nested objects become `Parent.Child` options, a `false` boolean becomes a flag); `CommandLine.ParseOptions` parses against explicitly declared `CommandLineOption`s.
+- Positional arguments (`CommandLineArgument`) with required/optional handling, optional "any number of arguments", and per-argument tags (default, valid values, limits, type).
+- Values parsed for all primitive types, `String`, `Char`, `DateTime`, `TimeSpan`, `Guid`, enums, arrays and lists (`;` separated); numbers accept expressions via SysWeaver.ExpressionEvaluator; extra parsers via `CommandLine.AddParser`.
+- Help/syntax text (`CommandLine.SyntaxObject<T>` / `SyntaxOptions`) generated from the options class and its XML documentation; `-?` and `-help` are built in.
+- `FileCommandLineArgument` / `FileCommandLineOptionArgument`: existing files with wildcards, `;` separated masks, a trailing `+` for recursive search and optional numbered file sequences.
+- `FilesToFolderTool` / `FilesToFolderTool<T>`: an input-files/output-folder tool shell with synchronous, asynchronous and parallel processing variants and consistent exit codes (0 ok, 1 help, -1 bad command line, -2 exception).
+- `Wildcard.Match`: Windows or Unix style file name wildcard matching.
+- `ConsoleMessageHandler`: console message handler with three detail styles, level colouring and sync/async output.
 
 ## Limitations and considerations
 
 - Designed for the SysWeaver conventions (option prefix, option naming); not a general replacement for full-featured CLI frameworks with sub-command trees.
-- Help quality depends on XML comments being present and deployed.
+- Options are recognised by the prefixes `-`, `--` and `/`; since `-` is tested first, `--name` is looked up as `-name`, and positional values starting with `-` or `/` (negative numbers, absolute Unix paths) are taken as options.
+- Help quality depends on XML comments being present and deployed; only the plain text of `<summary>` is used.
+- Known issues: the static non-async `OnFilesParallel` helper runs sequentially - prefer `OnFilesParallelAsync`; `Wildcard.Match` with `unixStyle: true` swaps pattern and file name; min/max limits are only enforced for option arguments, not positional arguments.
+- Configuration (prefixes, tags, parsers) is global static state; set it up once at startup.
 
 ## Using it
 
@@ -48,11 +55,12 @@ public sealed class Options
 }
 
 static int Main(string[] args) =>
-    FilesToFolderTool.OnFiles<Options>(args, (log, options, a, b, c) =>
+    FilesToFolderTool.OnFiles<Options>(args, (log, options, sourceFile, relativeName, destFolder) =>
     {
-        // process one input file; return an exit code
+        // process one input file; return 0 to continue, anything else aborts with that exit code
         return 0;
     });
+// Usage: MyTool [-Force] *.png+ OutFolder
 ```
 
 ## Relationships

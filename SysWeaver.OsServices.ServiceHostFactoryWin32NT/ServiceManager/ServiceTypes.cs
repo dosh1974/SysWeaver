@@ -2,6 +2,9 @@
 
 namespace SysWeaver.OsServices.ServiceManager
 {
+    /// <summary>
+    /// Win32 service types, plus SERVICE_NO_CHANGE.
+    /// </summary>
     enum ServiceTypes : uint
     {
         /// <summary>
@@ -23,7 +26,7 @@ namespace SysWeaver.OsServices.ServiceManager
 
 
         /// <summary>
-        /// Used when chaning config to signal that this should not change
+        /// Used when changing config to signal that this should not change
         /// </summary>
         SERVICE_NO_CHANGE = 0xffffffffu,
     }

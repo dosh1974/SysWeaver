@@ -4,7 +4,9 @@ using System.Collections.Generic;
 namespace SysWeaver
 {
     /// <summary>
-    /// Defines some roles that should be used as defautl auth requirements
+    /// Defines some roles that should be used as default auth requirements (ex: in WebApi auth attributes).
+    /// Each constant is a comma separated list of tokens, a user having any one of the tokens is granted access.
+    /// All roles (except <see cref="Disabled"/>) include the <see cref="Debug"/> token.
     /// </summary>
     public static class Roles
     {
@@ -60,13 +62,37 @@ namespace SysWeaver
         public const String Disabled = "-";
 
 
+        /// <summary>
+        /// The lower cased tokens of <see cref="Debug"/>.
+        /// </summary>
         public static readonly IReadOnlyList<String> DebugTokens = Debug.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        /// <summary>
+        /// The lower cased tokens of <see cref="Admin"/>.
+        /// </summary>
         public static readonly IReadOnlyList<String> AdminTokens = Admin.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        /// <summary>
+        /// The lower cased tokens of <see cref="Dev"/>.
+        /// </summary>
         public static readonly IReadOnlyList<String> DevTokens = Dev.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        /// <summary>
+        /// The lower cased tokens of <see cref="Ops"/>.
+        /// </summary>
         public static readonly IReadOnlyList<String> OpsTokens = Ops.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        /// <summary>
+        /// The lower cased tokens of <see cref="AdminOps"/>.
+        /// </summary>
         public static readonly IReadOnlyList<String> AdminOpsTokens = AdminOps.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        /// <summary>
+        /// The lower cased tokens of <see cref="OpsDev"/>.
+        /// </summary>
         public static readonly IReadOnlyList<String> OpsDevTokens = OpsDev.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        /// <summary>
+        /// The lower cased tokens of <see cref="DevAdmin"/>.
+        /// </summary>
         public static readonly IReadOnlyList<String> DevAdminTokens = DevAdmin.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        /// <summary>
+        /// The lower cased tokens of <see cref="DevAdminOps"/>.
+        /// </summary>
         public static readonly IReadOnlyList<String> DevAdminOpsTokens = DevAdminOps.FastToLower().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     }

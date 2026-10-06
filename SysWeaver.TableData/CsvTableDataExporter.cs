@@ -7,23 +7,52 @@ using System.Threading.Tasks;
 namespace SysWeaver.Data
 {
     /// <summary>
-    /// Export table as CSV
+    /// Export table data as a UTF-8 CSV text file.
     /// </summary>
+    /// <remarks>
+    /// Values are never quoted: any occurrence of the separator char in a header or value is replaced by a replacement char instead.
+    /// Line breaks inside values are not escaped.
+    /// Hidden columns (<see cref="TableDataColumnProps.Hide"/>) are omitted.
+    /// <see cref="Single"/>, <see cref="Double"/> and <see cref="Decimal"/> values are written using the invariant culture,
+    /// other values using <see cref="Object.ToString"/> (current culture).
+    /// The exporter is stateless and thread safe.
+    /// </remarks>
     public sealed class CsvTableDataExporter : ITableDataExporter
     {
 
+        /// <summary>
+        /// Returns the <see cref="Name"/>.
+        /// </summary>
+        /// <returns>The name of the exporter.</returns>
         public override string ToString() => Name;
 
+        /// <summary>
+        /// Comma separated values, commas in values are replaced with '_'.
+        /// </summary>
         public static readonly CsvTableDataExporter Comma = new CsvTableDataExporter("CSV (comma)", ',', '_', 10000, 
             "A text file where each line is a row.\nColumns are separated by a comma [,].");
         
+        /// <summary>
+        /// Tab separated values, tabs in values are replaced with '_'.
+        /// </summary>
         public static readonly CsvTableDataExporter Tab = new CsvTableDataExporter("CSV (tab)", '\t', '_', 10001,
             "A text file where each line is a row.\nColumns are separated by a tab.");
 
+        /// <summary>
+        /// Semi colon separated values, semi colons in values are replaced with '_'.
+        /// </summary>
         public static readonly CsvTableDataExporter SemiColon = new CsvTableDataExporter("CSV (semi colon)", ';', '_', 10002,
             "A text file where each line is a row.\nColumns are separated by a semia colon [;].");
 
 
+        /// <summary>
+        /// Create a CSV exporter.
+        /// </summary>
+        /// <param name="name">The display name of the exporter.</param>
+        /// <param name="sep">The column separator char.</param>
+        /// <param name="rep">The char that replaces any <paramref name="sep"/> found in headers and values.</param>
+        /// <param name="order">Sort order of the exporter in UI lists.</param>
+        /// <param name="desc">A description of the exporter.</param>
         public CsvTableDataExporter(String name, char sep, char rep, double order, String desc)
         {
             Name = name;
@@ -33,19 +62,30 @@ namespace SysWeaver.Data
             Order = order;
         }
 
+        /// <inheritdoc/>
         public String Name { get; init; }
+
+        /// <inheritdoc/>
         public String Desc { get; init; }
 
+        /// <inheritdoc/>
         public String Icon => "IconFileCsv";
 
+        /// <inheritdoc/>
         public double Order { get; init; }
 
+        /// <summary>
+        /// Always false, CSV export doesn't require a signed in user.
+        /// </summary>
         public bool RequireUser => false;
 
         readonly Char Sep;
         readonly Char Rep;
 
 
+        /// <summary>
+        /// Default value to text conversion: empty for null, else <see cref="Object.ToString"/>.
+        /// </summary>
         public static readonly Func<Object, String> DefToString = data =>
         {
             if (data == null)
@@ -53,6 +93,9 @@ namespace SysWeaver.Data
             return data.ToString();
         };
 
+        /// <summary>
+        /// Converts a value to a <see cref="Single"/> and formats it using the invariant culture (empty for null).
+        /// </summary>
         public static readonly Func<Object, String> SingleToString = data =>
         {
             if (data == null)
@@ -61,6 +104,9 @@ namespace SysWeaver.Data
             return Convert.ToSingle(data).ToString(CultureInfo.InvariantCulture);
         };
 
+        /// <summary>
+        /// Converts a value to a <see cref="Double"/> and formats it using the invariant culture (empty for null).
+        /// </summary>
         public static readonly Func<Object, String> DoubleToString = data =>
         {
             if (data == null)
@@ -68,6 +114,9 @@ namespace SysWeaver.Data
             return Convert.ToDouble(data).ToString(CultureInfo.InvariantCulture);
         };
 
+        /// <summary>
+        /// Converts a value to a <see cref="Decimal"/> and formats it using the invariant culture (empty for null).
+        /// </summary>
         public static readonly Func<Object, String> DecimalToString = data =>
         {
             if (data == null)
@@ -76,6 +125,9 @@ namespace SysWeaver.Data
         };
 
 
+        /// <summary>
+        /// Value to text conversions keyed on the full type name of the column, types not found use <see cref="DefToString"/>.
+        /// </summary>
         public static readonly IReadOnlyDictionary<String, Func<Object, String>> DefToStrings = new Dictionary<String, Func<Object, String>>(StringComparer.Ordinal)
         {
             { typeof(Single).FullName, SingleToString },
@@ -84,6 +136,13 @@ namespace SysWeaver.Data
         }.Freeze(); 
 
 
+        /// <summary>
+        /// Export the table as a CSV file (completes synchronously).
+        /// </summary>
+        /// <param name="tableData">The table to export, columns are optional (without columns no header line is written).</param>
+        /// <param name="context">Not used.</param>
+        /// <param name="options">Export options, <see cref="TableDataExportOptions.NoHeaders"/> and <see cref="TableDataExportOptions.Filename"/> are used.</param>
+        /// <returns>A file named "[Filename].csv" (default "Table.csv") with the <see cref="Mimes.Utf8PlainText"/> mime type.</returns>
         public Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
         {
             options = options ?? new TableDataExportOptions();

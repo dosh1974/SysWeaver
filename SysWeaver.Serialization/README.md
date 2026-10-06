@@ -2,7 +2,7 @@
 
 [⬆ SysWeaver overview](../README.md)
 
-> The serialization abstraction of SysWeaver and its registry: every component serializes through named, prioritised serializer types selected by file extension / MIME type. Includes System.Text.Json and XML implementations.
+> The serialization abstraction of SysWeaver and its registry: every component serializes through named, prioritised serializer types selected by file extension. Includes System.Text.Json and XML implementations.
 
 | | |
 |---|---|
@@ -35,21 +35,25 @@ flowchart TB
 
 | Concept | Description |
 |---|---|
-| **Serializer type** | A named implementation with extension, MIME type, text/binary nature and a *priority*. |
-| **Priority** | When several serializers share an extension, the highest priority wins — this is how a plug-in can become the default JSON implementation. |
-| **Text vs. binary** | Text serializers additionally support string input/output. |
-| **Compact vs. verbose** | Serialization options for compact wire output or human-readable output. |
-| **Type name resolution** | Robust lookup of types from names for polymorphic scenarios. |
+| **Serializer type** | `ISerializerType`: a named, stateless singleton with extension, MIME type, Content-Type header, encoding (null for binary) and a *priority*; `Serialize<T>` returns `ReadOnlyMemory<byte>`, `Create<T>` reads from `ReadOnlyMemory<byte>` / `ReadOnlySpan<byte>`. |
+| **Priority** | When several serializers share an extension, the highest priority wins (ties: the last registered) — this is how a plug-in can become the default JSON implementation. |
+| **Text vs. binary** | `ITextSerializerType` serializers additionally support string input/output (`ToString<T>`, `FromString<T>`); `SerManager.GetText` only considers these. |
+| **Compact vs. verbose** | `SerializerOptions.Compact`, `Verbose` and `Typeless` are hints: Newtonsoft-based serializers use them for indentation and `$type` output, System.Text.Json/CompactJson/Jil only for indentation, the rest ignore them. |
+| **Type name resolution** | `TypeNameResolver.Get` finds types from (assembly qualified) names, falling back to a case-insensitive scan of all loaded assemblies; results, including misses, are cached. |
 
 ## Key features
 
-- One registry for the whole process; formats are addressed by the same short names as file extensions.
-- System.Text.Json registered by default; XML available on request.
+- One registry for the whole process (`SerManager`); formats are addressed by the same short names as file extensions, with or without a leading dot (`"json"`, `".json"`).
+- `NetJsonSerializer` (System.Text.Json, priority 0) is always registered; `NetXmlSerializer` (XmlSerializer) is available via `NetXmlSerializer.Register()`.
+- `SerExtensions` adds `ToJsonString`, `ToJsonData` and `FromJsonData` extension methods that use the active `json` serializer (default option: `Verbose`).
+- `SerTools.SerializeWithoutType` / `TextSerTools.ToStringWithoutType` serialize an `object` as its runtime type; `SerTools.MakeHeader` builds `Content-Type` values with a charset.
 - Plug-ins for Newtonsoft JSON/BSON, Protobuf, MessagePack, SysWeaver's own JSON and binary formats, and several alternative JSON libraries.
 
 ## Limitations and considerations
 
-- The registry is process-wide static state: registering a higher-priority serializer changes behaviour for every consumer in the process.
+- The registry is process-wide static state: registering a higher-priority serializer changes behaviour for every consumer in the process. Register serializers at startup: `SerManager.AddType` is not thread-safe, and many consumers (including `SerExtensions`) resolve and cache a serializer on first use, so later registrations are not seen by them.
+- `NetJsonSerializer` writes with relaxed escaping (HTML-sensitive and non-ASCII characters are not escaped); escape before embedding output in HTML.
+- Extension lookups are case-sensitive; pass lowercase extensions.
 - Behaviour differences between JSON implementations (casing, field handling, polymorphism) mean the choice of default JSON serializer is an application-level decision.
 
 ## Using it
@@ -60,7 +64,7 @@ var json = SerManager.GetText("json");
 string text = json.ToString(new { Id = 1 });
 ```
 
-Register plug-ins in the manifest, e.g. `{ "Type": "SysWeaver.Serialization.SysWeaverJsonSerializer, SysWeaver.Serialization.SwJson" }`.
+Register plug-ins at startup (e.g. `SysWeaverJsonSerializer.Register();`) or in the manifest; the service manager calls the static `Register` method of any `ISerializerType` listed, e.g. `{ "Type": "SysWeaver.Serialization.SysWeaverJsonSerializer, SysWeaver.Serialization.SwJson" }`.
 
 ## Relationships
 

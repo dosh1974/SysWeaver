@@ -17,10 +17,21 @@ namespace SysWeaver.Net
 
 
     /// <summary>
-    /// A http module that can be used to serevr static web content
+    /// A http module that serves static content registered at runtime (embedded resources, memory, text or streams), keyed on the exact local url (GET requests only).
     /// </summary>
+    /// <remarks>
+    /// Typically used to serve the embedded web assets of all loaded assemblies.
+    /// If the same url is registered more than once, the handler with the highest order wins (on equal order, the last one wins only if replace is requested).
+    /// By default registered content is cached on the server "forever" (the request cache duration is <see cref="HttpServerTools.MaxRequestCache"/>), the cache key is unique per registration.
+    /// Thread safe.
+    /// </remarks>
     public sealed class StaticDataHttpServerModule : IHttpServerModule
     {
+        /// <summary>
+        /// Create a static data module.
+        /// </summary>
+        /// <param name="mp">Parameters (null to use defaults)</param>
+        /// <param name="messageHandler">Not used</param>
         public StaticDataHttpServerModule(StaticDataHttpServerModuleParams mp = null, IMessageHost messageHandler = null)
         {
             var p = mp ?? new StaticDataHttpServerModuleParams();
@@ -33,12 +44,23 @@ namespace SysWeaver.Net
             nameof(Handlers), ": ", Handlers.Count);
 
         readonly String RootUri;
+        /// <summary>
+        /// The default number of seconds a client may cache a resource (used when no duration is supplied when adding).
+        /// </summary>
         public readonly int ClientCacheDuration;
+        /// <summary>
+        /// The default runtime compression (used when no compression is supplied when adding).
+        /// </summary>
         public readonly HttpCompressionPriority Compression;
 
         const String LocationPrefix = "[Static] ";
 
 
+        /// <summary>
+        /// A filter used by <see cref="AddEmbeddedResources"/>.
+        /// </summary>
+        /// <param name="name">The manifest resource name, may be modified to change the served name</param>
+        /// <returns>True to include the resource, false to skip it</returns>
         public delegate bool AddCondition(ref String name);
 
 
@@ -51,19 +73,24 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Serve all matching embedded resources from an assembly
+        /// Serve all matching embedded resources from an assembly.
+        /// The resource name is turned into a url by replacing all '.' (except the one before the extension) with '/', ex: "web.scripts.app.js" becomes "web/scripts/app.js" (and ".../min.js" becomes "....min.js").
         /// </summary>
         /// <param name="asm">The assembly that contains the embedded resources</param>
-        /// <param name="rootNamespace">Only resources starting with this string is served (and this is also removed from the path)</param>
+        /// <param name="rootNamespace">Only resources starting with this string (followed by a '.') are served, and this prefix is removed from the path</param>
         /// <param name="urlRoot">An optional path prefix to the resource name</param>
         /// <param name="clientCacheDuration">The client side cache duration (null to use the modules default)</param>
         /// <param name="compression">The runtime compression to apply (null to use the module default)</param>
         /// <param name="disableCompession">True to disable any compression</param>
-        /// <param name="lastModified">The last modified string (null to use the default = application start)</param>
+        /// <param name="lastModified">The last modified time (null to use the last write time of the assembly)</param>
+        /// <param name="etag">The etag to use for all resources (null to derive it from the last modified time)</param>
         /// <param name="auth">Required authorization tokens, null = no auth required, "" = auth required but no specific tokens, or comma separated list of required security tokens</param>
-        /// <param name="doAdd">Optional function to determine if a resource should be included or not</param>
-        /// <param name="etag"></param>
-        /// <exception cref="NullReferenceException"></exception>
+        /// <param name="doAdd">Optional function to determine if a resource should be included or not (it may also rename the resource, but the rename is discarded if <paramref name="rootNamespace"/> is used)</param>
+        /// <remarks>
+        /// Resources with a compression extension (ex: "app.js.br") are served both as is and as the uncompressed name ("app.js", with the data marked as pre-compressed).
+        /// The <see cref="ResourceOrderAttribute"/> and <see cref="ReplaceEmbeddedFilesAttribute"/> of the assembly control which assembly wins if several assemblies supply the same url.
+        /// The resource data is read into memory.
+        /// </remarks>
         public void AddEmbeddedResources(Assembly asm, String rootNamespace = null, String urlRoot = null, int? clientCacheDuration = null, HttpCompressionPriority compression = null, bool disableCompession = false, DateTime? lastModified = null, String etag = null,String auth = null, AddCondition doAdd = null)
         {
             var lwt = lastModified ?? asm.GetLastWriteTimerUtc();
@@ -181,9 +208,10 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Serve some stream (typically from a resouce)
+        /// Serve some stream (typically from a resource).
+        /// The stream is opened once to determine the length and then once per (uncached) request.
         /// </summary>
-        /// <param name="url">The url to serve it from</param>
+        /// <param name="url">The url to serve it from (relative to the module's url root)</param>
         /// <param name="location">A string that describes the location of this asset, filename on disc, embedded resource name etc</param>
         /// <param name="openStream">The function to use for opening a stream</param>
         /// <param name="mime">The mime to use</param>
@@ -192,12 +220,12 @@ namespace SysWeaver.Net
         /// <param name="compression">The runtime compression to apply (null to use the module default)</param>
         /// <param name="disableCompession">True to disable any compression</param>
         /// <param name="lastModified">When the resource was last modified (null to use the default = application start)</param>
-        /// <param name="etag">The etag to use, defasult to using the lastModified time</param>
-        /// <param name="preCompressedFormat">The last modified string (null to use the default = application start)</param>
+        /// <param name="etag">The etag to use, defaults to using the lastModified time</param>
+        /// <param name="preCompressedFormat">If the stream data is pre-compressed, the decoder of the compression format, else null</param>
         /// <param name="auth">Required authorization tokens, null = no auth required, "" = auth required but no specific tokens, or comma separated list of required security tokens</param>
         /// <param name="replace">If true, any existing resource will be replaced if it's of the same order</param>
         /// <param name="order">An optional order, if the same resource is added more than once, the one with the highest order (or if equal the last replaced) is used</param>
-        /// <returns>True if successful</returns>
+        /// <returns>True if added, false if an existing resource with a higher (or equal, when not replacing) order exists</returns>
         public bool AddStream(String url, String location, Func<Stream> openStream, String mime, int? clientCacheDuration = null, int requestCacheDuration = HttpServerTools.MaxRequestCache, HttpCompressionPriority compression = null, bool disableCompession = false, DateTime? lastModified = null, String etag = null, ICompDecoder preCompressedFormat = null, String auth = null, bool replace = false, double order = 0)
         {
             compression = disableCompession ? null : (compression ?? Compression);
@@ -222,22 +250,22 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Serve some memory
+        /// Serve some memory.
         /// </summary>
-        /// <param name="url">The url to serve it from</param>
+        /// <param name="url">The url to serve it from (relative to the module's url root)</param>
         /// <param name="location">A string that describes the location of this asset, filename on disc, embedded resource name etc</param>
-        /// <param name="data">The data to serve</param>
+        /// <param name="data">The data to serve (not copied, must not be modified afterwards)</param>
         /// <param name="mime">The mime to use</param>
         /// <param name="clientCacheDuration">The client side cache duration (null to use the modules default)</param>
         /// <param name="compression">The runtime compression to apply (null to use the module default)</param>
         /// <param name="disableCompession">True to disable any compression</param>
         /// <param name="lastModified">When the resource was last modified (null to use the default = application start)</param>
-        /// <param name="etag">The etag to use, defasult to using the lastModified time</param>
-        /// <param name="preCompressedFormat">The last modified string (null to use the default = application start)</param>
+        /// <param name="etag">The etag to use (null to derive it from the data and lastModified)</param>
+        /// <param name="preCompressedFormat">If the data is pre-compressed, the decoder of the compression format, else null</param>
         /// <param name="auth">Required authorization tokens, null = no auth required, "" = auth required but no specific tokens, or comma separated list of required security tokens</param>
-        /// <param name="replace">If true, any existing resource will be replaced</param>
+        /// <param name="replace">If true, any existing resource with the same order will be replaced</param>
         /// <param name="order">An optional order, if the same resource is added more than once, the one with the highest order (or if equal the last replaced) is used</param>
-        /// <returns>True if successful</returns>
+        /// <returns>True if added, false if an existing resource with a higher (or equal, when not replacing) order exists</returns>
         public bool AddMemory(String url, String location, ReadOnlyMemory<Byte> data, String mime, int? clientCacheDuration = null, HttpCompressionPriority compression = null, bool disableCompession = false, DateTime? lastModified = null, String etag = null, ICompDecoder preCompressedFormat = null, String auth = null, bool replace = false, double order = 0)
         {
             compression = disableCompession ? null : (compression ?? Compression);
@@ -251,9 +279,9 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Serve some text
+        /// Serve some text.
         /// </summary>
-        /// <param name="url">The url to serve it from</param>
+        /// <param name="url">The url to serve it from (relative to the module's url root)</param>
         /// <param name="location">A string that describes the location of this asset, filename on disc, embedded resource name etc</param>
         /// <param name="text">The text to serve</param>
         /// <param name="mime">The mime to use</param>
@@ -262,12 +290,12 @@ namespace SysWeaver.Net
         /// <param name="compression">The runtime compression to apply (null to use the module default)</param>
         /// <param name="disableCompession">True to disable any compression</param>
         /// <param name="lastModified">When the resource was last modified (null to use the default = application start)</param>
-        /// <param name="etag">The etag to use, defasult to using the lastModified time</param>
+        /// <param name="etag">The etag to use (null to derive it from the data and lastModified)</param>
         /// <param name="auth">Required authorization tokens, null = no auth required, "" = auth required but no specific tokens, or comma separated list of required security tokens</param>
-        /// <param name="replace">If true, any existing resource will be replaced</param>
+        /// <param name="replace">If true, any existing resource with the same order will be replaced</param>
         /// <param name="order">An optional order, if the same resource is added more than once, the one with the highest order (or if equal the last replaced) is used</param>
-        /// <param name="storeCompressed">If true, the data is stored compressed</param>
-        /// <returns>True if successful</returns>
+        /// <param name="storeCompressed">If true, the data is stored brotli compressed (best level) in memory and served pre-compressed</param>
+        /// <returns>True if added, false if an existing resource with a higher (or equal, when not replacing) order exists</returns>
         public bool AddText(String url, String location, String text, String mime = MimeTypeMap.PlainText, Encoding encoding = null, int ? clientCacheDuration = null, HttpCompressionPriority compression = null, bool disableCompession = false, DateTime? lastModified = null, String etag = null, String auth = null, bool replace = false, double order = 0, bool storeCompressed = true)
         {
             compression = disableCompession ? null : (compression ?? Compression);
@@ -292,8 +320,18 @@ namespace SysWeaver.Net
 
         readonly SemiFrozenDictionary<String, IStaticHttpRequestHandler> Handlers = new SemiFrozenDictionary<string, IStaticHttpRequestHandler>(StringComparer.Ordinal);
 
+        /// <summary>
+        /// Remove a resource.
+        /// </summary>
+        /// <param name="url">The full local url of the resource (including the module's url root)</param>
+        /// <returns>True if removed</returns>
         public bool Remove(String url) => Handlers.TryRemove(url, out var d);
 
+        /// <summary>
+        /// Check if a resource is registered.
+        /// </summary>
+        /// <param name="url">The full local url of the resource (including the module's url root)</param>
+        /// <returns>True if registered</returns>
         public bool Contains(String url) => Handlers.ContainsKey(url);
 
         /// <summary>
@@ -303,12 +341,18 @@ namespace SysWeaver.Net
         /// <returns>A handler for the resource or null if it doesn't exist</returns>
         public IStaticHttpRequestHandler TryGetHandler(String localUrl) => Handlers.TryGetValue(localUrl, out var d) ? d : null;
 
+        /// <summary>
+        /// Returns the handler registered for the local url of a GET request, else null (note: HEAD requests are not handled).
+        /// </summary>
+        /// <param name="context">The request</param>
+        /// <returns>The handler or null</returns>
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             Handlers.TryGetValue(context.LocalUrl, out var handler);
             return context.HttpMethod == HttpServerMethods.GET ? handler : null;
         }
 
+        /// <inheritdoc/>
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(String root = null)
         {
             if (root == null)

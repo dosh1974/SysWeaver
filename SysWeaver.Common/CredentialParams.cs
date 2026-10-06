@@ -4,9 +4,17 @@ using System.IO;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Configuration parameters for a user name / password pair, either specified inline (<see cref="User"/>, <see cref="Password"/>) or read from a file (<see cref="CredFile"/>).
+    /// Typically used as (part of) service parameters loaded from a config file.
+    /// </summary>
     public class CredentialParams
     {
 
+        /// <summary>
+        /// Returns the credentials file name, or the user name if no file is used (never the password, so it's safe to log).
+        /// </summary>
+        /// <returns>A display string.</returns>
         public override string ToString() => String.IsNullOrEmpty(CredFile) ? String.Join(": ", nameof(User), User) : CredFile.ToFilename();
 
         /// <summary>
@@ -21,7 +29,9 @@ namespace SysWeaver
 
         /// <summary>
         /// Filename, if specified the user and password is read from the file (should be single line of text in the user:key format).
-        /// Variables can be used and with "$(" and ends with ")".
+        /// The first line that doesn't start with '#' is used, the user name is everything before the first ':' and the password everything after it (surrounding white space is trimmed).
+        /// Takes precedence over <see cref="User"/> and <see cref="Password"/>. Relative paths are relative to the executable folder.
+        /// Variables can be used, they start with "$(" and end with ")", see <see cref="PathTemplate"/>.
         /// Variables can be any value of the Environment.SpecialFolder enum, or CLI environment variables plus others.
         /// Ex:
         /// "$(KeyFolder)/SecretService.txt"
@@ -36,7 +46,7 @@ namespace SysWeaver
         ///             $(ExecutableDir) = ExecutableDir, ex: "C:\MyServices"
         ///             $(ExecutableBase) = Full path to the executable, excluding it's extensions, ex: "C:\MyServices\MyService"
         ///             $(AppName) = Application name (defaults to exe app name, can be changed in config), ex: "MyService".
-        ///             $(AppGuid) = A "unique" id for this process
+        ///             $(AppGuid) = A guid derived from the application assembly name (stable between runs)
         ///             $(AppDisplayName) = Friendly application name (defaults to de-camel cased exe app name, can be changed in config), ex: "My service".
         ///             $(MachineName) = Machine name, ex: "DESKTOP-324VHA".
         ///             $(KeyFolder) = The folder where keys are stored. ex: "C:\Keys".
@@ -50,6 +60,9 @@ namespace SysWeaver
         /// <param name="password">The password</param>
         /// <param name="mustBeValid">Throw if the user or password is empty</param>
         /// <returns>False if the user or password is empty, else True</returns>
+        /// <exception cref="Exception">The credentials file doesn't exist, is empty or the first non-comment line has no ':' (regardless of <paramref name="mustBeValid"/>),
+        /// or the user or password is empty and <paramref name="mustBeValid"/> is true.</exception>
+        /// <remarks>A file containing only comment lines yields empty values (and false) without throwing, even if <paramref name="mustBeValid"/> is true.</remarks>
         public bool GetUserPassword(out String user, out String password, bool mustBeValid = true)
         {
             var fn = CredFile;

@@ -10,13 +10,28 @@ using System.Threading;
 namespace SysWeaver
 {
     /// <summary>
-    /// Service used to change the application information such as display name etc
+    /// Service used to change the application information such as display name etc.
+    /// Constructing an instance applies the supplied <see cref="AppInfoParams"/> to the process wide <see cref="EnvInfo"/> properties,
+    /// logs some environment information and adjusts the minimum number of thread pool threads.
     /// </summary>
+    /// <remarks>
+    /// The changes are global (static state), so only one instance should be created (typically by the service manager at startup).
+    /// <see cref="Dispose"/> restores the thread pool minimums but not the <see cref="EnvInfo"/> values.
+    /// </remarks>
     public sealed class AppInfo
     {
 
         const String LogPrefix = "[AppInfo] ";
 
+        /// <summary>
+        /// Apply the application information.
+        /// </summary>
+        /// <param name="m">Optional message host used for logging.
+        /// Note: currently required (not null) if <paramref name="p"/> is not null, since the thread pool messages are logged without a null check.</param>
+        /// <param name="p">The parameters to apply, if null a warning is logged and nothing is changed.
+        /// Name, display name, description and language support <see cref="PathTemplate"/> variables.
+        /// If the name changes and no display name is given, the display name is derived from the name (camel case split).</param>
+        /// <exception cref="NullReferenceException"><paramref name="m"/> is null and <paramref name="p"/> is not null.</exception>
         public AppInfo(IMessageHost m, AppInfoParams p = null)
         {
             if (p == null)
@@ -122,6 +137,10 @@ namespace SysWeaver
         readonly int UseIoThreads;
 
 
+        /// <summary>
+        /// Restore the minimum number of thread pool threads to the values that were in effect before this instance was created.
+        /// </summary>
+        /// <remarks>Note that this class doesn't implement <see cref="IDisposable"/>, so this must be called explicitly.</remarks>
         public void Dispose()
         {
             var workerThreads = DefWorkerThreads;
@@ -130,6 +149,10 @@ namespace SysWeaver
                 ThreadPool.SetMinThreads(workerThreads, ioThreads);
         }
 
+        /// <summary>
+        /// Returns the current (global) application name, display name, seed and description.
+        /// </summary>
+        /// <returns>A display string.</returns>
         public override string ToString() => String.Concat(
             "Name: ", EnvInfo.AppName
             , ", Display name: ", EnvInfo.AppDisplayName

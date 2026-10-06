@@ -5,31 +5,47 @@ using SysWeaver.Net;
 namespace SysWeaver.HttpTransformer
 {
 
+    /// <summary>
+    /// Describes a source file (request) that a <see cref="ICachedTransformer"/> should validate or build cached variants for.
+    /// </summary>
     public class CachedTransformerFile
     {
-        internal readonly String CacheKey;
-        internal readonly ICachedTransformer Handler;
         /// <summary>
-        /// Mime of input
+        /// The cache key (local url + newline + etag of the source).
+        /// </summary>
+        internal readonly String CacheKey;
+
+        /// <summary>
+        /// The transformer that handles this file.
+        /// </summary>
+        internal readonly ICachedTransformer Handler;
+
+        /// <summary>
+        /// Mime of the input.
         /// </summary>
         public readonly String Mime;
         /// <summary>
-        /// Filename base (no extension)
+        /// Full path and base file name (no extension) on disc where the transformed variants should be stored; append an extension to get a file name.
+        /// The name is a hash of the cache key, so it changes when the source changes (new etag).
         /// </summary>
         public readonly String BaseName;
         /// <summary>
-        /// Extension without leading dot of input
+        /// File extension of the input, without leading dot.
         /// </summary>
         public readonly String Ext;
         /// <summary>
-        /// True if build strategy isn't AlwaysDirect
+        /// True if the build strategy isn't <see cref="CachedTransformerBuildStrategies.AlwaysDirect"/>, i.e. the original data may
+        /// also be served, so transformers should add a null entry (representing the original) and store the original size.
         /// </summary>
         public readonly bool IsSupported;
         /// <summary>
-        /// The decoder to use to get the raw data
+        /// The decoder needed to decompress the input data, null if the input isn't compressed.
         /// </summary>
         public readonly ICompDecoder Decoder;
 
+        /// <summary>
+        /// The transformer state of the request that triggered the build.
+        /// </summary>
         public readonly HttpRequestTransformerState State;
 
         internal CachedTransformerFile(ICachedTransformer handler, String cacheKey, string baseName, HttpRequestTransformerState state)
@@ -45,13 +61,16 @@ namespace SysWeaver.HttpTransformer
         }
     }
 
+    /// <summary>
+    /// A queued (or direct) build of a <see cref="CachedTransformerFile"/>.
+    /// </summary>
     sealed class CachedTransformerJob
     {
         public readonly CachedTransformerFile File;
 
         public readonly CachedTransformerEntry Entry;
         /// <summary>
-        /// Data of input
+        /// Data of input (possibly compressed, see <see cref="CachedTransformerFile.Decoder"/>).
         /// </summary>
         public readonly ReadOnlyMemory<Byte> Data;
         internal CachedTransformerJob(CachedTransformerFile file, ReadOnlyMemory<byte> data, CachedTransformerEntry entry)

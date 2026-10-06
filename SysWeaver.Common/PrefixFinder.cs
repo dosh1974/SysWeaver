@@ -5,11 +5,19 @@ using System.Linq;
 namespace SysWeaver
 {
     /// <summary>
-    /// Provides a fast way to determine what a string starts with (from a given fixed set), the string to test MUST start with one in the set
+    /// Provides a fast way to determine what a string starts with (from a given fixed set), the string to test MUST start with one in the set.
     /// </summary>
+    /// <remarks>
+    /// The prefixes are expected to be URL's: everything up to and including the host is stripped from every prefix ("https://host/api/" becomes "/api/"),
+    /// so the texts to test should be the path part of an URL. Not used by the framework.
+    /// </remarks>
     public static class PrefixFinder
     {
 
+        /// <summary>
+        /// Get the path part of an URL ("https://host/a/b" => "/a/b", "https://host" => "")
+        /// </summary>
+        /// <returns>The path (starting with a '/'), an empty string if there is no path, or null if the string doesn't contain "://"</returns>
         static String StripPrefix(String s)
         {
             int i = s.FastIndexOf("://");
@@ -20,12 +28,17 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Creates a prefix finder
+        /// Creates a prefix finder.
+        /// If all (stripped) prefixes differs at some char position (shorter than the shortest prefix), the result is a lookup of that single char (an array lookup if the chars are within a range of 256),
+        /// else a <see cref="TernaryTree{T}"/> is used.
         /// </summary>
-        /// <param name="prefixes">The prefixes that we should match against, ex: ["http://", "https://", "ftp://", "sftp://"]</param>
-        /// <param name="caseSensitive">True if the comparision should be case sensitive, else false</param>
-        /// <returns>A function that given a string, returns the prefix string that it starts with.
-        /// The given string must start with one of the pre-defined prefixes or the behaviour is undefined (can't throw exceptions or return String.Empty etc)</returns>
+        /// <param name="prefixes">The URL's whose path part should be matched against, ex: ["https://host/api/", "https://host/files/"] (matches "/api/" and "/files/").
+        /// Every prefix must contain "://" (or a NullReferenceException is thrown). Duplicate paths are merged</param>
+        /// <param name="caseSensitive">True if the comparison should be case sensitive, else false (ASCII and invariant culture case folding)</param>
+        /// <returns>A function that given a string (an URL path), returns the (stripped) prefix that it starts with.
+        /// The given string must start with one of the pre-defined prefixes or the behaviour is undefined (it may return a wrong prefix, String.Empty or throw an IndexOutOfRangeException).
+        /// If no prefixes are given the function always returns String.Empty, if one is given that prefix is always returned.
+        /// When a <see cref="TernaryTree{T}"/> is used and several prefixes match, the shortest one is returned</returns>
         public static Func<String, String> Create(String[] prefixes, bool caseSensitive = true)
         {
             prefixes = new HashSet<String>(prefixes.Select(x => StripPrefix(x))).ToArray();

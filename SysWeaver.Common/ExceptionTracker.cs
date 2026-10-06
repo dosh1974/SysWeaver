@@ -6,10 +6,15 @@ using SysWeaver.Data;
 namespace SysWeaver
 {
     /// <summary>
-    /// Class that can be used to track failures
+    /// Tracks failures: the number of exceptions, the time of the last one and the last exception
     /// </summary>
+    /// <remarks>Thread safe, the count, time and exception are updated individually (not as an atomic unit)</remarks>
     public sealed class ExceptionTracker
     {
+        /// <summary>
+        /// Returns a summary of the failures
+        /// </summary>
+        /// <returns>"No fails!" or the count, time of the last fail and the last exception</returns>
         public override string ToString()
         {
             var c = Interlocked.Read(ref InternalCount);
@@ -21,9 +26,9 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Call once on an exception
+        /// Register an exception (call once per failure)
         /// </summary>
-        /// <param name="ex">The exception that cause the failure</param>
+        /// <param name="ex">The exception that caused the failure, null is ignored</param>
         public void OnException(Exception ex)
         {
             if (ex == null)
@@ -55,6 +60,12 @@ namespace SysWeaver
         long InternalTime;
 
 
+        /// <summary>
+        /// Get the failure statistics (count, time and last exception text), nothing is returned if no exception have been registered
+        /// </summary>
+        /// <param name="system">The system name to use for the statistics</param>
+        /// <param name="prefix">A prefix for the statistics names (null is treated as empty)</param>
+        /// <returns>The statistics</returns>
         public IEnumerable<Stats> GetStats(String system, String prefix)
         {
             var l = Interlocked.Read(ref InternalCount);

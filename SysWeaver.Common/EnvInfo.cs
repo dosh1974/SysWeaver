@@ -18,8 +18,14 @@ namespace SysWeaver
 {
 
     /// <summary>
-    /// Additional information about the runtime environment
+    /// Additional information about the runtime environment: executable paths, OS / platform, application name and description,
+    /// and text variables that can be used in templates (ex: "$(AppName)").
     /// </summary>
+    /// <remarks>
+    /// Most values are computed once when the class is first accessed.
+    /// <see cref="AppName"/>, <see cref="AppDisplayName"/>, <see cref="AppDescription"/>, <see cref="AppSeed"/> and <see cref="AppLanguage"/>
+    /// can only be changed internally, typically by <see cref="AppInfo"/> at startup.
+    /// </remarks>
     public static class EnvInfo
     {
 
@@ -85,7 +91,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// The processor architecture:
+        /// The processor architecture of the current process (lower cased <see cref="RuntimeInformation.ProcessArchitecture"/>), ex:
         /// "x86"
         /// "x64"
         /// "arm"
@@ -113,11 +119,12 @@ namespace SysWeaver
         /// "linux"
         /// "osx"
         /// "windows"
+        /// "unknown"
         /// </summary>
         public static readonly String OsPlatform = GetOS();
 
         /// <summary>
-        /// The friendly OS name
+        /// The friendly OS name, as reported by <see cref="PlatformTools.Current"/>
         /// </summary>
         public static String OsName => PlatformTools.Current.OsFriendlyName;
 
@@ -127,22 +134,22 @@ namespace SysWeaver
         public static readonly String OsVersion = Environment.OSVersion.ToString();
 
         /// <summary>
-        /// Full path to the actual executable
+        /// Full path to the actual (host) executable of the process, ex: "C:\Program Files\dotnet\dotnet.exe" when started using "dotnet MyApp.dll"
         /// </summary>
         public static readonly String HostExecutable = GetHostExecutable();
 
         /// <summary>
-        /// The executable command ("host.exe" file or "host.exe asm.dll")
+        /// The executable command, i.e. what to run to start this application again ("host.exe" or "host.exe asm.dll"), paths containing spaces are quoted
         /// </summary>
         public static readonly String ExecCommand = GetExecCommand();
 
         /// <summary>
-        /// The command line (including host)
+        /// The command line (including host and arguments)
         /// </summary>
         public static readonly String CommandLine = GetCommandLine();
 
         /// <summary>
-        /// Full path to the executable
+        /// Full path to the executable (the entry assembly location, or the host executable if not available, ex: single file apps)
         /// </summary>
         public static readonly String Executable = GetExecutable();
 
@@ -158,7 +165,8 @@ namespace SysWeaver
 
         /// <summary>
         /// The "folder" to use when loading native dependencies.
-        /// ExecutableBase + "\runtimes\" + OsPlatform + "_" + ProcessorArchitecture.
+        /// ExecutableDir + "\runtimes\" + OsPlatform + "_" + ProcessorArchitecture.
+        /// Note: this differs from the .NET runtime identifier layout used by <see cref="RuntimeFolder"/>.
         /// Ex:
         /// "D:\MyApp\runtimes\linux_x64"
         /// "D:\MyApp\runtimes\windows_arm64"
@@ -171,7 +179,8 @@ namespace SysWeaver
         static readonly String ExeAppDescription = "This is the " + ExeAppDisplayName + " application.";
 
         /// <summary>
-        /// Application name
+        /// Application name, defaults to the executable name without extension (can be changed using <see cref="AppInfoParams.AppName"/>).
+        /// Setting null or empty restores the default.
         /// </summary>
         public static String AppName
         {
@@ -186,7 +195,8 @@ namespace SysWeaver
         static String InternalAppName = ExeAppName;
 
         /// <summary>
-        /// Application display name
+        /// Application display name, defaults to the executable name with camel case split into words (can be changed using <see cref="AppInfoParams.AppDisplayName"/>).
+        /// Setting null or empty restores the default.
         /// </summary>
         public static String AppDisplayName
         {
@@ -201,7 +211,8 @@ namespace SysWeaver
         static String InternalAppDisplayName = ExeAppDisplayName;
 
         /// <summary>
-        /// Application description
+        /// Application description, defaults to "This is the [display name] application." (can be changed using <see cref="AppInfoParams.AppDescription"/>).
+        /// Setting null or empty restores the default.
         /// </summary>
         public static String AppDescription
         {
@@ -222,30 +233,36 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Application start time
+        /// Application start time (UTC), actually the time when this class was first accessed
         /// </summary>
         public static readonly DateTime AppStart = DateTime.UtcNow;
 
         /// <summary>
-        /// Application CC tick
+        /// The number of ticks (100 ns) between 2023-11-01 and <see cref="AppStart"/>, used as a "unique" instance number
         /// </summary>
         public static readonly long Cc = AppStart.Ticks - new DateTime(2023, 11, 1).Ticks;
 
         /// <summary>
-        /// "Unique" instance id as a string
+        /// "Unique" instance id as a string (<see cref="Cc"/> in hex), changes every time the application is started
         /// </summary>
         public static readonly String AppInstance = Cc.ToString("x");
 
         /// <summary>
-        /// Assembly name, should stay the same independent of filename
+        /// Assembly name of the entry assembly, should stay the same independent of filename (falls back to <see cref="AppName"/>)
         /// </summary>
         public static readonly String AppAssemblyName = Assembly.GetEntryAssembly()?.GetName()?.Name ?? AppName;
 
         /// <summary>
-        /// A guid (as a string), based on AppAssemblyName
+        /// A guid (as a string, "{...}" format), based on AppAssemblyName, stable between runs and machines
         /// </summary>
         public static readonly String AppGuid = CreateHashGuid(AppAssemblyName);
 
+        /// <summary>
+        /// Create a deterministic guid from a text (MD5 hash of the UTF-16 bytes), not intended for security purposes.
+        /// </summary>
+        /// <param name="text">The text to hash (may not be null).</param>
+        /// <returns>The guid in the "B" format, ex: "{cfbedd92-341e-4edb-96eb-c8305974ee29}".</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="text"/> is null.</exception>
         public static String CreateHashGuid(String text)
         {
             var hash = MD5.HashData(Encoding.Unicode.GetBytes(text));
@@ -258,14 +275,18 @@ namespace SysWeaver
         ///             "AppName" = Application name.
         ///             "AppDisplayName" = Application display name.
         ///             "AppDescription" = Application description name.
-        ///             "AppStart" = Application start time as "yyyy-MM-hh hh:mm:ss".
+        ///             "AppStart" = Application start time (UTC) formatted using "yyyy-MM-hh hh:mm:ss" (note: month followed by a 12-hour clock hour, not the day).
         ///             "AppAssemblyName" = Application assembly name (typically the exe name), "ExchangeRateService".
-        ///             "AppGuid" = A unique guid for this appllication, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
+        ///             "AppGuid" = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
         ///             "UserName" = The environment user name, ex: "John Doe".
         ///             "Is64BitProcess" = "True" if the process is running as a 64-bit process, else "False".
         ///             "OSVersion" = The version of the OS.
         ///             "Platform" = The platform, ex "WinNT", "Unix".
         ///             "MachineName" = The computer name.
+        ///             "MachineNameCased" = The computer name, lower cased with the first letter upper cased.
+        ///             "ExeAppName", "Executable", "ExecutableDir", "ExecutableBase" = See the members with the same names.
+        ///             "KeyFolder" = The folder where keys are stored (<see cref="Folders.KeyFolder"/>).
+        /// Keys are case sensitive. The dictionary is rebuilt (lazily) when the app name, display name or description changes.
         /// </summary>
         public static IReadOnlyDictionary<String, String> TextVars
         {
@@ -307,15 +328,17 @@ namespace SysWeaver
         ///             "appname" = Application name.
         ///             "appdisplayname" = Application display name.
         ///             "appdescription" = Application description name.
-        ///             "appstart" = Application start time as "yyyy-MM-hh hh:mm:ss".
+        ///             "appstart" = Application start time (UTC) formatted using "yyyy-MM-hh hh:mm:ss" (note: month followed by a 12-hour clock hour, not the day).
         ///             "appassemblyname" = Application assembly name (typically the exe name), "ExchangeRateService".
-        ///             "appguid" = A unique guid for this appllication, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
+        ///             "appguid" = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
         ///             "username" = The environment user name, ex: "John Doe".
         ///             "is64bitprocess" = "True" if the process is running as a 64-bit process, else "False".
         ///             "osversion" = The version of the OS.
         ///             "platform" = The platform, ex "WinNT", "Unix".
         ///             "machinename" = The computer name.
         ///             "keyfolder" = The folder where keys are stored.
+        ///             "machinenamecased", "exeappname", "executable", "executabledir", "executablebase" = See <see cref="TextVars"/>.
+        /// The dictionary uses a case insensitive comparer, so any casing of the keys can be used for lookups.
         /// </summary>
         public static IReadOnlyDictionary<String, String> TextVarsCaseInsensitive
         {
@@ -358,9 +381,9 @@ namespace SysWeaver
         ///             $(AppName) = Application name.
         ///             $(AppDisplayName) = Application display name.
         ///             $(AppDescription) = Application description name.
-        ///             $(AppStart) = Application start time as "yyyy-MM-hh hh:mm:ss".
+        ///             $(AppStart) = Application start time (UTC) formatted using "yyyy-MM-hh hh:mm:ss" (note: month followed by a 12-hour clock hour, not the day).
         ///             $(AppAssemblyName) = Application assembly name (typically the exe name), "ExchangeRateService".
-        ///             $(AppGuid) = A unique guid for this appllication, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
+        ///             $(AppGuid) = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
         ///             $(UserName) = The environment user name, ex: "John Doe".
         ///             $(Is64BitProcess) = "True" if the process is running as a 64-bit process, else "False".
         ///             $(OSVersion) = The version of the OS.
@@ -372,9 +395,9 @@ namespace SysWeaver
         ///             $(AppName) = Application name.
         ///             $(AppDisplayName) = Application display name.
         ///             $(AppDescription) = Application description name.
-        ///             $(AppStart) = Application start time as "yyyy-MM-hh hh:mm:ss".
+        ///             $(AppStart) = Application start time (UTC) formatted using "yyyy-MM-hh hh:mm:ss" (note: month followed by a 12-hour clock hour, not the day).
         ///             $(AppAssemblyName) = Application assembly name (typically the exe name), "ExchangeRateService".
-        ///             $(AppGuid) = A unique guid for this appllication, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
+        ///             $(AppGuid) = A unique guid for this application, ex: "{CFBEDD92-341E-4EDB-96EB-C8305974EE29}".
         ///             $(UserName) = The environment user name, ex: "John Doe".
         ///             $(Is64BitProcess) = "True" if the process is running as a 64-bit process, else "False".
         ///             $(OSVersion) = The version of the OS.
@@ -383,8 +406,14 @@ namespace SysWeaver
         ///             $(KeyFolder) = The folder where keys are stored.
         /// </param>
         /// <param name="caseInSensitive">If true the variable names is case in-sensitive</param>
-        /// <param name="extra">Optional extra variables</param>
-        /// <returns>The resolved text</returns>
+        /// <param name="extra">Optional extra variables, used for names not found in <see cref="TextVars"/> (env info variables take precedence).
+        /// When case insensitive, the lookup in <paramref name="extra"/> uses its own comparer.</param>
+        /// <returns>The resolved text (null or empty if <paramref name="template"/> is null or empty)</returns>
+        /// <remarks>
+        /// Thread safe. When no <paramref name="extra"/> variables are given, the resolved result is cached per template (forever),
+        /// so a later change of <see cref="AppName"/>, <see cref="AppDisplayName"/> or <see cref="AppDescription"/> is not reflected for templates resolved before the change.
+        /// Caches are unbounded, so don't use with an unbounded set of templates.
+        /// </remarks>
         public static String ResolveText(String template, bool caseInSensitive = true, IReadOnlyDictionary<String, String> extra = null)
         {
             if (String.IsNullOrEmpty(template))
@@ -428,11 +457,12 @@ namespace SysWeaver
 
         /// <summary>
         /// Make an absolute path from a relative path (not using current directory, but rather the executable directory).
-        /// If the path already is absolute, nothing will be changed.
+        /// If the path already is absolute (rooted), or is an url (contains "://"), nothing will be changed (except for directory separators).
         /// </summary>
-        /// <param name="path">Relative or absolue path</param>
+        /// <param name="path">Relative or absolute path (alt directory separators are replaced with the platform directory separator)</param>
         /// <param name="useCurrentDir">Make relative to the current path instead of the executable path</param>
-        /// <returns>An absolute path</returns>
+        /// <returns>An absolute path, or null if <paramref name="path"/> is null</returns>
+        /// <remarks>The result is not normalized, ".." segments are kept as is (no protection against path traversal).</remarks>
         public static String MakeAbsoulte(String path, bool useCurrentDir = false)
         {
             if (path == null)
@@ -460,6 +490,10 @@ namespace SysWeaver
             new Stats(StatsSystem , nameof(OsPlatform), OsPlatform, "The general OS type"),
         ];
 
+        /// <summary>
+        /// Get statistics about the environment (executable, OS, machine, app name and current working set).
+        /// </summary>
+        /// <returns>The statistics.</returns>
         public static IEnumerable<Stats> GetStats()
         {
             foreach (var x in StaticStats)
@@ -471,6 +505,10 @@ namespace SysWeaver
 
 
 
+        /// <summary>
+        /// Get the two letter ISO 3166 region code of the current culture, ex: "US" (cached culture data is cleared first so OS changes are picked up).
+        /// </summary>
+        /// <returns>The two letter region code.</returns>
         public static String GetCurrentRegion()
         {
             CultureInfo.CurrentCulture.ClearCachedData();
@@ -489,14 +527,26 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// The .NET runtime identifier (RID) style name of the current platform, ex: "win-x64", "linux-arm64" (FreeBSD reports "unknown-..").
+        /// </summary>
         public static readonly string RumtimeID = $"{OSIdentifier}-{RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant()}";
+        /// <summary>
+        /// The RID specific runtime folder, ExecutableDir + "/runtimes/" + <see cref="RumtimeID"/>, ex: "C:\MyApp\runtimes\win-x64".
+        /// </summary>
         public static readonly string RuntimeFolder = Path.Combine(ExecutableDir, "runtimes", RumtimeID);
+        /// <summary>
+        /// The folder for native libraries, <see cref="RuntimeFolder"/> + "/native".
+        /// </summary>
         public static readonly string RuntimeFolderNative = Path.Combine(RuntimeFolder, "native");
+        /// <summary>
+        /// The folder for RID specific managed libraries, <see cref="RuntimeFolder"/> + "/lib".
+        /// </summary>
         public static readonly string RuntimeFolderLib = Path.Combine(RuntimeFolder, "lib");
 
 
         /// <summary>
-        /// Seed to use for generating data (app specific)
+        /// Seed to use for generating data (app specific, ex: the generated logo), set from <see cref="AppInfoParams.AppSeed"/>
         /// </summary>
         public static int AppSeed { get; internal set; }
 

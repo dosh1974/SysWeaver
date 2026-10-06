@@ -3,7 +3,7 @@ using System;
 namespace SysWeaver.Data
 {
     /// <summary>
-    /// Format valus as:
+    /// Format values as:
     /// List of tags separated by a comma, ex: "Banana, Apple, Orange".
     /// An optional value can be present using a colon, ex: "Banana:Yellow, Apple:Green, Orange:Orange".
     /// </summary>
@@ -34,7 +34,8 @@ namespace SysWeaver.Data
         /// {3} = The text (after formatting). 
         /// {4} = The title (after formatting). 
         /// </param>
-        /// <param name="copyOnClick">Copy all tags (raw value) to the clipboard on click.</param>
+        /// <param name="copyOnClick">Copy all tags (raw value) to the clipboard on click.
+        /// Note: Currently ignored by the web client, a tag is copied on click if <paramref name="copyFormat"/> is non-empty.</param>
         public TableDataTagsAttribute(String textFormat = "{1}", String titleFormat = "{2}", String copyFormat = null, bool copyOnClick = false) : base(TableDataFormats.Tags, textFormat ?? "{1}", titleFormat ?? "{2}", copyFormat ?? "", copyOnClick)
         {
         }

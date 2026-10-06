@@ -6,27 +6,49 @@ using SysWeaver.Inspection;
 
 namespace SysWeaver.Serialization
 {
+    /// <summary>
+    /// Binary serializer for the "swbin" extension using SysWeaver's inspection based binary format (<see cref="BinaryWriterInspector"/> / <see cref="BinaryReaderInspector"/>).
+    /// </summary>
+    /// <remarks>
+    /// Values are written as their static type <c>T</c> (no type information for the root), so they must be read back as the same type.
+    /// The <see cref="SerializerOptions"/> are ignored.
+    /// </remarks>
     public sealed class SysWeaverBinarySerializer : ISerializerType
     {
+        /// <inheritdoc/>
         public string Name => "SysWeaver.Binary";
 
+        /// <inheritdoc/>
         public string Extension => "swbin";
 
+        /// <summary>
+        /// The MIME type of the data produced by this serializer.
+        /// </summary>
         public const String MimeType = "application/x-swbin";
 
+        /// <inheritdoc/>
         public string Mime => MimeType;
 
+        /// <inheritdoc/>
         public string MimeHeader { get; private set; } = MimeType;
 
+        /// <inheritdoc/>
         public Encoding Encoding => null;
 
+        /// <inheritdoc/>
         public int Prio => 0;
 
         SysWeaverBinarySerializer()
         {
         }
 
+        /// <summary>
+        /// The singleton instance of this serializer.
+        /// </summary>
         public static readonly ISerializerType Instance = new SysWeaverBinarySerializer();
+        /// <summary>
+        /// Returns the <see cref="Name"/> of this serializer.
+        /// </summary>
         public override string ToString() => Name;
 
         /// <summary>
@@ -35,6 +57,7 @@ namespace SysWeaver.Serialization
         public static void Register() => SerManager.AddType(Instance);
 
 
+        /// <inheritdoc/>
         public unsafe T Create<T>(ReadOnlySpan<byte> data)
         {
             fixed (byte* bp = data)
@@ -45,6 +68,7 @@ namespace SysWeaver.Serialization
             }
         }
 
+        /// <inheritdoc/>
         public unsafe T Create<T>(ReadOnlyMemory<byte> data)
         {
             fixed (byte* bp = data.Span)
@@ -55,6 +79,7 @@ namespace SysWeaver.Serialization
             }
         }
 
+        /// <inheritdoc/>
         public ReadOnlyMemory<byte> Serialize<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
         {
             using var ms = new MemoryStream();

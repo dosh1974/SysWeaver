@@ -6,11 +6,20 @@ using SysWeaver.Data;
 namespace SysWeaver
 {
     /// <summary>
-    /// Represents a log message
+    /// Represents a single log message, created by <see cref="MessageHost.AddMessage(string, MessageLevels)"/> and dispatched to <see cref="MessageHandler"/> instances.
     /// </summary>
+    /// <remarks>
+    /// Instances are immutable (except for an internal cache of rendered text) and safe to share between threads.
+    /// A leading prefix of the form "[Token]" or "[A] [B]" in the original text is split off into <see cref="Prefix"/> / <see cref="OrgPrefix"/>
+    /// and padded so that message texts line up when rendered.
+    /// </remarks>
     [TableDataPrimaryKey(nameof(Id))]
     public sealed class Message
     {
+        /// <summary>
+        /// Format the message using the <see cref="Debug"/> format string.
+        /// </summary>
+        /// <returns>A formatted message.</returns>
         public override string ToString()
         {
             return Format(Debug);
@@ -30,28 +39,30 @@ namespace SysWeaver
         public const String ServerConsole = "{4:HH:mm::ss} {3,7}: {1}";
 
         /// <summary>
-        /// Returns a formatted log message string, given a formatting string, string formatter.
+        /// Returns a formatted log message string, using a composite format string (as used by <see cref="String.Format(string, object[])"/>).
         /// </summary>
-        /// <param name="format">The string formatter, argumets are:
+        /// <param name="format">The composite format string, arguments are:
         /// 0: Int64 Id
-        /// 1: String Text
+        /// 1: String Text (without the prefix)
         /// 2: Exception Exception (or null)
         /// 3: MessageLevels Level
-        /// 4: DateTime Time
-        /// 5: In32 ThreadId
+        /// 4: DateTime Time (UTC)
+        /// 5: Int32 ThreadId
         /// </param>
         /// <returns>A formatted log message</returns>
+        /// <exception cref="FormatException"><paramref name="format"/> is invalid or references an argument index greater than 5.</exception>
+        /// <remarks>Uses the current culture for formatting.</remarks>
         public String Format(String format)
         {
             return String.Format(format, Id, Text, Exception, Level, Time, ThreadId);
         }
 
         /// <summary>
-        /// Message id (unique number)
+        /// Message id, a sequence number that is unique (and increasing) per <see cref="MessageHost"/> instance.
         /// </summary>
         public readonly long Id;
         /// <summary>
-        /// The time when the message has created
+        /// The time (UTC) when the message was created
         /// </summary>
         public readonly DateTime Time;
         /// <summary>
@@ -61,25 +72,26 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Prefix to add at every new line before the message text (handles tabs etc)
+        /// Prefix to add before the message text, the "[..]" prefix padded to a fixed width (27 chars plus a space) followed by any tab indentation.
+        /// Never null, if the message had no prefix this is a padding only string.
         /// </summary>
         [TableDataHide]
         public readonly String Prefix;
 
         /// <summary>
-        /// Original prefix without padding
+        /// Original "[..]" prefix of the message text without padding or indentation (a padding string if the message had no prefix).
         /// </summary>
         [TableDataName(nameof(Prefix))]
         public readonly String OrgPrefix;
 
         /// <summary>
-        /// Message text
+        /// Message text (with any leading "[..]" prefix removed)
         /// </summary>
         [TableDataText(100, "{0}", "{0}", true)]
         public readonly String Text;
        
         /// <summary>
-        /// The thread that created the message
+        /// The managed thread id of the thread that created the message
         /// </summary>
         public readonly int ThreadId;
         
@@ -206,18 +218,21 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// The amount of detail to include when rendering a message as text, see <see cref="GetText(TextStyles)"/>.
+        /// </summary>
         public enum TextStyles
         {
             /// <summary>
-            /// Minimal details
+            /// Minimal details, prefix and text only
             /// </summary>
             Normal,
             /// <summary>
-            /// Plenty of details
+            /// Adds the local time (HH:mm:ss) and the message level
             /// </summary>
             Verbose,
             /// <summary>
-            /// Even more details
+            /// Same as <see cref="Verbose"/> but also adds the message id and the thread id
             /// </summary>
             Debug,
         }
@@ -228,10 +243,11 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Get new date strings
+        /// Get the local date of the message (yyyy-MM-dd) if it differs from a previously returned date.
+        /// Used by text handlers to emit a date line only when the date changes.
         /// </summary>
-        /// <param name="prev"></param>
-        /// <returns></returns>
+        /// <param name="prev">The previously emitted date string (or null).</param>
+        /// <returns>The local date as "yyyy-MM-dd", or null if it's equal to <paramref name="prev"/>.</returns>
         public String GetDate(String prev)
         {
             var localTime = Time.ToLocalTime();
@@ -240,10 +256,15 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get the formatted message text
+        /// Get the formatted message text, including any exception (message and stack trace, for all inner exceptions).
         /// </summary>
         /// <param name="style">The styling of the text</param>
-        /// <returns>Formatted message text</returns>
+        /// <returns>Formatted message text, always terminated by a new line. Multi-line texts are indented to line up with the first line.</returns>
+        /// <remarks>
+        /// The result is cached per style, so repeated calls (ex: from multiple handlers) are cheap. Thread safe.
+        /// Times are rendered in local time.
+        /// </remarks>
+        /// <exception cref="IndexOutOfRangeException"><paramref name="style"/> is not a defined <see cref="TextStyles"/> value.</exception>
         public String GetText(TextStyles style)
         {
             var t = Texts;

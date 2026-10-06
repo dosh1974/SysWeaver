@@ -15,12 +15,16 @@ Adds the Zstandard format to [SysWeaver.Compression](../SysWeaver.Compression/RE
 
 ## Key features
 
-- Pure managed implementation (no native binaries).
+- `CompZstdSharp`: pure managed implementation based on [ZstdSharp.Port](https://www.nuget.org/packages/ZstdSharp.Port) (no native binaries), registered as `zstd` (file extension `.zstd`) with priority 1.
+- Effort levels map to zstd level 1 / 9 / 22; compressor and decompressor contexts are pooled and reused.
+- Decodes concatenated (and skippable) zstd frames.
 - Once registered, available for HTTP content negotiation and for compressed binary API parameters.
 
 ## Limitations and considerations
 
 - Browser support for `zstd` content encoding is newer than for Brotli/GZip; the server falls back to other codecs when a client does not accept it.
+- Invalid data can surface as a `ZstdSharp.ZstdException` rather than the `InvalidDataException` thrown by the other codecs.
+- The `Best` level (22) is very slow and memory hungry for large inputs; use it for offline compression only.
 
 ## Using it
 

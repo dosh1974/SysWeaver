@@ -9,8 +9,13 @@ namespace SysWeaver
 {
     /// <summary>
     /// Utility class to open a compressed version of a file.
-    /// Files are cached so re-opening will be faster.
+    /// The compressed data is cached on disc (using <see cref="FileMetaData"/>, keyed by the content hash of the source file, compression type and level),
+    /// so re-opening the same content is fast. Cached files not used for 30 days are pruned at process exit.
     /// </summary>
+    /// <remarks>
+    /// Used by the HTTP server to serve pre-compressed static files.
+    /// Concurrent requests for the same content are serialized using a <see cref="SystemLock"/>.
+    /// </remarks>
     public static class CompressedFile
     {
 
@@ -21,44 +26,48 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Open a compressed version of a file, with caching etc.
+        /// Open a compressed version of a file, compressing it first if no cached copy exists.
         /// </summary>
         /// <param name="file">The name of the file to get the compressed data for</param>
         /// <param name="compType">The compression type</param>
         /// <param name="level">The desired compression level</param>
-        /// <returns>A compressed stream</returns>
+        /// <returns>A read only stream of the cached compressed file, the caller must dispose it.</returns>
+        /// <exception cref="Exception"><paramref name="file"/> doesn't exist.</exception>
         public static Stream Open(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
             => new FileStream(GetCompFile(file, compType, level), FileMode.Open, FileAccess.Read, FileShare.Read);
 
 
         /// <summary>
-        /// Open a compressed version of a file, with caching etc.
+        /// Open a compressed version of a file, compressing it first if no cached copy exists.
         /// </summary>
         /// <param name="file">The name of the file to get the compressed data for</param>
         /// <param name="compType">The compression type</param>
         /// <param name="level">The desired compression level</param>
-        /// <returns>A compressed stream</returns>
+        /// <returns>A read only stream of the cached compressed file, the caller must dispose it.</returns>
+        /// <exception cref="Exception"><paramref name="file"/> doesn't exist.</exception>
         public static async Task<Stream> OpenAsync(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
             => new FileStream(await GetCompFileAsync(file, compType, level).ConfigureAwait(false), FileMode.Open, FileAccess.Read, FileShare.Read);
 
 
         /// <summary>
-        /// Read all compressed bytes from a file (with caching etc)
+        /// Read all compressed bytes of a file, compressing it first if no cached copy exists.
         /// </summary>
-        /// <param name="file"></param>
-        /// <param name="compType"></param>
-        /// <param name="level"></param>
-        /// <returns></returns>
+        /// <param name="file">The name of the file to get the compressed data for</param>
+        /// <param name="compType">The compression type</param>
+        /// <param name="level">The desired compression level</param>
+        /// <returns>The compressed data, the caller must dispose it.</returns>
+        /// <exception cref="Exception"><paramref name="file"/> doesn't exist.</exception>
         public static IUnmanagedReadOnlyMemory<Byte> ReadAllBytes(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
             => FileReadOnlyMemory.Read(GetCompFile(file, compType, level));
 
         /// <summary>
-        /// Read all compressed bytes from a file (with caching etc)
+        /// Read all compressed bytes of a file, compressing it first if no cached copy exists.
         /// </summary>
-        /// <param name="file"></param>
-        /// <param name="compType"></param>
-        /// <param name="level"></param>
-        /// <returns></returns>
+        /// <param name="file">The name of the file to get the compressed data for</param>
+        /// <param name="compType">The compression type</param>
+        /// <param name="level">The desired compression level</param>
+        /// <returns>The compressed data, the caller must dispose it.</returns>
+        /// <exception cref="Exception"><paramref name="file"/> doesn't exist.</exception>
         public static async Task<IUnmanagedReadOnlyMemory<Byte>> ReadAllBytesAsync(String file, ICompType compType, CompEncoderLevels level = CompEncoderLevels.Best)
             => FileReadOnlyMemory.Read(await GetCompFileAsync(file, compType, level).ConfigureAwait(false));
 

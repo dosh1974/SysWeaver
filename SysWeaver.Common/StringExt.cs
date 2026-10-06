@@ -10,9 +10,21 @@ using System.Text;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// String extension methods: fast (allocation free when nothing changes) invariant culture case conversions, ordinal compares and searches, keyword / word extraction and char removal.
+    /// </summary>
+    /// <remarks>
+    /// The "Fast" case conversions are culture invariant (same result as <see cref="String.ToLowerInvariant"/> / <see cref="String.ToUpperInvariant"/>), vectorized for ASCII,
+    /// and return the input instance (no allocation) if no char changes.
+    /// The "Fast" compare and search methods are ordinal (case sensitive, culture independent).
+    /// Unless stated otherwise, the string arguments may not be null.
+    /// </remarks>
     public static class StringExt
     {
 
+        /// <summary>
+        /// The compare info of the invariant culture
+        /// </summary>
         static readonly CompareInfo Ci = CultureInfo.InvariantCulture.CompareInfo;
 
         /// <summary>
@@ -24,21 +36,22 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Returns true if a string is all lowercased (invariant)
+        /// Returns true if a string is all lowercased (invariant), i.e. if <see cref="FastToLower(string)"/> would return the same string
         /// </summary>
         /// <param name="str">The string to test</param>
-        /// <returns>True if all chars are lowercased (or not chars at all)</returns>
+        /// <returns>True if all chars are lowercased (or not letters at all)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastIsLower(this String str)
             => InternalFastIsLower(str.AsSpan(), str.Length);
 
         /// <summary>
-        /// Returns true if a string is all lowercased (invariant)
+        /// Returns true if a part of a string is all lowercased (invariant)
         /// </summary>
         /// <param name="str">The string to test</param>
         /// <param name="startIndex">The index of the first character to test</param>
-        /// <param name="length">The number of characters to test</param>
-        /// <returns>True if all chars are lowercased (or not chars at all)</returns>
+        /// <param name="length">The number of characters to test, a negative value tests the rest of the string</param>
+        /// <returns>True if all chars are lowercased (or not letters at all)</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The range is outside of the string</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastIsLower(this String str, int startIndex, int length = -1)
         {
@@ -51,8 +64,8 @@ namespace SysWeaver
         /// Returns true if all chars are lowercased (invariant)
         /// </summary>
         /// <param name="source">The chars</param>
-        /// <param name="l">The chars</param>
-        /// <returns>True if all chars are lowercased (or not chars at all)</returns>
+        /// <param name="l">The number of chars (from the start of the source) to test</param>
+        /// <returns>True if all chars are lowercased (or not letters at all)</returns>
         static bool InternalFastIsLower(this ReadOnlySpan<Char> source, int l)
         {
             var s = source[..l];
@@ -77,8 +90,9 @@ namespace SysWeaver
         /// </summary>
         /// <param name="str">The string to transform into a culture invariant lower case</param>
         /// <param name="startIndex">The index of the first character to convert</param>
-        /// <param name="length">The number of characters to convert</param>
-        /// <returns>Culture invariant lower case string</returns>
+        /// <param name="length">The number of characters to convert, a negative value converts the rest of the string</param>
+        /// <returns>Culture invariant lower case string (the input string if the whole string is used and nothing changes, else always a new string)</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The range is outside of the string</exception>
         public static String FastToLower(this String str, int startIndex, int length = -1)
         {
             var s = str.AsSpan(startIndex);
@@ -96,7 +110,7 @@ namespace SysWeaver
         /// Make a culture invariant lower case version of the first N chars of a string
         /// </summary>
         /// <param name="str">The string to transform into a culture invariant lower case</param>
-        /// <param name="length">The number of characters to convert</param>
+        /// <param name="length">The number of characters to convert (if it's greater than or equal to the length of the string, the whole string is converted)</param>
         /// <returns>Culture invariant lower case string</returns>
         public static String FastStartToLower(this String str, int length)
         {
@@ -136,8 +150,14 @@ namespace SysWeaver
                 destination[i] = source[i].FastToUpper();
         }
 
+        /// <summary>
+        /// Lower cases the first chars of the source (the state) into a new string
+        /// </summary>
         static readonly SpanAction<Char, ReadOnlySpan<Char>> LowerCasedSubString = (str, source) => LowerInto(source[..str.Length], str);
 
+        /// <summary>
+        /// Lower cases the source (the state) into a new string, using the invariant culture
+        /// </summary>
         static readonly SpanAction<Char, ReadOnlySpan<Char>> LowerCaseSpan = (dst, src) => src.ToLowerInvariant(dst);
 
         /// <summary>
@@ -228,10 +248,10 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Make a culture invariant lower case version of a string
+        /// Make a culture invariant lower case version of a string (same result as <see cref="String.ToLowerInvariant"/>)
         /// </summary>
-        /// <param name="str">The string to transform into a culture invariant lower case</param>
-        /// <returns>Culture invariant lower case string</returns>
+        /// <param name="str">The string to transform into a culture invariant lower case, may not be null</param>
+        /// <returns>Culture invariant lower case string, the input instance if no char changes (no allocation)</returns>
         public static String FastToLower(this String str)
         {
             //  One scan for the first char that must change (or isn't ASCII), the string is returned as is if there are none
@@ -261,21 +281,22 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Returns true if a string is all uppercased (invariant)
+        /// Returns true if a string is all uppercased (invariant), i.e. if <see cref="FastToUpper(string)"/> would return the same string
         /// </summary>
         /// <param name="str">The string to test</param>
-        /// <returns>True if all chars are uppercased (or not chars at all)</returns>
+        /// <returns>True if all chars are uppercased (or not letters at all)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastIsUpper(this String str)
             => InternalFastIsUpper(str.AsSpan(), str.Length);
 
         /// <summary>
-        /// Returns true if a string is all uppercased (invariant)
+        /// Returns true if a part of a string is all uppercased (invariant)
         /// </summary>
         /// <param name="str">The string to test</param>
         /// <param name="startIndex">The index of the first character to test</param>
-        /// <param name="length">The number of characters to test</param>
-        /// <returns>True if all chars are uppercased (or not chars at all)</returns>
+        /// <param name="length">The number of characters to test, a negative value tests the rest of the string</param>
+        /// <returns>True if all chars are uppercased (or not letters at all)</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The range is outside of the string</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastIsUpper(this String str, int startIndex, int length = -1)
         {
@@ -288,8 +309,8 @@ namespace SysWeaver
         /// Returns true if all chars are uppercased (invariant)
         /// </summary>
         /// <param name="source">The chars</param>
-        /// <param name="l">The chars</param>
-        /// <returns>True if all chars are uppercased (or not chars at all)</returns>
+        /// <param name="l">The number of chars (from the start of the source) to test</param>
+        /// <returns>True if all chars are uppercased (or not letters at all)</returns>
         static bool InternalFastIsUpper(this ReadOnlySpan<Char> source, int l)
         {
             var s = source[..l];
@@ -314,8 +335,9 @@ namespace SysWeaver
         /// </summary>
         /// <param name="str">The string to transform into a culture invariant upper case</param>
         /// <param name="startIndex">The index of the first character to convert</param>
-        /// <param name="length">The number of characters to convert</param>
-        /// <returns>Culture invariant upper case string</returns>
+        /// <param name="length">The number of characters to convert, a negative value converts the rest of the string</param>
+        /// <returns>Culture invariant upper case string (the input string if the whole string is used and nothing changes, else always a new string)</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The range is outside of the string</exception>
         public static String FastToUpper(this String str, int startIndex, int length = -1)
         {
             var s = str.AsSpan(startIndex);
@@ -333,8 +355,9 @@ namespace SysWeaver
         /// Make a culture invariant upper case version of the first N chars of a string
         /// </summary>
         /// <param name="str">The string to transform into a culture invariant upper case</param>
-        /// <param name="length">The number of characters to convert</param>
+        /// <param name="length">The number of characters to convert, must not be greater than the length of the string (unlike <see cref="FastStartToLower(string, int)"/>)</param>
         /// <returns>Culture invariant upper case string</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The length is greater than the length of the string</exception>
         public static String FastStartToUpper(this String str, int length)
         {
             if (length == str.Length)
@@ -344,8 +367,14 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Upper cases the first chars of the source (the state) into a new string
+        /// </summary>
         static readonly SpanAction<Char, ReadOnlySpan<Char>> UpperCasedSubString = (str, source) => UpperInto(source[..str.Length], str);
 
+        /// <summary>
+        /// Upper cases the source (the state) into a new string, using the invariant culture
+        /// </summary>
         static readonly SpanAction<Char, ReadOnlySpan<Char>> UpperCaseSpan = (dst, src) => src.ToUpperInvariant(dst);
 
         /// <summary>
@@ -436,10 +465,10 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Make a culture invariant upper case version of a string
+        /// Make a culture invariant upper case version of a string (same result as <see cref="String.ToUpperInvariant"/>)
         /// </summary>
-        /// <param name="str">The string to transform into a culture invariant upper case</param>
-        /// <returns>Culture invariant upper case string</returns>
+        /// <param name="str">The string to transform into a culture invariant upper case, may not be null</param>
+        /// <returns>Culture invariant upper case string, the input instance if no char changes (no allocation)</returns>
         public static String FastToUpper(this String str)
         {
             //  One scan for the first char that must change (or isn't ASCII), the string is returned as is if there are none
@@ -465,11 +494,11 @@ namespace SysWeaver
         #endregion//FastToUpper
 
         /// <summary>
-        /// A fast case sensitive, invariant culture starts with method
+        /// A fast ordinal (case sensitive, culture independent) starts with method
         /// </summary>
-        /// <param name="str"></param>
-        /// <param name="value"></param>
-        /// <returns></returns>
+        /// <param name="str">The string to test, may not be null</param>
+        /// <param name="value">The prefix, may not be null</param>
+        /// <returns>True if the string starts with the value (always true for an empty value)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastStartsWith(this String str, String value)
         {
@@ -484,12 +513,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// A fast case sensitive, invariant culture starts with method
+        /// A fast ordinal (case sensitive, culture independent) check if a string contains a value at an offset
         /// </summary>
-        /// <param name="str"></param>
-        /// <param name="value"></param>
-        /// <param name="atOffset"></param>
-        /// <returns></returns>
+        /// <param name="str">The string to test, may not be null</param>
+        /// <param name="value">The value, may not be null</param>
+        /// <param name="atOffset">The offset in the string where the value should start</param>
+        /// <returns>True if the string contains the value at the offset</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The offset is negative</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastStartsWith(this String str, String value, int atOffset)
         {
@@ -504,11 +534,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// A fast case sensitive, invariant culture ends with method
+        /// A fast ordinal (case sensitive, culture independent) ends with method
         /// </summary>
-        /// <param name="str"></param>
-        /// <param name="value"></param>
-        /// <returns></returns>
+        /// <param name="str">The string to test, may not be null</param>
+        /// <param name="value">The suffix, may not be null</param>
+        /// <returns>True if the string ends with the value</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastEndsWith(this String str, String value)
             => str.EndsWith(value, StringComparison.Ordinal);
@@ -523,22 +553,23 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// using case sensitive, invariant culture
+        /// Find the first occurrence of a string, using an ordinal (case sensitive, culture independent) vectorized search
         /// </summary>
-        /// <param name="str"></param>
-        /// <param name="value">The text to search for</param>
+        /// <param name="str">The string to search in, may not be null</param>
+        /// <param name="value">The text to search for, may not be null (an empty value is found at 0)</param>
         /// <returns>-1 if not found or the position where the string was found</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int FastIndexOf(this String str, String value)
             => str.AsSpan().IndexOf(value.AsSpan());
 
         /// <summary>
-        /// using case sensitive, invariant culture
+        /// Find the first occurrence of a string at or after a position, using an ordinal (case sensitive, culture independent) vectorized search
         /// </summary>
-        /// <param name="str"></param>
-        /// <param name="value">The text to search for</param>
+        /// <param name="str">The string to search in, may not be null</param>
+        /// <param name="value">The text to search for, may not be null</param>
         /// <param name="startPos">The start position for the search</param>
-        /// <returns>-1 if not found or the position where the string was found</returns>
+        /// <returns>-1 if not found or the position (in the whole string) where the string was found</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The start position is outside of the string</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int FastIndexOf(this String str, String value, int startPos)
         {
@@ -550,32 +581,34 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// using case sensitive, invariant culture
+        /// Find the last occurrence of a string, using an ordinal (case sensitive, culture independent) vectorized search
         /// </summary>
-        /// <param name="str"></param>
-        /// <param name="value">The text to search for</param>
+        /// <param name="str">The string to search in, may not be null</param>
+        /// <param name="value">The text to search for, may not be null</param>
         /// <returns>-1 if not found or the position where the string was found</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int FastLastIndexOf(this String str, String value)
             => str.AsSpan().LastIndexOf(value.AsSpan());
 
         /// <summary>
-        /// using case sensitive, invariant culture
+        /// Find the last occurrence of a string that ENDS before a position, using an ordinal (case sensitive, culture independent) vectorized search.
+        /// Note that this differs from <see cref="String.LastIndexOf(string, int)"/>, where the start index is the position of the last char that may be part of a match.
         /// </summary>
-        /// <param name="str"></param>
-        /// <param name="value">The text to search for</param>
-        /// <param name="startPos">The start position for the search</param>
+        /// <param name="str">The string to search in, may not be null</param>
+        /// <param name="value">The text to search for, may not be null</param>
+        /// <param name="startPos">The exclusive end of the searched range (only str[0..startPos) is searched)</param>
         /// <returns>-1 if not found or the position where the string was found</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The start position is negative or greater than the length of the string</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int FastLastIndexOf(this String str, String value, int startPos)
             => str.AsSpan(0, startPos).LastIndexOf(value.AsSpan());
 
         /// <summary>
-        /// A fast case sensitive, invariant culture equals with method
+        /// A fast ordinal (case sensitive, culture independent) equals method
         /// </summary>
-        /// <param name="str"></param>
-        /// <param name="value"></param>
-        /// <returns></returns>
+        /// <param name="str">A string, may be null</param>
+        /// <param name="value">The string to compare with, may be null</param>
+        /// <returns>True if the strings are equal (or both are null)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastEquals(this String str, String value)
             => String.Equals(str, value, StringComparison.Ordinal);
@@ -591,13 +624,13 @@ namespace SysWeaver
 */
 
         /// <summary>
-        /// A fast case sensitive, invariant culture equals with method
+        /// A fast ordinal (case sensitive, culture independent) compare of a part of a string, without allocating a substring
         /// </summary>
-        /// <param name="str"></param>
+        /// <param name="str">The string, may not be null</param>
         /// <param name="strStart">Start offset into the str, equal to str.SubString(strStart, strLen).FastEquals(value)</param>
         /// <param name="strLen">Length of the str, equal to str.SubString(strStart, strLen).FastEquals(value)</param>
-        /// <param name="value"></param>
-        /// <returns></returns>
+        /// <param name="value">The value to compare with, may not be null</param>
+        /// <returns>True if the part of the string is equal to the value (false if the range extends beyond the end of the string)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastSubEquals(this String str, int strStart, int strLen, String value)
         {
@@ -616,12 +649,12 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// A fast case sensitive, invariant culture equals with method
+        /// A fast ordinal (case sensitive, culture independent) compare of the end of a string, without allocating a substring
         /// </summary>
-        /// <param name="str"></param>
+        /// <param name="str">The string, may not be null</param>
         /// <param name="strStart">Start offset into the str, equal to str.SubString(strStart).FastEquals(value)</param>
-        /// <param name="value"></param>
-        /// <returns></returns>
+        /// <param name="value">The value to compare with, may not be null</param>
+        /// <returns>True if the string from the start offset is equal to the value</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastSubEquals(this String str, int strStart, String value)
         {
@@ -643,9 +676,9 @@ namespace SysWeaver
         /// "myBUNNY_isCool" => "my", "BUNNY", "is", "Cool" (if min len is 2)
         /// "MyFolder/Effects/CoolTorus.glsl" => "My", "Folder", "Effects", "Cool", "Torus", "glsl"
         /// </summary>
-        /// <param name="str">The string to extract keywords from</param>
-        /// <param name="minLen">The minimum length of a keyword</param>
-        /// <returns>An enuerable with keywords</returns>
+        /// <param name="str">The string to extract keywords from, may not be null</param>
+        /// <param name="minLen">The minimum length of a keyword (shorter parts are skipped)</param>
+        /// <returns>The keywords (lazily enumerated), a keyword is a run of letters that is split before an upper case letter that follows a lower case letter</returns>
         public static IEnumerable<String> ExtractKeywords(this String str, int minLen = 2)
         {
             var l = str.Length;
@@ -698,8 +731,8 @@ namespace SysWeaver
         /// "An invalid number such as 12.22.21 should be separated" => "An", "invalid", "number", "such", "as", "12.22", "21", "should", "be", "separated"
         /// "The depth was 32.14." => "The", "depth", "was", "32.14"
         /// </summary>
-        /// <param name="str"></param>
-        /// <returns></returns>
+        /// <param name="str">The text, null returns nothing</param>
+        /// <returns>The words and numbers (lazily enumerated), a number may contain one '.' (if followed by a digit)</returns>
         public static IEnumerable<String> ExtractWordsAndNumbers(this String str)
         {
             if (str != null)
@@ -762,11 +795,11 @@ namespace SysWeaver
         public static String NullIfEmpty(this String str) => String.IsNullOrEmpty(str) ? null : str;
 
         /// <summary>
-        /// Similar to String.Join but excludes all empty texts
+        /// Similar to String.Join but excludes all null or empty texts
         /// </summary>
-        /// <param name="separator"></param>
-        /// <param name="texts"></param>
-        /// <returns></returns>
+        /// <param name="separator">The separator to insert between the texts (null is the same as empty)</param>
+        /// <param name="texts">The texts to join</param>
+        /// <returns>null if texts is null, else the joined string (String.Empty if no text is non empty, the text itself if only one is non empty)</returns>
         public static String JoinNonEmpty(String separator, params String[] texts)
         {
             if (texts == null)
@@ -790,6 +823,9 @@ namespace SysWeaver
             return String.Create(total, (separator, texts), JoinNonEmptyAction);
         }
 
+        /// <summary>
+        /// Writes the non empty texts (with separators) into a new string
+        /// </summary>
         static readonly SpanAction<Char, (String Separator, String[] Texts)> JoinNonEmptyAction = (dst, state) =>
         {
             var sep = state.Separator.AsSpan();
@@ -817,7 +853,7 @@ namespace SysWeaver
         /// <param name="a">One string, ex: "abc"</param>
         /// <param name="b">Another string, ex: "123"</param>
         /// <returns>The interleaved result, ex: "a1b2c3"</returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="Exception">The strings have different lengths</exception>
         public static String Interleave(this String a, String b)
         {
             var al = a.Length;
@@ -827,6 +863,9 @@ namespace SysWeaver
             return String.Create(al + al, (a, b), InterleaveAction);
         }
 
+        /// <summary>
+        /// Writes the interleaved chars into a new string
+        /// </summary>
         static readonly SpanAction<Char, (String A, String B)> InterleaveAction = (res, state) =>
         {
             var a = state.A.AsSpan();
@@ -844,12 +883,12 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Check if a word is found in some text, the glyph before a word may no be a letter, the glyph after a word may not be a letter.
+        /// Check if a word is found in some text, the char before the word may not be a letter, and the char after the word may not be a letter (digits are allowed).
         /// </summary>
-        /// <param name="sentence"></param>
-        /// <param name="word"></param>
-        /// <param name="cmp"></param>
-        /// <returns></returns>
+        /// <param name="sentence">The text to search, may not be null</param>
+        /// <param name="word">The word to find, may not be null or empty (an empty word loops forever if the text starts with a letter)</param>
+        /// <param name="cmp">The comparison to use (default is ordinal ignore case)</param>
+        /// <returns>True if the word was found</returns>
         public static bool ContainsWord(this String sentence, String word, StringComparison cmp = StringComparison.OrdinalIgnoreCase)
         {
             var sl = sentence.Length;
@@ -873,10 +912,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Remove all diacritics from a string (replaces them with base values)
+        /// Remove all diacritics from a string (replaces them with base values), ex: "Crème brûlée" => "Creme brulee".
+        /// The text is decomposed (form D), all non spacing marks are removed, and the result is composed (form C).
         /// </summary>
-        /// <param name="text"></param>
-        /// <returns></returns>
+        /// <param name="text">The text, may not be null</param>
+        /// <returns>The text without diacritics, the input instance if it's all ASCII</returns>
+        /// <exception cref="ArgumentException">The text contains invalid unicode (ex: unpaired surrogates)</exception>
         [SkipLocalsInit]
         public static string RemoveDiacritics(this string text)
         {
@@ -953,9 +994,10 @@ namespace SysWeaver
         /// Ex: "apa" => apa
         /// 'banana' => banana
         /// ""monkey"" => "monkey"
+        /// Both the first and the last char must be the same quote char (" or ').
         /// </summary>
-        /// <param name="text"></param>
-        /// <returns></returns>
+        /// <param name="text">The text, may be null</param>
+        /// <returns>The text without the outer quotes, or the input if it isn't quoted (null if the input is null)</returns>
         public static string RemoveQuotes(this string text)
         {
             if (text == null)
@@ -974,12 +1016,12 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Count the number of occurances of a substring
+        /// Count the number of (non overlapping) occurrences of a substring
         /// </summary>
-        /// <param name="text"></param>
-        /// <param name="subString">The substring to count (an empty substring is never counted)</param>
-        /// <param name="com"></param>
-        /// <returns></returns>
+        /// <param name="text">The text to search, may not be null</param>
+        /// <param name="subString">The substring to count (an empty substring is never counted), may not be null</param>
+        /// <param name="com">The comparison to use, note that the default is the current culture (ordinal is vectorized)</param>
+        /// <returns>The number of occurrences</returns>
         public static int Count(this String text, String subString, StringComparison com = StringComparison.CurrentCulture)
         {
             int c = 0;
@@ -1013,11 +1055,11 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Remove all occurances of some chars from a string.
+        /// Remove all occurrences of some chars from a string.
         /// </summary>
-        /// <param name="text"></param>
-        /// <param name="removeChars">The chars to remove</param>
-        /// <returns></returns>
+        /// <param name="text">The text, may be null</param>
+        /// <param name="removeChars">The chars to remove, null or empty returns the text as is</param>
+        /// <returns>The text without the chars (the input instance if nothing is removed)</returns>
         public static String RemoveChars(this String text, params Char[] removeChars)
         {
             if (removeChars == null)
@@ -1028,11 +1070,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Remove all occurances of some chars from a string (no array is allocated for the chars).
+        /// Remove all occurrences of some chars from a string (no array is allocated for the chars).
         /// </summary>
-        /// <param name="text"></param>
-        /// <param name="removeChars">The chars to remove</param>
-        /// <returns></returns>
+        /// <param name="text">The text, may be null</param>
+        /// <param name="removeChars">The chars to remove, empty returns the text as is</param>
+        /// <returns>The text without the chars (the input instance if nothing is removed)</returns>
         public static String RemoveChars(this String text, params ReadOnlySpan<Char> removeChars)
         {
             if (removeChars.IsEmpty)
@@ -1041,11 +1083,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Remove all occurances of some chars from a string.
+        /// Remove all occurrences of some chars from a string.
         /// </summary>
-        /// <param name="text"></param>
-        /// <param name="removeChars">The chars to remove</param>
-        /// <returns></returns>
+        /// <param name="text">The text, may be null</param>
+        /// <param name="removeChars">The chars to remove, null or empty returns the text as is</param>
+        /// <returns>The text without the chars (the input instance if nothing is removed)</returns>
         public static String RemoveChars(this String text, String removeChars)
         {
             if (removeChars == null)
@@ -1056,11 +1098,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Remove all occurances of some chars from a string.
+        /// Remove all occurrences of some chars from a string.
         /// </summary>
-        /// <param name="text"></param>
-        /// <param name="removeChars">The chars to remove</param>
-        /// <returns></returns>
+        /// <param name="text">The text, may be null</param>
+        /// <param name="removeChars">The chars to remove, null or empty returns the text as is</param>
+        /// <returns>The text without the chars (the input instance if nothing is removed)</returns>
         [SkipLocalsInit]
         public static String RemoveChars(this String text, IReadOnlySet<Char> removeChars)
         {
@@ -1101,8 +1143,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Remove all occurances of some chars (vectorized search, no allocations except for the result)
+        /// Remove all occurrences of some chars (vectorized search, no allocations except for the result)
         /// </summary>
+        /// <param name="text">The text, may be null</param>
+        /// <param name="remove">The chars to remove</param>
+        /// <returns>The text without the chars (the input instance if nothing is removed)</returns>
         [SkipLocalsInit]
         static String InternalRemoveChars(String text, ReadOnlySpan<Char> remove)
         {

@@ -1,5 +1,9 @@
 ﻿namespace SysWeaver
 {
+    /// <summary>
+    /// The state of the console (terminal taskbar) progress indicator, see <see cref="ConsoleTools.SetProgress"/>.
+    /// The numeric values match the state parameter of the "ESC ] 9 ; 4" (ConEmu / Windows Terminal) progress escape sequence.
+    /// </summary>
     public enum ConsoleProgressDisplays
     {
         /// <summary>
@@ -19,7 +23,7 @@
         /// </summary>
         Indeterminate,
         /// <summary>
-        ///  = Warning (Yellow/Orange fill
+        /// Warning / paused (Yellow/Orange fill)
         /// </summary>
         Warning,
 

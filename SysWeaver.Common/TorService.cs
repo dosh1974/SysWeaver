@@ -9,8 +9,12 @@ namespace SysWeaver
 {
 
     /// <summary>
-    /// Check and exposes the SysWeaver.Tor services (if available)
+    /// Check and exposes the SysWeaver.Tor services (if available).
+    /// The SysWeaver.Tor assembly is located at runtime (by name, using <see cref="TypeFinder"/>) so there is no compile time dependency on it.
     /// </summary>
+    /// <remarks>
+    /// Used by <see cref="WebTools"/> to create HTTP clients that route traffic through the Tor network.
+    /// </remarks>
     public static class TorService
     {
 
@@ -40,17 +44,20 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// True if the tor tools are avialble
+        /// True if the tor tools are available (the SysWeaver.Tor assembly was found and bound successfully)
         /// </summary>
         public static bool IsAvailable;
 
         /// <summary>
-        /// Create a tor client (will return null if Tor tools isn't available)
+        /// Create a tor client (will return null if Tor tools isn't available).
+        /// The argument specifies if automatic decompression should be enabled. The caller owns (and should dispose) the returned client.
+        /// The first call starts (downloads if needed) the Tor proxy in the background.
         /// </summary>
         public static Func<bool, HttpClient> CreateTorClient;
 
         /// <summary>
-        /// The proxy to use to route through tor
+        /// The proxy to use to route through tor, or null if Tor tools isn't available.
+        /// The first access initializes (starts) the Tor proxy, thread safe.
         /// </summary>
         public static WebProxy Proxy
         {

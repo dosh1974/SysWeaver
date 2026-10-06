@@ -2,6 +2,9 @@
 
 namespace SysWeaver.OsServices.ServiceManager
 {
+    /// <summary>
+    /// Win32 SERVICE_* current state values (as in SERVICE_STATUS_PROCESS).
+    /// </summary>
     enum ServiceStates : int
     {
 

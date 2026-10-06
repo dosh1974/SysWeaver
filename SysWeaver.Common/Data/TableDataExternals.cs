@@ -5,9 +5,16 @@ namespace SysWeaver.Data
 
     #region Text 
 
+    /// <summary>
+    /// Format values (ISO 3166 alpha-2 country codes) as a link to information about the country.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataIsoCountryAttribute : TableDataUrlAttribute
     {
+        /// <summary>
+        /// Format values (ISO 3166 alpha-2 country codes) as a link to information about the country.
+        /// </summary>
+        /// <param name="textFormat">The text to display, {0} = This value.</param>
         public TableDataIsoCountryAttribute(String textFormat = "{0}")
             : base(
                   textFormat,
@@ -18,9 +25,16 @@ namespace SysWeaver.Data
         }
     }
 
+    /// <summary>
+    /// Format values (ISO 4217 currency codes) as a link to information about the currency.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataIsoCurrencyAttribute : TableDataUrlAttribute
     {
+        /// <summary>
+        /// Format values (ISO 4217 currency codes) as a link to information about the currency.
+        /// </summary>
+        /// <param name="textFormat">The text to display, {0} = This value.</param>
         public TableDataIsoCurrencyAttribute(String textFormat = "{0}")
             : base(
                   textFormat,
@@ -31,9 +45,16 @@ namespace SysWeaver.Data
         }
     }
 
+    /// <summary>
+    /// Format values (user agent strings) as a link to information about the user agent.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataUserAgentAttribute : TableDataUrlAttribute
     {
+        /// <summary>
+        /// Format values (user agent strings) as a link to information about the user agent.
+        /// </summary>
+        /// <param name="textFormat">The text to display, {0} = This value.</param>
         public TableDataUserAgentAttribute(String textFormat = "{0}")
             : base(
                   textFormat,
@@ -45,9 +66,17 @@ namespace SysWeaver.Data
     }
    
 
+    /// <summary>
+    /// Format values as a link to a wikipedia page.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataWikipediaAttribute : TableDataUrlAttribute
     {
+        /// <summary>
+        /// Format values as a link to a wikipedia page.
+        /// </summary>
+        /// <param name="textFormat">The text to display, {0} = This value.</param>
+        /// <param name="searchFormat">The wikipedia page name format, {0} = This value.</param>
         public TableDataWikipediaAttribute(String textFormat = "{0}", String searchFormat = "{0}")
             : base(
                   textFormat,
@@ -58,9 +87,17 @@ namespace SysWeaver.Data
         }
     }
 
+    /// <summary>
+    /// Format values as a link to a google search.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class TableDataGoogleSearchAttribute : TableDataUrlAttribute
     {
+        /// <summary>
+        /// Format values as a link to a google search.
+        /// </summary>
+        /// <param name="textFormat">The text to display, {0} = This value.</param>
+        /// <param name="searchFormat">The search term format, {0} = This value.</param>
         public TableDataGoogleSearchAttribute(String textFormat = "{0}", String searchFormat = "{0}")
             : base(
                   textFormat,
@@ -71,9 +108,16 @@ namespace SysWeaver.Data
         }
     }
 
+    /// <summary>
+    /// Format values (file extensions without the leading dot) as a link to a google search about the file extension.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataFileExtensionAttribute : TableDataGoogleSearchAttribute
     {
+        /// <summary>
+        /// Format values (file extensions without the leading dot) as a link to a google search about the file extension.
+        /// </summary>
+        /// <param name="textFormat">The text to display, {0} = This value.</param>
         public TableDataFileExtensionAttribute(String textFormat = "{0}")
             : base(
                   textFormat,
@@ -84,9 +128,16 @@ namespace SysWeaver.Data
     }
 
 
+    /// <summary>
+    /// Format values (mime types) as a link to a google search about the mime type.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataMimeAttribute : TableDataGoogleSearchAttribute
     {
+        /// <summary>
+        /// Format values (mime types) as a link to a google search about the mime type.
+        /// </summary>
+        /// <param name="textFormat">The text to display, {0} = This value.</param>
         public TableDataMimeAttribute(String textFormat = "{0}")
             : base(
                   textFormat,
@@ -97,9 +148,16 @@ namespace SysWeaver.Data
     }
 
 
+    /// <summary>
+    /// Format values (text encoding names) as a link to a google search about the text encoding.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataEncodingAttribute : TableDataGoogleSearchAttribute
     {
+        /// <summary>
+        /// Format values (text encoding names) as a link to a google search about the text encoding.
+        /// </summary>
+        /// <param name="textFormat">The text to display, {0} = This value.</param>
         public TableDataEncodingAttribute(String textFormat = "{0}")
             : base(
                   textFormat,
@@ -110,9 +168,16 @@ namespace SysWeaver.Data
     }
 
 
+    /// <summary>
+    /// Format values (IP addresses) as a link to information about the IP address.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataIpAttribute : TableDataUrlAttribute
     {
+        /// <summary>
+        /// Format values (IP addresses) as a link to information about the IP address.
+        /// </summary>
+        /// <param name="textFormat">The text to display, {0} = This value.</param>
         public TableDataIpAttribute(String textFormat = "{0}")
             : base(
                   textFormat,
@@ -127,9 +192,15 @@ namespace SysWeaver.Data
 
     #region Image
 
+    /// <summary>
+    /// Format values (ISO 3166 alpha-2 country codes) as a country flag linking to information about the country.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataIsoCountryImageAttribute : TableDataImgAttribute
     {
+        /// <summary>
+        /// Format values (ISO 3166 alpha-2 country codes) as a country flag linking to information about the country.
+        /// </summary>
         public TableDataIsoCountryImageAttribute()
             : base(
                   "../iso_data/country/{_0}.svg",
@@ -140,9 +211,15 @@ namespace SysWeaver.Data
         }
     }
 
+    /// <summary>
+    /// Format values (ISO language codes) as a language flag.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataIsoLanguageImageAttribute : TableDataImgAttribute
     {
+        /// <summary>
+        /// Format values (ISO language codes) as a language flag.
+        /// </summary>
         public TableDataIsoLanguageImageAttribute()
             : base(
                   "../iso_data/language/{_0}.svg",
@@ -155,9 +232,16 @@ namespace SysWeaver.Data
 
 
 
+    /// <summary>
+    /// Format values as a wikipedia icon linking to a wikipedia page.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataWikipediaImageAttribute : TableDataImgAttribute
     {
+        /// <summary>
+        /// Format values as a wikipedia icon linking to a wikipedia page.
+        /// </summary>
+        /// <param name="searchFormat">The wikipedia page name format, {0} = This value.</param>
         public TableDataWikipediaImageAttribute(String searchFormat = "{0}")
             : base(
                   "../icons/external/Wikipedia.svg",
@@ -168,9 +252,16 @@ namespace SysWeaver.Data
         }
     }
 
+    /// <summary>
+    /// Format values as a google search icon linking to a google search.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataGoogleSearchImageAttribute : TableDataImgAttribute
     {
+        /// <summary>
+        /// Format values as a google search icon linking to a google search.
+        /// </summary>
+        /// <param name="searchFormat">The search term format, {0} = This value.</param>
         public TableDataGoogleSearchImageAttribute(String searchFormat = "{0}")
             : base(
                   "../icons/external/GoogleSearch.svg",
@@ -182,9 +273,15 @@ namespace SysWeaver.Data
     }
 
 
+    /// <summary>
+    /// Format values (file extensions without the leading dot) as a file type icon linking to a google search about the file extension.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataFileExtensionImageAttribute : TableDataImgAttribute
     {
+        /// <summary>
+        /// Format values (file extensions without the leading dot) as a file type icon linking to a google search about the file extension.
+        /// </summary>
         public TableDataFileExtensionImageAttribute()
             : base(
                   "../icons/ext/{_0}.svg",
@@ -196,9 +293,16 @@ namespace SysWeaver.Data
     }
 
 
+    /// <summary>
+    /// Format values as a google maps icon linking to a google maps place page.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataGoogleMapsPlaceImageAttribute : TableDataImgAttribute
     {
+        /// <summary>
+        /// Format values as a google maps icon linking to a google maps place page.
+        /// </summary>
+        /// <param name="searchFormat">The place format, {0} = This value.</param>
         public TableDataGoogleMapsPlaceImageAttribute(String searchFormat = "{0}")
             : base(
                   "../icons/external/GoogleMaps.svg",

@@ -3,8 +3,11 @@
 namespace SysWeaver.Data
 {
     /// <summary>
-    /// Format valus as as duration (time span, integer or float)
+    /// Format values as a duration (time span, integer or float)
     /// </summary>
+    /// <remarks>
+    /// Note: The web client currently ignores the copy on click options and always copies the value before formatting on click.
+    /// </remarks>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class TableDataDurationAttribute : TableDataRawFormatAttribute
     {
@@ -21,7 +24,7 @@ namespace SysWeaver.Data
         /// {1} = Next value (must exist). 
         /// {2} = Value before formatting.
         /// </param>
-        /// <param name="copyOnClick">Copy the original value to the clipboard on click.</param>
+        /// <param name="copyOnClick">Copy the value to the clipboard on click (see remarks).</param>
         public TableDataDurationAttribute(String replaceZeroWith = null, String textFormat = "{0}", String titleFormat = "Raw: {2}", bool copyOnClick = false)
             : base(TableDataFormats.Duration, textFormat ?? "{0}", titleFormat ?? "Raw: {2}", copyOnClick ? "{0}" : null, replaceZeroWith)
         {
@@ -41,10 +44,11 @@ namespace SysWeaver.Data
         /// {1} = Next value (must exist). 
         /// {2} = Value before formatting.
         /// </param>
-        /// <param name="copyOnClickFormat">Copy the value to the clipboard on click, using this string formatter.
+        /// <param name="copyOnClickFormat">Copy the value to the clipboard on click, using this string formatter (see remarks).
         /// {0} = Formatted value.
-        /// {1} = Next value (must exist). 
+        /// {1} = Next value (must exist).
         /// {2} = Value before formatting.
+        /// An empty string means "{2}".
         /// </param>
         public TableDataDurationAttribute(String replaceZeroWith, String textFormat, String titleFormat, String copyOnClickFormat)
             : base(TableDataFormats.Duration, textFormat ?? "{0}", titleFormat ?? "Raw: {2}", copyOnClickFormat == "" ? "{2}" : copyOnClickFormat, replaceZeroWith)
@@ -58,7 +62,7 @@ namespace SysWeaver.Data
     /// <summary>
     /// Format the text as json.
     /// Will show a capped version of the text.
-    /// Will show the beutified json on click.
+    /// Will show the beautified json on click.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class TableDataJsonAttribute : TableDataRawFormatAttribute
@@ -66,9 +70,9 @@ namespace SysWeaver.Data
         /// <summary>
         /// Format the text as json.
         /// Will show a capped version of the text.
-        /// Will show the beutified json on click.
+        /// Will show the beautified json on click.
         /// </summary>
-        /// <param name="maxLength">Maximum number of chars to show</param>
+        /// <param name="maxLength">Maximum number of chars to show (zero or less means 30)</param>
         /// <param name="titleFormat">
         /// {0} = Value.
         /// {1} = Formatted value.
@@ -98,7 +102,7 @@ namespace SysWeaver.Data
         /// Will show a capped version of the text.
         /// Will show the full version of the text on click.
         /// </summary>
-        /// <param name="maxLength">Maximum number of chars to show</param>
+        /// <param name="maxLength">Maximum number of chars to show (zero or less means 30)</param>
         /// <param name="titleFormat">
         /// {0} = Value.
         /// {1} = Capped value.
@@ -128,7 +132,7 @@ namespace SysWeaver.Data
         /// Will show a capped version of the text (not formatted using MD).
         /// Will show the full version of the text on click.
         /// </summary>
-        /// <param name="maxLength">Maximum number of chars to show</param>
+        /// <param name="maxLength">Maximum number of chars to show (zero or less means 30)</param>
         /// <param name="titleFormat">
         /// {0} = Value.
         /// {1} = Capped value.

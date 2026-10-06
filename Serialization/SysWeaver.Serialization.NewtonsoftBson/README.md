@@ -8,7 +8,7 @@
 |---|---|
 | **Layer** | Serialization |
 | **Kind** | Serializer plug-in (`ISerializerType`) |
-| **Selection priority** | above default among serializers for `bson` |
+| **Selection priority** | 1 (the only bundled serializer for `bson`) |
 
 ## Purpose
 
@@ -28,12 +28,15 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 ## Key features
 
 - Binary JSON for clients that prefer it.
+- `NewtonsoftBsonSerializer` (singleton `Instance`, binary only) writes with an internal `MemberResolver` that skips read-only fields and get-only properties, and adds `$type` information (where needed for `Compact`, everywhere for `Verbose`, never for `Typeless`).
 - Registered through the manifest like any service, or with one static call in code.
 
 ## Limitations and considerations
 
 - BSON is rarely needed outside MongoDB-style ecosystems.
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered.
+- Reading uses Newtonsoft's default serializer settings (no type name handling), so polymorphic members written with `$type` are not restored.
+- BSON needs an object or array at the root: primitive root values can't be serialized, and root arrays/collections can't be read back (the reader does not enable `ReadRootValueAsArray`).
+- Selection between serializers of the same extension is by priority; this is currently the only bundled `bson` implementation.
 
 ## Using it
 

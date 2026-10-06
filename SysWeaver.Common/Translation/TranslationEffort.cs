@@ -24,6 +24,9 @@
     }
 
 
+    /// <summary>
+    /// The format of a text to translate (the format is preserved in the translation)
+    /// </summary>
     public enum TranslationContentTypes
     {
         /// <summary>

@@ -20,19 +20,24 @@ namespace SysWeaver
     }
 
     /// <summary>
-    /// A performance monitor collector instance
+    /// Collects timing statistics (count, total, average, min, max, concurrency etc) for named operations of a system.
+    /// Use <see cref="PerfMonitorEx.Track(PerfMonitor, string)"/> in a using statement to measure an operation, enumerate the instance to get the statistics.
     /// </summary>
+    /// <remarks>
+    /// Thread safe and lock free when measuring (an entry is created on first use of a name).
+    /// Timing uses <see cref="Stopwatch"/> time stamps. Enumerating updates the computed values of each entry, the values of an entry are not a consistent snapshot under concurrent measurements.
+    /// </remarks>
     public sealed class PerfMonitor : IEnumerable<IPerfEntry>
     {
 
         /// <summary>
-        /// Globally enable/disable all
+        /// Globally enable/disable all performance monitors (process wide), when false no measurements are made and enumerating returns nothing
         /// </summary>
         public static bool EnableAny = true;
 
 
         /// <summary>
-        /// Enable/disable performance tracking
+        /// Enable/disable performance tracking for this instance, changing the value resets all counters
         /// </summary>
         [TableDataOrder(0)]
         [TableDataBooleanToggle("../Api/debug/TogglePerformanceMonitor?\"{1}\"", "Enabled", "Enabled", "Click to disabled performance monitoring of \"{1}\"", "Click to enable performance monitoring of \"{1}\"")]
@@ -49,13 +54,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// System name
+        /// The name of the system being monitored
         /// </summary>
         [TableDataOrder(1)]
         public readonly String System;
 
         /// <summary>
-        /// Reset the performance counters for this system
+        /// The system name, used as the argument of the reset / toggle actions when displayed in a table
         /// </summary>
         [TableDataOrder(2)]
         [TableDataActions(
@@ -74,8 +79,9 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Reset all counters
+        /// Reset all counters (all entries are removed and the running time restarts)
         /// </summary>
+        /// <remarks>Measurements in progress complete on the removed entries (they are not counted in the new entries)</remarks>
         public void Reset()
         {
             Interlocked.Exchange(ref Start, Stopwatch.GetTimestamp());
@@ -83,9 +89,9 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Create a new peformance tracker
+        /// Create a new performance tracker
         /// </summary>
-        /// <param name="systemName"></param>
+        /// <param name="systemName">The name of the system being monitored</param>
         public PerfMonitor(String systemName)
         {
             System = systemName;
@@ -95,9 +101,9 @@ namespace SysWeaver
         long Start = long.MaxValue;
 
         /// <summary>
-        /// Get current performance information
+        /// Get current performance information, one entry per measured name (computed values are updated during the enumeration)
         /// </summary>
-        /// <returns></returns>
+        /// <returns>An enumerator of the entries, empty if <see cref="EnableAny"/> is false</returns>
         public IEnumerator<IPerfEntry> GetEnumerator()
         {
             if (EnableAny)
@@ -121,6 +127,11 @@ namespace SysWeaver
         bool InternalEnable = true;
 
 
+        /// <summary>
+        /// Get or create the entry for a name
+        /// </summary>
+        /// <param name="name">The name of the operation</param>
+        /// <returns>The entry, or null if monitoring is disabled</returns>
         internal PerfTrackerEntry Begin(String name)
         {
             if (!EnableAny)
@@ -141,14 +152,14 @@ namespace SysWeaver
         /// <summary>
         /// Get a stopwatch time stamp
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The current <see cref="Stopwatch.GetTimestamp"/> value</returns>
         public static long GetTimestamp() => Stopwatch.GetTimestamp();
 
         /// <summary>
-        /// Ellapsed tíme since a given stopwatch time stamp
+        /// Elapsed time since a given stopwatch time stamp
         /// </summary>
-        /// <param name="sinceTimeStamp"></param>
-        /// <returns></returns>
+        /// <param name="sinceTimeStamp">A time stamp obtained from <see cref="GetTimestamp"/></param>
+        /// <returns>The elapsed time</returns>
         public static TimeSpan GetEllapsed(long sinceTimeStamp) => TimeSpan.FromTicks(ToTicks(Stopwatch.GetTimestamp() - sinceTimeStamp));
 
 
@@ -158,7 +169,7 @@ namespace SysWeaver
         static readonly long Div = Stopwatch.Frequency / Gcd;
 
         /// <summary>
-        /// Convert from stop watchticks to time span ticks
+        /// Convert from stopwatch ticks to time span ticks (rounded to the nearest tick, an identity function if the stopwatch frequency is 10 MHz)
         /// </summary>
         public static readonly Func<long, long> ToTicks = NeedConversion ? new Func<long, long>(SlowGetTicks) : x => x;
 
@@ -187,8 +198,17 @@ namespace SysWeaver
 
     }
 
+    /// <summary>
+    /// Extension methods for <see cref="PerfMonitor"/>
+    /// </summary>
     public static class PerfMonitorEx
     {
+        /// <summary>
+        /// Start measuring an operation, dispose the returned value (typically with a using statement) when the operation completes
+        /// </summary>
+        /// <param name="tracker">The performance monitor, may be null (nothing is measured)</param>
+        /// <param name="name">The name of the operation (case sensitive)</param>
+        /// <returns>A measurement, a default (no-op) measurement if <paramref name="tracker"/> is null or monitoring is disabled</returns>
         public static PerfMesurement Track(this PerfMonitor tracker, String name)
         {
             if (tracker == null)
@@ -201,14 +221,29 @@ namespace SysWeaver
     }
 
 
+    /// <summary>
+    /// Extension methods for <see cref="PerfMesurement"/>
+    /// </summary>
     public static class PerfMesurementExt
     {
+        /// <summary>
+        /// Get the time elapsed since the measurement started
+        /// </summary>
+        /// <param name="perf">The measurement</param>
+        /// <returns>The elapsed time (meaningless for a default measurement)</returns>
         public static TimeSpan GetEllapsedTime(this PerfMesurement perf) => 
             PerfMonitor.ToTimeSpan(perf.Ellapsed);
     }
 
+    /// <summary>
+    /// An in progress measurement started by <see cref="PerfMonitorEx.Track(PerfMonitor, string)"/>, dispose it exactly once when the measured operation completes.
+    /// </summary>
+    /// <remarks>A default instance measures nothing (disposing it does nothing). Disposing a copy (or disposing twice) counts the operation twice.</remarks>
     public readonly struct PerfMesurement : IDisposable
     {
+        /// <summary>
+        /// Create an empty measurement (that measures nothing)
+        /// </summary>
         public PerfMesurement()
         {
         }
@@ -222,15 +257,18 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Time taken so far, in stop watch ticks
+        /// Time taken so far, in stopwatch ticks (meaningless for a default measurement)
         /// </summary>
         public long Ellapsed => Stopwatch.GetTimestamp() - Tc;
 
         /// <summary>
-        /// Get the start time stamp
+        /// The stopwatch time stamp when the measurement started (zero for a default measurement)
         /// </summary>
         public long StartTimeStamp => Tc;
 
+        /// <summary>
+        /// End the measurement and update the statistics of the entry
+        /// </summary>
         public void Dispose() 
         {
             var tc = Stopwatch.GetTimestamp();
@@ -250,6 +288,9 @@ namespace SysWeaver
         readonly PerfTrackerEntry E;
     }
 
+    /// <summary>
+    /// Performance statistics of a named operation, as returned when enumerating a <see cref="PerfMonitor"/>
+    /// </summary>
     [TableDataPrimaryKey(nameof(System), nameof(Name))]
     public interface IPerfEntry
     {
@@ -279,12 +320,12 @@ namespace SysWeaver
         /// </summary>
         TimeSpan Total { get; }
         /// <summary>
-        /// The avergae time spent executing one execution of the "method".
+        /// The average time spent executing one execution of the "method".
         /// </summary>
         TimeSpan Average { get; }
 
         /// <summary>
-        /// The pecentage of time spent in this "method".
+        /// The percentage of the time since the monitor was created (or reset) that was spent in this "method" (can exceed 100 with concurrent executions).
         /// </summary>
         [TableDataNumber(3, "{0}%")]
         float Percentage { get; }
@@ -320,6 +361,9 @@ namespace SysWeaver
 
     }
 
+    /// <summary>
+    /// The mutable statistics of one named operation, raw counters are updated atomically by <see cref="PerfMesurement"/> and the computed values are refreshed by <see cref="Update"/>
+    /// </summary>
     sealed class PerfTrackerEntry : IPerfEntry
     { 
         public PerfTrackerEntry(String system, String name)
@@ -365,6 +409,10 @@ namespace SysWeaver
         public float Rate => IntCountPerMinute;
 
 
+        /// <summary>
+        /// Refresh the computed values from the raw counters
+        /// </summary>
+        /// <param name="runningFor">Number of stopwatch ticks since the monitor was created or reset</param>
         internal void Update(long runningFor)
         {
             var count = Interlocked.Read(ref Count);

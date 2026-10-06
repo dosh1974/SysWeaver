@@ -68,6 +68,9 @@ namespace SysWeaver
 
     }
 
+    /// <summary>
+    /// Shared implementation of the code generators (symbol look up tables, decoding and instance caching)
+    /// </summary>
     static class CodeGeneratorHelper
     {
 
@@ -149,7 +152,7 @@ namespace SysWeaver
         /// <param name="strLen">The length</param>
         /// <param name="create">Creates a new generator</param>
         /// <returns>The cached generator</returns>
-        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="strLen"/> is less than 1 or not less than the length of <paramref name="gens"/></exception>
         public static ICodeGenerator GetOrCreate(ICodeGenerator[] gens, int strLen, Func<int, ICodeGenerator> create)
         {
             if ((strLen <= 0) || (strLen >= gens.Length))
@@ -406,6 +409,7 @@ namespace SysWeaver
     /// ..and so on, lengths [1, 21] are supported (length 21 is capped to 62 bits).
     /// The least significant symbol is written first.
     /// </summary>
+    /// <remarks>When decoding, the digits 0 and 1 (and any other non symbol char) are ignored, they are not rejected</remarks>
     public sealed class NumericCodeGenerator : ICodeGenerator
     {
         /// <summary>
@@ -500,7 +504,7 @@ namespace SysWeaver
         /// <summary>
         /// Returns a description of the generator
         /// </summary>
-        /// <returns>The string length and the valid range, ex: "4: [0, 1048576)"</returns>
+        /// <returns>The string length and the valid range, ex: "4: [0, 4096)"</returns>
         public override string ToString() => String.Concat(StrLen.ToString(), ": [0, ", MaxValue.ToString(), ')');
 
         /// <summary>
@@ -614,7 +618,7 @@ namespace SysWeaver
         /// Encode a value in the [0, MaxInput) interval.
         /// </summary>
         /// <param name="value">The value to encode in the [0, MaxInput)</param>
-        /// <param name="upperCase">Output upper or lower case letters</param>
+        /// <param name="upperCase">Not used (digits only)</param>
         /// <param name="group">Add a hypen between groups of 3 or 4 characters</param>
         /// <returns>A string with the encoded value</returns>
         /// <exception cref="ArgumentOutOfRangeException">The value is negative or greater than or equal to <see cref="MaxInput"/></exception>
@@ -629,7 +633,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Decodes a value from a string.
-        /// Decoding is case insensitive, similar looking symbols are treated as the same symbol and any char that isn't a symbol (such as hyphens and white space) is ignored.
+        /// Any char that isn't a symbol (such as hyphens, white space, 0 and 1) is ignored.
         /// </summary>
         /// <param name="value">A value encoded as a string</param>
         /// <returns>The value or -1 if the input string is invalid (not exactly <see cref="StrLen"/> symbols, or a value that is outside of [0, MaxInput))</returns>

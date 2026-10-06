@@ -6,10 +6,18 @@ using System.Threading;
 
 namespace SysWeaver.OsServices
 {
+    /// <summary>
+    /// File operations that retry (up to 10 times with a short, increasing sleep) to tolerate concurrent access to the status (pid) files.
+    /// </summary>
     static class FileHelper
     {
         const int retry = 10;
 
+        /// <summary>
+        /// Delete a file, retrying on failure.
+        /// </summary>
+        /// <param name="name">The file name.</param>
+        /// <returns>True if the file doesn't exist afterwards (including if it never existed), false on failure. Never throws.</returns>
         public static bool DeleteFile(String name)
         {
             try
@@ -39,6 +47,12 @@ namespace SysWeaver.OsServices
             }
         }
 
+        /// <summary>
+        /// Write (replace) a text file, retrying on failure.
+        /// </summary>
+        /// <param name="name">The file name.</param>
+        /// <param name="text">The text to write.</param>
+        /// <returns>True if written, false if all attempts failed. Never throws.</returns>
         public static bool WriteText(String name, String text)
         {
             for (int i = 0; i < retry; ++i)
@@ -59,6 +73,11 @@ namespace SysWeaver.OsServices
         }
 
 
+        /// <summary>
+        /// Read a text file, retrying on failure.
+        /// </summary>
+        /// <param name="name">The file name.</param>
+        /// <returns>The text, or null if the file doesn't exist or couldn't be read. Never throws.</returns>
         public static String ReadText(String name)
         {
             try

@@ -9,16 +9,24 @@ namespace SysWeaver
 {
 
     /// <summary>
-    /// System wide locks (using temporary files so available on OS'es)
+    /// System wide (cross process) named locks, implemented using exclusively opened lock files (delete on close) so they work on all OS'es.
     /// </summary>
+    /// <remarks>
+    /// The lock file name is an MD5 hash of the key, stored in the "SystemLock" <see cref="TempFolder"/>.
+    /// Locks are NOT re-entrant, taking the same lock twice from the same thread / async flow will dead lock.
+    /// Waiting is done by polling every 10 ms (no fairness).
+    /// A lock object that isn't disposed is released by its finalizer.
+    /// On Unix the exclusivity relies on advisory file locking, so all participants must use this class.
+    /// </remarks>
     public static class SystemLock
     {
 
         /// <summary>
-        /// Get the lock (or wait forever until it's available)
+        /// Get the lock (or wait forever until it's available), blocking the calling thread.
         /// </summary>
         /// <param name="key">The key to lock on (MD5 checksum of the string is what's actually being used to allow for any text here)</param>
         /// <returns>A lock object, dispose to unlock</returns>
+        /// <exception cref="Exception">Opening the lock file failed with a non IO exception (ex: access denied) more than 10 times.</exception>
         public static IDisposable Get(String key)
         {
             var name = GetFilename(key);
@@ -48,7 +56,8 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Check for a lock
+        /// Check if a lock is currently taken (by briefly trying to take it).
+        /// The result may be outdated as soon as it's returned.
         /// </summary>
         /// <param name="key">The key to lock on (MD5 checksum of the string is what's actually being used to allow for any text here)</param>
         /// <returns>True if the lock is taken else false</returns>
@@ -76,11 +85,11 @@ namespace SysWeaver
         static readonly Object CheckLock = new ();
 
         /// <summary>
-        /// Try to get the lock
+        /// Try to get the lock without waiting.
         /// </summary>
         /// <param name="key">The key to lock on (MD5 checksum of the string is what's actually being used to allow for any text here)</param>
         /// <param name="lockObject">If successful, a lock object, dispose to unlock</param>
-        /// <returns>True of the lock was successful else false</returns>
+        /// <returns>True if the lock was taken else false</returns>
         public static bool TryGet(String key, out IDisposable lockObject)
         {
             var name = GetFilename(key);
@@ -102,10 +111,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get the lock (or wait forever until it's available)
+        /// Get the lock (or wait forever until it's available), waiting asynchronously.
         /// </summary>
         /// <param name="key">The key to lock on (MD5 checksum of the string is what's actually being used to allow for any text here)</param>
         /// <returns>A lock object, dispose to unlock</returns>
+        /// <exception cref="Exception">Opening the lock file failed with a non IO exception (ex: access denied) more than 10 times.</exception>
         public static async Task<IDisposable> GetAsync(String key)
         {
             var name = GetFilename(key);
@@ -141,6 +151,9 @@ namespace SysWeaver
         static String GetFilename(String key) => Path.Combine(Folder, HashTools.GetHashString(key));
 
 
+        /// <summary>
+        /// A held lock, closing (and deleting) the exclusively opened lock file releases it.
+        /// </summary>
         sealed class Lock : IDisposable
         {
 

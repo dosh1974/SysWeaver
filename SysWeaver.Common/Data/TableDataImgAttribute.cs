@@ -3,7 +3,7 @@
 namespace SysWeaver.Data
 {
     /// <summary>
-    /// Format valus as:
+    /// Format values as:
     /// A clickable image link.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
@@ -45,21 +45,17 @@ namespace SysWeaver.Data
         }
     }
 
+    /// <summary>
+    /// Format values (user id's) as a clickable user icon, the image is fetched from "auth/UserImages/{id}/{size}".
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataUserIconAttribute : TableDataImgAttribute
     {
         /// <summary>
-        /// A clickable image.
+        /// A clickable user icon.
         /// </summary>
         /// <param name="root">Path used to get back to site root</param>
-        /// <param name="imageSize">
-        /// {0} = This value. 
-        /// {1} = Next value (must exist). 
-        /// Image alignment can (optionally) be controlled by prefixing (the evaluated) url with:
-        /// '-' for left alignment.
-        /// '*' for center alignment (default).
-        /// '+' for right alignment.
-        /// </param>
+        /// <param name="imageSize">The image size to display, ex: "small" (null is the same as "small")</param>
         /// <param name="urlFormat">
         /// {0} = This value. 
         /// {1} = Next value (must exist). 

@@ -7,8 +7,20 @@ using System.Text;
 
 namespace SysWeaver.Serialization
 {
+    /// <summary>
+    /// Helper methods used by serializer implementations and consumers.
+    /// </summary>
     public static class SerTools
     {
+        /// <summary>
+        /// Encode a string as UTF-8.
+        /// </summary>
+        /// <param name="st">The string to encode, must not be null.</param>
+        /// <returns>The UTF-8 bytes, as a slice of a newly allocated (larger) array.</returns>
+        /// <remarks>
+        /// Starts with a buffer of 2 bytes per char (+64), if that is too small (text with many non-ASCII chars) an <see cref="ArgumentException"/> is caught internally and the buffer is grown by 50% (repeatedly).
+        /// Invalid surrogates are replaced with U+FFFD.
+        /// </remarks>
         public static ReadOnlyMemory<Byte> ToUTF8(this String st)
         {
             var l = st.Length << 1;
@@ -33,11 +45,11 @@ namespace SysWeaver.Serialization
 
 
         /// <summary>
-        /// Add char-set to a mime if it exist
+        /// Create a Content-Type header value by appending the encoding's char set to a MIME type (ex: "application/json; charset=utf-8").
         /// </summary>
-        /// <param name="mime"></param>
-        /// <param name="enc"></param>
-        /// <returns></returns>
+        /// <param name="mime">The MIME type.</param>
+        /// <param name="enc">The text encoding, null for binary formats.</param>
+        /// <returns>The MIME type with a "; charset=" suffix, or <paramref name="mime"/> unchanged if <paramref name="enc"/> (or its header name) is null.</returns>
         public static String MakeHeader(String mime, Encoding enc)
         {
             var e = enc?.HeaderName;
@@ -49,19 +61,21 @@ namespace SysWeaver.Serialization
 
 
         /// <summary>
-        /// Serialize an object as if if was of it's own type, thus without type information (uses GetType() to determine the type and then serialize as that.
-        /// Example:
+        /// Serialize an object as its runtime type (from <see cref="Object.GetType"/>) rather than as <see cref="Object"/>, so serializers that add type information for polymorphic values don't do so for the root.
+        /// <code>
         ///     SomeType data = new SomeType();
         ///     Object obj = data;
         ///     var a = serializer.Serialize(data);
         ///     var b = serializer.Serialize(obj);
         ///     var c = serializer.SerializeWithoutType(obj);
-        /// For the above, a and c will be equal, b will contain type information.
+        /// </code>
+        /// For the above, a and c will be equal, b may contain type information (depending on the serializer).
         /// </summary>
-        /// <param name="serializer">The serializer</param>
-        /// <param name="obj">The object to serialize</param>
-        /// <param name="options">The object to serialize</param>
-        /// <returns>The serialized data</returns>
+        /// <param name="serializer">The serializer.</param>
+        /// <param name="obj">The object to serialize, if null it is serialized as a null <see cref="Object"/>.</param>
+        /// <param name="options">The requested output style.</param>
+        /// <returns>The serialized data.</returns>
+        /// <remarks>A compiled delegate is created and cached (thread safe) per runtime type on first use.</remarks>
         public static ReadOnlyMemory<Byte> SerializeWithoutType(this ISerializer serializer, Object obj, SerializerOptions options = SerializerOptions.Compact)
         {
             if (obj == null)
@@ -100,23 +114,28 @@ namespace SysWeaver.Serialization
 
 
 
+    /// <summary>
+    /// Helper methods for text based serializers.
+    /// </summary>
     public static class TextSerTools
     {
 
         /// <summary>
-        /// Serialize an object as if if was of it's own type, thus without type information (uses GetType() to determine the type and then serialize as that.
-        /// Example:
+        /// Serialize an object to text as its runtime type (from <see cref="Object.GetType"/>) rather than as <see cref="Object"/>, so serializers that add type information for polymorphic values don't do so for the root.
+        /// <code>
         ///     SomeType data = new SomeType();
         ///     Object obj = data;
-        ///     var a = serializer.Serialize(data);
-        ///     var b = serializer.Serialize(obj);
-        ///     var c = serializer.SerializeWithoutType(obj);
-        /// For the above, a and c will be equal, b will contain type information.
+        ///     var a = serializer.ToString(data);
+        ///     var b = serializer.ToString(obj);
+        ///     var c = serializer.ToStringWithoutType(obj);
+        /// </code>
+        /// For the above, a and c will be equal, b may contain type information (depending on the serializer).
         /// </summary>
-        /// <param name="serializer">The serializer</param>
-        /// <param name="obj">The object to serialize</param>
-        /// <param name="options">The object to serialize</param>
-        /// <returns>The serialized data</returns>
+        /// <param name="serializer">The text serializer.</param>
+        /// <param name="obj">The object to serialize, if null it is serialized as a null <see cref="Object"/>.</param>
+        /// <param name="options">The requested output style.</param>
+        /// <returns>The serialized text.</returns>
+        /// <remarks>A compiled delegate is created and cached (thread safe) per runtime type on first use.</remarks>
         public static String ToStringWithoutType(this ITextSerializer serializer, Object obj, SerializerOptions options = SerializerOptions.Compact)
         {
             if (obj == null)
@@ -154,7 +173,8 @@ namespace SysWeaver.Serialization
 
 
     /// <summary>
-    /// Try (real hard) to find a type for the given type name
+    /// Try (real hard) to find a type for the given type name.
+    /// Used when deserializing type information (Newtonsoft "$type" names and SysWeaver.Json type names).
     /// </summary>
     public static class TypeNameResolver
     {
@@ -163,10 +183,17 @@ namespace SysWeaver.Serialization
 
 
         /// <summary>
-        /// Get the type for a given type name or null if it can't be found
+        /// Get the type for a given type name or null if it can't be found.
+        /// Tries, in order: <see cref="Type.GetType(string, bool)"/> (case sensitive, then case insensitive), the assembly where the last app domain scan succeeded,
+        /// and finally every assembly loaded in the current app domain using the name with the last comma separated part removed.
         /// </summary>
-        /// <param name="typeName">The name of the type to find</param>
-        /// <returns>The type or null if it can't be found</returns>
+        /// <param name="typeName">The name of the type to find (full name or assembly qualified name).</param>
+        /// <returns>The type or null if it can't be found (or <paramref name="typeName"/> is null or empty).</returns>
+        /// <remarks>
+        /// Thread safe. Results are cached forever, including failed lookups, so a type in an assembly that is loaded after a failed lookup is never found.
+        /// Generic type names are not specially handled.
+        /// Any loaded type can be resolved, so names from untrusted input must be validated by the caller.
+        /// </remarks>
         public static Type Get(String typeName)
         {
             if (String.IsNullOrEmpty(typeName))

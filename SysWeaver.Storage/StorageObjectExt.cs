@@ -8,6 +8,9 @@ using SysWeaver.Serialization;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Extensions for reading embedded resources relative to a type, transparently decompressing resources stored compressed (ex: "MyText.txt.br").
+    /// </summary>
     public static class StorageTypeExt
     {
         /// <summary>
@@ -23,8 +26,9 @@ namespace SysWeaver
         /// <param name="t">The type</param>
         /// <param name="resourceName">Name of the resource (without name space)</param>
         /// <param name="noThrow">If true, return null if not found instead of throwing an error</param>
-        /// <returns>A stream to the (uncompressed) resource data.</returns>
-        /// <exception cref="Exception"></exception>
+        /// <returns>A stream to the (uncompressed) resource data, the caller must dispose it. Null if not found and <paramref name="noThrow"/> is true.
+        /// Compressed resources are fully decompressed into memory.</returns>
+        /// <exception cref="Exception">The resource wasn't found and <paramref name="noThrow"/> is false.</exception>
         public static Stream GetManifestResourceStream(this Type t, string resourceName, bool noThrow = false)
         {
             var asm = t.Assembly;
@@ -61,8 +65,10 @@ namespace SysWeaver
         /// </summary>
         /// <param name="t">The type</param>
         /// <param name="resourceName">Name of the resource (without name space)</param>
-        /// <param name="noThrow">If true, return default if not found instead of throwing an error</param>
+        /// <param name="noThrow">If true, return default if not found instead of throwing an error.
+        /// Note: the current implementation returns default whenever this is true, even if the resource exists.</param>
         /// <returns>The (uncompressed) data of the embedded resource</returns>
+        /// <exception cref="Exception">The resource wasn't found and <paramref name="noThrow"/> is false.</exception>
         public static ReadOnlyMemory<Byte> GetManifestResourceData(this Type t, string resourceName, bool noThrow = false)
         {
             using var s = GetManifestResourceStream(t, resourceName, noThrow);
@@ -83,13 +89,14 @@ namespace SysWeaver
         /// Compressed resource: "MyText.txt.br".
         /// 
         /// Use:
-        /// var text = type.GetManifestResourceData("MyText.txt");
+        /// var text = type.GetManifestResourceText("MyText.txt");
         /// </summary>
         /// <param name="t">The type</param>
         /// <param name="resourceName">Name of the resource (without name space)</param>
-        /// <param name="noThrow">If true, return default if not found instead of throwing an error</param>
+        /// <param name="noThrow">If true, return null if not found instead of throwing an error (see the note on <see cref="GetManifestResourceData(Type, string, bool)"/>)</param>
         /// <param name="encoding">The encoding to use, default is to use UTF-8</param>
         /// <returns>The text of the embedded resource</returns>
+        /// <exception cref="Exception">The resource wasn't found and <paramref name="noThrow"/> is false.</exception>
         public static String GetManifestResourceText(this Type t, string resourceName, bool noThrow = false, Encoding encoding = null)
         {
             var s = GetManifestResourceData(t, resourceName, noThrow);
@@ -111,14 +118,14 @@ namespace SysWeaver
         /// Compressed resource: "MyData.json.br".
         /// 
         /// Use:
-        /// var data = type.GetManifestResourceData("MyData.json");
+        /// var data = type.GetManifestResourceObject&lt;MyData&gt;("MyData.json");
         /// </summary>
         /// <typeparam name="T">The type of the stored object</typeparam>
         /// <param name="t">The type</param>
         /// <param name="resourceName">Name of the resource (without name space)</param>
-        /// <param name="noThrow">If true, return default if not found instead of throwing an error</param>
+        /// <param name="noThrow">If true, return default if not found (or if no serializer exists for the extension) instead of throwing an error (see the note on <see cref="GetManifestResourceData(Type, string, bool)"/>)</param>
         /// <returns>The object stored in the embedded resource</returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="Exception">The resource wasn't found or no serializer exists for the file extension, and <paramref name="noThrow"/> is false.</exception>
         public static T GetManifestResourceObject<T>(this Type t, string resourceName, bool noThrow = false)
         {
             var s = GetManifestResourceData(t, resourceName, noThrow);

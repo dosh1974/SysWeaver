@@ -10,18 +10,30 @@ namespace SysWeaver.Security
 {
 
     /// <summary>
-    /// Managed Lan certificates that is issued by the Lan Certificate Manager service
+    /// Provides a LAN certificate issued by a central Lan Certificate Manager service (see <see cref="ILanCertificateManager"/>).
+    /// If the manager can't be reached (and no certificate has been received yet), a self-signed certificate is used instead (cached in the configured file).
     /// </summary>
+    /// <remarks>
+    /// Configuration is typically read from files in the key folder: the server base url (<see cref="LanCertificateProviderParams.ServerConfigFile"/>),
+    /// the credentials (<see cref="LanCertificateProviderParams.ServerCreds"/>) and the domain name (<see cref="LanCertificateProviderParams.DomainName"/>).
+    /// The manager is polled every 60 minutes while a server certificate is used, and every 15 minutes while a self-signed fallback is used.
+    /// A server certificate is never replaced by a self-signed one during renewal.
+    /// When the certificate changes, <see cref="OnChanged"/> is raised with the new certificate and the old certificate is disposed.
+    /// Thread safe.
+    /// </remarks>
     public sealed class LanCertificateProvider : ICertificateProvider, IDisposable, IPerfMonitored
     {
+        /// <inheritdoc/>
         public override string ToString() => String.Concat(DomainName, " from ", Server, " cached in \"", Filename, '"');
 
 
         /// <summary>
-        /// Creates a self sigend certificate
+        /// Create a LAN certificate provider.
+        /// Reads the domain name (if it's a file) and the server base url from disc.
         /// </summary>
-        /// <param name="msg">Optional message host</param>
-        /// <param name="p">Paramaters</param>
+        /// <param name="msg">Optional message host, used to report failures to get a certificate from the manager.</param>
+        /// <param name="p">Parameters, null uses the defaults.</param>
+        /// <exception cref="Exception">The domain name file couldn't be read, the domain name isn't a valid DNS name or a subject field is invalid.</exception>
         public LanCertificateProvider(IMessageHost msg = null, LanCertificateProviderParams p = null)
         {
             p = p ?? new LanCertificateProviderParams();
@@ -82,6 +94,7 @@ namespace SysWeaver.Security
         const int CheckServerCertEveryMinutes = 60;
         const int CheckSelfSignedCertEveryMinutes = 15;
 
+        /// <inheritdoc/>
         public PerfMonitor PerfMon { get; } = new PerfMonitor(nameof(LanCertificateProvider));
 
         async Task<ValueTuple<X509Certificate2, int>> InternalGetCert(IMessageHost msg = null)
@@ -160,6 +173,11 @@ namespace SysWeaver.Security
             return ValueTuple.Create(c, CheckSelfSignedCertEveryMinutes);
         }
 
+        /// <summary>
+        /// Get the current certificate.
+        /// The first call contacts the manager (falling back to a self-signed certificate) and schedules periodic renewal checks.
+        /// </summary>
+        /// <returns>The certificate (owned by the provider, do not dispose it).</returns>
         public async Task<X509Certificate2> GetCert()
         {
             var c = C;
@@ -213,11 +231,14 @@ namespace SysWeaver.Security
         }
 
         /// <summary>
-        /// An event that is fired if the certificate is about to expire.
-        /// An application should restart (or re-init) to get the updated cert (calling GetCert again will return an updated cert).
+        /// An event that is fired when a renewal check found a different (and not worse) certificate.
+        /// The argument is the new certificate (the same instance that <see cref="GetCert"/> will return), the previous certificate is disposed after the event handlers returns.
         /// </summary>
         public event Action<X509Certificate2> OnChanged;
 
+        /// <summary>
+        /// Cancel renewal checks and dispose the current certificate.
+        /// </summary>
         public void Dispose()
         {
             using var _ = Lock.LockSync();

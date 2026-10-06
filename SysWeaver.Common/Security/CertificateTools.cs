@@ -10,6 +10,9 @@ using System.Text;
 
 namespace SysWeaver.Security
 {
+    /// <summary>
+    /// Helpers for X.509 certificates (loading, installing, expiration and subject alternative names).
+    /// </summary>
     public static class CertificateTools
     {
 
@@ -17,7 +20,8 @@ namespace SysWeaver.Security
         /// Get the expiration time of the certificate
         /// </summary>
         /// <param name="cert">Certificate to get expiration time</param>
-        /// <returns>The time when the certificate expires</returns>
+        /// <returns>The time when the certificate expires (local time)</returns>
+        /// <remarks>Parses the culture specific string from <see cref="X509Certificate.GetExpirationDateString"/>, <see cref="X509Certificate2.NotAfter"/> gives the same value without parsing.</remarks>
         public static DateTime GetExpiration(this X509Certificate2 cert)
         {
             var time = cert.GetExpirationDateString();
@@ -25,12 +29,12 @@ namespace SysWeaver.Security
         }
 
         /// <summary>
-        /// Test if a certificate is expired or will expire within a day
+        /// Test if a certificate is expired or will expire within a number of hours
         /// </summary>
         /// <param name="cert">Cert to test</param>
-        /// <param name="expires">When the cert expires</param>
+        /// <param name="expires">When the cert expires (local time)</param>
         /// <param name="hoursBeforeExpiration">The number of hours that this certificate must be valid</param>
-        /// <returns>True if the cert is expoired or will expire soon</returns>
+        /// <returns>True if the cert is expired or will expire within <paramref name="hoursBeforeExpiration"/> hours</returns>
         public static bool IsSoonExpired(this X509Certificate2 cert, out DateTime expires, int hoursBeforeExpiration)
         {
             expires = GetExpiration(cert);
@@ -101,6 +105,12 @@ namespace SysWeaver.Security
             return result;
         }
 
+        /// <summary>
+        /// Get the subject alternative names (SAN) of a certificate, ex: the DNS names and IP addresses that the certificate is valid for.
+        /// </summary>
+        /// <param name="cert">The certificate</param>
+        /// <returns>The names as strings (IP addresses are formatted, other types are decoded as UTF-8 text). Evaluated lazily.</returns>
+        /// <exception cref="InvalidDataException">The extension data is malformed (thrown on enumeration)</exception>
         public static IEnumerable<string> GetSubjectAlternativeNames(this X509Certificate2 cert)
         {
             return cert.Extensions
@@ -109,8 +119,19 @@ namespace SysWeaver.Security
                 .SelectMany(x => ParseSubjectAlternativeNames(x.RawData));
         }
 
+        /// <summary>
+        /// Get the subject alternative names (SAN) from a subject alternative name extension (OID 2.5.29.17).
+        /// </summary>
+        /// <param name="cert">The extension (the OID is not checked)</param>
+        /// <returns>The names as strings (IP addresses are formatted, other types are decoded as UTF-8 text)</returns>
+        /// <exception cref="InvalidDataException">The extension data is malformed</exception>
         public static IEnumerable<string> GetSubjectAlternativeNames(this X509Extension cert) => ParseSubjectAlternativeNames(cert.RawData);
 
+        /// <summary>
+        /// Check if a certificate is self signed, i.e. the subject and issuer names are equal (the signature isn't verified).
+        /// </summary>
+        /// <param name="cert">The certificate</param>
+        /// <returns>True if the subject and issuer names are equal</returns>
         public static bool IsSelfSigned(X509Certificate2 cert)
         {
             return cert.SubjectName.RawData.SequenceEqual(cert.IssuerName.RawData);
@@ -122,8 +143,10 @@ namespace SysWeaver.Security
         /// </summary>
         /// <param name="filename">.pfx file containing the cert</param>
         /// <param name="password">Password or password file</param>
-        /// <param name="passwordCanBeFile">True if password may be a file</param>
-        /// <returns></returns>
+        /// <param name="passwordCanBeFile">True if password may be a file, if the password is the name of an existing file, the (trimmed) content of that file is used as the password (environment variables are resolved using EnvInfo.ResolveText)</param>
+        /// <returns>The certificate (with an exportable private key, stored in the machine key set)</returns>
+        /// <exception cref="FileNotFoundException">The file doesn't exist</exception>
+        /// <exception cref="Exception">The certificate couldn't be loaded (the inner exception contains the reason)</exception>
         public static async Task<X509Certificate2> Load(String filename, String password = null, bool passwordCanBeFile = true)
         {
             if (!File.Exists(filename))
@@ -151,12 +174,13 @@ namespace SysWeaver.Security
         }
 
         /// <summary>
-        /// Load a certificate from disc
+        /// Load a certificate from memory
         /// </summary>
         /// <param name="data">Contents of a .pfx file containing the cert</param>
         /// <param name="password">Password or password file</param>
-        /// <param name="passwordCanBeFile">True if password may be a file</param>
-        /// <returns></returns>
+        /// <param name="passwordCanBeFile">True if password may be a file, if the password is the name of an existing file, the (trimmed) content of that file is used as the password (environment variables are resolved using EnvInfo.ResolveText)</param>
+        /// <returns>The certificate (with an exportable private key, stored in the machine key set)</returns>
+        /// <exception cref="Exception">The certificate couldn't be loaded (the inner exception contains the reason)</exception>
         public static async Task<X509Certificate2> Create(ReadOnlyMemory<Byte> data, String password = null, bool passwordCanBeFile = true)
         {
             string pfile = null;
@@ -183,10 +207,11 @@ namespace SysWeaver.Security
 
 
         /// <summary>
-        /// Install a certificates (if it's not already installed)
+        /// Install a certificate in the local machine personal ("My") store (if it's not already installed)
         /// </summary>
         /// <param name="cert">The certificate to check/install</param>
         /// <returns>True if the cert was installed (was new)</returns>
+        /// <remarks>Requires write access to the local machine store (typically administrator rights).</remarks>
         public static bool Install(this X509Certificate2 cert)
         {
             bool isNew = false;
@@ -216,8 +241,23 @@ namespace SysWeaver.Security
 
 
 
+        /// <summary>
+        /// Get the DER encoded bytes of a PEM encoded certificate.
+        /// </summary>
+        /// <param name="data">The PEM text (UTF-8 encoded)</param>
+        /// <returns>The DER encoded certificate</returns>
+        /// <exception cref="Exception">The text doesn't contain a certificate header or footer</exception>
+        /// <exception cref="FormatException">The text between the header and footer isn't valid base64</exception>
         public static Byte[] GetCertBytes(ReadOnlySpan<Byte> data) => GetCertBytes(Encoding.UTF8.GetString(data));
 
+        /// <summary>
+        /// Get the DER encoded bytes of a PEM encoded certificate.
+        /// </summary>
+        /// <param name="cert">The PEM text, everything between the first "-----BEGIN CERTIFICATE-----" and the last "-----END CERTIFICATE-----" is decoded,
+        /// so the text must only contain a single certificate</param>
+        /// <returns>The DER encoded certificate</returns>
+        /// <exception cref="Exception">The text doesn't contain a certificate header or footer</exception>
+        /// <exception cref="FormatException">The text between the header and footer isn't valid base64</exception>
         public static Byte[] GetCertBytes(String cert)
         {
             const String header = "-----BEGIN CERTIFICATE-----";

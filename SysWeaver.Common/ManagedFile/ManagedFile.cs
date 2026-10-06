@@ -15,8 +15,17 @@ namespace SysWeaver
     /// The file can be located locally on disc or remote using http/https.
     /// When the file change, the data is read and a callback is triggered
     /// </summary>
+    /// <remarks>
+    /// The location is resolved using PathTemplate.Resolve and made absolute (relative to the executable) before the source is selected.
+    /// A location without "://" is a local file, else the schema selects the source ("http" and "https" are built in, more can be added using <see cref="TryAddSchema"/>).
+    /// Exceptions from reading or from the callbacks are never thrown on change, they are collected in <see cref="Exceptions"/>.
+    /// </remarks>
     public sealed class ManagedFile : IDisposable
     {
+        /// <summary>
+        /// The location as specified in the parameters
+        /// </summary>
+        /// <returns>The location</returns>
         public override string ToString() => Location;
 
         /// <summary>
@@ -26,6 +35,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="p">The parameters</param>
         /// <param name="onChange">The callback to invoke whenever the file data has changed</param>
+        /// <exception cref="Exception">The schema of the location isn't supported</exception>
+        /// <remarks>Both constructors have an optional callback, so a call without a callback must specify the type of the null argument</remarks>
         public ManagedFile(ManagedFileParams p, Func<ManagedFileData, Task> onChange = null)
         {
             MustExist = p.MustExist;
@@ -44,6 +55,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="p">The parameters</param>
         /// <param name="onChange">The callback to invoke whenever the file data has changed</param>
+        /// <exception cref="Exception">The schema of the location isn't supported</exception>
         public ManagedFile(ManagedFileParams p, Action<ManagedFileData> onChange = null)
         {
             MustExist = p.MustExist;
@@ -58,7 +70,12 @@ namespace SysWeaver
         /// If the file haven't been read yet, try to read it.
         /// May throw an exception if the read fails.
         /// </summary>
-        /// <returns>The managed file data</returns>
+        /// <returns>The managed file data (check <see cref="ManagedFileData.Ex"/> if <see cref="ManagedFileParams.MustExist"/> is false)</returns>
+        /// <exception cref="Exception">The read failed and <see cref="ManagedFileParams.MustExist"/> is true (the exception of the read)</exception>
+        /// <remarks>
+        /// The result of the first read is cached (also a failed read), so only the first call can throw, later calls returns the cached data until a change is detected.
+        /// The read isn't synchronized, concurrent first calls may read the file more than once.
+        /// </remarks>
         public async Task<ManagedFileData> TryGetNowAsync()
         {
             var x = InternalData;
@@ -82,7 +99,12 @@ namespace SysWeaver
         /// If the file haven't been read yet, try to read it.
         /// May throw an exception if the read fails.
         /// </summary>
-        /// <returns>The managed file data</returns>
+        /// <returns>The managed file data (check <see cref="ManagedFileData.Ex"/> if <see cref="ManagedFileParams.MustExist"/> is false)</returns>
+        /// <exception cref="Exception">The read failed and <see cref="ManagedFileParams.MustExist"/> is true (the exception of the read)</exception>
+        /// <remarks>
+        /// The result of the first read is cached (also a failed read), so only the first call can throw, later calls returns the cached data until a change is detected.
+        /// The sync version blocks on the async read (sync over async).
+        /// </remarks>
         public ManagedFileData TryGetNow()
         {
             var x = InternalData;
@@ -113,7 +135,7 @@ namespace SysWeaver
         public readonly ExceptionTracker Exceptions = new ExceptionTracker();
 
         /// <summary>
-        /// Number of time the data have been changed (including the first successfull read).
+        /// Number of time the data have been changed (including the first successful read, and changes ignored because the hash was equal).
         /// </summary>
         public long ChangeCount => Interlocked.Read(ref InternalChangeCount);
 
@@ -127,12 +149,22 @@ namespace SysWeaver
         /// </summary>
         public ManagedFileData CurrentData => InternalData;
 
+        /// <summary>
+        /// Stop monitoring the file and release the current data (the object must not be used after this)
+        /// </summary>
         public void Dispose()
         {
             Interlocked.Exchange(ref Source, null)?.Dispose();
             InternalData = null;
         }
 
+        /// <summary>
+        /// Register a source creator for a location schema (the part before "://", case sensitive), ex: "ftp".
+        /// </summary>
+        /// <param name="schema">The schema</param>
+        /// <param name="sourceCreator">The function that creates a source, the arguments are: the manager, the resolved location, the parameters, the change callback and the hash function</param>
+        /// <returns>True if added, false if the schema is already registered</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="schema"/> is null</exception>
         public static bool TryAddSchema(String schema, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource> sourceCreator)
         {
             var s = SourceSchemaCreator;
@@ -140,6 +172,13 @@ namespace SysWeaver
                 return s.TryAdd(schema, sourceCreator);
         }
 
+        /// <summary>
+        /// Unregister a source creator for a location schema (only if the registered creator is the supplied one)
+        /// </summary>
+        /// <param name="schema">The schema</param>
+        /// <param name="sourceCreator">The creator that was registered</param>
+        /// <returns>True if removed, false if the schema isn't registered or is registered with another creator</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="schema"/> is null</exception>
         public static bool TryRemoveSchema(String schema, Func<ManagedFile, String, ManagedFileParams, Func<ManagedFileData, Task>, Func<ReadOnlyMemory<Byte>, Byte[]>, IManagedFileSource> sourceCreator)
         {
             var s = SourceSchemaCreator;
@@ -187,6 +226,9 @@ namespace SysWeaver
         long InternalChangeCount;
         long InternalHashEqualCount;
 
+        /// <summary>
+        /// Called by the source when the file has changed, updates the current data and invokes the callback (unless the hash is unchanged)
+        /// </summary>
         async Task OnChange(ManagedFileData data)
         {
             var ex = data.Ex;

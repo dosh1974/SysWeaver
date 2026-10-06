@@ -6,8 +6,14 @@ namespace SysWeaver.Net
 {
 
     /// <summary>
-    /// Interface for audit services
+    /// Interface for audit services.
+    /// Registered services are automatically attached to the API module's audit events and receive calls for API methods marked with
+    /// <see cref="SysWeaver.MicroService.WebApiAuditAttribute"/>.
     /// </summary>
+    /// <remarks>
+    /// The callbacks are invoked synchronously on the request path; implementations should be fast, thread safe and should not throw
+    /// (an exception from <see cref="OnApiBegin"/> or <see cref="OnApiEnd"/> fails the API call).
+    /// </remarks>
     public interface IApiAuditService
     {
         /// <summary>
@@ -16,7 +22,7 @@ namespace SysWeaver.Net
         /// <param name="id">A unique invoke id</param>
         /// <param name="r">The server request (used to get session data, such as agent etc)</param>
         /// <param name="api">The api that is being invoked</param>
-        /// <param name="value">The input value (can be used to inspect data), can be null for void API's</param>
+        /// <param name="value">The input value (after any audit params filter), can be null for API's without arguments. Must not be modified.</param>
         void OnApiBegin(long id, HttpServerRequest r, IHttpApiAudit api, Object value);
 
         /// <summary>
@@ -25,7 +31,7 @@ namespace SysWeaver.Net
         /// <param name="id">A unique invoke id (same as for the begin)</param>
         /// <param name="r">The server request (used to get session data, such as agent etc)</param>
         /// <param name="api">The api that is being invoked</param>
-        /// <param name="value">The output value (can be used to inspect data), can be null for void API's</param>
+        /// <param name="value">The output value (after any audit return filter), can be null for void API's. Must not be modified.</param>
         void OnApiEnd(long id, HttpServerRequest r, IHttpApiAudit api, Object value);
 
         /// <summary>
@@ -38,9 +44,9 @@ namespace SysWeaver.Net
         void OnApiException(long id, HttpServerRequest r, IHttpApiAudit api, Exception ex);
 
         /// <summary>
-        /// Flush pending audit data
+        /// Flush pending audit data.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A task that completes when pending data has been written.</returns>
         Task Flush();
 
     }
@@ -48,7 +54,7 @@ namespace SysWeaver.Net
 
 
     /// <summary>
-    /// Utilities for adding audits
+    /// Utilities for adding audits.
     /// </summary>
     public static class ApiAudit
     {
@@ -56,9 +62,9 @@ namespace SysWeaver.Net
         static long Trackid = (DateTime.UtcNow - new DateTime(2024, 1, 1)).Ticks;
 
         /// <summary>
-        /// Use this to get an audit ID
+        /// Get a new audit id (thread safe).
         /// </summary>
-        /// <returns></returns>
+        /// <returns>An id that is unique within the process; ids are seeded from the time since 2024-01-01 at startup so they are very likely unique across restarts too.</returns>
         public static long GetId()
             => Interlocked.Increment(ref Trackid);
         

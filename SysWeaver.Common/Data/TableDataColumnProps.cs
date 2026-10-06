@@ -14,7 +14,7 @@ namespace SysWeaver.Data
         CanSort = 1,
         
         /// <summary>
-        /// Set if the column is sorted in desceding order by default
+        /// Set if the column is sorted in descending order by default
         /// </summary>
         SortedDesc = 2,
         /// <summary>
@@ -49,7 +49,8 @@ namespace SysWeaver.Data
         IsKey = 128,
 
         /// <summary>
-        /// The column is the first part of the primary key (typically for a chart / graph)
+        /// The column is the first part of the primary key (typically for a chart / graph).
+        /// The primary key index is encoded as a 3-bit number (1-7) in the bits covered by <see cref="TableDataColumnProps.AnyPrimaryKey"/>, so test using (props &amp; AnyPrimaryKey) == IsPrimaryKeyN, not HasFlag.
         /// </summary>
         IsPrimaryKey1 = 256,
 
@@ -101,8 +102,17 @@ namespace SysWeaver.Data
 
 
         //  Computed
+        /// <summary>
+        /// Mask of all filter flags
+        /// </summary>
         AnyFilters = Filter | TextFilter | OrderFilter,
+        /// <summary>
+        /// Mask of the primary key index bits
+        /// </summary>
         AnyPrimaryKey = IsPrimaryKey7,
+        /// <summary>
+        /// Mask of all key flags (primary key index bits and <see cref="TableDataColumnProps.IsKey"/>)
+        /// </summary>
         AnyKey = AnyPrimaryKey | IsKey,
     }
 

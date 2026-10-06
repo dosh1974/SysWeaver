@@ -44,6 +44,9 @@ namespace SysWeaver
         /// </summary>
         public static int Shift(int bits) => (Unsafe.SizeOf<K>() == 4 ? 32 : 64) - bits;
 
+        /// <summary>
+        /// Compare two keys using the default comparer (devirtualized)
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Eq(K a, K b) => EqualityComparer<K>.Default.Equals(a, b);
 
@@ -118,6 +121,9 @@ namespace SysWeaver
             public V Value;
         }
 
+        /// <summary>
+        /// Copy the entries of a dictionary with more than 8 unique keys (see <see cref="ValueKeyTable{K}.CanUse"/>)
+        /// </summary>
         public ValueKeyTableReadonlyDictionary(IReadOnlyDictionary<K, V> d)
         {
             var n = d.Count;
@@ -241,10 +247,14 @@ namespace SysWeaver
     }
 
     /// <summary>
-    /// A frozen set with more than 8 keys of a 4 or 8 byte integer (or enum) type, using the default comparer (see <see cref="ValueKeyTable{K}"/>)
+    /// A frozen set with more than 8 keys of a 4 or 8 byte integer (or enum) type, using the default comparer (see <see cref="ValueKeyTable{K}"/>).
+    /// Contains, IsSupersetOf and Overlaps don't allocate, the other set operations copy the items to a <see cref="HashSet{T}"/>.
     /// </summary>
     sealed class ValueKeyTableReadonlySet<K> : IReadOnlySet<K>, IHaveComparere<K>
     {
+        /// <summary>
+        /// Copy the items of a set with more than 8 unique keys (see <see cref="ValueKeyTable{K}.CanUse"/>)
+        /// </summary>
         public ValueKeyTableReadonlySet(IReadOnlySet<K> s)
         {
             var n = s.Count;

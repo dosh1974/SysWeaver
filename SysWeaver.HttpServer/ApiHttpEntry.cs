@@ -20,21 +20,63 @@ namespace SysWeaver.Net
 
 
 
+    /// <summary>
+    /// A web API end point: an HTTP request handler bound to a single method on a service instance.
+    /// Created through <see cref="Create"/>, normally by <see cref="ApiHttpServerModule"/> for every <c>[WebApi]</c> method it discovers.
+    /// </summary>
+    /// <remarks>
+    /// The method may take zero or one argument, optionally followed by a trailing <see cref="HttpServerRequest"/> context parameter,
+    /// and may return void, a value, <see cref="Task"/>/<see cref="Task{TResult}"/> or <see cref="ValueTask"/>/<see cref="ValueTask{TResult}"/>.
+    /// A strongly typed invoker is compiled (via expression trees) for GET and POST at creation time.
+    /// GET reads the argument from the query string using <see cref="ApiIoParams"/>, POST reads it from the request body
+    /// (decompressed according to <c>Content-Encoding</c> and deserialized according to <c>Content-Type</c>).
+    /// Results are serialized according to the <c>Accept</c> header, unless the method is marked with <see cref="WebApiRawAttribute"/> and returns <see cref="ReadOnlyMemory{T}"/> of bytes.
+    /// Authorization, rate limiting and caching are not performed by this class: <see cref="HttpServerBase"/> uses <see cref="Auth"/>,
+    /// <see cref="ServiceRateLimiter"/>, <see cref="SessionRateLimiter(HttpSession)"/>, <see cref="RequestCacheDuration"/> and <see cref="GetCacheKey(HttpServerRequest)"/> before invoking it.
+    /// Instances are immutable after creation and thread safe.
+    /// </remarks>
     public sealed partial class ApiHttpEntry : IHttpRequestHandler, IApiHttpServerEndPoint
     {
         
+        /// <summary>
+        /// Default required auth tokens for methods without a <see cref="WebApiAuthAttribute"/>, null means no authorization is required.
+        /// </summary>
         public const String DefaultAuth = null;
+        /// <summary>
+        /// Default compression preference for methods with a positive (global) request cache duration, favours ratio since the result is compressed once and reused.
+        /// </summary>
         public const String DefaultCachedCompression = "br:Best, deflate:Best, gzip:Best";
+        /// <summary>
+        /// Default compression preference for uncached (or per session cached) methods, favours speed.
+        /// </summary>
         public const String DefaultCompression = "br:Balanced, deflate:Balanced, gzip:Balanced";
+        /// <summary>
+        /// Default prefix of the <see cref="Location"/> text.
+        /// </summary>
         public const String DefaultLocationPrefix = "[API] ";
 
 
 
+        /// <summary>
+        /// Optional filter applied to the input value before it is audited (from <see cref="WebApiAuditFilterParamsAttribute"/>), used to hide sensitive data. Null if not specified.
+        /// </summary>
         internal readonly Func<long, HttpServerRequest, Object, Object> FilterAuditParams;
+        /// <summary>
+        /// Optional filter applied to the return value before it is audited (from <see cref="WebApiAuditFilterReturnAttribute"/>). Null if not specified.
+        /// </summary>
         internal readonly Func<long, HttpServerRequest, Object, Object> FilterAuditReturn;
 
+        /// <summary>
+        /// Audit callback invoked with the deserialized input before the method is called. Null unless the method has a <see cref="WebApiAuditAttribute"/>.
+        /// </summary>
         internal readonly Action<long, HttpServerRequest, ApiHttpEntry, Object> OnStart;
+        /// <summary>
+        /// Audit callback invoked with the (unserialized) result after a successful call. Null unless the method is audited.
+        /// </summary>
         internal readonly Action<long, HttpServerRequest, ApiHttpEntry, Object> OnEnd;
+        /// <summary>
+        /// Audit callback invoked when the method (or result encoding) throws. Null unless the method is audited.
+        /// </summary>
         internal readonly Action<long, HttpServerRequest, ApiHttpEntry, Exception> OnException;
 
         static readonly ParameterExpression ValId = Expression.Parameter(typeof(long), "id");
@@ -42,6 +84,14 @@ namespace SysWeaver.Net
         static readonly ParameterExpression ValValue = Expression.Parameter(typeof(Object), "value");
 
 
+        /// <summary>
+        /// Compile a delegate calling an audit filter method declared on the service type.
+        /// </summary>
+        /// <param name="o">The service instance (used for instance methods).</param>
+        /// <param name="methodName">Name of a static or instance method with the signature <c>Object (long, HttpServerRequest, Object)</c> or <c>Object (long, Object)</c>.</param>
+        /// <param name="filterType">Text used in the error message.</param>
+        /// <returns>A delegate invoking the filter.</returns>
+        /// <exception cref="Exception">No method with a matching name and signature was found.</exception>
         static Func<long, HttpServerRequest, Object, Object>  BuildFilter(Object o, String methodName, String filterType = "input")
         {
             var valId = ValId;
@@ -73,8 +123,37 @@ namespace SysWeaver.Net
             return Expression.Lambda<Func<long, HttpServerRequest, Object, Object>>(prog, valId, valRequest, valValue).Compile();
         }
 
+        /// <summary>
+        /// The serializers used to read input and write output.
+        /// </summary>
         public readonly ApiIoParams IoParams;
 
+        /// <summary>
+        /// Create an API end point for a method.
+        /// </summary>
+        /// <param name="ioParams">The serializers to use for input and output.</param>
+        /// <param name="o">The instance to invoke the method on (must not be null, static methods are not supported).</param>
+        /// <param name="method">The method to expose. It may take zero or one parameter, optionally followed by a <see cref="HttpServerRequest"/> parameter.</param>
+        /// <param name="url">The local url of the end point, also used as the rate limiter key and in perf monitoring keys.</param>
+        /// <param name="perfMonitor">Optional performance monitor, every call is tracked as <c>&quot;url [GET]&quot;</c> or <c>&quot;url [POST]&quot;</c>.</param>
+        /// <param name="defaultAuth">Required auth tokens if neither the method nor the declaring type has a <see cref="WebApiAuthAttribute"/>.</param>
+        /// <param name="defaultCachedCompression">Compression preference used when the method has a positive request cache duration.</param>
+        /// <param name="defaultCompression">Compression preference used otherwise.</param>
+        /// <param name="locationPrefix">Prefix for the <see cref="Location"/> text.</param>
+        /// <param name="onStart">Audit start callback, ignored unless the method has a <see cref="WebApiAuditAttribute"/>.</param>
+        /// <param name="onEnd">Audit end callback, ignored unless the method is audited.</param>
+        /// <param name="onException">Audit exception callback, ignored unless the method is audited.</param>
+        /// <returns>The new end point.</returns>
+        /// <remarks>
+        /// Settings are read from attributes on the method, falling back to the declaring type: <see cref="WebApiAuthAttribute"/>, <see cref="WebApiClientCacheAttribute"/>,
+        /// <see cref="WebApiRequestCacheAttribute"/> (stored negated, i.e. per session, when auto detect is used and the method takes a request context),
+        /// <see cref="WebApiCompressionAttribute"/>. Rate limiting (<see cref="WebApiServiceRateLimitAttribute"/>, <see cref="WebApiSessionRateLimitAttribute"/>),
+        /// auditing and <see cref="WebApiRawAttribute"/> are read from the method only.
+        /// If <paramref name="o"/> implements <see cref="IRunTimeWebApiAuth"/>, an entry in <see cref="IRunTimeWebApiAuth.MethodAuths"/> for the method name (or <c>&quot;*&quot;</c>) overrides any attribute.
+        /// Compiles expression trees, so this is relatively expensive and intended to be called once per method.
+        /// </remarks>
+        /// <exception cref="Exception">Unknown pre-compression decoder or audit filter method not found.</exception>
+        /// <exception cref="ArgumentException">The method signature isn't supported (e.g. more than one input parameter).</exception>
         public static ApiHttpEntry Create(ApiIoParams ioParams, Object o, MethodInfo method, String url, 
             PerfMonitor perfMonitor = null, 
             String defaultAuth = DefaultAuth, 
@@ -735,11 +814,14 @@ namespace SysWeaver.Net
             return e;
         }
 
+        /// <summary>
+        /// The audit group from <see cref="WebApiAuditAttribute"/> (<c>&quot;Default&quot;</c> if empty), null if the method isn't audited.
+        /// </summary>
         public String AuditGroup { get; init; }
 
 
         /// <summary>
-        /// Ignore, used internally
+        /// Not used by API entries (always null), part of <see cref="IHttpRequestHandler"/>.
         /// </summary>
         public HttpServerRequest Redirected { get; set; }
 
@@ -798,9 +880,21 @@ namespace SysWeaver.Net
             Decoder = decoder;
         }
 
+        /// <summary>
+        /// Rate limiter shared by all callers of this end point (from <see cref="WebApiServiceRateLimitAttribute"/>), null if not limited.
+        /// </summary>
         public HttpRateLimiter ServiceRateLimiter { get; init; }
+        /// <summary>
+        /// Parameters for per session rate limiters (from <see cref="WebApiSessionRateLimitAttribute"/>), null if not limited.
+        /// </summary>
         readonly HttpRateLimiterParams SessionRateLimiterParams;
 
+        /// <summary>
+        /// Get (or lazily create) the rate limiter for this end point in the given session.
+        /// </summary>
+        /// <param name="session">The session of the caller.</param>
+        /// <returns>The limiter, or null if the method doesn't have a <see cref="WebApiSessionRateLimitAttribute"/>.</returns>
+        /// <remarks>Limiters are stored in the session under the key <c>&quot;ApiRateLimits&quot;</c>, keyed by <see cref="Uri"/>. Thread safe.</remarks>
         public HttpRateLimiter SessionRateLimiter(HttpSession session)
         {
             var l = SessionRateLimiterParams;
@@ -816,12 +910,22 @@ namespace SysWeaver.Net
             return limiter;
         }
 
+        /// <summary>
+        /// True if the result type has a type translator, results are then translated to the session language.
+        /// </summary>
         public readonly bool NeedTranslation;
+        /// <summary>
+        /// True if the result type's translator reads the source language from the value itself.
+        /// </summary>
         public readonly bool HaveDynamicSourceLanguage;
 
 
+        /// <summary>
+        /// True if the response depends on the session language (translated result or translated raw output), used to make cache entries language specific.
+        /// </summary>
         public bool IsLocalized { get; init; }
 
+        /// <inheritdoc/>
         public void GetDesc(out Type arg, out Type ret, out String methodDesc, out String argDesc, out String retDesc, out String argName)
         {
             arg = ArgType;
@@ -833,11 +937,29 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// True if the result is serialized, false for raw output (<see cref="WebApiRawAttribute"/>).
+        /// </summary>
         public readonly bool IsApi;
+        /// <summary>
+        /// The exposed method.
+        /// </summary>
         public readonly MethodInfo Mi;
+        /// <summary>
+        /// The input parameter (excluding any request context parameter), null if the method takes no input.
+        /// </summary>
         public readonly ParameterInfo Pi;
+        /// <summary>
+        /// The return parameter, null if the method doesn't return a value.
+        /// </summary>
         public readonly ParameterInfo Ri;
+        /// <summary>
+        /// The type the input is deserialized to, null if the method takes no input.
+        /// </summary>
         public readonly Type ArgType;
+        /// <summary>
+        /// The result type (unwrapped from <see cref="Task{TResult}"/> / <see cref="ValueTask{TResult}"/>), null if the method doesn't return a value.
+        /// </summary>
         public readonly Type RetType;
         readonly PerfMonitor Mon;
         readonly String GetKey;
@@ -847,47 +969,107 @@ namespace SysWeaver.Net
         readonly bool HaveArgs;
 
 
+        /// <summary>
+        /// Invoke the method directly, as a POST with the supplied body.
+        /// </summary>
+        /// <param name="request">The request context, its <see cref="HttpServerRequest.Custom"/> is overwritten with the input. Its headers select the input deserializer, decompression and output serializer.</param>
+        /// <param name="data">The serialized input (compressed only if the request has a <c>Content-Encoding</c> header), empty for no input (default value).</param>
+        /// <returns>The serialized result, empty for methods without a return value.</returns>
+        /// <remarks>No authorization, rate limiting or caching is performed, the caller is responsible for that. Used by AI tools, the API explorer and chart services.</remarks>
         public Task<ReadOnlyMemory<Byte>> InvokeAsync(HttpServerRequest request, ReadOnlyMemory<Byte> data)
         {
             request.Custom = UnmanagedMemory.Create(data);
             return PostAsync.Run(this, request);
         }
 
+        /// <inheritdoc/>
         public HttpServerEndpointTypes Type => HttpServerEndpointTypes.Api;
 
+        /// <summary>
+        /// The instance the method is invoked on.
+        /// </summary>
         public Object Instance { get; init; }
 
+        /// <summary>
+        /// Client cache duration in seconds (from <see cref="WebApiClientCacheAttribute"/>), 0 for no client caching.
+        /// </summary>
         public int ClientCacheDuration { get; init; }
 
+        /// <summary>
+        /// Server side response cache duration in seconds (from <see cref="WebApiRequestCacheAttribute"/>), 0 for no caching.
+        /// A negative value means the cache is per session (duration is the absolute value), otherwise the response is shared by all callers.
+        /// </summary>
         public int RequestCacheDuration { get; init; }
 
+        /// <summary>
+        /// The supported response encoders in priority order, null if compression is disabled.
+        /// </summary>
         public HttpCompressionPriority Compression { get; init; }
 
+        /// <summary>
+        /// For raw methods returning pre-compressed data (<see cref="WebApiRawAttribute.PreCompressedWith"/>), the decoder for that compression, else null.
+        /// </summary>
         public ICompDecoder Decoder { get; init; }
 
+        /// <summary>
+        /// The required auth tokens as returned by <see cref="Authorization.GetRequiredTokens(String)"/>, null if no authorization is required.
+        /// </summary>
         public IReadOnlyList<string> Auth { get; init; }
 
 
+        /// <inheritdoc/>
         public MethodInfo MethodInfo => Mi;
 
+        /// <summary>
+        /// The local url of the end point.
+        /// </summary>
         public string Uri { get; init; }
 
+        /// <summary>
+        /// Always null, never assigned (API entries accept both GET and POST).
+        /// </summary>
         public string Method { get; init; }
 
+        /// <inheritdoc/>
         public string CompPreference => Compression?.ToString();
 
+        /// <summary>
+        /// Always null.
+        /// </summary>
         public string PreCompressed => null;
 
+        /// <summary>
+        /// Human readable description of the method this end point maps to.
+        /// </summary>
         public string Location { get; init; }
 
+        /// <summary>
+        /// Always -1 (size unknown).
+        /// </summary>
         public long? Size => -1;
 
+        /// <summary>
+        /// The last write time (UTC) of the assembly declaring the method.
+        /// </summary>
         public DateTime LastModified { get; init; }
 
+        /// <summary>
+        /// Always null, API responses have no ETag.
+        /// </summary>
         public string ETag => null;
 
+        /// <summary>
+        /// The response mime type: the raw mime for <see cref="WebApiRawAttribute"/> methods, else the mime of <see cref="ApiIoParams.DefaultOutput"/>.
+        /// </summary>
         public string Mime { get; init; }
 
+        /// <summary>
+        /// Compute the server cache key for a request.
+        /// </summary>
+        /// <param name="request">The request.</param>
+        /// <returns>For GET (or methods without input): url and Accept header. For POST with input: the base64 encoded body, local url, Content-Encoding, Content-Type and Accept headers;
+        /// <see cref="HttpServerTools.PreventCacheKey"/> if the body is larger than 4096 bytes.</returns>
+        /// <remarks>For POST with input the body is read here and stored in <see cref="HttpServerRequest.Custom"/> so the invoker can reuse it (disposed with the request).</remarks>
         public async ValueTask<String> GetCacheKey(HttpServerRequest request)
         {
             var accept = request.GetReqHeader("Accept");
@@ -903,6 +1085,12 @@ namespace SysWeaver.Net
             return String.Join('\r', Convert.ToBase64String(mem.Span), request.LocalUrl, ce, ct, accept);
         }
 
+        /// <summary>
+        /// Sets the response mime type and requests asynchronous handling.
+        /// </summary>
+        /// <param name="useAsync">Always true.</param>
+        /// <param name="request">The request.</param>
+        /// <returns>Always null.</returns>
         public string GetEtag(out bool useAsync, HttpServerRequest request)
         {
             request.SetResMime(Mime);
@@ -911,11 +1099,22 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// Not supported, API entries are always handled asynchronously (see <see cref="GetEtag"/>).
+        /// </summary>
+        /// <param name="request">Unused.</param>
+        /// <returns>Never returns.</returns>
+        /// <exception cref="NotImplementedException">Always.</exception>
         public HttpRequestData Get(HttpServerRequest request)
         {
             throw new NotImplementedException();
         }
 
+        /// <summary>
+        /// Run the GET invoker for GET requests, otherwise the POST invoker, tracking the call in the perf monitor.
+        /// </summary>
+        /// <param name="request">The request.</param>
+        /// <returns>The response body.</returns>
         async Task<HttpRequestData> IHttpRequestHandler.GetAsync(HttpServerRequest request)
         {
             if (request.HttpMethod == HttpServerMethods.GET)
@@ -928,11 +1127,23 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// Not supported.
+        /// </summary>
+        /// <param name="root">Unused.</param>
+        /// <returns>Never returns.</returns>
+        /// <exception cref="NotImplementedException">Always.</exception>
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(string root = null)
         {
             throw new NotImplementedException();
         }
 
+        /// <summary>
+        /// Not supported.
+        /// </summary>
+        /// <param name="context">Unused.</param>
+        /// <returns>Never returns.</returns>
+        /// <exception cref="NotImplementedException">Always.</exception>
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             throw new NotImplementedException();
@@ -968,6 +1179,9 @@ namespace SysWeaver.Net
         #region Helpers
 
 
+        /// <summary>
+        /// Deserialize the input from the query string (everything after '?') using <see cref="ApiIoParams"/>, default if there is no query string.
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static T Input_GET<T>(ApiHttpEntry api, HttpServerRequest request)
         {
@@ -982,6 +1196,9 @@ namespace SysWeaver.Net
         static void ThrowSerializer(String ct)
             => throw new Exception(String.Concat("Don't know how to deserialize using \"", ct, '"'));
 
+        /// <summary>
+        /// Read the entire request body into pooled memory (no size limit, the caller must dispose the result).
+        /// </summary>
         static async Task<IUnmanagedReadOnlyMemory<Byte>> Input_POST_Read(ApiHttpEntry api, HttpServerRequest request)
         {
             var s = (int)request.ReqContentLength;
@@ -992,6 +1209,12 @@ namespace SysWeaver.Net
             return ms.GetMemory();
         }
 
+        /// <summary>
+        /// Deserialize the input from the request body (or from a body previously stored in <see cref="HttpServerRequest.Custom"/>).
+        /// The body is decompressed according to Content-Encoding and deserialized using the serializer registered for the Content-Type (or <see cref="ApiIoParams.DefaultInput"/> if no Content-Type).
+        /// Returns default for an empty body.
+        /// </summary>
+        /// <exception cref="Exception">Unknown Content-Encoding or Content-Type.</exception>
         static async Task<T> Input_POST<T>(ApiHttpEntry api, HttpServerRequest request)
         {
             IUnmanagedReadOnlyMemory<Byte> dataMem = null;

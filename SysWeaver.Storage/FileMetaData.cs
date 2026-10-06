@@ -14,8 +14,14 @@ namespace SysWeaver
 
 
     /// <summary>
-    /// Tools for associating meta data with a file and rebuild it when the file has changed.
+    /// Tools for associating meta data (and derived files, such as compressed copies) with the content of a file, and rebuild it when the file has changed.
     /// </summary>
+    /// <remarks>
+    /// Meta data is keyed by the content hash of the file (see <see cref="FileHash"/>), so identical files share meta data and any change invalidates it.
+    /// The meta data is stored as gzip compressed json in a folder per key type (configurable using "FileMetaDataFolders" and "FileMetaData[KeyType]Folders" in the config),
+    /// and is pruned at process exit when it hasn't been used for the configured number of days.
+    /// Processing of a given content hash is serialized across processes using a <see cref="SystemLock"/>.
+    /// </remarks>
     public static class FileMetaData
     {
         /// <summary>
@@ -24,10 +30,11 @@ namespace SysWeaver
         /// <typeparam name="T">The data type (must be serializable using json)</typeparam>
         /// <param name="keyType">A unique key for this application, only valid file chars are allowed</param>
         /// <param name="filename">The file to read/process meta data about</param>
-        /// <param name="processMetaData">A function that is called to process the data, first argument in the filename supplied, second is the base name to use for any files associated with the meta data. third is the meta data if it exists, return non null to store meta data (typically when the supplied meta data was null)</param>
-        /// <param name="cacheExpirationDays">Number of days to keep this meta data around</param>
+        /// <param name="processMetaData">A function that is always called (while holding the lock): first argument is the filename supplied, second is the base name (full path without extension) to use for any files associated with the meta data, third is the existing meta data or null.
+        /// Return non null to store (replace) the meta data, or null to keep the existing meta data unchanged.</param>
+        /// <param name="cacheExpirationDays">Number of days to keep this meta data around (since last use)</param>
         /// <param name="keySuffix">Typically a string representation of the parameters, only valid file chars are allowed</param>
-        /// <returns>The meta data associated with the file</returns>
+        /// <returns>The meta data associated with the file, or null if the file doesn't exist</returns>
         public static T Process<T>(String keyType, String filename, Func<String, String, T, T> processMetaData, int cacheExpirationDays = 30, String keySuffix = "") where T : class, new()
         {
             var t = new FileMetaDataDb<T>(String.Join('_', typeof(T).Name, keyType), processMetaData, cacheExpirationDays, keySuffix);
@@ -40,10 +47,11 @@ namespace SysWeaver
         /// <typeparam name="T">The data type (must be serializable using json)</typeparam>
         /// <param name="keyType">A unique key for this application, only valid file chars are allowed</param>
         /// <param name="filename">The file to read/process meta data about</param>
-        /// <param name="processMetaData">A function that is called to process the data, first argument in the filename supplied, second is the base name to use for any files associated with the meta data. third is the meta data if it exists, return non null to store meta data (typically when the supplied meta data was null)</param>
-        /// <param name="cacheExpirationDays">Number of days to keep this meta data around</param>
+        /// <param name="processMetaData">A function that is always called (while holding the lock): first argument is the filename supplied, second is the base name (full path without extension) to use for any files associated with the meta data, third is the existing meta data or null.
+        /// Return non null to store (replace) the meta data, or null to keep the existing meta data unchanged.</param>
+        /// <param name="cacheExpirationDays">Number of days to keep this meta data around (since last use)</param>
         /// <param name="keySuffix">Typically a string representation of the parameters, only valid file chars are allowed</param>
-        /// <returns>The meta data associated with the file</returns>
+        /// <returns>The meta data associated with the file, or null if the file doesn't exist</returns>
         public static Task<T> ProcessAsync<T>(String keyType, String filename, Func<String, String, T, Task<T>> processMetaData, int cacheExpirationDays = 30, String keySuffix = "") where T : class, new()
         {
             var t = new FileMetaDataDbAsync<T>(String.Join('_', typeof(T).Name, keyType), processMetaData, cacheExpirationDays, keySuffix);
@@ -56,16 +64,25 @@ namespace SysWeaver
         /// <typeparam name="T">The data type (must be serializable using json)</typeparam>
         /// <param name="keyType">A unique key for this application, only valid file chars are allowed</param>
         /// <param name="filename">The file to read/process meta data about</param>
-        /// <param name="processMetaData">A function that is called to process the data, first argument in the filename supplied, second is the base name to use for any files associated with the meta data. third is the meta data if it exists, return non null to store meta data (typically when the supplied meta data was null)</param>
-        /// <param name="cacheExpirationDays">Number of days to keep this meta data around</param>
+        /// <param name="processMetaData">A synchronous function that is always called (while holding the lock): first argument is the filename supplied, second is the base name (full path without extension) to use for any files associated with the meta data, third is the existing meta data or null.
+        /// Return non null to store (replace) the meta data, or null to keep the existing meta data unchanged.</param>
+        /// <param name="cacheExpirationDays">Number of days to keep this meta data around (since last use)</param>
         /// <param name="keySuffix">Typically a string representation of the parameters, only valid file chars are allowed</param>
-        /// <returns>The meta data associated with the file</returns>
+        /// <returns>The meta data associated with the file, or null if the file doesn't exist</returns>
         public static Task<T> ProcessAsync<T>(String keyType, String filename, Func<String, String, T, T> processMetaData, int cacheExpirationDays = 30, String keySuffix = "") where T : class, new()
         {
             var t = new FileMetaDataDbAsync<T>(String.Join('_', typeof(T).Name, keyType), processMetaData, cacheExpirationDays, keySuffix);
             return t.ProcessAsync(filename);
         }
 
+        /// <summary>
+        /// Get the folder to use for meta data of a given key type and key name.
+        /// The first call for a key type (case insensitive) determines the folders and expiration for that key type, and registers pruning at process exit.
+        /// </summary>
+        /// <param name="keyName">The name used to select one of the configured folders (if there are many).</param>
+        /// <param name="keyType">The key type, only valid file chars are allowed.</param>
+        /// <param name="cacheExpirationDays">Number of days to keep unused meta data, only used by the first call for a key type.</param>
+        /// <returns>The full path of the folder.</returns>
         public static String GetTempFolder(String keyName, String keyType, int cacheExpirationDays = 30)
         {
             var key = keyType.FastToLower();
@@ -84,12 +101,25 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// The serializer used for meta data files (json).
+        /// </summary>
         public static readonly ISerializerType Serializer = SerManager.Get("json");
+        /// <summary>
+        /// The compressor used for meta data files (gzip).
+        /// </summary>
         public static readonly ICompType Compressor = CompManager.GetFromHttp("gzip");
+        /// <summary>
+        /// The file extension of meta data files, ex: ".json.gz".
+        /// </summary>
         public static readonly String FileExt = "." + Serializer.Extension + "." + (Compressor.FileExtensions.FirstOrDefault() ?? Compressor.HttpCode);
 
         static readonly ConcurrentDictionary<String, CleanUp> CleansUps = new ConcurrentDictionary<string, CleanUp>(StringComparer.Ordinal);
 
+        /// <summary>
+        /// Base names (full paths without extension) whose associated files should be deleted at process exit, used when meta data couldn't be saved.
+        /// Only processed if at least one key type have been used.
+        /// </summary>
         public static readonly ConcurrentQueue<String> AdditionalCleanup = new ConcurrentQueue<string>();
 
         /// <summary>
@@ -240,6 +270,9 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// The resolved folders (P) and the negative expiration in days (C) of a key type, registers pruning of the folders at process exit.
+        /// </summary>
         sealed class CleanUp
         {
             public readonly String[] P;

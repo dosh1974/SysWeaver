@@ -15,15 +15,18 @@ namespace SysWeaver
 
 
     /// <summary>
-    /// Implements a thread safe cache that removes it's items after the specified duration (or at the time returned by an expiration function).
-    /// Item's have the same expiration duration.
-    /// If you need to have per item life times, use the MemCache class instead.
+    /// Implements a thread safe cache that removes its items after a fixed duration (or at the time returned by an expiration function).
     /// </summary>
     /// <remarks>
-    /// The expiration time of an item is computed when the item is added / updated, reading an item doesn't extend it's life time.
+    /// The expiration time of an item is computed when the item is added / updated, reading an item doesn't extend its life time.
     /// Expired items are never returned, they are removed (pruned) from the cache on any write (or when <see cref="Prune"/> is called).
-    /// Updates of the same key are serialized using a per key lock, so a value factory is only executed once for a key at the same time.
+    /// Pruning walks a queue in insertion order and stops at the first item that hasn't expired, so it works best when the expiration times are (roughly) increasing,
+    /// like with a fixed duration.
+    /// Updates of the same key are serialized using a per key spin lock (a lock entry in a concurrent dictionary), so a value factory is only executed once for a key at the same time.
+    /// Callers waiting for the key lock spin / sleep (they block a thread, even in the async methods).
     /// Keys can't be null.
+    /// Async methods with waitUntilReady = false store a pending entry while the value is created in the background,
+    /// the synchronous methods (GetOrUpdate etc) treat that entry as a cache hit and return default until the value is ready.
     /// </remarks>
     /// <typeparam name="K">The type of the key</typeparam>
     /// <typeparam name="V">The type of the value</typeparam>
@@ -31,7 +34,7 @@ namespace SysWeaver
     {
 
         /// <summary>
-        /// Creates a cache that removes it's items after the specified duration (after they are added or updated)
+        /// Creates a cache that removes its items after the specified duration (after they are added or updated)
         /// </summary>
         /// <param name="timeout">The duration to keep items in the cache (after they are added or updated).
         /// A zero or negative duration means that items expire immediately (nothing is cached).
@@ -62,10 +65,11 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Creates a cache that removes it's items after the specified duration (after last request)
+        /// Creates a cache where the expiration time of every item is computed by a function (when the item is added or updated)
         /// </summary>
-        /// <param name="getExpirationTimeUtc">A function that gets the expiration time (as UTC) of a value, called every time a value is added or updated.
-        /// Return <see cref="DateTime.MaxValue"/> for items that should never expire.</param>
+        /// <param name="getExpirationTimeUtc">A function that gets the expiration time (as UTC) of a value, called every time a value is added or updated (while holding the key lock).
+        /// Return <see cref="DateTime.MaxValue"/> for items that should never expire.
+        /// Note that an item that expires later than items added after it delays the pruning of those items (see <see cref="Prune"/>).</param>
         /// <param name="comparer">An optional key comparer, null to use the default comparer</param>
         /// <exception cref="ArgumentNullException"><paramref name="getExpirationTimeUtc"/> is null</exception>
         public FastMemCache(Func<V, DateTime> getExpirationTimeUtc, IEqualityComparer<K> comparer = null)
@@ -966,6 +970,7 @@ namespace SysWeaver
         /// </summary>
         /// <remarks>
         /// Pruning is performed automatically after every write.
+        /// Items are pruned in insertion order, pruning stops at the first item (in insertion order) that hasn't expired yet.
         /// Items that are locked (being updated) at the time of the prune are pruned later.
         /// </remarks>
         public void Prune()
@@ -1028,7 +1033,8 @@ namespace SysWeaver
         /// <param name="key">The key of the item to remove</param>
         /// <returns>True if an item was removed (expired items that haven't been pruned yet are also removed), false if there was no item with the key</returns>
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null</exception>
-        /// <remarks>Waits for any ongoing update of the key, must not be called for the same key from within a value factory (dead lock).</remarks>
+        /// <remarks>If an item exists, waits for any ongoing update of the key (must not be called for the same key from within a value factory, dead lock).
+        /// If no item exists, false is returned immediately (an ongoing update will add its value afterwards).</remarks>
         public bool Remove(K key)
         {
             var c = C;

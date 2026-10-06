@@ -3,7 +3,7 @@ using System;
 namespace SysWeaver.Data
 {
     /// <summary>
-    /// Format valus as:
+    /// Format values as:
     /// Format as a decimal number.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
@@ -30,7 +30,8 @@ namespace SysWeaver.Data
         /// {2} = Value before formatting.
         /// {3} = The text (after formatting). 
         /// </param>
-        /// <param name="copyOnClick">Copy the value to the clipboard on click.</param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.
+        /// Note: The web client currently treats any present value as true, so false doesn't disable copy on click.</param>
         public TableDataNumberAttribute(int decimals = -2, String textFormat = "{0}", String titleFormat = "Raw: {2}", bool copyOnClick = true)
             : base(TableDataFormats.Number, decimals, textFormat ?? "{0}", titleFormat ?? "Raw: {2}", copyOnClick)
         {
@@ -52,14 +53,26 @@ namespace SysWeaver.Data
     /// <summary>
     /// Use this attribute to mark a data table "column" as the primary key (used by default when creating a graph from a column)
     /// </summary>
+    /// <remarks>
+    /// Put on the row type, at most 7 columns can be part of the primary key.
+    /// Building the table data type information throws if a name doesn't match a column name.
+    /// If no primary key is specified, the first column with a <see cref="TableDataKeyAttribute"/> becomes the primary key.
+    /// </remarks>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = false)]
     public class TableDataPrimaryKeyAttribute : Attribute
     {
+        /// <summary>
+        /// Specify the primary key columns.
+        /// </summary>
+        /// <param name="primaryKeyNames">The column names (in order) that make up the primary key</param>
         public TableDataPrimaryKeyAttribute(params String[] primaryKeyNames)
         {
             PrimaryKeyNames = primaryKeyNames;
         }
 
+        /// <summary>
+        /// The column names (in order) that make up the primary key
+        /// </summary>
         public readonly String[] PrimaryKeyNames;
     }
 
@@ -67,14 +80,25 @@ namespace SysWeaver.Data
     /// <summary>
     /// Use this attribute to mark a data table "column" as potential key (optionally used by default when creating a graph from a column)
     /// </summary>
+    /// <remarks>
+    /// Sets <see cref="TableDataColumnProps.IsKey"/> on the column (unless it becomes the primary key).
+    /// If the type has no primary key, the first column with this attribute is used as the primary key instead.
+    /// </remarks>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false)]
     public class TableDataKeyAttribute : Attribute
     {
+        /// <summary>
+        /// Mark (or explicitly unmark) a column as a potential key.
+        /// </summary>
+        /// <param name="isKey">True if the column is a potential key</param>
         public TableDataKeyAttribute(bool isKey = true)
         {
             IsKey = isKey;
         }
 
+        /// <summary>
+        /// True if the column is a potential key
+        /// </summary>
         public readonly bool IsKey;
     }
 
@@ -82,7 +106,7 @@ namespace SysWeaver.Data
 
 
     /// <summary>
-    /// Format valus as an amount in USD dollars.
+    /// Format values as an amount in USD dollars.
     /// Ex: "$ 22.50"
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
@@ -98,7 +122,8 @@ namespace SysWeaver.Data
         /// {2} = Value before formatting.
         /// {3} = The text (after formatting). 
         /// </param>
-        /// <param name="copyOnClick">Copy the value to the clipboard on click.</param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.
+        /// Note: The web client currently treats any present value as true, so false doesn't disable copy on click.</param>
         public TableDataAmountUSDAttribute(String titleFormat = "USD {2}", bool copyOnClick = true)
             : base(TableDataFormats.Number, 2, "$ {0}", titleFormat ?? "USD {2}", copyOnClick)
         {

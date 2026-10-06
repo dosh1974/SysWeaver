@@ -16,6 +16,9 @@ namespace SysWeaver.Data
         {
             Name = name;
         }
+        /// <summary>
+        /// The name (unique id) to use for this column
+        /// </summary>
         public readonly String Name;
     }
 

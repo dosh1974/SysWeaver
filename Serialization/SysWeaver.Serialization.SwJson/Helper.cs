@@ -5,10 +5,18 @@ using System.Runtime.CompilerServices;
 
 namespace SysWeaver.Serialization.SwJson
 {
+    /// <summary>
+    /// Reflection helpers used when building the reader/writer expression trees.
+    /// In DEBUG builds a missing (or ambiguous) method throws an exception naming the method and type, in release builds these are plain <see cref="Type.GetMethod(string)"/> calls (that return null for a missing method).
+    /// </summary>
     static class Helper
     {
 #if DEBUG
 
+        /// <summary>
+        /// Get a public method by name, see <see cref="Type.GetMethod(string)"/>.
+        /// </summary>
+        /// <exception cref="Exception">The method wasn't found or is ambiguous</exception>
         public static MethodInfo SafeGetMethod(Type t, String name)
         {
             MethodInfo m;
@@ -25,6 +33,10 @@ namespace SysWeaver.Serialization.SwJson
             return m;
         }
 
+        /// <summary>
+        /// Get a method by name and binding flags, see <see cref="Type.GetMethod(string, BindingFlags)"/>.
+        /// </summary>
+        /// <exception cref="Exception">The method wasn't found or is ambiguous</exception>
         public static MethodInfo SafeGetMethod(Type t, String name, BindingFlags b)
         {
             MethodInfo m;
@@ -41,6 +53,10 @@ namespace SysWeaver.Serialization.SwJson
             return m;
         }
 
+        /// <summary>
+        /// Get a public method by name and parameter types, see <see cref="Type.GetMethod(string, Type[])"/>.
+        /// </summary>
+        /// <exception cref="Exception">The method wasn't found</exception>
         public static MethodInfo SafeGetMethod(Type t, String name, params Type[] b)
         {
             MethodInfo m;
@@ -57,6 +73,10 @@ namespace SysWeaver.Serialization.SwJson
             return m;
         }
 
+        /// <summary>
+        /// Get a method by name, binding flags and parameter types, see <see cref="Type.GetMethod(string, BindingFlags, Type[])"/>.
+        /// </summary>
+        /// <exception cref="Exception">The method wasn't found</exception>
         public static MethodInfo SafeGetMethod(Type t, String name, BindingFlags b, params Type[] types)
         {
             MethodInfo m;
@@ -73,6 +93,10 @@ namespace SysWeaver.Serialization.SwJson
             return m;
         }
 
+        /// <summary>
+        /// Get a method, see <see cref="Type.GetMethod(string, BindingFlags, Binder, Type[], ParameterModifier[])"/>.
+        /// </summary>
+        /// <exception cref="Exception">The method wasn't found</exception>
         public static MethodInfo SafeGetMethod(Type t, String name, BindingFlags b, Binder binder, Type[] types, ParameterModifier[] mods)
         {
             MethodInfo m;
@@ -91,30 +115,45 @@ namespace SysWeaver.Serialization.SwJson
 
 #else //DEBUG
 
+        /// <summary>
+        /// Get a public method by name, see <see cref="Type.GetMethod(string)"/> (null if not found).
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static MethodInfo SafeGetMethod(Type t, String name)
         {
             return t.GetMethod(name);
         }
 
+        /// <summary>
+        /// Get a method by name and binding flags, see <see cref="Type.GetMethod(string, BindingFlags)"/> (null if not found).
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static MethodInfo SafeGetMethod(Type t, String name, BindingFlags b)
         {
             return t.GetMethod(name, b);
         }
 
+        /// <summary>
+        /// Get a public method by name and parameter types, see <see cref="Type.GetMethod(string, Type[])"/> (null if not found).
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static MethodInfo SafeGetMethod(Type t, String name, params Type[] b)
         {
             return t.GetMethod(name, b);
         }
 
+        /// <summary>
+        /// Get a method by name, binding flags and parameter types, see <see cref="Type.GetMethod(string, BindingFlags, Type[])"/> (null if not found).
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static MethodInfo SafeGetMethod(Type t, String name, BindingFlags b, params Type[] types)
         {
             return t.GetMethod(name, b, types);
         }
 
+        /// <summary>
+        /// Get a method, see <see cref="Type.GetMethod(string, BindingFlags, Binder, Type[], ParameterModifier[])"/> (null if not found).
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static MethodInfo SafeGetMethod(Type t, String name, BindingFlags b, Binder binder, Type[] types, ParameterModifier[] mods)
         {

@@ -9,18 +9,39 @@ using SysWeaver.Docs;
 namespace SysWeaver.Translation
 {
 
+    /// <summary>
+    /// Non-generic access to the generated translator of a type, see <see cref="TypeTranslator.TryGetTranslator(Type, out ITypeTranslator)"/>.
+    /// </summary>
     public interface ITypeTranslator
     {
+        /// <summary>
+        /// Translates an object (boxed, must be of the translator type) in place, null if the type have nothing to translate.
+        /// Arguments: translator, target language ISO code, object, effort, cache retention.
+        /// </summary>
         Func<ITranslator, String, Object, TranslationEffort, TranslationCacheRetention, Task> ObjTranslator { get; }
+        /// <summary>
+        /// The expression tree of the strongly typed translator, null if the type have nothing to translate.
+        /// </summary>
         LambdaExpression TransExp { get; }
 
+        /// <summary>
+        /// The strongly typed translator as a <see cref="Delegate"/>
+        /// (a Func&lt;ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task&gt;), null if the type have nothing to translate.
+        /// </summary>
         Delegate DelTranslator { get; }
 
+        /// <summary>
+        /// True if the source language of any translated member (including members of element types) is determined at runtime
+        /// using <see cref="AutoTranslateDynLanguageAttribute"/>.
+        /// </summary>
         bool HaveDynamicSourceLanguage { get; }
 
     }
 
 
+    /// <summary>
+    /// Determines if a type (recursively) contains any members that should be translated.
+    /// </summary>
     static class TypeTranslationTest
     {
 
@@ -31,6 +52,14 @@ namespace SysWeaver.Translation
             return HaveTranslations(seenTypes, t, haveTrans);
         }
 
+        /// <summary>
+        /// Check if a type have any public instance <see cref="String"/> fields / properties marked with <see cref="AutoTranslateAttribute"/>,
+        /// directly or through members of other types, array / <see cref="IEnumerable{T}"/> element types or dictionary value types.
+        /// </summary>
+        /// <param name="seenTypes">Types already visited (used to break cycles), visited types are added</param>
+        /// <param name="t">The type to test</param>
+        /// <param name="haveTrans">The result so far, returned as is for already seen, primitive, abstract, interface and enum types</param>
+        /// <returns>True if any translatable member was found (or <paramref name="haveTrans"/> was true)</returns>
         public static bool HaveTranslations(HashSet<Type> seenTypes, Type t, bool haveTrans = false)
         {
             if (!seenTypes.Add(t))
@@ -79,10 +108,33 @@ namespace SysWeaver.Translation
     }
 
 
+    /// <summary>
+    /// Generates (once, in the static constructor) code that translates all members marked with <see cref="AutoTranslateAttribute"/> of <typeparamref name="T"/> in place.
+    /// Use <see cref="TypeTranslator"/> for the public API.
+    /// </summary>
+    /// <typeparam name="T">The type to translate</typeparam>
+    /// <remarks>
+    /// Supports classes / structs (public instance fields and properties), arrays, <see cref="IEnumerable{T}"/> and dictionaries (values only),
+    /// note that generic collections with translatable elements currently fail (see <c>BuildEnumerable</c>).
+    /// Translations of struct members are written to a copy and are lost.
+    /// All translations of an object are started concurrently and awaited using <see cref="Task.WhenAll(IEnumerable{Task})"/>.
+    /// Invalid attribute usage (ex: unknown context member names) throws while generating the code, i.e. a <see cref="TypeInitializationException"/>.
+    /// Instances are stateless, they only expose the static members through <see cref="ITypeTranslator"/>.
+    /// </remarks>
     public sealed class TypeTranslatorT<T> : ITypeTranslator
     {
+        /// <summary>
+        /// Translates an instance of <typeparamref name="T"/> in place, null if <typeparamref name="T"/> have nothing to translate.
+        /// Arguments: translator, target language ISO code, instance (null is ignored), effort, cache retention.
+        /// </summary>
         public static readonly Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task> Translate;
+        /// <summary>
+        /// Same as <see cref="Translate"/> but takes a boxed instance, null if <typeparamref name="T"/> have nothing to translate.
+        /// </summary>
         public static readonly Func<ITranslator, String, Object, TranslationEffort, TranslationCacheRetention, Task> TranslateObj;
+        /// <summary>
+        /// The expression tree that <see cref="Translate"/> was compiled from, null if <typeparamref name="T"/> have nothing to translate.
+        /// </summary>
         public static readonly LambdaExpression Exp;
         static readonly bool InternalHaveDynamicSourceLanguage;
         static readonly Type[] ElementTypes;
@@ -111,12 +163,20 @@ namespace SysWeaver.Translation
 
 
 
+        /// <summary>
+        /// Returns <see cref="Translate"/>.
+        /// </summary>
         public Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task> Translator => Translate;
+        /// <inheritdoc/>
         public Func<ITranslator, String, Object, TranslationEffort, TranslationCacheRetention, Task> ObjTranslator => TranslateObj;
+        /// <inheritdoc/>
         public LambdaExpression TransExp => Exp;
 
+        /// <inheritdoc/>
         public Delegate DelTranslator => Translate;
 
+        /// <inheritdoc/>
+        /// <remarks>Lazily computed and cached (benign race, may be computed more than once).</remarks>
         public bool HaveDynamicSourceLanguage
         {
             get
@@ -131,6 +191,12 @@ namespace SysWeaver.Translation
         }
 
 
+        /// <summary>
+        /// Adds code to <paramref name="prog"/> that starts the translation of a single string member (if not null) and adds the task to the task list.
+        /// The context is built from the XML doc summary, <see cref="AutoTranslateContextAttribute"/> (formatted using member values) and the translator type,
+        /// the source language from the attribute or the member named by <paramref name="fromLanguageMember"/>.
+        /// </summary>
+        /// <returns>The variable that holds the original value (must be added to the block variables)</returns>
         static ParameterExpression TranslateString(ref bool haveDynamicSourceLanguage, Dictionary<String, Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task<String>>> members, List<Expression> prog, ParameterExpression p, Expression src, IXmlDocInfo context, AutoTranslateAttribute attr, IEnumerable<AutoTranslateContextAttribute> contextAttributes, String memberName, TranslatorTypes trTypes, String fromLanguageMember)
         {
             var strParams = TypeTranslator.ParamString;
@@ -375,6 +441,9 @@ namespace SysWeaver.Translation
         }
 
 
+        /// <summary>
+        /// Builds code that translates all public instance fields and properties of an object, null if there is nothing to translate.
+        /// </summary>
         static Expression BuildObject(ref bool haveDynamicSourceLanguage, Dictionary<String, Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task<String>>> members, Type t, ParameterExpression p)
         {
             var taskList = TypeTranslator.VarTaskList;
@@ -456,6 +525,9 @@ namespace SysWeaver.Translation
             prog.Add(addOne);
         }
 
+        /// <summary>
+        /// Builds code that translates all elements of a (single dimensional) array, null if the element type have nothing to translate.
+        /// </summary>
         static Expression BuildArray(out Type et, Type t, ParameterExpression p)
         {
             et = t.GetElementType();
@@ -495,6 +567,11 @@ namespace SysWeaver.Translation
             return pr;
         }
 
+        /// <summary>
+        /// Builds code that enumerates a sequence and translates every element (or the value selected by <paramref name="getVal"/>),
+        /// null if the element type have nothing to translate.
+        /// </summary>
+        /// <remarks>NOTE: Currently throws for any element type that have something to translate (wrong Func arity, see bug report).</remarks>
         static Expression BuildEnumerable(Type t, Type enumerableType, Type et, ParameterExpression p, Func<Expression, Expression> getVal)
         {
             if (!TypeTranslator.TryGetTranslator(et, out var vt))

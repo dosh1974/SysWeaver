@@ -8,7 +8,7 @@ using System.Runtime.Intrinsics;
 namespace SysWeaver
 {
     /// <summary>
-    /// The implementation of the frozen string trees (FrozenStringTree and FrozenStringTreeList), a tree of strings that makes it fast to check if a text starts with ANY of the contained strings.
+    /// The implementation of the frozen string trees (<see cref="FrozenStringTree"/> and <see cref="FrozenStringTreeList{T}"/>), a tree of strings that makes it fast to check if a text starts with ANY of the contained strings.
     /// A leaf (the string, or the values of the string) is stored for every string in the tree (as an object, the derived classes have the typed public api, so that all code is compiled for the exact type).
     /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
     /// </summary>
@@ -21,6 +21,7 @@ namespace SysWeaver
     /// - Small trees (at most 32 strings of at least 4 chars, the typical use case) doesn't walk the tree in StartsWithAny, the first 4 - 8 chars (the length of the shortest string, at most 8) are looked up in a collision free hash table instead,
     ///   followed by a compare of the strings that starts with them. Case in-sensitive trees use the tree if the text isn't ASCII.
     /// For case in-sensitive trees all chars (keys and labels) are upper cased (using CharExt.FastToUpper).
+    /// Immutable after construction, so all searches are thread safe. The search results are equivalent to the mutable source trees (<see cref="StringTree"/> and <see cref="StringTreeList{T}"/>).
     /// </remarks>
     public abstract class FrozenStringTrie
     {
@@ -39,7 +40,7 @@ namespace SysWeaver
         /// Find the longest string (in the tree), that matches the text
         /// </summary>
         /// <param name="text">The text to match against the strings in the tree, may not be empty (from the start offset)</param>
-        /// <param name="start">An optional start offset, must be less than the length of the text</param>
+        /// <param name="start">An optional start offset, must be less than the length of the text (in release builds a start at or beyond the end returns null, a negative start throws an <see cref="IndexOutOfRangeException"/>)</param>
         /// <returns>The leaf of the longest found match or null if no match is found</returns>
         private protected Object StartsWithAnyLeaf(String text, int start)
         {
@@ -130,6 +131,13 @@ namespace SysWeaver
             return null;
         }
 
+        /// <summary>
+        /// Find the longest match by walking the tree
+        /// </summary>
+        /// <typeparam name="T">How chars are compared (<see cref="ExactChars"/> or <see cref="UpperChars"/>)</typeparam>
+        /// <param name="text">The text</param>
+        /// <param name="start">The start offset</param>
+        /// <returns>The leaf of the longest match or null</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         Object StartsWithAny<T>(String text, int start) where T : struct, IChars
         {
@@ -266,9 +274,9 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get the leafs of all strings contained in the tree, in any order
+        /// Get the leafs of all strings contained in the tree, in any order (node order, breadth first)
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The leafs (lazily enumerated)</returns>
         private protected IEnumerable<TLeaf> GetAllLeafs<TLeaf>() where TLeaf : class
         {
             var nodes = Nodes;
@@ -281,9 +289,9 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get the leafs of all strings contained in the tree, ordered by key
+        /// Get the leafs of all strings contained in the tree, ordered by key (a string comes before the strings that it's a prefix of)
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A new list of leafs</returns>
         private protected IEnumerable<TLeaf> GetAllLeafsInOrder<TLeaf>() where TLeaf : class
         {
             List<TLeaf> found = new();
@@ -292,9 +300,9 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get the leafs of all strings contained in the tree, in reverse key order
+        /// Get the leafs of all strings contained in the tree, in the reverse order of <see cref="GetAllLeafsInOrder{TLeaf}"/>
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A new list of leafs</returns>
         private protected IEnumerable<TLeaf> GetAllLeafsInReverseOrder<TLeaf>() where TLeaf : class
         {
             List<TLeaf> found = new();
@@ -306,6 +314,9 @@ namespace SysWeaver
 
         #region Implementation
 
+        /// <summary>
+        /// A node of the compressed trie (a key char, an optional label and an optional leaf)
+        /// </summary>
         struct Node
         {
             /// <summary>
@@ -394,6 +405,9 @@ namespace SysWeaver
         /// </summary>
         readonly PairBits Pairs;
 
+        /// <summary>
+        /// 256 * 64 bits, one bit for every pair of ASCII chars (see <see cref="Pairs"/>)
+        /// </summary>
         [InlineArray(256)]
         struct PairBits
         {
@@ -445,12 +459,18 @@ namespace SysWeaver
         /// </summary>
         readonly Char[] FastChars;
 
+        /// <summary>
+        /// The group index (a byte) of every hash slot
+        /// </summary>
         [InlineArray(256)]
         struct FastSlotBytes
         {
             Byte Slot;
         }
 
+        /// <summary>
+        /// The strings (of a small tree) that have the same key
+        /// </summary>
         struct FastGroup
         {
             /// <summary>
@@ -467,6 +487,9 @@ namespace SysWeaver
             public int Count;
         }
 
+        /// <summary>
+        /// A string (of a small tree) in a group, with the chars that must be compared (the chars that the key doesn't cover)
+        /// </summary>
         struct FastCandidate
         {
             /// <summary>
@@ -507,13 +530,24 @@ namespace SysWeaver
         const UInt64 LooseCase = 0x0020002000200020UL;
 
         /// <summary>
-        /// Create a key from the first 4 chars (as they are read from memory)
+        /// Create a key from the first 4 chars (as they are read from memory, little endian)
         /// </summary>
         static UInt64 Key(ReadOnlySpan<Char> s) => MemoryMarshal.Read<UInt64>(MemoryMarshal.AsBytes(s.Slice(0, 4)));
 
+        /// <summary>
+        /// Hash a key to a slot (the top 8 bits of a multiplicative hash)
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static int FastHash(UInt64 k0, UInt64 k1, UInt64 m0, UInt64 m1) => (int)(((k0 * m0) + (k1 * m1)) >> 56);
 
+        /// <summary>
+        /// Find a child of a node (using the lookup table, a linear scan or a vectorized search)
+        /// </summary>
+        /// <param name="node">The node, must have at least one child</param>
+        /// <param name="keys">The start of <see cref="Keys"/></param>
+        /// <param name="table">The start of <see cref="Table"/></param>
+        /// <param name="c">The (folded) char</param>
+        /// <returns>The index of the child (relative to the first child), or -1 if not found</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static int FindChild(ref Node node, ref Char keys, ref Byte table, Char c)
         {
@@ -591,9 +625,11 @@ namespace SysWeaver
         /// </summary>
         readonly struct ExactChars : IChars
         {
+            /// <inheritdoc/>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public Char Fold(Char c) => c;
 
+            /// <inheritdoc/>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool Equals(ref Char text, ref Char label, int length)
             {
@@ -627,6 +663,7 @@ namespace SysWeaver
         /// </summary>
         readonly struct UpperChars : IChars
         {
+            /// <inheritdoc/>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public Char Fold(Char c)
             {
@@ -634,6 +671,7 @@ namespace SysWeaver
                 return c < (uint)u.Length ? u[c] : c.FastToUpper();
             }
 
+            /// <inheritdoc/>
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool Equals(ref Char text, ref Char label, int length)
             {
@@ -700,15 +738,15 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// The number of nodes in the tree
+        /// The number of nodes in the (compressed) tree, including the root
         /// </summary>
         private protected int NodeCount => Nodes.Length;
 
         /// <summary>
         /// Create a tree
         /// </summary>
-        /// <param name="root">The root of the tree (the root leaf is ignored)</param>
-        /// <param name="caseInSensitive">True if the tree is case in-sensitive (all keys are folded)</param>
+        /// <param name="root">The root of the tree (the root leaf is ignored), the source isn't referenced after construction (but the leafs are)</param>
+        /// <param name="caseInSensitive">True if the tree is case in-sensitive (all keys must already be folded using CharExt.FastToUpper)</param>
         private protected FrozenStringTrie(FrozenStringTrieSource root, bool caseInSensitive)
         {
             CaseInSensitive = caseInSensitive;

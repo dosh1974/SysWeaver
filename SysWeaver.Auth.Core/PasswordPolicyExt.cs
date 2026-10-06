@@ -3,14 +3,18 @@ using System.Collections.Generic;
 
 namespace SysWeaver.Auth
 {
+    /// <summary>
+    /// Extensions for <see cref="PasswordPolicy"/>.
+    /// </summary>
     public static class PasswordPolicyExt
     {
         /// <summary>
-        /// Returns a new policy with the lowest common restriction
+        /// Returns a new policy that combines two policies: the smallest minimum length, the smallest maximum length and only the character class requirements that both have.
+        /// Note: unlike <see cref="Min(IEnumerable{PasswordPolicy})"/> the maximum length is the more restrictive (smaller) value.
         /// </summary>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <returns>A policy with the lowest common restriction of the inputs</returns>
+        /// <param name="a">The first policy</param>
+        /// <param name="b">The second policy</param>
+        /// <returns>A new policy</returns>
         public static PasswordPolicy Min(this PasswordPolicy a, PasswordPolicy b)
         {
             return new PasswordPolicy
@@ -25,9 +29,9 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Returns a new policy with the lowest common restriction
+        /// Returns a new policy with the lowest common restriction: the smallest minimum length, the largest maximum length and only the character class requirements that all have.
         /// </summary>
-        /// <param name="policies"></param>
+        /// <param name="policies">The policies, should contain at least one policy (an empty sequence gives a policy that rejects all passwords)</param>
         /// <returns>A policy with the lowest common restriction of the inputs</returns>
         public static PasswordPolicy Min(IEnumerable<PasswordPolicy> policies)
         {
@@ -58,8 +62,8 @@ namespace SysWeaver.Auth
         /// Check a password against a password policy
         /// </summary>
         /// <param name="policy">The policy</param>
-        /// <param name="password">The password</param>
-        /// <returns>The status of the password</returns>
+        /// <param name="password">The password, null is treated as too short</param>
+        /// <returns>The status of the password, the first failing requirement is reported in the order: length, letter, case, number, special</returns>
         public static PasswordStatus Check(this PasswordPolicy policy, String password)
         {
             if (password == null)

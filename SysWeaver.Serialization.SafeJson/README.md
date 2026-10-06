@@ -26,19 +26,24 @@ flowchart LR
 
 ## Key features
 
-- Highest priority of all JSON serializers, so registering it makes it *the* JSON implementation of the process.
-- Human-readable formatted output available for diagnostics.
+- `SafeJsonSerializer` (singleton `Instance`) has priority 10, the highest of all bundled JSON serializers, so registering it makes it *the* JSON implementation of the process.
+- `Compact` and `Typeless` output is written by SysWeaver.Json; `Verbose` output is written by Newtonsoft (indented, `$type` on every object); all input is read by Newtonsoft.
+- `SafeJsonSerializer.ToFormattedJson` gives human-readable output (byte arrays as aligned number rows) for diagnostics.
 
 ## Limitations and considerations
 
 - Reading and writing use different engines; types must serialize compatibly with both.
 - Pulls in both the SysWeaver JSON and Newtonsoft JSON plug-ins.
+- Reading goes through Newtonsoft with `$type` handling enabled and no type allow list, so despite the name it is not hardened against hostile input (see [SysWeaver.Serialization.NewtonsoftJson](../Serialization/SysWeaver.Serialization.NewtonsoftJson/README.md)).
+- Registering it does not register the Newtonsoft and SysWeaver.Json serializers themselves; they are only used internally.
 
 ## Using it
 
 ```json
 { "Type": "SysWeaver.Serialization.SafeJsonSerializer, SysWeaver.Serialization.SafeJson" }
 ```
+
+Or register it from code at startup: `SysWeaver.Serialization.SafeJsonSerializer.Register();`
 
 ## Relationships
 

@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.Translation
 {
+    /// <summary>
+    /// The type of text of an auto translated member, see <see cref="AutoTranslateTypeAttribute"/>
+    /// </summary>
     public enum TranslatorTypes
     {
         /// <summary>

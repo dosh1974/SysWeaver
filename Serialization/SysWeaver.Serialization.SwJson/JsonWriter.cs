@@ -16,33 +16,57 @@ namespace SysWeaver.Serialization.SwJson
 {
 
     /// <summary>
-    /// Methods for serializing an object to a buffer
+    /// Methods for serializing an object to UTF8 json (a byte buffer or a string).
     /// </summary>
+    /// <remarks>
+    /// A writer is generated (expression trees, compiled) for every type the first time it's used and cached for the lifetime of the process, so the first call for a type is slow.
+    /// Supported: primitives, decimal, string, char, enums (as their numeric value), DateTime, DateOnly, TimeOnly, TimeSpan, DateTimeOffset, Guid, byte[] (base64), Nullable&lt;T&gt;,
+    /// one dimensional arrays and other <see cref="ICollection{T}"/> types (json arrays), <see cref="IDictionary{TKey, TValue}"/> with string, char, integer, bool, TimeSpan, DateTime or Guid keys (json objects),
+    /// and classes / structs (json objects with the public instance fields and the public read / write properties, bounded types first, then sorted by type and name).
+    /// Interfaces and abstract types are written using the runtime type of the value.
+    /// When the runtime type of a value differs from the declared type, the value is written as {"$type":"name",...} (see <see cref="ToTypename"/>), except for primitive like types if typeIsOptional is true.
+    /// Collections and dictionaries with type information are written as {"$type":"name","$values":[...]} and primitives as {"$type":"name","$value":value}.
+    /// Numbers and dates are always formatted using the invariant culture. NaN and infinities are written as the (non standard json) tokens NaN, Infinity and -Infinity.
+    /// The methods are thread safe, but the static configuration (<see cref="AssemblyMap"/>, <see cref="NamespaceMap"/>, <see cref="ToTypename"/>) must be set up before the first use.
+    /// </remarks>
     [SkipLocalsInit]
     unsafe public static partial class JsonWriter
     {
 
         /// <summary>
-        /// Remapping of assembly names for type names 
+        /// Remapping of assembly names for type names (key is the simple assembly name, like "MyAssembly"), used by <see cref="DefaultTypename"/>.
+        /// An empty value removes the assembly name from the type name.
         /// </summary>
+        /// <remarks>
+        /// Not thread safe, configure before the first use (type names are embedded in the cached writers when a type is first used).
+        /// </remarks>
         public static readonly Dictionary<String, String> AssemblyMap = new Dictionary<string, string>(StringComparer.Ordinal);
 
         /// <summary>
-        /// Remapping of namespaces for type names
+        /// Remapping of namespaces for type names (key is the full namespace of the type), used by <see cref="DefaultTypename"/>.
+        /// An empty value removes the namespace from the type name.
         /// </summary>
+        /// <remarks>
+        /// Not thread safe, configure before the first use (type names are embedded in the cached writers when a type is first used).
+        /// Not applied to generic types (the full name of a generic type includes the assembly qualified type arguments, so the namespace isn't matched) or to generic type arguments.
+        /// </remarks>
         public static readonly Dictionary<String, String> NamespaceMap = new Dictionary<string, string>(StringComparer.Ordinal);
 
         /// <summary>
-        /// Function that maps from a Type to an assembly qualified typename
+        /// Function that maps from a Type to the type name written as "$type" (by default <see cref="DefaultTypename"/>).
         /// </summary>
+        /// <remarks>
+        /// Set before the first use, the type names are embedded in the cached writers when a type is first used.
+        /// </remarks>
         public static Func<Type, String> ToTypename = DefaultTypename;
 
 
         /// <summary>
-        /// The default mapping of a type to a type-name, uses the AssemblyMap nad NamespaceMap to adjust name
+        /// The default mapping of a type to a type-name: "FullName,AssemblyName" (like Newtonsoft.Json), uses the <see cref="AssemblyMap"/> and <see cref="NamespaceMap"/> to adjust the name.
+        /// All spaces are removed.
         /// </summary>
-        /// <param name="type"></param>
-        /// <returns></returns>
+        /// <param name="type">The type to get the name for</param>
+        /// <returns>The type name, like "System.Int32,System.Private.CoreLib"</returns>
         public static String DefaultTypename(Type type)
         {
             var tn = type.FullName;
@@ -72,14 +96,20 @@ namespace SysWeaver.Serialization.SwJson
         }
 
         /// <summary>
-        /// Convert an object to bytes (UTF8 encoded string), using an exisitng buffer
+        /// Convert an object to bytes (UTF8 encoded string), using an existing buffer
         /// </summary>
+        /// <remarks>
+        /// If <paramref name="dest"/> is big enough it's written to in place, else (or if null) the writer grows using pooled buffers and <paramref name="dest"/> is replaced
+        /// with a new array (somewhat larger than needed, so that it can be reused for similar data without growing).
+        /// The json starts at <paramref name="destOffset"/>, the bytes before it are copied from the original <paramref name="dest"/> (undefined if <paramref name="dest"/> was null).
+        /// </remarks>
         /// <typeparam name="T">Type of object, implicit</typeparam>
-        /// <param name="dest">Destination buffer, can be null, will be reallocated if more space is needed</param>
+        /// <param name="dest">Destination buffer, can be null, will be replaced if more space is needed</param>
         /// <param name="value">The object to convert to json</param>
-        /// <param name="destOffset">An optional write offset</param>
-        /// <param name="typeIsOptional">If true, some primitive boxed values are written without type information to be compatible with old Newtonsoft.Json versions, if false boxed data is always round-trippable</param>
-        /// <returns>The number of bytes written to the buffer</returns>
+        /// <param name="destOffset">An optional write offset, must be within <paramref name="dest"/> (0 if <paramref name="dest"/> is null)</param>
+        /// <param name="typeIsOptional">If true, boxed values of primitive like types (numbers, string, bool, char, date / time types, Guid and enums) are written without type information (compatible with old Newtonsoft.Json versions),
+        /// if false all boxed data is written with type information</param>
+        /// <returns>The end position of the json in <paramref name="dest"/>, i.e. <paramref name="destOffset"/> + the number of bytes written</returns>
         public static int ToJsonBytes<T>(ref Byte[] dest, T value, int destOffset = 0, bool typeIsOptional = true)
         {
             //  Without a destination (or if it's too small), the writer uses (and grows with) rented buffers,
@@ -111,10 +141,15 @@ namespace SysWeaver.Serialization.SwJson
         /// <summary>
         /// Convert an object to bytes (UTF8 encoded string)
         /// </summary>
+        /// <remarks>
+        /// If <paramref name="dest"/> is big enough the returned memory points into it (the caller must not reuse it while the result is in use),
+        /// else the json is written to pooled buffers and copied to a new array of the exact size.
+        /// </remarks>
         /// <typeparam name="T">Type of object, implicit</typeparam>
         /// <param name="value">The object to convert to json</param>
-        /// <param name="dest">An optional temporary buffer to use (if big enough one buffer allocation is avoided)</param>
-        /// <param name="typeIsOptional">If true, some primitive boxed values are written without type information to be compatible with old Newtonsoft.Json versions, if false boxed data is always round-trippable</param>
+        /// <param name="dest">An optional buffer to use (if big enough one buffer allocation is avoided)</param>
+        /// <param name="typeIsOptional">If true, boxed values of primitive like types (numbers, string, bool, char, date / time types, Guid and enums) are written without type information (compatible with old Newtonsoft.Json versions),
+        /// if false all boxed data is written with type information</param>
         /// <returns>The object as UTF8 encoded json</returns>
         public static Memory<Byte> ToJsonBytes<T>(T value, Byte[] dest = null, bool typeIsOptional = true)
         {
@@ -150,9 +185,13 @@ namespace SysWeaver.Serialization.SwJson
         /// <summary>
         /// Convert an object to a json string
         /// </summary>
+        /// <remarks>
+        /// The json is written to pooled buffers, only the resulting string is allocated.
+        /// </remarks>
         /// <typeparam name="T">Type of object, implicit</typeparam>
         /// <param name="value">The object to convert to json</param>
-        /// <param name="typeIsOptional">If true, some primitive boxed values are written without type information to be compatible with old Newtonsoft.Json versions, if false boxed data is always round-trippable</param>
+        /// <param name="typeIsOptional">If true, boxed values of primitive like types (numbers, string, bool, char, date / time types, Guid and enums) are written without type information (compatible with old Newtonsoft.Json versions),
+        /// if false all boxed data is written with type information</param>
         /// <returns>The object as a json string</returns>
         public static String ToJsonString<T>(T value, bool typeIsOptional = true)
         {
@@ -195,8 +234,14 @@ namespace SysWeaver.Serialization.SwJson
 
         #region Build
 
+        /// <summary>
+        /// Write a value that is known to be non null and of exactly the type <typeparamref name="T"/> (used for value types)
+        /// </summary>
         static void Internal<T>(ref BufferWriter w, T value) => CacheT<T>.Writer(ref w, value);
 
+        /// <summary>
+        /// Write a value of exactly the type <typeparamref name="T"/> or null (used for sealed types)
+        /// </summary>
         static void InternalMaybeNull<T>(ref BufferWriter w, T value)
         {
             if (value == null)
@@ -207,6 +252,9 @@ namespace SysWeaver.Serialization.SwJson
             CacheT<T>.Writer(ref w, value);
         }
 
+        /// <summary>
+        /// Write a value that may be null or of a derived type, if the runtime type differs from <typeparamref name="T"/> the value is written using <see cref="InternalBoxed{T}"/>
+        /// </summary>
         static void InternalMaybeBoxed<T>(ref BufferWriter w, T value)
         {
             var expectedType = typeof(T);
@@ -220,6 +268,12 @@ namespace SysWeaver.Serialization.SwJson
             CacheT<T>.Writer(ref w, value);
         }
 
+        /// <summary>
+        /// Write a value using the writer of its runtime type, with type information unless the type is optional (<see cref="BufferWriter.TypeIsOptional"/>)
+        /// </summary>
+        /// <param name="w">The writer</param>
+        /// <param name="value">The value</param>
+        /// <param name="actualType">The runtime type of the value, null to write null</param>
         static void InternalBoxed<T>(ref BufferWriter w, T value, Type actualType)
         {
             if (actualType == null)
@@ -236,10 +290,21 @@ namespace SysWeaver.Serialization.SwJson
         }
 
 
+        /// <summary>
+        /// A generated writer, writes the (boxed) value at the current position of the writer
+        /// </summary>
+        /// <param name="w">The writer</param>
+        /// <param name="o">The value to write (of the type the writer was generated for)</param>
         public delegate void WriterDel(ref BufferWriter w, Object o);
 
+        /// <summary>
+        /// Per type cache of the writer (initialized on first use of a type)
+        /// </summary>
         static class CacheT<T>
         {
+            /// <summary>
+            /// A writer for a value of type <typeparamref name="T"/> (no boxing)
+            /// </summary>
             public delegate void WriterDelT(ref BufferWriter w, T o);
 
             static readonly Type Tp = typeof(T);
@@ -248,6 +313,11 @@ namespace SysWeaver.Serialization.SwJson
         }
 
 
+        /// <summary>
+        /// Escape a string for use inside a json string (no quotes are added), used for member and type names when building writers
+        /// </summary>
+        /// <param name="t">The string to escape</param>
+        /// <returns>The escaped string (the same instance if nothing needs escaping)</returns>
         static String JsonEscape(String t)
         {
             var l = t.Length;
@@ -313,6 +383,9 @@ namespace SysWeaver.Serialization.SwJson
             }
         }
 
+        /// <summary>
+        /// Get the start of a typed value: {"$type":"name" (as UTF8, without a trailing comma)
+        /// </summary>
         static Byte[] GetTypeJson(Type type)
         {
             return Encoding.UTF8.GetBytes(String.Concat("{\"$type\":\"", JsonEscape(ToTypename(type)), "\""));
@@ -418,6 +491,10 @@ namespace SysWeaver.Serialization.SwJson
 
         static readonly Expression[] CachedBytes = Enumerable.Range(0, 256).Select(x => Expression.Assign(WriteDataAtOffsetExp, Expression.Constant((Byte)x))).ToArray();
 
+        /// <summary>
+        /// A writer that writes a constant
+        /// </summary>
+        /// <param name="w">The writer</param>
         public delegate void WriterConstDel(ref BufferWriter w);
 
 
@@ -439,6 +516,11 @@ namespace SysWeaver.Serialization.SwJson
         static readonly Expression WriteArrayEndExp = GetWriteByteExpr(ArrayEnd);// Expression.Call(ExpressionWriter, MethodBufferWriterWriteByte, ConstArrayEnd);
         static readonly Expression WriteCommaEndExp = GetWriteByteExpr(SepComma);// Expression.Call(ExpressionWriter, MethodBufferWriterWriteByte, ConstObjectComma);
 
+        /// <summary>
+        /// The key types of dictionaries that are written as json objects.
+        /// Dictionaries with other key types (like enums, floating point, DateOnly or DateTimeOffset) are treated as an <see cref="ICollection{T}"/> of <see cref="KeyValuePair{TKey, TValue}"/>,
+        /// which are written as empty objects (KeyValuePair has no settable members).
+        /// </summary>
         static readonly IReadOnlySet<Type> AllowedDictionaryKeys = new HashSet<Type>()
         {
             typeof(Char),
@@ -457,6 +539,9 @@ namespace SysWeaver.Serialization.SwJson
             typeof(Guid),
         }.ToFrozenSet();
 
+        /// <summary>
+        /// The dictionary key types that needs to be quoted (the writers of the other key types writes a json string)
+        /// </summary>
         static readonly IReadOnlySet<Type> DictionaryKeysWithQuote = new HashSet<Type>()
         {
             typeof(Byte),
@@ -470,6 +555,9 @@ namespace SysWeaver.Serialization.SwJson
             typeof(Boolean),
         }.ToFrozenSet();
 
+        /// <summary>
+        /// The writers of all types (built on demand), initialized with the primitive writers by the static constructor
+        /// </summary>
         static readonly ConcurrentDictionary<Type, TypeInfo> Writers;
 
 
@@ -518,6 +606,9 @@ namespace SysWeaver.Serialization.SwJson
             return (i as FieldInfo).FieldType;
         }
 
+        /// <summary>
+        /// Types with a bounded json size (written without an Ensure of their own), the value is unused
+        /// </summary>
         static readonly IReadOnlyDictionary<Type, int> PrimClasses = new Dictionary<Type, int>()
         {
             { typeof(Byte), 0 },
@@ -551,6 +642,9 @@ namespace SysWeaver.Serialization.SwJson
             return PrimClasses.TryGetValue(type, out var _);
         }
 
+        /// <summary>
+        /// The order members are written in: bounded types first (sorted by name), then the other types sorted by the full type name and name
+        /// </summary>
         static int MemberCompare(MemberInfo x, MemberInfo y)
         {
             var a = GetMemberType(x);
@@ -569,6 +663,12 @@ namespace SysWeaver.Serialization.SwJson
         }
 
 
+        /// <summary>
+        /// True if a member is serialized: public properties with a getter and a setter (of any accessibility) and public fields that aren't readonly
+        /// </summary>
+        /// <remarks>
+        /// Indexers are not excluded (a read / write indexer makes the writer creation fail).
+        /// </remarks>
         static bool IsValidMember(MemberInfo m)
         {
             {
@@ -607,6 +707,13 @@ namespace SysWeaver.Serialization.SwJson
 
         
 
+        /// <summary>
+        /// Create a single block from a list of expressions, flattening nested blocks (their variables are moved to the new block)
+        /// </summary>
+        /// <param name="program">The expressions</param>
+        /// <param name="parameters">Additional variables of the block</param>
+        /// <param name="skipRepeats">An expression that is only kept the first time it occurs (in the flattened list)</param>
+        /// <returns>The block, or the only expression if there is just one and no variables</returns>
         static Expression CreateProgramBlock(IList<Expression> program, IEnumerable<ParameterExpression> parameters = null, Expression skipRepeats = null)
         {
             HashSet<ParameterExpression> extraParams = new HashSet<ParameterExpression>();
@@ -626,8 +733,21 @@ namespace SysWeaver.Serialization.SwJson
             return prog;
         }
 
+        /// <summary>
+        /// The types that writers are currently being built for (to break recursion for recursive types)
+        /// </summary>
         static readonly ConcurrentDictionary<Type, Object> WritersInProgress = new ConcurrentDictionary<Type, object>();
 
+        /// <summary>
+        /// Build (and cache) the writer for a type
+        /// </summary>
+        /// <remarks>
+        /// If the writer for the type is already being built, the writer of <see cref="Object"/> is returned (it writes an empty object).
+        /// This is how recursive types are handled, but it also happens if another thread is building the writer for the same type.
+        /// </remarks>
+        /// <param name="type">The type</param>
+        /// <returns>The writer info</returns>
+        /// <exception cref="Exception">The type isn't supported (like multi dimensional arrays) or the writer couldn't be built</exception>
         static TypeInfo AddWriter(Type type)
         {
             if (!WritersInProgress.TryAdd(type, new object()))
@@ -672,56 +792,62 @@ namespace SysWeaver.Serialization.SwJson
                             vmi = pt.IsSealed ? MakeExpressionActionInternalMaybeNull(pt) : MakeExpressionActionInternalMaybeBoxed(pt);
                         }
                         var mi = MethodInternalKeyValueEnum.MakeGenericMethod(kt, pt);
-                        List<Expression> program = new List<Expression>();
-                        List<ParameterExpression> pes = new List<ParameterExpression>();
-                        program.Add(Ensure64Exp);
-                        program.Add(WriteObjectBeginExp);
-                        if (TryGetEnumeratorPattern(type, out _, out _, out var kvCurrent) && (kvCurrent.PropertyType == kvt))
+                        var enumPattern = TryGetEnumeratorPattern(type, out _, out _, out var kvCurrent) && (kvCurrent.PropertyType == kvt);
+                        //  Build the writer program, the typed variant starts with {"$type":"name" so every key (including the first) must be preceded by a comma
+                        Expression BuildDictionaryProgram(Expression ensureBegin, Expression writeBegin, bool commaFirst)
                         {
-                            //  Like InternalKeyValueEnum but without interface and delegate calls (and boxing)
-                            var dobj = Expression.Variable(type, "dict");
-                            var kv = Expression.Variable(kvt, "kv");
-                            pes.Add(dobj);
-                            pes.Add(kv);
-                            program.Add(Expression.Assign(dobj, Expression.Convert(WriterObject, type)));
-                            var keyWriter = CacheWriter(kt);
-                            var valueWriter = CacheWriter(pt);
-                            var needQuote = DictionaryKeysWithQuote.Contains(kt);
-                            var keyQuote = Encoding.UTF8.GetBytes("\"");
-                            var keyQuoteComma = Encoding.UTF8.GetBytes(",\"");
-                            var keyEndQuote = Encoding.UTF8.GetBytes("\":");
-                            var keyEnd = Encoding.UTF8.GetBytes(":");
-                            var comma = Encoding.UTF8.GetBytes(",");
-                            program.Add(GetLoopExp(type, kvt, dobj, (item, isFirst) =>
+                            List<Expression> program = new List<Expression>();
+                            List<ParameterExpression> pes = new List<ParameterExpression>();
+                            program.Add(ensureBegin);
+                            program.Add(writeBegin);
+                            if (enumPattern)
                             {
-                                var key = Expression.Property(kv, nameof(KeyValuePair<int, int>.Key));
-                                var value = Expression.Property(kv, nameof(KeyValuePair<int, int>.Value));
-                                List<Expression> e = new List<Expression>(8);
-                                e.Add(Expression.Assign(kv, item));
-                                e.Add(Ensure64Exp);
-                                if (needQuote)
-                                    e.Add(GetWriteConstExp(isFirst ? keyQuote : keyQuoteComma));
-                                else if (!isFirst)
-                                    e.Add(GetWriteConstExp(comma));
-                                e.Add(GetWriteValueExp(kt, keyWriter, key));
-                                e.Add(Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(16)));
-                                e.Add(GetWriteConstExp(needQuote ? keyEndQuote : keyEnd));
-                                e.Add(GetWriteValueExp(pt, valueWriter, value));
-                                return Expression.Block(e);
-                            }, pes));
+                                //  Like InternalKeyValueEnum but without interface and delegate calls (and boxing)
+                                var dobj = Expression.Variable(type, "dict");
+                                var kv = Expression.Variable(kvt, "kv");
+                                pes.Add(dobj);
+                                pes.Add(kv);
+                                program.Add(Expression.Assign(dobj, Expression.Convert(WriterObject, type)));
+                                var keyWriter = CacheWriter(kt);
+                                var valueWriter = CacheWriter(pt);
+                                var needQuote = DictionaryKeysWithQuote.Contains(kt);
+                                var keyQuote = Encoding.UTF8.GetBytes("\"");
+                                var keyQuoteComma = Encoding.UTF8.GetBytes(",\"");
+                                var keyEndQuote = Encoding.UTF8.GetBytes("\":");
+                                var keyEnd = Encoding.UTF8.GetBytes(":");
+                                var comma = Encoding.UTF8.GetBytes(",");
+                                program.Add(GetLoopExp(type, kvt, dobj, (item, isFirst) =>
+                                {
+                                    var noComma = isFirst && !commaFirst;
+                                    var key = Expression.Property(kv, nameof(KeyValuePair<int, int>.Key));
+                                    var value = Expression.Property(kv, nameof(KeyValuePair<int, int>.Value));
+                                    List<Expression> e = new List<Expression>(8);
+                                    e.Add(Expression.Assign(kv, item));
+                                    e.Add(Ensure64Exp);
+                                    if (needQuote)
+                                        e.Add(GetWriteConstExp(noComma ? keyQuote : keyQuoteComma));
+                                    else if (!noComma)
+                                        e.Add(GetWriteConstExp(comma));
+                                    e.Add(GetWriteValueExp(kt, keyWriter, key));
+                                    e.Add(Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(16)));
+                                    e.Add(GetWriteConstExp(needQuote ? keyEndQuote : keyEnd));
+                                    e.Add(GetWriteValueExp(pt, valueWriter, value));
+                                    return Expression.Block(e);
+                                }, pes));
+                            }
+                            else
+                            {
+                                program.Add(Expression.Call(mi, writer, Expression.Convert(WriterObject, ct), kmi, vmi, Expression.Constant(DictionaryKeysWithQuote.Contains(kt)), Expression.Constant(commaFirst)));
+                            }
+                            program.Add(Ensure64Exp);
+                            program.Add(WriteObjectEndExp);
+                            return CreateProgramBlock(program, pes);
                         }
-                        else
-                        {
-                            program.Add(Expression.Call(mi, writer, Expression.Convert(WriterObject, ct), kmi, vmi, Expression.Constant(DictionaryKeysWithQuote.Contains(kt))));
-                        }
-                        program.Add(Ensure64Exp);
-                        program.Add(WriteObjectEndExp);
-                        var finalUntyped = CreateProgramBlock(program, pes);
+                        var finalUntyped = BuildDictionaryProgram(Ensure64Exp, WriteObjectBeginExp, false);
                         var cbUntyped = Expression.Lambda<WriterDel>(finalUntyped, writer, WriterObject).Compile();
-                        var temp = Append(TextObjectBegin, Append(GetTypeJson(type), TextSepComma));
-                        program[0] = Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(temp.Length + 64));
-                        program[1] = GetWriteConstantBufferExp(temp);
-                        var finalTyped = CreateProgramBlock(program, pes);
+                        //  {"$type":"name" (no trailing comma, every key is written with a leading comma, so an empty dictionary is valid json)
+                        var temp = GetTypeJson(type);
+                        var finalTyped = BuildDictionaryProgram(Expression.Call(writer, MethodBufferWriterEnsure, GetInt32Exp(temp.Length + 64)), GetWriteConstantBufferExp(temp), true);
                         var cbTyped = Expression.Lambda<WriterDel>(finalTyped, writer, WriterObject).Compile();
                         ti = new TypeInfo(cbUntyped, cbTyped);
                     }
@@ -933,6 +1059,9 @@ namespace SysWeaver.Serialization.SwJson
         }
 
 
+        /// <summary>
+        /// An expression that writes a constant, optionally preceded by an Ensure (else the space, plus 7 bytes, must be ensured)
+        /// </summary>
         static Expression GetWriteConstantBufferExp(Byte[] buffer, bool ensure = false)
         {
             var e = GetWriteConstExp(buffer);
@@ -942,6 +1071,9 @@ namespace SysWeaver.Serialization.SwJson
             return Expression.Block(Expression.Call(WriterExp, MethodBufferWriterEnsure, GetInt32Exp(buffer.Length + 64)), e);
         }
 
+        /// <summary>
+        /// Compile a writer that ensures space for and writes a constant
+        /// </summary>
         static WriterConstDel GetWriteConstantBufferEnsuredAction(Byte[] buffer)
         {
             var w = WriterExp;
@@ -949,6 +1081,9 @@ namespace SysWeaver.Serialization.SwJson
             return Expression.Lambda<WriterConstDel>(e, w).Compile();
         }
 
+        /// <summary>
+        /// Compile a writer that ensures space for and writes a constant (the value is ignored)
+        /// </summary>
         static WriterDel GetWriteConstantBufferEnsuredActionObject(Byte[] buffer)
         {
             var w = WriterExp;
@@ -964,6 +1099,9 @@ namespace SysWeaver.Serialization.SwJson
 
 
 
+        /// <summary>
+        /// Create the escape table, same content as <see cref="FastFormat.Escapes"/>
+        /// </summary>
         static Byte[] GetEscapeChars()
         {
             // Must be zero initialized (0 = no escape)
@@ -1006,6 +1144,17 @@ namespace SysWeaver.Serialization.SwJson
         static readonly Byte[] HexBytes = Hex.Select(x => (Byte)x).ToArray();
 
 
+        /// <summary>
+        /// Write chars without escaping: the low byte of every char is written, followed by the UTF8 encoding for non ASCII chars.
+        /// </summary>
+        /// <remarks>
+        /// The output is NOT valid UTF8 for non ASCII chars (an extra byte precedes the UTF8 encoding of every char &gt;= 0x80), surrogate pairs are not combined.
+        /// Not used by the writer.
+        /// </remarks>
+        /// <param name="d">The write position (at least count * 4 bytes must be available)</param>
+        /// <param name="t">The chars</param>
+        /// <param name="count">The number of chars to write</param>
+        /// <returns>The position after the last written byte</returns>
         public static Byte* WriteUnescapedCharArray(Byte* d, Char[] t, int count)
         {
             for (int i = 0; i < count; ++ i)
@@ -1019,6 +1168,10 @@ namespace SysWeaver.Serialization.SwJson
             return d;
         }
 
+        /// <summary>
+        /// Write a code point (&gt;= 0x80) as UTF8 (2 - 4 bytes), surrogate code points are encoded as is (not valid UTF8)
+        /// </summary>
+        /// <exception cref="Exception">The code point is above 0x10ffff</exception>
         static Byte* WriteUtf8(Byte* d, uint x)
         {
             if (x <= 0x7ff)
@@ -1054,6 +1207,9 @@ namespace SysWeaver.Serialization.SwJson
             throw new Exception("Invalid unicode code point " + x + " (0x" + x.ToString("x8"));
         }
 
+        /// <summary>
+        /// Write an escape sequence: \uXXXX if <paramref name="e"/> is 1, else '\' followed by <paramref name="e"/>
+        /// </summary>
         static Byte* WriteEscape(Byte* d, uint x, Byte e)
         {
             *d = (Byte)'\\';
@@ -1081,6 +1237,9 @@ namespace SysWeaver.Serialization.SwJson
         }
 
 
+        /// <summary>
+        /// Write the items of a list (without brackets). Not used by the generated writers (only 4 bytes per item are ensured, not enough for most item types).
+        /// </summary>
         static void InternalList(ref BufferWriter w, Type actualType, IList values)
         {
             var l = values.Count;
@@ -1100,6 +1259,9 @@ namespace SysWeaver.Serialization.SwJson
             }
         }
 
+        /// <summary>
+        /// Write the items of a sequence (without brackets). Not used by the generated writers.
+        /// </summary>
         static void InternalEnum(ref BufferWriter w, Type actualType, IEnumerable values)
         {
             var valList = values as IList;
@@ -1122,6 +1284,9 @@ namespace SysWeaver.Serialization.SwJson
         }
 
 
+        /// <summary>
+        /// Write the items of a list that may contain nulls (without brackets). Not used by the generated writers.
+        /// </summary>
         static void InternalMaybeNullList(ref BufferWriter w, Type actualType, IList values)
         {
             var l = values.Count;
@@ -1148,6 +1313,9 @@ namespace SysWeaver.Serialization.SwJson
         }
 
 
+        /// <summary>
+        /// Write the items of a sequence that may contain nulls (without brackets). Not used by the generated writers.
+        /// </summary>
         static void InternalMaybeNullEnum(ref BufferWriter w, Type actualType, IEnumerable values)
         {
             var valList = values as IList;
@@ -1175,6 +1343,9 @@ namespace SysWeaver.Serialization.SwJson
             }
         }
 
+        /// <summary>
+        /// Write the items of a list that may contain nulls and derived types (without brackets). Not used by the generated writers.
+        /// </summary>
         static void InternalMaybeBoxedList(ref BufferWriter w, Type expectedType, IList values)
         {
             var l = values.Count;
@@ -1216,6 +1387,9 @@ namespace SysWeaver.Serialization.SwJson
 
         }
 
+        /// <summary>
+        /// Write the items of a sequence that may contain nulls and derived types (without brackets). Not used by the generated writers.
+        /// </summary>
         static void InternalMaybeBoxedEnum(ref BufferWriter w, Type expectedType, IEnumerable values)
         {
             var valList = values as IList;
@@ -1257,9 +1431,18 @@ namespace SysWeaver.Serialization.SwJson
             }
         }
 
-        static void InternalKeyValueEnum<K, V>(ref BufferWriter w, IEnumerable<KeyValuePair<K, V>> values, CacheT<K>.WriterDelT writeKey, CacheT<V>.WriterDelT writeValue, bool needQuote)
+        /// <summary>
+        /// Write the entries of a dictionary as "key":value pairs (without braces), used for dictionaries without a pattern based enumerator
+        /// </summary>
+        /// <param name="w">The writer</param>
+        /// <param name="values">The entries</param>
+        /// <param name="writeKey">Writes a key</param>
+        /// <param name="writeValue">Writes a value</param>
+        /// <param name="needQuote">True if the key writer doesn't write a json string (the key is then quoted)</param>
+        /// <param name="commaFirst">True to write a comma before the first key too (used when a "$type" member has already been written)</param>
+        static void InternalKeyValueEnum<K, V>(ref BufferWriter w, IEnumerable<KeyValuePair<K, V>> values, CacheT<K>.WriterDelT writeKey, CacheT<V>.WriterDelT writeValue, bool needQuote, bool commaFirst)
         {
-            bool needComma = false;
+            bool needComma = commaFirst;
             if (needQuote)
             {
                 foreach (var value in values)
@@ -1319,6 +1502,12 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = (int)(FastFormat.WriteUInt64(org + w.Offset, value) - org);
         }
 
+        /// <summary>
+        /// Write a float: integral values (that fit 32 bits) as integers, else the shortest round trippable representation ("r", invariant culture).
+        /// </summary>
+        /// <remarks>
+        /// NaN and infinities are written as NaN, Infinity and -Infinity (not valid json), -0 is written as 0.
+        /// </remarks>
         static void WriteSingle(ref BufferWriter w, Single value)
         {
             if (Single.IsInteger(value))
@@ -1351,6 +1540,12 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset += size;
         }
 
+        /// <summary>
+        /// Write a double: integral values (that fit 64 bits) as integers, else the shortest round trippable representation ("r", invariant culture, like 1e-07 or 1.5e+300).
+        /// </summary>
+        /// <remarks>
+        /// NaN and infinities are written as NaN, Infinity and -Infinity (not valid json), -0 is written as 0.
+        /// </remarks>
         static void WriteDouble(ref BufferWriter w, Double value)
         {
             if (Double.IsInteger(value))
@@ -1384,6 +1579,9 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset += size;
         }
 
+        /// <summary>
+        /// Write a decimal: integral values (that fit 64 bits) as integers (1.0m is written as 1), else with all decimals of its scale (1.50m is written as 1.50).
+        /// </summary>
         static void WriteDecimal(ref BufferWriter w, Decimal value)
         {
             if (Decimal.IsInteger(value))
@@ -1417,6 +1615,9 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset += size;
         }
 
+        /// <summary>
+        /// Remove trailing zeros (and the '.' if all are zero) from the fraction of a DateTime formatted using "o" (the fraction ends at index 27)
+        /// </summary>
         static void TrimDateTime(Span<Byte> dest, ref int size)
         {
             int s = 27;
@@ -1441,6 +1642,9 @@ namespace SysWeaver.Serialization.SwJson
             }
         }
 
+        /// <summary>
+        /// Write a TimeSpan as a json string using the "c" format with trailing fraction zeros removed, like "-1.02:03:04.5"
+        /// </summary>
         static void WriteTimeSpan(ref BufferWriter w, TimeSpan value)
         {
             var org = w.DataPtr;
@@ -1451,6 +1655,10 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = (int)(d + 1 - org);
         }
 
+        /// <summary>
+        /// Write a DateTime as a json string using the "o" format with trailing fraction zeros removed.
+        /// Utc times ends with "Z", local times with the offset of the local time zone (at that time) and unspecified times without a suffix.
+        /// </summary>
         static void WriteDateTime(ref BufferWriter w, DateTime value)
         {
             var org = w.DataPtr;
@@ -1472,6 +1680,9 @@ namespace SysWeaver.Serialization.SwJson
             w.Write(SepQuote);
         }
 
+        /// <summary>
+        /// Write a DateOnly as a json string: "yyyy-MM-dd"
+        /// </summary>
         static void WriteDateOnly(ref BufferWriter w, DateOnly value)
         {
             var org = w.DataPtr;
@@ -1482,6 +1693,9 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = (int)(d + 1 - org);
         }
 
+        /// <summary>
+        /// Write a TimeOnly as a json string: "HH:mm:ss[.fffffff]" with trailing fraction zeros removed
+        /// </summary>
         static void WriteTimeOnly(ref BufferWriter w, TimeOnly value)
         {
             var org = w.DataPtr;
@@ -1492,6 +1706,9 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = (int)(d + 1 - org);
         }
 
+        /// <summary>
+        /// Write a DateTimeOffset as a json string using the "o" format with trailing fraction zeros removed, like "2020-01-02T03:04:05.5+01:00"
+        /// </summary>
         static void WriteDateTimeOffset(ref BufferWriter w, DateTimeOffset value)
         {
             var org = w.DataPtr;
@@ -1502,6 +1719,9 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = (int)(d + 1 - org);
         }
 
+        /// <summary>
+        /// Write a Guid as a json string using the "D" format (lower case hex with dashes)
+        /// </summary>
         static void WriteGuid(ref BufferWriter w, Guid value)
         {
             w.Write(SepQuote);
@@ -1525,6 +1745,9 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = (int)(d + 1 - org);
         }
 
+        /// <summary>
+        /// Write a byte array as a base64 json string (or null), ensures the space it needs
+        /// </summary>
         static void WriteByteArrayEnsure(ref BufferWriter w, Object o)
         {
             if (o == null)
@@ -1538,6 +1761,9 @@ namespace SysWeaver.Serialization.SwJson
             WriteByteArray(ref w, b);
         }
 
+        /// <summary>
+        /// Write a byte array with type information: {"$type":"System.Byte[],...","$value":"base64"} (or null), ensures the space it needs
+        /// </summary>
         static void WriteByteArrayTypename(ref BufferWriter w, Object obj)
         {
             if (obj == null)
@@ -1556,6 +1782,10 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = o;
         }
 
+        /// <summary>
+        /// Write a char as a json string (escaped if needed).
+        /// A surrogate char is encoded as is (3 bytes, not valid UTF8), unlike strings where lone surrogates are written as U+FFFD.
+        /// </summary>
         static void WriteChar(ref BufferWriter w, Char value)
         {
             w.Ensure(64);
@@ -1584,6 +1814,9 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = (int)(d - org);
         }
 
+        /// <summary>
+        /// Write true or false (8 bytes are stored for false)
+        /// </summary>
         static void WriteBoolean(ref BufferWriter w, Boolean value)
         {
             w.Ensure(16);
@@ -1601,6 +1834,10 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = o + 5;
         }
 
+        /// <summary>
+        /// Write a (non null) string as a json string, ensures the space it needs (see <see cref="FastFormat.WriteString"/>)
+        /// </summary>
+        /// <exception cref="OverflowException">The string is too long (more than int.MaxValue / 3 chars)</exception>
         static void WriteString(ref BufferWriter w, String value)
         {
             //  Max 3 bytes per char (escapes ensures more as needed)
@@ -1608,6 +1845,9 @@ namespace SysWeaver.Serialization.SwJson
             FastFormat.WriteString(ref w, value);
         }
 
+        /// <summary>
+        /// Write a surrogate pair (high surrogate <paramref name="x"/>, low surrogate <paramref name="y"/>) as a 4 byte UTF8 sequence. Unused.
+        /// </summary>
         static Byte* WriteMultiUtf8(Byte* d, uint x, uint y)
         {
             x <<= 10;
@@ -1629,6 +1869,9 @@ namespace SysWeaver.Serialization.SwJson
         #endregion//Runtime
 
 
+        /// <summary>
+        /// Never set this to true, it only exists so that the static constructor references methods that are otherwise only used through reflection and expressions (keeps them from being trimmed); setting it makes the static constructor call them with dummy values.
+        /// </summary>
         public static bool NeverSetToTrue;
 
 
@@ -1667,7 +1910,7 @@ namespace SysWeaver.Serialization.SwJson
                     InternalEnum(ref w, null, null);
                     InternalMaybeNullEnum(ref w, null, null);
                     InternalMaybeBoxedEnum(ref w, null, null);
-                    InternalKeyValueEnum<int, int>(ref w, null, null, null, false);
+                    InternalKeyValueEnum<int, int>(ref w, null, null, null, false, false);
                 }
                 catch
                 {
@@ -1716,8 +1959,17 @@ namespace SysWeaver.Serialization.SwJson
             }
         }
 
+        /// <summary>
+        /// The writers for a type
+        /// </summary>
         sealed class TypeInfo
         {
+            /// <summary>
+            /// Writers for an unbounded type
+            /// </summary>
+            /// <param name="write">Writes the value without type information</param>
+            /// <param name="writeTyped">Writes the value with type information</param>
+            /// <param name="typeIsOptional">If true, <see cref="WriteOptionalTyped"/> is <paramref name="write"/> (no type information), else <paramref name="writeTyped"/></param>
             public TypeInfo(WriterDel write, WriterDel writeTyped, bool typeIsOptional = false)
             {
                 Write = write;
@@ -1728,6 +1980,17 @@ namespace SysWeaver.Serialization.SwJson
 
             static readonly ParameterExpression ParamObj = Expression.Parameter(typeof(Object), "o");
 
+            /// <summary>
+            /// Writers for a bounded type, using the static method named "Write" + type name of this class
+            /// </summary>
+            /// <remarks>
+            /// When <paramref name="convertTo"/> is used, the type name written with type information is the name of <paramref name="convertTo"/>, not <paramref name="t"/>
+            /// (so boxed bytes, shorts and enums are typed as their 32 bit / underlying type when type information is written).
+            /// </remarks>
+            /// <param name="t">The type</param>
+            /// <param name="typeIsOptional">If true, <see cref="WriteOptionalTyped"/> doesn't write type information</param>
+            /// <param name="convertTo">An optional type to convert the value to before writing it (used for small integers and enums)</param>
+            /// <param name="boundedSize">The max number of bytes written (the space that callers ensure)</param>
             public TypeInfo(Type t, bool typeIsOptional = false, Type convertTo = null, int boundedSize = 64)
             {
                 Expression p;
@@ -1766,11 +2029,26 @@ namespace SysWeaver.Serialization.SwJson
                 WriteTyped = wtl;
                 WriteOptionalTyped = typeIsOptional ? wl : wtl;
             }
+            /// <summary>
+            /// Builds an expression that writes a value (given as an expression), without an Ensure for bounded types
+            /// </summary>
             public readonly Func<Expression, Expression> WriteExp;
             //  The maximum number of bytes required by this type, 0 = Not bounded
+            /// <summary>
+            /// The maximum number of bytes written by <see cref="Write"/> (that the caller must ensure), 0 if not bounded (the writer ensures the space it needs)
+            /// </summary>
             public readonly int BoundedSize;
+            /// <summary>
+            /// Writes the value with type information
+            /// </summary>
             public readonly WriterDel WriteTyped;
+            /// <summary>
+            /// Writes the value without type information
+            /// </summary>
             public readonly WriterDel Write;
+            /// <summary>
+            /// The writer used for a boxed value when <see cref="BufferWriter.TypeIsOptional"/> is true (<see cref="Write"/> for primitive like types, else <see cref="WriteTyped"/>)
+            /// </summary>
             public readonly WriterDel WriteOptionalTyped;
         }
 

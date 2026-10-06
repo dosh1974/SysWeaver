@@ -3,8 +3,13 @@
 namespace SysWeaver.Data
 {
     /// <summary>
-    /// Put on a type to expand it when used in a data table
+    /// Put on a type (or on a member) to expand it when used in a data table, i.e. the public instance members of the value becomes columns of the table.
     /// </summary>
+    /// <remarks>
+    /// Only applies to member types that isn't a supported column type, members of such a type without this attribute are ignored.
+    /// For reference types, a null value is replaced by a default instance (so the type must be constructable).
+    /// The prefixes are applied recursively when an expanded type contains other expanded members.
+    /// </remarks>
     [AttributeUsage(AttributeTargets.Struct | AttributeTargets.Class | AttributeTargets.Field | AttributeTargets.Property)]
     public sealed class TableDataExpandAttribute : Attribute
     {
@@ -23,7 +28,13 @@ namespace SysWeaver.Data
             MemberNamePrefix = memberNamePrefix;
             TitlePrefix = titlePrefix;
         }
+        /// <summary>
+        /// The name prefix format, {0} = Member (column) name.
+        /// </summary>
         public readonly String MemberNamePrefix;
+        /// <summary>
+        /// The title prefix format, {0} = Member (column) name, {1} = Column title.
+        /// </summary>
         public readonly String TitlePrefix;
 
     }

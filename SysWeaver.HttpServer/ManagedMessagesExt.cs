@@ -9,14 +9,52 @@ using SysWeaver.Translation;
 namespace SysWeaver
 {
 
+    /// <summary>
+    /// Translation helpers that never fail (the source text is returned on any error).
+    /// </summary>
     public static class TranslatorExt
     {
+        /// <summary>
+        /// Translate html text, see <see cref="TranslateSafe"/>.
+        /// </summary>
+        /// <param name="translator">The translator, may be null (no translation)</param>
+        /// <param name="htmlText">The html text to translate</param>
+        /// <param name="to">The language to translate to, null for no translation</param>
+        /// <param name="from">The language of the text</param>
+        /// <param name="context">Optional context that helps the translation</param>
+        /// <param name="effort">The translation effort</param>
+        /// <param name="retention">How long the translation should be cached</param>
+        /// <returns>The translated text, or the source text if translation isn't possible</returns>
         public static Task<String> TranslateSafeHtml(this ITranslator translator, String htmlText, String to, String from = "en", String context = null, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
             => TranslateSafe(translator, htmlText, to, from, context, effort, retention, TranslationContentTypes.Html);
 
+        /// <summary>
+        /// Translate markdown text, see <see cref="TranslateSafe"/>.
+        /// </summary>
+        /// <param name="translator">The translator, may be null (no translation)</param>
+        /// <param name="htmlText">The markdown text to translate</param>
+        /// <param name="to">The language to translate to, null for no translation</param>
+        /// <param name="from">The language of the text</param>
+        /// <param name="context">Optional context that helps the translation</param>
+        /// <param name="effort">The translation effort</param>
+        /// <param name="retention">How long the translation should be cached</param>
+        /// <returns>The translated text, or the source text if translation isn't possible</returns>
         public static Task<String> TranslateSafeMD(this ITranslator translator, String htmlText, String to, String from = "en", String context = null, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
     => TranslateSafe(translator, htmlText, to, from, context, effort, retention, TranslationContentTypes.MarkDown);
 
+        /// <summary>
+        /// Translate a text, leading and trailing white space is kept as is (only the trimmed text is translated).
+        /// The text is returned as is if the translator is null, the text is null / empty / white space, <paramref name="to"/> is null or equal to <paramref name="from"/>, or the translation fails.
+        /// </summary>
+        /// <param name="translator">The translator, may be null (no translation)</param>
+        /// <param name="text">The text to translate</param>
+        /// <param name="to">The language to translate to, null for no translation</param>
+        /// <param name="from">The language of the text</param>
+        /// <param name="context">Optional context that helps the translation</param>
+        /// <param name="effort">The translation effort</param>
+        /// <param name="retention">How long the translation should be cached</param>
+        /// <param name="contentType">The type of content</param>
+        /// <returns>The translated text, or the source text if translation isn't possible</returns>
         public static async Task<String> TranslateSafe(this ITranslator translator, String text, String to, String from = "en", String context = null, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long, TranslationContentTypes contentType = TranslationContentTypes.Text)
         {
             if (translator == null)
@@ -73,6 +111,9 @@ namespace SysWeaver
 
     
 
+    /// <summary>
+    /// Get managed messages (emails, SMS and texts) in the language of a session, auto translating (and caching) missing languages.
+    /// </summary>
     public static class ManagedMessagesExt
     {
 
@@ -109,9 +150,23 @@ namespace SysWeaver
             dest[key] = await tr.TranslateSafe(text, to, defLang).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Get the messages in the language of the request's session, see <see cref="GetLang(ManagedMessages, String, ITranslator)"/>.
+        /// </summary>
+        /// <param name="msg">The messages</param>
+        /// <param name="context">The request</param>
+        /// <returns>The messages for the language</returns>
         public static Task<ManagedLanguageMessages> GetLang(this ManagedMessages msg, HttpServerRequest context)
             => GetLang(msg, context.Session.Language, context.Translator);
 
+        /// <summary>
+        /// Get the messages for a language. If the language isn't defined (a fallback is returned) and a translator is supplied,
+        /// all emails and SMS of the fallback language are translated and the result is added to <paramref name="msg"/> for later use.
+        /// </summary>
+        /// <param name="msg">The messages</param>
+        /// <param name="l">The language, null for "en"</param>
+        /// <param name="tr">The translator, may be null</param>
+        /// <returns>The messages for the language</returns>
         public static async Task<ManagedLanguageMessages> GetLang(this ManagedMessages msg, String l, ITranslator tr)
         {
             l = l ?? "en";
@@ -134,6 +189,15 @@ namespace SysWeaver
             return lang;
         }
 
+        /// <summary>
+        /// Get the texts for a language. If the language isn't defined and a translator is supplied, the default texts are translated and the result is added to <paramref name="msg"/> for later use.
+        /// Keys starting with '_' are translated themselves (first word only) while their values are kept.
+        /// </summary>
+        /// <param name="msg">The texts</param>
+        /// <param name="l">The language, null for "en"</param>
+        /// <param name="tr">The translator, may be null</param>
+        /// <param name="onNew">Optional function called with a newly translated language before it's added</param>
+        /// <returns>The texts for the language</returns>
         public static async Task<ManagedLanguageTexts> GetLang(this ManagedTexts msg, String l, ITranslator tr, Func<ManagedLanguageTexts, ITranslator, Task> onNew = null)
         {
             l = l ?? "en";

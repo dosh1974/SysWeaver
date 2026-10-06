@@ -12,6 +12,9 @@ namespace SysWeaver.Search
 
     public sealed partial class SimpleTextSearch
     {
+        /// <summary>
+        /// A thread safe searcher that ranks all content (a linear scan) on every search using a <see cref="Ranker"/>.
+        /// </summary>
         sealed class Searcher<T> : ITextSearcher<T>
         {
 

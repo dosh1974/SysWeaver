@@ -6,9 +6,21 @@ using System.Threading.Tasks;
 
 namespace SysWeaver
 {
+/// <summary>
+/// Color conversion helpers (HSV / RGB) and generators for HTML (CSS) color strings and gradients.
+/// See also <see cref="HtmlColors"/> for parsing and formatting HTML color strings.
+/// </summary>
     public static class ColorTools
     {
 
+/// <summary>
+/// Create a pseudo random hue gradient, deterministically derived from a text (the same text always gives the same gradient).
+/// Used to give charts / items stable but distinct colors.
+/// </summary>
+/// <param name="count">Number of colors to generate.</param>
+/// <param name="text">The text used to seed the random generator (ex: a title).</param>
+/// <param name="opacity">Opacity of the colors [0, 1], 1 gives "#rrggbb" colors, less than 1 gives "rgba(..)" colors.</param>
+/// <returns>An array of <paramref name="count"/> CSS color strings.</returns>
         public static String[] HtmlRandomGradient(int count, String text, double opacity = 1)
         {
             var rng = new Random(HashColors.SeedFromString(text));
@@ -21,6 +33,19 @@ namespace SysWeaver
             return HtmlHueGradient(count, hstart, hstart + range, sat, v, opacity);
         }
 
+/// <summary>
+/// Create a gradient of CSS colors by linearly interpolating hue (and optionally saturation, value and opacity) in HSV space.
+/// </summary>
+/// <param name="count">Number of colors to generate (a single color uses the start values).</param>
+/// <param name="h0">Start hue in degrees, may be any value (wrapped into [0, 360)).</param>
+/// <param name="h1">End hue in degrees, may be any value, the hue goes from h0 to h1 (so h1 &lt; h0 goes "backwards").</param>
+/// <param name="s">Start saturation [0, 1].</param>
+/// <param name="v">Start value (brightness) [0, 1].</param>
+/// <param name="opacity">Start opacity [0, 1].</param>
+/// <param name="s1">End saturation [0, 1], a negative value keeps the saturation constant.</param>
+/// <param name="v1">End value [0, 1], a negative value keeps the value constant.</param>
+/// <param name="opacity1">End opacity [0, 1], a negative value keeps the opacity constant.</param>
+/// <returns>An array of <paramref name="count"/> CSS color strings, "#rrggbb" for opaque colors, else "rgba(r,g,b,a)".</returns>
         public static String[] HtmlHueGradient(int count, double h0, double h1, double s = 0.8, double v = 0.6, double opacity = 1, double s1 = -1, double v1 = -1, double opacity1 = -1)
         {
             h1 -= h0;
@@ -65,10 +90,10 @@ namespace SysWeaver
         /// <summary>
         /// Convert a HSV value to rgb uint (0xrrggbb)
         /// </summary>
-        /// <param name="h">Hue in degrees [0, 360] </param>
+        /// <param name="h">Hue in degrees [0, 360] (values outside this range are not wrapped and give incorrect results)</param>
         /// <param name="s">Saturation in [0, 1]</param>
         /// <param name="v">Value in [0, 1]</param>
-        /// <returns>An rgb value as an uint (0xrrggbb)</returns>
+        /// <returns>An rgb value as an uint (0xrrggbb), components are truncated and clamped to [0, 255]</returns>
         public static uint HsvToRgb(double h, double s, double v)
         {
             HsvToRgb(out var r, out var g, out var b, h, s, v);
@@ -90,7 +115,7 @@ namespace SysWeaver
         /// <param name="r">Red result in [0, 1]</param>
         /// <param name="g">Green result in [0, 1]</param>
         /// <param name="b">Blue result in [0, 1]</param>
-        /// <param name="h">Hue in degrees [0, 360] </param>
+        /// <param name="h">Hue in degrees [0, 360] (values outside this range are not wrapped and give incorrect results)</param>
         /// <param name="s">Saturation in [0, 1]</param>
         /// <param name="v">Value in [0, 1]</param>
         public static void HsvToRgb(out double r, out double g, out double b, double h, double s, double v)
@@ -160,6 +185,15 @@ namespace SysWeaver
         }
 
 
+/// <summary>
+/// Convert an RGB value to HSV.
+/// </summary>
+/// <param name="h">Hue in degrees [0, 360), 0 for gray scale colors (undefined hue).</param>
+/// <param name="s">Saturation in [0, 1].</param>
+/// <param name="v">Value, the maximum of the components (same scale as the input).</param>
+/// <param name="r">Red component, typically in [0, 1].</param>
+/// <param name="g">Green component, typically in [0, 1].</param>
+/// <param name="b">Blue component, typically in [0, 1].</param>
         public static void RgbToHsv(out double h, out double s, out double v, double r, double g, double b)
         {
             double min, max, delta;
@@ -205,6 +239,14 @@ namespace SysWeaver
 
 
 
+/// <summary>
+/// Split a packed 0xrrggbbaa color into its components.
+/// </summary>
+/// <param name="r">Red component [0, 255].</param>
+/// <param name="g">Green component [0, 255].</param>
+/// <param name="b">Blue component [0, 255].</param>
+/// <param name="a">Alpha component [0, 255].</param>
+/// <param name="rgba">The packed color, 0xrrggbbaa (note: alpha in the lowest byte, unlike the 0xaarrggbb used by <see cref="HtmlColors"/>).</param>
         public static void SplitRgba(out double r, out double g, out double b, out double a, uint rgba)
         {
             r = (rgba >> 24);
@@ -213,6 +255,11 @@ namespace SysWeaver
             a = rgba & 0xff;
         }
 
+/// <summary>
+/// Round a value to the nearest integer and clamp it to [0, 255].
+/// </summary>
+/// <param name="v">The value.</param>
+/// <returns>The rounded and clamped value.</returns>
         public static uint ToClampedInt(double v)
         {
             if (v <= 0)
@@ -221,6 +268,13 @@ namespace SysWeaver
             return t > 255 ? 255 : t;
         }
 
+/// <summary>
+/// Linearly interpolate between two packed colors and return the result as a CSS color.
+/// </summary>
+/// <param name="fromRgba">The start color, 0xrrggbbaa.</param>
+/// <param name="toRgba">The end color, 0xrrggbbaa.</param>
+/// <param name="fraction">The interpolation fraction, clamped to [0, 1] (0 = <paramref name="fromRgba"/>, 1 = <paramref name="toRgba"/>).</param>
+/// <returns>"#rrggbb" if the interpolated alpha is opaque, else "rgba(r,g,b,a)".</returns>
         public static String GetInterpolatedAsHtml(uint fromRgba, uint toRgba, double fraction)
         {
             if (fraction < 0)

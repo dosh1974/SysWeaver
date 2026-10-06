@@ -8,10 +8,24 @@ namespace SysWeaver
 {
 
     /// <summary>
-    /// Message handler that output's messages to the console
+    /// Message handler that appends messages to a text (UTF-8) log file.
+    /// When the file grows above the max size, the oldest lines are removed so that the file is about 75% of the max size.
     /// </summary>
+    /// <remarks>
+    /// The file is opened, appended and closed for every message (no handle is kept open), so other processes may read the log while it's written.
+    /// Write failures are not thrown, they are recorded and exposed through <see cref="GetStats"/>.
+    /// Since file I/O is async, prefer <see cref="MessageHandler.Modes.Async"/> or <see cref="MessageHandler.Modes.ForceSync"/>
+    /// (<see cref="MessageHandler.Modes.NativeSync"/> requires the write to complete synchronously).
+    /// </remarks>
     public sealed class FileLogMessageHandler : TextMessageHandler, IHaveStats, IPerfMonitored
     {
+        /// <summary>
+        /// Create a file log handler, a "== File log started .. ==" line is appended (asynchronously) to the file.
+        /// </summary>
+        /// <param name="filename">The log file name (the folder must exist).</param>
+        /// <param name="style">The amount of detail to include in the text.</param>
+        /// <param name="mode">How messages are delivered, see <see cref="MessageHandler.Modes"/>.</param>
+        /// <param name="maxSize">The approximate max size of the log file in bytes (default 2 MiB, minimum 1 KiB).</param>
         public FileLogMessageHandler(String filename, Message.TextStyles style, Modes mode, long maxSize = 2 << 20) : base(style, mode)
         {
             Filename = filename;
@@ -20,7 +34,13 @@ namespace SysWeaver
             WriteText("== File log started " + DateTime.UtcNow.ToLocalTime().ToString("yy-MM-dd HH:mm:ss") + " ==\n").RunAsync();
         }
 
+        /// <summary>
+        /// The file name (without folder) of the log file, suitable as a download name.
+        /// </summary>
         public readonly String DownloadName;
+        /// <summary>
+        /// The file name of the log file, as supplied to the constructor.
+        /// </summary>
         public readonly String Filename;
         readonly long MaxSize;
 
@@ -159,8 +179,15 @@ namespace SysWeaver
 
         const String System = "FileLog";
 
+        /// <summary>
+        /// Performance monitor, tracks the time spent truncating the log file.
+        /// </summary>
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor(System);
 
+        /// <summary>
+        /// Get statistics: the number of chars written and any exceptions that occurred while writing or truncating.
+        /// </summary>
+        /// <returns>The statistics.</returns>
         public IEnumerable<Stats> GetStats()
         {
             yield return new Stats(System, "Written chars", Interlocked.Read(ref WrittenChars), "The total number of chars written to the log file (not bytes since UTF8 is used)");

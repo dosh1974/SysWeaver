@@ -7,11 +7,32 @@ using System.Runtime.InteropServices;
 namespace SysWeaver.Serialization.SwJson.Writer
 {
 
+    /// <summary>
+    /// A growable, pinned byte buffer that the <see cref="JsonWriter"/> writes UTF8 json to, using raw pointers.
+    /// Writers call <see cref="Ensure"/> before writing, the write methods themselves don't check bounds (except <see cref="Validate"/> in DEBUG builds).
+    /// </summary>
+    /// <remarks>
+    /// The buffer is always pinned (by the caller using fixed, or by a <see cref="GCHandle"/> owned by the writer), so <see cref="DataPtr"/> is stable until the buffer grows.
+    /// Growing replaces <see cref="Data"/> and <see cref="DataPtr"/>, any pointer into the old buffer is invalid after a call to <see cref="Ensure"/>.
+    /// Must be disposed (frees the pin handle and returns rented buffers).
+    /// Don't copy an instance (copies share the pin handle and rented buffer, disposing more than one copy frees or returns them twice).
+    /// Not thread safe.
+    /// </remarks>
     [SkipLocalsInit]
     unsafe public ref struct BufferWriter : IDisposable
     {
+        /// <summary>
+        /// If true, boxed values of primitive like types (numbers, strings, bool, char, date / time types, Guid and enums) are written without type information ("$type"),
+        /// else every boxed value (where the runtime type differs from the declared type) is written with type information.
+        /// Set by the <see cref="JsonWriter"/> entry points from their typeIsOptional parameter.
+        /// </summary>
         public bool TypeIsOptional = false;
 
+        /// <summary>
+        /// Create a writer that pins the buffer using a <see cref="GCHandle"/> and grows by allocating new arrays (not pooled).
+        /// </summary>
+        /// <param name="initData">The initial buffer, if null a 4 KB buffer is allocated. Written to in place until it needs to grow, after that the new buffer is available using <see cref="GetBuffer"/></param>
+        /// <param name="startOffset">The offset to start writing at</param>
         public BufferWriter(Byte[] initData, int startOffset = 0)
         {
             var d = initData ?? GC.AllocateUninitializedArray<Byte>(4096);//  (Rented =ArrayPoolStream.Rent(4096));
@@ -70,6 +91,7 @@ namespace SysWeaver.Serialization.SwJson.Writer
         /// <summary>
         /// Get a buffer that the caller owns, with everything written so far: the current buffer if it isn't rented, else a copy (with the same capacity).
         /// </summary>
+        /// <returns>A buffer with the first <see cref="Position"/> bytes written, it's at least <see cref="Position"/> bytes long (the content after that is undefined)</returns>
         internal Byte[] DetachBuffer()
         {
             var d = Data;
@@ -81,6 +103,10 @@ namespace SysWeaver.Serialization.SwJson.Writer
             return b;
         }
 
+        /// <summary>
+        /// Free the pin handle (if any) and return the current buffer to the pool if it's rented.
+        /// The <see cref="Data"/> is set to null, the writer must not be used after this.
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Dispose()
         {
@@ -94,13 +120,30 @@ namespace SysWeaver.Serialization.SwJson.Writer
             Data = null;
         }
 
+        /// <summary>
+        /// The pin handle of the current buffer, if it's pinned by the writer (not allocated if the caller pinned it using fixed)
+        /// </summary>
         public GCHandle PinHandle;
+        /// <summary>
+        /// The address of the first byte of <see cref="Data"/> (changes when the buffer grows)
+        /// </summary>
         public Byte* DataPtr;
 
+        /// <summary>
+        /// The current buffer (replaced when the buffer grows)
+        /// </summary>
         public Byte[] Data;
+        /// <summary>
+        /// The current write position (from the start of the buffer), also the number of bytes used when writing started at offset 0
+        /// </summary>
         public int Offset;
 
 
+        /// <summary>
+        /// Get the free space of the buffer, from the current position to the <see cref="Capacity"/>.
+        /// Used with TryFormat methods, the caller must advance <see cref="Offset"/> by the number of bytes written.
+        /// </summary>
+        /// <returns>A span over the unused part of the buffer (invalid after the buffer grows)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Span<Byte> AsSpan()
         {
@@ -108,6 +151,9 @@ namespace SysWeaver.Serialization.SwJson.Writer
             return new Span<byte>(DataPtr + o, S - o);
         }
 
+        /// <summary>
+        /// The capacity (see <see cref="Capacity"/>)
+        /// </summary>
         int S;
 
         /// <summary>
@@ -120,12 +166,25 @@ namespace SysWeaver.Serialization.SwJson.Writer
             get => S;
         }
 
+        /// <summary>
+        /// Get the current buffer (may be longer than the data written, see <see cref="Position"/>).
+        /// For a pooled writer the buffer may be rented and is returned to the pool when the writer is disposed, use <see cref="DetachBuffer"/> to keep it.
+        /// </summary>
+        /// <returns>The current buffer</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Byte[] GetBuffer() => Data;
 
+        /// <summary>
+        /// The current write position, same as <see cref="Offset"/>
+        /// </summary>
         public int Position => Offset;
 
 
+        /// <summary>
+        /// DEBUG builds only: throws if less than <paramref name="size"/> bytes are available at the current position
+        /// </summary>
+        /// <param name="size">The number of bytes about to be written</param>
+        /// <exception cref="Exception">Not enough space was ensured</exception>
         [Conditional("DEBUG")]
         void Validate(int size)
         {
@@ -146,6 +205,11 @@ namespace SysWeaver.Serialization.SwJson.Writer
         /// </summary>
         const int PooledMinMargin = 256;
 
+        /// <summary>
+        /// Grow the buffer so that at least <paramref name="end"/> bytes (from the start) can be written, keeping the data written so far
+        /// </summary>
+        /// <param name="end">The required capacity</param>
+        /// <exception cref="OutOfMemoryException"><paramref name="end"/> is larger than <see cref="Array.MaxLength"/></exception>
         [MethodImpl(MethodImplOptions.NoInlining)]
         void Grow(long end)
         {
@@ -202,6 +266,15 @@ namespace SysWeaver.Serialization.SwJson.Writer
         }
 
 
+        /// <summary>
+        /// Make sure that at least <paramref name="size"/> bytes can be written at the current position, growing the buffer if needed.
+        /// </summary>
+        /// <remarks>
+        /// The buffer (<see cref="Data"/> and <see cref="DataPtr"/>) may be replaced, so pointers and spans into the buffer must be re-read after this call.
+        /// The json writers ensure some slack (usually 64 bytes) since many writes store 8 or 16 bytes at a time.
+        /// </remarks>
+        /// <param name="size">The number of bytes that will be written</param>
+        /// <exception cref="OutOfMemoryException">The required size is larger than <see cref="Array.MaxLength"/></exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Ensure(int size)
         {
@@ -211,6 +284,10 @@ namespace SysWeaver.Serialization.SwJson.Writer
                 Grow(end);
         }
 
+        /// <summary>
+        /// Write a byte at the current position (the space must be ensured)
+        /// </summary>
+        /// <param name="value">The byte to write</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Write(Byte value)
         {
@@ -221,6 +298,11 @@ namespace SysWeaver.Serialization.SwJson.Writer
             Offset = o;
         }
 
+        /// <summary>
+        /// Write two bytes at the current position (the space must be ensured)
+        /// </summary>
+        /// <param name="a">The first byte</param>
+        /// <param name="b">The second byte</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Write(Byte a, Byte b)
         {

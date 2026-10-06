@@ -3,6 +3,11 @@ using SysWeaver.AI;
 
 namespace SysWeaver.Data
 {
+    /// <summary>
+    /// Request for editing the table data behind a table data reference (used by the "EditTableData" web API / AI tool).
+    /// The operations are applied using <see cref="TableDataEdit.ApplyOps(BaseTableData, Func{String, BaseTableData}, TableDataOp[])"/>,
+    /// the result is stored as a new table data reference and the source data is never modified.
+    /// </summary>
     public sealed class EditTableDataRequest
     {
         /// <summary>
@@ -27,6 +32,9 @@ namespace SysWeaver.Data
 
 
 
+    /// <summary>
+    /// Request for getting the content of a table data reference (used by the "GetTableData" web API / AI tool).
+    /// </summary>
     public sealed class GetTableDataRequest
     {
         /// <summary>

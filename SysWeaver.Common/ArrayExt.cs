@@ -279,7 +279,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Deep clones an array (the T must implement the IClone_T interface)
+        /// Deep clones an array, each element is cloned using <see cref="ICloneable{T}.Clone"/>
         /// </summary>
         /// <typeparam name="T">The element type</typeparam>
         /// <param name="array">The array to clone (may be null)</param>
@@ -296,7 +296,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Deep clones an array (the T must implement the IClone interface)
+        /// Deep clones an array, each element is cloned using <see cref="System.ICloneable.Clone"/>
         /// </summary>
         /// <typeparam name="T">The element type</typeparam>
         /// <param name="array">The array to clone (may be null)</param>
@@ -407,8 +407,9 @@ namespace SysWeaver
         /// <typeparam name="NewValue">The new value type</typeparam>
         /// <param name="dictionary">The dictionary to convert (may be null)</param>
         /// <param name="func">The function that convert a value, the first argument is the key and the second argument is the current value</param>
-        /// <returns>A new dictionary (using the same comparer if it can be determined) with the same keys and converted values, or null if <paramref name="dictionary"/> is null</returns>
+        /// <returns>A new dictionary (using the same comparer as the source) with the same keys and converted values, or null if <paramref name="dictionary"/> is null</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="dictionary"/> is non-null</exception>
+        /// <exception cref="Exception">Thrown if the comparer of the source can't be determined (only Dictionary, ConcurrentDictionary, FrozenDictionary and the frozen dictionaries of this library are supported, see <see cref="DictionaryExt.GetComparer{K, V}(IReadOnlyDictionary{K, V})"/>)</exception>
         public static Dictionary<Key, NewValue> ConvertValues<Key, CurrentValue, NewValue>(this IReadOnlyDictionary<Key, CurrentValue> dictionary, Func<Key, CurrentValue, NewValue> func)
         {
             if (dictionary == null)
@@ -428,8 +429,9 @@ namespace SysWeaver
         /// <typeparam name="NewValue">The new value type</typeparam>
         /// <param name="dictionary">The dictionary to convert (may be null)</param>
         /// <param name="func">The function that convert a value</param>
-        /// <returns>A new dictionary (using the same comparer if it can be determined) with the same keys and converted values, or null if <paramref name="dictionary"/> is null</returns>
+        /// <returns>A new dictionary (using the same comparer as the source) with the same keys and converted values, or null if <paramref name="dictionary"/> is null</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="dictionary"/> is non-null</exception>
+        /// <exception cref="Exception">Thrown if the comparer of the source can't be determined (only Dictionary, ConcurrentDictionary, FrozenDictionary and the frozen dictionaries of this library are supported, see <see cref="DictionaryExt.GetComparer{K, V}(IReadOnlyDictionary{K, V})"/>)</exception>
         public static Dictionary<Key, NewValue> ConvertValues<Key, CurrentValue, NewValue>(this IReadOnlyDictionary<Key, CurrentValue> dictionary, Func<CurrentValue, NewValue> func)
         {
             if (dictionary == null)
@@ -470,7 +472,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Convert an array to another element type using a function.
-        /// Elements are converted in paralell (async).
+        /// Elements are converted in parallel (async).
         /// </summary>
         /// <typeparam name="E">The source element type</typeparam>
         /// <typeparam name="T">The destination element type</typeparam>
@@ -509,7 +511,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Convert an array to another element type using a function.
-        /// Elements are converted in paralell (async).
+        /// Elements are converted in parallel (async).
         /// </summary>
         /// <typeparam name="E">The source element type</typeparam>
         /// <typeparam name="T">The destination element type</typeparam>
@@ -585,7 +587,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Convert an array to another element type using a function.
-        /// Elements are converted in paralell (async).
+        /// Elements are converted in parallel (async).
         /// </summary>
         /// <typeparam name="E">The source element type</typeparam>
         /// <typeparam name="T">The destination element type</typeparam>
@@ -624,7 +626,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Convert an array to another element type using a function.
-        /// Elements are converted in paralell (async).
+        /// Elements are converted in parallel (async).
         /// </summary>
         /// <typeparam name="E">The source element type</typeparam>
         /// <typeparam name="T">The destination element type</typeparam>

@@ -3,7 +3,8 @@
 namespace SysWeaver.Data
 {
     /// <summary>
-    /// Represents the aggregation of a column
+    /// Represents the aggregation of a column.
+    /// Intended for <see cref="TableDataEdit.Aggregate(BaseTableData, TableColumnAggregation[])"/>, which is not implemented yet.
     /// </summary>
     public sealed class TableColumnAggregation
     {
@@ -21,15 +22,15 @@ namespace SysWeaver.Data
         public TableColumnAggregations Aggregation;
 
         /// <summary>
-        /// An optional new column name (uses the exsiting name if omitted)
+        /// An optional new column name (uses the existing name if omitted)
         /// </summary>
         public String NewName;
         /// <summary>
-        /// An optional new column title (uses the exsiting title if omitted)
+        /// An optional new column title (uses the existing title if omitted)
         /// </summary>
         public String NewTitle;
         /// <summary>
-        /// An optional new description (uses the exsiting description if omitted)
+        /// An optional new description (uses the existing description if omitted)
         /// </summary>
         public String NewDesc;
 

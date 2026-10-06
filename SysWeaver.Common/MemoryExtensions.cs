@@ -81,6 +81,9 @@ namespace SysWeaver
     public static class ReadOnlyMemoryComparer
     {
 
+        /// <summary>
+        /// The comparer implementation (a single cached instance per element type)
+        /// </summary>
         sealed class Cmp<T> : IComparer<ReadOnlyMemory<T>>, IEqualityComparer<ReadOnlyMemory<T>>
         {
             public static readonly Cmp<T> Instance = new Cmp<T>();
@@ -126,6 +129,9 @@ namespace SysWeaver
     public static class MemoryComparer
     {
 
+        /// <summary>
+        /// The comparer implementation (a single cached instance per element type)
+        /// </summary>
         sealed class Cmp<T> : IComparer<Memory<T>>, IEqualityComparer<Memory<T>>
         {
             public static readonly Cmp<T> Instance = new Cmp<T>();
@@ -196,6 +202,9 @@ namespace SysWeaver
         /// </summary>
         const int EmptyHash = 0x2f8b51c7;
 
+        /// <summary>
+        /// Content equality (same length and all elements equal using <see cref="EqualityComparer{T}.Default"/>, bitwise types are compared as bytes)
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Equals(ReadOnlySpan<T> x, ReadOnlySpan<T> y)
         {
@@ -206,6 +215,11 @@ namespace SysWeaver
             return x.SequenceEqual(y);
         }
 
+        /// <summary>
+        /// Content hash code.
+        /// Bitwise types are hashed using <see cref="GxHash"/> over the bytes (stable within a process),
+        /// other types combine the element hash codes using <see cref="HashCode"/> (randomized per process).
+        /// </summary>
         public static int GetHashCode(ReadOnlySpan<T> data)
         {
             if (Bitwise)

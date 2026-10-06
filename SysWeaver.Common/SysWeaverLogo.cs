@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Renders the SysWeaver ASCII art logos (compressed, color coded art decoded by <see cref="AsciiTools"/>) to the console or as HTML.
+    /// </summary>
     public static class SysWeaverLogo
     {
         /*
@@ -13,8 +16,11 @@ namespace SysWeaver
         */
 
         /// <summary>
-        /// Draw the logo to the console with specific colors, use default to draw using the default color scheme
+        /// Draw a "Powered by" header followed by the logo to the console with specific colors, use default to draw using the default color scheme
         /// </summary>
+        /// <param name="bright">Color of the bright (foreground) parts of the logo.</param>
+        /// <param name="dark">Color of the dark (shadow) parts of the logo.</param>
+        /// <param name="poweredBy">Color of the "Powered by" text.</param>
         public static void Draw(ConsoleColor bright = ConsoleColor.Green, ConsoleColor dark = ConsoleColor.DarkGreen, ConsoleColor poweredBy = ConsoleColor.Cyan)
         {
             var oldC = ConsoleTools.ForegroundColor;
@@ -65,14 +71,44 @@ namespace SysWeaver
         ];
 
 */
+        /// <summary>
+        /// Render the SysWeaver logo to the console using two colors.
+        /// </summary>
+        /// <param name="bright">Color of the bright (foreground) parts.</param>
+        /// <param name="dark">Color of the dark (shadow) parts.</param>
+        /// <param name="tab">Text to prefix every line with (indentation).</param>
         public static void RenderLogo(ConsoleColor bright = ConsoleColor.Green, ConsoleColor dark = ConsoleColor.DarkGreen, String tab = "") => AsciiTools.RenderColor(Logo, bright, dark, tab);
+        /// <summary>
+        /// Render the SysWeaver logo to the console using its built in color gradient.
+        /// </summary>
+        /// <param name="tab">Text to prefix every line with (indentation).</param>
         public static void RenderLogoGradient(String tab = "") => AsciiTools.RenderColorGradient(LogoGradient, tab);
 
 
+        /// <summary>
+        /// Render the circular SysWeaver logo to the console using two colors.
+        /// </summary>
+        /// <param name="bright">Color of the bright (foreground) parts.</param>
+        /// <param name="dark">Color of the dark (shadow) parts.</param>
+        /// <param name="tab">Text to prefix every line with (indentation).</param>
         public static void RenderCircle(ConsoleColor bright = ConsoleColor.Green, ConsoleColor dark = ConsoleColor.DarkGreen, String tab = "") => AsciiTools.RenderColor(Circle, bright, dark, tab);
+        /// <summary>
+        /// Render the circular SysWeaver logo to the console using its built in color gradient.
+        /// </summary>
+        /// <param name="tab">Text to prefix every line with (indentation).</param>
         public static void RenderCircleGradient(String tab = "") => AsciiTools.RenderColorGradient(CircleGradient, tab);
 
+        /// <summary>
+        /// Render the "AV" logo to the console using two colors.
+        /// </summary>
+        /// <param name="bright">Color of the bright (foreground) parts.</param>
+        /// <param name="dark">Color of the dark (shadow) parts.</param>
+        /// <param name="tab">Text to prefix every line with (indentation).</param>
         public static void RenderAv(ConsoleColor bright = ConsoleColor.Green, ConsoleColor dark = ConsoleColor.DarkGreen, String tab = "") => AsciiTools.RenderColor(AvLogo, bright, dark, tab);
+        /// <summary>
+        /// Render the "AV" logo to the console using its built in color gradient.
+        /// </summary>
+        /// <param name="tab">Text to prefix every line with (indentation).</param>
         public static void RenderAvGradient(String tab = "") => AsciiTools.RenderColorGradient(AvLogoGradient, tab);
 
 
@@ -152,9 +188,27 @@ namespace SysWeaver
         ];
 
 
+        /// <summary>
+        /// Get the SysWeaver logo as HTML using two colors.
+        /// </summary>
+        /// <param name="bright">Color of the bright (foreground) parts.</param>
+        /// <param name="dark">Color of the dark (shadow) parts.</param>
+        /// <param name="tab">Text to prefix every line with (indentation).</param>
+        /// <param name="nlStart">Markup to insert at the start of every line.</param>
+        /// <param name="nlEnd">Markup to insert at the end of every line.</param>
+        /// <param name="tag">The element name used for colored text runs.</param>
+        /// <returns>The HTML markup.</returns>
         public static String GetHtmlLogo(ConsoleColor bright = ConsoleColor.Green, ConsoleColor dark = ConsoleColor.DarkGreen, String tab = "", String nlStart = "<div>", String nlEnd = "</div>", String tag = "span")
             => AsciiTools.GetHtml(Logo, bright, dark, tab, nlStart, nlEnd, tag);
         
+        /// <summary>
+        /// Get the SysWeaver logo as HTML using its built in color gradient.
+        /// </summary>
+        /// <param name="tab">Text to prefix every line with (indentation).</param>
+        /// <param name="nlStart">Markup to insert at the start of every line.</param>
+        /// <param name="nlEnd">Markup to insert at the end of every line.</param>
+        /// <param name="tag">The element name used for colored text runs.</param>
+        /// <returns>The HTML markup.</returns>
         public static String GetHtmlLogoGradient(String tab = "", String nlStart = "<div>", String nlEnd = "</div>", String tag = "span")
             => AsciiTools.GetHtmlGradient(LogoGradient, tab, nlStart, nlEnd, tag);
 

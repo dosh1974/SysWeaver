@@ -7,6 +7,10 @@ using System.Threading.Tasks;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// File name wildcard matching (* and ?) using Windows or Unix style rules.
+    /// </summary>
+    /// <remarks>Each call builds and evaluates a <see cref="Regex"/> (no caching), so avoid it in hot loops.</remarks>
     public static class Wildcard
     {
 
@@ -15,8 +19,16 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fileName">The file name to test, without folder.</param>
         /// <param name="pattern">A wildcard pattern which can use char * to match any amount of characters; or char ? to match one character.</param>
-        /// <param name="unixStyle">If true, use the *nix style wildcard rules; otherwise use windows style rules.</param>
+        /// <param name="unixStyle">
+        /// If true, use the *nix style wildcard rules (case sensitive, * matches anything, ? exactly one character);
+        /// otherwise use Windows style rules (case insensitive, ? matches zero or one non-dot character, special handling of trailing dots and ".*").
+        /// NOTE: the Unix style implementation currently swaps the file name and pattern internally, see the remarks.
+        /// </param>
         /// <returns>true if the file name matches the pattern, false otherwise.</returns>
+        /// <remarks>
+        /// With <paramref name="unixStyle"/> true, <paramref name="fileName"/> is currently used as the pattern and <paramref name="pattern"/> as the text,
+        /// so a call like Match("a.txt", "*.txt", true) returns false.
+        /// </remarks>
         public static bool Match(string fileName, string pattern, bool unixStyle = false)
             => unixStyle ? WildcardMatchesUnixStyle(fileName, pattern) : WildcardMatchesWindowsStyle(fileName, pattern);
 

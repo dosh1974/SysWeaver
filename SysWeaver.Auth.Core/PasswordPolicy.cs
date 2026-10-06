@@ -6,21 +6,29 @@ namespace SysWeaver.Auth
     /// <summary>
     /// Represents a policy to use for a password
     /// </summary>
+    /// <remarks>
+    /// Validate a password using <see cref="PasswordPolicyExt.Check(PasswordPolicy, string)"/>.
+    /// Policies are reported to clients so the UI can validate early.
+    /// </remarks>
     public sealed class PasswordPolicy
     {
+        /// <summary>
+        /// The default policy: 8 to 64 chars, mixed case and at least one number. Shared instance, do not modify.
+        /// </summary>
         public static readonly PasswordPolicy Default = new();
 
+        /// <inheritdoc/>
         public override string ToString() => String.Concat('[', MinLength, ", ", MaxLength, "]",
             MixedCase ? ", mixed case" : "",
             MixedNumerical ? ", mixed numerical" : "",
             MixedSpecial ? ", mixed special" : "");
 
         /// <summary>
-        /// The minimum length of a valid password
+        /// The minimum length of a valid password (values below 1 are treated as 1)
         /// </summary>
         public int MinLength = 8;
         /// <summary>
-        /// The maximum length of a valid password
+        /// The maximum length of a valid password (clamped to [<see cref="MinLength"/>, 128])
         /// </summary>
         public int MaxLength = 64;
 
@@ -30,12 +38,12 @@ namespace SysWeaver.Auth
         public bool MixedCase = true;
 
         /// <summary>
-        /// At least one numerical in addition to letters must be present
+        /// At least one numerical in addition to letters must be present (also requires a letter)
         /// </summary>
         public bool MixedNumerical = true;
 
         /// <summary>
-        /// At least one non-letter, non-numerical char must be present
+        /// At least one non-letter, non-numerical char must be present (also requires a letter)
         /// </summary>
         public bool MixedSpecial;
 

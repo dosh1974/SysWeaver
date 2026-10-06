@@ -24,8 +24,17 @@ namespace SysWeaver
     /// Writes also search for the key lock free before taking the lock (so that the cache misses don't happen while holding it),
     /// the result is used if the segment version is the same when the lock is taken.
     /// </summary>
-    /// <typeparam name="TKey"></typeparam>
-    /// <typeparam name="TValue"></typeparam>
+    /// <remarks>
+    /// Thread safe, all operations can be called concurrently.
+    /// Null keys are not allowed (<see cref="ArgumentNullException"/>).
+    /// Ordinal string keys (the default string comparer or <see cref="StringComparer.Ordinal"/>) use a fast, randomly seeded hash,
+    /// a segment that sees many collisions switches to the randomized ordinal hash (hash flooding protection).
+    /// The segment locks are spin locks, so keep comparers and hash functions cheap.
+    /// <see cref="Keys"/>, <see cref="Values"/>, <see cref="ToList"/> and <see cref="CopyTo"/> return snapshots (new collections), enumeration is weakly consistent (see <see cref="Enumerator"/>).
+    /// Removed entries leave tombstones that are cleaned up when a segment is rebuilt (memory is not returned until then).
+    /// </remarks>
+    /// <typeparam name="TKey">The key type</typeparam>
+    /// <typeparam name="TValue">The value type</typeparam>
     public sealed class LowAllocConcurrentDictionary<TKey, TValue> : IDictionary<TKey, TValue>
     {
         const int SegmentBits = 6;
@@ -77,6 +86,9 @@ namespace SysWeaver
         /// </summary>
         /// <param name="capacity">The number of items the dictionary can hold before it needs to grow, for large data sets set this to avoid growing (and the allocations it causes)</param>
         /// <param name="comparer">The key comparer to use, null to use the default comparer</param>
+        /// <remarks>
+        /// All segment tables are allocated up front (64 segments of at least 16 slots each, even for a small capacity).
+        /// </remarks>
         public LowAllocConcurrentDictionary(int capacity = 1024, IEqualityComparer<TKey> comparer = default)
         {
             Comparer = typeof(TKey).IsValueType && ((comparer == null) || ReferenceEquals(comparer, EqualityComparer<TKey>.Default))
@@ -101,21 +113,51 @@ namespace SysWeaver
                 GetSegmentAt(i).Table = new Table(blocks);
         }
 
+        /// <summary>
+        /// Create a new dictionary with room for 1024 items before growing
+        /// </summary>
+        /// <param name="comparer">The key comparer to use, null to use the default comparer</param>
         public LowAllocConcurrentDictionary(IEqualityComparer<TKey> comparer)
              : this(1024, comparer)
         {
         }
 
 
+        /// <summary>
+        /// Add a new key
+        /// </summary>
+        /// <param name="key">The key, must not be null</param>
+        /// <param name="value">The value</param>
+        /// <exception cref="ArgumentException">Thrown if the key already exists</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
         public void Add(TKey key, TValue value)
         {
             if (!TryAdd(key, value))
                 throw new ArgumentException("An item with the same key has already been added", nameof(key));
         }
 
+        /// <summary>
+        /// Check if a key exists (lock free)
+        /// </summary>
+        /// <param name="key">The key, must not be null</param>
+        /// <returns>True if the key exists</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
         public bool ContainsKey(TKey key) => TryGetValue(key, out _);
+
+        /// <summary>
+        /// Remove a key
+        /// </summary>
+        /// <param name="key">The key, must not be null</param>
+        /// <returns>True if the key was removed</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
         public bool Remove(TKey key) => TryRemove(key, out _);
 
+        /// <summary>
+        /// Get or set the value of a key (setting adds the key or overwrites its value)
+        /// </summary>
+        /// <param name="key">The key, must not be null</param>
+        /// <exception cref="KeyNotFoundException">Thrown by the getter if the key doesn't exist</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
         public TValue this[TKey key]
         {
             get => TryGetValue(key, out var val) ? val : throw new KeyNotFoundException();
@@ -136,9 +178,19 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Always false
+        /// </summary>
         public bool IsReadOnly => false;
+
+        /// <summary>
+        /// A snapshot of the keys (a new list on every call, modifying it doesn't affect the dictionary)
+        /// </summary>
         public ICollection<TKey> Keys => GetKeysCollection();
 
+        /// <summary>
+        /// A snapshot of the values (a new list on every call, modifying it doesn't affect the dictionary)
+        /// </summary>
         public ICollection<TValue> Values => GetValuesCollection();
 
         // The public operations select how keys are hashed and compared (see LowAllocKeyMode): the default comparer for value types (devirtualized and inlined),
@@ -164,6 +216,14 @@ namespace SysWeaver
             get => !typeof(TKey).IsValueType && FastStrings;
         }
 
+        /// <summary>
+        /// Add a key if it doesn't exist
+        /// </summary>
+        /// <param name="key">The key, must not be null</param>
+        /// <param name="value">The value</param>
+        /// <returns>True if the key was added, false if it already existed (the value is not updated)</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
+        /// <exception cref="InvalidOperationException">Thrown if a segment can't grow any further (2^30 slots)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryAdd(TKey key, TValue value)
         {
@@ -194,6 +254,14 @@ namespace SysWeaver
         bool AddOther(TKey key, TValue value, bool overwrite)
             => UseFastStrings ? AddInline(key, value, overwrite, LowAllocKeyMode.FastString) : AddInline(key, value, overwrite, LowAllocKeyMode.Custom);
 
+        /// <summary>
+        /// Get the value of a key.
+        /// Lock free (falls back to reading under the segment lock if the segment is modified continuously), doesn't allocate.
+        /// </summary>
+        /// <param name="key">The key, must not be null</param>
+        /// <param name="value">The value, or default if the key doesn't exist</param>
+        /// <returns>True if the key exists</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
         {
@@ -214,6 +282,13 @@ namespace SysWeaver
         bool TryGetValueOther(TKey key, [MaybeNullWhen(false)] out TValue value)
             => UseFastStrings ? TryGetValueInline(key, out value, LowAllocKeyMode.FastString) : TryGetValueInline(key, out value, LowAllocKeyMode.Custom);
 
+        /// <summary>
+        /// Remove a key (a missing key doesn't take the lock)
+        /// </summary>
+        /// <param name="key">The key, must not be null</param>
+        /// <param name="value">The removed value, or default if the key didn't exist</param>
+        /// <returns>True if the key was removed</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryRemove(TKey key, [MaybeNullWhen(false)] out TValue value)
             => Remove(key, out value, false, default);
@@ -1176,6 +1251,9 @@ namespace SysWeaver
             /// </summary>
             public bool TryGetValue(TAlternate key, [MaybeNullWhen(false)] out TKey actualKey, [MaybeNullWhen(false)] out TValue value) => Dictionary.TryGetValueAlternate(key, AltComparer, out actualKey, out value);
 
+            /// <summary>
+            /// Check if a key exists
+            /// </summary>
             public bool ContainsKey(TAlternate key) => Dictionary.TryGetValueAlternate(key, AltComparer, out _, out _);
 
             /// <summary>
@@ -1188,7 +1266,7 @@ namespace SysWeaver
             }
 
             /// <summary>
-            /// Add a key (created from the alternate key) if it doesn't exist
+            /// Add a key (created from the alternate key) if it doesn't exist, the key is only created (allocated) if it doesn't exist
             /// </summary>
             /// <returns>True if the key was added</returns>
             public bool TryAdd(TAlternate key, TValue value)
@@ -1339,6 +1417,10 @@ namespace SysWeaver
 
         #endregion//Alternate lookup
 
+        /// <summary>
+        /// Remove all items (one segment at a time, so it's not atomic: items added concurrently may survive).
+        /// The tables keep their size (no memory is released, except the references to the keys and values).
+        /// </summary>
         public void Clear()
         {
             var clearEntries = RuntimeHelpers.IsReferenceOrContainsReferences<Entry>();
@@ -1367,15 +1449,35 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Add a new key (see <see cref="Add(TKey, TValue)"/>)
+        /// </summary>
+        /// <param name="item">The key and value</param>
+        /// <exception cref="ArgumentException">Thrown if the key already exists</exception>
+        /// <exception cref="ArgumentNullException">Thrown if the key is null</exception>
         public void Add(KeyValuePair<TKey, TValue> item) => Add(item.Key, item.Value);
+
+        /// <summary>
+        /// Check if a key exists with a specific value (the value is compared using <see cref="EqualityComparer{T}.Default"/>)
+        /// </summary>
+        /// <param name="item">The key and value to find</param>
+        /// <returns>True if the key exists and has the value</returns>
+        /// <exception cref="ArgumentNullException">Thrown if the key is null</exception>
         public bool Contains(KeyValuePair<TKey, TValue> item) => TryGetValue(item.Key, out var val) && EqualityComparer<TValue>.Default.Equals(val, item.Value);
 
         /// <summary>
-        /// Remove the key, only if the value matches (atomically)
+        /// Remove the key, only if the value matches (atomically, the value is compared using <see cref="EqualityComparer{T}.Default"/>)
         /// </summary>
+        /// <param name="item">The key and the expected value</param>
+        /// <returns>True if the key was removed</returns>
+        /// <exception cref="ArgumentNullException">Thrown if the key is null</exception>
         public bool Remove(KeyValuePair<TKey, TValue> item)
             => Remove(item.Key, out _, true, item.Value);
 
+        /// <summary>
+        /// A snapshot of the items (weakly consistent, see <see cref="Enumerator"/>)
+        /// </summary>
+        /// <returns>A new list with the items</returns>
         public List<KeyValuePair<TKey, TValue>> ToList()
         {
             // Don't use the List constructor, it would call Count and CopyTo (that uses ToList)
@@ -1385,9 +1487,21 @@ namespace SysWeaver
             return list;
         }
 
+        /// <summary>
+        /// A snapshot of the items (weakly consistent, see <see cref="Enumerator"/>)
+        /// </summary>
+        /// <returns>A new array with the items</returns>
         public KeyValuePair<TKey, TValue>[] ToArray()
             => ToList().ToArray();
 
+        /// <summary>
+        /// Copy a snapshot of the items to an array
+        /// </summary>
+        /// <param name="array">The destination array</param>
+        /// <param name="arrayIndex">The index in <paramref name="array"/> to start writing at</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="array"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="arrayIndex"/> is negative</exception>
+        /// <exception cref="ArgumentException">Thrown if the destination is too small for the snapshot</exception>
         public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
         {
             ArgumentNullException.ThrowIfNull(array);
@@ -1423,6 +1537,7 @@ namespace SysWeaver
                 C = default;
             }
 
+            /// <inheritdoc/>
             public bool MoveNext()
             {
                 var dict = Dict;
@@ -1455,9 +1570,11 @@ namespace SysWeaver
                 }
             }
 
+            /// <inheritdoc/>
             public readonly KeyValuePair<TKey, TValue> Current => C;
             readonly object IEnumerator.Current => C;
 
+            /// <inheritdoc/>
             public void Reset()
             {
                 SegmentIdx = 0;
@@ -1466,6 +1583,9 @@ namespace SysWeaver
                 C = default;
             }
 
+            /// <summary>
+            /// Does nothing
+            /// </summary>
             public readonly void Dispose() { }
         }
 

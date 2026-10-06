@@ -14,13 +14,20 @@ namespace SysWeaver
 {
 
     /// <summary>
-    /// Dictionary extensions
+    /// Dictionary extensions: creation, aggregation, freezing (creating optimized immutable dictionaries) and getting the comparer of a dictionary.
     /// </summary>
+    /// <remarks>
+    /// <see cref="Freeze{K, V}(IReadOnlyDictionary{K, V}, IEqualityComparer{K})"/> picks the fastest implementation for the content:
+    /// a shared empty dictionary, a single entry dictionary, a vectorized dictionary for 2-8 integer / enum keys, an open addressing table for more integer / enum keys,
+    /// a fingerprint based dictionary for ordinal string keys, else a <see cref="FrozenDictionary{TKey, TValue}"/>.
+    /// The dictionaries returned by Freeze remember their comparer, so freezing them again (with the same comparer) returns the same instance.
+    /// </remarks>
     public static class DictionaryExt
     {
 
         /// <summary>
-        /// The keys of a dictionary as a read only set
+        /// The keys of a dictionary as a read only set (a live view, no copy is made).
+        /// Contains, IsSupersetOf and Overlaps don't allocate, the other set operations copy the keys to a <see cref="HashSet{T}"/>.
         /// </summary>
         sealed class KeySet<K, V> : IReadOnlySet<K>
         {
@@ -85,23 +92,31 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Treats the keys of the dictionary as as read only set, changes to the underlaying dictionary is proagated
+        /// Treats the keys of the dictionary as a read only set, changes to the underlying dictionary are visible through the set (it's a view, not a copy).
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="dictionary">The dictionary to treat as a read only set</param>
-        /// <returns></returns>
+        /// <remarks>
+        /// Thread safety is the same as for the dictionary (don't modify a non-concurrent dictionary while the set is used).
+        /// Lookups use the comparer of the dictionary.
+        /// </remarks>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="dictionary">The dictionary to treat as a read only set, must not be null</param>
+        /// <returns>A read only set view of the keys</returns>
         public static IReadOnlySet<K> KeysAsReadOnlySet<K, V>(this IReadOnlyDictionary<K, V> dictionary) => new KeySet<K, V>(dictionary);
 
 
         /// <summary>
-        /// Aggregates the values on a dictionary with the data from another dictionary.
+        /// Aggregates the values of another dictionary into a dictionary (in-place).
+        /// For keys that exist in both, the value is set to func(existing, other), keys that only exist in <paramref name="with"/> are added with their value.
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="dictionary">The dictionary to modify</param>
-        /// <param name="with">The dictionary to aggregate into the dictionary</param>
-        /// <param name="func">The aggregation function</param>
+        /// <remarks>
+        /// Not thread safe (even for a concurrent dictionary the read-modify-write of a key isn't atomic).
+        /// </remarks>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="dictionary">The dictionary to modify, must not be null</param>
+        /// <param name="with">The dictionary to aggregate into the dictionary, must not be null</param>
+        /// <param name="func">The aggregation function, the first argument is the existing value and the second is the value from <paramref name="with"/></param>
         /// <returns>The dictionary, same object, useful for chaining</returns>
         public static IDictionary<K, V> Aggregate<K, V>(this IDictionary<K, V> dictionary, IReadOnlyDictionary<K, V> with, Func<V, V, V> func)
         {
@@ -139,34 +154,34 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Add values from another dictionary into a dictionary
+        /// Add (sum) the values of another dictionary into a dictionary (in-place), see <see cref="Aggregate{K, V}(IDictionary{K, V}, IReadOnlyDictionary{K, V}, Func{V, V, V})"/>.
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="dictionary">The dictionary to modify</param>
-        /// <param name="with">The dictionary to add into the dictionary</param>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="dictionary">The dictionary to modify, must not be null</param>
+        /// <param name="with">The dictionary to add into the dictionary, must not be null</param>
         /// <returns>The dictionary, same object, useful for chaining</returns>
         public static IDictionary<K, V> Add<K, V>(this IDictionary<K, V> dictionary, IReadOnlyDictionary<K, V> with) where V : IAdditionOperators<V, V, V> =>
             Aggregate<K, V>(dictionary, with, (a, b) => a + b);
 
         /// <summary>
-        /// Take the maximum value from another dictionary into a dictionary
+        /// Take the minimum value of each key from another dictionary into a dictionary (in-place), see <see cref="Aggregate{K, V}(IDictionary{K, V}, IReadOnlyDictionary{K, V}, Func{V, V, V})"/>.
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="dictionary">The dictionary to modify</param>
-        /// <param name="with">The dictionary to max into the dictionary</param>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="dictionary">The dictionary to modify, must not be null</param>
+        /// <param name="with">The dictionary to min into the dictionary, must not be null</param>
         /// <returns>The dictionary, same object, useful for chaining</returns>
         public static IDictionary<K, V> Min<K, V>(this IDictionary<K, V> dictionary, IReadOnlyDictionary<K, V> with) where V : IComparisonOperators<V, V, bool> =>
             Aggregate<K, V>(dictionary, with, (a, b) => a < b ? a : b);
 
         /// <summary>
-        /// Take the maximum value from another dictionary into a dictionary
+        /// Take the maximum value of each key from another dictionary into a dictionary (in-place), see <see cref="Aggregate{K, V}(IDictionary{K, V}, IReadOnlyDictionary{K, V}, Func{V, V, V})"/>.
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="dictionary">The dictionary to modify</param>
-        /// <param name="with">The dictionary to max into the dictionary</param>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="dictionary">The dictionary to modify, must not be null</param>
+        /// <param name="with">The dictionary to max into the dictionary, must not be null</param>
         /// <returns>The dictionary, same object, useful for chaining</returns>
         public static IDictionary<K, V> Max<K, V>(this IDictionary<K, V> dictionary, IReadOnlyDictionary<K, V> with) where V : IComparisonOperators<V, V, bool> =>
             Aggregate<K, V>(dictionary, with, (a, b) => a > b ? a : b);
@@ -180,13 +195,14 @@ namespace SysWeaver
             => (vals != null) && vals.TryGetNonEnumeratedCount(out var c) ? c : 0;
 
         /// <summary>
-        /// Create a dictionary from a collection, if the same key is present more than once, the last is used
+        /// Create a dictionary from a collection of key-value pairs, if the same key is present more than once, the last value is used (doesn't throw).
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="vals">Values</param>
-        /// <param name="k">Optional equality comparer</param>
-        /// <returns></returns>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="vals">The key-value pairs (null is treated as empty)</param>
+        /// <param name="k">Optional key comparer, if null the default comparer is used</param>
+        /// <returns>A new dictionary</returns>
+        /// <exception cref="ArgumentNullException">Thrown if a key is null</exception>
         public static Dictionary<K, V> Create<K, V>(IEnumerable<KeyValuePair<K, V>> vals, IEqualityComparer<K> k = null)
         {
             var d = new Dictionary<K, V>(Capacity(vals), k);
@@ -196,13 +212,14 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Create a dictionary from a collection, if the same key is present more than once, the last is used
+        /// Create a dictionary from a collection of key-value pairs, if the same key is present more than once, the last value is used (doesn't throw).
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="vals">Values</param>
-        /// <param name="k">Optional equality comparer</param>
-        /// <returns></returns>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="vals">The key-value pairs (null is treated as empty)</param>
+        /// <param name="k">Optional key comparer, if null the default comparer is used</param>
+        /// <returns>A new dictionary</returns>
+        /// <exception cref="ArgumentNullException">Thrown if a key is null</exception>
         public static Dictionary<K, V> Create<K, V>(IEnumerable<Tuple<K, V>> vals, IEqualityComparer<K> k = null)
         {
             var d = new Dictionary<K, V>(Capacity(vals), k);
@@ -212,13 +229,14 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Create a dictionary from a collection, if the same key is present more than once, the last is used
+        /// Create a dictionary from a collection of key-value pairs, if the same key is present more than once, the last value is used (doesn't throw).
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="vals">Values</param>
-        /// <param name="k">Optional equality comparer</param>
-        /// <returns></returns>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="vals">The key-value pairs (null is treated as empty)</param>
+        /// <param name="k">Optional key comparer, if null the default comparer is used</param>
+        /// <returns>A new dictionary</returns>
+        /// <exception cref="ArgumentNullException">Thrown if a key is null</exception>
         public static Dictionary<K, V> Create<K, V>(IEnumerable<ValueTuple<K, V>> vals, IEqualityComparer<K> k = null)
         {
             var d = new Dictionary<K, V>(Capacity(vals), k);
@@ -231,13 +249,14 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Create a dictionary from a collection, if the same key is present more than once, the last is used
+        /// Create a concurrent dictionary from a collection of key-value pairs, if the same key is present more than once, the last value is used (doesn't throw).
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="vals">Values</param>
-        /// <param name="k">Optional equality comparer</param>
-        /// <returns></returns>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="vals">The key-value pairs (null is treated as empty)</param>
+        /// <param name="k">Optional key comparer, if null the default comparer is used</param>
+        /// <returns>A new concurrent dictionary (the concurrency level is the number of processors)</returns>
+        /// <exception cref="ArgumentNullException">Thrown if a key is null</exception>
         public static ConcurrentDictionary<K, V> CreateConcurrent<K, V>(IEnumerable<KeyValuePair<K, V>> vals, IEqualityComparer<K> k = null)
         {
             var d = new ConcurrentDictionary<K, V>(Environment.ProcessorCount, Math.Max(Capacity(vals), 31), k);
@@ -247,13 +266,14 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Create a dictionary from a collection, if the same key is present more than once, the last is used
+        /// Create a concurrent dictionary from a collection of key-value pairs, if the same key is present more than once, the last value is used (doesn't throw).
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="vals">Values</param>
-        /// <param name="k">Optional equality comparer</param>
-        /// <returns></returns>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="vals">The key-value pairs (null is treated as empty)</param>
+        /// <param name="k">Optional key comparer, if null the default comparer is used</param>
+        /// <returns>A new concurrent dictionary (the concurrency level is the number of processors)</returns>
+        /// <exception cref="ArgumentNullException">Thrown if a key is null</exception>
         public static ConcurrentDictionary<K, V> CreateConcurrent<K, V>(IEnumerable<Tuple<K, V>> vals, IEqualityComparer<K> k = null)
         {
             var d = new ConcurrentDictionary<K, V>(Environment.ProcessorCount, Math.Max(Capacity(vals), 31), k);
@@ -263,13 +283,14 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Create a dictionary from a collection, if the same key is present more than once, the last is used
+        /// Create a concurrent dictionary from a collection of key-value pairs, if the same key is present more than once, the last value is used (doesn't throw).
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="vals">Values</param>
-        /// <param name="k">Optional equality comparer</param>
-        /// <returns></returns>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="vals">The key-value pairs (null is treated as empty)</param>
+        /// <param name="k">Optional key comparer, if null the default comparer is used</param>
+        /// <returns>A new concurrent dictionary (the concurrency level is the number of processors)</returns>
+        /// <exception cref="ArgumentNullException">Thrown if a key is null</exception>
         public static ConcurrentDictionary<K, V> CreateConcurrent<K, V>(IEnumerable<ValueTuple<K, V>> vals, IEqualityComparer<K> k = null)
         {
             var d = new ConcurrentDictionary<K, V>(Environment.ProcessorCount, Math.Max(Capacity(vals), 31), k);
@@ -280,49 +301,65 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Try to remove an element from a dictionary
+        /// Try to remove an element from a dictionary (same as <see cref="Dictionary{TKey, TValue}.Remove(TKey, out TValue)"/>, named like <see cref="ConcurrentDictionary{TKey, TValue}.TryRemove(TKey, out TValue)"/> so that the same code works for both).
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="d"></param>
-        /// <param name="key"></param>
-        /// <param name="value"></param>
-        /// <returns></returns>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="d">The dictionary, must not be null</param>
+        /// <param name="key">The key to remove, must not be null</param>
+        /// <param name="value">The removed value, or default if the key wasn't found</param>
+        /// <returns>True if the key was found and removed</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryRemove<K, V>(this Dictionary<K, V> d, K key, out V value)
             => d.Remove(key, out value);
 
         /// <summary>
-        /// Create a frozen version of a dictionary
+        /// Create a frozen (immutable, lookup optimized) copy of a dictionary, using the comparer of the dictionary.
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="d"></param>
-        /// <returns></returns>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="d">The dictionary to freeze (may be null)</param>
+        /// <returns>An immutable dictionary with the same entries and comparer, or null if <paramref name="d"/> is null.
+        /// See <see cref="Freeze{K, V}(IReadOnlyDictionary{K, V}, IEqualityComparer{K})"/>.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IReadOnlyDictionary<K, V> Freeze<K, V>(this Dictionary<K, V> d)
             => Freeze<K, V>(d, d?.Comparer);
 
 
         /// <summary>
-        /// Create a frozen version of a dictionary
+        /// Create a frozen (immutable, lookup optimized) version of a dictionary, using the comparer of the dictionary.
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="d"></param>
-        /// <returns></returns>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="d">The dictionary to freeze (may be null)</param>
+        /// <returns>An immutable dictionary with the same entries and comparer, or null if <paramref name="d"/> is null.
+        /// If <paramref name="d"/> is already frozen it's returned as is.
+        /// See <see cref="Freeze{K, V}(IReadOnlyDictionary{K, V}, IEqualityComparer{K})"/>.</returns>
+        /// <exception cref="Exception">Thrown if the comparer of <paramref name="d"/> can't be determined (see <see cref="GetComparer{K, V}(IReadOnlyDictionary{K, V})"/>)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IReadOnlyDictionary<K, V> Freeze<K, V>(this IReadOnlyDictionary<K, V> d)
             => Freeze<K, V>(d, d?.GetComparer());
 
         /// <summary>
-        /// Create a frozen version of a dictionary
+        /// Create a frozen (immutable, lookup optimized) version of a dictionary, using a specific comparer.
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="d"></param>
-        /// <param name="comparer">The comparer to use (also kept for an empty dictionary)</param>
-        /// <returns></returns>
+        /// <remarks>
+        /// The implementation is chosen from the content and the comparer:
+        /// a shared (cached per comparer) empty dictionary, a single entry dictionary, a vectorized dictionary for 2-8 keys of a 4 or 8 byte integer / enum type (default comparer),
+        /// an open addressing table for more such keys, a fingerprint based dictionary for ordinal string keys (<see cref="StringComparer.Ordinal"/> or the default string comparer),
+        /// else a <see cref="FrozenDictionary{TKey, TValue}"/>.
+        /// The returned dictionaries are thread safe for reads.
+        /// Freezing allocates a copy, it's intended for data that is created once and read many times (see also <see cref="SemiFrozenDictionary{TKey, TValue}"/>).
+        /// A null key throws <see cref="ArgumentNullException"/> on lookups, except for the empty and single entry dictionaries (where it's simply not found).
+        /// </remarks>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="d">The dictionary to freeze (may be null)</param>
+        /// <param name="comparer">The comparer to use (also kept for an empty dictionary), must not be null</param>
+        /// <returns>An immutable dictionary with the entries of <paramref name="d"/> using <paramref name="comparer"/>, or null if <paramref name="d"/> is null.
+        /// If <paramref name="d"/> is already a frozen dictionary with the same comparer, it's returned as is.</returns>
+        /// <exception cref="Exception">Thrown if <paramref name="comparer"/> is null (and <paramref name="d"/> is non-null)</exception>
         public static IReadOnlyDictionary<K, V> Freeze<K, V>(this IReadOnlyDictionary<K, V> d, IEqualityComparer<K> comparer)
         {
             if (d == null)
@@ -359,14 +396,14 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Create an optimized dictionary from a single entry
+        /// Create an immutable, lookup optimized dictionary with a single entry (a single allocation).
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="key"></param>
-        /// <param name="value"></param>
-        /// <param name="comp"></param>
-        /// <returns></returns>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="key">The key</param>
+        /// <param name="value">The value</param>
+        /// <param name="comp">The key comparer, if null the default comparer is used</param>
+        /// <returns>A frozen dictionary with one entry (freezing it again with the same comparer returns the same instance)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IReadOnlyDictionary<K, V> Single<K, V>(K key, V value, IEqualityComparer<K> comp = null)
         {
@@ -378,9 +415,13 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Get the comparer of a dictionary (FrozenDictionary, Dictionary, ConcurrentDictionary and the dictionaries returned by Freeze / Single)
+        /// Get the comparer of a dictionary (<see cref="FrozenDictionary{TKey, TValue}"/>, <see cref="Dictionary{TKey, TValue}"/>, <see cref="ConcurrentDictionary{TKey, TValue}"/> and the dictionaries returned by Freeze / Single).
         /// </summary>
-        /// <exception cref="Exception">If the comparer is unknown</exception>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="dict">The dictionary</param>
+        /// <returns>The key comparer of the dictionary</returns>
+        /// <exception cref="Exception">Thrown if the comparer is unknown (any other dictionary implementation, like a SortedDictionary or a ReadOnlyDictionary wrapper) or if <paramref name="dict"/> is null</exception>
         public static IEqualityComparer<K> GetComparer<K, V>(this IReadOnlyDictionary<K, V> dict)
             => TryGetComparer(dict) ?? throw new Exception("No comparer could be found!");
 
@@ -399,21 +440,47 @@ namespace SysWeaver
     }
 
 
+    /// <summary>
+    /// Shared read only dictionary instances.
+    /// </summary>
+    /// <remarks>
+    /// Has the same name as System.Collections.ObjectModel.ReadOnlyDictionary, qualify the name if both namespaces are imported.
+    /// </remarks>
+    /// <typeparam name="K">The key type</typeparam>
+    /// <typeparam name="V">The value type</typeparam>
     public static class ReadOnlyDictionary<K, V>
     {
+        /// <summary>
+        /// A shared, immutable, empty dictionary using <see cref="EqualityComparer{T}.Default"/> (the same instance as <see cref="ReadOnlyData.EmptyDictionary{K, V}"/>).
+        /// </summary>
         public static readonly IReadOnlyDictionary<K, V> Empty = EmptyReadonlyDictionary<K, V>.Default;
     }
 
 
 
+    /// <summary>
+    /// Implemented by the frozen sets and dictionaries created by this library, exposes the comparer (so that they can be re-frozen without a copy).
+    /// </summary>
+    /// <typeparam name="K">The key type</typeparam>
     interface IHaveComparere<K>
     {
+        /// <summary>
+        /// The key comparer
+        /// </summary>
         IEqualityComparer<K> Comp { get; }
     }
 
+    /// <summary>
+    /// An immutable empty dictionary that remembers its comparer, one shared instance per comparer (returned by <see cref="DictionaryExt.Freeze{K, V}(IReadOnlyDictionary{K, V}, IEqualityComparer{K})"/> for an empty dictionary).
+    /// </summary>
+    /// <typeparam name="K">The key type</typeparam>
+    /// <typeparam name="V">The value type</typeparam>
     sealed class EmptyReadonlyDictionary<K, V> : IReadOnlyDictionary<K, V>, IHaveComparere<K>
     {
 
+        /// <summary>
+        /// The empty dictionary using <see cref="EqualityComparer{T}.Default"/>
+        /// </summary>
         public static readonly EmptyReadonlyDictionary<K, V> Default = new (EqualityComparer<K>.Default);
 
         /// <summary>
@@ -422,8 +489,10 @@ namespace SysWeaver
         static readonly ConditionalWeakTable<IEqualityComparer<K>, EmptyReadonlyDictionary<K, V>> Others = new();
 
         /// <summary>
-        /// Get an empty dictionary with a comparer
+        /// Get the shared empty dictionary of a comparer (the instances of other comparers than the default are kept in a weak table, so they don't keep the comparer alive).
+        /// Thread safe.
         /// </summary>
+        /// <param name="comparer">The comparer, must not be null</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static EmptyReadonlyDictionary<K, V> Get(IEqualityComparer<K> comparer)
         {
@@ -507,6 +576,9 @@ namespace SysWeaver
         public static bool Equals(IEqualityComparer<K> comparer, K a, K b) => comparer.Equals(a, b);
     }
 
+    /// <summary>
+    /// Selects the <see cref="IKeyEquality{K}"/> implementation to use
+    /// </summary>
     static class KeyEquality<K>
     {
         /// <summary>
@@ -517,6 +589,15 @@ namespace SysWeaver
             => typeof(K).IsValueType && ReferenceEquals(comparer, EqualityComparer<K>.Default);
     }
 
+    /// <summary>
+    /// An immutable dictionary with a single entry (see <see cref="DictionaryExt.Single{K, V}(K, V, IEqualityComparer{K})"/>).
+    /// </summary>
+    /// <typeparam name="K">The key type</typeparam>
+    /// <typeparam name="V">The value type</typeparam>
+    /// <typeparam name="TEq">How the key is compared, <see cref="DefaultKeyEquality{K}"/> for value types using the default comparer (devirtualized), else <see cref="ComparerKeyEquality{K}"/></typeparam>
+    /// <remarks>
+    /// A null key is passed to the comparer (it's not found, no exception is thrown).
+    /// </remarks>
     sealed class SingleReadonlyDictionary<K, V, TEq> : IReadOnlyDictionary<K, V>, IHaveComparere<K> where TEq : struct, IKeyEquality<K>
     {
         public SingleReadonlyDictionary(K key, V value, IEqualityComparer<K> comp)

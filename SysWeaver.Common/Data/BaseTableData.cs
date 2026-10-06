@@ -6,6 +6,9 @@ using SysWeaver.AI;
 namespace SysWeaver.Data
 {
 
+    /// <summary>
+    /// Members common to all table data responses.
+    /// </summary>
     public abstract class CommonTableData
     {
         /// <summary>
@@ -37,6 +40,10 @@ namespace SysWeaver.Data
         [AiOptional]
         public String Title;
 
+        /// <summary>
+        /// Copy the common values from another instance (shallow copy).
+        /// </summary>
+        /// <param name="s">The instance to copy from</param>
         public void CopyFrom(CommonTableData s)
         {
             RowCount = s.RowCount;
@@ -46,6 +53,9 @@ namespace SysWeaver.Data
 
     }
 
+    /// <summary>
+    /// Table data where each row is a <see cref="TableDataRow"/> containing the column values (type agnostic).
+    /// </summary>
     public class BaseTableData : CommonTableData
     {
 #if DEBUG
@@ -57,12 +67,20 @@ namespace SysWeaver.Data
         /// </summary>
         public TableDataRow[] Rows;
 
+        /// <summary>
+        /// Copy all values from another instance (shallow copy, the arrays are shared).
+        /// </summary>
+        /// <param name="s">The instance to copy from</param>
         public void CopyFrom(BaseTableData s)
         {
             base.CopyFrom(s);
             Rows = s.Rows;
         }
 
+        /// <summary>
+        /// Create a shallow copy (the arrays are shared).
+        /// </summary>
+        /// <returns>A new instance</returns>
         public BaseTableData Clone()
         {
             var t = new BaseTableData();
@@ -72,6 +90,10 @@ namespace SysWeaver.Data
 
     }
 
+    /// <summary>
+    /// Table data where each row is an instance of the row type (the columns are the members of the row type).
+    /// </summary>
+    /// <typeparam name="T">The row type</typeparam>
     public class TypedTableData<T> : CommonTableData
     {
 
@@ -93,10 +115,17 @@ namespace SysWeaver.Data
         /// </summary>
         public T[] Rows;
 
+        /// <summary>
+        /// Create an empty instance.
+        /// </summary>
         public TypedTableData()
         {
         }
 
+        /// <summary>
+        /// Copy all values from another instance (shallow copy, the arrays are shared).
+        /// </summary>
+        /// <param name="s">The instance to copy from</param>
         public void CopyFrom(TypedTableData<T> s)
         {
             base.CopyFrom(s);
@@ -105,6 +134,10 @@ namespace SysWeaver.Data
             Rows = s.Rows;
         }
 
+        /// <summary>
+        /// Create a shallow copy (the arrays are shared).
+        /// </summary>
+        /// <returns>A new instance</returns>
         public TypedTableData<T> Clone()
         {
             var t = new TypedTableData<T>();
@@ -113,6 +146,13 @@ namespace SysWeaver.Data
         }
 
 
+        /// <summary>
+        /// Create a new table data with the rows converted to another type, all other values (including the columns) are copied as is.
+        /// </summary>
+        /// <typeparam name="N">The new row type</typeparam>
+        /// <param name="convert">The function used to convert each row</param>
+        /// <returns>A new instance</returns>
+        /// <remarks>The columns are not updated, so they still describe <typeparamref name="T"/>.</remarks>
         public TypedTableData<N> Retype<N>(Func<T, N> convert)
             => new TypedTableData<N>
             {
@@ -124,6 +164,13 @@ namespace SysWeaver.Data
                 Title = Title,
             };
 
+        /// <summary>
+        /// Create a new table data with the rows converted to another type (asynchronously), all other values (including the columns) are copied as is.
+        /// </summary>
+        /// <typeparam name="N">The new row type</typeparam>
+        /// <param name="convert">The function used to convert each row</param>
+        /// <returns>A new instance</returns>
+        /// <remarks>The columns are not updated, so they still describe <typeparamref name="T"/>.</remarks>
         public async Task<TypedTableData<N>> RetypeAsync<N>(Func<T, Task<N>> convert)
             => new TypedTableData<N>
             {

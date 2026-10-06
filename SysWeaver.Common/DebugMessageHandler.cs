@@ -6,8 +6,12 @@ namespace SysWeaver
 {
 
     /// <summary>
-    /// Message handler that output's messages to the console
+    /// Message handler that writes messages to the debug output (<see cref="System.Diagnostics.Debug"/>, ex: the Visual Studio output window).
     /// </summary>
+    /// <remarks>
+    /// Instances are shared singletons, obtained using <see cref="GetSync(Message.TextStyles)"/> or <see cref="GetAsync(Message.TextStyles)"/>.
+    /// Since <see cref="System.Diagnostics.Debug"/> calls are removed by the compiler in release builds of this assembly, nothing is output in release builds.
+    /// </remarks>
     public sealed class DebugMessageHandler : TextMessageHandler
     {
        
@@ -15,7 +19,8 @@ namespace SysWeaver
         /// Get a debug log handler that isn't blocking the calling thread while outputting (this improved performance but "debugging" using logging is harder)
         /// </summary>
         /// <param name="style">The display style to use</param>
-        /// <returns>A message handler</returns>
+        /// <returns>A shared message handler instance (the same instance is returned for the same style)</returns>
+        /// <exception cref="IndexOutOfRangeException"><paramref name="style"/> is not a defined <see cref="Message.TextStyles"/> value.</exception>
         public static DebugMessageHandler GetAsync(Message.TextStyles style = Message.TextStyles.Debug)
         {
             var index = (int)style << 1;
@@ -26,7 +31,8 @@ namespace SysWeaver
         /// Get a debug log handler that is blocking the calling thread while outputting (this makes it better for "debugging" but may slow down)
         /// </summary>
         /// <param name="style">The display style to use</param>
-        /// <returns>A message handler</returns>
+        /// <returns>A shared message handler instance (the same instance is returned for the same style)</returns>
+        /// <exception cref="IndexOutOfRangeException"><paramref name="style"/> is not a defined <see cref="Message.TextStyles"/> value.</exception>
         public static DebugMessageHandler GetSync(Message.TextStyles style = Message.TextStyles.Debug)
         {
             var index = (int)style << 1;

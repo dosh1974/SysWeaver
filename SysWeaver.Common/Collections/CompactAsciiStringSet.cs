@@ -12,14 +12,30 @@ namespace SysWeaver.Collections
     /// Contains a set of strings with focus on being compact in memory.
     /// Searching for a string is log(n).
     /// Typically uses 3-4 times less memory than a byte array of the same strings along with a int array of string start indices.
-    /// String must be added in sorted order (using ascii sort).
+    /// String must be added in sorted order (using <see cref="AsciiCompare"/>).
     /// All chars are compared ordinally.
     /// </summary>
+    /// <remarks>
+    /// Strings are stored in blocks of <see cref="BlockSize"/> strings, each string (except the first in a block) is front coded,
+    /// i.e. stored as the length of the common prefix with the previous string (max 31) followed by the remaining chars, one byte per char.
+    /// A binary search on the first string of each block is followed by a linear scan of the block.
+    /// <para>
+    /// Strings must be non-empty and only contain chars in the range [32, 255]; this (and the sort order) is only validated in DEBUG builds,
+    /// in release builds violating it gives undefined results (chars above 255 are truncated to a byte).
+    /// </para>
+    /// <para>
+    /// Not thread safe. The read methods (<see cref="IndexOf"/>, <see cref="Contains"/> and enumeration) build the last partial block if needed,
+    /// so call <see cref="Fix"/> after the last <see cref="Add"/> before reading concurrently from multiple threads.
+    /// </para>
+    /// </remarks>
     public sealed class CompactAsciiStringSet : IEnumerable<String>
     {
 #if DEBUG
         public override string ToString() => String.Concat(Count, " strings in ", ByteCount, " bytes @ ", (Compression * 100.0).ToString("0.00", CultureInfo.InvariantCulture), "% compression");
 #endif//DEBBUG
+        /// <summary>
+        /// The ratio between <see cref="ByteCount"/> and <see cref="OriginalByteCount"/> (lower is better).
+        /// </summary>
         public double Compression => (double)ByteCount / (double)OriginalByteCount;
 
         /// <summary>
@@ -28,7 +44,7 @@ namespace SysWeaver.Collections
         public long ByteCount => RawByteCount + Blocks.Count * 16 + 16;
 
         /// <summary>
-        /// Approximate number of bytes used if sotred as one Byte[] and int int[] with string start indices.
+        /// Approximate number of bytes used if stored as one Byte[] and an int[] with string start indices.
         /// </summary>
         public long OriginalByteCount { get; private set; } = 2 * 16;
 
@@ -37,7 +53,7 @@ namespace SysWeaver.Collections
         long RawByteCount;
 
         /// <summary>
-        /// Number of string in the set
+        /// Number of strings in the set
         /// </summary>
         public long Count { get; private set; }
 
@@ -46,7 +62,15 @@ namespace SysWeaver.Collections
 
         readonly List<String> Build;
 
+        /// <summary>
+        /// The number of strings per block.
+        /// A larger block size is more compact but makes lookups slower (linear scan within a block).
+        /// </summary>
         public readonly int BlockSize;
+        /// <summary>
+        /// Create an empty set.
+        /// </summary>
+        /// <param name="blockSize">The number of strings per block, values less than 8 are clamped to 8</param>
         public CompactAsciiStringSet(int blockSize = 64)
         {
             blockSize = Math.Max(8, blockSize);
@@ -65,11 +89,11 @@ namespace SysWeaver.Collections
 
 
         /// <summary>
-        /// The sort method that must be used 
+        /// The sort method that must be used, an ordinal char by char comparison where a shorter string sorts before a longer string with the same prefix.
         /// </summary>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <returns></returns>
+        /// <param name="a">The first string (non-null)</param>
+        /// <param name="b">The second string (non-null)</param>
+        /// <returns>Less than zero if <paramref name="a"/> sorts before <paramref name="b"/>, zero if equal and greater than zero if <paramref name="a"/> sorts after <paramref name="b"/></returns>
         public static int AsciiCompare(String a, String b)
         {
             var al = a.Length;
@@ -87,19 +111,19 @@ namespace SysWeaver.Collections
         }
 
         /// <summary>
-        /// Check is a string is in the set
+        /// Check if a string is in the set
         /// </summary>
-        /// <param name="s"></param>
-        /// <returns></returns>
+        /// <param name="s">The string to find (non-null)</param>
+        /// <returns>True if the string is in the set</returns>
         public bool Contains(String s)
             => IndexOf(s) >= 0;
 
         /// <summary>
-        /// Get the index of a string (in insert order)
+        /// Get the index of a string (in insert order, which is also the sort order)
         /// </summary>
-        /// <param name="s"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="s">The string to find (non-null)</param>
+        /// <returns>The zero based index of the string or -1 if it's not in the set</returns>
+        /// <exception cref="Exception">DEBUG builds only: The string is empty or contains invalid chars</exception>
         public int IndexOf(String s)
         {
 #if DEBUG
@@ -192,7 +216,7 @@ namespace SysWeaver.Collections
         /// String must be ascii as in all chars are between: [32, 255].
         /// </summary>
         /// <param name="s">The string to insert</param>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="Exception">DEBUG builds only: The string is null, empty, contains invalid chars or isn't greater than the previously added string</exception>
         public void Add(String s)
         {
 #if DEBUG
@@ -236,6 +260,7 @@ namespace SysWeaver.Collections
 
         /// <summary>
         /// Call after last Add to get the correct statistics.
+        /// Builds the last partial block (if any), this is otherwise done lazily by the first read.
         /// </summary>
         public void Fix()
         {
@@ -302,6 +327,10 @@ namespace SysWeaver.Collections
             return bl;
         }
 
+        /// <summary>
+        /// Enumerate all strings in the set (in insert order).
+        /// </summary>
+        /// <returns>An enumerator, a new string is allocated for every item</returns>
         public IEnumerator<string> GetEnumerator()
         {
             if (HavePartial)

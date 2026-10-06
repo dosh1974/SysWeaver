@@ -11,19 +11,19 @@ namespace SysWeaver
     public static unsafe class SpanStringExt
     {
         /// <summary>
-        /// Create an lowercase string from a span
+        /// Create a lowercase string from a span (invariant culture, char by char)
         /// </summary>
-        /// <param name="text"></param>
-        /// <returns></returns>
+        /// <param name="text">The chars to convert</param>
+        /// <returns>A new string (always allocated)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToLowerCaseString(this ReadOnlySpan<Char> text)
             => String.Create(text.Length, text, CreateLowerCasedString);
 
         /// <summary>
-        /// Create an uppercase string from a span
+        /// Create an uppercase string from a span (invariant culture, char by char)
         /// </summary>
-        /// <param name="text"></param>
-        /// <returns></returns>
+        /// <param name="text">The chars to convert</param>
+        /// <returns>A new string (always allocated)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToUpperCaseString(this ReadOnlySpan<Char> text)
             => String.Create(text.Length, text, CreateUpperCasedString);
@@ -32,9 +32,9 @@ namespace SysWeaver
         /// <summary>
         /// Concat spans into a string with zero unnecessary memory allocations and zero unnecessary memory copying.
         /// </summary>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <returns></returns>
+        /// <param name="a">The first part</param>
+        /// <param name="b">The second part</param>
+        /// <returns>A new string with all the parts (empty if all parts are empty)</returns>
         public static String ConcatToString(this ReadOnlySpan<char> a, ReadOnlySpan<char> b)
         {
             var al = a.Length;
@@ -54,10 +54,10 @@ namespace SysWeaver
         /// <summary>
         /// Concat spans into a string with zero unnecessary memory allocations and zero unnecessary memory copying.
         /// </summary>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <param name="c"></param>
-        /// <returns></returns>
+        /// <param name="a">The first part</param>
+        /// <param name="b">The second part</param>
+        /// <param name="c">The third part</param>
+        /// <returns>A new string with all the parts (empty if all parts are empty)</returns>
         public static String ConcatToString(this ReadOnlySpan<char> a, ReadOnlySpan<char> b, ReadOnlySpan<char> c)
         {
             var al = a.Length;
@@ -80,11 +80,11 @@ namespace SysWeaver
         /// <summary>
         /// Concat spans into a string with zero unnecessary memory allocations and zero unnecessary memory copying.
         /// </summary>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <param name="c"></param>
-        /// <param name="d"></param>
-        /// <returns></returns>
+        /// <param name="a">The first part</param>
+        /// <param name="b">The second part</param>
+        /// <param name="c">The third part</param>
+        /// <param name="d">The fourth part</param>
+        /// <returns>A new string with all the parts (empty if all parts are empty)</returns>
         public static String ConcatToString(this ReadOnlySpan<char> a, ReadOnlySpan<char> b, ReadOnlySpan<char> c, ReadOnlySpan<char> d)
         {
             var al = a.Length;
@@ -108,6 +108,9 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Copies the (pinned) sources, pointer and length pairs, into the new string
+        /// </summary>
         static readonly SpanAction<Char, Span<(IntPtr, int)>> Concat = (dest, sources) =>
         {
             fixed (Char* dd = dest)
@@ -126,6 +129,9 @@ namespace SysWeaver
         };
 
 
+        /// <summary>
+        /// Upper cases the source (the state) into a new string, using the invariant culture
+        /// </summary>
         static readonly SpanAction<Char, ReadOnlySpan<Char>> CreateUpperCasedString = (to, src) =>
         {
             var t = CharPtrTools.Ti;
@@ -138,6 +144,9 @@ namespace SysWeaver
         };
 
 
+        /// <summary>
+        /// Lower cases the source (the state) into a new string, using the invariant culture
+        /// </summary>
         static readonly SpanAction<Char, ReadOnlySpan<Char>> CreateLowerCasedString = (to, src) =>
         {
             var t = CharPtrTools.Ti;

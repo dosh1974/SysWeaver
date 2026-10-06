@@ -14,6 +14,7 @@ namespace SysWeaver
     /// Variable values can be transformed by prepending the variable name with one of the following:
     ///   _ = Make lower case, ex: "hello world!".
     ///   ^ = Make upper case, ex: "HELLO WORLD!".
+    ///   ~ = Remove camel case, ex: "MyCoolType" => "My cool type".
     ///   @ = Make html attribute safe (HttpUtility.HtmlAttributeEncode), ex: "Hello world!".
     ///   # = Make html value safe (HttpUtility.HtmlEncode), ex: "Hello world!".
     ///   % = Make URL safe (HttpUtility.UrlEncode), ex: "Hello+world!".
@@ -23,15 +24,24 @@ namespace SysWeaver
     ///   * = Make file/path safe (PathExt.SafeFilename), ex: "C:\Apa" => "C__Apa".
     /// Only one of _ , ^ and ~ may be used.
     /// Only one of @, #, %, $, £, ¤ and * may be used.
-    /// _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: _#, ^$
+    /// _ , ^ and ~ can be combined with one of @, #, %, $, £, ¤ and *, ex: _#, ^$
     /// </summary>
+    /// <remarks>
+    /// The template text is parsed once (in the constructor), <see cref="Get(Func{string, string})"/> then builds the result with a single string allocation.
+    /// Instances are immutable and <see cref="Get(Func{string, string})"/> is thread safe (as long as the value provider is).
+    /// The value provider is called more than once per variable (once to compute the length and once per occurrence), so it must return the same value for the same name during a call.
+    /// How unresolved variables (the provider returns null) are rendered depends on the constructor, see each constructor.
+    /// Typically used for path templates (<see cref="PathTemplate"/>), environment variables (<see cref="EnvInfo.ResolveText(string, bool, IReadOnlyDictionary{string, string})"/>) and HTML / text templates in the HTTP server.
+    /// </remarks>
     public sealed class TextTemplate
     {
 
         /// <summary>
-        /// Create a text template where variables have a start and end token
+        /// Create a text template where variables have a start and end token.
+        /// Unresolved variables are left as is in the output (ex: "$(Unknown)"), unresolved transformed variables are rendered as the transformed variable name without the tokens.
+        /// A begin token without a matching end token is treated as plain text.
         /// </summary>
-        /// <param name="text">The original text</param>
+        /// <param name="text">The original text (may not be null)</param>
         /// <param name="varBegin">Variable begin with this</param>
         /// <param name="varEnd">Variables end with this</param>
         /// <param name="caseInSensitive">If true, the variable is case insensitive</param>
@@ -50,7 +60,8 @@ namespace SysWeaver
         /// Only one of _ , ^ and ~ may be used.
         /// Only one of @, #, %, $, £, ¤ and * may be used.
         /// _ , ^ and ~ can be combined with one of @, #, %, $ and *, ex: $(_#Var)
-        /// </param>/// 
+        /// </param>
+        /// <exception cref="NullReferenceException"><paramref name="text"/>, <paramref name="varBegin"/> or <paramref name="varEnd"/> is null.</exception>
         public TextTemplate(String text, String varBegin = "$(", String varEnd = ")", bool caseInSensitive = false, bool allowTransforms = true)
         {
             var beginLen = varBegin.Length;
@@ -136,7 +147,9 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Create a text template where the specified values can be replaced
+        /// Create a text template where the specified strings can be replaced (any occurrence of the strings in the text, no begin / end tokens).
+        /// Unresolved variables are left as is in the output.
+        /// When transforms are allowed, a transform prefix is inserted before the first letter or digit of each string, ex: "${Name}" can be used as "${_Name}".
         /// </summary>
         /// <param name="text">The original text</param>
         /// <param name="replace">A set of strings that can be replaced</param>
@@ -212,10 +225,15 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Create a text template where the specified values can be replaced
+        /// Create a text template where the specified strings (the keys of the dictionary) can be replaced (any occurrence of the strings in the text, no begin / end tokens).
+        /// Unresolved variables are removed (rendered as an empty string).
         /// </summary>
+        /// <remarks>
+        /// Note: the dictionary values (defaults) are currently not used, and transformed variables are always rendered as empty strings (the transform lookup is frozen before it's populated).
+        /// Pass the dictionary to <see cref="Get(IReadOnlyDictionary{string, string})"/> to use its values.
+        /// </remarks>
         /// <param name="text">The original text</param>
-        /// <param name="varsWithDefaults">A dictionary with the values that can be replaced and their specified defaults</param>
+        /// <param name="varsWithDefaults">A dictionary whose keys are the strings that can be replaced</param>
         /// <param name="caseInSensitive">If true, the variable is case insensitive</param>
         /// <param name="allowTransforms">If true, the variable can be transformed according to:
         /// [Var] = Variable, ex: "Hello world!".
@@ -287,7 +305,8 @@ namespace SysWeaver
         /// <summary>
         /// Get a string from the template with the specified replacements
         /// </summary>
-        /// <param name="vars">A dictionary containing the variables to replace and the value to replace it with</param>
+        /// <param name="vars">A dictionary containing the variables to replace and the value to replace it with.
+        /// For templates with begin / end tokens the keys are the names without the tokens, else the full strings.</param>
         /// <returns>A string with the specified replacements done</returns>
         public String Get(IReadOnlyDictionary<String, String> vars) => Get(x => vars.TryGetValue(x, out var v) ? v : null);
 
@@ -320,8 +339,10 @@ namespace SysWeaver
         /// <summary>
         /// Get a string from the template with the specified replacements
         /// </summary>
-        /// <param name="getVars">A function that returns the value for the given key, if not found return null</param>
+        /// <param name="getVars">A function that returns the value for the given key, if not found return null.
+        /// Called multiple times for the same key, so it must be deterministic (else the result is truncated or an exception is thrown).</param>
         /// <returns>A string with the specified replacements done</returns>
+        /// <exception cref="ArgumentException"><paramref name="getVars"/> returned a longer value for a key on a later call (the computed length is exceeded).</exception>
         public String Get(Func<String, String> getVars)
         {
             var eVars = VarsAndFrequency;
@@ -361,7 +382,7 @@ namespace SysWeaver
         public readonly String Template;
 
         /// <summary>
-        /// All variables found/used in the text
+        /// All variables found/used in the text (names without begin / end tokens and transform prefixes), may contain duplicates if a variable is used both with and without transforms
         /// </summary>
         public IEnumerable<String> Vars
         {
@@ -384,8 +405,9 @@ namespace SysWeaver
         public bool HaveVars => VarsAndFrequency.Count > 0;
 
         /// <summary>
-        /// Replaces a bunch of key value pairs in a text
+        /// Replaces a bunch of key value pairs in a text (every occurrence of a key is replaced by its value)
         /// </summary>
+        /// <remarks>Parses a new template on every call, cache a <see cref="TextTemplate"/> instance if the same text is used repeatedly.</remarks>
         /// <param name="text">The text to replace data in</param>
         /// <param name="values">A key value dictionary with replacements to be made</param>
         /// <param name="caseInSensitive">true to make the search case insensitive</param>
@@ -411,12 +433,13 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Replaces a bunch of key value pairs in a text
+        /// Replaces variables delimited by begin and end tokens in a text, ex: "${Name}" (unknown variables are left as is)
         /// </summary>
+        /// <remarks>Parses a new template on every call, cache a <see cref="TextTemplate"/> instance if the same text is used repeatedly.</remarks>
         /// <param name="text">The text to replace data in</param>
         /// <param name="varBegin">Variable begin with this</param>
         /// <param name="varEnd">Variables end with this</param>
-        /// <param name="values">A key value dictionary with replacements to be made</param>
+        /// <param name="values">A key value dictionary with replacements to be made (keys are variable names without the tokens)</param>
         /// <param name="caseInSensitive">true to make the search case insensitive</param>
         /// <param name="allowTransforms">If true, the variable can be transformed according to:
         /// [Var] = Variable, ex: "Hello world!".

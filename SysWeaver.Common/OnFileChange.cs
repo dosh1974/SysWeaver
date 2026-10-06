@@ -26,6 +26,10 @@ namespace SysWeaver
 
         readonly Action<string> C;
 
+        /// <summary>
+        /// Invokes the callback with the name of the file
+        /// </summary>
+        /// <returns>A completed task</returns>
         protected override Task Notify()
         {
             C(Name);
@@ -57,6 +61,10 @@ namespace SysWeaver
 
         readonly Func<string, Task> C;
 
+        /// <summary>
+        /// Invokes the callback with the name of the file and waits for it to complete
+        /// </summary>
+        /// <returns>The task of the callback</returns>
         protected override async Task Notify()
         {
             await C(Name).ConfigureAwait(false);
@@ -64,10 +72,29 @@ namespace SysWeaver
     }
 
 
+    /// <summary>
+    /// Base class for monitoring a single file for changes (using a <see cref="FileSystemWatcher"/>), must be Disposed!
+    /// When the file is created, changed or renamed to the monitored name, <see cref="Notify"/> is called once the file hasn't been written to for the specified delay.
+    /// </summary>
+    /// <remarks>
+    /// Only one notification is pending / running at a time, changes made while <see cref="Notify"/> is executing are ignored.
+    /// The folder of the file must exist when the instance is created, else the file is never monitored (no error is reported).
+    /// Exceptions are never thrown from the background notification, they are recorded in <see cref="LastExceptiion"/> and <see cref="ExceptionCount"/>.
+    /// Derived classes must call <see cref="Start"/> at the end of their constructor.
+    /// </remarks>
     public abstract class OnFileChangeBase : IDisposable
     {
+        /// <summary>
+        /// The name of the monitored file
+        /// </summary>
+        /// <returns>The file name as supplied to the constructor</returns>
         public override string ToString() => Name;
 
+        /// <summary>
+        /// Set up the monitoring (call <see cref="Start"/> to begin raising events)
+        /// </summary>
+        /// <param name="filename">The file to monitor (the folder part must be non-empty and exist, so use a full or relative path with a folder)</param>
+        /// <param name="delayMs">The time in ms that the file must be unchanged (based on its last write time) before <see cref="Notify"/> is called</param>
         protected OnFileChangeBase(string filename, int delayMs = 5000)
         {
             var thread = Thread.CurrentThread;
@@ -91,6 +118,9 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Start raising change events (does nothing if the folder didn't exist)
+        /// </summary>
         protected void Start()
         {
             var w = W;
@@ -98,6 +128,10 @@ namespace SysWeaver
                 w.EnableRaisingEvents = true;
         }
 
+        /// <summary>
+        /// Stop monitoring the file.
+        /// A notification that is already pending may still be executed after this.
+        /// </summary>
         public void Dispose()
         {
             W?.Dispose();
@@ -105,6 +139,9 @@ namespace SysWeaver
 
         readonly FileSystemWatcher W;
         readonly String Filter;
+        /// <summary>
+        /// The name of the monitored file (as supplied to the constructor)
+        /// </summary>
         protected readonly String Name;
         readonly int DelayMs;
 
@@ -132,22 +169,30 @@ namespace SysWeaver
 
 
 
+        /// <summary>
+        /// Called (on a thread pool thread) when the file has changed and then been unchanged for the delay.
+        /// Any exception is caught and recorded.
+        /// </summary>
+        /// <returns>A task that completes when the notification is handled</returns>
         protected abstract Task Notify();
 
 
         /// <summary>
-        /// The last exception catched
+        /// The last exception caught (and when it was caught, UTC), null if no exception has been caught
         /// </summary>
         public Tuple<Exception, DateTime> LastExceptiion => Ex;
 
         /// <summary>
-        /// The last exception catched
+        /// The number of exceptions caught
         /// </summary>
         public long ExceptionCount => Interlocked.Read(ref ExCount);
 
         volatile Tuple<Exception, DateTime> Ex;
         long ExCount;
 
+        /// <summary>
+        /// Wait until the file hasn't been written to for the delay, then notify (gives up after 5 failures to read the file time)
+        /// </summary>
         async Task Wait()
         {
             try
@@ -209,10 +254,11 @@ namespace SysWeaver
     {
 
         /// <summary>
-        ///  Reads a string from a text file, an executes a callback every time it's changed, must be Disposed!
+        ///  Reads a string from a text file, and executes a callback every time it's changed, must be Disposed!
         /// </summary>
         /// <param name="filename">The file to monitor</param>
-        /// <param name="onChange">The callback to execute when changed, the first trimmed line of text is supplied (unless it starts with a '#')</param>
+        /// <param name="onChange">The callback to execute when changed, the first non-empty trimmed line of text that doesn't start with a '#' is supplied.
+        /// It's only invoked if the value differs from the current value (if the file has no such line, the current value is kept and nothing is invoked)</param>
         /// <param name="delayMs">The delay in ms before invoking the onChange.
         /// Some application may write a file using several operations, by ensuring that nothing has changed for a certain period, the odds are greater that the file is fully written</param> 
         /// <param name="invokeFirst">If true, any onChange is invoked in the constructor (if the file exist and have data).</param> 
@@ -238,7 +284,7 @@ namespace SysWeaver
         public readonly ExceptionTracker Exceptions = new ExceptionTracker();
 
         /// <summary>
-        /// The current value (as read)
+        /// The current value (as read), null if no value has been read yet
         /// </summary>
         public String Data => Current;
 
@@ -246,6 +292,9 @@ namespace SysWeaver
 
         readonly Action<string> C;
 
+        /// <summary>
+        /// Update the current value from the lines of the file (the first non-empty, non-comment line), invoke the callback if it changed
+        /// </summary>
         void OnData(String[] data, bool invoke = true)
         {
             foreach (var x in data)
@@ -264,6 +313,10 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Re-read the file and update the value (exceptions are recorded in <see cref="Exceptions"/>)
+        /// </summary>
+        /// <returns>A task that completes when the file is read</returns>
         protected override async Task Notify()
         {
             try
@@ -292,8 +345,8 @@ namespace SysWeaver
         /// If it's a file, the first non-empty line (after trimming) that doesn't start with a '#' is used.
         /// If the file content changes, the string value is re-read and the optional onChange callback is invoked.
         /// </summary>
-        /// <param name="value">The value of the string, or a name of an existing file</param>
-        /// <param name="onChange">The callback to execute when changed</param>
+        /// <param name="value">The value of the string, or a name of an existing file (the file must exist when this is called to be treated as a file)</param>
+        /// <param name="onChange">The callback to execute when changed (only used if the value is a file, it's not invoked for the initial value)</param>
         /// <param name="delayMs">The delay in ms before invoking the onChange.
         /// Some application may write a file using several operations, by ensuring that nothing has changed for a certain period, the odds are greater that the file is fully written</param>
         public ManagedString(String value, Action<string> onChange = null, int delayMs = 1000)
@@ -315,11 +368,17 @@ namespace SysWeaver
             Fixed = value;
         }
 
+        /// <summary>
+        /// Stop monitoring the file (if any), the value of a file is lost (becomes null) after this
+        /// </summary>
         public void Dispose()
         {
             Interlocked.Exchange(ref Fs, null)?.Dispose();
         }
 
+        /// <summary>
+        /// The current value, the literal value or the current value read from the file
+        /// </summary>
         public String Value => Fs?.Data ?? Fixed;
 
         ManagedFileString Fs;

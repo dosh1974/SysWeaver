@@ -9,8 +9,8 @@ namespace SysWeaver.Net
     /// Interface for a user storage service.
     /// Can be used to store user owned files with support for:
     /// - Access scope (private, protected, public etc).
-    /// - Old data is automatically pruned (files are deleted if the time since last accees exceeds the policy).
-    /// - Disc quota is maintained (the files that would expire in the neareast future is deleted when exceeded).
+    /// - Old data is automatically pruned (files are deleted if the time since last access exceeds the policy).
+    /// - Disc quota is maintained (the files that would expire in the nearest future are deleted when exceeded).
     /// </summary>
     public interface IUserStorageService
     {
@@ -50,7 +50,7 @@ namespace SysWeaver.Net
         Task<string> StorePrivateLink(HttpServerRequest context, string url, params String[] storedFiles);
 
         /// <summary>
-        /// Store a link to something as public or protected, only accessible by the user who stored it
+        /// Store a link to something as public or protected, accessible to anyone that have the specified auth
         /// </summary>
         /// <param name="context">The request context that triggered this store</param>
         /// <param name="url">The link (url) to store</param>
@@ -75,43 +75,43 @@ namespace SysWeaver.Net
         /// <summary>
         /// Get the scope of a link or a file
         /// </summary>
-        /// <param name="context"></param>
+        /// <param name="context">The request context (used to validate access)</param>
         /// <param name="url">Url to the file or link</param>
-        /// <returns>The scope</returns>
+        /// <returns>The scope, or null if the url isn't a valid stored file or link (or isn't accessible)</returns>
         Task<UserStorageScopes?> GetScope(HttpServerRequest context, string url);
 
         /// <summary>
         /// Get the URL prefix used by this storage
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The local url prefix that all stored files and links are placed under</returns>
         Task<String> GetBaseUrlPrefix();
 
         /// <summary>
         /// Get the user part of the path
         /// </summary>
         /// <param name="userGuid">The user guid</param>
-        /// <returns></returns>
+        /// <returns>A url safe string identifying the user (an encoding of the guid, not a hash)</returns>
         String GetUserPath(String userGuid);
 
         /// <summary>
-        /// Get all stored files for a user
+        /// Get all stored files for the user of the request
         /// </summary>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="context">The request context identifying the user</param>
+        /// <returns>All files stored by the user</returns>
         Task<StoredFileInfo[]> GetAllStoredFiles(HttpServerRequest context);
 
         /// <summary>
-        /// Get all stored links for a user
+        /// Get all stored links for the user of the request
         /// </summary>
-        /// <param name="context"></param>
-        /// <returns></returns>
+        /// <param name="context">The request context identifying the user</param>
+        /// <returns>All links stored by the user</returns>
         Task<StoredLinkInfo[]> GetAllStoredLinks(HttpServerRequest context);
 
     }
 
 
     /// <summary>
-    /// Interface that service can use to specially handle chat sotring of links.
+    /// Interface that services can implement to specially handle the chat's storing of links.
     /// </summary>
     public interface IChatStoreLinkHandler
     {
@@ -127,6 +127,9 @@ namespace SysWeaver.Net
         Task<String> HandleLink(IUserStorageService us, String url, UserStorageScopes scope, HttpServerRequest context);
     }
 
+    /// <summary>
+    /// Information about a file stored in an <see cref="IUserStorageService"/>.
+    /// </summary>
     [TableDataPrimaryKey(nameof(Url))]
     public class StoredFileInfo
     {
@@ -177,6 +180,10 @@ namespace SysWeaver.Net
         public DateTime Expires;
 
 
+        /// <summary>
+        /// Copy all values from another instance.
+        /// </summary>
+        /// <param name="s">The instance to copy from.</param>
         public void CopyFrom(StoredFileInfo s)
         {
             Url = s.Url;
@@ -188,6 +195,10 @@ namespace SysWeaver.Net
             Expires = s.Expires;
         }
 
+        /// <summary>
+        /// Create a shallow copy of this instance.
+        /// </summary>
+        /// <returns>A new instance with the same values.</returns>
         public StoredFileInfo Clone()
         {
             var t = new StoredFileInfo();
@@ -198,6 +209,9 @@ namespace SysWeaver.Net
     }
 
 
+    /// <summary>
+    /// Information about a link stored in an <see cref="IUserStorageService"/>.
+    /// </summary>
     [TableDataPrimaryKey(nameof(Url))]
     public class StoredLinkInfo
     {
@@ -248,6 +262,10 @@ namespace SysWeaver.Net
         public DateTime Expires;
 
 
+        /// <summary>
+        /// Copy all values from another instance.
+        /// </summary>
+        /// <param name="s">The instance to copy from.</param>
         public void CopyFrom(StoredLinkInfo s)
         {
             Url = s.Url;
@@ -259,6 +277,10 @@ namespace SysWeaver.Net
             Expires = s.Expires;
         }
 
+        /// <summary>
+        /// Create a shallow copy of this instance.
+        /// </summary>
+        /// <returns>A new instance with the same values.</returns>
         public StoredLinkInfo Clone()
         {
             var t = new StoredLinkInfo();

@@ -7,19 +7,26 @@ using System.Threading.Tasks;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Helpers for running an external process, waiting for it to exit and capturing its output.
+    /// </summary>
     public sealed class ExternalProcess
     {
 
         /// <summary>
-        /// Run an external command
+        /// Run an external command and block until it exits (no timeout).
         /// </summary>
-        /// <param name="cmd">The command to run</param>
+        /// <param name="cmd">The command (executable) to run</param>
         /// <param name="args">Optional command arguments</param>
-        /// <param name="onMessage">Optionally called on every line outputted, second parameter is false for stdout and true for stderr</param>
-        /// <param name="onExit">Optionally called when the process completed or on error, paramaters are: exitCode, exception, duration and the last X stdout/stderr lines of output</param>
-        /// <param name="workingFolder">The folder to use as the current</param>
-        /// <param name="useShell">Use shell execute</param>
+        /// <param name="onMessage">Optional output callback, second parameter is false for stdout and true for stderr.
+        /// Note: currently it's called at most once, with the entire (trimmed) stdout after the process has closed it. Stderr is read but never reported.</param>
+        /// <param name="onExit">Optionally called when the process completed or on error, parameters are: exitCode (-1 on error), exception (null on success), duration and the captured output
+        /// (currently the trimmed stdout, added twice, and no stderr)</param>
+        /// <param name="workingFolder">The folder to use as the current, null to use the current folder of this process</param>
+        /// <param name="useShell">Use shell execute. Note: since output is always redirected, true causes the start to fail with an <see cref="InvalidOperationException"/></param>
         /// <returns>The process exit code</returns>
+        /// <exception cref="Exception">Any exception thrown while starting or running the process is re-thrown (after <paramref name="onExit"/> has been invoked),
+        /// ex: <see cref="System.ComponentModel.Win32Exception"/> if the executable can't be found.</exception>
         public static int Run(String cmd, String args = null, Action<String, bool> onMessage = null, Action<int, Exception, TimeSpan, IEnumerable<String>> onExit = null, String workingFolder = null, bool useShell = false)
         {
             var start = DateTime.UtcNow;
@@ -85,16 +92,22 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Run an external command
+        /// Run an external command and asynchronously wait for it to exit.
         /// </summary>
-        /// <param name="cmd">The command to run</param>
+        /// <param name="cmd">The command (executable or document when using the shell) to run</param>
         /// <param name="args">Optional command arguments</param>
-        /// <param name="onMessage">Optionally called on every line outputted, second parameter is false for stdout and true for stderr</param>
-        /// <param name="onExit">Optionally called when the process completed or on error, paramaters are: exitCode, exception, duration and the last X stdout/stderr lines of output</param>
-        /// <param name="cancelWait">An optional cancellation token</param>
-        /// <param name="workingFolder">The folder to use as the current</param>
-        /// <param name="useShell">Use shell execute</param>
+        /// <param name="onMessage">Optional output callback, second parameter is false for stdout and true for stderr.
+        /// Note: currently it's called at most once, with the entire (trimmed) stdout after the process has closed it. Stderr is read but never reported. Never called when <paramref name="useShell"/> is true.</param>
+        /// <param name="onExit">Optionally called when the process completed or on error, parameters are: exitCode (-1 on error), exception (null on success), duration and the captured output
+        /// (currently the trimmed stdout, added twice, and no stderr)</param>
+        /// <param name="cancelWait">An optional cancellation token, cancels the wait for the process to exit (the process is NOT killed).
+        /// Note: when output is redirected, stdout is read synchronously to the end before the token is observed.</param>
+        /// <param name="workingFolder">The folder to use as the current, null to use the current folder of this process</param>
+        /// <param name="useShell">Use shell execute (output is then not captured)</param>
         /// <returns>The process exit code</returns>
+        /// <exception cref="OperationCanceledException"><paramref name="cancelWait"/> was cancelled while waiting for the process to exit.</exception>
+        /// <exception cref="Exception">Any exception thrown while starting or running the process is re-thrown (after <paramref name="onExit"/> has been invoked).</exception>
+        /// <remarks>Blocks the calling thread while reading stdout (the read is synchronous).</remarks>
         public static async Task<int> RunAsync(String cmd, String args = null, Action<String, bool> onMessage = null, Action<int, Exception, TimeSpan, IEnumerable<String>> onExit = null, CancellationToken? cancelWait = null, String workingFolder = null, bool useShell = false)
         {
             var start = DateTime.UtcNow;

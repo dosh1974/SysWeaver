@@ -3,20 +3,23 @@
 namespace SysWeaver
 {
     /// <summary>
-    /// Put this to specify the default value to use when editing
+    /// Put this on a string member to allow multiple lines of text when editing
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property | AttributeTargets.Parameter | AttributeTargets.ReturnValue, AllowMultiple = false)]
 
     public sealed class EditMultilineAttribute : Attribute
     {
         /// <summary>
-        /// Put this to specify the default value to use when editing
+        /// Put this on a string member to allow multiple lines of text when editing
         /// </summary>
-        /// <param name="allowMultipleLines">True to allow for multi line </param>
+        /// <param name="allowMultipleLines">True to allow for multi line</param>
         public EditMultilineAttribute(bool allowMultipleLines = true)
         {
             AllowMultiLine = allowMultipleLines;
         }
+        /// <summary>
+        /// True if multiple lines are allowed
+        /// </summary>
         public readonly bool AllowMultiLine;
     }
 

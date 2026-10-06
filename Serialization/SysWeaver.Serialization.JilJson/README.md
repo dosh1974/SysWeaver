@@ -7,8 +7,8 @@
 | | |
 |---|---|
 | **Layer** | Serialization |
-| **Kind** | Serializer plug-in (`ISerializerType`) |
-| **Selection priority** | low among serializers for `json` |
+| **Kind** | Serializer plug-in (`ITextSerializerType`) |
+| **Selection priority** | -5 (lowest among the bundled serializers for `json`) |
 
 ## Purpose
 
@@ -27,11 +27,14 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 
 ## Key features
 
+- `JilJsonSerializer` (singleton `Instance`) implements both the binary (UTF-8) and the string APIs.
+- `SerializerOptions.Verbose` produces pretty printed output, the other options compact output; otherwise Jil's default options are used.
 - Registered through the manifest like any service, or with one static call in code.
 
 ## Limitations and considerations
 
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered.
+- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / Jil / SpanJson / Utf8Json -5).
+- Jil's own conventions (e.g. for dates) differ from the other JSON implementations.
 
 ## Using it
 

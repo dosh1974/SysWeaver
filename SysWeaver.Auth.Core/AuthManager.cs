@@ -12,13 +12,25 @@ namespace SysWeaver.Auth
 {
 
     /// <summary>
-    /// Caches and maintains auth information
+    /// Validates users across any number of <see cref="AuthorizerBase"/> instances (asked in the order they were added), and caches HTTP Authorization header results.
     /// </summary>
+    /// <remarks>
+    /// Typically created by the AuthManagerService and used by the HTTP server for every request with an Authorization header, and for login requests.
+    /// Cached header results are re-validated when the owning authorizer's <see cref="AuthorizerBase.ChangeCounter"/> changes.
+    /// Thread safe.
+    /// </remarks>
     public sealed class AuthManager : IDisposable
     {
 
+        /// <inheritdoc/>
         public override string ToString() => "Realm: " + Realm.ToQuoted();
 
+        /// <summary>
+        /// Create an auth manager.
+        /// </summary>
+        /// <param name="p">Parameters, null uses the defaults.</param>
+        /// <param name="authorizers">The initial authorizers, in priority order.</param>
+        /// <exception cref="Exception">Two authorizers have the same <see cref="AuthorizerBase.GuidPrefix"/>.</exception>
         public AuthManager(AuthManagerParams p, params AuthorizerBase[] authorizers)
         {
             var a = Auths;
@@ -37,10 +49,11 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Get information about a user (from it's guid)
+        /// Get information about a user (from it's guid).
+        /// The authorizer is selected using the guid prefix (the text before the first ':').
         /// </summary>
-        /// <param name="userGuid"></param>
-        /// <returns></returns>
+        /// <param name="userGuid">The user guid, ex: "SI:abc..."</param>
+        /// <returns>The user information or null if the guid is unknown</returns>
         public Task<AuthorizationInfo> FindUserFromGuid(String userGuid)
         {
             var t = userGuid.IndexOf(':');
@@ -54,10 +67,10 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Get information about a user
+        /// Get information about a user, asking all authorizers in order.
         /// </summary>
         /// <param name="userName">Name of the user</param>
-        /// <returns></returns>
+        /// <returns>The user information from the first authorizer that knows the user, or null</returns>
         public async Task<AuthorizationInfo> FindUser(String userName)
         {
             foreach (var author in OrderdAuths)
@@ -73,10 +86,15 @@ namespace SysWeaver.Auth
         static readonly Tuple<Authorization, bool> NoAuth = Tuple.Create((Authorization)null, false);
 
         /// <summary>
-        /// Get authorization from the auth HTTP header
+        /// Get authorization from the Authorization HTTP header.
+        /// Supports the "Basic" (user:password, base64 encoded) and "Bearer" / "*key" (token) schemes.
+        /// Results (including failures) are cached using the full header value as key.
         /// </summary>
-        /// <param name="authHeaderString">The auth header of the http request</param>
-        /// <returns>The authorization information for the given user, null means unknown user or invalid password</returns>
+        /// <param name="authHeaderString">The Authorization header of the http request</param>
+        /// <returns>Item1 is the authorization for the given user, null means unknown user or invalid password / token.
+        /// Item2 is true if the basic scheme was used (so the caller can request basic credentials again).
+        /// The tuple itself is null for unsupported schemes.</returns>
+        /// <exception cref="FormatException">The basic credentials are not valid base64.</exception>
         public async Task<Tuple<Authorization, bool>> Http(String authHeaderString)
         {
             var cache = HttpCache;
@@ -126,7 +144,8 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Get the salt for a user
+        /// Get the salt for a user (from the first authorizer that knows the user).
+        /// For unknown users a deterministic fake salt is returned, and a random delay is always added, to make user enumeration harder.
         /// </summary>
         /// <param name="username">The user name to auth</param>
         /// <returns>The salt string required to compute the password hash</returns>
@@ -147,10 +166,11 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Get the salt for a user
+        /// Get the salt for a user and the authorizer that knows the user.
+        /// For unknown users a deterministic fake salt is returned, and a random delay is always added, to make user enumeration harder.
         /// </summary>
         /// <param name="username">The user name to auth</param>
-        /// <returns>The authorizer and the salt string required to compute the password hash</returns>
+        /// <returns>The authorizer (null if no authorizer knows the user) and the salt string required to compute the password hash</returns>
         public async Task<Tuple<AuthorizerBase, String>> GetAuthorizerAndSalt(String username)
         {
             String salt = null;
@@ -172,7 +192,7 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Get authorization from a username and password hash
+        /// Get authorization from a username and a one time password hash (the secure login method, prevents replay attacks), asking all authorizers in order.
         /// </summary>
         /// <param name="username">The user name to auth</param>
         /// <param name="hash">The base64 encoded one time hash, should be: 
@@ -181,12 +201,20 @@ namespace SysWeaver.Auth
         /// </param>
         /// <param name="oneTimePad">The one time pad used</param>
         /// <returns>The authorization information for the given user, null means unknown user or invalid password</returns>
+        /// <exception cref="FormatException"><paramref name="hash"/> isn't valid base64.</exception>
         public Task<Authorization> UserHash(String username, String hash, String oneTimePad) => GetAuth(username, Convert.FromBase64String(hash), oneTimePad);
 
  
+        /// <summary>
+        /// The realm, used in the "WWW-Authenticate" response header for basic auth.
+        /// Defaults to the entry assembly name if not set in the parameters.
+        /// </summary>
         public readonly String Realm = "SysWeaver";
 
 
+        /// <summary>
+        /// Stop the periodic cache pruning.
+        /// </summary>
         public void Dispose()
         {
             Interlocked.Exchange(ref RetryAuth, null)?.Dispose();
@@ -226,6 +254,11 @@ namespace SysWeaver.Auth
             return null;
         }
 
+        /// <summary>
+        /// Get authorization from a one time token (typically issued by some other site), asking all authorizers in order.
+        /// </summary>
+        /// <param name="oneTimeToken">The token</param>
+        /// <returns>The authorization, or null if the token is null, empty or not accepted by any authorizer</returns>
         public async Task<Authorization> TokenAuth(String oneTimeToken)
         {
             if (String.IsNullOrEmpty(oneTimeToken))
@@ -275,6 +308,12 @@ namespace SysWeaver.Auth
         PeriodicTask RetryAuth;
 
 
+        /// <summary>
+        /// Add an authorizer (last in priority order).
+        /// </summary>
+        /// <param name="auth">The authorizer to add</param>
+        /// <returns>True if added, false if it was already added</returns>
+        /// <exception cref="Exception">Another authorizer have the same <see cref="AuthorizerBase.GuidPrefix"/>.</exception>
         public bool AddAuth(AuthorizerBase auth)
         {
             if (!Auths.TryAdd(auth, Interlocked.Increment(ref AuthIndex)))
@@ -285,6 +324,12 @@ namespace SysWeaver.Auth
             return true;
         }
 
+        /// <summary>
+        /// Remove an authorizer.
+        /// Note that already cached Authorization header results are not invalidated.
+        /// </summary>
+        /// <param name="auth">The authorizer to remove</param>
+        /// <returns>True if removed, false if it wasn't added</returns>
         public bool RemoveAuth(AuthorizerBase auth)
         {
             if (!Auths.TryRemove(auth, out var _))
@@ -305,7 +350,7 @@ namespace SysWeaver.Auth
         }
 
         /// <summary>
-        /// All authorizers
+        /// All authorizers, in priority order
         /// </summary>
         public IEnumerable<AuthorizerBase> Authorizers => OrderdAuths;
 
@@ -324,6 +369,9 @@ namespace SysWeaver.Auth
 
         volatile PasswordPolicy InternalCommonPasswordPolicy = new PasswordPolicy();
 
+        /// <summary>
+        /// The least restrictive combination of the password policies of all authorizers (see <see cref="PasswordPolicyExt.Min(IEnumerable{PasswordPolicy})"/>).
+        /// </summary>
         public PasswordPolicy CommonPasswordPolicy => InternalCommonPasswordPolicy;
 
 

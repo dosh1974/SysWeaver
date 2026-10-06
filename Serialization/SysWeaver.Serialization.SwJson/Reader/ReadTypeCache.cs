@@ -13,10 +13,25 @@ using System.Collections.Frozen;
 
 namespace SysWeaver.Serialization.SwJson.Reader
 {
+    /// <summary>
+    /// The compiled readers for a type, created on first use and cached forever (thread safe).
+    /// Also sets <see cref="ReadTyped{T}.Create"/> for the type.
+    /// </summary>
+    /// <remarks>
+    /// The reader expression depends on the type: numbers, dates, <see cref="Guid"/> and <see cref="Boolean"/> use <see cref="SpanParsers"/> (date/time types and <see cref="Guid"/> must be quoted),
+    /// strings, <see cref="Char"/>, <see cref="Byte"/> arrays and <see cref="Object"/> are special cased, then enums, arrays, generic collections with one type argument, nullable value types,
+    /// reference types (including dictionaries) and finally other value types.
+    /// </remarks>
     sealed class ReadTypeCache
     {
         static readonly ConcurrentDictionary<Type, ReadTypeCache> Cache = new ConcurrentDictionary<Type, ReadTypeCache>();
 
+        /// <summary>
+        /// Get (or create) the readers for a type.
+        /// </summary>
+        /// <remarks>Creation is serialized by a global lock, element types of arrays and collections are created too.</remarks>
+        /// <param name="t">The type to read</param>
+        /// <returns>The cached readers</returns>
         public static ReadTypeCache Get(Type t)
         {
             var cache = Cache;
@@ -89,6 +104,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
         }
 
 
+        /// <summary>
+        /// Create a new (empty) instance of the type, boxed, see <see cref="ReadTyped{T}.CreateNewBoxed"/>.
+        /// </summary>
         public readonly Func<Object> CreateNewBoxed;
 
         static readonly Type JsonParserType = typeof(Utf8JsonParser);
@@ -98,7 +116,13 @@ namespace SysWeaver.Serialization.SwJson.Reader
         static readonly MethodInfo MethodReadAsciiQuotedString = Helper.SafeGetMethod(JsonParserType, nameof(Utf8JsonParser.ReadAsciiQuotedString), BindingFlags.Static | BindingFlags.Public);
         static readonly MethodInfo MethodReadQuotedString = Helper.SafeGetMethod(JsonParserType, nameof(Utf8JsonParser.ReadQuotedString), BindingFlags.Static | BindingFlags.Public);
 
+        /// <summary>
+        /// The parser state parameter of all compiled readers.
+        /// </summary>
         public static readonly ParameterExpression ParState = Expression.Parameter(typeof(JsonParserState), "state");
+        /// <summary>
+        /// The end condition parameter of all compiled readers.
+        /// </summary>
         public static readonly ParameterExpression ParEndOn = Expression.Parameter(typeof(Func<char, bool>), "end");
         static readonly ParameterExpression ParHeader = Expression.Parameter(typeof(ReadOnlySpan<byte>), "h");
 
@@ -110,22 +134,42 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         static readonly ConstantExpression ConstInvariant = Expression.Constant(CultureInfo.InvariantCulture);
 
+        /// <summary>
+        /// The parameters of a compiled reader: (<see cref="ParState"/>, <see cref="ParEndOn"/>).
+        /// </summary>
         public static readonly ParameterExpression[] TempCall =
         [
             ParState, ParEndOn
         ];
 
+        /// <summary>
+        /// <see cref="RuntimeHelpers.GetUninitializedObject(Type)"/>, used to create types without a public parameterless constructor.
+        /// </summary>
         public static MethodInfo MethodGetUninitializedObject = Helper.SafeGetMethod(typeof(RuntimeHelpers), nameof(RuntimeHelpers.GetUninitializedObject), BindingFlags.Static | BindingFlags.Public);
 
 
+        /// <summary>
+        /// Read a (boxed) value at the current position.
+        /// </summary>
         public delegate object Creator(JsonParserState state, Func<char, bool> endOn);
+        /// <summary>
+        /// Create and populate an object, given the already read first member name (<paramref name="header"/>).
+        /// </summary>
         public delegate object CreateAndPopulateDel(ReadOnlySpan<byte> header, JsonParserState state, Func<char, bool> endOn);
 
+        /// <summary>
+        /// Set <see cref="ReadTyped{T}.Create"/> for the type (using reflection).
+        /// </summary>
         static void SetStatic(Type t, Expression v)
         {
             Helper.SafeGetMethod(typeof(ReadTyped<>).MakeGenericType(t), nameof(ReadTyped<int>.Set), BindingFlags.Static | BindingFlags.Public).Invoke(null, [v.Type == t ? v : Expression.Convert(v, t)]);
         }
 
+        /// <summary>
+        /// Create the readers for a type that is read from a (quoted, escaped) string.
+        /// </summary>
+        /// <param name="t">The type</param>
+        /// <param name="onStringExp">Converts the string read expression to an expression of the type</param>
         public ReadTypeCache(Type t, Func<Expression, Expression> onStringExp)
         {
 #if VERBOSE
@@ -150,6 +194,11 @@ namespace SysWeaver.Serialization.SwJson.Reader
 #endif//VERBOSE
         }
 
+        /// <summary>
+        /// Create the readers for a type.
+        /// </summary>
+        /// <param name="t">The type</param>
+        /// <param name="v">The read expression (using <see cref="TempCall"/> parameters), converted to <paramref name="t"/> if needed</param>
         public ReadTypeCache(Type t, Expression v)
         {
 #if VERBOSE
@@ -173,8 +222,18 @@ namespace SysWeaver.Serialization.SwJson.Reader
 #endif//VERBOSE
         }
 
+        /// <summary>
+        /// The read expression, of the type (for embedding in other readers).
+        /// </summary>
         public readonly Expression CreateExp;
+        /// <summary>
+        /// The compiled reader, boxed.
+        /// </summary>
         public readonly Creator Create;
+        /// <summary>
+        /// Create and populate an instance given the first member name, null if the type has no public parameterless constructor.
+        /// Used when <c>"$type"</c> names a different type than the declared one.
+        /// </summary>
         public readonly CreateAndPopulateDel Cp;
 
         static readonly Type JsonReaderType = typeof(JsonReader);
@@ -197,12 +256,18 @@ namespace SysWeaver.Serialization.SwJson.Reader
         static readonly MethodInfo MethodToUtf8StringEscaped = Helper.SafeGetMethod(JsonParserType, nameof(Utf8JsonParser.ToUtf8String), BindingFlags.Static | BindingFlags.Public);
 
 
+        /// <summary>
+        /// Extra dictionary key parsers (from an unescaped UTF8 span expression), for key types not handled by <see cref="SpanParsers"/>.
+        /// </summary>
         public static readonly IReadOnlyDictionary<Type, Func<Expression, Expression>> JsonSpanReaders = new Dictionary<Type, Func<Expression, Expression>>()
         {
             { typeof(String), e => Expression.Call(MethodToUtf8StringEscaped, ParState, e) },
         }.ToFrozenDictionary();
 
 
+        /// <summary>
+        /// Compares memory by content, the hash code is the length and the first byte (throws for empty memory).
+        /// </summary>
         sealed class Cmp : IEqualityComparer<ReadOnlyMemory<Byte>>
         {
             public bool Equals(ReadOnlyMemory<Byte> x, ReadOnlyMemory<Byte> y) => x.Span.SequenceEqual(y.Span);
@@ -218,6 +283,16 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         //static Assembly LastAsm;
 
+        /// <summary>
+        /// Resolve a <c>"$type"</c> type name using <see cref="TypeNameResolver"/>, cached by the raw (still escaped) UTF8 bytes.
+        /// </summary>
+        /// <param name="state">The parser state</param>
+        /// <param name="ptr">The start of the name (after the quote)</param>
+        /// <param name="len">The length of the name in bytes (excluding the quotes)</param>
+        /// <param name="isEscaped">True if the name contains escapes</param>
+        /// <returns>The type</returns>
+        /// <exception cref="Exception">No type with the name was found</exception>
+        /// <remarks>Any type in any loaded assembly can be resolved, the reader doesn't restrict the types that json can instantiate.</remarks>
         public unsafe static Type ResolveType(JsonParserState state, Byte* ptr, int len, bool isEscaped)
         {
             var c = TypenameCache;
@@ -261,6 +336,10 @@ namespace SysWeaver.Serialization.SwJson.Reader
             c.TryAdd(typeof(object), new ReadTypeCache(typeof(object), Expression.Call(Helper.SafeGetMethod(JsonReaderType, nameof(JsonReader.CreateBoxedObject), BindingFlags.Static | BindingFlags.NonPublic), TempCall)));
         }
 
+        /// <summary>
+        /// The element type of a generic collection: the type argument, or a <see cref="KeyValuePair{TKey, TValue}"/> of two type arguments.
+        /// </summary>
+        /// <exception cref="Exception">The type has more than two type arguments</exception>
         static Type GetCollectionElementType(Type t)
         {
             var at = t.GetGenericArguments();

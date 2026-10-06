@@ -101,6 +101,9 @@ namespace SysWeaver
             public static ulong Get(ref char s, int length, int offset) => (ulong)length * LengthMul;
         }
 
+        /// <summary>
+        /// The fingerprint readers, the most selective first (the order candidates are tried in)
+        /// </summary>
         public enum Kind
         {
             Left4,
@@ -298,6 +301,12 @@ namespace SysWeaver
     /// </summary>
     readonly struct SmallStringKeys<TFp> where TFp : struct, IStringFingerprint
     {
+        /// <param name="keys">The keys (2 to 8, unique, not null), the fingerprints must be unique</param>
+        /// <param name="comparer">The ordinal comparer (<see cref="StringComparer.Ordinal"/> or the default string comparer), only kept to be reported by <see cref="Comparer"/></param>
+        /// <param name="kind">The fingerprint kind (the same as TFp)</param>
+        /// <param name="offset">The fingerprint offset</param>
+        /// <param name="minLength">The length of the shortest key</param>
+        /// <param name="maxLength">The length of the longest key</param>
         public SmallStringKeys(ReadOnlySpan<string> keys, IEqualityComparer<string> comparer, StringFingerprint.Kind kind, int offset, int minLength, int maxLength)
         {
             Inline8<ulong> fps = default;
@@ -338,6 +347,9 @@ namespace SysWeaver
         /// </summary>
         readonly bool IsDefaultComparer;
 
+        /// <summary>
+        /// The ordinal comparer the keys were frozen with
+        /// </summary>
         public IEqualityComparer<string> Comparer => IsDefaultComparer ? EqualityComparer<string>.Default : StringComparer.Ordinal;
 
         readonly int Offset;
@@ -387,7 +399,10 @@ namespace SysWeaver
     /// </summary>
     readonly struct StringKeyTable<TFp, V> where TFp : struct, IStringFingerprint
     {
-        /// <param name="keys">The keys</param>
+        /// <summary>
+        /// Build the table
+        /// </summary>
+        /// <param name="keys">The keys (unique, not null)</param>
         /// <param name="values">The values (in the same order as the keys), empty for a set</param>
         /// <param name="kind">The fingerprint kind (the same as TFp)</param>
         /// <param name="offset">The fingerprint offset</param>
@@ -440,7 +455,14 @@ namespace SysWeaver
             LengthRange = (uint)(maxLength - minLength);
         }
 
+        /// <summary>
+        /// The first entry of every bucket (bucketCount + 1 items, the last is the number of entries)
+        /// </summary>
         readonly int[] Starts;
+
+        /// <summary>
+        /// The entries, sorted by bucket (exactly one per key)
+        /// </summary>
         public readonly StringKeyEntry<V>[] Entries;
         readonly int Shift;
         readonly int Offset;
@@ -478,7 +500,8 @@ namespace SysWeaver
     }
 
     /// <summary>
-    /// Creates the frozen dictionaries and sets with string keys using the ordinal comparer
+    /// Creates the frozen dictionaries and sets with string keys using the ordinal comparer (used by <see cref="DictionaryExt.Freeze{K, V}(IReadOnlyDictionary{K, V}, IEqualityComparer{K})"/> and <see cref="SetExt.Freeze{K}(IReadOnlySet{K}, IEqualityComparer{K})"/>).
+    /// Up to 8 keys use a vectorized fingerprint compare (<see cref="SmallStringKeys{TFp}"/>), more keys use a bucketed table on the fingerprint (<see cref="StringKeyTable{TFp, V}"/>).
     /// </summary>
     static class OrdinalStringKeys
     {
@@ -669,12 +692,18 @@ namespace SysWeaver
     /// </summary>
     abstract class StringKeyReadonlySetBase : IReadOnlySet<string>, IHaveComparere<string>
     {
+        /// <inheritdoc/>
         public abstract IEqualityComparer<string> Comp { get; }
 
+        /// <inheritdoc/>
         public abstract int Count { get; }
 
+        /// <summary>
+        /// Check if a string is in the set (null is never found, like a HashSet)
+        /// </summary>
         public abstract bool Contains(string item);
 
+        /// <inheritdoc/>
         public abstract IEnumerator<string> GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -713,6 +742,8 @@ namespace SysWeaver
     /// </summary>
     sealed class SmallStringKeyReadonlyDictionary<V, TFp> : IReadOnlyDictionary<string, V>, IHaveComparere<string> where TFp : struct, IStringFingerprint
     {
+        /// <param name="keys">The analyzed keys</param>
+        /// <param name="values">The values, in the same order as the keys</param>
         public SmallStringKeyReadonlyDictionary(in SmallStringKeys<TFp> keys, ReadOnlySpan<V> values)
         {
             K = keys;
@@ -824,6 +855,8 @@ namespace SysWeaver
     /// </summary>
     sealed class StringKeyTableReadonlyDictionary<V, TFp> : IReadOnlyDictionary<string, V>, IHaveComparere<string> where TFp : struct, IStringFingerprint
     {
+        /// <param name="table">The table with the keys and values</param>
+        /// <param name="comparer">The ordinal comparer the keys were frozen with (reported by Comp)</param>
         public StringKeyTableReadonlyDictionary(StringKeyTable<TFp, V> table, IEqualityComparer<string> comparer)
         {
             T = table;
@@ -904,6 +937,8 @@ namespace SysWeaver
     /// </summary>
     sealed class StringKeyTableReadonlySet<TFp> : StringKeyReadonlySetBase where TFp : struct, IStringFingerprint
     {
+        /// <param name="table">The table with the keys</param>
+        /// <param name="comparer">The ordinal comparer the keys were frozen with (reported by Comp)</param>
         public StringKeyTableReadonlySet(StringKeyTable<TFp, NoValue> table, IEqualityComparer<string> comparer)
         {
             T = table;

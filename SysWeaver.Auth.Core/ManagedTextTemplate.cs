@@ -20,7 +20,8 @@ namespace SysWeaver
         /// - If a type is supplied and an embedded resource exist (raw or compressed using any of the supported compressors), the embedded data is read as UTF8.
         /// - The string is the input string.
         /// </param>
-        /// <param name="embeddedResourceType">A type in the assembly where the embedded resource exists</param>
+        /// <param name="embeddedResourceType">A type in the assembly where the embedded resource exists.
+        /// Note: currently ignored, embedded resources are only searched for in this assembly (using the <see cref="ManagedTextTemplate"/> type).</param>
         /// <param name="vars">The variables that the template may use, if null, the EnvInfo.TextVarsCaseInsensitive keys surrounded by [], ex: [AppDisplayName]</param>
         public ManagedTextTemplate(String location, Type embeddedResourceType = null, IReadOnlySet<String> vars = null)
         {
@@ -29,9 +30,10 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get the current EnvInfo.TextVarsCaseInsensitive variables surrounded by [], ex: [AppDisplayName]
+        /// Get the current EnvInfo.TextVarsCaseInsensitive variables with the keys surrounded by [], ex: [AppDisplayName].
+        /// The result is cached until the EnvInfo variables change.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The variables (case insensitive keys)</returns>
         public static IReadOnlyDictionary<String, String> GetDefVars()
         {
             var t = DefVars;
@@ -51,7 +53,7 @@ namespace SysWeaver
         /// <summary>
         /// Get the current EnvInfo.TextVarsCaseInsensitive keys surrounded by [], ex: [AppDisplayName]
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The variable names (case insensitive)</returns>
         public static IReadOnlySet<String> GetDefVarKeys()
         {
             GetDefVars();
@@ -90,12 +92,16 @@ namespace SysWeaver
         volatile TextTemplate CachedTemplate;
 
 
+        /// <inheritdoc/>
         public override string ToString() => String.Concat(Location.ToQuoted(), " with vars: ", String.Join(", ", Vars));
 
+        /// <summary>
+        /// The location: a file path, an embedded resource name or the template text (never null).
+        /// </summary>
         public readonly String Location;
 
         /// <summary>
-        /// All avaiable locations
+        /// All variables that the template may use (frozen)
         /// </summary>
         public readonly IReadOnlySet<String> Vars;
 

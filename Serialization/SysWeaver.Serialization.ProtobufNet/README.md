@@ -8,7 +8,7 @@
 |---|---|
 | **Layer** | Serialization |
 | **Kind** | Serializer plug-in (`ISerializerType`) |
-| **Selection priority** | default among serializers for `proto` |
+| **Selection priority** | 0 (the only bundled serializer for `proto`) |
 
 ## Purpose
 
@@ -28,12 +28,15 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 ## Key features
 
 - Compact, fast binary format with broad language support.
+- `ProtobufNetSerializer` (singleton `Instance`, binary only) needs **no** protobuf attributes: an internal `SerializerBuilder` adds each type to a private `RuntimeTypeModel` on first use, mapping all instance fields (public and non-public, including auto-property backing fields) and registering derived types as sub types.
+- Constructors are not called when deserializing; `DateTime.Kind` is preserved.
 - Registered through the manifest like any service, or with one static call in code.
 
 ## Limitations and considerations
 
-- Types usually need protobuf contract annotations (member order) to serialize meaningfully.
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered.
+- Field and sub-type numbers are assigned automatically from reflection and discovery order, so the wire format is not a stable contract: don't use it for data that must be read by other languages, other builds or (for class hierarchies) other processes.
+- `SerializerOptions` are ignored.
+- Selection between serializers of the same extension is by priority; this is currently the only bundled `proto` implementation.
 
 ## Using it
 

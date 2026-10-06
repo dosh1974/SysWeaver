@@ -10,8 +10,22 @@ namespace SysWeaver
 {
 
 
+    /// <summary>
+    /// Decode and render compressed, colored ASCII art (like the <see cref="SysWeaverLogo"/>) to the console or to html.
+    /// </summary>
+    /// <remarks>
+    /// The data format is a deflate compressed blob: [char count - 1, color count - 1, chars - 1..., colors - 1..., cells...] where every cell byte is (color index * char count + char index), a '\n' char ends a line.
+    /// Decoded data is cached by the array reference (the cache is never cleared, so only use it with static data).
+    /// Colors are single chars that are mapped to a <see cref="ConsoleColor"/> using a palette, ex: <see cref="ConsolePalette"/> (unknown chars are rendered as <see cref="ConsoleColor.Black"/>).
+    /// </remarks>
     public static class AsciiTools
     {
+        /// <summary>
+        /// Decode compressed ASCII art (see the class remarks for the format)
+        /// </summary>
+        /// <param name="text">The text of every line</param>
+        /// <param name="color">The color char of every char in every line (same lengths as the text lines)</param>
+        /// <param name="data">The compressed data</param>
         public static void Decode(out String[] text, out String[] color, Byte[] data)
         {
             using (var inMs = new MemoryStream(data))
@@ -53,8 +67,20 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Render compressed ASCII art to the console using the <see cref="ConsolePalette"/>
+        /// </summary>
+        /// <param name="data">The compressed data</param>
+        /// <param name="tab">Written before every line</param>
         public static void RenderColorGradient(Byte[] data, String tab = "") => RenderColor(data, ConsolePalette, tab);
 
+        /// <summary>
+        /// Render compressed two color ASCII art to the console (color char 'a' is the bright color and 'b' is the dark color)
+        /// </summary>
+        /// <param name="data">The compressed data</param>
+        /// <param name="bright">The color to use for 'a'</param>
+        /// <param name="dark">The color to use for 'b'</param>
+        /// <param name="tab">Written before every line</param>
         public static void RenderColor(Byte[] data, ConsoleColor bright = ConsoleColor.Green, ConsoleColor dark = ConsoleColor.DarkGreen, String tab = "")
         {
             var d = new Dictionary<Char, ConsoleColor>()
@@ -65,6 +91,12 @@ namespace SysWeaver
             RenderColor(data, d, tab);
         }
 
+        /// <summary>
+        /// Render compressed ASCII art to the console (the decoded data is cached by the array reference)
+        /// </summary>
+        /// <param name="data">The compressed data</param>
+        /// <param name="palette">Maps color chars to console colors</param>
+        /// <param name="tab">Written before every line</param>
         public static void RenderColor(Byte[] data, IReadOnlyDictionary<Char, ConsoleColor> palette, String tab = "")
         {
             var ca = Cache;
@@ -77,9 +109,20 @@ namespace SysWeaver
             RenderColor(d.Item1, d.Item2, palette, tab);
         }
 
+        /// <summary>
+        /// The decoded text and colors of compressed data (keyed by the array reference, never cleared)
+        /// </summary>
         static readonly ConcurrentDictionary<Byte[], Tuple<String[], String[]>> Cache = new ConcurrentDictionary<byte[], Tuple<string[], string[]>>();
 
 
+        /// <summary>
+        /// Render ASCII art to the console, the foreground color is restored after every line (spaces doesn't change the color).
+        /// Not synchronized with other console output.
+        /// </summary>
+        /// <param name="text">The text of every line</param>
+        /// <param name="color">The color char of every char in every line (same lengths as the text lines)</param>
+        /// <param name="palette">Maps color chars to console colors</param>
+        /// <param name="tab">Written before every line</param>
         public static void RenderColor(String[] text, String[] color, IReadOnlyDictionary<Char, ConsoleColor> palette, String tab = "")
         {
             var h = text.Length;
@@ -123,6 +166,9 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// A palette for gradient ASCII art: 'a' - 'f' are the bright colors (red, yellow, green, cyan, blue, magenta), 'A' - 'F' the dark versions, '0' - '3' are black, gray, dark gray and white
+        /// </summary>
         public static readonly IReadOnlyDictionary<Char, ConsoleColor> ConsolePalette = new Dictionary<Char, ConsoleColor>()
         {
             { 'a', ConsoleColor.Red },
@@ -143,6 +189,9 @@ namespace SysWeaver
             { '3', ConsoleColor.White },
         }.Freeze();
 
+        /// <summary>
+        /// The html color of every <see cref="ConsoleColor"/> (indexed by the enum value)
+        /// </summary>
         static readonly String[] HtmlColors =
         [
             "#000",     // Black        
@@ -164,6 +213,17 @@ namespace SysWeaver
         ];
 
 
+        /// <summary>
+        /// Get compressed two color ASCII art as html (color char 'a' is the bright color and 'b' is the dark color)
+        /// </summary>
+        /// <param name="data">The compressed data</param>
+        /// <param name="bright">The color to use for 'a'</param>
+        /// <param name="dark">The color to use for 'b'</param>
+        /// <param name="tab">Raw html inserted at the start of the first element of every non empty line</param>
+        /// <param name="nlStart">Raw html added before every line</param>
+        /// <param name="nlEnd">Raw html added after every line</param>
+        /// <param name="tag">The html tag used for every color run (with an inline color style)</param>
+        /// <returns>The html</returns>
         public static String GetHtml(Byte[] data, ConsoleColor bright = ConsoleColor.Green, ConsoleColor dark = ConsoleColor.DarkGreen, String tab = "", String nlStart = "<div>", String nlEnd = "</div>", String tag = "span")
         {
             var d = new Dictionary<Char, ConsoleColor>()
@@ -174,9 +234,28 @@ namespace SysWeaver
             return GetHtml(data, d, tab, nlStart, nlEnd, tag);
         }
 
+        /// <summary>
+        /// Get compressed ASCII art as html, using the <see cref="ConsolePalette"/>
+        /// </summary>
+        /// <param name="data">The compressed data</param>
+        /// <param name="tab">Raw html inserted at the start of the first element of every non empty line</param>
+        /// <param name="nlStart">Raw html added before every line</param>
+        /// <param name="nlEnd">Raw html added after every line</param>
+        /// <param name="tag">The html tag used for every color run (with an inline color style)</param>
+        /// <returns>The html</returns>
         public static String GetHtmlGradient(Byte[] data, String tab = "", String nlStart = "<div>", String nlEnd = "</div>", String tag = "span")
             => GetHtml(data, ConsolePalette, tab, nlStart, nlEnd, tag);
 
+        /// <summary>
+        /// Get compressed ASCII art as html (the decoded data is cached by the array reference)
+        /// </summary>
+        /// <param name="data">The compressed data</param>
+        /// <param name="palette">Maps color chars to console colors</param>
+        /// <param name="tab">Raw html inserted at the start of the first element of every non empty line</param>
+        /// <param name="nlStart">Raw html added before every line</param>
+        /// <param name="nlEnd">Raw html added after every line</param>
+        /// <param name="tag">The html tag used for every color run (with an inline color style)</param>
+        /// <returns>The html</returns>
         public static String GetHtml(Byte[] data, IReadOnlyDictionary<Char, ConsoleColor> palette, String tab = "", String nlStart = "<div>", String nlEnd = "</div>", String tag = "span")
         {
             var ca = Cache;
@@ -189,6 +268,17 @@ namespace SysWeaver
             return GetHtml(d.Item1, d.Item2, palette, tab, nlStart, nlEnd, tag);
         }
 
+        /// <summary>
+        /// Get ASCII art as html, the text is html encoded and spaces are converted to &amp;nbsp; (the other arguments are inserted as is)
+        /// </summary>
+        /// <param name="text">The text of every line</param>
+        /// <param name="color">The color char of every char in every line (same lengths as the text lines)</param>
+        /// <param name="palette">Maps color chars to console colors</param>
+        /// <param name="tab">Raw html inserted at the start of the first element of every non empty line</param>
+        /// <param name="nlStart">Raw html added before every line</param>
+        /// <param name="nlEnd">Raw html added after every line</param>
+        /// <param name="tag">The html tag used for every color run (with an inline color style)</param>
+        /// <returns>The html</returns>
         public static String GetHtml(String[] text, String[] color, IReadOnlyDictionary<Char, ConsoleColor> palette, String tab = "", String nlStart = "<div>", String nlEnd = "</div>", String tag = "span")
         {
             StringBuilder stringBuilder = new StringBuilder();

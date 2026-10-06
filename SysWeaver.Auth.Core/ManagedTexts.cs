@@ -6,17 +6,24 @@ using System.Linq;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Holds a set of localized text templates, one "key: text" file (see <see cref="ManagedTextLookup"/>) per language.
+    /// </summary>
+    /// <remarks>
+    /// For language codes with a region (ex: "en-GB"), the neutral language ("en") is also mapped to the first (alphabetically) regional variant if no neutral folder exists.
+    /// </remarks>
     public sealed class ManagedTexts
     {
         /// <summary>
-        /// Holds a bunch of texts localized
+        /// Load localized texts for all language folders found.
         /// </summary>
         /// <param name="sourceFile">A source file pattern.
         /// "*" is used to specify where the subfolders are.".
         /// Ex: "C:\locale\*\MyTexts.txt".".
         /// "C:\Locale" should then include sub-folders named using a language code like: "en-US", "en-GB", "es-MX", "es-ES", "de", "sv".
         /// </param>
-        /// <param name="defaultLang">The default language if the supplied language isn't found</param>
+        /// <param name="defaultLang">The default language if the supplied language isn't found, null uses "en"</param>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="sourceFile"/> doesn't contain a '*'.</exception>
         public ManagedTexts(String sourceFile, String defaultLang)
         {
             var languages = new ConcurrentDictionary<String, ManagedLanguageTexts>(StringComparer.Ordinal);
@@ -61,26 +68,36 @@ namespace SysWeaver
             Languages = languages;
         }
 
+        /// <inheritdoc/>
         public override string ToString() => String.Concat("Default: ", Default, ", languages: ", Languages.Count);
 
         readonly ConcurrentDictionary<String, ManagedLanguageTexts> Languages = new ConcurrentDictionary<String, ManagedLanguageTexts>(StringComparer.Ordinal);
         
+        /// <summary>
+        /// Add a language (typically machine translated at runtime) if it doesn't exist.
+        /// </summary>
+        /// <param name="language">The language code, should be lower case to be found by <see cref="GetLang(string)"/></param>
+        /// <param name="data">The texts</param>
+        /// <returns>True if added, false if the language already exists</returns>
         public bool TryAddTranslatedLanguage(String language, ManagedLanguageTexts data)
             => Languages.TryAdd(language, data);
 
 
+        /// <summary>
+        /// All languages, key is the lower cased language code (including neutral language aliases).
+        /// </summary>
         public IEnumerable<KeyValuePair<String, ManagedLanguageTexts>> AllLanguages => Languages;
 
         /// <summary>
-        /// The language used if the supplied language isn't found
+        /// The language used if the supplied language isn't found (null if there are no languages)
         /// </summary>
         public readonly ManagedLanguageTexts Default;
 
         /// <summary>
-        /// Get 
+        /// Get the texts for a language, falling back to the neutral language (ex: "en" for "en-US") and then to <see cref="Default"/>.
         /// </summary>
-        /// <param name="language"></param>
-        /// <returns></returns>
+        /// <param name="language">The language code (case insensitive), null returns <see cref="Default"/></param>
+        /// <returns>The texts, null only if no languages exist</returns>
         public ManagedLanguageTexts GetLang(String language)
         {
             if (language == null)
@@ -98,10 +115,10 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Get 
+        /// Get the texts for a language, falling back to the neutral language (ex: "en" for "en-US"), without using the default language.
         /// </summary>
-        /// <param name="language"></param>
-        /// <returns></returns>
+        /// <param name="language">The language code (case insensitive)</param>
+        /// <returns>The texts, or null if the language isn't available</returns>
         public ManagedLanguageTexts TryGetLang(String language)
         {
             if (language == null)

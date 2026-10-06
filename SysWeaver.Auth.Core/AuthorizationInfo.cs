@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace SysWeaver.Auth
 {
+    /// <summary>
+    /// Public information about a user (identity, tokens and profile data), without any authorizer specific state.
+    /// </summary>
     public class AuthorizationInfo
     {
         /// <summary>
@@ -31,12 +34,13 @@ namespace SysWeaver.Auth
         public readonly String Email;
 
         /// <summary>
-        /// A user guid
+        /// A user guid, ASCII only, starting with the authorizer's <see cref="AuthorizerBase.GuidPrefix"/> and a ':'
         /// </summary>
         public readonly String Guid;
 
         /// <summary>
-        /// Optional information for the user
+        /// The display name of the user, defaults to the user name.
+        /// If the name contains '@' or '+' (could be an email or phone number) a random name is generated from the guid instead.
         /// </summary>
         public readonly String NickName;
 
@@ -47,10 +51,10 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Use this to generate a nick name based of a users guid
+        /// Generate a deterministic random nick name based of a users guid (the same guid always gives the same name)
         /// </summary>
-        /// <param name="guid"></param>
-        /// <returns></returns>
+        /// <param name="guid">The user guid</param>
+        /// <returns>A name with at most <see cref="AuhorizationLimits.MaxNickNameLength"/> chars</returns>
         public static String GetRandomName(string guid)
             => NameGen.GetRandomName(AuhorizationLimits.MaxNickNameLength, NameGen.Genus.Male, new Random((int)QuickHash.Hash(guid)));
 
@@ -59,6 +63,17 @@ namespace SysWeaver.Auth
         /// If a nick contains any of these it's invalid (email and phone).
         /// </summary>
         static readonly Char[] InvalidNick = "@+".ToCharArray();
+        /// <summary>
+        /// Create user information, validating the lengths of the values.
+        /// </summary>
+        /// <param name="username">The user name (at most <see cref="AuhorizationLimits.MaxUserNameLength"/> chars)</param>
+        /// <param name="tokens">The security tokens (lower case), null means no tokens. The set is frozen</param>
+        /// <param name="language">Preferred language, may be null</param>
+        /// <param name="domain">Application specific domain (at most <see cref="AuhorizationLimits.MaxDomainName"/> chars), may be null</param>
+        /// <param name="email">Email (at most <see cref="AuhorizationLimits.MaxEmailLength"/> chars), may be null</param>
+        /// <param name="guid">The user guid (ASCII, at most <see cref="AuhorizationLimits.MaxGuidLength"/> chars)</param>
+        /// <param name="nickName">The nick name, null uses the user name</param>
+        /// <exception cref="Exception">A value is too long or the guid contains non ASCII chars.</exception>
         public AuthorizationInfo(string username, IReadOnlySet<string> tokens, string language, string domain, string email, string guid, string nickName)
         {
             AuthTools.ValidateUserGuid(guid);
@@ -86,6 +101,10 @@ namespace SysWeaver.Auth
             Language = language;
         }
 
+        /// <summary>
+        /// Create a copy of the public user information (ex: to strip the authorizer state from an <see cref="Authorization"/>).
+        /// </summary>
+        /// <param name="from">The instance to copy from</param>
         public AuthorizationInfo(AuthorizationInfo from)
         {
             Guid = from.Guid;

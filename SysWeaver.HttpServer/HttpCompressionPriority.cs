@@ -6,8 +6,17 @@ using SysWeaver.Compression;
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// An ordered list of compression encoders (and levels) that a handler supports, used to pick the encoder for a request's Accept-Encoding header.
+    /// Instances are shared (one per distinct configuration), get them using <see cref="GetSupportedEncoders"/>.
+    /// </summary>
+    /// <remarks>
+    /// Thread safe. The results are cached per distinct Accept-Encoding header value, without any bound.
+    /// Quality values ("q=") are ignored, any listed encoding (even "gzip;q=0") is considered accepted, "*" is not supported.
+    /// </remarks>
     public sealed class HttpCompressionPriority
     {
+        /// <inheritdoc/>
         public override string ToString() => String.Join(", ", Encoders.Select(x => String.Join(":", x.Item1.HttpCode, x.Item2)));
 
         HttpCompressionPriority(IReadOnlyList<Tuple<ICompEncoder, CompEncoderLevels>> encoders)
@@ -16,7 +25,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// The encoders to use, most preferable first etc
+        /// The encoders and compression levels to use, most preferable first.
         /// </summary>
         public readonly IReadOnlyList<Tuple<ICompEncoder, CompEncoderLevels>> Encoders;
         /// The encoder compression level to use, most preferable first etc
@@ -26,18 +35,18 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Given the supported encodings (usually from the Accept-Encoding header), return the encoder and compression level
+        /// Given the supported encodings (usually from the Accept-Encoding header), return the encoder and compression level.
         /// </summary>
-        /// <param name="supported"></param>
-        /// <returns></returns>
+        /// <param name="supported">The Accept-Encoding header value</param>
+        /// <returns>The first of <see cref="Encoders"/> that the client accepts, or null if none is accepted or <paramref name="supported"/> is null or empty</returns>
         public Tuple<ICompEncoder, CompEncoderLevels> GetEncoder(String supported) => GetEncoder(supported, GetAcceptedEncoders(supported));
 
         /// <summary>
-        /// Given the supported encodings (usually from the Accept-Encoding header), return the encoder and compression level
+        /// Given the supported encodings (usually from the Accept-Encoding header), return the encoder and compression level.
         /// </summary>
-        /// <param name="supported"></param>
-        /// <param name="sup"></param>
-        /// <returns></returns>
+        /// <param name="supported">The Accept-Encoding header value (used as cache key)</param>
+        /// <param name="sup">The accepted encodings parsed from <paramref name="supported"/> (see <see cref="GetAcceptedEncoders"/>)</param>
+        /// <returns>The first of <see cref="Encoders"/> that the client accepts, or null if none is accepted or <paramref name="supported"/> is null or empty</returns>
         public Tuple<ICompEncoder, CompEncoderLevels> GetEncoder(String supported, IReadOnlySet<String> sup)
         {
             if (String.IsNullOrEmpty(supported))
@@ -60,13 +69,17 @@ namespace SysWeaver.Net
             return val;
         }
 
+        /// <summary>
+        /// The default compression preference.
+        /// </summary>
         public const String DefaultMethods = "br:Fast, deflate:Fast, gzip:Fast";
 
         /// <summary>
-        /// Get a list of desired encoders and their levels given a string of priorities
+        /// Get a (shared) instance for a comma separated list of compression methods and levels.
         /// </summary>
-        /// <param name="methodsAndPerformance">Compresson method and level, ex: "br:Fast, deflate:Balanced"</param>
-        /// <returns></returns>
+        /// <param name="methodsAndPerformance">Compression methods (http codes) and optional levels (<see cref="CompEncoderLevels"/> names, default Fast), ex: "br:Fast, deflate:Balanced".
+        /// Unknown methods and duplicates are ignored.</param>
+        /// <returns>The instance, or null if the value is null, empty or contains no known methods</returns>
         public static HttpCompressionPriority GetSupportedEncoders(String methodsAndPerformance = DefaultMethods)
         {
             if (String.IsNullOrEmpty(methodsAndPerformance))
@@ -108,6 +121,11 @@ namespace SysWeaver.Net
 
         static readonly IReadOnlySet<String> Empty = new HashSet<String>().Freeze();
 
+        /// <summary>
+        /// Parse an Accept-Encoding header value into a set of lower cased encoding names (parameters such as "q=" are stripped).
+        /// </summary>
+        /// <param name="supported">The header value, may be null</param>
+        /// <returns>The (cached, shared) set, empty if <paramref name="supported"/> is null</returns>
         public static IReadOnlySet<String> GetAcceptedEncoders(String supported)
         {
             if (supported == null)
@@ -127,6 +145,9 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// The instance for <see cref="DefaultMethods"/>.
+        /// </summary>
         public static readonly HttpCompressionPriority Default = GetSupportedEncoders(DefaultMethods);
 
 

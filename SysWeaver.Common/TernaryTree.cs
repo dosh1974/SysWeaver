@@ -7,57 +7,74 @@ namespace SysWeaver
 
 
     /// <summary>
-    /// Creates an instance of terenary search tree.
+    /// A ternary search tree, a map from (non empty) string keys to values that supports prefix, wildcard and near (Hamming distance) searches.
     /// </summary>
-    /// <typeparam name="T">Value</typeparam>
+    /// <remarks>
+    /// Not thread safe for writes (reads concurrent with writes are also unsafe).
+    /// A null value is treated as "no value", so prefix nodes and keys with a null value are indistinguishable.
+    /// For non nullable value types every node counts as having a value, so prefix and near searches also return the default value for intermediate nodes.
+    /// All operations are recursive (the stack depth is proportional to the key length plus the tree depth).
+    /// Only used by <see cref="PrefixFinder"/>.
+    /// </remarks>
+    /// <typeparam name="T">The type of the values</typeparam>
     public class TernaryTree<T>
     {
+        /// <summary>
+        /// Create an empty tree
+        /// </summary>
+        /// <param name="caseSenesitive">True for ordinal compares, false to fold all chars (of keys and queries) using <see cref="CharExt.FastLower"/> (invariant culture)</param>
         public TernaryTree(bool caseSenesitive = true)
         {
             CaseSenesitive = caseSenesitive;
         }
 
+        /// <summary>
+        /// True if the keys are case sensitive (ordinal), false if all chars are folded to lower case (invariant culture)
+        /// </summary>
         public readonly bool CaseSenesitive;
 
 
         /// <summary>
-        /// The size of tree.
+        /// The number of added keys (see <see cref="Length"/>)
         /// </summary>
         int N;
 
         /// <summary>
-        /// The root
+        /// The root node, null if the tree is empty
         /// </summary>
         Node root;
 
         /// <summary>
-        /// Node instance.
+        /// A node, represents one char of one or more keys
         /// </summary>
         class Node
         {
             /// <summary>
-            /// character
+            /// The (folded) char of this node
             /// </summary>
             internal char c;
 
             /// <summary>
-            /// The  left, middle, and right subtries.
+            /// The left (smaller char), middle (next char of the key) and right (larger char) sub trees
             /// </summary>
             internal Node left, mid, right;
 
             /// <summary>
-            /// The value associated .
+            /// The value of the key that ends at this node (null / default if no key ends here)
             /// </summary>
             internal T value;
+            /// <summary>
+            /// The sum of the prefix lengths (char index + 1) of all added keys that passes this node, used to compute <see cref="BestVolume"/>
+            /// </summary>
             internal long volume;
         }
 
         /// <summary>
-        /// Gets the number of keys in tree.
+        /// The number of keys in the tree.
         /// </summary>
-        /// <value>
-        /// The size.
-        /// </value>
+        /// <remarks>
+        /// Not accurate: it's based on <see cref="Contains(string)"/>, so adding a key that is a prefix of an already added key isn't counted
+        /// </remarks>
         public int Length
         {
             get
@@ -67,12 +84,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Determines whether the tree [contains] [the specified key].
+        /// Check if a node exists for a key.
         /// </summary>
-        /// <param name="key">The key.</param>
-        /// <returns>
-        ///   <c>true</c> if the tree [contains] [the specified key]; otherwise, <c>false</c>.
-        /// </returns>
+        /// <param name="key">The key, may not be null or empty (if the tree isn't empty)</param>
+        /// <returns>True if a node exists for the key. Note that this is also true if the key is only a prefix of an added key (the node doesn't need to have a value)</returns>
+        /// <exception cref="IndexOutOfRangeException">The key is empty (and the tree isn't empty)</exception>
         public bool Contains(string key)
         {
             var node = Get(root, key, 0);
@@ -81,13 +97,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Gets the <see cref="Node"/> with the specified key.
+        /// Get the value of a key
         /// </summary>
-        /// <value>
-        /// The <see cref="Node"/>.
-        /// </value>
-        /// <param name="key">The key.</param>
-        /// <returns></returns>
+        /// <param name="key">The key, may not be null or empty (if the tree isn't empty)</param>
+        /// <returns>The value of the key, or default if the key isn't found (or is only a prefix of an added key)</returns>
+        /// <exception cref="IndexOutOfRangeException">The key is empty (and the tree isn't empty)</exception>
         public T this[string key]
         {
             get
@@ -101,12 +115,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Gets the specified x.
+        /// Find the node of the last char of a key (recursive)
         /// </summary>
-        /// <param name="node">The x.</param>
-        /// <param name="key">The key.</param>
-        /// <param name="charIndex">The d.</param>
-        /// <returns></returns>
+        /// <param name="node">The sub tree to search</param>
+        /// <param name="key">The key</param>
+        /// <param name="charIndex">The index of the char in the key to match against the node</param>
+        /// <returns>The node of the last char of the key (it may not have a value), or null if not found</returns>
         Node Get(Node node, string key, int charIndex)
         {
             if (node == null) 
@@ -125,12 +139,12 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Gets the specified x.
+        /// Find the first (shortest) node with a value along the path of a text (recursive)
         /// </summary>
-        /// <param name="node">The x.</param>
-        /// <param name="key">The key.</param>
-        /// <param name="charIndex">The d.</param>
-        /// <returns></returns>
+        /// <param name="node">The sub tree to search</param>
+        /// <param name="key">The text</param>
+        /// <param name="charIndex">The index of the char in the text to match against the node</param>
+        /// <returns>The node of the shortest key (with a value) that the text starts with, the node of the last char of the text if there is none, or null if the path doesn't exist</returns>
         Node GetFirstWithValue(Node node, string key, int charIndex)
         {
             if (node == null) 
@@ -151,10 +165,12 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Adds the specified key.
+        /// Add a key (or replace the value of an existing key).
+        /// Also updates <see cref="Best"/> and <see cref="BestVolume"/>.
         /// </summary>
-        /// <param name="key">The key.</param>
-        /// <param name="value">The value.</param>
+        /// <param name="key">The key, may not be null or empty</param>
+        /// <param name="value">The value, a null value makes the key indistinguishable from a missing key</param>
+        /// <exception cref="InvalidOperationException">The key is null or empty</exception>
         public void Add(string key, T value)
         {
             if (string.IsNullOrEmpty(key)) { throw new InvalidOperationException("Keys cannot be null or empty."); }
@@ -165,13 +181,13 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Adds the specified node in the tree.
+        /// Add a key to a sub tree (recursive)
         /// </summary>
-        /// <param name="node">The Node.</param>
-        /// <param name="key">The key.</param>
-        /// <param name="value">The val.</param>
-        /// <param name="charIndex">The d.</param>
-        /// <returns></returns>
+        /// <param name="node">The sub tree, null to create a new node</param>
+        /// <param name="key">The key</param>
+        /// <param name="value">The value</param>
+        /// <param name="charIndex">The index of the char in the key to match against the node</param>
+        /// <returns>The (new) root of the sub tree</returns>
         Node Add(Node node, string key, T value, int charIndex)
         {
             char charAtIndex = key[charIndex];
@@ -203,17 +219,21 @@ namespace SysWeaver
             return node;
         }
 
+        /// <summary>
+        /// The highest "volume" of any node, where the volume of a node is the sum of the prefix lengths of all added keys that passes through it (adding the same key twice counts twice)
+        /// </summary>
         public long BestVolume { get; private set; }
 
+        /// <summary>
+        /// The prefix of the node with the highest volume (see <see cref="BestVolume"/>), i.e. the most "valuable" shared prefix (with the casing of the key that last updated it), null for an empty tree
+        /// </summary>
         public String Best { get; private set; }
 
 
         /// <summary>
-        /// Returns all keys in tree.
+        /// All keys (that have a non null value) in the tree, ordered by char (folded to lower case for case in-sensitive trees).
+        /// A new collection is created on every call.
         /// </summary>
-        /// <value>
-        /// The keys.
-        /// </value>
         public IEnumerable<string> Keys
         {
             get
@@ -225,10 +245,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Returns all keys starting with a given prefix.
+        /// Get all keys (that have a non null value) starting with a prefix (including the prefix itself).
         /// </summary>
-        /// <param name="prefix">The prefix.</param>
-        /// <returns></returns>
+        /// <param name="prefix">The prefix, may not be null or empty (if the tree isn't empty)</param>
+        /// <returns>The keys, the prefix part have the casing of <paramref name="prefix"/>, the rest is folded for case in-sensitive trees</returns>
+        /// <exception cref="IndexOutOfRangeException">The prefix is empty (and the tree isn't empty)</exception>
         public IEnumerable<string> PrefixMatch(string prefix)
         {
             Queue<string> queue = new Queue<string>();
@@ -240,11 +261,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Collects all keys in subtrie rooted at x with given prefix.
+        /// Collect all keys (with a value) in a sub tree (recursive)
         /// </summary>
-        /// <param name="node">The x.</param>
-        /// <param name="prefix">The prefix.</param>
-        /// <param name="queue">The queue.</param>
+        /// <param name="node">The sub tree</param>
+        /// <param name="prefix">The chars of the path to the sub tree</param>
+        /// <param name="queue">Receives the keys</param>
         void Collect(Node node, string prefix, Queue<string> queue)
         {
             if (node == null) return;
@@ -255,10 +276,10 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Returns all keys matching given wilcard pattern.
+        /// Get all keys (that have a non null value) that matches a wildcard pattern, where a '.' matches any single char (the key must have the same length as the pattern).
         /// </summary>
-        /// <param name="pat">The pat.</param>
-        /// <returns></returns>
+        /// <param name="pat">The pattern, may not be null or empty (if the tree isn't empty)</param>
+        /// <returns>The matching keys (folded for case in-sensitive trees)</returns>
         public IEnumerable<string> WildcardMatch(string pat)
         {
             Queue<string> queue = new Queue<string>();
@@ -267,13 +288,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Collects all nodes for the specified prefix pattern.
+        /// Collect all keys in a sub tree that matches a wildcard pattern (recursive)
         /// </summary>
-        /// <param name="node">The Node.</param>
-        /// <param name="prefix">The prefix.</param>
-        /// <param name="charIndex">The index of char.</param>
-        /// <param name="pattern">The pattern.</param>
-        /// <param name="query">The query.</param>
+        /// <param name="node">The sub tree</param>
+        /// <param name="prefix">The chars of the path to the sub tree</param>
+        /// <param name="charIndex">The index of the char in the pattern to match against the node</param>
+        /// <param name="pattern">The pattern ('.' matches any char)</param>
+        /// <param name="query">Receives the matching keys</param>
         void Collect(Node node, string prefix, int charIndex, string pattern, Queue<string> query)
         {
             if (node == null) return;
@@ -292,10 +313,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Searches  all vals of keys starting with given prefix.
+        /// Get the values of all keys starting with a prefix (including the prefix itself if it's a key).
         /// </summary>
-        /// <param name="prefix">The prefix.</param>
-        /// <returns></returns>
+        /// <param name="prefix">The prefix, may not be null or empty (if the tree isn't empty)</param>
+        /// <returns>The non null values, in key order</returns>
+        /// <exception cref="IndexOutOfRangeException">The prefix is empty (and the tree isn't empty)</exception>
         public IEnumerable<T> Search(string prefix)
         {
             Queue<T> queue = new Queue<T>();
@@ -308,11 +330,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Searches all vals of keys starting with given prefix.
+        /// Find the value of the SHORTEST key that a text starts with.
         /// </summary>
-        /// <param name="val">The found value.</param>
-        /// <param name="value">The start of the string</param>
-        /// <returns></returns>
+        /// <param name="val">The value of the shortest matching key, or default if not found</param>
+        /// <param name="value">The text to test, may not be null or empty (if the tree isn't empty)</param>
+        /// <returns>True if a key (with a non null value) that the text starts with was found</returns>
+        /// <exception cref="IndexOutOfRangeException">The text is empty (and the tree isn't empty)</exception>
         public bool TryFindStart(out T val, string value)
         {
             var node = GetFirstWithValue(root, value, 0);
@@ -328,11 +351,11 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Collects all values of keys in subtrie rooted at x with given prefix.
+        /// Collect the values of all keys in a sub tree (recursive)
         /// </summary>
-        /// <param name="node">The x.</param>
-        /// <param name="prefix">The prefix.</param>
-        /// <param name="queue">The queue.</param>
+        /// <param name="node">The sub tree</param>
+        /// <param name="prefix">The chars of the path to the sub tree (not needed, but the strings are still built)</param>
+        /// <param name="queue">Receives the non null values</param>
         void Collect(Node node, string prefix, Queue<T> queue)
         {
             if (node == null) return;
@@ -346,11 +369,15 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Returns all values for keys in the dictionary that are within a given Hamming distance of a query.
+        /// Get the values of keys that are (approximately) within a Hamming distance of a query.
         /// </summary>
-        /// <param name="query">The query.</param>
-        /// <param name="distance">Hamming distance.</param>
-        /// <returns></returns>
+        /// <remarks>
+        /// The implementation is approximate: keys that extends a shorter key with a value are never visited (the search doesn't continue below a node with a value),
+        /// keys shorter than the query can match, and a distance of 0 (an exact match) always returns nothing.
+        /// </remarks>
+        /// <param name="query">The query, null or white space returns nothing</param>
+        /// <param name="distance">The max number of mismatched chars, must be greater than 0 (else nothing is returned)</param>
+        /// <returns>The values found</returns>
         public IEnumerable<T> NearSearch(string query, int distance)
         {
             Queue<T> queue = new Queue<T>();
@@ -360,12 +387,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Collects all values of keys which are within a given Hamming Distance.
+        /// Collect the values of keys in a sub tree that are within a Hamming distance (recursive)
         /// </summary>
-        /// <param name="query">The query.</param>
-        /// <param name="node">The node.</param>
-        /// <param name="queue">The queue.</param>
-        /// <param name="d">The d.</param>
+        /// <param name="query">The remaining part of the query</param>
+        /// <param name="node">The sub tree</param>
+        /// <param name="queue">Receives the values</param>
+        /// <param name="d">The remaining number of allowed mismatches</param>
         void Collect(string query, Node node, Queue<T> queue, int d)
         {
             if (node == null) return;

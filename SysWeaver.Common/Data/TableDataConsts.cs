@@ -51,7 +51,7 @@ namespace SysWeaver.Data
         public const String MimeSearchFormat = "Information about the \".{0}\" mime type";
 
         /// <summary>
-        /// Mime search
+        /// Text encoding search
         /// </summary>
         public const String EncodingSearchFormat = "Information about the {0} text encoding format";
 
@@ -67,7 +67,7 @@ namespace SysWeaver.Data
         public const int ImgMaxHeight = 24;
 
         /// <summary>
-        /// Path used for external information redirects
+        /// Path used for external information redirects (handled by the redirect module of the http server)
         /// </summary>
         public const String ExternalInfoPath = "externalInfo/";
 

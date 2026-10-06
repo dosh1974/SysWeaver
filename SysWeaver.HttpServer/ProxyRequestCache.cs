@@ -6,6 +6,14 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// A response cache for proxied GET and HEAD requests (used by <see cref="FileProxy"/> and the reverse proxy).
+    /// Responses are cached for the max-age of the upstream Cache-Control header (not cached if missing or zero), keyed by the upstream url and the Accept-Encoding header.
+    /// </summary>
+    /// <remarks>
+    /// Thread safe. The cache key doesn't include the client's credentials or cookies, and "private" / "no-store" directives are not honored,
+    /// so a cached response (including any Set-Cookie headers) is served to every client requesting the same url.
+    /// </remarks>
     public sealed class ProxyRequestCache
     {
 
@@ -59,13 +67,14 @@ namespace SysWeaver.Net
         public IEnumerable<Stats> HeadCacheStats(String system, String prefix = "") => HeadCache.GetStats(system, prefix);
 
         /// <summary>
-        /// A cache wrapper around a proxy request.
-        /// Only GET and HEAD requests are cached as of now (POST caching would require a hash computation of the post data, even if the request isn't cached)
+        /// Handle a request by proxying it (or serving it from the cache) and writing the response to the request.
+        /// Only GET and HEAD requests are cached as of now (POST caching would require a hash computation of the post data, even if the request isn't cached).
         /// </summary>
-        /// <param name="context">The request</param>
-        /// <param name="req">The request uri (this is what is used as the cache key)</param>
+        /// <param name="context">The request, the response is written to it</param>
+        /// <param name="req">The upstream url (also used as the cache key)</param>
         /// <param name="doRequest">Function that performs a fresh request (as in not being cached)</param>
-        /// <returns></returns>
+        /// <returns><see cref="HttpServerTools.AlreadyHandled"/></returns>
+        /// <exception cref="HttpResponseException">Thrown (404) if the method isn't GET, HEAD or POST</exception>
         public async Task<IHttpRequestHandler> HandleAsync(HttpServerRequest context, String req, Func<String, ProxyData, Task<ProxyData>> doRequest)
         {
             FastMemCache<String, CacheEntry> cache = null;
@@ -142,6 +151,9 @@ namespace SysWeaver.Net
 
 
 
+        /// <summary>
+        /// A cached upstream response.
+        /// </summary>
         sealed class CacheEntry
         {
             public long Expires;

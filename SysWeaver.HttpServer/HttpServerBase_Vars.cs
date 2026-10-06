@@ -16,9 +16,16 @@ namespace SysWeaver.Net
         #region Variables
 
 
+        /// <summary>
+        /// Static template variables: the "Key=Value" pairs from <see cref="HttpServerBaseParams.Variables"/> and the application colors ("Color.Background", "Color.Color", "Color.Acc1", "Color.Acc2").
+        /// </summary>
         readonly IReadOnlyDictionary<String, String> TempVars;
 
 
+        /// <summary>
+        /// Template variable groups, keyed by group name, a variable "Group.Name" is resolved by the group "Group" (ex: "${EnvInfo.AppName}").
+        /// Services can add their own groups, the built-in groups are "Env" and "EnvInfo".
+        /// </summary>
         public readonly ConcurrentDictionary<String, ITemplateVariableGroup> TempVarGroups = new(StringComparer.Ordinal);
 
 
@@ -26,6 +33,9 @@ namespace SysWeaver.Net
             "Session", "Server", "Request"
         );
 
+        /// <summary>
+        /// Check if a variable is dynamic (prefix "Session.", "Server.", "Request." or a dynamic variable group).
+        /// </summary>
         bool IsDynamic(String s)
         {
             var k = s.IndexOf('.');
@@ -39,6 +49,11 @@ namespace SysWeaver.Net
             return false;
         }
 
+        /// <summary>
+        /// Check if a template uses any dynamic variables (responses using it can't be cached globally).
+        /// </summary>
+        /// <param name="temp">The template</param>
+        /// <returns>True if any variable is dynamic</returns>
         public bool IsDynamic(TextTemplate temp)
         {
             foreach (var x in temp.Vars)
@@ -49,6 +64,17 @@ namespace SysWeaver.Net
             return false;
         }
 
+        /// <summary>
+        /// Get the per request template variables.
+        /// All query string parameters are included (decoded) as variables with the parameter name as key.
+        /// If <paramref name="isDynamic"/> is true, "Server.UTC", "Request.Prefix", "Request.IP", "Session.Lang" and (if a user is logged in) "Session.User", "Session.UserName", "Session.Email", "Session.Domain" and "Session.NickName" are added (overriding query parameters with the same name).
+        /// </summary>
+        /// <param name="isDynamic">True to include the dynamic variables</param>
+        /// <param name="request">The request</param>
+        /// <returns>A new dictionary</returns>
+        /// <remarks>These variables take precedence over static variables and variable groups when a template is applied, so a query parameter can override for example "EnvInfo.AppDisplayName".
+        /// Values are inserted as is unless the template uses an encoding modifier.
+        /// "Server.UTC" is formatted using a 12 hour clock without AM/PM.</remarks>
         public static Dictionary<String, String> GetVars(bool isDynamic, HttpServerRequest request)
         {
             Dictionary<String, String> vars = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -80,6 +106,14 @@ namespace SysWeaver.Net
 
 
 
+        /// <summary>
+        /// Apply a template, variables are resolved from (in order): <paramref name="vars"/>, <paramref name="extra"/>, the static variables and the variable groups.
+        /// Unknown variables resolve to null.
+        /// </summary>
+        /// <param name="template">The template</param>
+        /// <param name="vars">The per request variables (see <see cref="GetVars"/>)</param>
+        /// <param name="extra">Optional extra variables (translations), may be null</param>
+        /// <returns>The UTF-8 encoded result</returns>
         public ReadOnlyMemory<Byte> ApplyTemplate(TextTemplate template, IReadOnlyDictionary<String, String> vars, IReadOnlyDictionary<String, String> extra)
         {
             using (PerfMon.Track(nameof(ApplyTemplate)))
@@ -135,11 +169,11 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Get all template variables
+        /// Get all template variables (with their values for the current request).
         /// </summary>
-        /// <param name="r">Paramaters</param>
-        /// <param name="request">Paramaters</param>
-        /// <returns></returns>
+        /// <param name="r">Table parameters</param>
+        /// <param name="request">The request</param>
+        /// <returns>The table data</returns>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Dev)]
         [WebApiClientCache(1)]
@@ -153,12 +187,13 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Get translations as variables
+        /// Get the translations of a language template as variables (untranslated if there is no translator or the language is English).
+        /// Variables in translations whose name starts with 'V' are substituted using <paramref name="vars"/>.
         /// </summary>
-        /// <param name="language"></param>
-        /// <param name="temp"></param>
-        /// <param name="vars"></param>
-        /// <returns></returns>
+        /// <param name="language">The language to translate to</param>
+        /// <param name="temp">The language template</param>
+        /// <param name="vars">Variables to substitute, may be null</param>
+        /// <returns>The translation variables, null if the template has no texts</returns>
         async Task<IReadOnlyDictionary<String, String>> GetTranslationVars(String language, LanguageTemplate temp, IReadOnlyDictionary<String, String> vars)
         {
             var v = temp.Vars;

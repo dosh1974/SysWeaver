@@ -8,6 +8,14 @@ using System.Buffers;
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// The serializers available to API end points, and the logic for choosing an output serializer from an Accept header
+    /// and for decoding API arguments passed in the query string.
+    /// </summary>
+    /// <remarks>
+    /// One instance is shared by all <see cref="ApiHttpEntry"/> instances of an <see cref="ApiHttpServerModule"/>.
+    /// Thread safe.
+    /// </remarks>
     public sealed class ApiIoParams
     {
 
@@ -15,30 +23,60 @@ namespace SysWeaver.Net
         const String XmlMime = "application/xml";
         const string UrlMime = "application/x-www-form-urlencoded";
 
+        /// <summary>
+        /// The json serializer (used to deep copy API results before they are translated, so the original instance isn't modified), null if json isn't registered.
+        /// </summary>
         public readonly ISerializerType CopySerializer = SerManager.Get("json");
 
 
         /// <summary>
-        /// Valid output serializers, the key is the mime type (all lowercased)
+        /// Valid output serializers, keyed by mime type, mime header value and file extension (as reported by the serializer).
         /// </summary>
         public readonly IReadOnlyDictionary<String, ISerializer> OutputSerializers;
 
         /// <summary>
-        /// Valid input serializers, the key is the extension, mime etc (all lowercased)
+        /// Valid input serializers, keyed by mime type, mime header value and file extension (as reported by the serializer).
         /// </summary>
         public readonly IReadOnlyDictionary<String, IDeserializer> InputSerializers;
 
+        /// <summary>
+        /// The serializer used for output when the Accept header is missing or doesn't match any output serializer.
+        /// </summary>
         public readonly ISerializer DefaultOutput;
+
+        /// <summary>
+        /// The deserializer used for a request body that has no Content-Type header.
+        /// </summary>
         public readonly IDeserializer DefaultInput;
 
+        /// <summary>
+        /// The enabled json deserializer, null if json input isn't enabled.
+        /// </summary>
         public readonly IDeserializer JsonDeSer;
+
+        /// <summary>
+        /// The enabled "application/x-www-form-urlencoded" deserializer, null if not enabled.
+        /// </summary>
         public readonly IDeserializer UriDeSer;
 
+        /// <summary>
+        /// Maps the first character of a query string argument to the deserializer to use (json for json-like starts, xml for '&lt;').
+        /// A null value means the format is recognized but its deserializer isn't enabled.
+        /// </summary>
         public readonly IReadOnlyDictionary<Char, IDeserializer> SerMapper;
 
 
+        /// <summary>
+        /// Cache of raw Accept header value -> serializer (unbounded, keyed by client supplied header values).
+        /// </summary>
         readonly ConcurrentDictionary<String, ISerializer> Ac = new ConcurrentDictionary<string, ISerializer>(StringComparer.Ordinal);
 
+        /// <summary>
+        /// Get the output serializer to use for an Accept header value.
+        /// </summary>
+        /// <param name="accept">The raw Accept header value, can be null.</param>
+        /// <returns>The first enabled serializer in the order listed by the header (quality values are ignored), or <see cref="DefaultOutput"/>.</returns>
+        /// <remarks>Results are cached per distinct header value (ordinal), the cache is never pruned.</remarks>
         public ISerializer GetSerializer(String accept)
         {
             if (accept == null)
@@ -59,6 +97,9 @@ namespace SysWeaver.Net
             return s;
         }
 
+        /// <summary>
+        /// Build a lookup keyed by mime, mime header and extension (the first serializer wins for an extension, the last for a mime).
+        /// </summary>
         static IReadOnlyDictionary<String, T> Get<T>(IReadOnlyList<T> l) where T : ISerializerInfo
         {
             var t = new Dictionary<String, T>(StringComparer.Ordinal);
@@ -73,6 +114,13 @@ namespace SysWeaver.Net
 
         }
 
+        /// <summary>
+        /// Create the API IO parameters.
+        /// </summary>
+        /// <param name="inputSerializers">Enabled input deserializers.</param>
+        /// <param name="outputSerializers">Enabled output serializers.</param>
+        /// <param name="defaultInput">Default deserializer, null to use json if enabled, else the first input deserializer.</param>
+        /// <param name="defaultOutput">Default serializer, null to use json if enabled, else the first output serializer.</param>
         public ApiIoParams(
             IReadOnlyList<IDeserializer> inputSerializers,
             IReadOnlyList<ISerializer> outputSerializers,
@@ -102,6 +150,10 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// Binary argument type characters: lower case = json payload, upper case = payload serializer named explicitly;
+        /// d = deflate, g = gzip, b = brotli, z = zstd (if available), u = uncompressed.
+        /// </summary>
         static IReadOnlyDictionary<Char, ValueTuple<ICompType, bool>> GetDecomp()
         {
             Dictionary<Char, ValueTuple<ICompType, bool>> decomp = new Dictionary<char, ValueTuple<ICompType, bool>>();
@@ -200,6 +252,10 @@ namespace SysWeaver.Net
 
 
 
+        /// <summary>
+        /// Decode base64 or base64url (padding optional) starting at <paramref name="start"/>.
+        /// Invalid input currently yields an empty result rather than an exception.
+        /// </summary>
         static ReadOnlyMemory<Byte> FromText(String text, int start)
         {
             var ttl = text.Length;
@@ -232,6 +288,9 @@ namespace SysWeaver.Net
             return new ReadOnlyMemory<Byte>(temp, 0, b);
         }
 
+        /// <summary>
+        /// Decode a binary argument: "_" + type char (see <see cref="GetDecomp"/>) + [serializer extension + ","] + base64url data.
+        /// </summary>
         T GetBinary<T>(String text)
         {
             if (!Decomp.TryGetValue(text[1], out var z))
@@ -275,6 +334,23 @@ namespace SysWeaver.Net
             return v;
         }
 
+        /// <summary>
+        /// Decode an API argument passed as text (typically the query string of a GET request).
+        /// </summary>
+        /// <typeparam name="T">The argument type.</typeparam>
+        /// <param name="textInput">The URL encoded argument text.</param>
+        /// <returns>The deserialized value, default when <paramref name="textInput"/> is empty.</returns>
+        /// <remarks>
+        /// The text is URL unescaped and the format is chosen by its first character:
+        /// <list type="bullet">
+        /// <item>'_' : compressed/binary payload, "_" + d|g|b|z|u (upper case = followed by a serializer extension and ','), then base64url data.</item>
+        /// <item>'{', '[', '"', ''', '-', '+', '.', digit : json.</item>
+        /// <item>'&lt;' : xml.</item>
+        /// <item>"null", "undefined", "true", "false", "nan" (exact, case sensitive) : json constants ("nan" becomes 0).</item>
+        /// <item>Any other letter : "application/x-www-form-urlencoded" style data.</item>
+        /// </list>
+        /// </remarks>
+        /// <exception cref="Exception">The format can't be determined or the required serializer isn't enabled.</exception>
         public T Get<T>(ReadOnlySpan<Char> textInput)
         {
             var tl = textInput.Length;

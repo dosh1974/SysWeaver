@@ -5,17 +5,23 @@ namespace SysWeaver
 {
 
     /// <summary>
-    /// Message handler that output's messages to the console
+    /// Message handler that writes messages to the console, optionally coloured by level and with a time/id/thread header depending on <see cref="Styles"/>.
     /// </summary>
+    /// <remarks>
+    /// <para>Instances are shared singletons (one per style/colour/mode combination) obtained from <see cref="GetSync(Styles, bool)"/> or <see cref="GetAsync(Styles, bool)"/>;
+    /// disposing one affects every user of that instance.</para>
+    /// <para>Output from all instances is serialized with a single static lock. Colour is disabled automatically if no ANSI capable console is available.</para>
+    /// <para>The service manager adds one of these when the process runs with a console (sync/Debug in DEBUG builds, otherwise async/Verbose).</para>
+    /// </remarks>
     public sealed class ConsoleMessageHandler : MessageHandler
     {
         
         /// <summary>
-        /// Get a console log handler that isn't blocking the calling thread while outputting (this improved performance but "debugging" using logging is harder)
+        /// Get a console log handler that isn't blocking the calling thread while outputting (this improves performance but "debugging" using logging is harder)
         /// </summary>
         /// <param name="style">The display style to use</param>
         /// <param name="monoChrome">True for monochrome output</param>
-        /// <returns>A message handler</returns>
+        /// <returns>A shared message handler instance (do not dispose unless shutting down)</returns>
         public static ConsoleMessageHandler GetAsync(Styles style = Styles.Debug, bool monoChrome = false)
         {
             int index = 1 + (monoChrome ? 2 : 0);
@@ -28,7 +34,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="style">The display style to use</param>
         /// <param name="monoChrome">True for monochrome output</param>
-        /// <returns>A message handler</returns>
+        /// <returns>A shared message handler instance (do not dispose unless shutting down)</returns>
         public static ConsoleMessageHandler GetSync(Styles style = Styles.Debug, bool monoChrome = false)
         {
             int index = 0 + (monoChrome ? 2 : 0);
@@ -37,23 +43,32 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// The amount of header detail written before each message
+        /// </summary>
         public enum Styles
         {
             /// <summary>
-            /// Minimal details
+            /// Minimal details: only the message text (and exceptions)
             /// </summary>
             Normal,
             /// <summary>
-            /// Plenty of details
+            /// Plenty of details: adds the local time (and the date whenever it changes), plus the level name when monochrome
             /// </summary>
             Verbose,
             /// <summary>
-            /// Even more details
+            /// Even more details: also adds the message id and thread id
             /// </summary>
             Debug,
         }
 
+        /// <summary>
+        /// True if no colours are used (requested, or forced because no ANSI console is available)
+        /// </summary>
         public readonly bool Monochrome;
+        /// <summary>
+        /// The display style of this handler
+        /// </summary>
         public readonly Styles Style;
 
         readonly ConsoleColor DefaultForeground;
@@ -66,6 +81,9 @@ namespace SysWeaver
             DefaultForeground = Console.ForegroundColor;
         }
 
+        /// <summary>
+        /// Waits for pending output (up to the base class timeout) and resets the console colour.
+        /// </summary>
         public override void Dispose()
         {
             base.Dispose();
@@ -91,6 +109,10 @@ namespace SysWeaver
             new ConsoleMessageHandler(Styles.Debug, true, Modes.Async),
         ];
 
+        /// <summary>
+        /// Returns a description, ex: "Console Async Verbose Monochrome".
+        /// </summary>
+        /// <returns>A description of the handler.</returns>
         public override string ToString()
         {
             return String.Concat("Console ", Mode, " ", Style, Monochrome ? " Monochrome" : "");
@@ -125,6 +147,11 @@ namespace SysWeaver
 
         static readonly object Lock = new object();
 
+        /// <summary>
+        /// Writes a message (and the message, stack trace of the exception and any inner exceptions) to the console.
+        /// </summary>
+        /// <param name="message">The message to write.</param>
+        /// <returns>A completed task, the write is synchronous.</returns>
         protected override Task Add(Message message)
         {
             Exception e = message.Exception;
@@ -186,6 +213,9 @@ namespace SysWeaver
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Flushes <see cref="Console.Out"/>.
+        /// </summary>
         protected override void OnFlush()
         {
             Console.Out.Flush();

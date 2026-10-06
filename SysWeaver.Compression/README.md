@@ -28,19 +28,40 @@ flowchart TB
 
 ## Key features
 
-- Codec lookup by HTTP content-coding name; highest priority implementation wins.
-- Effort levels (fast / balanced / best) expressed in compact preference strings such as `"br:Balanced, gzip:Fast"`.
-- Stream and memory based APIs, helpers for embedded (pre-compressed) resources.
-- Conversion of GZip data to Deflate without recompression.
+- Codec lookup by HTTP content-coding name or file extension (`CompManager.GetFromHttp`, `CompManager.GetFromExt`); the highest priority implementation wins (on a tie, the last registered).
+- Three effort levels (`CompEncoderLevels.Fast` / `Balanced` / `Best`), mapped by each codec to its own quality setting (ex: Brotli quality 1 / 4 / 11). The HTTP server expresses its preferences as compact strings such as `"br:Balanced, gzip:Fast"`.
+- Sync and async APIs for every combination of stream / memory input and output; extension methods (`CompExt`) that compress or decompress into an exact size array or pooled memory.
+- Truncated or invalid compressed data throws (`InvalidDataException`) instead of silently returning partial data, also for the .NET `DeflateStream` / `GZipStream` based codecs.
+- Helpers for embedded resources that may be stored pre-compressed (`AsmResExt`, ex: `index.html.br`) and for text files on disc that may be compressed (`CompFile`).
+- Conversion of GZip data to raw Deflate without recompression (`TransformGZipToDeflateStream`).
+- `CompStreamCodec<TEncoder, TDecoder>` implements the whole codec API on top of a struct encoder / decoder pair with pooled buffers, used by the Brotli, native Brotli and Zstandard codecs.
+
+## Key types
+
+| Type | Role |
+|---|---|
+| `ICompType` (`ICompEncoder`, `ICompDecoder`, `ICompInfo`) | A codec: name, HTTP code, priority, file extensions, compress / decompress. |
+| `CompManager` | Process wide codec registry, lookup by HTTP code or file extension. |
+| `CompEncoderLevels` | Fast / Balanced / Best effort. |
+| `CompExt` | `GetCompressed`, `GetDecompressed`, `GetDecompressedArray`, `GetUnmanagedDecompressed` extension methods. |
+| `CompBrotliNETNew`, `CompDeflateNET`, `CompGZipNET` | The built-in codecs registered by default (`br`, `deflate`, `gzip` / `gz`). |
+| `CompBrotliNET` | Alternative `BrotliStream` based Brotli codec (priority -1, not registered). |
+| `CompDeflateNETNew`, `CompGZipNETNew`, `CompZStdNETNew` | Codecs using the .NET 11+ encoder / decoder APIs, only compiled when targeting .NET 11 or later and not registered by default. |
+| `CompStreamCodec<TEncoder, TDecoder>`, `ICompStreamEncoder<T>`, `ICompStreamDecoder<T>` | Building blocks for implementing a codec from a streaming encoder / decoder. |
+| `CompInstancePool<T>` | Small lock-free pool used to reuse native encoder / decoder state. |
+| `AsmResExt`, `CompFile` | Read (optionally compressed) embedded resources and files. |
+| `TransformGZipToDeflateStream` | Present GZip data as raw Deflate data. |
 
 ## Limitations and considerations
 
 - Codec availability is process-wide; clients can only negotiate codecs that have been registered.
+- Concatenated streams are only decoded for GZip (members) and Zstandard (frames); for other formats data after the first compressed stream is ignored.
+- When decompressing from a stream, the decoder may read past the end of the compressed data.
 - Build steps that pre-compress web assets use an external tool (see [SysWeaver overview](../README.md) build notes).
 
 ## Using it
 
-Built-in codecs need no registration. Add plug-ins via the manifest (they are registered, not instantiated):
+Built-in codecs need no registration. Add plug-ins via the manifest (they are registered, not instantiated), or call their static `Register()` method:
 
 ```json
 { "Type": "SysWeaver.Compression.CompZstdSharp, SysWeaver.Compression.ZstdSharp" }

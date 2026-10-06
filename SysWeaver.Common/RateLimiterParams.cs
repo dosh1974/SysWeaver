@@ -3,16 +3,24 @@
 namespace SysWeaver
 {
     /// <summary>
-    /// A parameters for a rate limiter
+    /// Parameters for a <see cref="RateLimiter"/>: allow at most <see cref="Count"/> requests per <see cref="Duration"/> seconds
     /// </summary>
     public class RateLimiterParams
     {
 
 #if DEBUG
+        /// <summary>
+        /// Returns the limit as "count / duration seconds"
+        /// </summary>
+        /// <returns>The limit as text</returns>
         public override string ToString() => String.Concat(Count, " / ", Duration, Duration == 1 ? " second" : " seconds");
 
 #endif//DEBUG
 
+        /// <summary>
+        /// Validate the parameters
+        /// </summary>
+        /// <exception cref="Exception"><see cref="Count"/> or <see cref="Duration"/> is less than one</exception>
         public virtual void Validate()
         {
             if (Count <= 0)
@@ -22,12 +30,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Number of request
+        /// Maximum number of requests within the time window
         /// </summary>
         public int Count = 10;
 
         /// <summary>
-        /// Over this time frame in seconds
+        /// The time window in seconds
         /// </summary>
         public int Duration = 1;
     }

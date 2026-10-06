@@ -17,10 +17,15 @@ namespace SysWeaver
     /// Folders can be overridden using the key "FileHashFolders" in the ApplicationName.Config.json file (shared with DecompressedFileHash).
     /// Default uses the Folders.AllSharedFolders locations.
     /// </summary>
+    /// <remarks>
+    /// Hashes are MD5 hashes of the file content, encoded as 26 char strings (see <see cref="HashTools"/>), typically used as ETags / cache busters, NOT for security.
+    /// The disk cache is a small text file per (file name, creation time, last write time, length) key, a file modified without changing any of these returns a stale hash.
+    /// Cache files that haven't been accessed for 30 days are deleted when the process exits.
+    /// </remarks>
     public static class FileHash
     {
         /// <summary>
-        /// Convert a compact hash of length 26 to a hexadecimal hash of length 32
+        /// Convert a compact hash of length 26 to a hexadecimal hash of length 32 (same as <see cref="HashTools.ToHexHash(string)"/>)
         /// </summary>
         /// <param name="hashStringh16">A string of length 26 with an encoded hash</param>
         /// <returns>Hex hash (32 lower case hexadecimal chars)</returns>
@@ -133,6 +138,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="filename">The existing file to get the hash of the content, may also be a http or https url (see <see cref="IsWeb(string)"/>)</param>
         /// <returns>A hash string (26 chars) or null if there is some error</returns>
+        /// <remarks>Urls are hashed by blocking on <see cref="GetHashAsync(string)"/> (sync over async), prefer the async version.</remarks>
         public static String GetHash(String filename)
         {
             bool isWeb = IsWeb(filename);
@@ -188,16 +194,23 @@ namespace SysWeaver
 
         /// <summary>
         /// Get a hash of the contents of the supplied file (the MD5 hash encoded using <see cref="HashTools.GetHashString16(ReadOnlySpan{byte})"/>).
-        /// The hash is cached in memory and on disk (using the file name, creation time, last write time and length as the key).
+        /// The hash is cached on disk (using the file name, creation time, last write time and length as the key), local files are also cached in memory (for 30 minutes).
         /// </summary>
         /// <param name="filename">The existing file to get the hash of the content, may also be a http or https url (see <see cref="IsWeb(string)"/>)</param>
         /// <returns>A hash string (26 chars) or null if there is some error</returns>
+        /// <remarks>
+        /// For urls two GET requests are made, one to get the headers for the cache key and one to download and hash the content (unless the hash is cached on disk).
+        /// A null result (failure) for a local file is also cached in memory.
+        /// </remarks>
         public static Task<String> GetHashAsync(String filename)
         {
             return InternalHashAsync(filename, IsWeb(filename));
         }
 
 
+        /// <summary>
+        /// In memory cache of local file hashes, the key is the cache key of the file
+        /// </summary>
         static readonly FastMemCache<String, String> Cache = new (TimeSpan.FromMinutes(30), StringComparer.Ordinal);
 
         static async Task<String> InternalHashAsync(String filename, bool isWeb)
@@ -458,8 +471,14 @@ namespace SysWeaver
 
         #region Internal
 
+        /// <summary>
+        /// Holds the cache folders and deletes cache files that haven't been accessed for 30 days when the process exits
+        /// </summary>
         sealed class CleanUp
         {
+            /// <summary>
+            /// The cache folders (from the "FileHashFolders" config key, or the shared folders)
+            /// </summary>
             public readonly String[] P = Folders.FromConfig("FileHashFolders", Folders.AllSharedFolders, "FileHash", true);
 
             public CleanUp()

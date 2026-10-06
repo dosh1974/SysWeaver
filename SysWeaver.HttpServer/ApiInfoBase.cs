@@ -4,10 +4,18 @@ using System;
 namespace SysWeaver.Net
 {
 
+    /// <summary>
+    /// Describes a registered API end point, used as the row type of the API debug table and as the base of richer API descriptions.
+    /// </summary>
     [TableDataPrimaryKey(nameof(Uri))]
 
     public class ApiInfoBase
     {
+        /// <summary>
+        /// Copy the values of this instance to another instance.
+        /// </summary>
+        /// <param name="dest">The instance to copy to.</param>
+        /// <remarks>Note: <see cref="PerSession"/> and <see cref="Assembly"/> are currently NOT copied.</remarks>
         public void CopyTo(ApiInfoBase dest)
         {
             dest.Uri = Uri;
@@ -22,25 +30,25 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// The Uri of the end point
+        /// The local url of the end point (no leading slash).
         /// </summary>
         [TableDataUrl(null, "*../explore/api.html?q={0}", "Click to show the API details")]
         public String Uri;
 
         /// <summary>
-        /// Auth information, null = open, empty = auth required or comma separted tokens that are required
+        /// Auth information: null = open, empty = any logged in user, else comma separated tokens where at least one is required.
         /// </summary>
         [TableDataTags("{^0}", null, "{0}", true)]
         public String Auth;
 
         /// <summary>
-        /// The mime type of the return value if it's not a serialized object
+        /// The mime type (without parameters) of the return value if it's raw data, null if the result is a serialized object.
         /// </summary>
         [TableDataMime]
         public String Mime;
 
         /// <summary>
-        /// API description (code comments)
+        /// API description (the title of the method's XML doc summary).
         /// </summary>
         [TableDataText(60)]
         [AutoTranslate(false)]
@@ -60,23 +68,23 @@ namespace SysWeaver.Net
         public int RequestCacheDuration;
 
         /// <summary>
-        /// If true, the request is cached per session else it's cached globally
+        /// If true, the request is cached per session else it's cached globally (only relevant if <see cref="RequestCacheDuration"/> is positive).
         /// </summary>
         public bool PerSession;
 
         /// <summary>
-        /// The compression method to use (in order of preferens) or null if no compression should be applied
+        /// The compression methods to use (in order of preference) or null if no compression should be applied.
         /// </summary>
         [TableDataTags("{^1}", "Compression quality: {2}", "{0}", true)]
         public String CompPreference;
 
         /// <summary>
-        /// The assembly that defined the API
+        /// The name of the assembly that declares the API method.
         /// </summary>
         public String Assembly;
 
         /// <summary>
-        /// If true, the request response contains data that will be translated
+        /// If true, the response contains data that will be translated to the session language.
         /// </summary>
         public bool Translated;
 

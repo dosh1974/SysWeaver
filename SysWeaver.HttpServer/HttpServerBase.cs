@@ -24,6 +24,18 @@ using SysWeaver.Translation;
 namespace SysWeaver.Net
 {
 
+    /// <summary>
+    /// The listener independent http server: request pipeline, module routing, sessions, authentication, redirects, caching, compression,
+    /// text templates, transformers, translation and push messages.
+    /// Concrete servers (HttpListener or Kestrel based) adapt their requests to <see cref="HttpServerRequest"/> and call <see cref="Handle"/>.
+    /// </summary>
+    /// <remarks>
+    /// Request pipeline (see <see cref="Handle"/>): server rate limit, raw modules, session (cookie), session rate limit, forced end points
+    /// ("logout", "auth/redirect", "auth/logout_user", "serverTime"), folder redirects, module handlers (prefix modules first, then the other modules in order),
+    /// optional end points (generated favicons, logo, "login" etc), handler rate limits, auth, 304 handling, request cache, templates, transformers,
+    /// compression and range handling.
+    /// Thread safe, all members may be used concurrently.
+    /// </remarks>
     [WebMenuEmbedded(null, "Welcome", "Welcome", "app/Welcome.html", "Show the welcome page", "IconHome", -100, null, true)]
     [WebMenuEmbedded(null, "Home", "Home", "app/Home.html", "Show the home page", "IconHome", -100, "")]
     [WebMenuPath("Theme", "Theme", "Theme", "Color themes", "IconTheme")]
@@ -41,25 +53,47 @@ namespace SysWeaver.Net
         protected const String Prefix = "[HttpServer] ";
 
         /// <summary>
-        /// Local host prefix
+        /// A prefix that can be used to reach the server from this computer (set by the implementation when it starts listening), ex: "http://localhost:8080/".
         /// </summary>
         public String LocalUri { get; protected set; }
 
 
         /// <summary>
-        /// External host prefix
+        /// The external root uri, used for building absolute links outside of a request (ex: in emails).
+        /// Initialized from <see cref="HttpServerBaseParams.ExternalRootUri"/> (or the local prefix by the implementation).
         /// </summary>
+        /// <remarks>Unless <see cref="ExternalRootUriFromRequest"/> is set, the value is replaced by the prefix of the first request that is handled
+        /// (with a wildcard listener prefix that prefix contains the client supplied Host header).</remarks>
         public String ExternalRootUri { get; protected set; }
 
+        /// <summary>
+        /// True once <see cref="ExternalRootUri"/> has been set from a request prefix (the first handled request sets it).
+        /// </summary>
         protected bool ExternalRootUriFromRequest;
 
         long CacheHit;
         long CacheTotal;
 
+        /// <inheritdoc/>
         public override string ToString() => BaseParams.ToString();
 
+        /// <summary>
+        /// The translator used for automatic translations, null if <see cref="HttpServerBaseParams.AutoTranslate"/> is false or no translator was supplied.
+        /// </summary>
         public readonly ITranslator Translator;
 
+        /// <summary>
+        /// Create the server base.
+        /// </summary>
+        /// <param name="msg">Optional message handler</param>
+        /// <param name="translator">Optional translator (only used if <see cref="HttpServerBaseParams.AutoTranslate"/> is true)</param>
+        /// <param name="audit">Optional API audit service (used for the "auth/redirect" end point)</param>
+        /// <param name="auth">Optional auth manager, without it end points requiring auth are inaccessible</param>
+        /// <param name="firewallHandler">Optional firewall handler, used for prefixes that should be added to the firewall</param>
+        /// <param name="p">The parameters, null for defaults</param>
+        /// <param name="listenerExceptionType">The exception type that the listener throws for connection problems (counted as listener exceptions instead of handler errors), may be null</param>
+        /// <remarks>May block for up to 60 seconds waiting for a LAN ip if none is available.</remarks>
+        /// <exception cref="Exception">Thrown if the allowed languages are invalid or contain duplicates, or the rate limit parameters are invalid</exception>
         protected HttpServerBase(IMessageHost msg, ITranslator translator, IApiAuditService audit, AuthManager auth, IFirewallHandler firewallHandler, HttpServerBaseParams p, Type listenerExceptionType)
         {
             p = p ?? new HttpServerBaseParams();
@@ -218,6 +252,12 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <summary>
+        /// Validate (and normalize in place) a list of language codes.
+        /// </summary>
+        /// <param name="languages">The language codes, modified in place</param>
+        /// <returns>The normalized array, null if <paramref name="languages"/> is null or empty</returns>
+        /// <exception cref="Exception">Thrown if a language is invalid or occurs more than once</exception>
         public static String[] ValidateLanguageList(String[] languages)
         {
             if (languages == null)
@@ -247,9 +287,11 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Call this when Auth on a session have been set
+        /// Call this when a user has been set on a session (see <see cref="HttpSession.SetAuth"/>).
+        /// Pushes a "user.login" message, clears the session data, registers the session with the user and raises <see cref="OnLogin"/> and <see cref="OnLoginAsync"/>.
         /// </summary>
-        /// <param name="session"></param>
+        /// <param name="session">The session</param>
+        /// <remarks>The session token is not changed.</remarks>
         public async Task RunOnLogin(HttpSession session)
         {
             session.PushMessage(MessageUserLogIn, true, false);
@@ -281,6 +323,12 @@ namespace SysWeaver.Net
         readonly ExceptionTracker LoginErrors = new ExceptionTracker();
         readonly ExceptionTracker LogoutErrors = new ExceptionTracker();
 
+        /// <summary>
+        /// Called when a session is removed: raises the session's close event, unregisters it from its user (pushing a "user.logout" message) and clears the session (including its auth).
+        /// </summary>
+        /// <param name="session">The session</param>
+        /// <param name="reason">The logout reason, null for "Session expired"</param>
+        /// <returns>True if the session was registered with a user</returns>
         internal bool RunOnSessionRemove(HttpSession session, String reason = null)
         {
             try
@@ -323,6 +371,11 @@ namespace SysWeaver.Net
             return true;
         }
 
+        /// <summary>
+        /// Log out a session (see <see cref="RunOnSessionRemove"/>), a "user.logout" message is pushed even if the session wasn't registered with a user.
+        /// </summary>
+        /// <param name="session">The session</param>
+        /// <param name="reason">The logout reason, null for "User signed out"</param>
         internal void RunOnLogout(HttpSession session, String reason = null)
         {
             reason = reason ?? "User signed out";
@@ -331,11 +384,17 @@ namespace SysWeaver.Net
                 session.PushMessage(new PushMessageStringValue("user.logout", reason), true, false);
         }
 
+        /// <summary>
+        /// Implementations should call this before pausing (pushes "server.pause" to all sessions).
+        /// </summary>
         protected void RunBeforePause()
         {
             PushMessageAllSessions(MessageServerPause);
         }
 
+        /// <summary>
+        /// Implementations should call this after continuing (pushes "server.continue" to all sessions).
+        /// </summary>
         protected void RunAfterContinue()
         {
             PushMessageAllSessions(MessageServerContinue);
@@ -343,11 +402,11 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Execute some function on all active sessions for a specific user
+        /// Execute some function on all sessions that a specific user is logged into.
         /// </summary>
         /// <param name="userGuid">The user guid</param>
-        /// <param name="onSession">All sessions</param>
-        /// <returns>True if the user is known and have some avtive or dead sessions, else False</returns>
+        /// <param name="onSession">Called for each session</param>
+        /// <returns>True if the user is known (has some sessions), else false</returns>
         public bool EnumUserSessions(String userGuid, Action<HttpSession> onSession)
         {
             if (!UserSessions.TryGetValue(userGuid, out var ud))
@@ -460,10 +519,22 @@ namespace SysWeaver.Net
             return true;
         }
 
+        /// <summary>
+        /// Raised when a new session is created (exceptions are caught and tracked).
+        /// </summary>
         public event Action<HttpSession> OnSessionStart;
+        /// <summary>
+        /// Raised when a user has logged into a session (see <see cref="RunOnLogin"/>).
+        /// </summary>
         public event Action<HttpSession> OnLogin;
+        /// <summary>
+        /// Raised when a user is logged out using <see cref="ForceLogout"/> (exceptions are caught and tracked).
+        /// </summary>
         public event Action<HttpServerRequest> OnLogout;
 
+        /// <summary>
+        /// Raised (and awaited) when a user has logged into a session, after <see cref="OnLogin"/>.
+        /// </summary>
         public event Func<HttpSession, Task> OnLoginAsync;
 
 
@@ -578,6 +649,14 @@ namespace SysWeaver.Net
 
         }
 
+        /// <summary>
+        /// Read the (decompressed) response data for a url by running it through the module handlers (no auth, caching, templates or transformers are applied).
+        /// </summary>
+        /// <param name="newUrl">The absolute url to read</param>
+        /// <param name="session">Optional session, required for the optional end points (generated icons etc)</param>
+        /// <param name="ifNotModifiedSince">Optional etag, if the handler's etag equals it null is returned</param>
+        /// <returns>The data, the etag, the handler and the request, or null if no handler was found, the etag matched or an exception occurred.
+        /// For handlers that write the response directly only the data is set.</returns>
         public async Task<Tuple<ReadOnlyMemory<Byte>, String, IHttpRequestHandler, HttpServerRequest>> InternalRead(String newUrl, HttpSession session = null, String ifNotModifiedSince = null)
         {
             var host = GetHost(out var pre, out int qs, out bool didIndex, ref newUrl);
@@ -678,15 +757,15 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Add's a HTTP redirect (30x) for all data in a folder
+        /// Adds a HTTP redirect (30x) for all data in a folder.
+        /// The redirect is done to the same prefix, the rest of the local url and the query string are kept.
         /// </summary>
-        /// <param name="fromFolder">The folder to redirect, must end with a '/'</param>
-        /// <param name="toFolder">The redirected target folder, must end with a '/'</param>
-        /// <param name="redirectCode">The redirct code to send</param>
+        /// <param name="fromFolder">The local folder to redirect, must end with a '/'</param>
+        /// <param name="toFolder">The redirected target folder (relative to the prefix), must end with a '/'</param>
+        /// <param name="redirectCode">The redirect code to send</param>
         /// <param name="replace">if true and the redirect already exist, replace with this new one</param>
-        /// <returns>true if the redirect was possible or false if it was already added</returns>
-        /// <exception cref="ArgumentException"></exception>
-        /// <exception cref="Exception"></exception>
+        /// <returns>true if the redirect was added or false if it was already added</returns>
+        /// <exception cref="ArgumentException">Thrown (in DEBUG builds only) if a folder doesn't end with a '/'</exception>
         public bool AddFolderRedirect(String fromFolder, String toFolder, int redirectCode = 307, bool replace = false)
         {
 #if DEBUG
@@ -708,12 +787,11 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Removes a previosly added redirect
+        /// Removes a previously added redirect.
         /// </summary>
-        /// <param name="fromFolder">The folder that was redirect, must end with a '/'</param>
+        /// <param name="fromFolder">The folder that was redirected, must end with a '/'</param>
         /// <returns>true if the redirect was removed</returns>
-        /// <exception cref="ArgumentException"></exception>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="ArgumentException">Thrown (in DEBUG builds only) if the folder doesn't end with a '/'</exception>
         public bool RemoveFolderRedirect(String fromFolder)
         {
 #if DEBUG
@@ -934,6 +1012,12 @@ namespace SysWeaver.Net
         ValueTask<IHttpRequestHandler> HandleLogin(HttpServerRequest data, HttpSession session)
             => LoginTrueAuthHandler;
 
+        /// <summary>
+        /// Log out the user of a session (if any), raising <see cref="OnLogout"/> and invalidating the session cache.
+        /// </summary>
+        /// <param name="data">The request (passed to <see cref="OnLogout"/>)</param>
+        /// <param name="session">The session</param>
+        /// <returns>True if a user was logged out</returns>
         public bool ForceLogout(HttpServerRequest data, HttpSession session)
         {
             bool didClose = session.Auth != null;
@@ -1103,6 +1187,11 @@ namespace SysWeaver.Net
         readonly IReadOnlyDictionary<String, Func<HttpServerRequest, HttpSession, ValueTask<IHttpRequestHandler>>> OptionalEndPoints;
 
 
+        /// <summary>
+        /// Get the 404 response text, translated to a language.
+        /// </summary>
+        /// <param name="language">The language</param>
+        /// <returns>The text</returns>
         public async Task<String> Get404Text(String language)
         {
             return await Translator.TranslateSafe("Not Found - The server cannot find the requested resource.", language, "en", "This is the message to display when trying to access a non-existing end point in a web server").ConfigureAwait(false);
@@ -1374,6 +1463,13 @@ namespace SysWeaver.Net
             return v;
         }
 
+        /// <summary>
+        /// Handle a request (the main entry point used by the listener implementations), see the class remarks for the pipeline.
+        /// Exceptions thrown by the handler while producing the response are turned into error responses (500, or the code of an <see cref="HttpResponseException"/>, with the exception message as text).
+        /// </summary>
+        /// <param name="data">The request</param>
+        /// <returns>A task that completes when the response has been written</returns>
+        /// <remarks>Exceptions thrown while resolving the handler (by a module) propagate to the caller.</remarks>
         public async Task Handle(HttpServerRequest data)
         {
             RequestStats.Add(data.ReqContentLength);
@@ -2055,17 +2151,24 @@ namespace SysWeaver.Net
         protected abstract Task<bool> OnNewCert(ICertificateProvider cert, String pre);
 
         readonly int CertRetryMinutes;
+        /// <summary>
+        /// Number of minutes to wait before retrying to get a certificate if it failed during start up.
+        /// </summary>
         protected readonly int FirstCertRetryMinutes;
 
 
+        /// <summary>
+        /// The thumb print of the bound certificate, implementations should set this (<see cref="SwitchCert"/> skips rebinding if the new certificate has the same thumb print).
+        /// </summary>
         protected String CurrentCertThumbPrint;
 
         /// <summary>
-        /// Call to initiate a certificate switch
+        /// Call to initiate a certificate switch: gets the certificate and calls <see cref="OnNewCert"/> if the thumb print changed.
+        /// If getting the certificate fails a retry is scheduled (after CertRetryMinutes).
         /// </summary>
         /// <param name="cert">Certificate provider</param>
         /// <param name="pre">The prefix</param>
-        /// <returns></returns>
+        /// <returns>A task that completes when done (exceptions are logged, not thrown)</returns>
         protected async Task SwitchCert(ICertificateProvider cert, String pre)
         {
             var msg = Msg;
@@ -2099,7 +2202,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Call this whenever a certificate have been changed (
+        /// Call this whenever a certificate has been changed, starts a certificate switch in the background (see <see cref="SwitchCert"/>).
         /// </summary>
         /// <param name="cert">Certificate provider</param>
         /// <param name="pre">The prefix</param>
@@ -2117,6 +2220,12 @@ namespace SysWeaver.Net
         readonly IFirewallHandler FirewallHandler;
         readonly Stack<String> FirewallRules;
 
+        /// <summary>
+        /// Set the prefixes the server listens on (implementations call this when they start).
+        /// Default ports are removed from the prefixes (the instances are modified) and firewall rules are added for prefixes that ask for it.
+        /// </summary>
+        /// <param name="prefixes">The normalized prefixes (see <see cref="HttpServerPrefix.FixPrefix"/>)</param>
+        /// <param name="haveFirewall">True if firewall rules should be added</param>
         protected void SetPrefixes(IEnumerable<HttpServerPrefix> prefixes, bool haveFirewall)
         {
             var pp = prefixes.ToArray();
@@ -2181,10 +2290,17 @@ namespace SysWeaver.Net
 
 
 
+        /// <summary>
+        /// The prefixes the server listens on.
+        /// </summary>
         public IEnumerable<String> AllPrefixes => Prefixes.Select(x => x.Prefix);
 
+        /// <summary>
+        /// The prefixes the server listens on (set by <see cref="SetPrefixes"/>).
+        /// </summary>
         protected HttpServerPrefix[] Prefixes { get; private set; }
 
+        /// <inheritdoc/>
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor("HttpServer");
 
         readonly HttpServerBaseParams BaseParams;
@@ -2192,10 +2308,19 @@ namespace SysWeaver.Net
         #region Auth
 
         readonly String AuthRedirect;
+        /// <summary>
+        /// True if users may authenticate using the Authorization header (and API key headers), see <see cref="HttpServerBaseParams.AllowAuthorizationAuth"/>.
+        /// </summary>
         public readonly bool AllowAuthorizationAuth;
         readonly String LogoutRedirect;
 
+        /// <summary>
+        /// The message handler, may be null.
+        /// </summary>
         protected readonly IMessageHost Msg;
+        /// <summary>
+        /// The auth manager, null if there is none (end points requiring auth are then inaccessible).
+        /// </summary>
         public readonly AuthManager Auth;
 
         #endregion Auth
@@ -2252,6 +2377,11 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <summary>
+        /// Add a module, modules are queried for handlers in the order they were added (modules with prefixes are queried first, for matching urls).
+        /// </summary>
+        /// <param name="module">The module</param>
+        /// <returns>True if added, false if it was already added</returns>
         public bool AddModule(IHttpServerModule module)
         {
             var m = Modules;
@@ -2261,6 +2391,11 @@ namespace SysWeaver.Net
             return true;
         }
 
+        /// <summary>
+        /// Remove a module.
+        /// </summary>
+        /// <param name="module">The module</param>
+        /// <returns>True if removed, false if it wasn't added</returns>
         public bool RemoveModule(IHttpServerModule module)
         {
             var m = Modules;
@@ -2342,6 +2477,11 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <summary>
+        /// Add a raw module, raw modules get to handle requests before sessions are resolved (and before any other processing).
+        /// </summary>
+        /// <param name="RawModule">The module</param>
+        /// <returns>True if added, false if it was already added</returns>
         public bool AddRawModule(IHttpServerRawModule RawModule)
         {
             var m = RawModules;
@@ -2351,6 +2491,11 @@ namespace SysWeaver.Net
             return true;
         }
 
+        /// <summary>
+        /// Remove a raw module.
+        /// </summary>
+        /// <param name="RawModule">The module</param>
+        /// <returns>True if removed, false if it wasn't added</returns>
         public bool RemoveRawModule(IHttpServerRawModule RawModule)
         {
             var m = RawModules;
@@ -2495,10 +2640,19 @@ namespace SysWeaver.Net
             return "en";
         }
 
+        /// <summary>
+        /// Get the best supported language for an Accept-Language header value (cached for 24 hours per header value).
+        /// </summary>
+        /// <param name="acceptLanguageValue">The header value, may be null</param>
+        /// <returns>The language code, "en" if none of the languages are supported</returns>
         protected ValueTask<String> GetAcceptLanguage(String acceptLanguageValue)
             => AcceptLangCache.GetOrUpdateAsync(String.IsNullOrEmpty(acceptLanguageValue) ? "en" : acceptLanguageValue, GetAcceptLang);
 
 
+        /// <summary>
+        /// Get the session token from a Cookie header without allocating.
+        /// Finds the first occurrence of "name=" anywhere in the header (not only at a cookie boundary).
+        /// </summary>
         unsafe ReadOnlyMemory<Char> ExtractSessionCookie(String cookieString)
         {
             if (cookieString == null)
@@ -2611,6 +2765,11 @@ namespace SysWeaver.Net
             return session;
         }
 
+        /// <summary>
+        /// Close (remove) a session, the user is logged out of the session.
+        /// </summary>
+        /// <param name="session">The session, may be null</param>
+        /// <returns>True if the session was active and has been removed</returns>
         public bool CloseSession(HttpSession session)
         {
             if (session == null)
@@ -2653,9 +2812,9 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Enumerate all enpoints
+        /// Enumerate all end points (forced end points, module end points and optional end points).
         /// </summary>
-        /// <param name="root">If null all endpoints are returned (recursively)</param>
+        /// <param name="root">If null all endpoints are returned (recursively), else only the end points directly in this folder</param>
         /// <returns>End point information</returns>
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(String root = null)
         {
@@ -2690,9 +2849,18 @@ namespace SysWeaver.Net
 
         #region Pause
 
+        /// <summary>
+        /// Pause the server (requests get a "paused" response).
+        /// </summary>
         public abstract void Pause();
+        /// <summary>
+        /// Continue a paused server.
+        /// </summary>
         public abstract void Continue();
 
+        /// <summary>
+        /// True while the server is paused.
+        /// </summary>
         protected volatile bool IsPaused;
 
 
@@ -2781,6 +2949,7 @@ namespace SysWeaver.Net
 
 
 
+        /// <inheritdoc/>
         public virtual IEnumerable<Stats> GetStats()
         {
             const String sys = "HttpServer";
@@ -2814,9 +2983,21 @@ namespace SysWeaver.Net
 
 
         readonly Type ListenerExceptionType;
+        /// <summary>
+        /// Exceptions thrown by the listener (connection problems).
+        /// </summary>
         protected readonly ExceptionTracker ListenerExceptions = new ExceptionTracker();
+        /// <summary>
+        /// Exceptions thrown by request handlers.
+        /// </summary>
         protected readonly ExceptionTracker HandlerExceptions = new ExceptionTracker();
+        /// <summary>
+        /// Exceptions thrown while handling requests (outside of handlers).
+        /// </summary>
         protected readonly ExceptionTracker RequestExceptions = new ExceptionTracker();
+        /// <summary>
+        /// Exceptions thrown by session close events.
+        /// </summary>
         protected readonly ExceptionTracker SessionCloseExceptions = new ExceptionTracker();
 
         #endregion//Error tracking
@@ -2999,11 +3180,12 @@ namespace SysWeaver.Net
         #endregion//Cache
 
         /// <summary>
-        /// Get messages, block until new message is sent, only one request per session is supported (only one will get messages).
+        /// Get push messages for the current session, blocks until a message is pushed or the keep alive time has passed (long polling).
+        /// Every concurrent request (ex: one per browser tab) gets the messages.
         /// </summary>
-        /// <param name="events">The events types to fetch and the change counter</param>
-        /// <param name="request"></param>
-        /// <returns>List of messages and the new change counter</returns>
+        /// <param name="events">The message types to fetch and the change counter</param>
+        /// <param name="request">The request</param>
+        /// <returns>List of messages and the new change counter, null if nothing changed</returns>
         [WebApi("application/{0}")]
         public async Task<MessageStreamResponse> GetMessages(MessageStreamRequest events, HttpServerRequest request)
         {
@@ -3052,8 +3234,9 @@ namespace SysWeaver.Net
         readonly FastMemCache<String, LanguageInfo[]> LocalizedLanguagesCache = new FastMemCache<string, LanguageInfo[]>(TimeSpan.FromDays(1));
 
         /// <summary>
-        /// Get a list of the supported languages, with localized meta information.
+        /// Get a list of the supported languages, with meta information localized to the session language.
         /// </summary>
+        /// <param name="context">The request</param>
         /// <returns>The list of supported languages.
         /// null = No language support</returns>
         [WebApi("application/{0}")]
@@ -3075,10 +3258,11 @@ namespace SysWeaver.Net
         readonly FastMemCache<String, LanguageInfo> LocalizedLangCache = new FastMemCache<string, LanguageInfo>(TimeSpan.FromDays(1));
 
         /// <summary>
-        /// Get localized language information
+        /// Get localized language information (cached for a day).
         /// </summary>
-        /// <returns>The list of supported languages.
-        /// null = No language support</returns>
+        /// <param name="info">The ISO code of the language to describe</param>
+        /// <param name="toLanguage">The language to localize the information to</param>
+        /// <returns>The language information</returns>
         public ValueTask<LanguageInfo> GetLocalizedLanguage(String info, String toLanguage)
             => LocalizedLangCache.GetOrUpdateAsync(String.Concat(info, '_', toLanguage), cl =>
                 OneLang(Translator, info, toLanguage)
@@ -3136,17 +3320,17 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Change the preferred language for the currently logged in user.
-        /// If successful a page reload request is sent to all sessions for that user (maybe don't have time to get the result or act on it)
+        /// Change the language of the session (and the preferred language of the logged in user, if any).
+        /// A refresh message is sent to the session, or to all sessions of the user if the user's language was changed.
         /// </summary>
-        /// <param name="languageCode">The new language code.
-        /// A two letter letter ISO 639-1 code with an optional hypen followed by an ISO 3166 Alpha 2 country code.
+        /// <param name="languageCode">The new language code, must be one of <see cref="GetSupportedLanguages"/>.
+        /// A two letter ISO 639-1 code with an optional hyphen followed by an ISO 3166 Alpha 2 country code.
         /// Examples:
         /// "fr", "en-US", "en-GB", "es-ES", "es-MX"
         /// </param>
-        /// <param name="context"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="context">The request</param>
+        /// <returns>True</returns>
+        /// <exception cref="Exception">Thrown if the language isn't supported</exception>
         [WebApi("application/{0}")]
         public async Task<bool> SetLanguage(String languageCode, HttpServerRequest context)
         {
@@ -3171,9 +3355,10 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Get the current language of the session
+        /// Get the current language of the session.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="context">The request</param>
+        /// <returns>The language code</returns>
         [WebApiClientCache(1)]
         [WebApi("application/{0}")]
         public String GetLanguage(HttpServerRequest context)
@@ -3208,10 +3393,16 @@ namespace SysWeaver.Net
 
         bool StopMessages;
 
+        /// <summary>
+        /// Called by <see cref="Dispose"/> (after the shutdown message has been pushed), override to dispose the listener.
+        /// </summary>
         protected virtual void OnDispose()
         {
         }
 
+        /// <summary>
+        /// Stop the server: stops message polling, pushes "server.shutdown" to all sessions, calls <see cref="OnDispose"/> and removes added firewall rules (if configured).
+        /// </summary>
         public void Dispose()
         {
             StopMessages = true;
@@ -3240,6 +3431,9 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// Raise <see cref="OnCancel"/>.
+        /// </summary>
         protected void InvokeCancel() => OnCancel?.Invoke();
 
 
@@ -3251,6 +3445,9 @@ namespace SysWeaver.Net
         #region Debug
 
 
+        /// <summary>
+        /// The menu path of the http server debug tables.
+        /// </summary>
         public const String MenuPath = "Debug/Http Server/{0}";
 
 
@@ -3295,10 +3492,10 @@ namespace SysWeaver.Net
         public void SendAllSessionsMessage(String message, HttpServerRequest request) => request.Server.PushMessageAllSessions(new PushMessage(message));
 
         /// <summary>
-        /// Get all active sessions
+        /// Get all active (and recently expired) sessions, the tokens are redacted.
         /// </summary>
-        /// <param name="r">Paramaters</param>
-        /// <returns></returns>
+        /// <param name="r">Table parameters</param>
+        /// <returns>The table data</returns>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(5)]
@@ -3328,10 +3525,11 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Show a table with active users and their stats
+        /// Show a table with active users and their sessions.
         /// </summary>
-        /// <param name="r"></param>
-        /// <returns></returns>
+        /// <param name="r">Table parameters</param>
+        /// <returns>The table data</returns>
+        /// <remarks>The session information includes the full session tokens.</remarks>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(5)]
@@ -3346,10 +3544,10 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Get cache entries
+        /// Get the entries of the global request cache.
         /// </summary>
-        /// <param name="r">Paramaters</param>
-        /// <returns></returns>
+        /// <param name="r">Table parameters</param>
+        /// <returns>The table data</returns>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(5)]
@@ -3363,11 +3561,12 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Get cache entries for just this session
+        /// Get the entries of the request cache of the current session.
         /// </summary>
-        /// <param name="r">Paramaters</param>
-        /// <param name="context">Paramaters</param>
-        /// <returns></returns>
+        /// <param name="r">Table parameters</param>
+        /// <param name="context">The request</param>
+        /// <returns>The table data</returns>
+        /// <remarks>The response is stored in the global request cache (keyed by url, not session) for 4 seconds, so other sessions may get this session's entries.</remarks>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(5)]
@@ -3382,10 +3581,10 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// The mime mappings (extension to mime type) used by the web server
+        /// The mime mappings (extension to mime type) used by the web server.
         /// </summary>
-        /// <param name="r">Paramaters</param>
-        /// <returns></returns>
+        /// <param name="r">Table parameters</param>
+        /// <returns>The table data</returns>
         [WebApi("debug/data/{0}")]
         [WebApiAuth(Roles.DevAdminOps)]
         [WebApiClientCacheStatic]
@@ -3396,10 +3595,10 @@ namespace SysWeaver.Net
             => TableDataTools.GetTyped(r, 30000, MimeTypeMap.AllExtensionEntries);
 
         /// <summary>
-        /// All mime types that the web server recognizes
+        /// All mime types that the web server recognizes.
         /// </summary>
-        /// <param name="r">Paramaters</param>
-        /// <returns></returns>
+        /// <param name="r">Table parameters</param>
+        /// <returns>The table data</returns>
         [WebApi("debug/data/{0}")]
         [WebApiAuth(Roles.DevAdminOps)]
         [WebApiClientCacheStatic]

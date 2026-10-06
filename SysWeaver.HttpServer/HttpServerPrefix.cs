@@ -3,13 +3,18 @@ using System.Collections.Generic;
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// A listener prefix (the scheme, host and port a server listens on), with optional certificate binding and firewall rule.
+    /// </summary>
     public sealed class HttpServerPrefix
     {
+        /// <inheritdoc/>
         public override string ToString() => Prefix;
 
 
         /// <summary>
-        /// https with certificate and firewall to make it accessible outside the executing computer, requires elevated execution
+        /// https on port 443 for all host names, with any certificate provider and a firewall rule to make it accessible outside the executing computer, requires elevated execution.
+        /// A new instance is returned on every call.
         /// </summary>
         public static HttpServerPrefix DefaultExternalHttps => new HttpServerPrefix
         {
@@ -19,7 +24,8 @@ namespace SysWeaver.Net
         };
 
         /// <summary>
-        /// https with certificate accessible only on by this computer
+        /// https on port 443 with any certificate provider, intended to be accessible only by this computer.
+        /// Note: the host name is misspelled as "locahost" so this prefix doesn't match "localhost" requests.
         /// </summary>
         public static HttpServerPrefix DefaultLocalHttps => new HttpServerPrefix
         {
@@ -28,7 +34,7 @@ namespace SysWeaver.Net
         };
 
         /// <summary>
-        /// http with firewall to make it accessible outside the executing computer, requires elevated execution, not recommended, should use https!
+        /// http on port 80 for all host names, with a firewall to make it accessible outside the executing computer, requires elevated execution, not recommended, should use https!
         /// </summary>
         public static HttpServerPrefix DefaultExternalHttp => new HttpServerPrefix
         {
@@ -37,30 +43,35 @@ namespace SysWeaver.Net
         };
 
         /// <summary>
-        /// http accessible only on by this computer
+        /// http on port 80, intended to be accessible only by this computer.
+        /// Note: the host name is misspelled as "locahost" so this prefix doesn't match "localhost" requests.
         /// </summary>
         public static HttpServerPrefix DefaultLocalHttp => new HttpServerPrefix
         {
             Prefix = "http://locahost:80",
         };
 
+        /// <summary>
+        /// The default firewall rule name, "$(AppName)" and "$(Port)" are replaced (EnvInfo variables and the port of the prefix).
+        /// </summary>
         public const String DefaultFirewallName = "SysWeaver $(AppName) $(Port)";
 
 
         /// <summary>
         /// The prefix to listen on, syntax: "protocol://hostname:port/route".
         /// Where:
-        /// "protcol" = "http" or "https" (defaults to "http").
-        /// "hostname" = Examples: "192.168.1.10", "localhost", "www.mydomain.com".
-        /// "port" = Default's to "80" if protocol is "http" and "443" is protocol is "https".
-        /// "route" = Optional route, not available for kestral.
+        /// "protocol" = "http" or "https" (defaults to "http").
+        /// "hostname" = Examples: "*" (any host), "192.168.1.10", "localhost", "www.mydomain.com".
+        /// "port" = Defaults to "80" if protocol is "http" and "443" if protocol is "https".
+        /// "route" = Optional route, not available for Kestrel.
+        /// The server normalizes the prefix (see <see cref="FixPrefix"/>) and removes default ports.
         /// </summary>
         public String Prefix;
 
         /// <summary>
         /// Optionally bind a certificate to the prefix.
-        /// Only works for https prefix'es.
-        /// The value is the name of a registered ICertificate provider, or "*" to take any (first) provider.
+        /// Only works for https prefixes.
+        /// The value is the name of a registered certificate provider, or "*" to take any (first) provider.
         /// </summary>
         public String Certificate;
 
@@ -78,6 +89,13 @@ namespace SysWeaver.Net
 
         const String DefaultProtocol = "http";
 
+        /// <summary>
+        /// Normalize a prefix to "scheme://host:port/path/" (lower cased host, explicit port, trailing slash).
+        /// A missing scheme defaults to "http", "*" is kept as the host wildcard.
+        /// </summary>
+        /// <param name="f">The prefix as configured</param>
+        /// <returns>The normalized prefix, or null if <paramref name="f"/> is null or white space</returns>
+        /// <exception cref="UriFormatException">Thrown if the prefix isn't a valid uri</exception>
         public static String FixPrefix(String f)
         {
             f = f?.Trim();
@@ -94,6 +112,10 @@ namespace SysWeaver.Net
             return f;
         }
 
+        /// <summary>
+        /// Create a shallow copy.
+        /// </summary>
+        /// <returns>A new instance with the same values</returns>
         public HttpServerPrefix Clone()
         {
             return new HttpServerPrefix

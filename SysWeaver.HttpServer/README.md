@@ -56,14 +56,52 @@ sequenceDiagram
 
 | Concept | Description |
 |---|---|
-| **Modules** | Units that claim URL paths and produce request handlers. Any registered service implementing the module interface is attached automatically. |
-| **Web API engine** | Discovers `[WebApi]` methods on service instances and compiles fast invokers. URLs are composed from an API root, the class prefix and the method name/url. Parameters come from the query string (a single JSON value, XML, form data or compressed binary) or the request body; results are serialized according to the client's preferences. |
-| **Sessions and auth** | Cookie based sessions and device ids; authentication delegated to an `AuthManager` when registered; login redirect for protected pages; API keys via the Authorization header. |
-| **Caching** | Client cache headers, server-side response caches (global and per session), pre-compressed assets, ETags. |
-| **Templates** | Text files can be served as templates with `${Variable}` substitution and encoding modifiers; templates using dynamic variables bypass caching. |
-| **Transformers** | Services can register file-extension based transformers (e.g. minify, convert, translate) whose results are cached on disc. |
-| **Push messages** | A long-poll channel through which the server pushes messages to a session, a user or everyone. |
+| **Modules** | Units that claim URL paths and produce request handlers (`IHttpServerModule`, or `IHttpServerRawModule`, which bypasses the whole pipeline including auth). Any registered service implementing a module interface is attached automatically. |
+| **Web API engine** | `ApiHttpServerModule` discovers `[WebApi]` methods on service instances and compiles fast invokers. URLs are composed from the API root (default `Api`), the class url (`[WebApiUrl]`, default the type name) and the method url/name, matched exactly and case sensitively. A method takes at most one input parameter (optionally followed by an `HttpServerRequest`). GET input is the whole query string (a single JSON value, XML, form data or compressed binary); POST input is the body, deserialized per `Content-Type`. Results are serialized according to the `Accept` header, falling back to the default serializer. |
+| **Sessions and auth** | Cookie based sessions (`HttpSession`) and device ids; authentication delegated to an `AuthManager` when registered; login redirect (`AuthRedirect`, default `auth/Login.html?to={0}`) for protected pages; API keys via the `Authorization` header (Basic / Bearer) or the `x-api-key` / `x-goog-api-key` headers, with the resulting user stored in the cookie session. |
+| **Auth tokens** | Per end point: `null` = open, `""` = any logged in user, `"-"` = explicitly open, otherwise comma separated tokens (any one suffices). For APIs: method `[WebApiAuth]` > type `[WebApiAuth]` > module default, with `IRunTimeWebApiAuth` overrides on top. |
+| **Caching** | Client cache headers, server-side response caches (global, or per session), pre-compressed assets, ETags / 304. |
+| **Templates** | Text files matching template patterns are served with `${Variable}` substitution and encoding modifiers; templates using dynamic variables bypass the global cache. |
+| **Transformers** | Services can register file-extension based transformers (e.g. minify, convert, translate); `CachedTransformer` caches their results on disc. |
+| **Push messages** | A long-poll channel through which the server pushes messages to a session, a user, all logged in users or all sessions. |
 | **Translation** | With a translator registered, responses and web assets can be translated to the session language automatically. |
+
+### Key types
+
+| Type | Role |
+|---|---|
+| `HttpServerBase` / `HttpServerBaseParams` | The abstract pipeline (partial, split over `HttpServerBase*.cs`) and its configuration. |
+| `HttpServerRequest` | The adapted request; `ManualHttpServerRequest` is an in-memory implementation. |
+| `HttpSession` | Per client session state, with `MessageStreamRequest` / `MessageStreamResponse` for long polling. |
+| `HttpServerPrefix`, `HttpServerHosts`, `HttpServerHostInfo` | Listen prefixes and host lookup. |
+| `IHttpRequestHandler` | A resolved handler: auth, etag (304), cache key, then `Get` / `GetAsync`. |
+| `ApiHttpServerModule`, `ApiHttpEntry`, `ApiIoParams` | The Web API engine, a compiled API method, and serializer negotiation. |
+| `FileHttpServerModule`, `StaticDataHttpServerModule`, `RedirectHttpServerModule` | Disc folders, embedded / in-memory content, and redirects. |
+| `FileProxy`, `ProxyTools`, `ProxyRequestCache` | Forwarding requests to other servers. |
+| `CertificateBinder`, `IFirewallHandler` (`WindowsFirewallHandler`, `NoFirewallHandler`) | HTTPS certificate binding and firewall rules. |
+| `NoUserLoggedInException` and related auth exceptions | Thrown by modules during handler resolution to start the login flow. |
+| `IApiAuditService`, `IHttpTransformerService`, `IUserStorageService` | Contracts implemented by other services. |
+
+### Built-in end points
+
+| Kind | End points |
+|---|---|
+| Always handled by the server | `logout`, `auth/redirect`, `auth/logout_user`, `serverTime` |
+| Used only when no module serves them | `login`, `basic_auth`, `icon.svg`, `icon_debug.svg`, `favicon.ico`, `apple-touch-icon.png`, `icon-180.png`, `icon-192.png`, `icon-512.png`, `logo.svg`, `logo_debug.svg`, `logo.png` (generated from the app name and colors), `app/app.css`, `app/app.js` (empty) |
+| Default templates | `index.html`, `debug.html`, `app/manifest.json`, `app/Home.html`, `common/theme.css`, plus the patterns in `HttpServerBaseParams.Templates` |
+
+### Template variables
+
+- Query string parameters are available as variables and take precedence over the other sources.
+- Dynamic (per request): `Server.UTC`, `Request.Prefix`, `Request.IP`, `Session.Lang` and, with a logged in user, `Session.User`, `Session.UserName`, `Session.Email`, `Session.Domain`, `Session.NickName`.
+- Static: `Color.Background`, `Color.Color`, `Color.Acc1`, `Color.Acc2` and the `Key=Value` pairs of `HttpServerBaseParams.Variables`.
+- Groups: `Env.*` (environment variables) and `EnvInfo.*` (e.g. `${EnvInfo.AppName}`); services can add their own groups.
+- Values are inserted as is unless the template uses an encoding modifier.
+
+### Session lifetime
+
+- Sessions with 3 or fewer requests and no strongly authenticated user expire 30 seconds after the last activity; other sessions expire after `SessionExtendLifetime` (default 15) minutes of inactivity.
+- The session cookie is `HttpOnly`; `Secure` and `SameSite` are only added when `CorsCookies` is set.
 
 ## Key features
 
@@ -71,14 +109,17 @@ sequenceDiagram
 - Serving of embedded, on-disc and proxied content with redirects and pre-compressed variants.
 - HTTPS certificate binding from certificate provider services; optional firewall rule management.
 - A built-in single-page web application shell (home, welcome, menus, tables, themes) that other projects extend with their own pages.
-- Extensive diagnostic tables (APIs, sessions, users, caches, MIME types, template variables).
+- Extensive diagnostic tables (APIs, sessions, users, caches, MIME types, template variables, transformer caches).
+- In-process API invocation (`IApiHttpServerEndPoint.InvokeAsync`) for AI tools and other services. It performs no auth, rate limit or cache checks, so callers must check `Auth` themselves.
 
 ## Limitations and considerations
 
 - Certificate binding for the HttpListener based server uses Windows tooling; on other platforms use the Kestrel server for HTTPS.
-- The server's default listen prefix is external HTTPS on port 443, which requires a certificate provider (and, on Windows with HttpListener, elevated rights) — always configure prefixes explicitly for development.
-- HTTP range requests are not handled for cached content (marked as a TODO in the source), which matters for media streaming.
-- Forwarded-for headers are not added by the built-in proxy components (TODO in source).
+- The listeners' default listen prefix is external HTTPS on port 443 (`HttpServerPrefix.DefaultExternalHttps`), which requires a certificate provider (and, on Windows with HttpListener, elevated rights). Always configure prefixes explicitly for development with an explicit host (e.g. `http://localhost:8080`) rather than relying on the `DefaultLocalHttp(s)` presets.
+- HTTP range requests are not handled for cached content (marked as a TODO in the source), which matters for media streaming; suffix and multi-range requests are rejected.
+- The client IP is always the direct peer address. `Forwarded` / `X-Forwarded-For` headers are neither read nor added by the built-in proxy components (TODO in source), and the proxies forward the client's headers, including cookies and authorization.
+- Neither the server nor the API engine applies a request body size limit.
+- Request path handling and template output have known open hardening issues; expose only folders meant to be public and don't rely on the server as the only protection for sensitive files.
 - The build embeds pre-compressed assets produced by a Windows tool, so the project builds as-is only on Windows.
 
 ## Using it

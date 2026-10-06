@@ -3,10 +3,14 @@
 namespace SysWeaver
 {
     /// <summary>
-    /// Paramaters for a managed file, the credetial parameters are used for web based files
+    /// Parameters for a managed file (see <see cref="ManagedFile"/>), the credential parameters are used for web based files
     /// </summary>
     public class ManagedFileParams : CredentialParams
     {
+        /// <summary>
+        /// The quoted location and the credential parameters
+        /// </summary>
+        /// <returns>A description of the parameters</returns>
         public override string ToString() => String.Concat('"', Location, "\" [", base.ToString(), ']');
 
         /// <summary>
@@ -35,7 +39,7 @@ namespace SysWeaver
         public int LocalGraceTime = 2000;
 
         /// <summary>
-        /// For web based files, poll for changes at this frequency
+        /// For web based files, poll for changes at this frequency (the interval in ms)
         /// </summary>
         public int HttpPollFrequency = 5000;
 
@@ -46,7 +50,7 @@ namespace SysWeaver
         //public int FtpPollFrequency = 5000;
 
         /// <summary>
-        /// If true, the file must exist or an exception will be thrown
+        /// If true, the file must exist or an exception will be thrown (by the first call to <see cref="ManagedFile.TryGetNow"/> / <see cref="ManagedFile.TryGetNowAsync"/>)
         /// </summary>
         public bool MustExist = true;
     }

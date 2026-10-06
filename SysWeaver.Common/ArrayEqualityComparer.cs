@@ -13,6 +13,9 @@ namespace SysWeaver
     /// </remarks>
     public sealed class ArrayEqualityComparer
     {
+        /// <summary>
+        /// The array comparer implementation (a struct, boxed once when returned as an interface).
+        /// </summary>
         struct ComparerT<T> : IEqualityComparer<T[]>
         {
 
@@ -77,6 +80,9 @@ namespace SysWeaver
                 return h;
             }
 
+            /// <summary>
+            /// The cached comparer that uses <see cref="EqualityComparer{T}.Default"/> for the elements
+            /// </summary>
             public static readonly IEqualityComparer<T[]> Def = new ComparerT<T>(EqualityComparer<T>.Default);
         }
 
@@ -96,6 +102,7 @@ namespace SysWeaver
         /// <typeparam name="T">The array element type</typeparam>
         /// <param name="comparer">Element comparer, if null the default element comparer is used (and the cached instance is returned, same as <see cref="Get{T}()"/>)</param>
         /// <returns>An equality comparer for arrays of <typeparamref name="T"/></returns>
+        /// <remarks>A new comparer instance is allocated for every call with a non-null <paramref name="comparer"/>, cache it if it's used frequently.</remarks>
         public static IEqualityComparer<T[]> Get<T>(IEqualityComparer<T> comparer)
             => comparer == null ? ComparerT<T>.Def : new ComparerT<T>(comparer);
 

@@ -9,25 +9,54 @@ namespace SysWeaver.Auth
 {
 
     /// <summary>
-    /// The auhorization for a user
+    /// The authorization of a logged in user: the user information, the authorizer that validated the user and per-user data storage.
     /// </summary>
+    /// <remarks>
+    /// Authorizations are typically shared by many sessions / requests and must be treated as immutable (except for the user data).
+    /// Disposing releases the reference to the shared user data.
+    /// </remarks>
     public sealed class Authorization : AuthorizationInfo, IDisposable
     {
+        /// <inheritdoc/>
         public override string ToString() => String.Concat(Username, " with: ", String.Join(", ", Tokens));
 
 
+        /// <summary>
+        /// Pre-processed tokens of <see cref="Roles.Debug"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
+        /// </summary>
         public static IReadOnlyList<String> RoleDebug = GetRequiredTokens(Roles.Debug);
+        /// <summary>
+        /// Pre-processed tokens of <see cref="Roles.Admin"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
+        /// </summary>
         public static IReadOnlyList<String> RoleAdmin = GetRequiredTokens(Roles.Admin);
+        /// <summary>
+        /// Pre-processed tokens of <see cref="Roles.Dev"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
+        /// </summary>
         public static IReadOnlyList<String> RoleDev = GetRequiredTokens(Roles.Dev);
+        /// <summary>
+        /// Pre-processed tokens of <see cref="Roles.Ops"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
+        /// </summary>
         public static IReadOnlyList<String> RoleOps = GetRequiredTokens(Roles.Ops);
+        /// <summary>
+        /// Pre-processed tokens of <see cref="Roles.Service"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
+        /// </summary>
         public static IReadOnlyList<String> RoleService = GetRequiredTokens(Roles.Service);
+        /// <summary>
+        /// Pre-processed tokens of <see cref="Roles.Disabled"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
+        /// </summary>
         public static IReadOnlyList<String> RoleDisabled = GetRequiredTokens(Roles.Disabled);
+        /// <summary>
+        /// Pre-processed tokens of <see cref="Roles.AdminOps"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
+        /// </summary>
         public static IReadOnlyList<String> RoleAdminOps = GetRequiredTokens(Roles.AdminOps);
+        /// <summary>
+        /// Pre-processed tokens of <see cref="Roles.OpsDev"/>, for use with <see cref="AuthExt.IsValid(Authorization, IReadOnlyList{string})"/>.
+        /// </summary>
         public static IReadOnlyList<String> RoleOpsDev = GetRequiredTokens(Roles.OpsDev);
 
 
         /// <summary>
-        /// The auhorizer of this user
+        /// The authorizer of this user
         /// </summary>
         public readonly AuthorizerBase Auth;
 
@@ -37,15 +66,16 @@ namespace SysWeaver.Auth
         public readonly Object AuthContext;
 
         /// <summary>
-        /// The change counter of the auhtorizer when this auhorization was created, if this doesn't equal to Auth.ChangeCounter a new auth will have to be performed
+        /// The change counter of the authorizer when this authorization was created, if this doesn't equal to <see cref="AuthorizerBase.ChangeCounter"/> of <see cref="Auth"/> a new auth will have to be performed
         /// </summary>
         public readonly long Cc;
 
         /// <summary>
         /// Transform a comma separated token list to a pre processed and faster representation
         /// </summary>
-        /// <param name="requiredTokens">A list of comma separated tokens</param>
-        /// <returns>A readonly list of curated tokens</returns>
+        /// <param name="requiredTokens">A list of comma separated tokens (case insensitive, white spaces are trimmed)</param>
+        /// <returns>A readonly list of unique lower case tokens.
+        /// Null if <paramref name="requiredTokens"/> is null (no auth required), <see cref="AuthTools.Empty"/> if it's empty (any logged in user) and <see cref="AuthTools.NoAuth"/> if it's "-" (no one).</returns>
         public static IReadOnlyList<String> GetRequiredTokens(String requiredTokens)
         {
             if (requiredTokens == null)
@@ -69,8 +99,9 @@ namespace SysWeaver.Auth
         /// <summary>
         /// Transform a comma separated token list to a pre processed and faster representation
         /// </summary>
-        /// <param name="requiredTokens">A list of comma separated tokens</param>
-        /// <returns>A readonly list of curated tokens</returns>
+        /// <param name="requiredTokens">A list of comma separated tokens (case insensitive, white spaces are trimmed)</param>
+        /// <returns>A set of lower case tokens.
+        /// Null if <paramref name="requiredTokens"/> is null, <see cref="AuthTools.EmptyTokens"/> if it's empty and <see cref="AuthTools.NoAuthSet"/> if it's "-".</returns>
         public static IReadOnlySet<String> GetRequiredTokenSet(String requiredTokens)
         {
             if (requiredTokens == null)
@@ -93,6 +124,20 @@ namespace SysWeaver.Auth
 
 
 
+        /// <summary>
+        /// Create an authorization, the current <see cref="AuthorizerBase.ChangeCounter"/> of <paramref name="auth"/> is captured.
+        /// </summary>
+        /// <param name="auth">The authorizer that validated the user</param>
+        /// <param name="username">The user name</param>
+        /// <param name="tokens">The security tokens (lower case), null means no tokens</param>
+        /// <param name="weakMethod">True if a weak auth method was used (basic auth, bearer token etc)</param>
+        /// <param name="guid">The user guid, must start with the authorizer's <see cref="AuthorizerBase.GuidPrefix"/></param>
+        /// <param name="email">Optional email</param>
+        /// <param name="nickName">Optional nick name, null uses the user name</param>
+        /// <param name="authContext">Optional authorizer specific data</param>
+        /// <param name="domain">Optional application specific domain</param>
+        /// <param name="language">Optional preferred language</param>
+        /// <exception cref="Exception">A value is too long or the guid contains non ASCII chars.</exception>
         public Authorization(AuthorizerBase auth, string username, IReadOnlySet<string> tokens, bool weakMethod, String guid, string email = null, string nickName = null, object authContext = null, String domain = null, string language = null)
             : base(username, tokens, language, domain, email, guid, nickName)
         {
@@ -111,12 +156,13 @@ namespace SysWeaver.Auth
 
         
         /// <summary>
-        /// Use this to "lock" some operation for a specific user
+        /// Use this to "lock" some operation for a specific user.
+        /// Note: this is per <see cref="Authorization"/> instance, not shared between different instances of the same user.
         /// </summary>
         public readonly SemaphoreSlim UserLock = new SemaphoreSlim(1);
 
         /// <summary>
-        /// Request a logout of this auth
+        /// Request a logout of this auth, raises <see cref="OnRequestLogout"/> (the sessions using this auth are expected to log out).
         /// </summary>
         /// <param name="reason">A reason for the logout</param>
         public void RequestLogout(String reason) => OnRequestLogout?.Invoke(reason);
@@ -128,6 +174,9 @@ namespace SysWeaver.Auth
 
 
 
+        /// <summary>
+        /// Release the reference to the shared user data.
+        /// </summary>
         public void Dispose()
         {
             Interlocked.Exchange(ref InternalUserData, null)?.Dispose();
@@ -160,7 +209,8 @@ namespace SysWeaver.Auth
         }
 
         /// <summary>
-        /// Get or create user data
+        /// Get or create user data.
+        /// User data is shared between all <see cref="Authorization"/> instances of the same user (by guid) from the same authorizer.
         /// </summary>
         /// <typeparam name="T">The type of data</typeparam>
         /// <param name="key">The unique key for this data</param>
@@ -259,6 +309,7 @@ namespace SysWeaver.Auth
         /// Get the url of the logged in user image
         /// </summary>
         /// <param name="imageName">"small", "large" or a specific size, can use "" to get the base path to all images</param>
+        /// <remarks>The url is "[rootUrl]auth/UserImages/[hex encoded guid]/[imageName]".</remarks>
         /// <param name="rootUrl">Depends on where the link will be used, this value should "point" to the web root</param>
         /// <returns>An url to the specified image</returns>
         public String GetUserImage(String imageName = "small", String rootUrl = "../")
@@ -267,14 +318,18 @@ namespace SysWeaver.Auth
     }
 
 
+    /// <summary>
+    /// Extensions for checking if an <see cref="Authorization"/> fulfills a token requirement.
+    /// </summary>
     public static class AuthExt
     {
         /// <summary>
-        /// Validate that this user have ANY of the supplied tokens
+        /// Validate that this user have ANY of the supplied tokens.
         /// </summary>
-        /// <param name="auth">The autorization</param>
-        /// <param name="requiredTokens">A list of comma separated tokens that must exist in this users Token set</param>
-        /// <returns>True if all tokens are present</returns>
+        /// <param name="auth">The authorization, null means not logged in</param>
+        /// <param name="requiredTokens">A list of comma separated tokens (case insensitive).
+        /// Null means no auth required (always true), empty means that any logged in user is valid and "-" means that no one is valid</param>
+        /// <returns>True if the requirement is fulfilled, i.e. at least one of the tokens is present</returns>
         public static bool IsValid(this Authorization auth, String requiredTokens = null)
         {
             if (requiredTokens == null)
@@ -300,11 +355,12 @@ namespace SysWeaver.Auth
         }
 
         /// <summary>
-        /// Validate that this user have ANY of the supplied tokens
+        /// Validate that this user have ANY of the supplied tokens.
         /// </summary>
-        /// <param name="auth">The autorization</param>
-        /// <param name="requiredTokens">A list of tokens that must exist in this users Token set, must be all lowercased</param>
-        /// <returns>True if all tokens are present</returns>
+        /// <param name="auth">The authorization, null means not logged in</param>
+        /// <param name="requiredTokens">Tokens as returned by <see cref="Authorization.GetRequiredTokens(string)"/> (must be all lower case).
+        /// Null means no auth required (always true), empty means that any logged in user is valid and <see cref="AuthTools.NoAuth"/> (reference equality) means that no one is valid</param>
+        /// <returns>True if the requirement is fulfilled, i.e. at least one of the tokens is present</returns>
         public static bool IsValid(this Authorization auth, IReadOnlyList<String> requiredTokens)
         {
             if (requiredTokens == null)

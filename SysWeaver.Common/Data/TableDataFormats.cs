@@ -1,5 +1,13 @@
 namespace SysWeaver.Data
 {
+    /// <summary>
+    /// The built in formats that can be used in a <see cref="TableDataColumn.Format"/> string.
+    /// </summary>
+    /// <remarks>
+    /// The format string is the name of the format followed by the arguments, separated by ';', ex: "Number;2;{0}%".
+    /// The name (not the numeric value) is used by the web client, so names must not be changed.
+    /// Typically created using one of the attributes derived from <see cref="TableDataRawFormatAttribute"/>.
+    /// </remarks>
     public enum TableDataFormats
     {
         /// <summary>
@@ -10,7 +18,7 @@ namespace SysWeaver.Data
         /// {0} = Formatted value.
         /// {1} = Next value (must exist). 
         /// {2} = Value before formatting.
-        /// If the third argument is true, the original value will be copied to the clipboard on click.
+        /// The third argument is the click to copy formatting (with the same arguments as the title), if missing the value before formatting is copied, if empty nothing is copied.
         /// </summary>
         Default = 0,
         /// <summary>
@@ -65,7 +73,7 @@ namespace SysWeaver.Data
         Tags,
 
         /// <summary>
-        /// The type and format is found in the next column instead of in the header
+        /// The type and format is found in the next column instead of in the header, the next column value must be "TypeName|Format"
         /// </summary>
         PerRowFormat,
 
@@ -127,28 +135,31 @@ namespace SysWeaver.Data
         /// {0} = This value. 
         /// {1} = Next value (must exist). 
         /// {2} = The image source url (after formatting). 
-        /// {3} = The url (after formatting). 
+        /// {3} = The url (after formatting).
+        /// Fourth and fifth arguments are the max width and max height of the image (ignored if zero or less).
+        /// The sixth argument is a prefix to add to relative image urls.
         /// </summary>
         Img,
 
         /// <summary>
         /// Format as duration.
+        /// The first and second arguments are the text and title formatting, the third the click to copy formatting and the fourth a text to replace an exact zero with.
         /// </summary>
         Duration,
 
         /// <summary>
-        /// Format as json, only the first line (or max length) in shown.
+        /// Format as json, only the first line (or max length) is shown.
         /// Full text on hover (and click).
         /// </summary>
         Json,
 
         /// <summary>
-        /// Format as multiline text, only the first line (or max length) in shown.
+        /// Format as multiline text, only the first line (or max length) is shown.
         /// </summary>
         Text,
 
         /// <summary>
-        /// Format as multiline mark down, only the first line (or max length) in shown.
+        /// Format as multiline mark down, only the first line (or max length) is shown.
         /// </summary>
         MD,
 

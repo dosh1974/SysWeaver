@@ -8,29 +8,45 @@ using System.Runtime.CompilerServices;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Read only set extensions: merging, freezing (creating optimized immutable sets) and getting the comparer of a set.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Freeze{K}(IReadOnlySet{K}, IEqualityComparer{K})"/> picks the fastest implementation for the content:
+    /// a shared empty set, a single item set, a vectorized set for 2-8 integer / enum keys, an open addressing table for more integer / enum keys,
+    /// a fingerprint based set for ordinal string keys, else a <see cref="FrozenSet{T}"/>.
+    /// The sets returned by Freeze remember their comparer, so freezing them again (with the same comparer) returns the same instance.
+    /// </remarks>
     public static class SetExt
     {
         /// <summary>
-        /// Merge two or more sets.
-        /// The comparer used is from the first non-null set.
+        /// Merge (union) a set with zero or more other sets.
+        /// The comparer used is the comparer of <paramref name="t"/> if it's non-null, else the comparer of the first non-empty set in <paramref name="others"/>.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="t"></param>
-        /// <param name="others"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="t">The first set (may be null)</param>
+        /// <param name="others">The sets to merge into the first set (may be null, null sets are ignored)</param>
+        /// <returns>The union of all sets.
+        /// If at most one of the sets is non-empty, that set instance is returned as is (no copy is made, may be null if all sets are null), else a new <see cref="HashSet{T}"/>.
+        /// The input sets are never modified.</returns>
+        /// <exception cref="Exception">Thrown if <paramref name="others"/> is non-null and the comparer of <paramref name="t"/> (or, if <paramref name="t"/> is null or empty, of the first non-empty other set) can't be determined (see <see cref="GetComparer{T}(IReadOnlySet{T})"/>)</exception>
         public static IReadOnlySet<T> Merge<T>(this IReadOnlySet<T> t, params IReadOnlySet<T>[] others)
             => Merge<T>(t, false, others);
 
 
         /// <summary>
-        /// Merge two or more sets.
-        /// The comparer used is from the first non-null set.
+        /// Merge (union) a set with zero or more other sets, optionally freezing the result.
+        /// The comparer used is the comparer of <paramref name="t"/> if it's non-null, else the comparer of the first non-empty set in <paramref name="others"/>.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="t"></param>
-        /// <param name="freeze">True to return a frozen set (if the comparer of the result is known)</param>
-        /// <param name="others"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="t">The first set (may be null)</param>
+        /// <param name="freeze">True to return a frozen set (see <see cref="Freeze{K}(IReadOnlySet{K}, IEqualityComparer{K})"/>).
+        /// If the result is one of the input sets and its comparer is unknown, it's returned as is (not frozen)</param>
+        /// <param name="others">The sets to merge into the first set (may be null, null sets are ignored)</param>
+        /// <returns>The union of all sets.
+        /// If at most one of the sets is non-empty, that set instance (or its frozen version) is returned, else a new set.
+        /// The input sets are never modified.</returns>
+        /// <exception cref="Exception">Thrown if <paramref name="others"/> is non-null and the comparer of <paramref name="t"/> (or, if <paramref name="t"/> is null or empty, of the first non-empty other set) can't be determined (see <see cref="GetComparer{T}(IReadOnlySet{T})"/>)</exception>
         public static IReadOnlySet<T> Merge<T>(this IReadOnlySet<T> t, bool freeze, params IReadOnlySet<T>[] others)
         {
             if (others == null)
@@ -86,32 +102,46 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Create a frozen version of a set
+        /// Create a frozen (immutable, lookup optimized) copy of a hash set, using the comparer of the set.
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <param name="d"></param>
-        /// <returns></returns>
+        /// <typeparam name="K">The element type</typeparam>
+        /// <param name="d">The set to freeze (may be null)</param>
+        /// <returns>An immutable set with the same elements and comparer, or null if <paramref name="d"/> is null.
+        /// See <see cref="Freeze{K}(IReadOnlySet{K}, IEqualityComparer{K})"/>.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IReadOnlySet<K> Freeze<K>(this HashSet<K> d)
             => Freeze<K>(d, d?.Comparer);
 
         /// <summary>
-        /// Create a frozen version of a set
+        /// Create a frozen (immutable, lookup optimized) version of a set, using the comparer of the set.
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <param name="d"></param>
-        /// <returns></returns>
+        /// <typeparam name="K">The element type</typeparam>
+        /// <param name="d">The set to freeze (may be null)</param>
+        /// <returns>An immutable set with the same elements and comparer, or null if <paramref name="d"/> is null.
+        /// If <paramref name="d"/> is already frozen it's returned as is.
+        /// See <see cref="Freeze{K}(IReadOnlySet{K}, IEqualityComparer{K})"/>.</returns>
+        /// <exception cref="Exception">Thrown if the comparer of <paramref name="d"/> can't be determined (see <see cref="GetComparer{T}(IReadOnlySet{T})"/>)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IReadOnlySet<K> Freeze<K>(this IReadOnlySet<K> d)
             => Freeze<K>(d, d.GetComparer());
 
         /// <summary>
-        /// Create a frozen version of a set
+        /// Create a frozen (immutable, lookup optimized) version of a set, using a specific comparer.
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <param name="d"></param>
-        /// <param name="comparer">The comparer to use (also kept for an empty set)</param>
-        /// <returns></returns>
+        /// <remarks>
+        /// The implementation is chosen from the content and the comparer:
+        /// a shared (cached per comparer) empty set, a single item set, a vectorized set for 2-8 keys of a 4 or 8 byte integer / enum type (default comparer),
+        /// an open addressing table for more such keys, a fingerprint based set for ordinal string keys (<see cref="StringComparer.Ordinal"/> or the default string comparer),
+        /// else a <see cref="FrozenSet{T}"/>.
+        /// The returned sets are thread safe for reads.
+        /// Freezing allocates a copy, it's intended for data that is created once and read many times.
+        /// </remarks>
+        /// <typeparam name="K">The element type</typeparam>
+        /// <param name="d">The set to freeze (may be null)</param>
+        /// <param name="comparer">The comparer to use (also kept for an empty set), must not be null</param>
+        /// <returns>An immutable set with the elements of <paramref name="d"/> using <paramref name="comparer"/>, or null if <paramref name="d"/> is null.
+        /// If <paramref name="d"/> is already a frozen set with the same comparer, it's returned as is.</returns>
+        /// <exception cref="Exception">Thrown if <paramref name="comparer"/> is null (and <paramref name="d"/> is non-null)</exception>
         public static IReadOnlySet<K> Freeze<K>(this IReadOnlySet<K> d, IEqualityComparer<K> comparer)
         {
             if (d == null)
@@ -150,9 +180,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get the comparer of a set (FrozenSet, HashSet and the sets returned by Freeze), the default comparer for null
+        /// Get the comparer of a set (<see cref="FrozenSet{T}"/>, <see cref="HashSet{T}"/> and the sets returned by Freeze).
         /// </summary>
-        /// <exception cref="Exception">If the comparer is unknown</exception>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="set">The set (may be null)</param>
+        /// <returns>The comparer of the set, or <see cref="EqualityComparer{T}.Default"/> if <paramref name="set"/> is null</returns>
+        /// <exception cref="Exception">Thrown if the comparer is unknown (any other set implementation, like a SortedSet or a custom set)</exception>
         public static IEqualityComparer<T> GetComparer<T>(this IReadOnlySet<T> set)
         {
             if (set == null)
@@ -174,14 +207,29 @@ namespace SysWeaver
     }
 
 
+    /// <summary>
+    /// Shared read only set instances.
+    /// </summary>
+    /// <typeparam name="T">The element type</typeparam>
     public static class ReadOnlySet<T>
     {
+        /// <summary>
+        /// A shared, immutable, empty set using <see cref="EqualityComparer{T}.Default"/> (the same instance as <see cref="ReadOnlyData.EmptySet{T}"/>).
+        /// </summary>
         public static readonly IReadOnlySet<T> Empty = EmptyReadonlySet<T>.Default;
     }
 
 
+    /// <summary>
+    /// An immutable empty set that remembers its comparer, one shared instance per comparer (returned by <see cref="SetExt.Freeze{K}(IReadOnlySet{K}, IEqualityComparer{K})"/> for an empty set).
+    /// </summary>
+    /// <typeparam name="K">The element type</typeparam>
     sealed class EmptyReadonlySet<K> : IReadOnlySet<K>, IHaveComparere<K>
     {
+
+        /// <summary>
+        /// The empty set using <see cref="EqualityComparer{T}.Default"/>
+        /// </summary>
 
         public static readonly EmptyReadonlySet<K> Default = new(EqualityComparer<K>.Default);
 
@@ -196,8 +244,10 @@ namespace SysWeaver
         static EmptyReadonlySet<K> Last = Default;
 
         /// <summary>
-        /// Get an empty set with a comparer
+        /// Get the shared empty set of a comparer (the instances of other comparers than the default are kept in a weak table, so they don't keep the comparer alive).
+        /// Thread safe.
         /// </summary>
+        /// <param name="comparer">The comparer, must not be null</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static EmptyReadonlySet<K> Get(IEqualityComparer<K> comparer)
         {
@@ -256,6 +306,14 @@ namespace SysWeaver
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
+    /// <summary>
+    /// An immutable set with a single item (returned by <see cref="SetExt.Freeze{K}(IReadOnlySet{K}, IEqualityComparer{K})"/> for a set with one item).
+    /// </summary>
+    /// <typeparam name="K">The element type</typeparam>
+    /// <typeparam name="TEq">How the item is compared, <see cref="DefaultKeyEquality{K}"/> for value types using the default comparer (devirtualized), else <see cref="ComparerKeyEquality{K}"/></typeparam>
+    /// <remarks>
+    /// The set operations (subset, superset etc) enumerate the other collection and compare using this set's comparer.
+    /// </remarks>
     sealed class SingleReadonlySet<K, TEq> : IReadOnlySet<K>, IHaveComparere<K> where TEq : struct, IKeyEquality<K>
     {
         public SingleReadonlySet(K key, IEqualityComparer<K> comp)

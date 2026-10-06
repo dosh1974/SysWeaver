@@ -4,6 +4,10 @@ using System.Globalization;
 
 namespace SysWeaver
 {
+/// <summary>
+/// Parse, format and manipulate HTML (CSS) color strings: named colors (case insensitive), "#rgb", "#rrggbb", "rgb(r,g,b)" and "rgba(r,g,b,a)".
+/// Modern CSS syntax (space separated components, percentages, "#rrggbbaa", hsl(..)) is not supported.
+/// </summary>
     public static class HtmlColors
     {
 
@@ -12,7 +16,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="argColor">The color as 0xaarrggbb</param>
         /// <param name="htmlColor">A html color, can be a name [Red], a hex value [#f00] or [#ff0000], rgb [rgb(255,0,0)] or rgba [rgba(255,0,0,1.0)]</param>
-        /// <returns>True if the input in understod and a hex colour value is returned</returns>
+        /// <returns>True if the input in understood and a hex colour value is returned, false if the format isn't recognized</returns>
+        /// <remarks>
+        /// Despite the name, malformed input in a recognized format throws (ex: "#ggg" or "rgb(a,b,c)").
+        /// Components are not range checked, so values above 255 corrupt the other channels.
+        /// </remarks>
+        /// <exception cref="NullReferenceException"><paramref name="htmlColor"/> is null.</exception>
+        /// <exception cref="FormatException">A hex digit or number in the color is invalid.</exception>
+        /// <exception cref="OverflowException">A component in "rgb(..)" / "rgba(..)" is negative or too large.</exception>
         public static bool TryGetArgb(out uint argColor, String htmlColor)
         {
             htmlColor = htmlColor.Trim();
@@ -91,7 +102,7 @@ namespace SysWeaver
         /// <param name="g">[0, 255] Green component</param>
         /// <param name="b">[0, 255] Blue component</param>
         /// <param name="a">[0, 1] Alpha component</param>
-        /// <returns>True if the input in understod</returns>
+        /// <returns>True if the input in understood (see <see cref="TryGetArgb(out uint, string)"/> for exceptions on malformed input)</returns>
         public static bool ParseHtmlColor(String htmlColor, out int r, out int g, out int b, out double a)
         {
             if (!TryGetArgb(out var col, htmlColor))
@@ -111,7 +122,8 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get the shorted version of a given color (using names, 3 component hex or 6 component hex)
+        /// Get the shortest version of a given color (using names, 3 component hex or 6 component hex).
+        /// Semi-transparent and unrecognized colors are returned unchanged (with white space removed).
         /// </summary>
         /// <param name="htmlColor">A html color, can be a name [Red], a hex value [#f00] or [#ff0000], rgb [rgb(255,0,0)] or rgba [rgba(255,0,0,1.0)]</param>
         /// <returns>The shortest version of the color</returns>
@@ -252,8 +264,9 @@ namespace SysWeaver
         /// </summary>
         /// <param name="htmlColorA">A html color, can be a name [Red], a hex value [#f00] or [#ff0000], rgb [rgb(255,0,0)] or rgba [rgba(255,0,0,1.0)]</param>
         /// <param name="htmlColorB">A html color, can be a name [Red], a hex value [#f00] or [#ff0000], rgb [rgb(255,0,0)] or rgba [rgba(255,0,0,1.0)]</param>
-        /// <param name="distance">The distance to move from A to B</param>
-        /// <returns>The resulting color</returns>
+        /// <param name="distance">The distance to move from A to B, 0 = A, 1 = B (not clamped)</param>
+        /// <returns>The resulting color, or the unparsable input color (A is checked first). Null if either input is null.</returns>
+        /// <remarks>Note: the interpolated alpha is currently rounded to 0 or 1, so the result is either fully opaque or "transparent".</remarks>
         public static String MakeTransparentLerp(String htmlColorA, String htmlColorB, double distance = 0.5)
         {
             if (htmlColorA == null)
@@ -291,6 +304,14 @@ namespace SysWeaver
 
 
 
+/// <summary>
+/// Convert a HTML color to HSV.
+/// </summary>
+/// <param name="h">Hue in degrees [0, 360).</param>
+/// <param name="s">Saturation [0, 1].</param>
+/// <param name="v">Value [0, 1].</param>
+/// <param name="a">Alpha [0, 1].</param>
+/// <param name="htmlColor">A html color, unrecognized colors give black with zero alpha.</param>
         public static void HtmlToHsv(out double h, out double s, out double v, out double a, String htmlColor)
         {
             const double toN = (1.0 / 255.0);
@@ -298,6 +319,14 @@ namespace SysWeaver
             ColorTools.RgbToHsv(out h, out s, out v, toN * r, toN * g, toN * b);
         }
 
+/// <summary>
+/// Convert a HSV color to the shortest HTML color string.
+/// </summary>
+/// <param name="h">Hue in degrees [0, 360].</param>
+/// <param name="s">Saturation [0, 1].</param>
+/// <param name="v">Value [0, 1].</param>
+/// <param name="a">Alpha [0, 1].</param>
+/// <returns>A html color string, see <see cref="MakeHtmlColor(int, int, int, double)"/>.</returns>
         public static String HsvToHtml(double h, double s, double v, double a = 1.0)
         {
             ColorTools.HsvToRgb(out var r, out var g, out var b, h, s, v);
@@ -310,6 +339,12 @@ namespace SysWeaver
             return MakeHtmlColor((int)r, (int)g, (int)b, a);
         }
 
+/// <summary>
+/// Scale the HSV value (brightness) of a HTML color.
+/// </summary>
+/// <param name="color">A html color.</param>
+/// <param name="adjust">The factor to multiply the value with, ex: 0.8 makes the color darker, 1.2 lighter (clamped when converted back).</param>
+/// <returns>The adjusted html color string.</returns>
         public static String AdjustLightness(String color, double adjust = 1.0)
         {
             HtmlToHsv(out var h, out var s, out var v, out var a , color);

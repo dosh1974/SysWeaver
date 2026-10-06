@@ -2,6 +2,10 @@
 
 namespace SysWeaver.Data
 {
+    /// <summary>
+    /// Options passed to <see cref="ITableDataExporter.Export"/>, exporters use the defaults if null is passed.
+    /// Not all exporters support all options.
+    /// </summary>
     public sealed class TableDataExportOptions
     {
         /// <summary>
@@ -15,7 +19,7 @@ namespace SysWeaver.Data
         public bool NoHeaders;
 
         /// <summary>
-        /// True to output in portrait mode
+        /// True to output in portrait mode (for exporters producing paged output, such as Excel)
         /// </summary>
         public bool Portrait;
 

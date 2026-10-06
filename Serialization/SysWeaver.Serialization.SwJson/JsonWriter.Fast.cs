@@ -22,6 +22,12 @@ namespace SysWeaver.Serialization.SwJson
 
         //  These write 8 bytes at a time, so up to 7 bytes after the constant are overwritten (the 64 byte slack of every Ensure covers that)
 
+        /// <summary>
+        /// Write a constant of 1 - 8 bytes (stored as 8 bytes) and advance the position by <paramref name="length"/>
+        /// </summary>
+        /// <param name="w">The writer (the space must be ensured)</param>
+        /// <param name="a">Bytes 0 - 7 as a little endian ulong</param>
+        /// <param name="length">The length of the constant</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static void WriteConst8(ref BufferWriter w, ulong a, int length)
         {
@@ -31,6 +37,9 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = o + length;
         }
 
+        /// <summary>
+        /// Write a constant of 9 - 16 bytes (stored as 16 bytes) and advance the position by <paramref name="length"/>
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static void WriteConst16(ref BufferWriter w, ulong a, ulong b, int length)
         {
@@ -41,6 +50,9 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = o + length;
         }
 
+        /// <summary>
+        /// Write a constant of 17 - 24 bytes (stored as 24 bytes) and advance the position by <paramref name="length"/>
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static void WriteConst24(ref BufferWriter w, ulong a, ulong b, ulong c, int length)
         {
@@ -52,6 +64,9 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = o + length;
         }
 
+        /// <summary>
+        /// Write a constant of 25 - 32 bytes (stored as 32 bytes) and advance the position by <paramref name="length"/>
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static void WriteConst32(ref BufferWriter w, ulong a, ulong b, ulong c, ulong e, int length)
         {
@@ -64,6 +79,9 @@ namespace SysWeaver.Serialization.SwJson
             w.Offset = o + length;
         }
 
+        /// <summary>
+        /// Copy a constant (of any length) to the current position and advance the position (the space must be ensured)
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static void WriteConstBytes(ref BufferWriter w, Byte[] data)
         {
@@ -106,8 +124,10 @@ namespace SysWeaver.Serialization.SwJson
         }
 
         /// <summary>
-        /// An expression that writes a constant (the space must be ensured, including 7 extra bytes)
+        /// An expression that writes a constant (the space must be ensured, including 7 extra bytes).
+        /// Constants up to <see cref="MaxImmediateConstant"/> bytes are embedded as immediate ulong values, longer ones are copied from the array.
         /// </summary>
+        /// <param name="data">The constant bytes (UTF8 json)</param>
         static Expression GetWriteConstExp(Byte[] data)
         {
             var l = data.Length;
@@ -129,7 +149,7 @@ namespace SysWeaver.Serialization.SwJson
         #region Values
 
         /// <summary>
-        /// Write a string or null (like InternalMaybeNull&lt;String&gt; without the delegate calls)
+        /// Write a string or null (like InternalMaybeNull&lt;String&gt; without the delegate calls), ensures the space it needs
         /// </summary>
         static void WriteStringOrNull(ref BufferWriter w, String value)
         {
@@ -151,6 +171,8 @@ namespace SysWeaver.Serialization.SwJson
         /// Same rules as for members: value types are written with Internal&lt;T&gt;, sealed types with InternalMaybeNull&lt;T&gt; (string and byte[] without delegates)
         /// and other types with InternalMaybeBoxed&lt;T&gt; (polymorphism).
         /// </summary>
+        /// <param name="type">The declared type of the value</param>
+        /// <param name="value">An expression that returns the value (evaluated once)</param>
         static Expression GetWriteUnboundedExp(Type type, Expression value)
         {
             var w = WriterExp;
@@ -185,6 +207,9 @@ namespace SysWeaver.Serialization.SwJson
         /// <summary>
         /// An expression that writes a value of any type, including the Ensure needed for bounded types
         /// </summary>
+        /// <param name="type">The declared type of the value</param>
+        /// <param name="typeWriter">The writer info for <paramref name="type"/></param>
+        /// <param name="value">An expression that returns the value</param>
         static Expression GetWriteValueExp(Type type, TypeInfo typeWriter, Expression value)
         {
             var size = typeWriter.BoundedSize;
@@ -201,6 +226,7 @@ namespace SysWeaver.Serialization.SwJson
         /// Find a public GetEnumerator() (like foreach does), that returns an enumerator with MoveNext() and Current.
         /// Most collections have a struct enumerator (no allocation and no interface calls).
         /// </summary>
+        /// <returns>True if a public, non interface enumerator with MoveNext() returning bool and a Current property was found</returns>
         static bool TryGetEnumeratorPattern(Type type, out MethodInfo getEnumerator, out MethodInfo moveNext, out PropertyInfo current)
         {
             moveNext = null;
@@ -219,6 +245,10 @@ namespace SysWeaver.Serialization.SwJson
         /// <summary>
         /// Build an expression that loops over all items of a collection, calling writeItem(item, isFirst) for every item
         /// </summary>
+        /// <remarks>
+        /// Arrays (single dimensional) and <see cref="List{T}"/> are iterated by index, other collections by the pattern based enumerator or <see cref="IEnumerable{T}"/>.
+        /// The enumerator is never disposed (unlike foreach), so if writing an item throws, an enumerator holding resources (like a lock) isn't released.
+        /// </remarks>
         /// <param name="type">The collection type</param>
         /// <param name="itemType">The item type</param>
         /// <param name="collection">The collection (of type "type")</param>

@@ -8,9 +8,17 @@ namespace SysWeaver.Net
 {
     public abstract partial class HttpServerBase
     {
+        /// <summary>
+        /// A row in the request cache debug tables (<see cref="CacheEntries"/> and <see cref="SessionCacheEntries"/>).
+        /// </summary>
         [TableDataPrimaryKey(nameof(LocalUrl))]
         sealed class CacheData
         {
+            /// <summary>
+            /// Create a row from a cache entry.
+            /// </summary>
+            /// <param name="cs">The cache key (key, request type, accept encoding, method and optional language separated by '\n') and entry</param>
+            /// <param name="utcNow">Not used</param>
             public CacheData(KeyValuePair<String, HttpCacheEntry> cs, DateTime utcNow)
             {
                 var s = cs.Value;

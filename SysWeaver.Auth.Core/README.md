@@ -2,7 +2,7 @@
 
 [⬆ SysWeaver overview](../README.md)
 
-> Authentication core: the `AuthManager` that validates users across any number of pluggable authorizers with caching, the authorizer contract, a configuration-based `SimpleAuthorizer` with API keys, password policies and localizable message templates.
+> Authentication core: the `AuthManager` that validates users across any number of pluggable authorizers and caches Authorization header results, the authorizer contract, a configuration-based `SimpleAuthorizer` with API keys, password policies and localizable message templates.
 
 | | |
 |---|---|
@@ -11,41 +11,47 @@
 
 ## Purpose
 
-Separate *who can log in and with which tokens* from the web server. The server only asks the `AuthManager`; the manager consults its authorizers (a static user list, a database-backed user manager, …) and caches the results.
+Separate *who can log in and with which tokens* from the web server. The server only asks the `AuthManager`; the manager consults its authorizers (a static user list, a database-backed user manager, …) in order, and caches the results of HTTP `Authorization` headers.
 
 ## How it fits into SysWeaver
 
 ```mermaid
 flowchart TB
-  Http["HTTP server<br/>sessions and WebApiAuth checks"] --> AM["AuthManager<br/>cache"]
+  Http["HTTP server<br/>sessions and WebApiAuth checks"] --> AM["AuthManager<br/>header cache"]
   AM --> A1["SimpleAuthorizer<br/>users from config or file"]
   AM --> A2["UserManagerService<br/>MySQL users"]
   AM --> A3["other AuthorizerBase implementations"]
-  A1 --> Keys["API keys<br/>Authorization header"]
+  A1 --> Keys["API keys<br/>Bearer / Basic Authorization header"]
+  A1 --> KVS["KeyValueStore<br/>stored API keys"]
 ```
 
 ## Key concepts
 
 | Concept | Description |
 |---|---|
-| **Authorization** | The result of a successful login: user identity plus the set of *tokens* (roles) that `[WebApiAuth]` checks against. |
-| **Authorizer** | A source of users. Several can be active; the manager asks them in turn. |
-| **Realm** | A per-system value mixed into password hashes so identical credentials hash differently on different systems. |
-| **Simple authorizer** | Users defined as `user:password:tokens` strings (clear text or pre-computed hash) in parameters or a watched file; optional basic auth; API key management with runtime-configurable permissions. |
-| **Password policy** | Length and character class requirements, reported to clients so the UI can validate early. |
-| **Managed texts** | Localizable text/mail templates with variables, loaded from disc or web, used by account flows. |
+| **Authorization** | The result of a successful login (`Authorization`, extends `AuthorizationInfo`): user identity, guid, the set of lower case *tokens* (roles) that `[WebApiAuth]` checks against (`AuthExt.IsValid`), the authorizer and shared per-user data. `WeakMethod` tells if basic auth / a bearer token was used. |
+| **Authorizer** | A source of users (`AuthorizerBase`). Several can be active; the manager asks them in turn. Supported methods: basic auth, bearer token, one-time-pad secure login, one-time tokens. Each has a unique guid prefix and a `ChangeCounter` used to invalidate cached results. |
+| **Password hashing** | Clients compute `SHA256(password + "|" + salt)` with a salt from the authorizer (`AuthManager.GetSalt`); the secure login sends `SHA256(base64(hash) + "|" + oneTimePad)` so the password hash is never replayable (`AuthTools`). |
+| **Realm** | The name sent in the `WWW-Authenticate` header for basic auth (defaults to the entry assembly name). |
+| **Simple authorizer** | Users defined as `user:password[:tokens[:domain]]` strings (clear text or pre-computed hash) in parameters or a watched file; optional basic auth; API key management (stored in `KeyValueStore.AllApp`, usable as bearer tokens) with runtime-configurable permissions, plus a web page to generate password hashes. |
+| **Password policy** | Length and character class requirements (`PasswordPolicy`, checked with `PasswordPolicyExt.Check`), reported to clients so the UI can validate early. |
+| **Managed texts** | Localizable text/mail templates with variables (`ManagedMessages`, `ManagedTexts`, `ManagedTextTemplate`, …), loaded from per-language folders, embedded resources or literal text and reloaded when files change; used by account flows. |
+| **Name generator** | `NameGen` creates random human friendly nick names (deterministic per user guid). |
 
 ## Key features
 
 - Multiple authorizers behind one manager.
-- Result caching to keep per-request auth checks cheap.
-- Client-side salted hashing support.
+- Result caching to keep per-request Authorization header checks cheap.
+- Client-side salted hashing support, constant time hash comparisons in `SimpleAuthorizer`.
 - API keys for machine-to-machine access.
 
 ## Limitations and considerations
 
 - `SimpleAuthorizer` is meant for small, static user sets (operators, services); use [SysWeaver.MicroService.UserManager](../SysWeaver.MicroService.UserManager/README.md) for self-service accounts.
-- Clear-text passwords in configuration are supported but should be replaced with hashes (`<exe> hash user password`).
+- Clear-text passwords in configuration are supported but should be replaced with hashes, generated on the *Debug/SimpleAuth/Generate password hash* page (requires the debug or ops token).
+- Password hashes are a single SHA256 (fast to brute force if leaked); keep user files and configuration private.
+- API keys are stored in clear text in the application key/value store.
+- `SimpleAuthorizer.ChangeCounter` is always 0, so Authorization header results cached by the `AuthManager` are not invalidated when users or API keys change (a restart is required for removed keys or changed passwords to take effect on cached headers).
 
 ## Using it
 

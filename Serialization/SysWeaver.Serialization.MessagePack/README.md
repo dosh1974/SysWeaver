@@ -8,7 +8,7 @@
 |---|---|
 | **Layer** | Serialization |
 | **Kind** | Serializer plug-in (`ISerializerType`) |
-| **Selection priority** | default among serializers for `msgpack` |
+| **Selection priority** | 0 (the only bundled serializer for `msgpack`) |
 
 ## Purpose
 
@@ -28,12 +28,14 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 ## Key features
 
 - Very compact and fast binary encoding.
+- `MessagePackSerializer` (singleton `Instance`, binary only) uses the *contractless* standard resolver, so types need no `[MessagePackObject]` / `[Key]` attributes.
 - Registered through the manifest like any service, or with one static call in code.
 
 ## Limitations and considerations
 
-- Type annotations may be required depending on the MessagePack resolver in use.
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered.
+- Members are written by name (contractless resolver), which is larger than integer keyed contracts.
+- `SerializerOptions` are ignored.
+- Selection between serializers of the same extension is by priority; this is currently the only bundled `msgpack` implementation.
 
 ## Using it
 

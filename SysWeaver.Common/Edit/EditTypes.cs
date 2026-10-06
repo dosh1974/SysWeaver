@@ -3,7 +3,7 @@
 namespace SysWeaver
 {
     /// <summary>
-    /// Some predefined editor types
+    /// Some predefined editor types (for use with <see cref="EditTypeAttribute"/>)
     /// </summary>
     public static class EditTypes
     {

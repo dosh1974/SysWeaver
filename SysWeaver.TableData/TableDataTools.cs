@@ -19,20 +19,30 @@ namespace SysWeaver.Data
 
 
 
+    /// <summary>
+    /// The main entry point for producing table data from a sequence of objects.
+    /// Columns are derived from the row type (public fields and properties, <c>TableData*</c> attributes and XML documentation),
+    /// and requests (<see cref="TableDataRequest"/>) are applied as filters, sort order, free text search, paging and look ahead.
+    /// Also contains helpers to manipulate columns, translate table content, build tables from untyped rows and handle the column change counter.
+    /// </summary>
+    /// <remarks>
+    /// Per type metadata and compiled code is built once (on first use of a row type) and cached, all methods are thread safe.
+    /// Processing is done in memory using LINQ over the supplied sequence.
+    /// </remarks>
     public static class TableDataTools
     {
         /// <summary>
-        /// The default text searcher to use
+        /// The default text searcher used for <see cref="TableDataRequest.SearchText"/> when none is specified.
         /// </summary>
         public static ITextSearch DefaultSearch = new SimpleTextSearch();
 
 
         /// <summary>
-        /// Convert from typed table data to generic table data
+        /// Convert from typed table data to generic table data, extracting the values of each row object.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="table"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="table">The typed table.</param>
+        /// <returns>A new table. If the typed table has columns, all columns of <typeparamref name="T"/> are used (matching the extracted values), else none.</returns>
         public static TableData ToTableData<T>(this TypedTableData<T> table)
             => new TableData
             {
@@ -45,6 +55,14 @@ namespace SysWeaver.Data
             };
 
 
+        /// <summary>
+        /// Deserialize a serialized typed table (ex: a <see cref="TypedTableData{T}"/> received from another service) into generic table data.
+        /// </summary>
+        /// <param name="type">The typed table type, its first generic argument is the row type used to get the columns.</param>
+        /// <param name="ser">The deserializer to use.</param>
+        /// <param name="data">The serialized data.</param>
+        /// <returns>The table data, using the columns of the row type.</returns>
+        /// <remarks>Deserialization is done into a dynamically emitted type with one property per column, the conversion function is cached per type and mime type.</remarks>
         public static TableData FromTypedData(Type type, IDeserializer ser, ReadOnlySpan<Byte> data)
         {
             var c = TableConverters;
@@ -86,32 +104,34 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Filter some data using TableDataFilter's
+        /// Sort some data by column names (lazily, using LINQ).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="order">The order to sort by</param>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="order">The column names to sort by in priority order, a '-' prefix reverses the order. Unknown names are ignored.</param>
         /// <param name="data">Source data</param>
-        /// <returns>The resulting data</returns>
+        /// <returns>The resulting data, null if <paramref name="data"/> is null.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEnumerable<T> Sort<T>(String[] order, IEnumerable<T> data)
             => TableDataType<T>.Sort(order, data);
 
         /// <summary>
-        /// Filter some data using TableDataFilter's
+        /// Filter some data using <see cref="TableDataFilter"/>'s (lazily, using LINQ).
+        /// Filters with a null value or an unknown column name are ignored.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="filters">The filters to apply</param>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="filters">The filters to apply, may be null.</param>
         /// <param name="data">Source data</param>
-        /// <returns>The resulting data</returns>
+        /// <returns>The resulting data, null if <paramref name="data"/> is null.</returns>
+        /// <exception cref="IndexOutOfRangeException">A filter has an undefined <see cref="TableDataFilterOps"/> value.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEnumerable<T> Filter<T>(TableDataFilter[] filters, IEnumerable<T> data)
             => TableDataType<T>.Filter(filters, data);
 
 
         /// <summary>
-        /// Sort and filter some data using a table data request 
+        /// Filter and sort some data using a table data request (lazily).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The row type.</typeparam>
         /// <param name="request">What part of the data, sorting etc</param>
         /// <param name="data">Source data</param>
         /// <returns>The resulting data</returns>
@@ -120,12 +140,13 @@ namespace SysWeaver.Data
             => TableDataType<T>.SortAndFilter(request ?? DefRequest, data);
 
         /// <summary>
-        /// Sort, filter and limit some data using a table data request 
+        /// Filter, sort, skip and limit some data using a table data request (lazily).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="request">What part of the data, sorting etc</param>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="request">What part of the data, sorting etc, if null a default request (first 20 rows) is used.</param>
         /// <param name="data">Source data</param>
-        /// <param name="maxAllowedRows">Maximum allowed rows (minimum of this and the request is used)</param>
+        /// <param name="maxAllowedRows">Maximum allowed rows (minimum of this and the requested row count plus look ahead is used).
+        /// Not applied if the request has no row limit (<see cref="TableDataOrderRequest.MaxRowCount"/> zero or negative).</param>
         /// <returns>The resulting data</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEnumerable<T> SortAndFilterAndLimit<T>(TableDataOrderRequest request, IEnumerable<T> data, long maxAllowedRows = 100000)
@@ -133,12 +154,13 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Sort and limit some data using a table data request 
+        /// Sort, skip and limit some data using a table data request (lazily), filters are NOT applied.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="request">What part of the data, sorting etc</param>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="request">What part of the data, sorting etc, if null a default request (first 20 rows) is used.</param>
         /// <param name="data">Source data</param>
-        /// <param name="maxAllowedRows">Maximum allowed rows (minimum of this and the request is used)</param>
+        /// <param name="maxAllowedRows">Maximum allowed rows (minimum of this and the requested row count plus look ahead is used).
+        /// Not applied if the request has no row limit (<see cref="TableDataOrderRequest.MaxRowCount"/> zero or negative).</param>
         /// <returns>The resulting data</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEnumerable<T> SortAndLimit<T>(TableDataOrderRequest request, IEnumerable<T> data, long maxAllowedRows = 100000)
@@ -149,34 +171,38 @@ namespace SysWeaver.Data
         #region Boxed versions
 
         /// <summary>
-        /// Get table data from an enumerable sequence
+        /// Get table data from an enumerable sequence: filter, sort, text search, skip, limit (with look ahead) and extract the rows.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="request">What part of the data, sorting etc</param>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="request">What part of the data, sorting etc, if null a default request (first 20 rows) is used.</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
-        /// <returns>Some table data</returns>
+        /// <returns>Some table data. Columns and title are only included if the request change counter differs from the current one.</returns>
+        /// <remarks>
+        /// Exceptions while processing the data are swallowed, giving an empty table.
+        /// No server side cap is applied to the requested row count (zero or negative returns all rows).
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TableData Get<T>(TableDataRequest request, IEnumerable<T> data, String title = null) 
             => TableDataType<T>.Get(request ?? DefRequest, data, title);
 
 
         /// <summary>
-        /// Get table data from an enumerable sequence without any filtering, sorting or limiting
+        /// Get table data from an enumerable sequence without any filtering, sorting or limiting.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The row type.</typeparam>
         /// <param name="data">Source data</param>
-        /// <returns>Some table data</returns>
+        /// <returns>Some table data with all columns, <see cref="CommonTableData.RowCount"/> is not set.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TableData GetAll<T>(IEnumerable<T> data)
             => TableDataType<T>.GetAll(data);
 
         /// <summary>
-        /// Get table data from an enumerable sequence
+        /// Get table data from an enumerable sequence, see <see cref="Get{T}(TableDataRequest, IEnumerable{T}, string)"/>.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The row type.</typeparam>
         /// <param name="request">What part of the data, sorting etc</param>
-        /// <param name="refreshRate">Number of ms to wait befor a new refresh</param>
+        /// <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
         /// <returns>Some table data</returns>
@@ -189,12 +215,13 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Get table data from an enumerable sequence with any translations applied
+        /// Get table data from an enumerable sequence with the <see cref="AutoTranslateAttribute"/> columns translated,
+        /// see <see cref="Get{T}(TableDataRequest, IEnumerable{T}, string)"/>.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="translationContext">The translator and target language to use</param>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="translationContext">The translator and target language to use, if null (or without translator) no translation is done</param>
         /// <param name="request">What part of the data, sorting etc</param>
-        /// <param name="refreshRate">Number of ms to wait befor a new refresh</param>
+        /// <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
         /// <returns>Some table data</returns>
@@ -213,34 +240,36 @@ namespace SysWeaver.Data
         #region Typed versions
 
         /// <summary>
-        /// Get table data from an enumerable sequence
+        /// Get typed table data (rows are the objects themselves) from an enumerable sequence: filter, sort, text search, skip and limit.
+        /// The columns exclude read only and computed members.
         /// </summary>
         /// <typeparam name="T">The element (row) type</typeparam>
-        /// <param name="request">What part of the data, sorting etc</param>
+        /// <param name="request">What part of the data, sorting etc, if null a default request (first 20 rows) is used.</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
         /// <returns>Some table data</returns>
+        /// <remarks>Exceptions while processing the data are swallowed, giving an empty table.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TypedTableData<T> GetTyped<T>(TableDataRequest request, IEnumerable<T> data, String title = null)
             => TableDataType<T>.GetTyped<TypedTableData<T>>(request ?? DefRequest, data, title);
 
 
         /// <summary>
-        /// Get table data from an enumerable sequence without any filtering, sorting or limiting
+        /// Get typed table data from an enumerable sequence without any filtering, sorting or limiting.
         /// </summary>
         /// <typeparam name="T">The element (row) type</typeparam>
         /// <param name="data">Source data</param>
-        /// <returns>Some table data</returns>
+        /// <returns>Some table data, <see cref="CommonTableData.RowCount"/> is not set.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TypedTableData<T> GetAllTyped<T>(IEnumerable<T> data)
             => TableDataType<T>.GetAllTyped<TypedTableData<T>>(data);
 
         /// <summary>
-        /// Get table data from an enumerable sequence
+        /// Get typed table data from an enumerable sequence, see <see cref="GetTyped{T}(TableDataRequest, IEnumerable{T}, string)"/>.
         /// </summary>
         /// <typeparam name="T">The element (row) type</typeparam>
         /// <param name="request">What part of the data, sorting etc</param>
-        /// <param name="refreshRate">Number of ms to wait befor a new refresh</param>
+        /// <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
         /// <returns>Some table data</returns>
@@ -253,12 +282,12 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Get table data from an enumerable sequence with any translations applied
+        /// Get typed table data from an enumerable sequence with any translations applied (the row objects are modified in place).
         /// </summary>
         /// <typeparam name="T">The element (row) type</typeparam>
-        /// <param name="translationContext">The translator and target language to use</param>
+        /// <param name="translationContext">The translator and target language to use, if null (or without translator) no translation is done</param>
         /// <param name="request">What part of the data, sorting etc</param>
-        /// <param name="refreshRate">Number of ms to wait befor a new refresh</param>
+        /// <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
         /// <returns>Some table data</returns>
@@ -276,11 +305,11 @@ namespace SysWeaver.Data
         #region Typed base versions
 
         /// <summary>
-        /// Get table data from an enumerable sequence
+        /// Get typed table data of a custom table type, see <see cref="GetTyped{T}(TableDataRequest, IEnumerable{T}, string)"/>.
         /// </summary>
         /// <typeparam name="T">The element (row) type</typeparam>
-        /// <typeparam name="R">The data type</typeparam>
-        /// <param name="request">What part of the data, sorting etc</param>
+        /// <typeparam name="R">The typed table type to create</typeparam>
+        /// <param name="request">What part of the data, sorting etc, if null a default request (first 20 rows) is used.</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
         /// <returns>Some table data</returns>
@@ -290,10 +319,10 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Get table data from an enumerable sequence without any filtering, sorting or limiting
+        /// Get typed table data of a custom table type without any filtering, sorting or limiting.
         /// </summary>
         /// <typeparam name="T">The element (row) type</typeparam>
-        /// <typeparam name="R">The data type</typeparam>
+        /// <typeparam name="R">The typed table type to create</typeparam>
         /// <param name="data">Source data</param>
         /// <returns>Some table data</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -301,12 +330,12 @@ namespace SysWeaver.Data
             => TableDataType<T>.GetAllTyped<R>(data);
 
         /// <summary>
-        /// Get table data from an enumerable sequence
+        /// Get typed table data of a custom table type, see <see cref="GetTyped{T}(TableDataRequest, IEnumerable{T}, string)"/>.
         /// </summary>
         /// <typeparam name="T">The element (row) type</typeparam>
-        /// <typeparam name="R">The data type</typeparam>
+        /// <typeparam name="R">The typed table type to create</typeparam>
         /// <param name="request">What part of the data, sorting etc</param>
-        /// <param name="refreshRate">Number of ms to wait befor a new refresh</param>
+        /// <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
         /// <returns>Some table data</returns>
@@ -319,13 +348,13 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Get table data from an enumerable sequence with any translations applied
+        /// Get typed table data of a custom table type with any translations applied (the row objects are modified in place).
         /// </summary>
         /// <typeparam name="T">The element (row) type</typeparam>
-        /// <typeparam name="R">The data type</typeparam>
-        /// <param name="translationContext">The translator and target language to use</param>
+        /// <typeparam name="R">The typed table type to create</typeparam>
+        /// <param name="translationContext">The translator and target language to use, if null (or without translator) no translation is done</param>
         /// <param name="request">What part of the data, sorting etc</param>
-        /// <param name="refreshRate">Number of ms to wait befor a new refresh</param>
+        /// <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
         /// <returns>Some table data</returns>
@@ -342,21 +371,21 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Convert an object into a values array
+        /// Convert an object into a values array (one boxed value per column, in column order).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="data"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="data">The row object.</param>
+        /// <returns>A new array of values.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Object[] GetValues<T>(T data)
             => TableDataType<T>.Extract(data);
 
         /// <summary>
-        /// Convert an object into a table row
+        /// Convert an object into a table row.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="data"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="data">The row object.</param>
+        /// <returns>A new row with one boxed value per column.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TableDataRow GetRow<T>(T data)
             => new TableDataRow { Values = TableDataType<T>.Extract(data) };
@@ -373,9 +402,10 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// If table data columns exist, clone them and return true
+        /// If table data columns exist, replace them with clones (so that they can be modified without affecting the shared, per type, columns) and return true.
         /// </summary>
-        /// <param name="data"></param>
+        /// <typeparam name="T">The table type.</typeparam>
+        /// <param name="data">The table to modify.</param>
         /// <param name="cols">The columns data to modify</param>
         /// <param name="addColumns">Add columns</param>
         /// <returns>True if column information exists, else false</returns>
@@ -401,11 +431,12 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Remove a column, based on index
+        /// Remove a column, and the corresponding value from every row, based on index.
         /// </summary>
-        /// <param name="data"></param>
-        /// <param name="columnIndex">The columns data to modify</param>
-        /// <returns>True if column information exists, else false</returns>
+        /// <typeparam name="T">The table type.</typeparam>
+        /// <param name="data">The table to modify (in place).</param>
+        /// <param name="columnIndex">The index of the column to remove.</param>
+        /// <returns>The source table data.</returns>
         public static T RemoveColumnIndex<T>(this T data, int columnIndex) where T : BaseTableData
         {
             var src = data.Cols;
@@ -420,11 +451,12 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Remove a column, based on index
+        /// Remove a column definition from a typed table, based on index (the row objects are unaffected).
         /// </summary>
-        /// <param name="data"></param>
-        /// <param name="columnIndex">The columns data to modify</param>
-        /// <returns>True if column information exists, else false</returns>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="data">The table to modify (in place).</param>
+        /// <param name="columnIndex">The index of the column (in the table's <see cref="CommonTableData.Cols"/>) to remove.</param>
+        /// <returns>The source table data.</returns>
         public static TypedTableData<T> RemoveColumnIndex<T>(this TypedTableData<T> data, int columnIndex)
         {
             var src = data.Cols;
@@ -435,20 +467,26 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Remove a column, based on name 
+        /// Remove a column definition from a typed table, based on name.
         /// </summary>
-        /// <param name="data"></param>
-        /// <param name="name">The columns data to modify</param>
-        /// <returns>True if column information exists, else false</returns>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="data">The table to modify (in place).</param>
+        /// <param name="name">The name of the column.</param>
+        /// <returns>The source table data.</returns>
+        /// <exception cref="KeyNotFoundException">No column with that name exists in <typeparamref name="T"/>.</exception>
+        /// <remarks>The index is looked up among all columns of <typeparamref name="T"/>, while typed tables only contain the writable columns;
+        /// the wrong column is removed if any read only or computed column precedes the named one.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TypedTableData<T> RemoveColumn<T>(this TypedTableData<T> data, String name)
             => RemoveColumnIndex(data, TableDataType<T>.NameToColumnIndex[name]);
 
         /// <summary>
-        /// Hide a column in some table data
+        /// Hide a column in some table data (sets <see cref="TableDataColumnProps.Hide"/>).
+        /// The column objects are modified in place, use <see cref="ModifyColumns{T}(T, out TableDataColumn[], int)"/> first if they are shared.
         /// </summary>
+        /// <typeparam name="T">The table type.</typeparam>
         /// <param name="data">The table data to manipulate</param>
-        /// <param name="name">The name of the column (memeber name)</param>
+        /// <param name="name">The name of the column (member name)</param>
         /// <returns>The source table data</returns>
         public static T HideColumn<T>(this T data, String name) where T : CommonTableData
         {
@@ -464,8 +502,10 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Set the title of a column
+        /// Set the title of a column.
+        /// The column objects are modified in place, use <see cref="ModifyColumns{T}(T, out TableDataColumn[], int)"/> first if they are shared.
         /// </summary>
+        /// <typeparam name="T">The table type.</typeparam>
         /// <param name="data">The table data to manipulate</param>
         /// <param name="name">The name of the column (member name)</param>
         /// <param name="title">The new title</param>
@@ -484,11 +524,13 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Set the title of a column
+        /// Set the title of a column.
+        /// The column objects are modified in place, use <see cref="ModifyColumns{T}(T, out TableDataColumn[], int)"/> first if they are shared.
         /// </summary>
+        /// <typeparam name="T">The table type.</typeparam>
         /// <param name="data">The table data to manipulate</param>
         /// <param name="name">The name of the column (member name)</param>
-        /// <param name="getTitle">A function that gets a new title</param>
+        /// <param name="getTitle">A function that gets a new title, given the column</param>
         /// <returns>The source table data</returns>
         public static T SetColumnTitle<T>(this T data, String name, Func<TableDataColumn, String> getTitle) where T : CommonTableData
         {
@@ -505,8 +547,10 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Set the description of a column
+        /// Set the description of a column.
+        /// The column objects are modified in place, use <see cref="ModifyColumns{T}(T, out TableDataColumn[], int)"/> first if they are shared.
         /// </summary>
+        /// <typeparam name="T">The table type.</typeparam>
         /// <param name="data">The table data to manipulate</param>
         /// <param name="name">The name of the column (member name)</param>
         /// <param name="desc">The new description</param>
@@ -525,11 +569,13 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Set the description of a column
+        /// Intended to set the description of a column using a function.
+        /// Note: the current implementation assigns the result to <see cref="TableDataColumn.Title"/>, not <see cref="TableDataBaseColumn.Desc"/>.
         /// </summary>
+        /// <typeparam name="T">The table type.</typeparam>
         /// <param name="data">The table data to manipulate</param>
         /// <param name="name">The name of the column (member name)</param>
-        /// <param name="getDesc">A function that gets a new description</param>
+        /// <param name="getDesc">A function that gets a new description, given the column</param>
         /// <returns>The source table data</returns>
         public static T SetColumnDesc<T>(this T data, String name, Func<TableDataColumn, String> getDesc) where T : CommonTableData
         {
@@ -557,9 +603,9 @@ namespace SysWeaver.Data
         internal static readonly MethodInfo Where = typeof(Enumerable).GetMethods(BindingFlags.Static | BindingFlags.Public).First(x => (x.Name == nameof(Enumerable.Where)) && (x.GetParameters().Length == 2));
 
         /// <summary>
-        /// For a given type and column name (member name), get the column index
+        /// For a given type and column name (member name), get the column index (in <see cref="GetCols{T}"/> and in extracted value arrays).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The row type.</typeparam>
         /// <param name="name">The column name (member name)</param>
         /// <returns>The column index or -1 if not found</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -623,6 +669,9 @@ namespace SysWeaver.Data
 
         static readonly MethodInfo ConvObjectMi = typeof(TableDataTools).GetMethod(nameof(ConvObject), BindingFlags.NonPublic| BindingFlags.Static);
 
+        /// <summary>
+        /// Information about a supported column type: an optional expression conversion to a serializable value and a (throwing) string parser for filter values.
+        /// </summary>
         internal sealed class FtInfo
         {
             public readonly Func<Expression, Expression> TypeToData;
@@ -637,6 +686,10 @@ namespace SysWeaver.Data
         }
 
 
+        /// <summary>
+        /// The member types that can be used directly as columns (in addition to enums and nullables of these).
+        /// <see cref="Type"/> columns are converted to the full name, <see cref="Exception"/> to the message and <see cref="Object"/> values to strings unless primitive or supported.
+        /// </summary>
         internal static readonly IReadOnlyDictionary<Type, FtInfo> ValidDataTypes = new Dictionary<Type, FtInfo>()
         {
             {  typeof(SByte), new FtInfo(null, typeof(SByte)) },
@@ -852,6 +905,10 @@ namespace SysWeaver.Data
 
         static int GetOrder(MemberInfo mi) => mi.GetCustomAttribute<TableDataOrderAttribute>()?.Order ?? 0;
 
+        /// <summary>
+        /// Get the instance fields and properties (any non method member) of a type, ordered by <see cref="TableDataOrderAttribute"/> (stable).
+        /// For interfaces, members of inherited interfaces are included (first member with a given name wins).
+        /// </summary>
         static internal IEnumerable<MemberInfo> GetInstanceMembers(Type t, BindingFlags flags = BindingFlags.Public)
         {
             flags |= BindingFlags.Instance;
@@ -893,37 +950,37 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Get column information for a type
+        /// Get column information for a type (all columns).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <returns></returns>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <returns>The shared column array, clone before modifying.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TableDataColumn[] GetCols<T>() => TableDataType<T>.Cols;
 
         /// <summary>
-        /// Get column types for a type
+        /// Get the member type of each column for a type.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <returns></returns>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <returns>The shared array of types, in column order.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Type[] GetColTypes<T>() => TableDataType<T>.ColTypes;
 
 
         /// <summary>
-        /// Get column information for a type
+        /// Get the column information used for typed tables (excludes read only and computed members).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <returns></returns>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <returns>The shared column array, clone before modifying.</returns>
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TableDataColumn[] GetTypedCols<T>() => TableDataType<T>.TypedCols;
 
 
         /// <summary>
-        /// Get column information for a type
+        /// Get column information for a type (all columns), using reflection, see <see cref="GetCols{T}"/>.
         /// </summary>
-        /// <param name="t"></param>
-        /// <returns></returns>
+        /// <param name="t">The row type.</param>
+        /// <returns>The shared column array, clone before modifying.</returns>
         public static TableDataColumn[] GetCols(Type t)
         {
             var gt = (TableDataColumn[])typeof(TableDataType<>).MakeGenericType(t).GetField(nameof(TableDataType<int>.Cols), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null);
@@ -932,10 +989,10 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Get column information for a type
+        /// Get the column information used for typed tables, using reflection, see <see cref="GetTypedCols{T}"/>.
         /// </summary>
-        /// <param name="t"></param>
-        /// <returns></returns>
+        /// <param name="t">The row type.</param>
+        /// <returns>The shared column array, clone before modifying.</returns>
         public static TableDataColumn[] GetTypedCols(Type t)
         {
             var gt = (TableDataColumn[])typeof(TableDataType<>).MakeGenericType(t).GetField(nameof(TableDataType<int>.TypedCols), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null);
@@ -943,10 +1000,10 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Get column types for a type
+        /// Get the member type of each column for a type, using reflection, see <see cref="GetColTypes{T}"/>.
         /// </summary>
-        /// <param name="t"></param>
-        /// <returns></returns>
+        /// <param name="t">The row type.</param>
+        /// <returns>The shared array of types, in column order.</returns>
         public static Type[] GetColTypes(Type t)
         {
             var gt = (Type[])typeof(TableDataType<>).MakeGenericType(t).GetField(nameof(TableDataType<int>.ColTypes), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null);
@@ -956,24 +1013,24 @@ namespace SysWeaver.Data
         /// <summary>
         /// Extract data from enumerable (should already be filtered, ordered, offsetted etc)
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="count">Count (inluding lookahead)</param>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="count">Number of extracted rows plus the number of look ahead items found</param>
         /// <param name="data">Enumerable data</param>
-        /// <param name="limit">Maximum number of rows to take</param>
-        /// <param name="lookAhead">Number of rows to look ahead</param>
-        /// <returns>Data rows</returns>
+        /// <param name="limit">Maximum number of rows to take, zero or negative means no limit</param>
+        /// <param name="lookAhead">Number of additional items to count (but not extract)</param>
+        /// <returns>Data rows, never null</returns>
         public static TableDataRow[] ExtractGet<T>(out long count, IEnumerable<T> data, long limit = long.MaxValue, long lookAhead = 0) => TableDataType<T>.ExtractGet(out count, data, limit, lookAhead);
 
 
         /// <summary>
-        /// Extract data from enumerable (should already be filtered, ordered, offsetted etc)
+        /// Take rows from enumerable (should already be filtered, ordered, offsetted etc)
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="count">Count (inluding lookahead)</param>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="count">Number of returned rows plus the number of look ahead items found</param>
         /// <param name="data">Enumerable data</param>
-        /// <param name="limit">Maximum number of rows to take</param>
-        /// <param name="lookAhead">Number of rows to look ahead</param>
-        /// <returns>Data rows</returns>
+        /// <param name="limit">Maximum number of rows to take, zero or negative means no limit</param>
+        /// <param name="lookAhead">Number of additional items to count (but not return)</param>
+        /// <returns>The row objects, never null</returns>
         public static T[] ExtractGetTyped<T>(out long count, IEnumerable<T> data, long limit = long.MaxValue, long lookAhead = 0) => TableDataType<T>.ExtractTypedGet(out count, data, limit, lookAhead);
 
 
@@ -988,6 +1045,13 @@ namespace SysWeaver.Data
         internal static readonly IReadOnlyDictionary<Type, MethodInfo> LinqMinMethods;
         internal static readonly IReadOnlyDictionary<Type, MethodInfo> LinqMaxMethods;
 
+        /// <summary>
+        /// Build an expression that splits a comma separated string (entries trimmed) and converts each entry to <paramref name="type"/>
+        /// using the lenient <see cref="StringConverter"/> (invalid entries become the default value).
+        /// </summary>
+        /// <param name="stringValueExpression">A string expression.</param>
+        /// <param name="type">The element type.</param>
+        /// <returns>An expression of type <c>String[]</c> or <c>IEnumerable&lt;type&gt;</c>.</returns>
         public static Expression GetEnumerableTypeFromStringArray(Expression stringValueExpression, Type type)
         {
             var stringCol = Expression.Call(stringValueExpression, StringSplitMethod, CommaArrayCharExp, StringSplitOptionsExp);
@@ -999,6 +1063,11 @@ namespace SysWeaver.Data
             return stringCol;
         }
 
+        /// <summary>
+        /// Build an expression that creates a <see cref="HashSet{T}"/> (default comparer) from an enumerable or array expression.
+        /// </summary>
+        /// <param name="enumExpression">An array or <see cref="IEnumerable{T}"/> expression.</param>
+        /// <returns>A new hash set expression.</returns>
         public static Expression GetHashSetFromEnum(Expression enumExpression)
         {
             var et = enumExpression.Type;
@@ -1008,6 +1077,13 @@ namespace SysWeaver.Data
             return hashSetExpression;
         }
 
+        /// <summary>
+        /// Build an expression that creates a <see cref="HashSet{T}"/> from an enumerable or array expression,
+        /// using an ordinal (optionally case insensitive) comparer for strings.
+        /// </summary>
+        /// <param name="enumExpression">An array or <see cref="IEnumerable{T}"/> expression.</param>
+        /// <param name="caseSensitive">For string elements, true to use <see cref="StringComparer.Ordinal"/>, false for <see cref="StringComparer.OrdinalIgnoreCase"/>.</param>
+        /// <returns>A new hash set expression.</returns>
         public static Expression GetHashSetFromEnum(Expression enumExpression, bool caseSensitive)
         {
             var et = enumExpression.Type;
@@ -1023,6 +1099,11 @@ namespace SysWeaver.Data
 
         static readonly MethodInfo MinMaxMethod = typeof(EnumerableExt).GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(x => x.Name == nameof(EnumerableExt.MinMax) && x.GetParameters().Length == 2);
 
+        /// <summary>
+        /// Build an expression that computes the (min, max) tuple of an enumerable or array expression using <c>EnumerableExt.MinMax</c>.
+        /// </summary>
+        /// <param name="enumExpression">An array or <see cref="IEnumerable{T}"/> expression.</param>
+        /// <returns>An expression returning a <see cref="Tuple{T1, T2}"/> with the min and max values.</returns>
         public static Expression GetMinMaxFromEnum(Expression enumExpression)
         {
             var et = enumExpression.Type;
@@ -1035,6 +1116,11 @@ namespace SysWeaver.Data
         }
 
 
+        /// <summary>
+        /// Build an expression that computes the minimum of an enumerable or array expression using <see cref="Enumerable"/>.Min.
+        /// </summary>
+        /// <param name="enumExpression">An array or <see cref="IEnumerable{T}"/> expression.</param>
+        /// <returns>The min expression.</returns>
         public static Expression GetMinFromEnum(Expression enumExpression)
         {
             var et = enumExpression.Type;
@@ -1042,6 +1128,11 @@ namespace SysWeaver.Data
             return Expression.Call(LinqMinMethods.TryGetValue(elementType, out var m) ? m : LinqMinMethod.MakeGenericMethod(elementType), enumExpression);
         }
 
+        /// <summary>
+        /// Build an expression that computes the maximum of an enumerable or array expression using <see cref="Enumerable"/>.Max.
+        /// </summary>
+        /// <param name="enumExpression">An array or <see cref="IEnumerable{T}"/> expression.</param>
+        /// <returns>The max expression.</returns>
         public static Expression GetMaxFromEnum(Expression enumExpression)
         {
             var et = enumExpression.Type;
@@ -1049,6 +1140,12 @@ namespace SysWeaver.Data
             return Expression.Call(LinqMaxMethods.TryGetValue(elementType, out var m) ? m : LinqMaxMethod.MakeGenericMethod(elementType), enumExpression);
         }
 
+        /// <summary>
+        /// Build an expression that calls <see cref="HashSet{T}.Contains(T)"/>.
+        /// </summary>
+        /// <param name="hashSetExpression">A <see cref="HashSet{T}"/> expression.</param>
+        /// <param name="value">The value expression to test.</param>
+        /// <returns>A boolean expression.</returns>
         public static Expression HashSetContains(Expression hashSetExpression, Expression value)
         {
             var elementType = hashSetExpression.Type.GetGenericArguments()[0];
@@ -1095,13 +1192,15 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Create a function that returns table data from some static data
+        /// Create a function that returns table data from some static data.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="data">The static data (a copy won't be made)</param>
-        /// <param name="columns">Optionally use these column data instead of the ones dervied from the type and attributes, must match order, column type and name etc</param>
-        /// <param name="title">Optional title</param>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="data">The static data, enumerated once into a list (later changes to the source are not seen, but the row objects are shared).</param>
+        /// <param name="columns">Optionally override the description, format, title and the hide/key/chart flags of the columns derived from the type.
+        /// Must have the same number of columns, in the same order, as the type. Name and type are always taken from the type.</param>
+        /// <param name="title">Optional title, only used when <paramref name="columns"/> is given.</param>
         /// <returns>A function that can be used to get the static data</returns>
+        /// <exception cref="Exception">The number of <paramref name="columns"/> doesn't match the type.</exception>
         public static Func<TableDataRequest, TableData> GetStaticTableFn<T>(IEnumerable<T> data, TableDataColumn[] columns = null, String title = null)
         {
             var d = data.ToList();
@@ -1179,12 +1278,15 @@ namespace SysWeaver.Data
         static readonly MethodInfo ChangeTypeMethod = typeof(TableDataTools).GetMethod(nameof(ChangeType), BindingFlags.NonPublic| BindingFlags.Static);
 
         /// <summary>
-        /// Create a function that returns table data from some static data
+        /// Create a function that returns table data from some static untyped data.
+        /// A row type with one public field per column is emitted (and cached per column type and name set), and the rows are converted into instances of it.
         /// </summary>
-        /// <param name="columns">The columns in the table</param>
-        /// <param name="rows">Data for each row and column</param>
+        /// <param name="columns">The columns in the table, <see cref="TableDataBaseColumn.Type"/> must be resolvable type names.</param>
+        /// <param name="rows">Data for each row and column, values are converted to the column type when needed (strings are parsed).
+        /// Enumerated once, immediately.</param>
         /// <param name="title">Optional title</param>
         /// <returns>A function that can be used to get the static data</returns>
+        /// <remarks>Null values in value type columns, or values that can't be converted, throw while creating the rows.</remarks>
         public static Func<TableDataRequest, TableData> GetStaticTableFn(TableDataColumn[] columns, IEnumerable<object[]> rows, String title = null)
         {
             var type = GetDynType(out var createFn, columns);
@@ -1304,6 +1406,12 @@ namespace SysWeaver.Data
 
 
 
+        /// <summary>
+        /// Define a public auto property (private backing field, public get and set accessors) on a type being built.
+        /// </summary>
+        /// <param name="typeBuilder">The type builder.</param>
+        /// <param name="propertyName">The name of the property.</param>
+        /// <param name="propertyType">The type of the property.</param>
         public static void DefineAutoProperty(this TypeBuilder typeBuilder, string propertyName, Type propertyType)
         {
             // 1. Define the private backing field (e.g., _status)
@@ -1385,6 +1493,11 @@ namespace SysWeaver.Data
         static readonly ConcurrentDictionary<String, Type> PropertyTypeCache = new(StringComparer.Ordinal);
 
 
+        /// <summary>
+        /// Create an array with one empty filter per column of the type (only <see cref="TableDataFilter.ColName"/> is set).
+        /// </summary>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <returns>A new array of filters, in column order.</returns>
         public static TableDataFilter[] GetDefaultFilterRow<T>()
         {
             var c = TableDataType<T>.Cols;
@@ -1400,6 +1513,12 @@ namespace SysWeaver.Data
             return f;
         }
 
+        /// <summary>
+        /// Remove the filters of hidden columns from a per column filter array (in place, the array is resized if needed).
+        /// </summary>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="f">One filter per column of the type, in column order.</param>
+        /// <returns>The filters for the visible columns.</returns>
         public static TableDataFilter[] RemoveHidden<T>(TableDataFilter[] f)
         {
             var c = TableDataType<T>.Cols;
@@ -1418,6 +1537,13 @@ namespace SysWeaver.Data
         }
 
 
+        /// <summary>
+        /// Create a table UI state from a request, arranging the request filters into rows of per (visible) column filters
+        /// (a column with multiple filters spans multiple rows).
+        /// </summary>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="r">The request.</param>
+        /// <returns>The state, referencing the request.</returns>
         public static TableDataState StateFromRequest<T>(TableDataRequest r)
         {
             var cindex = TableDataType<T>.NameToColumnIndex;
@@ -1457,6 +1583,11 @@ namespace SysWeaver.Data
 
 
 
+        /// <summary>
+        /// Get a (cached) constant expression holding a default instance of a class, created using its public parameterless constructor.
+        /// Used as a fallback for null values of expanded members.
+        /// </summary>
+        /// <returns>The constant expression, or null if the type has no public parameterless constructor or it threw.</returns>
         internal static Expression GetStaticObject(Type type)
         {
             var c = DefaultObjects;
@@ -1481,7 +1612,8 @@ namespace SysWeaver.Data
         static readonly ConcurrentDictionary<Type, Expression> DefaultObjects = new ConcurrentDictionary<Type, Expression>();
 
         /// <summary>
-        /// Column types that can be charted (value axis)
+        /// Full names of column types that can be charted (value axis).
+        /// Columns of these types get <see cref="TableDataColumnProps.CanChart"/> if the row type has a primary key and they aren't part of it.
         /// </summary>
         public static readonly IReadOnlySet<String> ChartTypes = ReadOnlyData.Set(StringComparer.Ordinal,
             [
@@ -1507,10 +1639,10 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Translate the data in a table data.
+        /// Translate the <see cref="AutoTranslateAttribute"/> columns of a table data (in place, rows are processed concurrently).
         /// </summary>
         /// <typeparam name="T">The type must match the type used when creating the table</typeparam>
-        /// <param name="data">The data to translate</param>
+        /// <param name="data">The data to translate, returned as is if null or if the translator is null</param>
         /// <param name="translator">The translator to use</param>
         /// <param name="to">The target language</param>
         /// <param name="effort">The effort (cost / time) to put into the translation</param>
@@ -1534,11 +1666,11 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Translate the data in a table data.
+        /// Translate the <see cref="AutoTranslateAttribute"/> members of the row objects in a typed table data (in place, rows are processed concurrently).
         /// </summary>
         /// <typeparam name="T">The type must match the element type used when creating the table</typeparam>
         /// <typeparam name="R">The type must match the type used when creating the table</typeparam>
-        /// <param name="data">The data to translate</param>
+        /// <param name="data">The data to translate, returned as is if null or if the translator is null</param>
         /// <param name="translator">The translator to use</param>
         /// <param name="to">The target language</param>
         /// <param name="effort">The effort (cost / time) to put into the translation</param>
@@ -1586,6 +1718,15 @@ namespace SysWeaver.Data
 
 
 
+        /// <summary>
+        /// Apply the column change counter logic: column definitions and title are only sent when the client doesn't already have them.
+        /// The change counter is <see cref="EnvInfo.Cc"/>, a value unique to the server process instance.
+        /// </summary>
+        /// <param name="data">The table to update (in place).</param>
+        /// <param name="requestCc">The change counter from the request: -1 = never send columns, the current counter = client already has the columns, any other value = send columns.</param>
+        /// <param name="cols">The columns to send.</param>
+        /// <param name="title">The title to set when columns are sent, if null the existing title is kept.</param>
+        /// <returns>The source table data.</returns>
         public static TableData HandleCc(this TableData data, long requestCc, TableDataColumn[] cols, String title = null)
         {
             if (requestCc == -1)
@@ -1610,10 +1751,29 @@ namespace SysWeaver.Data
             return data;
         }
 
+        /// <summary>
+        /// Apply the column change counter logic to a typed table, see <see cref="HandleCc(TableData, long, TableDataColumn[], string)"/>.
+        /// </summary>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <param name="data">The table to update (in place).</param>
+        /// <param name="requestCc">The change counter from the request.</param>
+        /// <param name="cols">The columns to send.</param>
+        /// <param name="title">The title to set when columns are sent, if null the existing title is kept.</param>
+        /// <returns>The source table data.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static TypedTableData<T> HandleCc<T>(this TypedTableData<T> data, long requestCc, TableDataColumn[] cols, String title = null)
             => HandleCc<T, TypedTableData<T>>(data, requestCc, cols, title);
 
+        /// <summary>
+        /// Apply the column change counter logic to a custom typed table, see <see cref="HandleCc(TableData, long, TableDataColumn[], string)"/>.
+        /// </summary>
+        /// <typeparam name="T">The row type.</typeparam>
+        /// <typeparam name="R">The typed table type.</typeparam>
+        /// <param name="data">The table to update (in place).</param>
+        /// <param name="requestCc">The change counter from the request.</param>
+        /// <param name="cols">The columns to send.</param>
+        /// <param name="title">The title to set when columns are sent, if null the existing title is kept.</param>
+        /// <returns>The source table data.</returns>
         public static R HandleCc<T, R>(this R data, long requestCc, TableDataColumn[] cols, String title = null) where R : TypedTableData<T>
         {
             if (requestCc == -1)

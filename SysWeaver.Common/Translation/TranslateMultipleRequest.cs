@@ -23,7 +23,7 @@ namespace SysWeaver.Translation
 
         /// <summary>
         /// The texts to translate.
-        /// If any text is starting with "{MD}" that text is assumed to be in the Mark Down format (and returned as such).
+        /// Use <see cref="ContentType"/> to specify mark down or html.
         /// </summary>
         public String[] Texts { get; set; }
 
@@ -44,7 +44,7 @@ namespace SysWeaver.Translation
         public TranslationCacheRetention Retention { get; set; } = TranslationCacheRetention.Medium;
 
         /// <summary>
-        /// The duration to cache the translation
+        /// The type of text (plain text, mark down or html)
         /// </summary>
         public TranslationContentTypes ContentType { get; set; } = TranslationContentTypes.Text;
 

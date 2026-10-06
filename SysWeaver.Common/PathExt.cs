@@ -275,7 +275,8 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Use the casing of the file system for all existing parts of a full path (the root is kept as is)
+        /// Use the casing of the file system for all existing parts of a full path (the root is kept as is).
+        /// Note that each part is used as a search pattern, so a name containing wild cards ('*' or '?', only valid on non-Windows file systems) may match another entry.
         /// </summary>
         /// <param name="full">A full path</param>
         /// <returns>The path with the casing of the existing parts fixed</returns>
@@ -347,7 +348,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Make sure that the folder containing thie supplied filename exists.
+        /// Make sure that the folder containing the supplied filename exists.
         /// If the folder doesn't exist it will be created.
         /// If the create fails it can retry.
         /// </summary>
@@ -410,7 +411,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Make sure that the folder containing thie supplied filename exists.
+        /// Make sure that the folder containing the supplied filename exists.
         /// If the folder doesn't exist it will be created.
         /// If the create fails it can retry.
         /// </summary>
@@ -462,7 +463,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Delete a file if it exists.
-        /// If it fails, retry at least N times.
+        /// If it fails, it's retried (up to retryCount attempts in total).
         /// </summary>
         /// <param name="filename">The file to delete</param>
         /// <param name="retryCount">The maximum number of times to try the operation (a value less than 2 means that it's only tried once)</param>
@@ -492,7 +493,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Delete a file if it exists.
-        /// If it fails, retry at least N times.
+        /// If it fails, it's retried (up to retryCount attempts in total).
         /// </summary>
         /// <param name="filename">The file to delete</param>
         /// <param name="retryCount">The maximum number of times to try the operation (a value less than 2 means that it's only tried once)</param>
@@ -609,8 +610,8 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Try to copy a file.
-        /// If it fails, retry at least N times.
+        /// Try to copy a file (the destination folder is created if needed, a read only destination is overwritten and the file times of the source are applied to the destination).
+        /// If it fails, it's retried (up to retryCount attempts in total).
         /// </summary>
         /// <param name="source">The file to copy</param>
         /// <param name="dest">The file to overwrite or create</param>
@@ -632,8 +633,8 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Try to copy a file.
-        /// If it fails, retry at least N times.
+        /// Try to copy a file (the destination folder is created if needed, a read only destination is overwritten and the file times of the source are applied to the destination).
+        /// If it fails, it's retried (up to retryCount attempts in total).
         /// </summary>
         /// <param name="source">The file to copy</param>
         /// <param name="dest">The file to overwrite or create</param>
@@ -655,15 +656,15 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Try to move / rename a file.
-        /// If it fails, retry at least N times.
+        /// Try to move / rename a file (the destination folder is created if needed, an existing destination is overwritten and the file times of the source are kept).
+        /// If it fails, it's retried (up to retryCount attempts in total).
         /// </summary>
         /// <param name="source">The file to move</param>
         /// <param name="dest">The file to overwrite or create</param>
         /// <param name="retryCount">The maximum number of times to try the operation (a value less than 2 means that it's only tried once)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <remarks>This method never throws, any exception is returned instead.</remarks>
-        /// <returns>Null if the file was copied successfully, else the exception</returns>
+        /// <returns>Null if the file was moved successfully, else the exception</returns>
         public static Exception TryMoveFile(String source, String dest, int retryCount = 10, int delayInMs = 100)
         {
             try
@@ -682,15 +683,15 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Try to move / rename a file.
-        /// If it fails, retry at least N times.
+        /// Try to move / rename a file (the destination folder is created if needed, an existing destination is overwritten and the file times of the source are kept).
+        /// If it fails, it's retried (up to retryCount attempts in total).
         /// </summary>
         /// <param name="source">The file to move</param>
         /// <param name="dest">The file to overwrite or create</param>
         /// <param name="retryCount">The maximum number of times to try the operation (a value less than 2 means that it's only tried once)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
         /// <remarks>This method never throws, any exception is returned instead.</remarks>
-        /// <returns>Null if the file was copied successfully, else the exception</returns>
+        /// <returns>Null if the file was moved successfully, else the exception</returns>
         public static async Task<Exception> TryMoveFileAsync(String source, String dest, int retryCount = 10, int delayInMs = 100)
         {
             try
@@ -712,8 +713,8 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Try to Gzip-zompress a file.
-        /// If it fails, retry at least N times.
+        /// Try to Gzip-compress a file (the creation, last write and last access times of the source are applied to the destination).
+        /// If it fails, it's retried (up to retryCount attempts in total).
         /// </summary>
         /// <param name="source">The file to compress</param>
         /// <param name="dest">The file to overwrite or create</param>
@@ -736,8 +737,8 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Try to Gzip-zompress a file.
-        /// If it fails, retry at least N times.
+        /// Try to Gzip-compress a file (the creation, last write and last access times of the source are applied to the destination).
+        /// If it fails, it's retried (up to retryCount attempts in total).
         /// </summary>
         /// <param name="source">The file to compress</param>
         /// <param name="dest">The file to overwrite or create</param>
@@ -763,7 +764,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Delete a directory if it exists.
-        /// If it fails, retry at least N times.
+        /// If it fails, it's retried (up to retryCount attempts in total).
         /// </summary>
         /// <param name="directory">The directory to delete</param>
         /// <param name="onlyEmpty">Only delete the directory if it's empty</param>
@@ -807,7 +808,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Delete a directory if it exists.
-        /// If it fails, retry at least N times.
+        /// If it fails, it's retried (up to retryCount attempts in total).
         /// </summary>
         /// <param name="directory">The directory to delete</param>
         /// <param name="onlyEmpty">Only delete the directory if it's empty</param>
@@ -852,7 +853,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Clean a directory, decide on a per file and per folder basis if it should be deleted
-        /// If a delete operation fails, retry at least N times.
+        /// If a delete operation fails, it's retried (up to retryCount attempts in total).
         /// </summary>
         /// <param name="directory">The directory to delete</param>
         /// <param name="doDelete">Callback used to determine if it should be deleted or not, first argument is the file or folder name, if the second argument is true, it's a folder.
@@ -1117,9 +1118,10 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Make a copy of a folder
+        /// Make a copy of a folder (recursively, existing files in the destination are overwritten).
+        /// File times are kept for files (by <see cref="File.Copy(string, string, bool)"/>), attributes and times are copied for sub folders.
         /// </summary>
-        /// <param name="from">The existing folder that should be moved</param>
+        /// <param name="from">The existing folder that should be copied</param>
         /// <param name="to">The desired name of the target folder</param>
         /// <param name="retryCount">The maximum number of times to try the operation (a value less than 2 means that it's only tried once)</param>
         /// <param name="delayInMs">Number of milli seconds to wait between any retries</param>
@@ -1227,9 +1229,13 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Allow all users to read / write a folder (adds a full control rule for "Everyone", inherited by all files and sub folders).
+        /// Allow all users to read / write a folder (adds a full control rule for "Everyone").
         /// Only does anything on Windows.
         /// </summary>
+        /// <remarks>
+        /// The rule is inherited using <see cref="PropagationFlags.NoPropagateInherit"/>, so it only applies to the folder and its direct files and sub folders, not to deeper levels.
+        /// Granting everyone full control makes the folder writable by any local user, only use it for data that isn't security sensitive.
+        /// </remarks>
         /// <param name="folder">The folder</param>
         /// <returns>True if successful (or if the folder doesn't exist or the OS isn't Windows), false on error (never throws)</returns>
         public static bool AllowAllAccess(String folder)
@@ -1302,11 +1308,11 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Create a folder if it doesn't exist and set it up for data usage (enable all access and disable indexing).
-        /// If the folder exist nothing will be done
+        /// Create a folder if it doesn't exist and set it up for data usage (enable all access and disable indexing, see <see cref="SetupDataFolder(string)"/>).
+        /// If the folder exist and <paramref name="forceSetup"/> is false nothing will be done.
         /// </summary>
         /// <param name="path">The folder to setup</param>
-        /// <param name="forceSetup">If true the enabling of all access and disabling indexing will be enforced, if false it will only be applied if the folder was created</param>
+        /// <param name="forceSetup">If true the enabling of all access and disabling indexing will be enforced, if false it will only be applied if the folder was created (failures to set up the folder are ignored)</param>
         /// <returns>The full path, or null if the folder couldn't be created (never throws)</returns>
         public static String CreateDataFolder(String path, bool forceSetup = true)
         {
@@ -1323,7 +1329,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Set up a folder for data: disable content indexing and allow it to be accessed by eveyone
+        /// Set up a folder for data: disable content indexing and allow it to be accessed by everyone (see <see cref="AllowAllAccess(string)"/>)
         /// </summary>
         /// <param name="path">The folder</param>
         /// <returns>True if successful, false on error (never throws)</returns>
@@ -1335,7 +1341,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Gety the directory name and file mask from a path (typically containing wild cards).
+        /// Get the directory name and file mask from a path (typically containing wild cards).
         /// Example: "D:\Temp\*.png" => "D:\Temp" and fileMask = "*.png".
         /// Handles cases like having no directory (uses Environment.CurrentDirectory), ex: "*.png", "..\*.txt", ".\*.exe", "Sub\*.jpg" and so on.
         /// </summary>

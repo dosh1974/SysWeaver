@@ -9,6 +9,13 @@ using SysWeaver.Compression;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Extension methods for reading (optionally pre-compressed) embedded resources.
+    /// </summary>
+    /// <remarks>
+    /// A resource is considered compressed if its name ends with a "." followed by an extension registered in the <see cref="CompManager"/> (ex: "Site.index.html.br").
+    /// Uncompressed data of resources that are memory mapped (the normal case) is returned without copying, as memory that is valid for the lifetime of the (non-collectible) assembly.
+    /// </remarks>
     public static class AsmResExt
     {
         /// <summary>
@@ -32,11 +39,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Given an uncompressed resource name, find the compressed version (if any) and modify to the true resource name
+        /// Given an uncompressed resource name, find the resource that has that name or that name + "." + a compression extension, and modify to the true resource name.
+        /// If no resource starts with the name, the name is retried with the prefix of the first resource that contains ".data." (the convention used for embedded web data).
         /// </summary>
         /// <param name="asm">The assembly that contain the resource</param>
-        /// <param name="uncompressedName">The name of the resource, if a compressed version is found it's modified to that resource</param>
-        /// <returns>The compression type or null</returns>
+        /// <param name="uncompressedName">The name of the resource.
+        /// On return it's the full name of the resource that was found (the compressed or uncompressed one, whichever is listed first), or null if no resource was found</param>
+        /// <returns>The compression type of the found resource, or null if it's uncompressed or not found</returns>
         public static ICompType FindResource(this Assembly asm, ref String uncompressedName)
         {
             var allRes = GetResourceNames(asm);
@@ -84,9 +93,9 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Determine the compression method used in a resource based on it's extension
+        /// Determine the compression method used in a resource based on its extension (only the name is inspected, the resource doesn't need to exist)
         /// </summary>
-        /// <param name="asm">The assembly that contain the resource</param>
+        /// <param name="asm">The assembly that contain the resource (not used)</param>
         /// <param name="compressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
         /// <returns>The compression type or null</returns>
         public static ICompType GetResourceCompression(this Assembly asm, ref String compressedName)
@@ -104,8 +113,10 @@ namespace SysWeaver
         /// Get the data of an embedded resource, if it's compressed it will be decompressed
         /// </summary>
         /// <param name="asm">The assembly that contain the resource</param>
-        /// <param name="compressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+        /// <param name="compressedName">The full name of the resource (including any compression extension), if the resource is compressed the compression extension is removed</param>
         /// <returns>The uncompressed data of the resource</returns>
+        /// <exception cref="NullReferenceException">The resource doesn't exist.</exception>
+        /// <exception cref="InvalidDataException">The compressed data is invalid.</exception>
         public static unsafe ReadOnlyMemory<Byte> GetUncompressedResourceData(this Assembly asm, ref String compressedName)
         {
             var o = compressedName;
@@ -124,8 +135,10 @@ namespace SysWeaver
         /// Get the data of an embedded resource, if it's compressed it will be decompressed
         /// </summary>
         /// <param name="asm">The assembly that contain the resource</param>
-        /// <param name="uncompressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+        /// <param name="uncompressedName">The name of the resource without any compression extension, a compressed version is located using <see cref="FindResource(Assembly, ref string)"/></param>
         /// <returns>The uncompressed data of the resource</returns>
+        /// <exception cref="ArgumentNullException">The resource doesn't exist.</exception>
+        /// <exception cref="InvalidDataException">The compressed data is invalid.</exception>
         public static unsafe ReadOnlyMemory<Byte> GetUncompressedResourceData(this Assembly asm, String uncompressedName)
         {
             var comp = FindResource(asm, ref uncompressedName);
@@ -139,11 +152,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get the data of an embedded resource
+        /// Get the data of an embedded resource (no decompression), without copying if the resource is memory mapped
         /// </summary>
         /// <param name="asm">The assembly that contain the resource</param>
-        /// <param name="name">The name of the resource</param>
+        /// <param name="name">The full name of the resource</param>
         /// <returns>The data of the resource</returns>
+        /// <exception cref="NullReferenceException">The resource doesn't exist.</exception>
         public static unsafe ReadOnlyMemory<Byte> GetResourceData(this Assembly asm, String name)
         {
             using var s = asm.GetManifestResourceStream(name);
@@ -153,11 +167,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get the data of an embedded resource as a byte array
+        /// Get the data of an embedded resource as a new byte array (no decompression)
         /// </summary>
         /// <param name="asm">The assembly that contain the resource</param>
-        /// <param name="name">The name of the resource</param>
+        /// <param name="name">The full name of the resource</param>
         /// <returns>The data of the resource</returns>
+        /// <exception cref="NullReferenceException">The resource doesn't exist.</exception>
         public static unsafe Byte[] GetResourceDataBytes(this Assembly asm, String name)
         {
             using var s = asm.GetManifestResourceStream(name);
@@ -174,9 +189,11 @@ namespace SysWeaver
         /// <summary>
         /// Get the data of an embedded resource, if it's compressed it will be decompressed
         /// </summary>
-        /// <param name="asmType">A type in the assembly that contain the resource</param>
-        /// <param name="uncompressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+        /// <param name="asmType">A type in the assembly that contain the resource, if the resource isn't found by name it's retried prefixed with the namespace of this type</param>
+        /// <param name="uncompressedName">The name of the resource without any compression extension, a compressed version is located using <see cref="FindResource(Assembly, ref string)"/></param>
         /// <returns>The uncompressed data of the resource</returns>
+        /// <exception cref="ArgumentNullException">The resource doesn't exist.</exception>
+        /// <exception cref="InvalidDataException">The compressed data is invalid.</exception>
         public static unsafe ReadOnlyMemory<Byte> GetUncompressedResourceData(this Type asmType, String uncompressedName)
         {
             var asm = asmType.Assembly;
@@ -197,11 +214,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get the data of an embedded resource, if it's compressed it will be decompressed
+        /// Get the data of an embedded resource as a new byte array, if it's compressed it will be decompressed
         /// </summary>
-        /// <param name="asmType">A type in the assembly that contain the resource</param>
-        /// <param name="uncompressedName">The name of the resource, if the resource is compressed the compression extension is removed</param>
+        /// <param name="asmType">A type in the assembly that contain the resource, if the resource isn't found by name it's retried prefixed with the namespace of this type</param>
+        /// <param name="uncompressedName">The name of the resource without any compression extension, a compressed version is located using <see cref="FindResource(Assembly, ref string)"/></param>
         /// <returns>The uncompressed data of the resource</returns>
+        /// <exception cref="ArgumentNullException">The resource doesn't exist.</exception>
+        /// <exception cref="InvalidDataException">The compressed data is invalid.</exception>
         public static unsafe Byte[] GetUncompressedResourceDataBytes(this Type asmType, String uncompressedName)
         {
             var asm = asmType.Assembly;
@@ -230,7 +249,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// A MemoryManager over a raw pointer
+        /// A <see cref="MemoryManager{T}"/> over a raw pointer, used to expose memory mapped resource data as <see cref="Memory{T}"/> without copying
         /// </summary>
         /// <remarks>The pointer is assumed to be fully unmanaged, or externally pinned - no attempt will be made to pin this data</remarks>
         sealed unsafe class UnmanagedMemoryManager<T> : MemoryManager<T>

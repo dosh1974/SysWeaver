@@ -9,20 +9,24 @@ namespace SysWeaver
     /// An immutable lookup that finds the longest string (from a set of strings) that a text starts with, using ordinal (case sensitive) compares.
     /// Optimized for a few (up to ~32) short strings (4 - 16 chars), where most searches doesn't match, like the web page sub paths of special modules.
     /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
-    /// See StringPrefixLookupBase for the implementation.
+    /// See <see cref="StringPrefixLookupBase"/> for the implementation. Immutable and thread safe.
+    /// Used by the http server for the path prefixes of modules and redirects (and as a faster drop in replacement for a case sensitive <see cref="FrozenStringTree"/>).
     /// </summary>
     public sealed class StringPrefixLookup : StringPrefixLookupBase, IStringTree
     {
         /// <summary>
         /// Create a lookup of some strings
         /// </summary>
-        /// <param name="strings">The strings, may not contain null, empty strings or duplicates</param>
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="Exception"></exception>
+        /// <param name="strings">The strings, may not contain null, empty strings or duplicates (ordinal)</param>
+        /// <exception cref="ArgumentNullException">A string is null (or <paramref name="strings"/> is null)</exception>
+        /// <exception cref="Exception">A string is a duplicate, or (in debug builds only) a string is empty</exception>
         public StringPrefixLookup(IEnumerable<String> strings) : this(strings.ToArray())
         {
         }
 
+        /// <summary>
+        /// Create a lookup where the leaf of a string is the string itself
+        /// </summary>
         StringPrefixLookup(String[] strings) : base(strings, strings)
         {
         }
@@ -31,8 +35,8 @@ namespace SysWeaver
         /// Find the longest string, that the text starts with
         /// </summary>
         /// <param name="text">The text to match against the strings, may not be empty (from the start offset)</param>
-        /// <param name="start">An optional start offset, must be less than the length of the text</param>
-        /// <returns>The longest found match or null if no match is found</returns>
+        /// <param name="start">An optional start offset, must be less than the length of the text (in release builds a start at or beyond the end returns null)</param>
+        /// <returns>The longest found match (the stored string instance) or null if no match is found</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public String StartsWithAny(String text, int start = 0) => Unsafe.As<String>(StartsWithAnyLeaf(text, start));
 
@@ -40,8 +44,9 @@ namespace SysWeaver
         /// Create a lookup of strings with values, where a string can have more than one value (a drop in replacement for a case sensitive FrozenStringTreeList)
         /// </summary>
         /// <typeparam name="T">The type of the values</typeparam>
-        /// <param name="strings">The strings and values, the strings may not be null or empty</param>
+        /// <param name="strings">The strings and values, the strings may not be null or empty (duplicate strings are grouped)</param>
         /// <returns>A lookup where the value of a string is the values of that string (in the order they where added)</returns>
+        /// <exception cref="ArgumentNullException">A string is null</exception>
         public static StringPrefixLookup<IReadOnlyList<T>> BuildList<T>(IEnumerable<Tuple<String, T>> strings)
             => new(strings
                 .GroupBy(x => x.Item1, StringComparer.Ordinal)
@@ -51,8 +56,9 @@ namespace SysWeaver
         /// Create a lookup of strings with values, where a string can have more than one value (a drop in replacement for a case sensitive FrozenStringTreeList)
         /// </summary>
         /// <typeparam name="T">The type of the values</typeparam>
-        /// <param name="strings">The strings and values, the strings may not be null or empty</param>
+        /// <param name="strings">The strings and values, the strings may not be null or empty (duplicate strings are grouped)</param>
         /// <returns>A lookup where the value of a string is the values of that string (in the order they where added)</returns>
+        /// <exception cref="ArgumentNullException">A string is null</exception>
         public static StringPrefixLookup<IReadOnlyList<T>> BuildList<T>(IEnumerable<KeyValuePair<String, T>> strings)
             => BuildList(strings.Select(x => Tuple.Create(x.Key, x.Value)));
 
@@ -61,8 +67,9 @@ namespace SysWeaver
         /// </summary>
         /// <typeparam name="T">The type of the values</typeparam>
         /// <param name="values">The values</param>
-        /// <param name="getKey">Function that extracts the string key (may not return null or an empty string)</param>
+        /// <param name="getKey">Function that extracts the string key (may not return null or an empty string, values with the same key are grouped)</param>
         /// <returns>A lookup where the value of a string is the values of that string (in the order they where added)</returns>
+        /// <exception cref="ArgumentNullException">A key is null</exception>
         public static StringPrefixLookup<IReadOnlyList<T>> BuildList<T>(IEnumerable<T> values, Func<T, String> getKey)
             => BuildList(values.Select(x => Tuple.Create(getKey(x), x)));
     }
@@ -71,7 +78,7 @@ namespace SysWeaver
     /// An immutable lookup that finds the value of the longest string (from a set of strings with a value each) that a text starts with, using ordinal (case sensitive) compares.
     /// Optimized for a few (up to ~32) short strings (4 - 16 chars), where most searches doesn't match, like the web page sub paths of special modules.
     /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
-    /// See StringPrefixLookupBase for the implementation.
+    /// See <see cref="StringPrefixLookupBase"/> for the implementation. Immutable and thread safe (as long as the values are).
     /// </summary>
     /// <typeparam name="T">The type of the values</typeparam>
     public sealed class StringPrefixLookup<T> : StringPrefixLookupBase
@@ -79,9 +86,9 @@ namespace SysWeaver
         /// <summary>
         /// Create a lookup of strings with values
         /// </summary>
-        /// <param name="strings">The strings and values, the strings may not be null, empty or duplicates</param>
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="Exception"></exception>
+        /// <param name="strings">The strings and values, the strings may not be null, empty or duplicates (ordinal)</param>
+        /// <exception cref="ArgumentNullException">A string is null (or <paramref name="strings"/> is null)</exception>
+        /// <exception cref="Exception">A string is a duplicate, or (in debug builds only) a string is empty</exception>
         public StringPrefixLookup(IEnumerable<KeyValuePair<String, T>> strings) : this(strings.ToArray())
         {
         }
@@ -91,12 +98,15 @@ namespace SysWeaver
         /// </summary>
         /// <param name="values">The values</param>
         /// <param name="getKey">Function that extracts the string key (may not return null, an empty string or duplicates)</param>
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="ArgumentNullException">A key is null (or <paramref name="values"/> is null)</exception>
+        /// <exception cref="Exception">A key is a duplicate, or (in debug builds only) a key is empty</exception>
         public StringPrefixLookup(IEnumerable<T> values, Func<T, String> getKey) : this(values.Select(x => KeyValuePair.Create(getKey(x), x)).ToArray())
         {
         }
 
+        /// <summary>
+        /// Create a lookup where the leaf of a string is an <see cref="Entry"/> with the value and the precomputed prefix values
+        /// </summary>
         StringPrefixLookup(KeyValuePair<String, T>[] strings) : base(strings.Select(x => x.Key).ToArray(), Entries(strings))
         {
         }
@@ -105,8 +115,8 @@ namespace SysWeaver
         /// Find the value of the longest string, that the text starts with
         /// </summary>
         /// <param name="text">The text to match against the strings, may not be empty (from the start offset)</param>
-        /// <param name="start">An optional start offset, must be less than the length of the text</param>
-        /// <returns>The value of the longest found match or default if no match is found</returns>
+        /// <param name="start">An optional start offset, must be less than the length of the text (in release builds a start at or beyond the end finds nothing)</param>
+        /// <returns>The value of the longest found match or default if no match is found (use <see cref="TryStartsWithAny(out T, string, int)"/> if default is a valid value)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T StartsWithAny(String text, int start = 0)
         {
@@ -119,7 +129,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The value of the longest found match or default if no match is found</param>
         /// <param name="text">The text to match against the strings, may not be empty (from the start offset)</param>
-        /// <param name="start">An optional start offset, must be less than the length of the text</param>
+        /// <param name="start">An optional start offset, must be less than the length of the text (in release builds a start at or beyond the end finds nothing)</param>
         /// <returns>True if a match was found</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryStartsWithAny(out T value, String text, int start = 0)
@@ -138,8 +148,8 @@ namespace SysWeaver
         /// Find the values of all strings, that is a prefix of the text
         /// </summary>
         /// <param name="text">The text to find prefixes for, may not be empty (from the start offset)</param>
-        /// <param name="start">An optional start offset, must be less than the length of the text</param>
-        /// <returns>The values of the matches, ordered from shortest match to longest match. The returned list is shared (by all searches with the same result), it must not be modified</returns>
+        /// <param name="start">An optional start offset, must be less than the length of the text (in release builds a start at or beyond the end finds nothing)</param>
+        /// <returns>The values of the matches, ordered from shortest match to longest match (an empty list if there are none). The returned list is shared (by all searches with the same result), it must not be modified (it's an array)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public IReadOnlyList<T> PrefixesOf(String text, int start = 0)
         {
@@ -150,6 +160,9 @@ namespace SysWeaver
 
         #region Implementation
 
+        /// <summary>
+        /// The (shared) result of <see cref="PrefixesOf(string, int)"/> when nothing matches
+        /// </summary>
         static readonly T[] NoPrefixes = [];
 
         /// <summary>
@@ -168,6 +181,9 @@ namespace SysWeaver
             public T[] Prefixes;
         }
 
+        /// <summary>
+        /// Create the leafs (an <see cref="Entry"/> for every string), O(n^2) in the number of strings
+        /// </summary>
         static Object[] Entries(KeyValuePair<String, T>[] strings)
         {
             var res = new Object[strings.Length];

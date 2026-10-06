@@ -4,6 +4,9 @@ using SysWeaver.AI;
 namespace SysWeaver.Data
 {
 
+    /// <summary>
+    /// A filter condition (without the column), see <see cref="TableDataFilter"/>.
+    /// </summary>
     public class TableDataFilterBase
     {
 #if DEBUG
@@ -29,6 +32,10 @@ namespace SysWeaver.Data
         public String Value;
 
 
+        /// <summary>
+        /// Copy all filter values from another instance.
+        /// </summary>
+        /// <param name="src">The instance to copy from</param>
         public void CopyFrom(TableDataFilterBase src)
         {
             Invert = src.Invert;
@@ -40,6 +47,9 @@ namespace SysWeaver.Data
     }
 
 
+    /// <summary>
+    /// A filter that is applied to a column when requesting table data, see <see cref="TableDataSortAndFilterRequest.Filters"/>.
+    /// </summary>
     public sealed class TableDataFilter : TableDataFilterBase
     {
 #if DEBUG
@@ -51,6 +61,10 @@ namespace SysWeaver.Data
         public String ColName;
 
 
+        /// <summary>
+        /// Copy all values (including the column name) from another instance.
+        /// </summary>
+        /// <param name="src">The instance to copy from</param>
         public void CopyFrom(TableDataFilter src)
         {
             ColName = src.ColName;

@@ -1,7 +1,8 @@
 ﻿namespace SysWeaver.Data
 {
     /// <summary>
-    /// Must be kept in sync with DataScopeTools.ScopePrefixes
+    /// The visibility scope of a server side <see cref="DataReference"/>.
+    /// Must be kept in sync with <see cref="DataScopeTools.ScopePrefixes"/>.
     /// </summary>
     public enum DataScopes
     {
@@ -18,15 +19,21 @@
         /// </summary>
         Session,
         /// <summary>
-        /// Unsupported as of now, data should be available for the user
+        /// Data should only be available for the user (across sessions).
+        /// Not supported yet, the HTTP server throws if this scope is used.
         /// </summary>
         User,
     }
 
+    /// <summary>
+    /// Helpers for <see cref="DataScopes"/>.
+    /// </summary>
     public static class DataScopeTools
     {
         /// <summary>
-        /// Must be kept in sync with enum
+        /// The id prefix char for each <see cref="DataScopes"/> value, indexed by the enum value
+        /// ('g' = Global, 'a' = AnyUser, 's' = Session, 'u' = User).
+        /// Must be kept in sync with the enum.
         /// </summary>
         public const string ScopePrefixes = "gasu";
     }

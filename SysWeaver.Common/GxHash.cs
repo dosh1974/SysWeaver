@@ -22,6 +22,14 @@ namespace SysWeaver
     public class GxHash
     {
         // Internal usage only because T cannot be checked at compile time via generic type constrains
+        /// <summary>
+        /// Hash a span of bytes and return the low bits of the 128-bit hash reinterpreted as <typeparamref name="T"/>.
+        /// </summary>
+        /// <typeparam name="T">A primitive numeric type of at most 16 bytes (not checked, the caller must ensure it's a type supported by <see cref="Vector128{T}"/>)</typeparam>
+        /// <param name="bytes">The input bytes to hash</param>
+        /// <param name="seed">A 128-bit seed</param>
+        /// <returns>The first element of the hash vector as a <typeparamref name="T"/></returns>
+        /// <exception cref="PlatformNotSupportedException">If AES intrinsics aren't supported by the CPU</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static T Hash<T>(ReadOnlySpan<byte> bytes, UInt128 seed)
         {

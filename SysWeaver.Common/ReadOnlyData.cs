@@ -8,7 +8,8 @@ namespace SysWeaver
     /// Creates read only (frozen) sets and dictionaries
     /// </summary>
     /// <remarks>
-    /// The returned instances are immutable and optimized for look ups (see SetExt.Freeze and the dictionary Freeze extension).
+    /// The returned instances are immutable, thread safe and optimized for look ups
+    /// (see <see cref="SetExt.Freeze{K}(IReadOnlySet{K}, IEqualityComparer{K})"/> and <see cref="DictionaryExt.Freeze{K, V}(IReadOnlyDictionary{K, V}, IEqualityComparer{K})"/>).
     /// </remarks>
     public static class ReadOnlyData
     {

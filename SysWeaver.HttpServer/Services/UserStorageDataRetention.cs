@@ -3,39 +3,40 @@
 namespace SysWeaver.Net
 {
     /// <summary>
-    /// Data retention policy, can optionally be controlled per user by supplying an implementation of IUserStoragePerUserHandler
+    /// Data retention policy, can optionally be controlled per user by supplying an implementation of <see cref="IUserStoragePerUserHandler"/>.
     /// </summary>
     public sealed class UserStorageDataRetention
     {
         /// <summary>
         /// Number of days to keep private files alive (after last view).
-        /// 0 or less to use defaults.
+        /// 0 or less to use defaults. Values above 100000 are clamped.
         /// </summary>
         public int PrivateDays = 90;
 
         /// <summary>
-        /// Number of days to keep protected files alive (after last view)
-        /// 0 or less to use defaults.
+        /// Number of days to keep protected files alive (after last view).
+        /// 0 or less to use defaults. Values above 100000 are clamped.
         /// </summary>
         public int ProtectedDays = 60;
 
         /// <summary>
-        /// Number of days to keep public files alive (after last view)
-        /// 0 or less to use defaults.
+        /// Number of days to keep public files alive (after last view).
+        /// 0 or less to use defaults. Values above 100000 are clamped.
         /// </summary>
         public int PublicDays = 30;
 
         /// <summary>
         /// Maximum number of Mb of space that a user can have.
-        /// If exceeded, the files that would expire if the neareast future is deleted.
+        /// If exceeded, the files that would expire in the nearest future are deleted.
         /// 0 or less to use defaults.
         /// </summary>
         public int DiscQuotaMb = 100;
 
         /// <summary>
-        /// Get the validate max number of bytes that a user may store
+        /// Get the validated max number of bytes that a user may store.
         /// </summary>
-        /// <returns></returns>
+        /// <param name="defaultDiscQuotaMb">The quota in Mb to use if <see cref="DiscQuotaMb"/> is 0 or less; if this is also 0 or less, 100 Mb is used.</param>
+        /// <returns>The quota in bytes.</returns>
         public long GetMaxDiscBytes(int defaultDiscQuotaMb) => 
             ((long)(DiscQuotaMb <= 0 ?
                 (defaultDiscQuotaMb <= 0 ? 100 : defaultDiscQuotaMb)
@@ -49,7 +50,8 @@ namespace SysWeaver.Net
         /// 2 = Public.
         /// </summary>
         /// <param name="to">An array of at least length 3</param>
-        /// <param name="defaults">The defaults to use in case defaults are required</param>
+        /// <param name="defaults">The defaults to use in case defaults are required, null to use the built in defaults (90, 60 and 30 days).
+        /// Note that the values of <paramref name="defaults"/> are used as is (not validated).</param>
         public void Get(TimeSpan[] to, UserStorageDataRetention defaults)
         {
             var pri = PrivateDays;

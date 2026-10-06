@@ -6,6 +6,11 @@ namespace SysWeaver.Data
     /// <summary>
     /// Action buttons.
     /// </summary>
+    /// <remarks>
+    /// Each button is encoded as "text|title|url|icon", so the strings can't contain '|' (or ';', the format separator).
+    /// The formats can use {0} (the current value), {1} (the next value) and {2} to {x} (populated from the value if it's a comma separated string).
+    /// An invalid number of button strings throws an <see cref="ArgumentException"/> when the attribute is instantiated (i.e. when it's read using reflection).
+    /// </remarks>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class TableDataActionsAttribute : TableDataRawFormatAttribute
     {
@@ -48,6 +53,7 @@ namespace SysWeaver.Data
         /// <param name="url">Url to the get request that will be performed on click.\nIf it start's with a '@' the url will be opened in a new tab.\nIf it start's with a '&amp;' the url will be opened in the same tab.</param>
         /// <param name="icon">Icon class name or url</param>
         /// <param name="moreButtons">An optional array of extra buttons, 4 strings per button following a: "text", "title", "url" and "icon" pattern</param>
+        /// <exception cref="ArgumentException">The number of strings in <paramref name="moreButtons"/> isn't a multiple of 4</exception>
         public TableDataActionsAttribute(String text, String title, String url, String icon, params String[] moreButtons)
             :
             base(TableDataFormats.Actions, Parse(text, title, url, icon, moreButtons))
@@ -58,6 +64,7 @@ namespace SysWeaver.Data
         /// Action buttons.
         /// </summary>
         /// <param name="buttons">An array of buttons, 4 strings per button following a: "text", "title", "url" and "icon" pattern</param>
+        /// <exception cref="ArgumentException">The number of strings in <paramref name="buttons"/> isn't a multiple of 4</exception>
         public TableDataActionsAttribute(params String[] buttons)
             :
             base(TableDataFormats.Actions, Parse(buttons))

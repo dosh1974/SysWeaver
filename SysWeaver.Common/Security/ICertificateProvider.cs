@@ -13,7 +13,7 @@ namespace SysWeaver.Security
         /// <summary>
         /// Get a certificate.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The current certificate</returns>
         Task<X509Certificate2> GetCert();
 
         /// <summary>

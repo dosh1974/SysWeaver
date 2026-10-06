@@ -167,7 +167,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a single allocation
         /// </summary>
         /// <param name="value">The value</param>
         /// <param name="prefix">Optional prefix, added before the value string</param>
@@ -183,7 +183,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a single allocation
         /// </summary>
         /// <param name="value">The value</param>
         /// <param name="prefix">Optional prefix, added before the value string</param>
@@ -197,7 +197,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a single allocation
         /// </summary>
         /// <param name="value">The value</param>
         /// <param name="prefix">Optional prefix, added before the value string</param>
@@ -214,7 +214,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a single allocation
         /// </summary>
         /// <param name="value">The value</param>
         /// <param name="prefix">Optional prefix, added before the value string</param>
@@ -227,7 +227,7 @@ namespace SysWeaver
             => InternalToValueString(value, prefix, suffix, minPadLeft, thousandSeparator, padChar, false);
 
         /// <summary>
-        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation.
+        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a single allocation.
         /// The value is converted to a Decimal (15 significant digits) before it's formatted.
         /// </summary>
         /// <param name="value">The value</param>
@@ -237,7 +237,7 @@ namespace SysWeaver
         /// <param name="minPadLeft">Pad the string (to the left) to this minimum length (the total length, including the prefix and suffix), zero or negative for no padding</param>
         /// <param name="thousandSeparator">The thousand separator char to use</param>
         /// <param name="padChar">The padding char to use</param>
-        /// <param name="decimalChar">The char to use as a decimal sparator</param>
+        /// <param name="decimalChar">The char to use as a decimal separator</param>
         /// <returns>A string of the format: OptionalPad + Prefix + ValueStr + Suffix (ValueStr includes a '-' sign for negative values)</returns>
         /// <exception cref="OverflowException">The value is NaN, infinite or outside of the range of a Decimal</exception>
         public static String ToValueString(this Double value, int decimalCount = 2, String prefix = null, String suffix = null, int minPadLeft = 0, char thousandSeparator = ' ', char padChar = ' ', char decimalChar = '.')
@@ -246,7 +246,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation.
+        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a single allocation.
         /// The value is converted to a Decimal (7 significant digits) before it's formatted.
         /// </summary>
         /// <param name="value">The value</param>
@@ -256,7 +256,7 @@ namespace SysWeaver
         /// <param name="minPadLeft">Pad the string (to the left) to this minimum length (the total length, including the prefix and suffix), zero or negative for no padding</param>
         /// <param name="thousandSeparator">The thousand separator char to use</param>
         /// <param name="padChar">The padding char to use</param>
-        /// <param name="decimalChar">The char to use as a decimal sparator</param>
+        /// <param name="decimalChar">The char to use as a decimal separator</param>
         /// <returns>A string of the format: OptionalPad + Prefix + ValueStr + Suffix (ValueStr includes a '-' sign for negative values)</returns>
         /// <exception cref="OverflowException">The value is NaN, infinite or outside of the range of a Decimal</exception>
         public static String ToValueString(this Single value, int decimalCount = 2, String prefix = null, String suffix = null, int minPadLeft = 0, char thousandSeparator = ' ', char padChar = ' ', char decimalChar = '.')
@@ -264,7 +264,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a with single allocation
+        /// Create a string with thousands separator, optional prefix, optional suffix and optional left padding all using a single allocation
         /// </summary>
         /// <param name="value">The value</param>
         /// <param name="decimalCount">Number of decimals, the value is rounded to this number of decimals using banker's rounding (to even), negative values are treated as zero</param>
@@ -273,7 +273,7 @@ namespace SysWeaver
         /// <param name="minPadLeft">Pad the string (to the left) to this minimum length (the total length, including the prefix and suffix), zero or negative for no padding</param>
         /// <param name="thousandSeparator">The thousand separator char to use</param>
         /// <param name="padChar">The padding char to use</param>
-        /// <param name="decimalChar">The char to use as a decimal sparator</param>
+        /// <param name="decimalChar">The char to use as a decimal separator</param>
         /// <returns>A string of the format: OptionalPad + Prefix + ValueStr + Suffix (ValueStr includes a '-' sign for negative values, also if the rounded value is zero)</returns>
         [SkipLocalsInit]
         public static unsafe String ToValueString(this Decimal value, int decimalCount = 2, String prefix = null, String suffix = null, int minPadLeft = 0, char thousandSeparator = ' ', char padChar = ' ', char decimalChar = '.')

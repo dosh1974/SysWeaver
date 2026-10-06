@@ -9,19 +9,39 @@ using System.Web;
 namespace SysWeaver.Data
 {
     /// <summary>
-    /// Export table as html
+    /// Export table data as a stand alone UTF-8 HTML file, built from four embedded <see cref="TextTemplate"/> resources (body, row, header cell and cell).
     /// </summary>
+    /// <remarks>
+    /// Templates use <c>${Var}</c> variables (with the usual <see cref="TextTemplate"/> transforms, ex: <c>${#Text}</c> for HTML encoding).
+    /// Variables: body: Title, Rows; row: Cells; header: Title (column description), Text, Class; cell: Title (raw value), Text (encoded by the template), TextFmt (pre-formatted markup), Class.
+    /// Hidden columns (<see cref="TableDataColumnProps.Hide"/>) are omitted. Columns with a "Url" format are rendered as links.
+    /// The exporter is immutable and thread safe.
+    /// </remarks>
     public sealed class HtmlTableDataExporter : ITableDataExporter
     {
 
 
+        /// <summary>
+        /// A basic HTML table, using the embedded "Simple" templates.
+        /// </summary>
         public static readonly HtmlTableDataExporter Simple = new HtmlTableDataExporter("Simple HTML", "A basic HTML table", "Simple");
 
+        /// <summary>
+        /// Returns the <see cref="Name"/>.
+        /// </summary>
+        /// <returns>The name of the exporter.</returns>
         public override string ToString() => Name;
 
 
 
 
+        /// <summary>
+        /// Create an HTML exporter using the templates "[folder].[folder]Body.html", "[folder].[folder]Row.html",
+        /// "[folder].[folder]Header.html" and "[folder].[folder]Cell.html" embedded in this assembly.
+        /// </summary>
+        /// <param name="name">The display name of the exporter.</param>
+        /// <param name="desc">A description of the exporter.</param>
+        /// <param name="folder">The resource folder (and file name prefix) of the templates.</param>
         public HtmlTableDataExporter(String name, String desc, String folder)
             : this(name, desc,
                   folder + "." + folder + "Body",
@@ -32,6 +52,15 @@ namespace SysWeaver.Data
         {
         }
 
+        /// <summary>
+        /// Create an HTML exporter using explicitly named templates embedded in this assembly (resource names without the ".html" extension).
+        /// </summary>
+        /// <param name="name">The display name of the exporter.</param>
+        /// <param name="desc">A description of the exporter.</param>
+        /// <param name="body">The template for the whole document.</param>
+        /// <param name="row">The template for a row.</param>
+        /// <param name="header">The template for a header cell.</param>
+        /// <param name="cell">The template for a data cell.</param>
         public HtmlTableDataExporter(String name, String desc, String body, String row, String header, String cell)
         {
             Body = Create(body);
@@ -62,16 +91,28 @@ namespace SysWeaver.Data
         readonly TextTemplate Cell;
 
         
+        /// <inheritdoc/>
         public String Name { get; init; }
+
+        /// <inheritdoc/>
         public String Desc { get; init; }
 
+        /// <inheritdoc/>
         public String Icon => "IconFileHtml";
 
+        /// <inheritdoc/>
         public double Order { get; init; }
 
+        /// <summary>
+        /// Always false, HTML export doesn't require a signed in user.
+        /// </summary>
         public bool RequireUser => false;
 
 
+        /// <summary>
+        /// CSS classes to apply to cells, keyed on the full type name of the column
+        /// ("m" = monospace, "n" = number, "t" = time, "b" = boolean).
+        /// </summary>
         public static readonly IReadOnlyDictionary<String, String> Classes = new Dictionary<String, String>(StringComparer.Ordinal)
         {
             { typeof(Single).FullName, "m n" },
@@ -150,6 +191,14 @@ namespace SysWeaver.Data
 
         }.Freeze();
 
+        /// <summary>
+        /// Export the table as an HTML file (completes synchronously).
+        /// </summary>
+        /// <param name="tableData">The table to export, columns are optional (without columns no header row is written).</param>
+        /// <param name="context">Not used.</param>
+        /// <param name="options">Export options, <see cref="TableDataExportOptions.NoHeaders"/> and <see cref="TableDataExportOptions.Filename"/> are used.</param>
+        /// <returns>A file named "[Filename].html" (default "Table.html") with the <see cref="Mimes.HtmlText"/> mime type.
+        /// The document title is the table title, or the file name if the table has no title.</returns>
         public Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
         {
             options = options ?? new TableDataExportOptions();

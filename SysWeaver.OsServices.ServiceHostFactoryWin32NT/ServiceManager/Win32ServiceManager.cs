@@ -7,8 +7,12 @@ namespace SysWeaver.OsServices.ServiceManager
 {
 
     /// <summary>
-    /// Installs and provides functionality for handling windows services
+    /// Installs and provides functionality for handling windows services using the advapi32 Service Control Manager API.
     /// </summary>
+    /// <remarks>
+    /// Most operations require administrator rights. Each call opens and closes its own SCM and service handles.
+    /// Win32 errors are read using a direct kernel32 GetLastError P/Invoke (not <see cref="Marshal.GetLastWin32Error"/>), so error detection is not reliable.
+    /// </remarks>
     static class Win32ServiceManager
     {
 
@@ -27,7 +31,7 @@ namespace SysWeaver.OsServices.ServiceManager
         /// <summary>
         /// Set the description of a service
         /// </summary>
-        /// <param name="serviceName">The windows service name to get the description for</param>
+        /// <param name="serviceName">The windows service name to set the description for</param>
         /// <param name="description">The new description</param>
         /// <param name="failSilent">If true, return false on error, else throw exceptions</param>
         /// <returns>True if succeeded</returns>
@@ -41,12 +45,16 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
-        /// Run to enabled restarting of the service on fail
+        /// Configure the failure actions of a service to restart it on the first, second and subsequent failures.
         /// </summary>
+        /// <remarks>
+        /// NOTE: <paramref name="resetSeconds"/> is multiplied by 1000 before being passed as the reset period, but Win32 expects seconds,
+        /// so the effective reset period is 1000 times longer than requested.
+        /// </remarks>
         /// <param name="serviceName">The windows service name to enable restart on fail</param>
         /// <param name="failSilent">If true, return false on error, else throw exceptions</param>
         /// <param name="restartDelaySeconds">Number of seconds to wait on first and second fails</param>
-        /// <param name="restartDelayLastSeconds">Number of seconds to wait on the third fail</param>
+        /// <param name="restartDelayLastSeconds">Number of seconds to wait on the third (and later) fail</param>
         /// <param name="resetSeconds">Number of seconds before resetting the failure counter</param>
         /// <returns>True if succeeded</returns>
         public static bool EnableRestartServiceOnError(string serviceName, bool failSilent = false, int restartDelaySeconds = 2 * 60, int restartDelayLastSeconds = 5 * 60, int resetSeconds = 24 * 60 * 60)
@@ -93,7 +101,7 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
-        /// Get a flag indicating if the service has a delayed start or not
+        /// Get a flag indicating if the (auto start) service has a delayed start or not
         /// </summary>
         /// <param name="isDelayed">True if the service start-up is delayed</param>
         /// <param name="serviceName">The windows service name to get information for</param>
@@ -107,10 +115,10 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
-        /// Enabled or disabled delayed start of a service
+        /// Enable or disable delayed start of an auto start service
         /// </summary>
-        /// <param name="serviceName">The windows service name to get information for</param>
-        /// <param name="isDelayed">True to enabled delayed start of the service, else false</param>
+        /// <param name="serviceName">The windows service name to change</param>
+        /// <param name="isDelayed">True to enable delayed start of the service, else false</param>
         /// <param name="failSilent">If true, return false on error, else throw exceptions</param>
         /// <returns>True if succeeded</returns>
         public static bool SetDelayedStart(string serviceName, bool isDelayed = true, bool failSilent = false)
@@ -125,9 +133,11 @@ namespace SysWeaver.OsServices.ServiceManager
         const String DeletedDesc = "** Deleted **";
 
         /// <summary>
-        /// Takes a service name and tries to stop and then uninstall the windows serviceError
+        /// Marks a windows service for deletion (it is NOT stopped first, the SCM deletes it once it has stopped and all handles are closed).
+        /// The description is temporarily set to "** Deleted **" so that <see cref="IsInstalled"/> treats a service pending deletion as not installed.
         /// </summary>
         /// <param name="serviceName">The windows service name to uninstall</param>
+        /// <exception cref="ApplicationException">The SCM couldn't be opened, or the service couldn't be opened or deleted.</exception>
         public static void Uninstall(string serviceName)
         {
             nint scman = OpenSCManager(ServiceManagerRights.Connect);
@@ -167,10 +177,11 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
-        /// Accepts a service name and returns true if the service with that service name exists
+        /// Accepts a service name and returns true if the service with that service name exists (and isn't marked as deleted by <see cref="Uninstall"/>)
         /// </summary>
         /// <param name="serviceName">The service name that we will check for existence</param>
         /// <returns>True if that service exists false otherwise</returns>
+        /// <exception cref="ApplicationException">The SCM couldn't be opened.</exception>
         public static bool IsInstalled(string serviceName)
         {
             nint scman = OpenSCManager(ServiceManagerRights.Connect);
@@ -205,6 +216,7 @@ namespace SysWeaver.OsServices.ServiceManager
         /// </summary>
         /// <param name="serviceName">The name of the service</param> 
         /// <returns>The startup type of the given service</returns>
+        /// <exception cref="Exception">The configuration couldn't be read.</exception>
         public static StartTypes GetStartupType(string serviceName)
         {
             var t = GetServiceConfig(serviceName, false);
@@ -216,7 +228,7 @@ namespace SysWeaver.OsServices.ServiceManager
         /// </summary>
         /// <param name="serviceName">The name of the service</param> 
         /// <param name="startType">The new start up type</param>
-        /// <returns>True if the start up type was changed successfully</returns>
+        /// <returns>True if the start up type was changed successfully (or already was <paramref name="startType"/>), false on any error</returns>
         public static bool SetStartupType(string serviceName, StartTypes startType)
         {
             var t = GetServiceConfig(serviceName, true);
@@ -228,11 +240,12 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
-        /// Takes a service name, a service display name and the path to the service executable and installs / starts the windows service.
+        /// Takes a service name, a service display name and the path to the service executable and installs (if needed) and starts the windows service (currently unused).
         /// </summary>
         /// <param name="serviceName">The service name that this service will have</param>
         /// <param name="displayName">The display name that this service will have</param>
-        /// <param name="fileName">The path to the executable of the service</param>
+        /// <param name="fileName">The command line of the service (executable path, quoted if needed, and arguments)</param>
+        /// <exception cref="ApplicationException">The SCM couldn't be opened or the service couldn't be created.</exception>
         public static void InstallAndStart(string serviceName, string displayName, string fileName)
         {
             nint scman = OpenSCManager(ServiceManagerRights.Connect |
@@ -270,12 +283,15 @@ namespace SysWeaver.OsServices.ServiceManager
 
 
         /// <summary>
-        /// Takes a service name, a service display name and the path to the service executable and installs the windows service.
+        /// Takes a service name, a service display name and the path to the service executable and installs the windows service
+        /// (own process, auto start, normal error control, running as LocalSystem).
         /// </summary>
         /// <param name="serviceName">The service name that this service will have</param>
         /// <param name="displayName">The display name that this service will have</param>
-        /// <param name="fileName">The path to the executable of the service</param>
+        /// <param name="fileName">The command line of the service (executable path, quoted if needed, and arguments)</param>
         /// <param name="failSilent">If true, return false on error, else throw exceptions</param>
+        /// <returns>True if the service was created, false if it already existed or (with <paramref name="failSilent"/>) creation failed</returns>
+        /// <exception cref="ApplicationException">The SCM couldn't be opened, or creation failed and <paramref name="failSilent"/> is false.</exception>
         public static bool Install(string serviceName, string displayName, string fileName, bool failSilent = false)
         {
             nint scman = OpenSCManager(ServiceManagerRights.Connect | ServiceManagerRights.CreateService);
@@ -312,9 +328,10 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
-        /// Takes a service name and starts it
+        /// Takes a service name and requests it to start (doesn't wait, and a failed start request is NOT reported)
         /// </summary>
         /// <param name="serviceName">The service name</param>
+        /// <exception cref="ApplicationException">The SCM or the service couldn't be opened.</exception>
         public static void Start(string serviceName)
         {
             nint scman = OpenSCManager(ServiceManagerRights.Connect);
@@ -342,9 +359,10 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
-        /// Stops the provided windows service
+        /// Requests the provided windows service to stop (doesn't wait, and a failed control request is NOT reported)
         /// </summary>
         /// <param name="serviceName">The service name that will be stopped</param>
+        /// <exception cref="ApplicationException">The SCM or the service couldn't be opened.</exception>
         public static void Stop(string serviceName)
         {
             nint scman = OpenSCManager(ServiceManagerRights.Connect);
@@ -373,9 +391,10 @@ namespace SysWeaver.OsServices.ServiceManager
 
 
         /// <summary>
-        /// Pause the provided windows service
+        /// Requests the provided windows service to pause (doesn't wait, and a failed control request is NOT reported)
         /// </summary>
-        /// <param name="serviceName">The service name that will be stopped</param>
+        /// <param name="serviceName">The service name that will be paused</param>
+        /// <exception cref="ApplicationException">The SCM or the service couldn't be opened.</exception>
         public static void Pause(string serviceName)
         {
             nint scman = OpenSCManager(ServiceManagerRights.Connect);
@@ -403,9 +422,10 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
-        /// Resume the provided windows service
+        /// Requests the provided (paused) windows service to resume (doesn't wait, and a failed control request is NOT reported)
         /// </summary>
-        /// <param name="serviceName">The service name that will be stopped</param>
+        /// <param name="serviceName">The service name that will be resumed</param>
+        /// <exception cref="ApplicationException">The SCM or the service couldn't be opened.</exception>
         public static void Continue(string serviceName)
         {
             nint scman = OpenSCManager(ServiceManagerRights.Connect);
@@ -436,7 +456,8 @@ namespace SysWeaver.OsServices.ServiceManager
         /// Takes a service name and returns the <code>ServiceState</code> of the corresponding service
         /// </summary>
         /// <param name="serviceName">The service name that we will check for his <code>ServiceState</code></param>
-        /// <returns>The ServiceState of the service we wanted to check</returns>
+        /// <returns>The ServiceState of the service we wanted to check, <see cref="ServiceState.NotFound"/> if the service couldn't be opened</returns>
+        /// <exception cref="ApplicationException">The SCM couldn't be opened or the status couldn't be queried.</exception>
         public static ServiceState GetServiceStatus(string serviceName)
         {
             nint scman = OpenSCManager(ServiceManagerRights.Connect);
@@ -465,6 +486,13 @@ namespace SysWeaver.OsServices.ServiceManager
 
         #region Internal
 
+        /// <summary>
+        /// Returns <paramref name="ret"/> if GetLastError is 0, else throws. NOTE: the last error is never cleared, so a stale error code may cause a throw after a successful call.
+        /// </summary>
+        /// <typeparam name="T">The return type.</typeparam>
+        /// <param name="ret">The value to return.</param>
+        /// <returns><paramref name="ret"/>.</returns>
+        /// <exception cref="Exception">GetLastError is non-zero.</exception>
         static T ThrowNativeOrReturn<T>(T ret)
         {
             var r = GetLastError();
@@ -473,6 +501,10 @@ namespace SysWeaver.OsServices.ServiceManager
             throw new Exception("Win32 failure: " + r + " (0x" + r.ToString("x").PadLeft(8, '0'));
         }
 
+        /// <summary>
+        /// Change the service configuration using ChangeServiceConfig, use the NO_CHANGE values / null for settings that should not change.
+        /// </summary>
+        /// <returns>The result of ChangeServiceConfig, false on exceptions if <paramref name="failSilent"/>.</returns>
         static bool SetServiceConfig(string serviceName, ServiceTypes dwServiceType, StartTypes dwStartType, ServiceErrors dwErrorControl, string lpBinaryPathName, string lpLoadOrderGroup, string lpDependencies, string lpServiceStartName, string lpPassword, string lpDisplayName, bool failSilent = true)
         {
             var manager = OpenSCManager(null, null, ServiceManagerRights.GENERIC_READ);
@@ -502,6 +534,9 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
 
+        /// <summary>
+        /// Query optional configuration (QueryServiceConfig2) into a marshalled class. NOTE: <paramref name="failSilent"/> is ignored, errors are thrown.
+        /// </summary>
         static T GetServiceConfig2<T>(IntPtr service, uint infoLevel, bool failSilent = true) where T : class, new()
         {
             if (!QueryServiceConfig2(service, infoLevel, nint.Zero, 0, out var bytesNeeded))
@@ -551,6 +586,9 @@ namespace SysWeaver.OsServices.ServiceManager
             }
         }
 
+        /// <summary>
+        /// Set optional configuration (ChangeServiceConfig2) from a marshalled class, success is determined using GetLastError (see <see cref="ThrowNativeOrReturn{T}"/>).
+        /// </summary>
         static bool SetServiceConfig2<T>(IntPtr service, uint infoLevel, T value, bool failSilent = false)
         {
             var bytesNeeded = Marshal.SizeOf(value);
@@ -604,6 +642,9 @@ namespace SysWeaver.OsServices.ServiceManager
             }
         }
 
+        /// <summary>
+        /// Query extended service status (QueryServiceStatusEx) into a marshalled class (currently unused).
+        /// </summary>
         static T GetServiceStatus<T>(string serviceName, uint infoLevel, bool failSilent = true) where T : class, new()
         {
             var manager = OpenSCManager(null, null, ServiceManagerRights.GENERIC_READ);
@@ -709,7 +750,7 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
-        /// Stars the provided windows service
+        /// Starts the provided windows service (the result is ignored)
         /// </summary>
         /// <param name="hService">The handle to the windows service</param>
         static void StartService(nint hService)
@@ -765,8 +806,8 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
-        /// Returns true when the service status has been changes from wait status to desired status
-        /// ,this method waits around 10 seconds for this operation.
+        /// Returns true when the service status has been changed from wait status to desired status (currently unused).
+        /// Waits while the service makes progress (check point increases), giving up if no progress is made within the wait hint.
         /// </summary>
         /// <param name="hService">The handle to the service</param>
         /// <param name="WaitStatus">The current state of the service</param>
@@ -823,7 +864,8 @@ namespace SysWeaver.OsServices.ServiceManager
         /// Opens the service manager
         /// </summary>
         /// <param name="Rights">The service manager rights</param>
-        /// <returns>the handle to the service manager</returns>
+        /// <returns>the handle to the service manager, must be closed using CloseServiceHandle</returns>
+        /// <exception cref="ApplicationException">The SCM couldn't be opened.</exception>
         static nint OpenSCManager(ServiceManagerRights Rights)
         {
             nint scman = OpenSCManager(null, null, Rights);

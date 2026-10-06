@@ -4,14 +4,20 @@ using System.Text;
 
 namespace SysWeaver.Compression
 {
+    /// <summary>
+    /// Read text files that may be stored compressed on disc (ex: "words.txt" stored as "words.txt.br").
+    /// </summary>
     public static class CompFile
     {
         /// <summary>
-        /// Read the text from a file on disc, optionally compressed
+        /// Read the text from a file on disc, optionally compressed.
+        /// If <paramref name="filename"/> exists it's read as is, else the first existing file named <paramref name="filename"/> + "." + a registered compression extension
+        /// (in the order that the extensions were registered in the <see cref="CompManager"/>) is decompressed.
         /// </summary>
         /// <param name="filename">The filename without any compression extension</param>
         /// <param name="encoding">Optional text encoding, UTF8 assumed by default</param>
-        /// <returns>The string content or null if file doesn't exist</returns>
+        /// <returns>The string content or null if neither the file nor a compressed version of it exists</returns>
+        /// <exception cref="System.IO.InvalidDataException">The compressed file is invalid or truncated.</exception>
         public static String TryGetAllText(String filename, Encoding encoding = null)
         {
             encoding ??= Encoding.UTF8;
@@ -38,8 +44,8 @@ namespace SysWeaver.Compression
         }
 
         /// <summary>
-        /// Read the non-empty, non-comment lines of text from a file on disc, optionally compressed.
-        /// Ccomments are lines that start with a '#'.
+        /// Read the non-empty, non-comment lines of text from a file on disc, optionally compressed (see <see cref="TryGetAllText(string, Encoding)"/>).
+        /// Comments are lines that start with a '#', lines are split on line feeds and trimmed.
         /// </summary>
         /// <param name="filename">The filename without any compression extension</param>
         /// <param name="encoding">Optional text encoding, UTF8 assumed by default</param>

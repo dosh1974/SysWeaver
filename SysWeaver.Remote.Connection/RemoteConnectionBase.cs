@@ -19,32 +19,49 @@ namespace SysWeaver.Remote
 {
 
     /// <summary>
-    /// Base class for remote connection implmentations
+    /// Base class for the runtime generated (IL emitted) classes that implement remote API interfaces, see <see cref="RemoteConnection.Create{T}"/>.
+    /// Owns the <see cref="HttpClient"/> used for all calls and contains the GET/POST/PUT/DELETE helpers that the generated methods call.
     /// </summary>
+    /// <remarks>
+    /// Each instance owns its own <see cref="HttpClient"/> and handler; dispose the instance when it's no longer needed.
+    /// All request methods are thread safe and may be called concurrently.
+    /// Failures are tracked per HTTP method and exposed through <see cref="GetStats"/>, timings through <see cref="PerfMon"/>.
+    /// </remarks>
     public abstract class RemoteConnectionBase : IRemoteApi, IPerfMonitored, IHaveStats
     {
         #region IRemoteApi
 
         /// <summary>
-        /// Invoked before any request (after request payload serilization)
+        /// Invoked before any request is sent (after request payload serialization and compression).
         /// </summary>
         public event RemoteApiCallBegin OnCallBegin;
 
         /// <summary>
-        /// Invoked after any request (before response payload deserilization)
-        /// Will always get called if OnRequestBegin is called
+        /// Invoked after any request completes (before response payload deserialization).
         /// </summary>
+        /// <remarks>
+        /// Not invoked when the server responds with a non-200 status code and a non-empty text body (that exception is thrown directly),
+        /// so it is NOT guaranteed to be called for every <see cref="OnCallBegin"/>.
+        /// </remarks>
         public event RemoteApiCallEnd OnCallEnd;
 
         /// <summary>
-        /// Cancels all pending request on the remote connection 
+        /// Cancels all pending requests on this connection (calls <see cref="HttpClient.CancelPendingRequests"/>).
         /// </summary>
         public void Cancel() => Client.CancelPendingRequests();
 
         #endregion//IRemoteApi
 
+        /// <summary>
+        /// Returns a description of the connection: interface name, base url, Tor usage and the auth method (never any secrets).
+        /// </summary>
+        /// <returns>A text such as <c>"IMyApi@http://host/api/, auth: Bearer"</c>.</returns>
         public override string ToString() => Tos;
 
+        /// <summary>
+        /// Cancels any pending requests and disposes the owned <see cref="HttpClient"/> and handler.
+        /// The instance can't be used after disposal.
+        /// </summary>
         public void Dispose()
         {
             var c = Client;
@@ -56,37 +73,40 @@ namespace SysWeaver.Remote
         }
 
         /// <summary>
-        /// The base url, all endpoints defined in an API is prefixed with this value, ex: "http://locahost:1234/api/"
+        /// The resolved base url (always ending with a single '/'), all endpoints defined in an API are prefixed with this value, ex: "http://localhost:1234/api/".
         /// </summary>
         public readonly String UrlBase;
 
         /// <summary>
-        /// The serializer to use for for decoding responses
+        /// The default serializer used for decoding responses (can be overridden per end point using <see cref="RemoteSerializerAttribute"/>).
         /// </summary>
         public readonly ISerializerType Ser;
 
         /// <summary>
-        /// The serializer to use for encoding (POST/PUT)
+        /// The default serializer used for encoding request payloads (POST/PUT).
         /// </summary>
         public readonly ISerializerType PostSer;
 
         /// <summary>
-        /// The internal HttpClient that is used
+        /// The internal HttpClient that is used, owned by this instance (default headers contain the user agent and any auth).
         /// </summary>
         public readonly HttpClient Client;
 
         /// <summary>
-        /// The internal HttpClientHandler that is used
+        /// The message handler used by <see cref="Client"/>, a <see cref="HttpClientTimeoutHandler"/> wrapping a <see cref="HttpClientHandler"/>.
         /// </summary>
         public readonly DelegatingHandler ClientHandler;
 
         /// <summary>
-        /// The timeout to use for a request, less or equal to zero to uses the timeout attribute on the interface type or if not present 60 000 ms is used.
+        /// The resolved default timeout in milliseconds (from <see cref="RemoteConnection.TimeoutInMilliSeconds"/>, else the interface <see cref="RemoteTimeoutAttribute"/>, else 60 000 ms).
         /// </summary>
+        /// <remarks>
+        /// This is also used as <see cref="HttpClient.Timeout"/>, so a per end point timeout can only shorten, never extend, the request time.
+        /// </remarks>
         public readonly int TimeoutInMilliSeconds;
 
         /// <summary>
-        /// If true, url's in exceptions is stripped to not disclose sensitive information
+        /// If true, urls in exceptions are stripped of scheme, host and query to not disclose sensitive information, see <see cref="GetCleanUrl"/>.
         /// </summary>
         public readonly bool CleanUrl = true;
 
@@ -96,24 +116,24 @@ namespace SysWeaver.Remote
         public readonly bool UsingTor;
 
         /// <summary>
-        /// The compression type to use when sending content, the server MUST support the compression method.
+        /// The compression type to use when sending content (null for no compression), the server MUST support the compression method.
         /// </summary>
         public readonly ICompType Compression;
 
         /// <summary>
-        /// The compression level
+        /// The compression level used when compressing request payloads (only used if <see cref="Compression"/> is non-null).
         /// </summary>
         public readonly CompEncoderLevels CompLevel;
 
         /// <summary>
-        /// The performance monitor instance
+        /// The performance monitor that tracks the time of every end point call (and cache lookups), named "Interface@BaseUrl".
         /// </summary>
         public PerfMonitor PerfMon { get; private set; }
 
         /// <summary>
-        /// Return some stats
+        /// Returns failure statistics (exception counts) per HTTP method, using the system name "Remote " + <see cref="UrlBase"/>.
         /// </summary>
-        /// <returns>The stats</returns>
+        /// <returns>The stats, lazily enumerated.</returns>
         public IEnumerable<Stats> GetStats()
         {
             var sys = "Remote " + UrlBase;
@@ -133,6 +153,22 @@ namespace SysWeaver.Remote
         readonly ExceptionTracker DeleteFails = new ExceptionTracker();
 
 
+        /// <summary>
+        /// Creates the connection, resolving defaults and building the <see cref="HttpClient"/>.
+        /// Called by the constructor of the generated class.
+        /// </summary>
+        /// <param name="p">The connection parameters. NOTE: <see cref="RemoteConnection.Serializer"/>, <see cref="RemoteConnection.PostSerializer"/>,
+        /// <see cref="RemoteConnection.TimeoutInMilliSeconds"/> and <see cref="RemoteConnection.BaseUrl"/> are updated in place with the resolved values.</param>
+        /// <param name="interfaceType">The remote API interface type being implemented (used for naming).</param>
+        /// <remarks>
+        /// Serializers: <see cref="RemoteConnection.Serializer"/>, else the interface <see cref="RemoteSerializerAttribute"/>, else "json"; the post serializer defaults to the serializer.
+        /// The base url is resolved using <see cref="PathTemplate.Resolve(string, System.Collections.Generic.IReadOnlyDictionary{string, string}, bool, bool)"/>; if it then points to an existing file, the first non-comment line is used as the url.
+        /// Auth: a non-empty <see cref="RemoteConnection.BearerToken"/> is sent as a Bearer token. Otherwise, for <see cref="RemoteAuthMethod.HttpAuth"/>, credentials with the user name
+        /// "bearer" are sent as a Bearer token, a user name starting with '*' sends the password in a custom header named by the rest of the user name (lower cased),
+        /// and anything else uses Basic auth (ASCII encoded). For <see cref="RemoteAuthMethod.SysWeaverLogin"/> a login is performed synchronously (blocking) during construction.
+        /// </remarks>
+        /// <exception cref="Exception">Unknown compression, both a proxy and Tor specified, Tor unavailable, an empty base url file or a failed SysWeaver login.</exception>
+        /// <exception cref="ArgumentException"><see cref="RemoteConnection.BaseUrl"/> is null.</exception>
         protected RemoteConnectionBase(RemoteConnection p, Type interfaceType)
         {
             PerfMon = new PerfMonitor(interfaceType.Name + "@" + p.BaseUrl);
@@ -296,6 +332,16 @@ namespace SysWeaver.Remote
 
         #region AsyncTask
 
+        /// <summary>
+        /// Performs a GET request returning a value (used by generated <c>Task&lt;T&gt;</c> methods). Consults and updates the end point cache, keyed by <paramref name="url"/>.
+        /// </summary>
+        /// <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking and the optional response cache).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <returns>The deserialized response.</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> Get<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
         {
             var cache = meta.Cache;
@@ -332,6 +378,16 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// Performs a DELETE request returning a value (used by generated <c>Task&lt;T&gt;</c> methods). Consults and updates the end point cache, keyed by <paramref name="url"/>.
+        /// </summary>
+        /// <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking and the optional response cache).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <returns>The deserialized response.</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> Delete<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
         {
             var cache = meta.Cache;
@@ -368,6 +424,18 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// Performs a POST request with a serialized payload returning a value (used by generated <c>Task&lt;T&gt;</c> methods). Never cached.
+        /// </summary>
+        /// <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+        /// <typeparam name="D">The request payload type.</typeparam>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking).</param>
+        /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <returns>The deserialized response.</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> Post<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -394,6 +462,18 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// Performs a PUT request with a serialized payload returning a value (used by generated <c>Task&lt;T&gt;</c> methods). Never cached.
+        /// </summary>
+        /// <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+        /// <typeparam name="D">The request payload type.</typeparam>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking).</param>
+        /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <returns>The deserialized response.</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> Put<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -425,6 +505,16 @@ namespace SysWeaver.Remote
 
         #region AsyncValueTask
 
+        /// <summary>
+        /// GET helper selected for <c>ValueTask&lt;T&gt;</c> interface methods, identical to <see cref="Get{T}"/> (note: it returns a <see cref="Task{TResult}"/>, not a <see cref="ValueTask{TResult}"/>).
+        /// </summary>
+        /// <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking and the optional response cache).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <returns>The deserialized response.</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> ValueGet<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
         {
             var cache = meta.Cache;
@@ -461,6 +551,16 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// DELETE helper selected for <c>ValueTask&lt;T&gt;</c> interface methods, identical to <see cref="Delete{T}"/> (note: it returns a <see cref="Task{TResult}"/>, not a <see cref="ValueTask{TResult}"/>).
+        /// </summary>
+        /// <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking and the optional response cache).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <returns>The deserialized response.</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> ValueDelete<T>(String url, ApiMeta<T> meta, EndPointOptions opt)
         {
             var cache = meta.Cache;
@@ -497,6 +597,18 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// POST helper selected for <c>ValueTask&lt;T&gt;</c> interface methods, identical to <see cref="Post{T, D}"/> (note: it returns a <see cref="Task{TResult}"/>, not a <see cref="ValueTask{TResult}"/>).
+        /// </summary>
+        /// <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+        /// <typeparam name="D">The request payload type.</typeparam>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking).</param>
+        /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <returns>The deserialized response.</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> ValuePost<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -523,6 +635,18 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// PUT helper selected for <c>ValueTask&lt;T&gt;</c> interface methods, identical to <see cref="Put{T, D}"/> (note: it returns a <see cref="Task{TResult}"/>, not a <see cref="ValueTask{TResult}"/>).
+        /// </summary>
+        /// <typeparam name="T">The response type, deserialized using the end point or connection serializer.</typeparam>
+        /// <typeparam name="D">The request payload type.</typeparam>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking).</param>
+        /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <returns>The deserialized response.</returns>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task<T> ValuePut<T, D>(String url, ApiMeta<T> meta, D data, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -559,6 +683,14 @@ namespace SysWeaver.Remote
 
         #region AsyncTask
 
+        /// <summary>
+        /// Performs a GET request without a return value (used by generated <see cref="Task"/> methods). The response body is ignored and never cached.
+        /// </summary>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task VoidGet(String url, ApiMeta meta, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -583,6 +715,14 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// Performs a DELETE request without a return value (used by generated <see cref="Task"/> methods). The response body is ignored.
+        /// </summary>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task VoidDelete(String url, ApiMeta meta, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -607,6 +747,16 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// Performs a POST request with a serialized payload without a return value (used by generated <see cref="Task"/> methods).
+        /// </summary>
+        /// <typeparam name="D">The request payload type.</typeparam>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking).</param>
+        /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task VoidPost<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -635,6 +785,16 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// Performs a PUT request with a serialized payload without a return value (used by generated <see cref="Task"/> methods).
+        /// </summary>
+        /// <typeparam name="D">The request payload type.</typeparam>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking).</param>
+        /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task VoidPut<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -669,6 +829,14 @@ namespace SysWeaver.Remote
 
         #region AsyncValueTask
 
+        /// <summary>
+        /// GET helper selected for <see cref="ValueTask"/> interface methods, identical to <see cref="VoidGet"/> (note: it returns a <see cref="Task"/>, not a <see cref="ValueTask"/>).
+        /// </summary>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task ValueVoidGet(String url, ApiMeta meta, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -693,6 +861,14 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// DELETE helper selected for <see cref="ValueTask"/> interface methods, identical to <see cref="VoidDelete"/> (note: it returns a <see cref="Task"/>, not a <see cref="ValueTask"/>).
+        /// </summary>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task ValueVoidDelete(String url, ApiMeta meta, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -717,6 +893,16 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// POST helper selected for <see cref="ValueTask"/> interface methods, identical to <see cref="VoidPost{D}"/> (note: it returns a <see cref="Task"/>, not a <see cref="ValueTask"/>).
+        /// </summary>
+        /// <typeparam name="D">The request payload type.</typeparam>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking).</param>
+        /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task ValueVoidPost<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -745,6 +931,16 @@ namespace SysWeaver.Remote
             }
         }
 
+        /// <summary>
+        /// PUT helper selected for <see cref="ValueTask"/> interface methods, identical to <see cref="VoidPut{D}"/> (note: it returns a <see cref="Task"/>, not a <see cref="ValueTask"/>).
+        /// </summary>
+        /// <typeparam name="D">The request payload type.</typeparam>
+        /// <param name="url">The url relative to <see cref="UrlBase"/> (including any query string).</param>
+        /// <param name="meta">End point meta data (name used for perf tracking).</param>
+        /// <param name="data">The payload, serialized using the end point or connection post serializer (and optionally compressed).</param>
+        /// <param name="opt">Optional end point overrides (serializers, timeout), may be null.</param>
+        /// <exception cref="HttpResponseException">The server responded with a status code other than 200.</exception>
+        /// <exception cref="Exception">Any other failure, wrapped with the HTTP method and (cleaned) url.</exception>
         protected async Task ValueVoidPut<D>(String url, ApiMeta meta, D data, EndPointOptions opt)
         {
             using (PerfMon.Track(meta.Name))
@@ -797,6 +993,11 @@ namespace SysWeaver.Remote
 
         long ReqId;
 
+        /// <summary>
+        /// Removes the scheme, host and query string from a url if <see cref="CleanUrl"/> is true, ex: "https://host/api/Get?key=x" becomes "api/Get".
+        /// </summary>
+        /// <param name="s">The url to clean.</param>
+        /// <returns>The cleaned url (empty if the url only contains a host), or <paramref name="s"/> unchanged if <see cref="CleanUrl"/> is false.</returns>
         public String GetCleanUrl(String s)
         {
             if (!CleanUrl)

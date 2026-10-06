@@ -37,14 +37,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         /// <typeparam name="T">The type of the result of the function</typeparam>
         public static void LimitConcurrency<K, T>(ref Func<K, int, Task<T>> fn, int maxConcurrency, int numberOfItems)
@@ -65,14 +65,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         /// <typeparam name="T">The type of the result of the function</typeparam>
         public static void LimitConcurrency<K, T>(ref Func<K, int, ValueTask<T>> fn, int maxConcurrency, int numberOfItems)
@@ -93,14 +93,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         /// <typeparam name="T">The type of the result of the function</typeparam>
         public static void LimitConcurrency<K, T>(ref Func<K, Task<T>> fn, int maxConcurrency, int numberOfItems)
@@ -121,14 +121,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         /// <typeparam name="T">The type of the result of the function</typeparam>
         public static void LimitConcurrency<K, T>(ref Func<K, ValueTask<T>> fn, int maxConcurrency, int numberOfItems)
@@ -152,14 +152,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         /// <typeparam name="V">The type of the second argument of the function</typeparam>
         /// <typeparam name="T">The type of the result of the function</typeparam>
@@ -181,14 +181,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         /// <typeparam name="V">The type of the second argument of the function</typeparam>
         /// <typeparam name="T">The type of the result of the function</typeparam>
@@ -210,14 +210,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         /// <typeparam name="V">The type of the second argument of the function</typeparam>
         /// <typeparam name="T">The type of the result of the function</typeparam>
@@ -239,14 +239,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         /// <typeparam name="V">The type of the second argument of the function</typeparam>
         /// <typeparam name="T">The type of the result of the function</typeparam>
@@ -272,14 +272,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         public static void LimitConcurrency<K>(ref Func<K, int, Task> fn, int maxConcurrency, int numberOfItems)
         {
@@ -299,14 +299,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         public static void LimitConcurrency<K>(ref Func<K, int, ValueTask> fn, int maxConcurrency, int numberOfItems)
         {
@@ -326,14 +326,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         public static void LimitConcurrency<K>(ref Func<K, Task> fn, int maxConcurrency, int numberOfItems)
         {
@@ -353,14 +353,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         public static void LimitConcurrency<K>(ref Func<K, ValueTask> fn, int maxConcurrency, int numberOfItems)
         {
@@ -383,14 +383,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         /// <typeparam name="V">The type of the second argument of the function</typeparam>
         public static void LimitConcurrency<K, V>(ref Func<K, V, int, Task> fn, int maxConcurrency, int numberOfItems)
@@ -411,14 +411,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         /// <typeparam name="V">The type of the second argument of the function</typeparam>
         public static void LimitConcurrency<K, V>(ref Func<K, V, int, ValueTask> fn, int maxConcurrency, int numberOfItems)
@@ -439,14 +439,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         /// <typeparam name="V">The type of the second argument of the function</typeparam>
         public static void LimitConcurrency<K, V>(ref Func<K, V, Task> fn, int maxConcurrency, int numberOfItems)
@@ -467,14 +467,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         /// <typeparam name="V">The type of the second argument of the function</typeparam>
         public static void LimitConcurrency<K, V>(ref Func<K, V, ValueTask> fn, int maxConcurrency, int numberOfItems)
@@ -498,14 +498,14 @@ namespace SysWeaver
         /// Return a lock for the given concurrency constraints
         /// </summary>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
-        /// If less than zero, it's a percentage of the number of available logical processors.
-        /// If zero the concurrency is the number of processors minus one.
+        /// If less than zero, it's a percentage of the number of available logical processors (rounded to the nearest integer, at least one).
+        /// If zero the concurrency is <see cref="DefaultLimit"/> (the number of processors minus one, but at least two).
         /// Ex:
         /// -50 = 50% of the number of processors (so 4 if there are 8 processors).
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <param name="numberOfItems">The number of items that will be processed, the function is only wrapped if it's greater than the computed concurrency (and greater than one)</param>
         /// <returns>A lock or null</returns>
         static AsyncLock CreateLock(int maxConcurrency, int numberOfItems)
         {

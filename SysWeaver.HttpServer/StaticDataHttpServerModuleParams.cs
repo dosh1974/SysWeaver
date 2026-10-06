@@ -2,6 +2,9 @@ using System;
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// Parameters for <see cref="StaticDataHttpServerModule"/>.
+    /// </summary>
     public class StaticDataHttpServerModuleParams
     {
         public override string ToString() =>
@@ -11,7 +14,7 @@ namespace SysWeaver.Net
                 nameof(Compression), ": ", Compression.ToQuoted());
 
         /// <summary>
-        /// Root url for the assets
+        /// Root url for the assets (prefixed to all registered urls, leading and trailing '/' are ignored), null or empty for the server root.
         /// </summary>
         public String UrlRoot;
 
@@ -21,7 +24,7 @@ namespace SysWeaver.Net
         public int ClientCacheDuration = 15;
 
         /// <summary>
-        /// The compression methods in the preferred order to server data
+        /// The default runtime compression methods in the preferred order, ex: "br: Balanced, deflate: Balanced".
         /// </summary>
         public String Compression = "br: Balanced, deflate: Balanced, gzip: Balanced";
 

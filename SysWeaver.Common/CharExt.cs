@@ -6,6 +6,12 @@ namespace SysWeaver
 {
 
 
+    /// <summary>
+    /// Fast culture invariant char case conversions and tests (table based for the first 2048 chars), and hex digit parsing
+    /// </summary>
+    /// <remarks>
+    /// All case conversions give the same result as <see cref="Char.ToLowerInvariant(char)"/> / <see cref="Char.ToUpperInvariant(char)"/>.
+    /// </remarks>
     public static class CharExt
     {
         /// <summary>
@@ -48,21 +54,40 @@ namespace SysWeaver
             TableIsUpper = isUpper;
         }
 
+        /// <summary>
+        /// The invariant lower case of the first <see cref="TableCount"/> chars
+        /// </summary>
         static readonly Char[] TableLower;
+
+        /// <summary>
+        /// The invariant upper case of the first <see cref="TableCount"/> chars
+        /// </summary>
         static readonly Char[] TableUpper;
+
+        /// <summary>
+        /// One bit per char (of the first <see cref="TableCount"/> chars), set if the char is equal to its invariant lower case
+        /// </summary>
         static readonly Byte[] TableIsLower;
+
+        /// <summary>
+        /// One bit per char (of the first <see cref="TableCount"/> chars), set if the char is equal to its invariant upper case
+        /// </summary>
         static readonly Byte[] TableIsUpper;
 
 
-        /// Make an culture invariant upper case version of a char
+        /// <summary>
+        /// Make a culture invariant lower case version of a char (a delegate to TextInfo.ToLower of the invariant culture, prefer <see cref="FastToLower(char)"/> for direct calls)
+        /// </summary>
         public static readonly Func<Char, Char> FastLower = CultureInfo.InvariantCulture.TextInfo.ToLower;
 
-        /// Make an culture invariant upper case version of a char
+        /// <summary>
+        /// Make a culture invariant upper case version of a char (a delegate to TextInfo.ToUpper of the invariant culture, prefer <see cref="FastToUpper(char)"/> for direct calls)
+        /// </summary>
         public static readonly Func<Char, Char> FastUpper = CultureInfo.InvariantCulture.TextInfo.ToUpper;
 
 
         /// <summary>
-        /// A method to check if a char is a lowercased letter or a non-letter (case independent)
+        /// Check if a char is a lowercased letter or a non-letter (case independent), i.e. if <see cref="Char.ToLowerInvariant(char)"/> doesn't change it
         /// </summary>
         /// <param name="c">The char to test</param>
         /// <returns>True if the input is a lowercased letter or a non-letter (case independent)</returns>
@@ -80,10 +105,10 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// A method to check if a char is a uppercased letter or a non-letter (case independent)
+        /// Check if a char is an uppercased letter or a non-letter (case independent), i.e. if <see cref="Char.ToUpperInvariant(char)"/> doesn't change it
         /// </summary>
         /// <param name="c">The char to test</param>
-        /// <returns>True if the input is a uppercased letter or a non-letter (case independent)</returns>
+        /// <returns>True if the input is an uppercased letter or a non-letter (case independent)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool FastIsUpperOrNonLetter(this Char c)
         {
@@ -99,7 +124,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Make an culture invariant lower case version of a char
+        /// Make a culture invariant lower case version of a char (same as <see cref="Char.ToLowerInvariant(char)"/>, table based for the first 2048 chars)
         /// </summary>
         /// <param name="c">The char to transform into a culture invariant lower case</param>
         /// <returns>Culture invariant lower case char</returns>
@@ -108,7 +133,8 @@ namespace SysWeaver
         public static Char FastToLower(this Char c) => c < TableCount ? TableLower[c] : Char.ToLowerInvariant(c);
 
         /// <summary>
-        /// Make an culture invariant upper case version of a char
+        /// Make a culture invariant upper case version of a char (same as <see cref="Char.ToUpperInvariant(char)"/>, table based for the first 2048 chars).
+        /// Used for case folding by the case in-sensitive string trees.
         /// </summary>
         /// <param name="c">The char to transform into a culture invariant upper case</param>
         /// <returns>Culture invariant upper case char</returns>
@@ -119,9 +145,9 @@ namespace SysWeaver
         /// <summary>
         /// Convert a hexadecimal character to it's decimal value, only '0' - '9', 'a' - 'f' or 'A' - 'F' is valid, will throw on invalid input
         /// </summary>
-        /// <param name="c"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="c">The hex digit</param>
+        /// <returns>The value of the digit, 0 - 15</returns>
+        /// <exception cref="Exception">The char isn't a hex digit</exception>
         public static int HexValue(this Char c)
         {
             if (c < '0')

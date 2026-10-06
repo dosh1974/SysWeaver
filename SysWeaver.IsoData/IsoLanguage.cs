@@ -5,13 +5,26 @@ using SysWeaver.Data;
 
 namespace SysWeaver.IsoData
 {
+    /// <summary>
+    /// Contains information about a language (ISO 639-1 and ISO 639-2 codes, name and comments).
+    /// Use <see cref="TryGet(string)"/>, <see cref="TryGet(out IsoCountry, string)"/>, <see cref="TryGetName(string)"/> or <see cref="Validate(string, bool)"/>
+    /// to look up a language, or enumerate <see cref="Languages"/>.
+    /// </summary>
+    /// <remarks>
+    /// All instances are created once from built-in static data and are immutable.
+    /// The static initializer also uses <see cref="IsoCountry.Countries"/> to compute <see cref="GetCountries(string)"/> and <see cref="Common"/>.
+    /// </remarks>
     public class IsoLanguage
     {
+        /// <summary>
+        /// Returns a debug friendly description, ex: "sv Swedish [swe]" (the comment is appended if present).
+        /// </summary>
+        /// <returns>The codes, name and optional comment of the language.</returns>
         public override string ToString() => Comment == null ? String.Concat(Iso639_1, ' ', Name, " [", Iso639_2, ']') : String.Concat(Iso639_1, ' ', Name, " [", Iso639_2, "] - ", Comment);
 
 
         /// <summary>
-        /// Flag
+        /// The flag of the language (same value as <see cref="Iso639_1"/>, rendered as a language flag in table data views).
         /// </summary>
         [TableDataIsoLanguageImage]
         [TableDataOrder(-1)]
@@ -34,13 +47,20 @@ namespace SysWeaver.IsoData
         public readonly String Name;
 
         /// <summary>
-        /// Optional comments
+        /// Optional comments, null if there are none.
         /// </summary>
         [AutoTranslate(false)]
         [AutoTranslateContext("This is the comments section for the language named \"{0}\"", nameof(Name))]
         [AutoTranslateContext("The two letter ISO 639-1 language code of this language is \"{0}\"", nameof(Iso639_1))]
         public readonly String Comment;
 
+        /// <summary>
+        /// Creates a language instance.
+        /// </summary>
+        /// <param name="name">The official name of the language.</param>
+        /// <param name="iso639_1">The two letter ISO 639-1 language code.</param>
+        /// <param name="iso639_2">The three letter ISO 639-2 language code.</param>
+        /// <param name="comment">Optional comment, can be null.</param>
         protected IsoLanguage(string name, string iso639_1, string iso639_2, String comment)
         {
             Name = name;
@@ -50,12 +70,12 @@ namespace SysWeaver.IsoData
         }
 
         /// <summary>
-        /// Get information about a language from a two letter ISO 639-1 language code or a three letter ISO 639-2 language code.
+        /// Get information about a language from a two letter ISO 639-1 language code or a three letter ISO 639-2 language code (case insensitive, no trimming).
         /// Ex: 
-        /// "en" => "English"
-        /// "afr" => "Afrikaans"
+        /// "en" =&gt; "English"
+        /// "afr" =&gt; "Afrikaans"
         /// </summary>
-        /// <param name="iso639">A two letter ISO 639-1 language code or a three letter ISO 639-2 language code</param>
+        /// <param name="iso639">A two letter ISO 639-1 language code or a three letter ISO 639-2 language code, may be null.</param>
         /// <returns>Information about the language if it's known, or null if it's unknown</returns>
         public static IsoLanguage TryGet(String iso639) => IsoToInfo.TryGetValue(iso639?.FastToLower() ?? "", out var i) ? i : null;
 
@@ -63,13 +83,17 @@ namespace SysWeaver.IsoData
         /// Get information about a language from a two letter ISO 639-1 language code or a three letter ISO 639-2 language code.
         /// The code can optionally be combined with a two letter ISO 3166-A2 country code using a hyphen.
         /// Ex: 
-        /// "en" => "English", null
-        /// "en-GB" => "English", "UNITED KINGDOM"
-        /// "es-MX" => "Spanish, Castilian", "MEXICO"
+        /// "en" =&gt; English, null
+        /// "en-GB" =&gt; English, United Kingdom
+        /// "es-MX" =&gt; Spanish, Castilian, Mexico
         /// </summary>
         /// <param name="country">Information about the country if specified and known, else null</param>
         /// <param name="regionalCode">A two letter ISO 639-1 language code or a three letter ISO 639-2 language code, optionally combined with a two letter ISO 3166-A2 country code using a hyphen.</param>
-        /// <returns>Information about the language if it's known, or null if it's unknown</returns>
+        /// <returns>Information about the language if it's known, or null if it's unknown or if a country part is present but unknown.</returns>
+        /// <remarks>
+        /// The country part is case insensitive, but unlike <see cref="TryGet(string)"/> the language part is matched case sensitively,
+        /// so it must be lower case (ex: "EN-GB" returns null). Everything after the first hyphen is treated as the country part.
+        /// </remarks>
         public static IsoLanguage TryGet(out IsoCountry country, String regionalCode)
         {
             country = null;
@@ -87,23 +111,24 @@ namespace SysWeaver.IsoData
         }
 
         /// <summary>
-        /// Get information about a language from a language name, iso code and so on
+        /// Get information about a language from a language name (or any comma separated part of the name), ISO 639-1 or ISO 639-2 code (case insensitive).
+        /// Anything from the first hyphen is ignored, so regional codes like "en-GB" are accepted.
         /// Ex:
-        ///   "Swedish" => "sv"
-        ///   "Maldivian" => "dv"
+        ///   "Swedish" =&gt; "sv"
+        ///   "Maldivian" =&gt; "dv"
         /// </summary>
-        /// <param name="name">The name of the language</param>
+        /// <param name="name">The name of the language, may be null.</param>
         /// <returns>Information about the language if it's known, or null if it's unknown</returns>
         public static IsoLanguage TryGetName(String name) => NameToInfo.TryGetValue((name ?? "").Split('-')[0].FastTrimToLower(), out var i) ? i : null;
 
 
         /// <summary>
-        /// Enumerates all aliases for a language
+        /// Enumerates all aliases (lower case lookup keys used by <see cref="TryGetName(string)"/>) and the language they map to.
         /// </summary>
         public static IEnumerable<KeyValuePair<String, IsoLanguage>> Aliases => NameToInfo;
 
         /// <summary>
-        /// All known languages
+        /// All known languages, ordered (mostly) alphabetically by name.
         /// </summary>
         public static readonly IReadOnlyList<IsoLanguage> Languages = new IsoLanguage[]
         {
@@ -294,6 +319,12 @@ namespace SysWeaver.IsoData
 
 
 
+        /// <summary>
+        /// ISO 639-1 codes of commonly used languages: languages used in countries with a combined population of at least 10 million,
+        /// excluding languages whose comment starts with "ancient". In the same order as <see cref="Languages"/>.
+        /// Used as the default set of target languages when no translator is available.
+        /// </summary>
+        /// <remarks>This is a shared, mutable array assigned by the static constructor; do not modify it.</remarks>
         public static String[] Common;
 
 
@@ -403,10 +434,13 @@ namespace SysWeaver.IsoData
         }
 
         /// <summary>
-        /// Get countries where a language is used.
+        /// Get countries where a language is used (according to <see cref="IsoCountry.Languages"/>).
         /// </summary>
-        /// <param name="language">The ISO 639-1 language code of the language</param>
-        /// <returns>An array of ISO 3166 Alpha 2 country codes where the language is used, in order of population</returns>
+        /// <param name="language">The ISO 639-1 language code of the language (case insensitive).</param>
+        /// <returns>An array of ISO 3166 Alpha 2 country codes where the language is used, or an empty array if unknown.
+        /// Ordered by a score based on population, where the language's position in the country's language list reduces the score
+        /// (primary language full population, second 3%, then halved for each further language).</returns>
+        /// <remarks>The returned array is shared, do not modify it.</remarks>
         public static String[] GetCountries(String language) => CountryMap.TryGetValue((language ?? "").FastToLower(), out var countries) ? countries : [];
 
 
@@ -416,12 +450,14 @@ namespace SysWeaver.IsoData
         static readonly IReadOnlyDictionary<String, IsoLanguage> NameToInfo;
 
         /// <summary>
-        /// Validate that the input is a valid language code
+        /// Validate that the input is a valid language code and normalize it.
+        /// Leading and trailing white space is ignored, and the language may be given as an ISO 639-1 or ISO 639-2 code (case insensitive).
         /// </summary>
         /// <param name="language">The ISO 639-1 language code of the language with an optional two letter ISO 3166-A2 country code separated by a hyphen ('-')</param>
-        /// <param name="allowNames">If true a known language name is accepted</param>
-        /// <returns>The ISO 639-1 language code (with option country code) or null for invalid codes</returns>
-        /// <exception cref="Exception">For malformed input</exception>
+        /// <param name="allowNames">If true a known language name is accepted (only when no country part is present)</param>
+        /// <returns>The ISO 639-1 language code, optionally followed by a hyphen and the upper case ISO 3166-A2 country code (ex: "en-GB"),
+        /// or null if <paramref name="language"/> is null, empty or white space.</returns>
+        /// <exception cref="Exception">If the language or country is unknown, or the input contains more than one hyphen.</exception>
         public static String Validate(string language, bool allowNames = false)
         {
             language = language?.Trim();
@@ -459,13 +495,17 @@ namespace SysWeaver.IsoData
     }
 
 
+    /// <summary>
+    /// Extension methods for <see cref="IsoLanguage"/>.
+    /// </summary>
     public static class IsoLanguageExt
     {
         /// <summary>
-        /// Get countries where a language is used.
+        /// Get countries where a language is used, see <see cref="IsoLanguage.GetCountries(string)"/>.
         /// </summary>
-        /// <param name="language">The ISO 639-1 language code of the language</param>
-        /// <returns>An array of ISO 3166 Alpha 2 country codes where the language is used, in order of population</returns>
+        /// <param name="language">The language, may be null.</param>
+        /// <returns>An array of ISO 3166 Alpha 2 country codes where the language is used, in order of importance (population weighted)</returns>
+        /// <remarks>The returned array is shared, do not modify it.</remarks>
         public static String[] GetCountries(this IsoLanguage language) => IsoLanguage.GetCountries(language?.Iso639_1);
 
     }

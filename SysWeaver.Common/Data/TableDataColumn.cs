@@ -32,6 +32,10 @@ namespace SysWeaver.Data
         [AutoTranslateContext("The name (id) of the column is \"{0}\"", nameof(Name))]
         public String Desc;
 
+        /// <summary>
+        /// Copy all values from another column.
+        /// </summary>
+        /// <param name="from">The column to copy from</param>
         public void CopyFrom(TableDataBaseColumn from)
         {
             Name = from.Name;
@@ -39,6 +43,10 @@ namespace SysWeaver.Data
             Desc = from.Desc;
         }
 
+        /// <summary>
+        /// Create a shallow copy of this column.
+        /// </summary>
+        /// <returns>A new instance with the same values</returns>
         public TableDataBaseColumn Clone()
         {
             var r = new TableDataBaseColumn();
@@ -57,6 +65,7 @@ namespace SysWeaver.Data
     {
         /// <summary>
         /// Formatting hint (used when displaying the table), depends on Type etc.
+        /// Typically set using an attribute derived from <see cref="TableDataRawFormatAttribute"/>.
         /// </summary>
         [AiOptional]
         [EditAllowNull]
@@ -78,6 +87,10 @@ namespace SysWeaver.Data
         [AiIgnore]
         public TableDataColumnProps Props;
 
+        /// <summary>
+        /// Copy all values from another column.
+        /// </summary>
+        /// <param name="from">The column to copy from</param>
         public void CopyFrom(TableDataColumn from)
         {
             base.CopyFrom(from);
@@ -86,6 +99,10 @@ namespace SysWeaver.Data
             Props = from.Props;
         }
 
+        /// <summary>
+        /// Create a shallow copy of this column.
+        /// </summary>
+        /// <returns>A new instance with the same values</returns>
         public new TableDataColumn Clone()
         {
             var t = new TableDataColumn();

@@ -2,6 +2,9 @@
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// The web side settings of a folder served by <see cref="FileHttpServerModule"/> (see <see cref="FileHttpServerModuleFolder"/>).
+    /// </summary>
     public class FileHttpServerModuleWebFolder
     {
         public override string ToString() => String.Concat(
@@ -11,7 +14,8 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// The web folder to serve this folder at
+        /// The web folder to serve this folder at, relative to the server root (ex: "site" or "site/images"), null or empty for the root.
+        /// Leading and trailing '/' are ignored.
         /// </summary>
         public String WebFolder;
 
@@ -31,17 +35,18 @@ namespace SysWeaver.Net
         public long MaxCacheSize = 32768;
 
         /// <summary>
-        /// The preferred on the fly compression schemes
+        /// The preferred on the fly compression schemes (in order of preference), only applied to compressible mime types.
         /// </summary>
         public String Compression = "br: Balanced, deflate: Balanced, gzip: Balanced";
 
         /// <summary>
-        /// If true, compressed files that have a compressed version may be served, i.e "Test.txt.gzip" may be served in place of "Test.txt" if Test.txt is older or non existent.
+        /// If true, pre-compressed variants of files may be served, i.e "Test.txt.br" may be served in place of "Test.txt" if it's smaller and not older than "Test.txt", or if "Test.txt" doesn't exist.
+        /// The compressed file extensions are the ones registered in the compression manager.
         /// </summary>
         public bool AssumePreCompressed = true;
 
         /// <summary>
-        /// The required auth for these files (null = no auth required, "" = no special auth token is required, but user must be authenticated)
+        /// The required auth for these files (null = no auth required, "" = no special auth token is required, but user must be authenticated, else a comma separated list of required tokens)
         /// </summary>
         public String Auth;
 
@@ -55,6 +60,10 @@ namespace SysWeaver.Net
         /// </summary>
         public bool IsDynamic;
 
+        /// <summary>
+        /// Copy all settings to another instance.
+        /// </summary>
+        /// <param name="t">The instance to copy to</param>
         public void CopyTo(FileHttpServerModuleWebFolder t)
         {
             t.WebFolder = WebFolder;

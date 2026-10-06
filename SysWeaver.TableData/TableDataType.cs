@@ -13,9 +13,15 @@ namespace SysWeaver.Data
 {
 
 
+    /// <summary>
+    /// Compares members by name and declaring type full name, so that the same member obtained through different
+    /// reflected types (ex: base and derived) is considered equal.
+    /// </summary>
     sealed class MemberInfoComparer : IEqualityComparer<MemberInfo>
     {
-
+        /// <summary>
+        /// The shared instance.
+        /// </summary>
         public static readonly MemberInfoComparer Inst = new MemberInfoComparer();
 
         public bool Equals(MemberInfo x, MemberInfo y)
@@ -33,13 +39,40 @@ namespace SysWeaver.Data
         }
     }
 
+    /// <summary>
+    /// Per row type metadata and compiled code used by <see cref="TableDataTools"/>.
+    /// The static constructor reflects over <typeparamref name="T"/> once and compiles expression trees for value extraction,
+    /// sorting, filtering, text search and translation; everything is immutable afterwards and thread safe.
+    /// </summary>
+    /// <typeparam name="T">The row type.</typeparam>
+    /// <remarks>
+    /// Columns are created from public instance fields and properties (ordered by <see cref="TableDataOrderAttribute"/>) whose type is a supported
+    /// primitive (see <see cref="TableDataTools.ValidDataTypes"/>), an enum or a nullable of these.
+    /// Members of other types are skipped, unless the member or its type has a <see cref="TableDataExpandAttribute"/>, in which case its members are added as prefixed columns.
+    /// Invalid configuration (ex: unknown primary key column names) throws from the static constructor, i.e. a <see cref="TypeInitializationException"/> on first use.
+    /// </remarks>
     static class TableDataType<T>
     {
 
+        /// <summary>
+        /// Column name to index (in <see cref="Cols"/> and in the extracted value arrays).
+        /// </summary>
         public static readonly IReadOnlyDictionary<String, int> NameToColumnIndex;
+
+        /// <summary>
+        /// The names of the primary key columns (in key order), from <see cref="TableDataPrimaryKeyAttribute"/> or the first member with a <see cref="TableDataKeyAttribute"/>.
+        /// </summary>
         public static readonly IReadOnlyList<String> PrimaryKey;
+
+        /// <summary>
+        /// The names of the (non primary) key columns, members with a <see cref="TableDataKeyAttribute"/>.
+        /// </summary>
         public static readonly IReadOnlyList<String> Keys;
 
+        /// <summary>
+        /// Translates the <see cref="AutoTranslateAttribute"/> columns of an extracted values array in place, null if no column is translatable.
+        /// Parameters: translator, target language, values array, effort, retention.
+        /// </summary>
         public static readonly Func<ITranslator, String, Object[], TranslationEffort, TranslationCacheRetention, Task> TranslateRow;
      
         static TableDataType()
@@ -205,6 +238,11 @@ namespace SysWeaver.Data
         static readonly ParameterExpression ValuesParam = Expression.Parameter(typeof(Object[]), "values");
         
 
+        /// <summary>
+        /// Build an expression that translates the value at <paramref name="colIndex"/> in the values array (if the member has an <see cref="AutoTranslateAttribute"/>),
+        /// including static and dynamic (other column values) contexts from <see cref="AutoTranslateContextAttribute"/>'s.
+        /// </summary>
+        /// <returns>An expression returning a <see cref="Task"/>, or null if the member isn't translatable.</returns>
         static Expression GetTranslateColumnExp(MemberInfo mi, int colIndex, IReadOnlyDictionary<MemberInfo, int> memberCols)
         {
             var attr = mi.GetCustomAttribute<AutoTranslateAttribute>(true);
@@ -396,6 +434,10 @@ namespace SysWeaver.Data
             return fnc;
         }
 
+        /// <summary>
+        /// Add the column (or columns, for expanded members) for a member, including its extraction, sort and filter functions.
+        /// </summary>
+        /// <returns>True if a column was added for the member itself, false if it was ignored or expanded.</returns>
         static internal bool GetColumn(MemberInfo x,
             Dictionary<MemberInfo, int> members,
             List<TableDataColumn> cols,
@@ -614,6 +656,10 @@ namespace SysWeaver.Data
 
         
 
+        /// <summary>
+        /// Create the filter functions for a column, one per <see cref="TableDataFilterOps"/> value times 4 (case sensitivity and inversion),
+        /// in the order expected by <see cref="Filters"/>.
+        /// </summary>
         static void GetFilters(out List<Func<IEnumerable<T>, String, IEnumerable<T>>> filters, out List<Func<T, String, bool>> singleFilter, Expression getCompareValueExp, Expression value, Expression valueString, ParameterExpression compareValueObject, ParameterExpression op, ParameterExpression ep)
         {
             filters = new();
@@ -766,10 +812,25 @@ namespace SysWeaver.Data
             // TODO: Add the four new methods!
         }
 
+        /// <summary>
+        /// The columns used for typed tables (<see cref="TypedTableData{T}"/>), i.e. <see cref="Cols"/> excluding read only and computed members.
+        /// Note that indices in this array doesn't match <see cref="NameToColumnIndex"/>.
+        /// </summary>
         internal static readonly TableDataColumn[] TypedCols;
+
+        /// <summary>
+        /// All columns of the type (shared instances, clone before modifying).
+        /// </summary>
         internal static readonly TableDataColumn[] Cols;
+
+        /// <summary>
+        /// The member type of each column in <see cref="Cols"/>.
+        /// </summary>
         internal static readonly Type[] ColTypes;
 
+        /// <summary>
+        /// Extract the (boxed) column values of a row, in <see cref="Cols"/> order.
+        /// </summary>
         internal static readonly Func<T, Object[]> Extract;
 
         static readonly Func<IEnumerable<T>, IEnumerable<T>>[] SortFn;
@@ -778,11 +839,19 @@ namespace SysWeaver.Data
         static readonly Func<IEnumerable<T>, IEnumerable<T>>[] ThenByDesc;
 
         /// <summary>
-        /// [Column index][(FilerOp * 4) | (CaseSensitive ? 2 : 0) | (Reverse ? 1 : 0)]
+        /// [Column index][(FilterOp * 4) | (CaseSensitive ? 2 : 0) | (Invert ? 1 : 0)]
         /// </summary>
         static readonly Func<IEnumerable<T>, String, IEnumerable<T>>[][] Filters;
 
 
+        /// <summary>
+        /// Apply filters (lazily, using LINQ).
+        /// Filters with a null value or an unknown column name are ignored.
+        /// </summary>
+        /// <param name="fs">The filters, may be null.</param>
+        /// <param name="data">The source data.</param>
+        /// <returns>The filtered sequence, null if <paramref name="data"/> is null.</returns>
+        /// <exception cref="IndexOutOfRangeException">A filter has an undefined <see cref="TableDataFilterBase.Op"/> value (thrown on call).</exception>
         public static IEnumerable<T> Filter(TableDataFilter[] fs, IEnumerable<T> data)
         {
             if (data == null)
@@ -813,6 +882,13 @@ namespace SysWeaver.Data
             return data;
         }
 
+        /// <summary>
+        /// Sort data (lazily, using LINQ).
+        /// </summary>
+        /// <param name="o">Column names to sort by, in priority order, a '-' prefix sorts in reverse. Unknown names are ignored.
+        /// Columns with a <see cref="TableDataSortDescAttribute"/> sort descending by default (and ascending with '-').</param>
+        /// <param name="data">The source data.</param>
+        /// <returns>The sorted sequence, null if <paramref name="data"/> is null.</returns>
         public static IEnumerable<T> Sort(String[] o, IEnumerable<T> data)
         {
             if (data == null)
@@ -843,6 +919,12 @@ namespace SysWeaver.Data
             return data;
         }
 
+        /// <summary>
+        /// Apply the filters and then the sort order of a request (lazily), see <see cref="Filter"/> and <see cref="Sort"/>.
+        /// </summary>
+        /// <param name="request">The request, may not be null.</param>
+        /// <param name="data">The source data.</param>
+        /// <returns>The resulting sequence, null if <paramref name="data"/> is null.</returns>
         public static IEnumerable<T> SortAndFilter(TableDataOrderRequest request, IEnumerable<T> data)
         {
             if (data == null)
@@ -901,6 +983,14 @@ namespace SysWeaver.Data
             return data;
         }
 
+        /// <summary>
+        /// Apply filters, sorting, skip (<see cref="TableDataOrderRequest.Row"/>) and take (<see cref="TableDataOrderRequest.MaxRowCount"/> + <see cref="TableDataOrderRequest.LookAheadCount"/>, capped by <paramref name="maxAllowedRows"/>).
+        /// If <see cref="TableDataOrderRequest.MaxRowCount"/> is zero or negative no limit is applied.
+        /// </summary>
+        /// <param name="request">The request, may not be null.</param>
+        /// <param name="data">The source data.</param>
+        /// <param name="maxAllowedRows">The maximum number of rows to take.</param>
+        /// <returns>The resulting sequence, null if <paramref name="data"/> is null.</returns>
         public static IEnumerable<T> SortAndFilterAndLimit(TableDataOrderRequest request, IEnumerable<T> data, long maxAllowedRows= 10000)
         {
             if (data == null)
@@ -930,6 +1020,13 @@ namespace SysWeaver.Data
             return data;
         }
 
+        /// <summary>
+        /// Same as <see cref="SortAndFilterAndLimit"/> but without applying any filters.
+        /// </summary>
+        /// <param name="request">The request, may not be null.</param>
+        /// <param name="data">The source data.</param>
+        /// <param name="maxAllowedRows">The maximum number of rows to take.</param>
+        /// <returns>The resulting sequence, null if <paramref name="data"/> is null.</returns>
         public static IEnumerable<T> SortAndLimit(TableDataOrderRequest request, IEnumerable<T> data, long maxAllowedRows = 10000)
         {
             if (data == null)
@@ -959,6 +1056,14 @@ namespace SysWeaver.Data
             return data;
         }
 
+        /// <summary>
+        /// Enumerate data and extract up to <paramref name="limit"/> rows, then keep enumerating up to <paramref name="lookAhead"/> more items only to count them.
+        /// </summary>
+        /// <param name="count">The number of extracted rows plus the number of look ahead items found.</param>
+        /// <param name="data">The data (should already be filtered, sorted and skipped).</param>
+        /// <param name="limit">Maximum number of rows to extract, zero or negative means no limit.</param>
+        /// <param name="lookAhead">Number of additional items to count.</param>
+        /// <returns>The extracted rows, never null.</returns>
         public static TableDataRow[] ExtractGet(out long count, IEnumerable<T> data, long limit = long.MaxValue, long lookAhead = 0)
         {
             count = 0;
@@ -989,6 +1094,14 @@ namespace SysWeaver.Data
 
 
 
+        /// <summary>
+        /// Same as <see cref="ExtractGet"/> but returns the row objects themselves.
+        /// </summary>
+        /// <param name="count">The number of returned rows plus the number of look ahead items found.</param>
+        /// <param name="data">The data (should already be filtered, sorted and skipped).</param>
+        /// <param name="limit">Maximum number of rows to return, zero or negative means no limit.</param>
+        /// <param name="lookAhead">Number of additional items to count.</param>
+        /// <returns>The rows, never null.</returns>
         public static T[] ExtractTypedGet(out long count, IEnumerable<T> data, long limit = long.MaxValue, long lookAhead = 0)
         {
             count = 0;
@@ -1016,6 +1129,11 @@ namespace SysWeaver.Data
         static readonly TableDataRow[] Empty = Array.Empty<TableDataRow>();
         static readonly T[] EmptyT = Array.Empty<T>();
 
+        /// <summary>
+        /// Extract all rows (no filtering, sorting or limit) into a table with all columns.
+        /// </summary>
+        /// <param name="data">The data.</param>
+        /// <returns>A new table, <see cref="CommonTableData.RowCount"/> is not set.</returns>
         public static TableData GetAll(IEnumerable<T> data)
         {
             var rows = ExtractGet(out var _, data);
@@ -1025,6 +1143,12 @@ namespace SysWeaver.Data
                 Cols = Cols,
             };
         }
+        /// <summary>
+        /// Get all rows (no filtering, sorting or limit) into a typed table with the <see cref="TypedCols"/> columns.
+        /// </summary>
+        /// <typeparam name="R">The typed table type to create.</typeparam>
+        /// <param name="data">The data.</param>
+        /// <returns>A new table, <see cref="CommonTableData.RowCount"/> is not set.</returns>
         public static R GetAllTyped<R>(IEnumerable<T> data) where R : TypedTableData<T>, new()
         {
             var rows = ExtractTypedGet(out var _, data);
@@ -1035,8 +1159,24 @@ namespace SysWeaver.Data
             };
         }
 
+        /// <summary>
+        /// Get the searchable texts of a row (all string members with a positive <see cref="TableDataSearchAttribute"/> weight, default 1), ordered by descending weight.
+        /// Null if the type has no searchable members.
+        /// </summary>
         static readonly Func<T, String[]> GetTexts;
 
+        /// <summary>
+        /// Process a table request: filter, sort, text search (results ordered by rank), skip, limit (with look ahead) and extract rows.
+        /// </summary>
+        /// <param name="request">The request, may not be null.</param>
+        /// <param name="data">The source data.</param>
+        /// <param name="title">The table title, only set when the columns are included.</param>
+        /// <param name="search">The text search to use, defaults to <see cref="TableDataTools.DefaultSearch"/>.</param>
+        /// <returns>The table. Columns and title are omitted if the request change counter matches (see <see cref="TableDataTools.HandleCc(TableData, long, TableDataColumn[], string)"/>).</returns>
+        /// <remarks>
+        /// Any exception during processing (including from the source enumerable) is swallowed and results in an empty table.
+        /// No server side cap is applied to <see cref="TableDataOrderRequest.MaxRowCount"/>, zero or negative returns all rows.
+        /// </remarks>
         public static TableData Get(TableDataRequest request, IEnumerable<T> data, String title, ITextSearch search = null)
         {
             long count = 0;
@@ -1077,6 +1217,16 @@ namespace SysWeaver.Data
             }.HandleCc(request.Cc, Cols, title);
         }
 
+        /// <summary>
+        /// Same as <see cref="Get"/> but returns the row objects in a typed table with the <see cref="TypedCols"/> columns.
+        /// </summary>
+        /// <typeparam name="R">The typed table type to create.</typeparam>
+        /// <param name="request">The request, may not be null.</param>
+        /// <param name="data">The source data.</param>
+        /// <param name="title">The table title, only set when the columns are included.</param>
+        /// <param name="search">The text search to use, defaults to <see cref="TableDataTools.DefaultSearch"/>.</param>
+        /// <returns>The typed table.</returns>
+        /// <remarks>Any exception during processing is swallowed and results in an empty table.</remarks>
         public static R GetTyped<R>(TableDataRequest request, IEnumerable<T> data, String title, ITextSearch search = null) where R : TypedTableData<T>, new()
         {
             long count = 0;

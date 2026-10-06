@@ -5,25 +5,48 @@ using System.Text;
 namespace SysWeaver
 {
 
+    /// <summary>
+    /// The type of a domain name, as detected by <see cref="StringValidate.DomainName(string)"/>
+    /// </summary>
     public enum DomainTypes
     {
+        /// <summary>
+        /// A NetBIOS (windows) computer name (no '.' or ':')
+        /// </summary>
         ComputerName,
+        /// <summary>
+        /// A DNS domain name (contains a '.' and the last part isn't numeric)
+        /// </summary>
         DnsName,
+        /// <summary>
+        /// An IPv4 address (the part after the last '.' is numeric)
+        /// </summary>
         IPv4,
+        /// <summary>
+        /// An IPv6 address (contains a ':' but no '.')
+        /// </summary>
         IPv6,
     }
 
 
+    /// <summary>
+    /// Validation of common string formats (computer names, DNS names, IP addresses, emails and numbers).
+    /// All methods throws an <see cref="Exception"/> with a human readable message if the input is invalid.
+    /// The validation is a simplified (not RFC complete) syntax check.
+    /// </summary>
     public static class StringValidate
     {
 
+        /// <summary>
+        /// Chars that are not allowed in a NetBIOS computer name
+        /// </summary>
         static readonly Char[] InvalidComputerNameChars = "\\/:*?\"<>|.".ToCharArray();
 
         /// <summary>
-        /// Validate that the input is valid for a NetBIOS computer name (windows)
+        /// Validate that the input is valid for a NetBIOS computer name (windows): at most 15 chars, no white spaces and none of \ / : * ? " &lt; &gt; | .
         /// </summary>
-        /// <param name="name">The string to test</param>
-        /// <exception cref="Exception"></exception>
+        /// <param name="name">The string to test (an empty string is accepted)</param>
+        /// <exception cref="Exception">The name is null or invalid</exception>
         public static void ComputerName(String name)
         {
             if (name == null)
@@ -42,10 +65,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Validate that the input is valid for a DNS domain name 
+        /// Validate that the input is valid for a DNS domain name: 2 - 255 bytes (UTF-8), parts separated by '.', every part is non empty and only contains letters (any unicode letter), digits or '-',
+        /// may not start with a '-' or end with a '-' or '.'
         /// </summary>
         /// <param name="name">The string to test</param>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="Exception">The name is null or invalid</exception>
+        /// <exception cref="IndexOutOfRangeException">The name contains non ASCII chars (the UTF-8 byte count is used as the char count)</exception>
         public static void DnsName(String name)
         {
             if (name == null)
@@ -86,10 +111,10 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Validate that the input is valid for an IPv4 address
+        /// Validate that the input is valid for an IPv4 address (four decimal numbers 0 - 255 separated by '.')
         /// </summary>
         /// <param name="name">The string to test</param>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="Exception">The address is null or invalid</exception>
         public static void IpV4(String name)
         {
             if (name == null)
@@ -105,10 +130,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Validate that the input is valid for an IPv6 address
+        /// Validate that the input is valid for an IPv6 address, with an optional "/prefix length" (1 - 128).
+        /// The address must have 2 - 8 parts separated by ':', where every non empty part must be a DECIMAL number 0 - 65535
+        /// (so addresses with hex digits a - f, like "fe80::1", are rejected).
         /// </summary>
         /// <param name="name">The string to test</param>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="Exception">The address is null or invalid</exception>
         public static void IpV6(String name)
         {
             if (name == null)
@@ -141,10 +168,12 @@ namespace SysWeaver
 
         /// <summary>
         /// Validate that the input is valid for a Domain name (IPv4, IPv6 address, DNS or Computer name).
+        /// The type is detected from the format: no '.' and no ':' is a computer name, no '.' but a ':' is an IPv6 address,
+        /// a numeric last part (after the last '.') is an IPv4 address, else it's a DNS name. The detected type is then validated.
         /// </summary>
         /// <param name="name">The string to test</param>
         /// <returns>The type of domain</returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="Exception">The name is null, empty or invalid (for the detected type)</exception>
         public static DomainTypes DomainName(String name)
         {
             if (name == null)
@@ -216,11 +245,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Validate that the input is valid for an email (name@domainname)
+        /// Validate that the input is valid for an email (name@domainname): 3 - 254 chars, exactly one '@', a non empty name and a valid domain name (see <see cref="DomainName(string)"/>).
+        /// The name part is not validated (except that it may not end with a white space).
         /// </summary>
         /// <param name="email">The string to test</param>
-        /// <returns>The type of domain</returns>
-        /// <exception cref="Exception"></exception>
+        /// <returns>The type of the domain name part</returns>
+        /// <exception cref="Exception">The email is null or invalid</exception>
         public static DomainTypes Email(String email)
         {
             if (email == null)
@@ -256,13 +286,14 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Validate that a string only contains numeric and optionally is within some interval
+        /// Validate that a string only contains decimal digits ('0' - '9') and optionally is within some interval
         /// </summary>
         /// <param name="s">The string to test</param>
         /// <param name="errPrefix">A prefix to add to any exception texts</param>
-        /// <param name="min">An optional minimum allowed value</param>
-        /// <param name="max">An optional maximum allowed value</param>
-        /// <exception cref="Exception"></exception>
+        /// <param name="min">An optional minimum allowed value (inclusive)</param>
+        /// <param name="max">An optional maximum allowed value (inclusive)</param>
+        /// <exception cref="Exception">The string is null, empty, contains a non digit or is out of range</exception>
+        /// <exception cref="OverflowException">The value doesn't fit in an <see cref="int"/></exception>
         public static void Numeric(String s, String errPrefix, int? min = null, int? max = null)
         {
             if (s == null)
@@ -291,13 +322,15 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Validate that a string only contains numeric and optionally is within some interval
+        /// Validate that a string only contains hexadecimal digits ('0' - '9', 'a' - 'f', 'A' - 'F') and optionally is within some interval.
+        /// Note: the max check is currently broken (it checks val &lt; max), so <paramref name="max"/> only rejects values below it.
         /// </summary>
         /// <param name="s">The string to test</param>
         /// <param name="errPrefix">A prefix to add to any exception texts</param>
-        /// <param name="min">An optional minimum allowed value</param>
-        /// <param name="max">An optional maximum allowed value</param>
-        /// <exception cref="Exception"></exception>
+        /// <param name="min">An optional minimum allowed value (inclusive)</param>
+        /// <param name="max">An optional maximum allowed value (inclusive)</param>
+        /// <exception cref="Exception">The string is null, empty, contains a non hex digit or is out of range</exception>
+        /// <exception cref="OverflowException">The value doesn't fit in 32 bits (more than 8 significant digits), values with 8 digits and the top bit set are parsed as negative numbers</exception>
         public static void Hex(String s, String errPrefix, int? min = null, int? max = null)
         {
             if (s == null)

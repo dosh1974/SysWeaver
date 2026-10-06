@@ -8,8 +8,13 @@ namespace SysWeaver.Data
 
 
     /// <summary>
-    /// Extensions method for manipulating table data
+    /// Extension methods for manipulating table data (<see cref="BaseTableData"/>).
     /// </summary>
+    /// <remarks>
+    /// All methods return a new table and never modify the source table, but cell values (and column objects) are shared, not cloned.
+    /// Column names are matched case sensitive (ordinal). The resulting tables do not keep the <see cref="CommonTableData.Title"/> (except <see cref="Filter(BaseTableData, TableDataOrderRequest)"/>).
+    /// Used by the "EditTableData" web API through <see cref="ApplyOps(BaseTableData, Func{String, BaseTableData}, TableDataOp[])"/>.
+    /// </remarks>
     public static class TableDataEdit
     {
 
@@ -18,8 +23,9 @@ namespace SysWeaver.Data
         /// Build a new table with the selected columns
         /// </summary>
         /// <param name="data">The table to manipulate</param>
-        /// <param name="columnNames">The columns to keep (in desired order)</param>
-        /// <returns>A new table with only the selected columns</returns>
+        /// <param name="columnNames">The columns to keep (in desired order), the same column may be selected multiple times</param>
+        /// <returns>A new table with only the selected columns, an empty table (no columns or rows) if <paramref name="columnNames"/> is empty</returns>
+        /// <exception cref="Exception">If the table have no columns or if a column name isn't found</exception>
         public static BaseTableData SelectColumns(this BaseTableData data, params String[] columnNames)
         {
             var lookup = BuildLookUpValidateNames(data, columnNames);
@@ -46,8 +52,9 @@ namespace SysWeaver.Data
         /// Build a new table with some columns removed
         /// </summary>
         /// <param name="data">The table to manipulate</param>
-        /// <param name="columnNames">The columns to remove</param>
-        /// <returns>A new table without the selected columns</returns>
+        /// <param name="columnNames">The columns to remove (duplicates are ignored)</param>
+        /// <returns>A new table without the selected columns, an empty table (no columns or rows) if all columns are removed</returns>
+        /// <exception cref="Exception">If the table have no columns or if a column name isn't found</exception>
         public static BaseTableData RemoveColumns(this BaseTableData data, params String[] columnNames)
         {
             BuildLookUpValidateNames(data, columnNames);
@@ -78,11 +85,22 @@ namespace SysWeaver.Data
 
         /// <summary>
         /// Add new (computed) column(s).
+        /// Each new column is placed using <see cref="NewTableDataColumn.InsertBefore"/> or <see cref="NewTableDataColumn.InsertAfter"/> (appended last if neither is set)
+        /// and is initialized by evaluating <see cref="NewTableDataColumn.Expression"/> for every row.
         /// </summary>
         /// <param name="data">The table to manipulate</param>
-        /// <param name="columns">The columns to add</param>
-        /// <returns></returns>
-        /// <exception cref="ArgumentException"></exception>
+        /// <param name="columns">The columns to add (processed in order, a later column may be positioned relative to an earlier new column)</param>
+        /// <returns>A new table with the added columns</returns>
+        /// <exception cref="ArgumentException">If a new column name already exists, a referenced insert position column isn't found,
+        /// the column type is unknown (resolved using TypeFinder) or the expression can't be compiled</exception>
+        /// <exception cref="Exception">If the table have no columns</exception>
+        /// <remarks>
+        /// Expression variables are the names of existing columns (and new columns defined earlier in <paramref name="columns"/>) whose values
+        /// can be converted to the new column type, other columns are silently unavailable.
+        /// If the expression is empty, the type have no expression evaluator, or no column can be used as a variable,
+        /// the default value of the type is used for all rows.
+        /// A null <see cref="TableDataBaseColumn.Desc"/> defaults to the expression and a null <see cref="TableDataColumn.Title"/> to the de-camel-cased name.
+        /// </remarks>
         public static BaseTableData AddColumns(this BaseTableData data, params NewTableDataColumn[] columns)
         {
             var lookUp = BuildLookUpValidateNames(data);
@@ -225,12 +243,12 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Append a table to some table, column count and types must match
+        /// Append a table to some table, column count and types must match (column names are not checked).
         /// </summary>
-        /// <param name="data">The table to append data to (at end)</param>
+        /// <param name="data">The table to append data to (at end), it's columns are used for the result</param>
         /// <param name="dataToAppend">The data to append</param>
-        /// <returns>A new table with the content of both tables</returns>
-        /// <exception cref="Exception"></exception>
+        /// <returns>A new table with the rows of both tables (row objects are shared, not copied)</returns>
+        /// <exception cref="Exception">If the column count or any column type differs</exception>
         public static BaseTableData Append(this BaseTableData data, BaseTableData dataToAppend)
         {
             var dcols = data.Cols;
@@ -258,11 +276,11 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Filter, Order a table and optionally keep a limited range of rows.
+        /// Filter, order a table and optionally keep a limited range of rows.
         /// </summary>
         /// <param name="data">The table to filter</param>
-        /// <param name="r">The filter options</param>
-        /// <returns>A new table</returns>
+        /// <param name="r">The filter, order, start row and max row count options</param>
+        /// <returns>A new table, as returned by <see cref="TableDataTools.GetStaticTableFn(TableDataColumn[], IEnumerable{object[]}, string)"/></returns>
         public static BaseTableData Filter(this BaseTableData data, TableDataOrderRequest r)
         {
             var t = new TableDataRequest();
@@ -277,7 +295,7 @@ namespace SysWeaver.Data
         /// Reverse the order of the rows
         /// </summary>
         /// <param name="data">The table to reverse rows</param>
-        /// <returns>A new table</returns>
+        /// <returns>A new table with the same columns and the rows in reverse order</returns>
         public static BaseTableData Reverse(this BaseTableData data)
         {
             var sr = data.Rows;
@@ -300,13 +318,19 @@ namespace SysWeaver.Data
 
         /// <summary>
         /// Build a new table with the selected columns from two different tables.
-        /// The number of rows must be identical
+        /// The number of rows must be identical, rows are combined by index.
         /// </summary>
         /// <param name="data">The first table to select columns from</param>
         /// <param name="other">The other table to select columns from</param>
         /// <param name="columnNames">The columns to keep (in desired order).
-        /// If a column exist in both tables, use a prefix of '-' to take it from the first or '+' to take it from the other table</param>
-        /// <returns>A new table with the selected columns</returns>
+        /// If a column exist in both tables, use a prefix of '-' to take it from the first or '+' to take it from the other table.
+        /// A name without prefix is taken from the first table if it exists there, else from the other table.</param>
+        /// <returns>A new table with the selected columns, an empty table (no columns or rows) if <paramref name="columnNames"/> is empty</returns>
+        /// <exception cref="Exception">If the row counts differ or a table have no columns</exception>
+        /// <exception cref="KeyNotFoundException">If a column name isn't found</exception>
+        /// <remarks>
+        /// NOTE: The '-' / '+' prefix is currently NOT stripped before the lookup, so prefixed names always throw <see cref="KeyNotFoundException"/> (see bug report).
+        /// </remarks>
         public static BaseTableData MergeColumns(this BaseTableData data, BaseTableData other, params String[] columnNames)
         {
             var rows1 = data.Rows;
@@ -382,6 +406,12 @@ namespace SysWeaver.Data
         }
 
 
+        /// <summary>
+        /// Aggregate columns (NOT IMPLEMENTED).
+        /// </summary>
+        /// <param name="data">The table to aggregate</param>
+        /// <param name="columns">The column aggregations to perform</param>
+        /// <returns>Currently always null</returns>
         public static BaseTableData Aggregate(this BaseTableData data, params TableColumnAggregation[] columns)
         {
             return null;
@@ -390,12 +420,15 @@ namespace SysWeaver.Data
 
 
         /// <summary>
-        /// Build a new table by appling a number of operations on it
+        /// Build a new table by applying a number of operations on it.
+        /// For each <see cref="TableDataOp"/> the steps are performed in this order: append rows, merge columns, compute columns,
+        /// select columns, remove columns and finally sort / filter rows.
         /// </summary>
         /// <param name="data">The table data to manipulate</param>
         /// <param name="referenceSolver">A function that resolves a data table reference (required for append rows and merge columns only)</param>
         /// <param name="ops">The operations to perform on the data (in order)</param>
-        /// <returns>The new table data</returns>
+        /// <returns>The new table data, <paramref name="data"/> itself if <paramref name="ops"/> is null or contains no actual operations</returns>
+        /// <remarks>Any exception thrown by the individual operations is propagated.</remarks>
         public static BaseTableData ApplyOps(this BaseTableData data, Func<String, BaseTableData> referenceSolver, params TableDataOp[] ops)
         {
             if (ops == null)

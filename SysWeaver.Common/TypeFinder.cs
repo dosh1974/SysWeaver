@@ -16,6 +16,12 @@ namespace SysWeaver
         /// The type is searched for using Type.GetType, then in all loaded assemblies and finally (if the name is assembly qualified) by loading the assembly from the executable folder.
         /// The result is cached (also if not found), except when an exception is thrown.
         /// </summary>
+        /// <remarks>
+        /// Thread safe. The cache is unbounded, so avoid passing untrusted (user supplied) names, every distinct name adds an entry.
+        /// Assemblies are loaded using <see cref="Assembly.LoadFile(string)"/>, which on .NET (Core) loads into a separate load context,
+        /// so types from such an assembly are not identical to the same types loaded by the default context.
+        /// A negative result is cached, so an assembly loaded later will not be detected for a name that previously failed.
+        /// </remarks>
         /// <param name="typeName">The name of the type to find, a full type name, ex: "System.String" or an assembly qualified name, ex: "MyNamespace.MyType, MyAssembly"</param>
         /// <param name="noThrow">If true, always return null instead of throwing</param>
         /// <returns>The type or null if it can't be found (or if <paramref name="typeName"/> is null or empty)</returns>

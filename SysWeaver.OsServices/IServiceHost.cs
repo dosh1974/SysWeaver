@@ -6,11 +6,15 @@ using SysWeaver.MicroService;
 namespace SysWeaver.OsServices
 {
 
+    /// <summary>
+    /// OS specific service system (Windows Service Control Manager, systemd, SysVinit) used by <see cref="ServiceHost.Run"/> to install, control and run the application as a service.
+    /// Instances are created by an <see cref="IServiceHostFactory"/> implementation in an OS specific factory assembly.
+    /// </summary>
     public interface IServiceHost
     {
 
         /// <summary>
-        /// The display name of this service system 
+        /// The display name of this service system (ex: "Windows Service Control Manager", "systemd")
         /// </summary>
         String Name { get; }    
 
@@ -38,52 +42,52 @@ namespace SysWeaver.OsServices
 
 
         /// <summary>
-        /// Run as a daemon (main function of a daemon process)
+        /// Run as a daemon (main function of a daemon process), blocks until the OS service system stops the service.
         /// </summary>
         /// <param name="onStart">Optional callback to execute after all services in the manifest file have been created</param>
-        /// <returns>The exit code</returns>
+        /// <returns>The process exit code (the built-in hosts return 0 when the service stopped normally)</returns>
         int Run(Action<ServiceManager> onStart);
 
         /// <summary>
         /// Return status of the service
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The current status</returns>
         ServiceStatus Status();
 
         /// <summary>
         /// Installs the service (no start)
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The result, ex: <see cref="ServiceResponse.Ok"/> or <see cref="ServiceResponse.AlreadyInstalled"/></returns>
         ServiceResponse Install();
 
         /// <summary>
         /// (Stops and) uninstalls the service
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The result, ex: <see cref="ServiceResponse.Ok"/> or <see cref="ServiceResponse.NotInstalled"/></returns>
         ServiceResponse Uninstall();
 
         /// <summary>
         /// (Install and) start the service
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The result, ex: <see cref="ServiceResponse.Ok"/> or <see cref="ServiceResponse.AlreadyRunning"/></returns>
         ServiceResponse Start();
 
         /// <summary>
         /// Stop the service
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The result, ex: <see cref="ServiceResponse.Ok"/> or <see cref="ServiceResponse.NotRunning"/></returns>
         ServiceResponse Stop();
 
         /// <summary>
         /// Pause a running service
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The result, ex: <see cref="ServiceResponse.Ok"/> or <see cref="ServiceResponse.NotSupported"/></returns>
         ServiceResponse Pause();
 
         /// <summary>
         /// Resume a paused service
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The result, ex: <see cref="ServiceResponse.Ok"/> or <see cref="ServiceResponse.NotPaused"/></returns>
         ServiceResponse Continue();
 
     }

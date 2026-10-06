@@ -4,10 +4,13 @@ using System.Collections.Generic;
 namespace SysWeaver
 {
 
+    /// <summary>
+    /// The standard variables available in managed message templates (in addition to any custom variables).
+    /// </summary>
     public class ManagedVars
     {
         /// <summary>
-        /// The available html vars
+        /// The variables available in html (mail) templates
         /// </summary>
         public static readonly IReadOnlySet<String> HtmlVars = ReadOnlyData.Set(StringComparer.OrdinalIgnoreCase,
             "[Site]",
@@ -36,7 +39,7 @@ namespace SysWeaver
         );
 
         /// <summary>
-        /// The available text message vars
+        /// The variables available in text (and plain text mail) templates
         /// </summary>
         public static readonly IReadOnlySet<String> TextVars = ReadOnlyData.Set(StringComparer.OrdinalIgnoreCase,
             "[Site]",
@@ -59,19 +62,37 @@ namespace SysWeaver
     }
 
 
+    /// <summary>
+    /// A mail message template (subject and body), where each part can be a file name, an embedded resource name or the template text itself.
+    /// </summary>
+    /// <remarks>
+    /// Templates are parsed lazily and cached, if a part is read from a file the cached template is dropped when the file changes.
+    /// Thread safe.
+    /// </remarks>
     public class ManagedMailMessage
     {
+        /// <summary>
+        /// Create a mail message template that only uses the standard variables.
+        /// </summary>
         public ManagedMailMessage()
         {
         }
 
+        /// <summary>
+        /// Create a mail message template that may use some additional variables.
+        /// </summary>
+        /// <param name="vars">Additional variables, ex: "[Amount]"</param>
         public ManagedMailMessage(IReadOnlySet<String> vars)
         {
             Vars = vars.Freeze();
         }
 
+        /// <summary>
+        /// Additional variables (in addition to <see cref="ManagedVars"/>) that the templates may use, may be null.
+        /// </summary>
         public readonly IReadOnlySet<String> Vars;
 
+        /// <inheritdoc/>
         public override string ToString() => Subject;
         
         /// <summary>
@@ -85,13 +106,13 @@ namespace SysWeaver
         public String Body { get; set; }
         
         /// <summary>
-        /// Set to true if the body is html
+        /// Set to true if the body is html (selects <see cref="ManagedVars.HtmlVars"/> instead of <see cref="ManagedVars.TextVars"/>)
         /// </summary>
         public bool IsHtml { get; set; }
 
 
         /// <summary>
-        /// Get texts
+        /// Evaluate the subject and body templates
         /// </summary>
         /// <param name="subject">The subject after evaluation</param>
         /// <param name="body">The body after evaluation</param>

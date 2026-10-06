@@ -8,6 +8,9 @@ namespace SysWeaver
 {
 
 
+    /// <summary>
+    /// Extension methods for getting uniformly distributed random numbers in a range from a <see cref="SecureRng"/> (using rejection sampling, so there is no modulo bias).
+    /// </summary>
     public static class SecureRngExt
     {
         /// <summary>
@@ -15,9 +18,10 @@ namespace SysWeaver
         /// </summary>
         /// <param name="r">The rng to use</param>
         /// <param name="maxValue">The maximum values (exclusive)</param>
-        /// <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask()</param>
-        /// <returns>A random values in the [0, maxValue) interval</returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask() (0 means that it's computed)</param>
+        /// <returns>A random value in the [0, maxValue) interval</returns>
+        /// <exception cref="Exception">Debug builds only: <paramref name="maxValue"/> is 0</exception>
+        /// <remarks>A <paramref name="maxValue"/> of 0 is invalid, in release builds it never returns (infinite loop)</remarks>
         public static UInt32 GetUInt32Max(this SecureRng r, UInt32 maxValue, UInt32 mask = 0)
         {
 #if DEBUG
@@ -39,9 +43,10 @@ namespace SysWeaver
         /// </summary>
         /// <param name="r">The rng to use</param>
         /// <param name="maxValue">The maximum values (exclusive)</param>
-        /// <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask()</param>
-        /// <returns>A random values in the [0, maxValue) interval</returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask() (0 means that it's computed)</param>
+        /// <returns>A random value in the [0, maxValue) interval</returns>
+        /// <exception cref="Exception">Debug builds only: <paramref name="maxValue"/> is 0</exception>
+        /// <remarks>A <paramref name="maxValue"/> of 0 is invalid, in release builds it never returns (infinite loop)</remarks>
         public static UInt64 GetUInt64Max(this SecureRng r, UInt64 maxValue, UInt64 mask = 0)
         {
 #if DEBUG
@@ -64,9 +69,10 @@ namespace SysWeaver
         /// </summary>
         /// <param name="r">The rng to use</param>
         /// <param name="maxValue">The maximum values (exclusive)</param>
-        /// <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask()</param>
-        /// <returns>A random values in the [0, maxValue) interval</returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask() (0 means that it's computed)</param>
+        /// <returns>A random value in the [0, maxValue) interval</returns>
+        /// <exception cref="Exception">Debug builds only: <paramref name="maxValue"/> is 0 or negative</exception>
+        /// <remarks>A <paramref name="maxValue"/> that is 0 or negative is invalid, in release builds the result is undefined (a negative value, or it never returns)</remarks>
         public static Int32 GetInt32Max(this SecureRng r, Int32 maxValue, Int32 mask = 0)
         {
 #if DEBUG
@@ -88,9 +94,10 @@ namespace SysWeaver
         /// </summary>
         /// <param name="r">The rng to use</param>
         /// <param name="maxValue">The maximum values (exclusive)</param>
-        /// <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask()</param>
-        /// <returns>A random values in the [0, maxValue) interval</returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask() (0 means that it's computed)</param>
+        /// <returns>A random value in the [0, maxValue) interval</returns>
+        /// <exception cref="Exception">Debug builds only: <paramref name="maxValue"/> is 0 or negative</exception>
+        /// <remarks>A <paramref name="maxValue"/> that is 0 or negative is invalid, in release builds the result is undefined (a negative value, or it never returns)</remarks>
         public static Int64 GetInt64Max(this SecureRng r, Int64 maxValue, Int64 mask = 0)
         {
 #if DEBUG
@@ -108,12 +115,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get a random number with in an inclusive range [min, max]
+        /// Get a random number within an inclusive range [min, max] (if min is greater than max they are swapped)
         /// </summary>
         /// <param name="r">The rng to use</param>
         /// <param name="min">The minimum inclusive value</param>
         /// <param name="max">The maximum inclusive value</param>
-        /// <returns>A random values in the [min, max] interval</returns>
+        /// <returns>A random value in the [min, max] interval</returns>
+        /// <remarks>The range is computed without overflow checks, the difference between max and min must be less than Int32.MaxValue (else the result is wrong or the call never returns)</remarks>
         public static Int32 InRangeInt32(this SecureRng r, Int32 min, Int32 max)
         {
             var range = max - min;
@@ -129,12 +137,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get a random number with in an inclusive range [min, max]
+        /// Get a random number within an inclusive range [min, max] (if min is greater than max they are swapped)
         /// </summary>
         /// <param name="r">The rng to use</param>
         /// <param name="min">The minimum inclusive value</param>
         /// <param name="max">The maximum inclusive value</param>
-        /// <returns>A random values in the [min, max] interval</returns>
+        /// <returns>A random value in the [min, max] interval</returns>
+        /// <remarks>The range is computed without overflow checks, the difference between max and min must be less than Int64.MaxValue (else the result is wrong or the call never returns)</remarks>
         public static Int64 InRangeInt64(this SecureRng r, Int64 min, Int64 max)
         {
             var range = max - min;
@@ -150,12 +159,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get a random number with in an inclusive range [min, max]
+        /// Get a random number within an inclusive range [min, max] (if min is greater than max they are swapped)
         /// </summary>
         /// <param name="r">The rng to use</param>
         /// <param name="min">The minimum inclusive value</param>
         /// <param name="max">The maximum inclusive value</param>
-        /// <returns>A random values in the [min, max] interval</returns>
+        /// <returns>A random value in the [min, max] interval</returns>
+        /// <remarks>The range is computed without overflow checks, the full range [0, UInt32.MaxValue] is not supported (else the result is wrong or the call never returns)</remarks>
         public static UInt32 InRangeUInt32(this SecureRng r, UInt32 min, UInt32 max)
         {
             var range = max - min;
@@ -171,12 +181,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get a random number with in an inclusive range [min, max]
+        /// Get a random number within an inclusive range [min, max] (if min is greater than max they are swapped)
         /// </summary>
         /// <param name="r">The rng to use</param>
         /// <param name="min">The minimum inclusive value</param>
         /// <param name="max">The maximum inclusive value</param>
-        /// <returns>A random values in the [min, max] interval</returns>
+        /// <returns>A random value in the [min, max] interval</returns>
+        /// <remarks>The range is computed without overflow checks, the full range [0, UInt64.MaxValue] is not supported (else the result is wrong or the call never returns)</remarks>
         public static UInt64 InRangeUInt64(this SecureRng r, UInt64 min, UInt64 max)
         {
             var range = max - min;
@@ -194,17 +205,25 @@ namespace SysWeaver
 
     }
 
+    /// <summary>
+    /// Extension methods for creating random numeric codes (ex: one time codes sent by email / sms)
+    /// </summary>
     public static class NumericCodeRngExt
     {
         /// <summary>
-        /// Get a random numeric code of N-digits as a string
+        /// Get a random numeric code of N-digits as a string, avoiding codes that are easy to guess (long repeats or series)
         /// </summary>
         /// <param name="r">The rng to use</param>
-        /// <param name="numDigits">Number of digits (min 1)</param>
+        /// <param name="numDigits">Number of digits (min 1, the digits are stack allocated so keep it small)</param>
         /// <param name="maxRepeat">Maximum number of repeated digits, Ex: if 2, "223311" is ok, "153444" is not ok</param>
         /// <param name="maxInc">Maximum number of digits in an increasing or decreasing series, Ex: if 3, "123890" is ok, "543299" is not ok</param>
         /// <param name="nonZeroFirst">If true, the first number may not be 0</param>
         /// <returns>A "random" numerical string obeying the above rules</returns>
+        /// <exception cref="IndexOutOfRangeException"><paramref name="numDigits"/> is less than 1</exception>
+        /// <remarks>
+        /// The repeat and series counters are shared and only reset by a step larger than one, so the rules are applied more strictly than described
+        /// (ex: with the defaults "112234" is rejected), the codes are therefore slightly less than uniformly random.
+        /// </remarks>
         public static String GetNumericCode(this SecureRng r, int numDigits = 6, int maxRepeat = 2, int maxInc = 3, bool nonZeroFirst = true)
         {
             int dataMax = numDigits + numDigits;
@@ -272,6 +291,10 @@ namespace SysWeaver
 
     }
 
+    /// <summary>
+    /// Extension methods for creating random, base64 encoded identifiers (unguessable tokens)
+    /// </summary>
+    /// <remarks>The identifiers are standard base64 (may contain '+' and '/'), so they must be escaped if used in urls or file names</remarks>
     public static class GuidRngExt
     {
 
@@ -301,10 +324,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Create a 24 character long GUID (144 bits, 10 bytes of rng and 8 bytes of time stamp)
+        /// Create a 24 character long GUID (144 bits, 10 bytes of rng and 8 bytes of time stamp).
+        /// The time stamp (UtcNow ticks + <paramref name="lifeTimeTicks"/>, machine endian) is the first 8 bytes and can be read using <see cref="SecureRng.GetTimeStampFromGuid(string)"/>.
         /// </summary>
         /// <param name="r">The rng to use</param>
-        /// <param name="lifeTimeTicks">Ticks that get added to the time stamp</param>
+        /// <param name="lifeTimeTicks">Ticks that get added to the time stamp (ex: to encode an expiration time)</param>
         /// <returns>A GUID as a string</returns>
         public static String GetTimeStampGuid24(this SecureRng r, long lifeTimeTicks = 0)
         {
@@ -315,10 +339,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Create a 48 character long GUID (288 bits, 28 bytes of rng and 8 bytes of time stamp)
+        /// Create a 48 character long GUID (288 bits, 28 bytes of rng and 8 bytes of time stamp).
+        /// The time stamp (UtcNow ticks + <paramref name="lifeTimeTicks"/>, machine endian) is the first 8 bytes and can be read using <see cref="SecureRng.GetTimeStampFromGuid(string)"/>.
         /// </summary>
         /// <param name="r">The rng to use</param>
-        /// <param name="lifeTimeTicks">Ticks that get added to the time stamp</param>
+        /// <param name="lifeTimeTicks">Ticks that get added to the time stamp (ex: to encode an expiration time)</param>
         /// <returns>A GUID as a string</returns>
         public static String GetTimeStampGuid48(this SecureRng r, long lifeTimeTicks = 0)
         {
@@ -332,8 +357,20 @@ namespace SysWeaver
     }
 
 
+    /// <summary>
+    /// A cryptographically secure random number generator (wraps <see cref="RandomNumberGenerator"/>), instances are pooled.
+    /// Use the pattern: using var rng = SecureRng.Get();
+    /// </summary>
+    /// <remarks>
+    /// Dispose returns the instance to a shared pool, so it must not be used after it's disposed (and must not be disposed twice).
+    /// Extension methods are found in <see cref="SecureRngExt"/>, <see cref="NumericCodeRngExt"/> and <see cref="GuidRngExt"/>.
+    /// </remarks>
     public sealed class SecureRng : IDisposable
     {
+        /// <summary>
+        /// Get an instance from the pool (or create a new one if the pool is empty), dispose it when done to return it to the pool
+        /// </summary>
+        /// <returns>An instance that is owned by the caller until disposed</returns>
         public static SecureRng Get()
         {
             var i = Instances;
@@ -343,9 +380,33 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Fill an array with random bytes
+        /// </summary>
+        /// <param name="data">The array to fill</param>
+        /// <exception cref="ArgumentNullException"><paramref name="data"/> is null</exception>
         public void GetBytes(Byte[] data) => Rng.GetBytes(data);
+        /// <summary>
+        /// Fill a part of an array with random bytes
+        /// </summary>
+        /// <param name="data">The array to fill</param>
+        /// <param name="offset">The index of the first byte to fill</param>
+        /// <param name="count">The number of bytes to fill</param>
+        /// <exception cref="ArgumentNullException"><paramref name="data"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> or <paramref name="count"/> is negative</exception>
+        /// <exception cref="ArgumentException">The range is outside of the array</exception>
         public void GetBytes(Byte[] data, int offset, int count) => Rng.GetBytes(data, offset, count);
+        /// <summary>
+        /// Fill a span with random bytes
+        /// </summary>
+        /// <param name="data">The span to fill</param>
         public void GetBytes(Span<Byte> data) => Rng.GetBytes(data);
+        /// <summary>
+        /// Get a new array with random bytes
+        /// </summary>
+        /// <param name="count">The number of bytes</param>
+        /// <returns>A new array with <paramref name="count"/> random bytes</returns>
+        /// <exception cref="OverflowException"><paramref name="count"/> is negative</exception>
         public Byte[] GetBytes(int count)
         {
             var t = GC.AllocateUninitializedArray<Byte>(count);
@@ -354,6 +415,9 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Return this instance to the pool (it must not be used after this)
+        /// </summary>
         public void Dispose()
         {
             Instances.Push(this);
@@ -373,13 +437,13 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Create a 24 character long GUID (144 bits, 18 bytes of randomness)
+        /// Create a 24 character long GUID (144 bits, 18 bytes of randomness), base64 encoded.
         /// </summary>
         /// <returns>A GUID as a string</returns>
         public static String GetHashGuid24()
         {
             using var r = Get();
-            Span<Byte> span = stackalloc Byte[1];
+            Span<Byte> span = stackalloc Byte[18];
             r.GetBytes(span);
             return Convert.ToBase64String(span);
         }
@@ -399,7 +463,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Create a 24 character long GUID (144 bits, 18 bytes of hash value)
+        /// Create a deterministic 24 character long GUID (144 bits, the first 18 bytes of the SHA512 hash of the data)
         /// </summary>
         /// <param name="data">Some data (that will get hashed)</param>
         /// <returns>A GUID as a string</returns>
@@ -413,7 +477,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Create a 48 character long GUID (288 bits, 36 bytes of hash value)
+        /// Create a deterministic 48 character long GUID (288 bits, the first 36 bytes of the SHA512 hash of the data)
         /// </summary>
         /// <param name="data">Some data (that will get hashed)</param>
         /// <returns>A GUID as a string</returns>
@@ -429,7 +493,10 @@ namespace SysWeaver
         /// Extract the time stamp from a guid created with GetTimeStampGuid**
         /// </summary>
         /// <param name="guid">A guid created using any of the GetTimeStampGuid**</param>
-        /// <returns></returns>
+        /// <returns>The time stamp in ticks (UTC ticks + the life time ticks used when the guid was created)</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="guid"/> is null</exception>
+        /// <exception cref="FormatException"><paramref name="guid"/> isn't valid base64</exception>
+        /// <exception cref="ArgumentException">The decoded data is shorter than 8 bytes</exception>
         public static long GetTimeStampFromGuid(String guid)
         {
             var data = Convert.FromBase64String(guid);
@@ -440,7 +507,7 @@ namespace SysWeaver
         /// <summary>
         /// Get 8 random bits
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A random value (all values are equally likely)</returns>
         public Byte GetByte()
         {
             Span<Byte> span = stackalloc Byte[1];
@@ -452,7 +519,7 @@ namespace SysWeaver
         /// <summary>
         /// Get 8 random bits
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A random value (all values are equally likely)</returns>
         public SByte GetSByte()
         {
             Span<Byte> span = stackalloc Byte[1];
@@ -463,7 +530,7 @@ namespace SysWeaver
         /// <summary>
         /// Get 16 random bits
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A random value (all values are equally likely)</returns>
         public UInt16 GetUInt16()
         {
             Span<Byte> span = stackalloc Byte[2];
@@ -474,7 +541,7 @@ namespace SysWeaver
         /// <summary>
         /// Get 32 random bits
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A random value (all values are equally likely)</returns>
         public UInt32 GetUInt32()
         {
             Span<Byte> span = stackalloc Byte[4];
@@ -485,7 +552,7 @@ namespace SysWeaver
         /// <summary>
         /// Get 64 random bits
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A random value (all values are equally likely)</returns>
         public UInt64 GetUInt64()
         {
             Span<Byte> span = stackalloc Byte[8];
@@ -497,7 +564,7 @@ namespace SysWeaver
         /// <summary>
         /// Get 16 random bits
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A random value (all values are equally likely)</returns>
         public Int16 GetInt16()
         {
             Span<Byte> span = stackalloc Byte[2];
@@ -509,7 +576,7 @@ namespace SysWeaver
         /// <summary>
         /// Get 32 random bits
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A random value (all values are equally likely)</returns>
         public Int32 GetInt32()
         {
             Span<Byte> span = stackalloc Byte[4];
@@ -520,7 +587,7 @@ namespace SysWeaver
         /// <summary>
         /// Get 64 random bits
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A random value (all values are equally likely)</returns>
         public Int64 GetInt64()
         {
             Span<Byte> span = stackalloc Byte[8];

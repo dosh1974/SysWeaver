@@ -6,6 +6,10 @@ using SysWeaver.Data;
 namespace SysWeaver
 {
 
+    /// <summary>
+    /// Meta data about a text file (ex: a log file) that can be listed and viewed using the web UI (see <see cref="IHaveTextFiles"/>).
+    /// The attributes controls how it's presented in a table.
+    /// </summary>
     [TableDataPrimaryKey(nameof(Name))]
     public sealed class TextFile
     {
@@ -58,18 +62,22 @@ namespace SysWeaver
 
     }
 
+    /// <summary>
+    /// Implemented by services that exposes text files (ex: log files) that can be listed and read (ex: by the server manager).
+    /// </summary>
     public interface IHaveTextFiles
     {
         /// <summary>
         /// Get meta data about the available files
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The meta data of all available files</returns>
         IEnumerable<TextFile> GetTextFiles();
 
         /// <summary>
         /// Read the content of a file
         /// </summary>
-        /// <returns>null if the file is unknown or if it failed to be read, else the binary data of the file</returns>
+        /// <param name="name">The name of the file (<see cref="TextFile.Name"/>)</param>
+        /// <returns>Empty memory (default) if the file is unknown or if it failed to be read, else the binary data of the file</returns>
         Task<ReadOnlyMemory<Byte>> TryReadTextFile(String name);
     }
 

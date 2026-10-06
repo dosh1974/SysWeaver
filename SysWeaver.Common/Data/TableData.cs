@@ -8,12 +8,12 @@ namespace SysWeaver.Data
 {
 
     /// <summary>
-    /// Represent rows of data in a type agnostic manner
+    /// Represent rows of data in a type agnostic manner, this is the type returned by table data web API's.
     /// </summary>
     public sealed class TableData : BaseTableData
     {
         /// <summary>
-        /// A change counter for the column information, if the request Cc is equal to this, no column information is sent
+        /// A change counter for the column information, if the request <see cref="TableDataRequest.Cc"/> is equal to this, no column information is sent
         /// </summary>
         [AiIgnore]
         public long Cc;

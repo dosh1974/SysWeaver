@@ -6,8 +6,17 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.Security
 {
+    /// <summary>
+    /// A firewall handler for Windows, using "netsh advfirewall" (requires elevated rights).
+    /// </summary>
+    /// <remarks>
+    /// Existing rules are validated by parsing the (English) output of "netsh advfirewall firewall show rule", on localized systems the rule is always updated.
+    /// </remarks>
     public sealed class WindowsFirewallHandler : IFirewallHandler
     {
+        /// <summary>
+        /// The singleton instance.
+        /// </summary>
         public static readonly IFirewallHandler Instance = new WindowsFirewallHandler();
         static readonly IReadOnlyDictionary<FirewallDirections, String> Dirs = new Dictionary<FirewallDirections, string>
         {
@@ -23,6 +32,18 @@ namespace SysWeaver.Security
         }.Freeze();
 
 
+        /// <summary>
+        /// Make sure that an allow rule with the given name exists for the port (all profiles, any local and remote address).
+        /// An existing rule with the same name is validated and updated (or removed and re-added) if needed.
+        /// </summary>
+        /// <param name="ruleName">The name of the rule</param>
+        /// <param name="port">The local port</param>
+        /// <param name="msg">Optional message handler</param>
+        /// <param name="messagePrefix">The prefix to use for messages, null for the default</param>
+        /// <param name="protocol">The protocol(s)</param>
+        /// <param name="direction">The direction</param>
+        /// <returns>True if a valid rule exists or was added / updated</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="msg"/> is null and the rule already exists and is valid</exception>
         public bool AddOrSet(string ruleName, int port, IMessageHost msg = null, string messagePrefix = null, FirewallProtcols protocol = FirewallProtcols.Tcp, FirewallDirections direction = FirewallDirections.Inbound)
         {
             var p = messagePrefix ?? FirewallHandler.Prefix;
@@ -139,6 +160,13 @@ namespace SysWeaver.Security
             return false;
         }
 
+        /// <summary>
+        /// Delete all rules with the given name.
+        /// </summary>
+        /// <param name="ruleName">The name of the rule</param>
+        /// <param name="msg">Optional message handler</param>
+        /// <param name="messagePrefix">The prefix to use for messages, null for the default</param>
+        /// <returns>True if the rule was deleted</returns>
         public bool Remove(string ruleName, IMessageHost msg = null, string messagePrefix = null)
         {
             var p = messagePrefix ?? FirewallHandler.Prefix;
@@ -166,10 +194,17 @@ namespace SysWeaver.Security
     }
 
 
+    /// <summary>
+    /// A firewall handler for platforms without firewall support, every operation logs a warning and fails.
+    /// </summary>
     public sealed class NoFirewallHandler : IFirewallHandler
     {
+        /// <summary>
+        /// The singleton instance.
+        /// </summary>
         public static readonly IFirewallHandler Instance = new NoFirewallHandler();
 
+        /// <inheritdoc/>
         public bool AddOrSet(string ruleName, int port, IMessageHost msg = null, string messagePrefix = null, FirewallProtcols protocol = FirewallProtcols.Tcp, FirewallDirections direction = FirewallDirections.Inbound)
         {
             var p = messagePrefix ?? FirewallHandler.Prefix;
@@ -177,6 +212,7 @@ namespace SysWeaver.Security
             return false;
         }
 
+        /// <inheritdoc/>
         public bool Remove(string ruleName, IMessageHost msg = null, string messagePrefix = null)
         {
             var p = messagePrefix ?? FirewallHandler.Prefix;
@@ -185,10 +221,17 @@ namespace SysWeaver.Security
         }
     }
 
+    /// <summary>
+    /// A firewall handler that forwards to the handler for the current platform (<see cref="WindowsFirewallHandler"/> on Windows, else <see cref="NoFirewallHandler"/>).
+    /// </summary>
     public sealed class FirewallHandler : IFirewallHandler
     {
+        /// <summary>
+        /// The default message prefix.
+        /// </summary>
         public const String Prefix = "[Firewall] ";
 
+        /// <inheritdoc/>
         public override string ToString()
         {
             var rs = Handlers;
@@ -208,12 +251,17 @@ namespace SysWeaver.Security
             return h ?? NoFirewallHandler.Instance;
         }
 
+        /// <summary>
+        /// The handler for the current platform.
+        /// </summary>
         public static readonly IFirewallHandler Instance = Get();
 
 
+        /// <inheritdoc/>
         public bool AddOrSet(string ruleName, int port, IMessageHost msg = null, string messagePrefix = null, FirewallProtcols protocol = FirewallProtcols.Tcp, FirewallDirections direction = FirewallDirections.Inbound)
             => Instance.AddOrSet(ruleName, port, msg, messagePrefix, protocol, direction);
 
+        /// <inheritdoc/>
         public bool Remove(string ruleName, IMessageHost msg = null, string messagePrefix = null) 
             => Instance.Remove(ruleName, msg, messagePrefix);
 

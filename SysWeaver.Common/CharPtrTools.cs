@@ -9,7 +9,8 @@ namespace SysWeaver
 
     /// <summary>
     /// Low level string handling with char pointers.
-    /// A range is [start, end), an empty range (or an end before the start) never contains anything.
+    /// A range is [start, end), an empty range (or an end before the start) never contains anything (except for the search methods, the other methods expects end &gt;= start).
+    /// The caller is responsible for keeping the memory pinned and valid for the duration of a call.
     /// </summary>
     public unsafe static class CharPtrTools
     {
@@ -17,7 +18,7 @@ namespace SysWeaver
         /// <summary>
         /// Find the first occurence of a string (ordinal) in a range
         /// </summary>
-        /// <param name="s">The string to find, an empty string is found at the start</param>
+        /// <param name="s">The string to find (may not be null), an empty string is found at the start</param>
         /// <param name="start">The start of the range</param>
         /// <param name="end">The end of the range (exclusive)</param>
         /// <returns>A pointer to the first char of the first occurence, or null if not found</returns>
@@ -109,10 +110,10 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Trim away whitespaces from a memory range
+        /// Trim away whitespaces (<see cref="Char.IsWhiteSpace(char)"/>) from a memory range, by moving the start and end pointers
         /// </summary>
-        /// <param name="start"></param>
-        /// <param name="end"></param>
+        /// <param name="start">The start of the range, moved forward past any leading white spaces</param>
+        /// <param name="end">The end of the range (exclusive), moved backwards past any trailing white spaces</param>
         public static void Trim(ref Char* start, ref Char* end)
         {
             while (start < end)
@@ -133,11 +134,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Create a trimmed string with zero unnecessary memory allocations and zero unnecessary memory copying.
+        /// Create a trimmed string (see <c>Trim</c>) with zero unnecessary memory allocations and zero unnecessary memory copying.
         /// </summary>
-        /// <param name="start"></param>
-        /// <param name="end"></param>
-        /// <returns></returns>
+        /// <param name="start">The start of the range</param>
+        /// <param name="end">The end of the range (exclusive), must not be before the start</param>
+        /// <returns>The trimmed string (a new instance, empty if the range only contains white spaces)</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The end is before the start</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToTrimmedString(Char* start, Char* end)
         {
@@ -145,47 +147,64 @@ namespace SysWeaver
             return new string(start, 0, (int)(end - start));
         }
 
+        /// <summary>
+        /// Create a string from some chars
+        /// </summary>
+        /// <param name="start">The first char</param>
+        /// <param name="len">The number of chars</param>
+        /// <returns>A new string</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToString(Char* start, int len)
             => new string(start, 0, len);
 
 
         /// <summary>
-        /// Create a lowercased string (using the invariant culture).
+        /// Create a lowercased string (using the invariant culture, same as <see cref="Char.ToLowerInvariant(char)"/> of every char, ASCII is converted vectorized).
         /// With zero unnecessary memory allocations and zero unnecessary memory copying.
         /// </summary>
-        /// <param name="start"></param>
-        /// <param name="len"></param>
-        /// <returns></returns>
+        /// <param name="start">The first char</param>
+        /// <param name="len">The number of chars</param>
+        /// <returns>A new string (always allocated)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToLowerCaseString(Char* start, int len)
             => String.Create(len, (IntPtr)start, CreateLowerCasedString);
 
 
         /// <summary>
-        /// Create an uppercased string (using the invariant culture).
+        /// Create an uppercased string (using the invariant culture, same as <see cref="Char.ToUpperInvariant(char)"/> of every char, ASCII is converted vectorized).
         /// With zero unnecessary memory allocations and zero unnecessary memory copying.
         /// </summary>
-        /// <param name="start"></param>
-        /// <param name="len"></param>
-        /// <returns></returns>
+        /// <param name="start">The first char</param>
+        /// <param name="len">The number of chars</param>
+        /// <returns>A new string (always allocated)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToUpperCaseString(Char* start, int len)
             => String.Create(len, (IntPtr)start, CreateUpperCasedString);
 
 
+        /// <summary>
+        /// The text info of the invariant culture
+        /// </summary>
         public static readonly TextInfo Ti = CultureInfo.InvariantCulture.TextInfo;
 
 
+        /// <summary>
+        /// Invariant culture lower casing of a char (a delegate to <see cref="TextInfo.ToLower(char)"/> of <see cref="Ti"/>)
+        /// </summary>
         public static readonly Func<Char, Char> ToLower = Ti.ToLower;
+
+        /// <summary>
+        /// Invariant culture upper casing of a char (a delegate to <see cref="TextInfo.ToUpper(char)"/> of <see cref="Ti"/>)
+        /// </summary>
         public static readonly Func<Char, Char> ToUpper = Ti.ToUpper;
 
         /// <summary>
-        /// Copy some memory to a lowercased version (the same as Char.ToLowerInvariant of every char), the source and destination can be the same memory
+        /// Copy some memory to a lowercased version (the same as Char.ToLowerInvariant of every char), the source and destination can be the same memory.
+        /// Partially overlapping memory is processed from the end to the start, which is only correct if the destination is after the source.
         /// </summary>
-        /// <param name="dest"></param>
-        /// <param name="source"></param>
-        /// <param name="length"></param>
+        /// <param name="dest">The destination</param>
+        /// <param name="source">The source</param>
+        /// <param name="length">The number of chars, nothing is done if it's zero or negative</param>
         public static void CopyLowerCased(Char* dest, Char* source, int length)
         {
             if (length <= 0)
@@ -209,11 +228,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Copy some memory to an uppercased version (the same as Char.ToUpperInvariant of every char), the source and destination can be the same memory
+        /// Copy some memory to an uppercased version (the same as Char.ToUpperInvariant of every char), the source and destination can be the same memory.
+        /// Partially overlapping memory is processed from the end to the start, which is only correct if the destination is after the source.
         /// </summary>
-        /// <param name="dest"></param>
-        /// <param name="source"></param>
-        /// <param name="length"></param>
+        /// <param name="dest">The destination</param>
+        /// <param name="source">The source</param>
+        /// <param name="length">The number of chars, nothing is done if it's zero or negative</param>
         public static void CopyUpperCased(Char* dest, Char* source, int length)
         {
             if (length <= 0)
@@ -334,8 +354,14 @@ namespace SysWeaver
 
         #region String creators
 
+        /// <summary>
+        /// Lower cases the chars at the pointer (the state) into a new string
+        /// </summary>
         static readonly SpanAction<Char, IntPtr> CreateLowerCasedString = (to, src) => LowerCore(new ReadOnlySpan<Char>((Char*)src.ToPointer(), to.Length), to);
 
+        /// <summary>
+        /// Upper cases the chars at the pointer (the state) into a new string
+        /// </summary>
         static readonly SpanAction<Char, IntPtr> CreateUpperCasedString = (to, src) => UpperCore(new ReadOnlySpan<Char>((Char*)src.ToPointer(), to.Length), to);
 
         #endregion//String creators

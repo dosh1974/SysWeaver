@@ -8,7 +8,7 @@
 |---|---|
 | **Layer** | Serialization |
 | **Kind** | Serializer plug-in (`ISerializerType`) |
-| **Selection priority** | default among serializers for `swbin` |
+| **Selection priority** | 0 (the only serializer for `swbin`) |
 
 ## Purpose
 
@@ -27,6 +27,7 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 
 ## Key features
 
+- `SysWeaverBinarySerializer` (singleton `Instance`, binary only) writes with `BinaryWriterInspector` and reads with `BinaryReaderInspector`.
 - No external dependency.
 - Versioned, inspection-based encoding.
 - Registered through the manifest like any service, or with one static call in code.
@@ -34,7 +35,9 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 ## Limitations and considerations
 
 - Only SysWeaver can read the format.
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered.
+- The root value is written as its static type (no root type information), so it must be read back as the same type.
+- `SerializerOptions` are ignored.
+- Selection between serializers of the same extension is by priority; this is currently the only bundled `swbin` implementation.
 
 ## Using it
 

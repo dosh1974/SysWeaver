@@ -593,7 +593,10 @@ namespace SysWeaver
         /// <param name="obj">The sequence of elements</param>
         /// <returns>The mixed hash code, 42 if the sequence is empty</returns>
         /// <exception cref="ArgumentNullException">If <paramref name="obj"/> is null</exception>
-        /// <remarks>Arrays and lists of int and arrays of objects are handled without enumerating (no boxing)</remarks>
+        /// <remarks>
+        /// Arrays and lists of int and arrays of objects are handled without enumerating (no boxing), other sequences box value type elements.
+        /// Note that a single string argument binds to this overload (a string is a sequence of chars), use <see cref="Get{T}(T)"/> to get the hash code of the string itself.
+        /// </remarks>
         public static int Mix(IEnumerable obj)
         {
             ArgumentNullException.ThrowIfNull(obj);

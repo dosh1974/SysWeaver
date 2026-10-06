@@ -10,11 +10,21 @@ using System.Threading;
 namespace SysWeaver.OsServices
 {
 
+    /// <summary>
+    /// <see cref="IServiceHost"/> for the Windows Service Control Manager.
+    /// The service is registered as an own process service running "[command] daemon" (as LocalSystem), with description, startup type
+    /// (<see cref="ServiceParams.Start"/>) and optional restart on failure actions (<see cref="ServiceParams.RestartOnFail"/>).
+    /// </summary>
     sealed class ServiceHostWindows : IServiceHost
     {
 
+        /// <inheritdoc/>
         public String Name => "Windows service manager";
 
+        /// <summary>
+        /// Creates the host.
+        /// </summary>
+        /// <param name="p">The service parameters.</param>
         public ServiceHostWindows(ServiceParams p)
         {
             P = p;
@@ -24,6 +34,14 @@ namespace SysWeaver.OsServices
         readonly ServiceParams P;
 
 
+        /// <summary>
+        /// Poll the service state (every 100 ms) until it's one of <paramref name="states"/>, or (after 3 seconds) no longer <paramref name="whileStateIs"/>.
+        /// Gives up after 3 minutes.
+        /// </summary>
+        /// <param name="name">The service name.</param>
+        /// <param name="whileStateIs">The transitional state to wait on.</param>
+        /// <param name="states">The states to wait for.</param>
+        /// <returns>The last state, <see cref="SysWeaver.OsServices.ServiceManager.ServiceState.NotFound"/> on time out.</returns>
         static ServiceState WaitForWhile(String name, ServiceState whileStateIs, params ServiceState[] states)
         {
             var s = new HashSet<ServiceState>(states);
@@ -50,6 +68,12 @@ namespace SysWeaver.OsServices
             }
         }
 
+        /// <summary>
+        /// Poll the service state (every 100 ms) until it's one of <paramref name="states"/>, gives up after 60 seconds.
+        /// </summary>
+        /// <param name="name">The service name.</param>
+        /// <param name="states">The states to wait for.</param>
+        /// <returns>The last state, <see cref="SysWeaver.OsServices.ServiceManager.ServiceState.NotFound"/> on time out.</returns>
         static ServiceState WaitFor(String name, params ServiceState[] states)
         {
             var s = new HashSet<ServiceState>(states);
@@ -69,6 +93,11 @@ namespace SysWeaver.OsServices
             }
         }
 
+        /// <summary>
+        /// Run the service using <see cref="ServiceBase.Run(ServiceBase)"/>, blocks until the SCM stops the service.
+        /// </summary>
+        /// <param name="onStart">Optional callback to execute after all services in the manifest file have been created.</param>
+        /// <returns>Always 0.</returns>
         public int Run(Action<SysWeaver.MicroService.ServiceManager> onStart)
         {
             using var inst = new ServiceInstance(P, onStart);
@@ -79,6 +108,7 @@ namespace SysWeaver.OsServices
 
         #region Elevation
 
+        /// <inheritdoc/>
         public bool IsElevated { get; private set; }
 
         static readonly IReadOnlySet<ServiceVerbs> IntNeedElevation = ReadOnlyData.Set(
@@ -92,12 +122,15 @@ namespace SysWeaver.OsServices
             ServiceVerbs.Continue
         );
 
+        /// <inheritdoc/>
         public bool NeedElevation(ServiceVerbs verb) => IntNeedElevation.Contains(verb);
 
+        /// <inheritdoc cref="ElevatedProcessWin32NT.RunElevated(string, bool, bool)"/>
         public int RunElevated(String commandLine, bool terminal, bool noWait) => ElevatedProcessWin32NT.RunElevated(commandLine, terminal, noWait);
 
         #endregion//Elevation
 
+        /// <inheritdoc/>
         public ServiceStatus Status()
         {
             using var s = ServiceController.GetServices().FirstOrDefault(x => String.Equals(x.ServiceName, P.Name, StringComparison.OrdinalIgnoreCase));
@@ -124,6 +157,7 @@ namespace SysWeaver.OsServices
         }
 
 
+        /// <inheritdoc/>
         public ServiceResponse Install()
         {
             var p = P;
@@ -157,6 +191,7 @@ namespace SysWeaver.OsServices
             return ServiceResponse.GenericError;
         }
 
+        /// <inheritdoc/>
         public ServiceResponse Uninstall()
         {
             var p = P;
@@ -185,6 +220,10 @@ namespace SysWeaver.OsServices
 
 
 
+        /// <summary>
+        /// Install (if needed) and start the service. NOTE: a paused service is not resumed (returns <see cref="ServiceResponse.StartFailed"/>).
+        /// </summary>
+        /// <returns>The result.</returns>
         public ServiceResponse Start()
         {
         //  Install
@@ -225,6 +264,7 @@ namespace SysWeaver.OsServices
         }
 
 
+        /// <inheritdoc/>
         public ServiceResponse Stop()
         {
             var p = P;
@@ -259,6 +299,7 @@ namespace SysWeaver.OsServices
             return ServiceResponse.StopFailed;
         }
 
+        /// <inheritdoc/>
         public ServiceResponse Pause()
         {
             //  Start
@@ -283,6 +324,7 @@ namespace SysWeaver.OsServices
             return ServiceResponse.PauseFailed;
         }
 
+        /// <inheritdoc/>
         public ServiceResponse Continue()
         {
             //  Start

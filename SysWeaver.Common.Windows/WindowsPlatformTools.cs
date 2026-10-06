@@ -12,15 +12,40 @@ using System.Management;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Windows implementation of <see cref="IPlatformTools"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Not referenced directly: <see cref="PlatformTools.Current"/> loads it by name ("SysWeaver.WindowsPlatformTools, SysWeaver.Common.Windows") when running on Windows,
+    /// so the assembly only needs to be deployed with the application.</para>
+    /// <para>Uses WMI for the OS name, a "Processor Information" performance counter for CPU usage, GlobalMemoryStatusEx for memory,
+    /// FlushFileBuffers, ExitWindowsEx and directory ACLs.</para>
+    /// <para>The type initializer creates the performance counter and the constructor queries WMI; if either fails the instance can't be created
+    /// and <see cref="PlatformTools.Current"/> falls back to a dummy implementation.</para>
+    /// </remarks>
     public sealed class WindowsPlatformTools : IPlatformTools
     {
+        /// <summary>
+        /// Returns "Windows".
+        /// </summary>
         public string Name => "Windows";
 
+        /// <summary>
+        /// Returns "C:\Keys".
+        /// </summary>
         public String DefaultKeyDir => @"C:\Keys";
 
+        /// <summary>
+        /// The WMI caption of the OS with build number and bitness, ex: "Microsoft Windows 11 Pro build 26100 (64 bits)".
+        /// </summary>
         public string OsFriendlyName { get; } = GetOsFriendlyName();
 
 
+        /// <summary>
+        /// Flushes the OS buffers of a file to disc using FlushFileBuffers.
+        /// </summary>
+        /// <param name="h">The file handle, must have write access.</param>
+        /// <returns>True if successful, false on failure.</returns>
         public bool FlushToDisc(SafeHandle h)
         {
             try
@@ -35,6 +60,12 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Gets the physical memory size using GlobalMemoryStatusEx.
+        /// </summary>
+        /// <param name="availableBytes">Receives the available physical memory in bytes, 0 on failure.</param>
+        /// <param name="totalBytes">Receives the total physical memory in bytes, 0 on failure.</param>
+        /// <returns>True if successful, false on failure (the exception is tracked in the stats).</returns>
         public bool GetMemorySize(out ulong availableBytes, out ulong totalBytes)
         {
             try
@@ -72,6 +103,12 @@ namespace SysWeaver
             c.NextValue();
         }
 
+        /// <summary>
+        /// Gets the total CPU usage from the "Processor Information\% Processor Time\_Total" performance counter.
+        /// </summary>
+        /// <param name="cpuUsage">Receives the CPU usage in percent, 0 on failure.</param>
+        /// <returns>True if successful, false on failure (the exception is tracked in the stats).</returns>
+        /// <remarks>The value is averaged over the time since the previous call (by any caller, the counter is shared and calls are serialized).</remarks>
         public bool GetCpuUsage(out double cpuUsage)
         {
             try
@@ -89,6 +126,10 @@ namespace SysWeaver
             return false;
         }
 
+        /// <summary>
+        /// Reboots the computer using ExitWindowsEx (planned shutdown, not forced) after enabling the SeShutdownPrivilege.
+        /// </summary>
+        /// <returns>True if the reboot was initiated, false if the privilege couldn't be enabled or the call failed.</returns>
         public bool Reboot()
             => ExitWindows(ExitWindowsFlags.Reboot, ShutdownReason.FlagPlanned, true);
 
@@ -104,6 +145,14 @@ namespace SysWeaver
             AccessControlType.Allow);
 
 
+        /// <summary>
+        /// Adds a "full control" access rule for the Everyone group to a directory, unless an equivalent rule exists.
+        /// </summary>
+        /// <param name="directoryName">The directory.</param>
+        /// <returns>null if successful, else the exception that occurred.</returns>
+        /// <remarks>
+        /// The rule is inherited by files and sub directories but uses <see cref="PropagationFlags.InheritOnly"/>, so it does not apply to the directory itself.
+        /// </remarks>
         public Exception MakeDirectoryAccessableToEveryOne(String directoryName)
         {
             try
@@ -292,6 +341,12 @@ namespace SysWeaver
                 string lpName,
                 ref LUID lpLuid);
 
+            /// <summary>
+            /// Enables a privilege (ex: "SeShutdownPrivilege") in the current process token.
+            /// </summary>
+            /// <param name="lpszPrivilege">The privilege name.</param>
+            /// <param name="bEnablePrivilege">Intended to choose enable/disable, but the privilege is always enabled.</param>
+            /// <returns>True if the privilege was enabled (the process holds it), else false.</returns>
             public static bool EnablePrivilege(string lpszPrivilege, bool bEnablePrivilege)
             {
                 bool retval = false;
@@ -382,6 +437,10 @@ namespace SysWeaver
 
         readonly ExceptionTracker Exs = new ExceptionTracker();
 
+        /// <summary>
+        /// Returns the exception statistics (system "Windows.Platform", names prefixed with "Exception.").
+        /// </summary>
+        /// <returns>The statistics.</returns>
         public IEnumerable<Stats> GetStats()
             => Exs.GetStats("Windows.Platform", "Exception.");
 

@@ -7,7 +7,8 @@ using System.Runtime.Intrinsics;
 namespace SysWeaver
 {
     /// <summary>
-    /// SIMD helpers for converting the case of ASCII letters in strings
+    /// SIMD helpers for converting the case of ASCII letters in strings, used by <see cref="StringExt.FastToLower(string)"/> and <see cref="StringExt.FastToUpper(string)"/>
+    /// to return the input string (without allocating) if no char must change
     /// </summary>
     static class AsciiCase
     {
@@ -33,7 +34,10 @@ namespace SysWeaver
         /// </summary>
         /// <param name="str">The string to search</param>
         /// <param name="first">The first letter that must change, <see cref="ToLower"/> or <see cref="ToUpper"/></param>
-        /// <returns>-1 if all chars are ASCII and none must change, else the index of an ASCII letter that must change, or the index of the first non ASCII char if no ASCII letter must change</returns>
+        /// <returns>-1 if all chars are ASCII and none must change, else the index of a char that must be inspected: an ASCII letter that must change or a non ASCII char.
+        /// For the first 32 chars (and strings shorter than 8 chars) it's the first such char. Beyond the first 32 chars an ASCII letter that must change is preferred,
+        /// the first non ASCII char is only returned if no ASCII letter must change (so a non ASCII char may exist before the returned index).
+        /// Callers must treat a non ASCII char at the returned index as "check the rest of the string".</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int FindChangeOrNonAscii(String str, ushort first)
         {

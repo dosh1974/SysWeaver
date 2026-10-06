@@ -6,16 +6,44 @@ using System.Reflection;
 
 namespace SysWeaver.Data
 {
+    /// <summary>
+    /// Provides (cached) per-type aggregation functions (min, max, sum, average) over boxed column values.
+    /// Intended for <see cref="TableDataEdit.Aggregate(BaseTableData, TableColumnAggregation[])"/>, which is not implemented yet, so this is currently unused.
+    /// </summary>
+    /// <remarks>
+    /// Built-in numeric types, <see cref="DateTime"/>, <see cref="TimeSpan"/> and <see cref="String"/> (ordinal) are pre-registered,
+    /// other types are built on demand using <see cref="InternalTableAggregatorT{T}"/>.
+    /// Thread safe (backed by a <see cref="ConcurrentDictionary{TKey, TValue}"/>).
+    /// </remarks>
     static class InternalTableAggregator
     {
-
+        /// <summary>
+        /// The shared "values" parameter expression used when compiling aggregation lambdas.
+        /// </summary>
         internal static readonly ParameterExpression Inp = Expression.Parameter(typeof(IEnumerable<Object>), "values");
+        /// <summary>
+        /// Open generic method definition of <see cref="InternalHelpers.Min{T}(IEnumerable{object})"/>.
+        /// </summary>
         internal static readonly MethodInfo Min = typeof(InternalHelpers).GetMethod(nameof(InternalHelpers.Min), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+        /// <summary>
+        /// Open generic method definition of <see cref="InternalHelpers.Max{T}(IEnumerable{object})"/>.
+        /// </summary>
         internal static readonly MethodInfo Max = typeof(InternalHelpers).GetMethod(nameof(InternalHelpers.Max), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+        /// <summary>
+        /// Open generic method definition of <see cref="InternalHelpers.Sum{T, W}(IEnumerable{object})"/>.
+        /// </summary>
         internal static readonly MethodInfo Sum = typeof(InternalHelpers).GetMethod(nameof(InternalHelpers.Sum), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+        /// <summary>
+        /// Open generic method definition of <see cref="InternalHelpers.Avg{T, W}(IEnumerable{object})"/>.
+        /// </summary>
         internal static readonly MethodInfo Avg = typeof(InternalHelpers).GetMethod(nameof(InternalHelpers.Avg), BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
 
-
+        /// <summary>
+        /// Get the aggregation functions for a column value type.
+        /// </summary>
+        /// <param name="type">The column value type</param>
+        /// <returns>The aggregation functions (individual functions are null when not supported), or null if they couldn't be created.
+        /// Failures are cached (as null) and never rethrown.</returns>
         public static InternalTableAggregatorType Get(Type type)
         {
             var c = Cache;
@@ -174,6 +202,9 @@ namespace SysWeaver.Data
             return c;
         }
 
+        /// <summary>
+        /// Average of <see cref="TimeSpan"/> values (tick precision). Throws <see cref="DivideByZeroException"/> on an empty sequence.
+        /// </summary>
         static Object TimeSpanAvg(IEnumerable<Object> values)
         {
             TimeSpan c = default;
@@ -192,6 +223,10 @@ namespace SysWeaver.Data
             return TimeSpan.FromTicks(c.Ticks / count);
         }
 
+        /// <summary>
+        /// Average of <see cref="DateTime"/> values computed by summing ticks (unchecked, can overflow for more than ~14 values),
+        /// the <see cref="DateTimeKind"/> of the first value is used. Throws <see cref="DivideByZeroException"/> on an empty sequence.
+        /// </summary>
         static Object DateTimeAvg(IEnumerable<Object> values)
         {
             long c = default;

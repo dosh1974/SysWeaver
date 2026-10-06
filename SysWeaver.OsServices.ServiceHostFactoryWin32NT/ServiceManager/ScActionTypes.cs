@@ -2,6 +2,9 @@
 
 namespace SysWeaver.OsServices.ServiceManager
 {
+    /// <summary>
+    /// Win32 SC_ACTION_TYPE values, the action to perform on a service failure.
+    /// </summary>
     enum ScActionTypes : uint
     {
         /// <summary>

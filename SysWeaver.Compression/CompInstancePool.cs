@@ -6,13 +6,18 @@ namespace SysWeaver.Compression
     /// <summary>
     /// A small, bounded, lock-free and allocation-free pool of reusable instances (such as encoders and decoders).
     /// </summary>
+    /// <remarks>
+    /// Thread safe. The pool never creates instances, callers create a new instance when <see cref="TryRent"/> returns null.
+    /// The pool doesn't reset instances, callers must only return instances that are in a reusable state.
+    /// Instances held by the pool are never disposed (the pool itself isn't disposable), so pools are typically static.
+    /// </remarks>
     /// <typeparam name="T">The instance type</typeparam>
     public sealed class CompInstancePool<T> where T : class, IDisposable
     {
         /// <summary>
         /// Create a pool
         /// </summary>
-        /// <param name="maxRetained">The max number of instances to keep in the pool, defaults to the number of processors capped at 8</param>
+        /// <param name="maxRetained">The max number of instances to keep in the pool, zero or negative uses the number of processors capped at 8</param>
         public CompInstancePool(int maxRetained = 0)
         {
             if (maxRetained <= 0)
@@ -23,7 +28,7 @@ namespace SysWeaver.Compression
         readonly T[] Slots;
 
         /// <summary>
-        /// Get an instance from the pool
+        /// Get an instance from the pool (the caller owns it until it's returned using <see cref="Return(T)"/> or disposed)
         /// </summary>
         /// <returns>An instance or null if the pool is empty</returns>
         public T TryRent()
@@ -42,7 +47,7 @@ namespace SysWeaver.Compression
         /// <summary>
         /// Return an instance to the pool, the instance is disposed if the pool is full
         /// </summary>
-        /// <param name="instance">The instance to return, must be in a reusable state</param>
+        /// <param name="instance">The instance to return, must be in a reusable state and not used by the caller after this call</param>
         public void Return(T instance)
         {
             var slots = Slots;

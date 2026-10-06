@@ -5,18 +5,23 @@ using SysWeaver.Security;
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// Binds TLS certificates to listening ports at the OS level (used by the HttpListener based server, where the OS performs the TLS handshake).
+    /// </summary>
     public static class CertificateBinder
     {
         /// <summary>
-        /// Bind a certificate to a https port.
-        /// This is platform/OS specific, currently these platforms are supported:
-        /// * WinNT
+        /// Bind a certificate to the port of an https listener prefix.
+        /// This is platform/OS specific, currently only WinNT is supported (uses "netsh http update/add sslcert", requires elevated rights).
         /// </summary>
-        /// <param name="msg">Message handler</param>
-        /// <param name="listenerPrefix">The listener prefix, ex: "https://*:443"</param>
-        /// <param name="cert">The certificate to bind</param>
+        /// <param name="listenerPrefix">The listener prefix, ex: "https://*:443". A "*" (or "localhost") host binds to all addresses ("ipport=0.0.0.0:port"), any other host uses SNI ("hostnameport=host:port")</param>
+        /// <param name="cert">The certificate to bind, it is installed into the certificate store first</param>
+        /// <param name="msg">Optional message handler for progress and warnings</param>
         /// <param name="logPrefix">The prefix to use for logging</param>
-        /// <returns></returns>
+        /// <returns>False if an exception occurred, true otherwise.
+        /// Note that true is also returned for non-https prefixes, unsupported platforms and when netsh reports a failure (only logged), so true doesn't guarantee that the binding succeeded.</returns>
+        /// <remarks>Runs synchronously (the netsh processes are waited for) despite the async signature.
+        /// If the certificate was newly installed, any existing binding for the same ip/port or host/port is removed first.</remarks>
         public static async Task<bool> BindHttps(String listenerPrefix, X509Certificate2 cert, IMessageHost msg = null, String logPrefix = "")
         {
             try

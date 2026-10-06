@@ -13,13 +13,28 @@ using SysWeaver.Compression;
 namespace SysWeaver.Net
 {
 
+    /// <summary>
+    /// A module that serves a remote http(s) folder under a local web folder, proxying GET, HEAD and POST requests (GET and HEAD responses are cached, see <see cref="ProxyRequestCache"/>).
+    /// </summary>
+    /// <remarks>
+    /// The local url after the web root (url decoded by the server) is appended to the source root, and the decoded query string is appended as is.
+    /// All client request headers (including cookies, such as the session cookie) are forwarded to the remote server.
+    /// The auth check is done while the module resolves handlers, before the request is matched against the web root.
+    /// </remarks>
     public sealed class FileProxy : IHttpServerModule, IDisposable, IPerfMonitored, IHaveStats
     {
 
+        /// <inheritdoc/>
         public String Name { get; init; }
 
+        /// <inheritdoc/>
         public String[] OnlyForPrefixes { get; init; }
 
+        /// <summary>
+        /// Create a file proxy.
+        /// </summary>
+        /// <param name="p">The parameters</param>
+        /// <exception cref="Exception">Thrown if the web root or the source root is null or empty</exception>
         public FileProxy(FileProxyParams p)
         {
             var root = p.WebRoot;
@@ -68,6 +83,9 @@ namespace SysWeaver.Net
 
         readonly IReadOnlyList<String> Auth;
 
+        /// <summary>
+        /// Dispose the http client (if one was created for this proxy).
+        /// </summary>
         public void Dispose()
         {
             if (OwnClient)
@@ -78,13 +96,16 @@ namespace SysWeaver.Net
         readonly bool OwnClient;
         readonly HttpClient Client;
 
+        /// <inheritdoc/>
         public override string ToString() => Name;
 
         readonly int WebRootLen;
         readonly String SourceRoot;
 
+        /// <inheritdoc/>
         public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get; init; }
 
+        /// <inheritdoc/>
         public PerfMonitor PerfMon { get; init;  }
 
         readonly ProxyRequestCache Cache = new ProxyRequestCache();
@@ -95,6 +116,10 @@ namespace SysWeaver.Net
             return await ProxyTools.ProxyRequest(Client, url, data).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Proxy a request.
+        /// </summary>
+        /// <exception cref="UserNotAllowedException">Thrown if the session lacks the required tokens (for any request that reaches this module, even if it doesn't match the web root)</exception>
         async Task<IHttpRequestHandler> HandleAsync(HttpServerRequest context)
         {
             using var __ = PerfMon.Track(nameof(HandleAsync));
@@ -114,6 +139,7 @@ namespace SysWeaver.Net
             return await Cache.HandleAsync(context, req, DownstreamRequest).ConfigureAwait(false);
         }
 
+        /// <inheritdoc/>
         public IEnumerable<Stats> GetStats()
         {
             const String sys = nameof(FileProxy);

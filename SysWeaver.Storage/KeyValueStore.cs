@@ -13,47 +13,60 @@ namespace SysWeaver
 
 
     /// <summary>
-    /// Represent a key value store.
+    /// Represent a file based key value store.
     /// Prefer using the Async methods if possible.
     /// Designed to be as reliable as possible, not for speed:
-    /// - Uses system wide locks for data read/writes.
-    /// - Uses redundancy by having R copies of the data.
-    /// - Uses hashing to validate the data (detects corruption).
+    /// - Uses system wide locks (<see cref="SystemLock"/>, one per key) for data read/writes, so it's safe to use from multiple threads and processes.
+    /// - Uses redundancy by having R copies of the data (one file per copy, in separate sub folders and optionally on separate volumes).
+    /// - Uses a SHA256 checksum to validate the data (detects corruption, invalid copies are deleted when found).
     /// - Compresses data (save disc space).
     /// When setting data:
-    /// - The (redundancy - 1) oldest (non-existing and invalid copies count as very old) copies are overwritten with the new data.
+    /// - The <see cref="WriteRedundancy"/> oldest copies (non-existing and invalid copies count as very old) are overwritten with the new data.
     /// When reading data:
     /// - The most recent valid copy is returned.
     /// </summary>
+    /// <remarks>
+    /// The key is used as a file name, so it may only contain valid file name characters (only verified in DEBUG builds, never pass untrusted keys).
+    /// Values are written with the configured serializer, so the same type should be used when reading.
+    /// Not intended for large values or high write rates, every operation touches all copies.
+    /// </remarks>
     public sealed class KeyValueStore
     {
         /// <summary>
-        /// A default key/value store that is the same for all users but application specific
+        /// A default key/value store that is the same for all users but application specific.
         /// </summary>
+        /// <remarks>
+        /// All four default stores are created with the id "Default", and <see cref="Get(KeyValueStoreParams)"/> caches stores by id,
+        /// so currently <see cref="UserApp"/>, <see cref="AllShared"/> and <see cref="UserShared"/> return this same instance (all data is stored per application for all users).
+        /// </remarks>
         public static readonly KeyValueStore AllApp;
 
         /// <summary>
-        /// A default key/value store that is unique to the users but application specific
+        /// A default key/value store that is intended to be unique to the user but application specific.
+        /// Note: currently the same instance as <see cref="AllApp"/> (see the remarks there).
         /// </summary>
         public static readonly KeyValueStore UserApp;
 
         /// <summary>
-        /// A default key/value store that is the same for all users and all applications
+        /// A default key/value store that is intended to be the same for all users and all applications.
+        /// Note: currently the same instance as <see cref="AllApp"/> (see the remarks there).
         /// </summary>
         public static readonly KeyValueStore AllShared;
 
         /// <summary>
-        /// A default key/value store that is unique to the users but common to all applications
+        /// A default key/value store that is intended to be unique to the user but common to all applications.
+        /// Note: currently the same instance as <see cref="AllApp"/> (see the remarks there).
         /// </summary>
         public static readonly KeyValueStore UserShared;
 
 
         /// <summary>
-        /// Get a new custom store, if the store exist, that store is returned
+        /// Get a custom store, creating it if needed.
+        /// Stores are cached by <see cref="KeyValueStoreParams.Id"/> (case insensitive), if a store with that id exist, that store is returned and the other parameters are ignored.
         /// </summary>
-        /// <param name="p"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="p">The store parameters, null uses the defaults (id "Default").</param>
+        /// <returns>The store.</returns>
+        /// <exception cref="Exception">The serializer or folders couldn't be resolved, or the store folders couldn't be created.</exception>
         public static KeyValueStore Get(KeyValueStoreParams p)
         {
             p = p ?? new KeyValueStoreParams();
@@ -77,14 +90,14 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Get a value from the key value store
+        /// Get a value from the key value store, blocking while waiting for the key lock.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="key">The unqiue key</param>
-        /// <param name="returnWhenNotFound">The value to return when the key is not found</param>
+        /// <typeparam name="T">The type of the value (should be the same type as used when setting it)</typeparam>
+        /// <param name="key">The unique key, may only contain valid file name characters</param>
+        /// <param name="returnWhenNotFound">The value to return when the key is not found (or no valid copy exists)</param>
         /// <param name="tryAll">If deserialization fails, retry the second most recent copy and so on</param>
         /// <returns>The value in the store, or the supplied default</returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="Exception">Deserialization of the most recent valid copy failed and <paramref name="tryAll"/> is false.</exception>
         public T TryGet<T>(String key, T returnWhenNotFound = default, bool tryAll = false)
         {
 #if DEBUG
@@ -117,14 +130,14 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get a value from the key value store
+        /// Get a value from the key value store.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="key">The unqiue key</param>
-        /// <param name="returnWhenNotFound">The value to return when the key is not found</param>
+        /// <typeparam name="T">The type of the value (should be the same type as used when setting it)</typeparam>
+        /// <param name="key">The unique key, may only contain valid file name characters</param>
+        /// <param name="returnWhenNotFound">The value to return when the key is not found (or no valid copy exists)</param>
         /// <param name="tryAll">If deserialization fails, retry the second most recent copy and so on</param>
         /// <returns>The value in the store, or the supplied default</returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="Exception">Deserialization of the most recent valid copy failed and <paramref name="tryAll"/> is false.</exception>
         public async Task<T> TryGetAsync<T>(String key, T returnWhenNotFound = default, bool tryAll = false)
         {
 #if DEBUG
@@ -156,13 +169,14 @@ namespace SysWeaver
             return returnWhenNotFound;
         }
 
-                /// <summary>
-        /// Set a value in the key value store
+        /// <summary>
+        /// Set a value in the key value store, blocking while waiting for the key lock.
+        /// All existing copies are read and validated before the oldest / invalid copies are overwritten.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="key">The unqiue key</param>
+        /// <typeparam name="T">The type of the value</typeparam>
+        /// <param name="key">The unique key, may only contain valid file name characters</param>
         /// <param name="value">The value to set/replace</param>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="Exception">Serialization or writing to disc failed.</exception>
         public void Set<T>(String key, T value)
         {
 #if DEBUG
@@ -186,12 +200,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Set a value in the key value store
+        /// Set a value in the key value store.
+        /// All existing copies are read and validated before the oldest / invalid copies are overwritten.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="key">The unqiue key</param>
+        /// <typeparam name="T">The type of the value</typeparam>
+        /// <param name="key">The unique key, may only contain valid file name characters</param>
         /// <param name="value">The value to set/replace</param>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="Exception">Serialization or writing to disc failed.</exception>
         public async Task SetAsync<T>(String key, T value)
         {
 #if DEBUG
@@ -214,10 +229,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Delete a key/value
+        /// Delete a key/value (all copies), blocking while waiting for the key lock.
+        /// Deleting a key that doesn't exist does nothing.
         /// </summary>
-        /// <param name="key">The unqiue key</param>
-        /// <exception cref="Exception"></exception>
+        /// <param name="key">The unique key, may only contain valid file name characters</param>
+        /// <exception cref="Exception">A copy couldn't be deleted.</exception>
         public void Delete(String key)
         {
 #if DEBUG
@@ -234,10 +250,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Delete a key/value
+        /// Delete a key/value (all copies).
+        /// Deleting a key that doesn't exist does nothing.
         /// </summary>
-        /// <param name="key">The unqiue key</param>
-        /// <exception cref="Exception"></exception>
+        /// <param name="key">The unique key, may only contain valid file name characters</param>
+        /// <exception cref="Exception">A copy couldn't be deleted.</exception>
         public async Task DeleteAsync(String key)
         {
 #if DEBUG
@@ -260,12 +277,13 @@ namespace SysWeaver
         public readonly String Id;
 
         /// <summary>
-        /// Store redundancy
+        /// Store redundancy, the number of copies (files) kept for each key.
         /// </summary>
         public int Redundancy => Paths.Length;
 
 #if DEBUG
 
+        /// <inheritdoc/>
         public override string ToString() => String.Concat(Id, " using ", Paths.Length, " copies @ ", String.Join(", ", Paths.Select(x => x.ToFolder())));
 
 #endif//DEBUG
@@ -337,6 +355,9 @@ namespace SysWeaver
             LockPrefix = String.Join('_', "KeyValueStore", HashTools.GetHashString(String.Join(';', paths)));
         }
 
+        /// <summary>
+        /// The minimum number of copies that are overwritten on every write (normally <see cref="Redundancy"/> - 1, so the previous value survives a failed write).
+        /// </summary>
         public readonly int WriteRedundancy;
 
         /// <summary>

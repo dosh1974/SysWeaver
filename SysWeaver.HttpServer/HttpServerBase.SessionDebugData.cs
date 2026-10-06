@@ -5,9 +5,17 @@ namespace SysWeaver.Net
 {
     public abstract partial class HttpServerBase
     {
+        /// <summary>
+        /// A row in the active sessions debug table (<see cref="ActiveSessions"/>).
+        /// </summary>
         [TableDataPrimaryKey(nameof(Token))]
         sealed class SessionDebugData
         {
+            /// <summary>
+            /// Create a snapshot of a session.
+            /// </summary>
+            /// <param name="s">The session</param>
+            /// <param name="utcNow">The current UTC time</param>
             public SessionDebugData(HttpSession s, DateTime utcNow)
             {
                 var nowTick = utcNow.Ticks;
@@ -47,7 +55,7 @@ namespace SysWeaver.Net
             }
 
             /// <summary>
-            /// Session token (redacted)
+            /// Session token, this is the full token, <see cref="ActiveSessions"/> redacts it after the table has been built.
             /// </summary>
             public readonly String Token;
 
@@ -62,7 +70,7 @@ namespace SysWeaver.Net
             public readonly TimeSpan Duration;
 
             /// <summary>
-            /// How long ago the last activity was made
+            /// How long ago the last activity was made (zero while a request is in progress)
             /// </summary>
             public readonly TimeSpan Last;
 

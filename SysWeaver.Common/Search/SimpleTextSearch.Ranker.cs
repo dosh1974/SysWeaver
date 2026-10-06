@@ -8,6 +8,11 @@ namespace SysWeaver.Search
 
     public sealed partial class SimpleTextSearch
     {
+        /// <summary>
+        /// Ranks texts by finding the (lower case) words and numbers of the search text in them.
+        /// A match scores higher if it's early in the text, starts or ends at a word boundary and comes after the previous match.
+        /// Each subsequent text has 0.95 times the weight of the previous text.
+        /// </summary>
         struct Ranker : ITextRanker
         {
             public Ranker(String text)

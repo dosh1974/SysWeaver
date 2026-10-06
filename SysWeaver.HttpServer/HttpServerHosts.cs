@@ -9,6 +9,12 @@ namespace SysWeaver.Net
     /// Resolves the host of a request url (called for every request).
     /// A server typically has a few hosts (1 to 3), so these are kept in a small array that is searched linearly (no hashing, no allocations).
     /// </summary>
+    /// <remarks>
+    /// Also url decodes the whole url (path and query, see <see cref="HttpServerTools.UrlDecode(string)"/>) and inserts "index.html" for directory requests.
+    /// The decoding happens after any normalization done by the listener, so the resulting local url may contain "../" segments (from "%2F" / "%2E") and "?" chars (from "%3F").
+    /// Thread safe, new hosts are added under a lock (copy on write lookup array).
+    /// Hosts are never removed, a new <see cref="HttpServerHostInfo"/> is kept for every distinct "scheme://host:port" that matches a listener prefix.
+    /// </remarks>
     public sealed class HttpServerHosts
     {
         /// <summary>
@@ -29,9 +35,10 @@ namespace SysWeaver.Net
         const String IndexFile = "index.html";
 
         /// <summary>
-        /// Set the prefixes the server is listening on, used to create new hosts
+        /// Set the prefixes the server is listening on, used to create new hosts.
+        /// Should be called before any request is resolved, hosts that are already known are not affected.
         /// </summary>
-        /// <param name="prefixes">The prefixes</param>
+        /// <param name="prefixes">The (normalized) listener prefixes</param>
         public void SetPrefixes(HttpServerPrefix[] prefixes) => Prefixes = prefixes;
 
         HttpServerPrefix[] Prefixes = [];
@@ -93,6 +100,14 @@ namespace SysWeaver.Net
             return null;
         }
 
+        /// <summary>
+        /// Create (or get) the host for a lower cased "scheme://host:port" (slow path, takes a lock).
+        /// With a single listener prefix any host name is accepted, with multiple prefixes the first prefix that the url starts with (wildcard replaced by the host name) is used.
+        /// </summary>
+        /// <param name="hostName">The lower cased "scheme://host:port" part of the url</param>
+        /// <param name="url">The full url</param>
+        /// <returns>The host</returns>
+        /// <exception cref="Exception">Thrown if there are multiple prefixes and none of them matches the url</exception>
         HttpServerHostInfo CreateHost(String hostName, String url)
         {
             var hosts = Hosts;
@@ -152,13 +167,14 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Resolve the host of a url, decodes the url and inserts index.html for directory requests
+        /// Resolve the host of a url, decodes the url and inserts index.html for directory requests.
         /// </summary>
-        /// <param name="prefix">The prefix (the host name)</param>
-        /// <param name="queryStart">The index of the '?' that starts the query string, -1 if there is no query string</param>
+        /// <param name="prefix">The prefix (the <see cref="HttpServerHostInfo.Name"/> of the host)</param>
+        /// <param name="queryStart">The index of the '?' that starts the query string in the returned url, -1 if there is no query string</param>
         /// <param name="didIndex">True if "index.html" was added to the url</param>
-        /// <param name="url">The url, replaced with the decoded url (with index.html inserted if needed)</param>
+        /// <param name="url">The absolute url ("scheme://host:port/path?query"), replaced with the decoded url (with index.html inserted if needed)</param>
         /// <returns>The host</returns>
+        /// <exception cref="Exception">Thrown if there are multiple listener prefixes and none of them matches a new host</exception>
         [SkipLocalsInit]
         public HttpServerHostInfo GetHost(out String prefix, out int queryStart, out bool didIndex, ref String url)
         {

@@ -7,8 +7,12 @@ namespace SysWeaver.IO
 
 
     /// <summary>
-    /// Contains method that create BinareReader's with specific endianness requirements.
+    /// Contains method that create BinaryReader's with specific endianness requirements.
     /// </summary>
+    /// <remarks>
+    /// Note that the standard <see cref="BinaryReader"/> always reads little endian (regardless of the machine endianness),
+    /// so on a big endian machine the readers for <see cref="Endianess.Big"/> and <see cref="Endianess.Current"/> actually reads little endian data.
+    /// </remarks>
     public static class EndianAwareBinaryReader
     {
         /// <summary>
@@ -59,12 +63,13 @@ namespace SysWeaver.IO
             => Open(stream, Endianess.Current, Encoding.UTF8, leaveOpen);
 
         /// <summary>
-        /// Creates a BinaryReader that reads data using the current endian (of the current process)
+        /// Creates a BinaryReader that reads data using the specified endianness (strings and chars are read as UTF-8)
         /// </summary>
         /// <param name="stream">The stream to read from</param>
         /// <param name="endian">What endian to read data in</param>
         /// <param name="leaveOpen">Optionally leave the <paramref name="stream"/> open when the binary reader is disposed</param>
-        /// <returns>A binary reader that reads data stored using the current endian (of the current process)</returns>
+        /// <returns>A binary reader that reads data using the specified endianness</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="endian"/> isn't a valid value</exception>
         public static BinaryReader Open(Stream stream, Endianess endian, bool leaveOpen = false)
             => Open(stream, endian, Encoding.UTF8, leaveOpen);
 
@@ -76,6 +81,7 @@ namespace SysWeaver.IO
         /// <param name="encoding">The text encoding of the stream</param>
         /// <param name="leaveOpen">Optionally leave the <paramref name="stream"/> open when the binary reader is disposed</param>
         /// <returns>A binary reader that reads data using the specified endianness</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="endian"/> isn't a valid value</exception>
         public static BinaryReader Open(Stream stream, Endianess endian, Encoding encoding, bool leaveOpen = false)
         {
             switch (endian)
@@ -94,7 +100,7 @@ namespace SysWeaver.IO
 
 
     /// <summary>
-    /// Repesents an endianness
+    /// Represents an endianness
     /// </summary>
     public enum Endianess
     {

@@ -11,13 +11,18 @@ namespace SysWeaver.Serialization.SwJson.Writer
     /// The caller must make sure that there is room for the output (see each method).
     /// The output is identical to the .NET formatting that the JsonWriter used before (verified by the tests).
     /// </summary>
+    /// <remarks>
+    /// No bounds checks are made, writing past the ensured space corrupts memory.
+    /// All formatting is culture invariant (ASCII digits, '.' as the decimal separator).
+    /// Methods named Try* return null when the value isn't handled, the caller then falls back to the .NET formatting.
+    /// </remarks>
     [SkipLocalsInit]
     static unsafe class FastFormat
     {
         #region Integers
 
         /// <summary>
-        /// "00", "01", .. "99" as little endian ushort's
+        /// "00", "01", .. "99" as little endian ushort's (the first char in the low byte), so that a pair is written with one 16 bit store
         /// </summary>
         static readonly ushort[] DigitPairs = CreateDigitPairs();
 
@@ -29,6 +34,9 @@ namespace SysWeaver.Serialization.SwJson.Writer
             return t;
         }
 
+        /// <summary>
+        /// 10^0 .. 10^19 (all powers of 10 that fit in an ulong)
+        /// </summary>
         static readonly ulong[] PowersOf10 = CreatePowersOf10();
 
         static ulong[] CreatePowersOf10()
@@ -52,6 +60,8 @@ namespace SysWeaver.Serialization.SwJson.Writer
         /// <summary>
         /// The number of decimal digits (1 for 0)
         /// </summary>
+        /// <param name="value">The value</param>
+        /// <returns>1 - 20</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int CountDigits(ulong value)
         {
@@ -64,6 +74,9 @@ namespace SysWeaver.Serialization.SwJson.Writer
         /// <summary>
         /// Write an unsigned integer, max 10 bytes
         /// </summary>
+        /// <param name="d">The write position</param>
+        /// <param name="value">The value</param>
+        /// <returns>The position after the last written byte</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Byte* WriteUInt32(Byte* d, uint value)
         {
@@ -101,6 +114,9 @@ namespace SysWeaver.Serialization.SwJson.Writer
         /// <summary>
         /// Write an unsigned integer, max 20 bytes
         /// </summary>
+        /// <param name="d">The write position</param>
+        /// <param name="value">The value</param>
+        /// <returns>The position after the last written byte</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Byte* WriteUInt64(Byte* d, ulong value)
         {
@@ -137,8 +153,11 @@ namespace SysWeaver.Serialization.SwJson.Writer
         }
 
         /// <summary>
-        /// Write a signed integer, max 11 bytes
+        /// Write a signed integer, max 11 bytes (handles <see cref="int.MinValue"/>)
         /// </summary>
+        /// <param name="d">The write position</param>
+        /// <param name="value">The value</param>
+        /// <returns>The position after the last written byte</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Byte* WriteInt32(Byte* d, int value)
         {
@@ -151,8 +170,11 @@ namespace SysWeaver.Serialization.SwJson.Writer
         }
 
         /// <summary>
-        /// Write a signed integer, max 20 bytes
+        /// Write a signed integer, max 20 bytes (handles <see cref="long.MinValue"/>)
         /// </summary>
+        /// <param name="d">The write position</param>
+        /// <param name="value">The value</param>
+        /// <returns>The position after the last written byte</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Byte* WriteInt64(Byte* d, long value)
         {
@@ -187,6 +209,9 @@ namespace SysWeaver.Serialization.SwJson.Writer
 
         #region Floating point
 
+        /// <summary>
+        /// 1e0 .. 1e22, all exactly representable as a double
+        /// </summary>
         static readonly double[] Pow10Double = CreatePow10Double();
 
         static double[] CreatePow10Double()
@@ -197,6 +222,9 @@ namespace SysWeaver.Serialization.SwJson.Writer
             return t;
         }
 
+        /// <summary>
+        /// 1e0 .. 1e10, all exactly representable as a float
+        /// </summary>
         static readonly float[] Pow10Single = [1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f, 1e8f, 1e9f, 1e10f];
 
         // 2^50, scaled values must be below this
@@ -213,6 +241,13 @@ namespace SysWeaver.Serialization.SwJson.Writer
         /// so any shorter round trippable string would have been found with a smaller k, and the digits for a k are unique.
         /// 0.001 &lt;= |value| &lt; 10^15 is always written without an exponent by "r".
         /// </summary>
+        /// <remarks>
+        /// Integral values must be handled by the caller: for those "x.0" would be written (k = 1 always matches), while "r" writes "x".
+        /// Returns null for 0, -0, NaN, infinities, values outside the range, and values that need more than 17 decimals or a scaled value of 2^50 or more.
+        /// </remarks>
+        /// <param name="d">The write position</param>
+        /// <param name="value">The (non integral) value</param>
+        /// <returns>The position after the last written byte, or null if the value isn't handled (nothing is written)</returns>
         public static Byte* TryWriteShortDouble(Byte* d, double value)
         {
             var a = Math.Abs(value);
@@ -239,8 +274,12 @@ namespace SysWeaver.Serialization.SwJson.Writer
         }
 
         /// <summary>
-        /// Like TryWriteShortDouble but for a float, max 32 bytes
+        /// Like <see cref="TryWriteShortDouble"/> but for a float (0.001 &lt;= |value| &lt; 10^6, scaled value below 2^21), max 32 bytes.
+        /// The output is identical to TryFormat("r") for a float.
         /// </summary>
+        /// <param name="d">The write position</param>
+        /// <param name="value">The (non integral) value</param>
+        /// <returns>The position after the last written byte, or null if the value isn't handled (nothing is written)</returns>
         public static Byte* TryWriteShortSingle(Byte* d, float value)
         {
             var a = MathF.Abs(value);
@@ -267,7 +306,8 @@ namespace SysWeaver.Serialization.SwJson.Writer
         }
 
         /// <summary>
-        /// Write n*10^-scale (with scale > 0) as a decimal number, like "12.34" or "0.0012"
+        /// Write n*10^-scale (with scale &gt; 0) as a decimal number, like "12.34" or "0.0012".
+        /// Trailing zeros of the fraction are kept (the callers use the smallest scale, so there are none).
         /// </summary>
         static Byte* WriteScaled(Byte* d, ulong n, int scale)
         {
@@ -288,9 +328,16 @@ namespace SysWeaver.Serialization.SwJson.Writer
         }
 
         /// <summary>
-        /// Write a decimal (that isn't an integer) with a 64 bit mantissa, identical to TryFormat("r").
+        /// Write a decimal with a non zero scale and a non zero mantissa that fits in 64 bits, identical to the default .NET formatting.
         /// Returns null if the value isn't handled, max 32 bytes.
         /// </summary>
+        /// <remarks>
+        /// Trailing zeros (part of the decimal's scale) are kept, 1.50m is written as "1.50".
+        /// Returns null for a scale of 0, a zero mantissa (like 0.00m) and mantissas that need more than 64 bits.
+        /// </remarks>
+        /// <param name="d">The write position</param>
+        /// <param name="value">The value</param>
+        /// <returns>The position after the last written byte, or null if the value isn't handled (nothing is written)</returns>
         public static Byte* TryWriteDecimal(Byte* d, decimal value)
         {
             Span<int> bits = stackalloc int[4];
@@ -346,6 +393,7 @@ namespace SysWeaver.Serialization.SwJson.Writer
         /// <summary>
         /// Write the fraction of a second (0 - 9 999 999 ticks) with trailing zeros removed, nothing is written for 0
         /// </summary>
+        /// <returns>The position after the last written byte</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static Byte* WriteTrimmedFraction(Byte* d, uint fraction)
         {
@@ -394,9 +442,12 @@ namespace SysWeaver.Serialization.SwJson.Writer
         }
 
         /// <summary>
-        /// Like TryFormat("o") with trailing fraction zeros removed, for Utc and Unspecified times.
+        /// Like TryFormat("o") with trailing fraction zeros removed, for Utc ("Z" suffix) and Unspecified (no suffix) times.
         /// Returns null for local times (the offset needs the local time zone). Max 28 bytes.
         /// </summary>
+        /// <param name="d">The write position</param>
+        /// <param name="value">The value</param>
+        /// <returns>The position after the last written byte, or null for a <see cref="DateTimeKind.Local"/> time (nothing is written)</returns>
         public static Byte* TryWriteDateTime(Byte* d, DateTime value)
         {
             var kind = value.Kind;
@@ -412,8 +463,12 @@ namespace SysWeaver.Serialization.SwJson.Writer
         }
 
         /// <summary>
-        /// Like TryFormat("o") with trailing fraction zeros removed, max 33 bytes
+        /// Like TryFormat("o") with trailing fraction zeros removed, max 33 bytes.
+        /// The clock time (<see cref="DateTimeOffset.DateTime"/>) is written followed by the offset as +hh:mm or -hh:mm (never "Z").
         /// </summary>
+        /// <param name="d">The write position</param>
+        /// <param name="value">The value</param>
+        /// <returns>The position after the last written byte</returns>
         public static Byte* WriteDateTimeOffset(Byte* d, DateTimeOffset value)
         {
             d = WriteDateTimeCore(d, value.DateTime);
@@ -438,6 +493,9 @@ namespace SysWeaver.Serialization.SwJson.Writer
         /// <summary>
         /// Like TryFormat("o") for a DateOnly: yyyy-MM-dd (10 bytes)
         /// </summary>
+        /// <param name="d">The write position</param>
+        /// <param name="value">The value</param>
+        /// <returns>The position after the last written byte</returns>
         public static Byte* WriteDateOnly(Byte* d, DateOnly value)
         {
             value.Deconstruct(out int year, out int month, out int day);
@@ -473,13 +531,19 @@ namespace SysWeaver.Serialization.SwJson.Writer
         }
 
         /// <summary>
-        /// Like TryFormat("o") for a TimeOnly with trailing fraction zeros removed, max 16 bytes
+        /// Like TryFormat("o") for a TimeOnly with trailing fraction zeros removed: HH:mm:ss[.fffffff], max 16 bytes
         /// </summary>
+        /// <param name="d">The write position</param>
+        /// <param name="value">The value</param>
+        /// <returns>The position after the last written byte</returns>
         public static Byte* WriteTimeOnly(Byte* d, TimeOnly value) => WriteTimeOfDay(d, (ulong)value.Ticks);
 
         /// <summary>
         /// Like TryFormat("c") for a TimeSpan with trailing fraction zeros removed: [-][d.]hh:mm:ss[.fffffff], max 26 bytes
         /// </summary>
+        /// <param name="d">The write position</param>
+        /// <param name="value">The value (<see cref="TimeSpan.MinValue"/> is handled)</param>
+        /// <returns>The position after the last written byte</returns>
         public static Byte* WriteTimeSpan(Byte* d, TimeSpan value)
         {
             var t = value.Ticks;
@@ -509,10 +573,14 @@ namespace SysWeaver.Serialization.SwJson.Writer
 
         #region Strings
 
+        /// <summary>
+        /// Lower case hex digits as UTF8
+        /// </summary>
         static readonly Byte[] HexDigits = "0123456789abcdef"u8.ToArray();
 
         /// <summary>
-        /// The escape char for '\b' '\t' '\n' '\f' '\r' '"' and '\\', 1 for other chars that must be escaped (as \u00XX), 0 if no escape is needed
+        /// The escape char for '\b' '\t' '\n' '\f' '\r' '"' and '\\', 1 for other chars that must be escaped (as \u00XX), 0 if no escape is needed.
+        /// Indexed by an ASCII char (128 entries), only the control chars 0x00 - 0x1f, '"' and '\\' are escaped.
         /// </summary>
         public static readonly Byte[] Escapes = CreateEscapes();
 
@@ -570,6 +638,14 @@ namespace SysWeaver.Serialization.SwJson.Writer
         /// Max 3 bytes per char + 64 must be ensured before calling this, a \u00XX escape (6 bytes) ensures more space as needed.
         /// Lone surrogates are written as U+FFFD (the replacement char).
         /// </summary>
+        /// <remarks>
+        /// Only the control chars (0x00 - 0x1f), '"' and '\\' are escaped (using the short escapes when available, else \u00xx with lower case hex).
+        /// DEL (0x7f), '/', U+2028 and U+2029 are written as is (valid json, but not safe to embed in a html script block without further escaping).
+        /// Uses <see cref="Vector128"/> to copy 16 ASCII chars at a time when hardware accelerated (16 bytes are always stored, relying on the ensured space).
+        /// The buffer may be replaced (by an escape), so pointers into the writer's buffer are invalid after the call.
+        /// </remarks>
+        /// <param name="w">The writer, with value.Length * 3 + 64 bytes ensured, the position is advanced past the closing quote</param>
+        /// <param name="value">The string to write, must not be null</param>
         public static void WriteString(ref BufferWriter w, String value)
         {
             var l = value.Length;

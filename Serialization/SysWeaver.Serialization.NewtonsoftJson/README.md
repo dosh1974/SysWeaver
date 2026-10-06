@@ -7,8 +7,8 @@
 | | |
 |---|---|
 | **Layer** | Serialization |
-| **Kind** | Serializer plug-in (`ISerializerType`) |
-| **Selection priority** | above default among serializers for `json` |
+| **Kind** | Serializer plug-in (`ITextSerializerType`) |
+| **Selection priority** | 1 (above System.Text.Json, below SysWeaver.Json and SafeJson) |
 
 ## Purpose
 
@@ -28,13 +28,18 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 ## Key features
 
 - Tolerant, feature-rich JSON parsing.
-- Pretty-printed output helper.
+- `NewtonsoftJsonSerializer` (singleton `Instance`) writes `$type` information where needed for `Compact`, on every object (indented) for `Verbose` and never for `Typeless`; reading honours `$type` (`TypeNameHandling.Auto`) and resolves names through `TypeNameResolver`.
+- `MemberResolver` (public contract resolver, also used by Chart.js) serializes fields and skips read-only fields and get-only properties.
+- `NewtonsoftJsonSerializer.ToFormattedJson` pretty-prints objects with byte arrays as aligned rows of numbers instead of base64.
+- Deserializers are pooled, so concurrent use is cheap and safe.
 - Registered through the manifest like any service, or with one static call in code.
 
 ## Limitations and considerations
 
 - Slower and more allocation-heavy than the span-based serializers.
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered.
+- **Security:** `$type` names in the input are resolved against every loaded assembly without an allow list. Never deserialize untrusted input into types with `object`, interface or non-sealed base class members.
+- `FromString(string)` throws `NullReferenceException` when the text deserializes to null but isn't the literal `null` (e.g. empty text), unlike the other overloads which return null.
+- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / Jil / SpanJson / Utf8Json -5).
 
 ## Using it
 

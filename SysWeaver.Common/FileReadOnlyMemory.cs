@@ -15,43 +15,54 @@ namespace SysWeaver
 
 
     /// <summary>
-    /// Function for getting the file content as memory (using memory mapped io).
+    /// Functions for getting the content of a file as memory, using memory mapped io when possible (no copy, the OS pages the file in on demand).
     /// </summary>
+    /// <remarks>
+    /// All functions reads from the current position of the file stream to the end of the file.
+    /// The returned <see cref="IUnmanagedReadOnlyMemory{T}"/> must be disposed when no longer used (unmaps the file, or returns a pooled buffer).
+    /// Files opened by name are opened with <see cref="FileShare.Read"/>, so the file can't be modified while it's mapped.
+    /// Used by <see cref="StreamExt"/> for all <see cref="FileStream"/>'s, by <see cref="FileHash"/> and by the http file handler.
+    /// </remarks>
     public static class FileReadOnlyMemory
     {
 
         /// <summary>
-        /// Get the content of a file as memory, the file is not read, just mapped into the process.
-        /// If memory mapped IO doesn't work the file is read to memory.
-        /// This is the safest method to use.
+        /// Read the content of a file into a new array (the file is memory mapped and copied, if memory mapped IO doesn't work the file is read normally).
         /// </summary>
-        /// <param name="filename">The name of the file to map</param>
-        /// <returns>The content of the file</returns>
+        /// <param name="filename">The name of the file to read</param>
+        /// <returns>The content of the file (an empty array for an empty file)</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="filename"/> is null</exception>
+        /// <exception cref="FileNotFoundException">The file doesn't exist</exception>
+        /// <exception cref="IOException">The file can't be opened or read (ex: it's opened for writing by someone else)</exception>
+        /// <exception cref="UnauthorizedAccessException">Access to the file is denied</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Task<Byte[]> ReadAllBytesAsync(string filename)
             => ReadAllBytesAsync(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
 
 
         /// <summary>
-        /// Get the content of a file as memory, the file is not read, just mapped into the process.
-        /// If memory mapped IO doesn't work the file is read to memory.
-        /// This is the safest method to use.
+        /// Read the content of a file into a new array (the file is memory mapped and copied, if memory mapped IO doesn't work the file is read normally).
         /// </summary>
-        /// <param name="filename">The name of the file to map</param>
-        /// <returns>The content of the file</returns>
+        /// <param name="filename">The name of the file to read</param>
+        /// <returns>The content of the file (an empty array for an empty file)</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="filename"/> is null</exception>
+        /// <exception cref="FileNotFoundException">The file doesn't exist</exception>
+        /// <exception cref="IOException">The file can't be opened or read (ex: it's opened for writing by someone else)</exception>
+        /// <exception cref="UnauthorizedAccessException">Access to the file is denied</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Byte[] ReadAllBytes(string filename)
             => ReadAllBytes(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
 
 
         /// <summary>
-        /// Get the content of a file using memory mapped io if possible
-        /// If memory mapped IO doesn't work the file is read to memory in a traditional fashion
-        /// This is the safest method to use.
+        /// Read the remaining content of a file stream (from the current position) into a new array.
+        /// The file is memory mapped and copied, if memory mapped IO doesn't work the file is read normally.
         /// </summary>
         /// <param name="fileStream">The file stream, must be open for reading</param>
-        /// <param name="leaveOpen">If true, the stream is left open (positioned at the end of the read data), else it's disposed (when the returned memory is disposed if the file is mapped)</param>
-        /// <returns>The content of the file</returns>
+        /// <param name="leaveOpen">If true, the stream is left open (positioned at the end of the read data), else it's disposed before this method returns</param>
+        /// <returns>The remaining content of the file (an empty array if there is no remaining data)</returns>
+        /// <exception cref="NullReferenceException"><paramref name="fileStream"/> is null</exception>
+        /// <exception cref="IOException">An I/O error occurred, or the remaining data is larger than the max array size</exception>
         public static async Task<Byte[]> ReadAllBytesAsync(FileStream fileStream, bool leaveOpen = false)
         {
             using var p = await ReadAsync(fileStream, leaveOpen).ConfigureAwait(false);
@@ -64,13 +75,14 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Get the content of a file using memory mapped io if possible
-        /// If memory mapped IO doesn't work the file is read to memory in a traditional fashion
-        /// This is the safest method to use.
+        /// Read the remaining content of a file stream (from the current position) into a new array.
+        /// The file is memory mapped and copied, if memory mapped IO doesn't work the file is read normally.
         /// </summary>
         /// <param name="fileStream">The file stream, must be open for reading</param>
-        /// <param name="leaveOpen">If true, the stream is left open (positioned at the end of the read data), else it's disposed (when the returned memory is disposed if the file is mapped)</param>
-        /// <returns>The content of the file</returns>
+        /// <param name="leaveOpen">If true, the stream is left open (positioned at the end of the read data), else it's disposed before this method returns</param>
+        /// <returns>The remaining content of the file (an empty array if there is no remaining data)</returns>
+        /// <exception cref="NullReferenceException"><paramref name="fileStream"/> is null</exception>
+        /// <exception cref="IOException">An I/O error occurred, or the remaining data is larger than the max array size</exception>
         public static Byte[] ReadAllBytes(FileStream fileStream, bool leaveOpen = false)
         {
             using var p = Read(fileStream, leaveOpen);
@@ -84,24 +96,33 @@ namespace SysWeaver
 
         /// <summary>
         /// Get the content of a file as memory, the file is not read, just mapped into the process.
-        /// If memory mapped IO doesn't work the file is read to memory.
+        /// If memory mapped IO doesn't work the file is read to (pooled) memory.
         /// This is the safest method to use.
         /// </summary>
         /// <param name="filename">The name of the file to map</param>
-        /// <returns>The content of the file</returns>
+        /// <returns>The content of the file, dispose it when done (the file is kept open until then)</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="filename"/> is null</exception>
+        /// <exception cref="FileNotFoundException">The file doesn't exist</exception>
+        /// <exception cref="IOException">The file can't be opened or read (ex: it's opened for writing by someone else)</exception>
+        /// <exception cref="UnauthorizedAccessException">Access to the file is denied</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Task<IUnmanagedReadOnlyMemory<Byte>> ReadAsync(string filename)
             => ReadAsync(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
 
 
         /// <summary>
-        /// Get the content of a file as memory, the file is not read, just mapped into the process.
-        /// If memory mapped IO doesn't work the file is read to memory.
+        /// Get the remaining content of a file stream (from the current position) as memory, the file is not read, just mapped into the process.
+        /// If memory mapped IO doesn't work (or the remaining data is larger than int.MaxValue bytes) the file is read to (pooled) memory.
         /// This is the safest method to use.
         /// </summary>
         /// <param name="fileStream">The file stream, must be open for reading</param>
         /// <param name="leaveOpen">If true, the stream is left open (positioned at the end of the read data), else it's disposed (when the returned memory is disposed if the file is mapped)</param>
-        /// <returns>The content of the file</returns>
+        /// <returns>The remaining content of the file, dispose it when done (a shared empty instance if there is no remaining data)</returns>
+        /// <exception cref="NullReferenceException"><paramref name="fileStream"/> is null</exception>
+        /// <exception cref="IOException">An I/O error occurred, or the remaining data is too large to be read into memory</exception>
+        /// <remarks>
+        /// If mapping fails after the mapping took ownership of the stream (leaveOpen is false), the stream is already disposed and the fallback read throws an <see cref="ObjectDisposedException"/>.
+        /// </remarks>
         public static async Task<IUnmanagedReadOnlyMemory<Byte>> ReadAsync(FileStream fileStream, bool leaveOpen = false)
         {
             try
@@ -130,24 +151,33 @@ namespace SysWeaver
 
         /// <summary>
         /// Get the content of a file as memory, the file is not read, just mapped into the process.
-        /// If memory mapped IO doesn't work the file is read to memory.
+        /// If memory mapped IO doesn't work the file is read to (pooled) memory.
         /// This is the safest method to use.
         /// </summary>
         /// <param name="filename">The name of the file to map</param>
-        /// <returns>The content of the file</returns>
+        /// <returns>The content of the file, dispose it when done (the file is kept open until then)</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="filename"/> is null</exception>
+        /// <exception cref="FileNotFoundException">The file doesn't exist</exception>
+        /// <exception cref="IOException">The file can't be opened or read (ex: it's opened for writing by someone else)</exception>
+        /// <exception cref="UnauthorizedAccessException">Access to the file is denied</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IUnmanagedReadOnlyMemory<Byte> Read(string filename)
             => Read(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
 
 
         /// <summary>
-        /// Get the content of a file as memory, the file is not read, just mapped into the process.
-        /// If memory mapped IO doesn't work the file is read to memory.
+        /// Get the remaining content of a file stream (from the current position) as memory, the file is not read, just mapped into the process.
+        /// If memory mapped IO doesn't work (or the remaining data is larger than int.MaxValue bytes) the file is read to (pooled) memory.
         /// This is the safest method to use.
         /// </summary>
         /// <param name="fileStream">The file stream, must be open for reading</param>
         /// <param name="leaveOpen">If true, the stream is left open (positioned at the end of the read data), else it's disposed (when the returned memory is disposed if the file is mapped)</param>
-        /// <returns>The content of the file</returns>
+        /// <returns>The remaining content of the file, dispose it when done (a shared empty instance if there is no remaining data)</returns>
+        /// <exception cref="NullReferenceException"><paramref name="fileStream"/> is null</exception>
+        /// <exception cref="IOException">An I/O error occurred, or the remaining data is too large to be read into memory</exception>
+        /// <remarks>
+        /// If mapping fails after the mapping took ownership of the stream (leaveOpen is false), the stream is already disposed and the fallback read throws an <see cref="ObjectDisposedException"/>.
+        /// </remarks>
         public static IUnmanagedReadOnlyMemory<Byte> Read(FileStream fileStream, bool leaveOpen = false)
         {
             try
@@ -182,7 +212,13 @@ namespace SysWeaver
         /// The length of the file may not be larger than int.MaxValue (2GB), in that case an exception is thrown.
         /// </summary>
         /// <param name="filename">The name of the file to map</param>
-        /// <returns>The content of the file</returns>
+        /// <returns>The content of the file, dispose it when done (the file is kept open until then)</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="filename"/> is null</exception>
+        /// <exception cref="FileNotFoundException">The file doesn't exist</exception>
+        /// <exception cref="IOException">The file can't be opened or read (ex: it's opened for writing by someone else)</exception>
+        /// <exception cref="UnauthorizedAccessException">Access to the file is denied</exception>
+        /// <exception cref="Exception">The remaining data is larger than int.MaxValue bytes</exception>
+        /// <exception cref="IOException">The file can't be mapped</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IUnmanagedReadOnlyMemory<Byte> Map(string filename)
             => Map<Byte>(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
@@ -191,8 +227,15 @@ namespace SysWeaver
         /// Get the content of a file as memory, the file is not read, just mapped into the process.
         /// The length of the file may not be larger than int.MaxValue (2GB), in that case an exception is thrown.
         /// </summary>
+        /// <typeparam name="T">The element type, the file is reinterpreted as an array of T (a trailing partial element is ignored)</typeparam>
         /// <param name="filename">The name of the file to map</param>
-        /// <returns>The content of the file</returns>
+        /// <returns>The content of the file, dispose it when done (the file is kept open until then)</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="filename"/> is null</exception>
+        /// <exception cref="FileNotFoundException">The file doesn't exist</exception>
+        /// <exception cref="IOException">The file can't be opened or read (ex: it's opened for writing by someone else)</exception>
+        /// <exception cref="UnauthorizedAccessException">Access to the file is denied</exception>
+        /// <exception cref="Exception">The remaining data is larger than int.MaxValue bytes</exception>
+        /// <exception cref="IOException">The file can't be mapped</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IUnmanagedReadOnlyMemory<T> Map<T>(string filename) where T : unmanaged
             => Map<T>(new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read));
@@ -200,10 +243,15 @@ namespace SysWeaver
         /// <summary>
         /// Try to get the content of a file as memory, the file is not read, just mapped into the process.
         /// </summary>
-        /// <param name="mem">The content of the file if successful</param>
+        /// <param name="mem">The content of the file if successful (dispose it when done), else null</param>
         /// <param name="filename">The name of the file to map</param>
-        /// <param name="maxLength">The maximum length of the file, if the file is larger than this, the function returns false</param>
-        /// <returns>True if the file could be mapped (is smaller than the maximum) else false</returns>
+        /// <param name="maxLength">The maximum length of the file in bytes, if the file is larger than this, the function returns false</param>
+        /// <returns>True if the file was mapped (its length is at most <paramref name="maxLength"/>) else false (the file is closed)</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="filename"/> is null</exception>
+        /// <exception cref="FileNotFoundException">The file doesn't exist</exception>
+        /// <exception cref="IOException">The file can't be opened or read (ex: it's opened for writing by someone else)</exception>
+        /// <exception cref="UnauthorizedAccessException">Access to the file is denied</exception>
+        /// <exception cref="IOException">The file can't be mapped (failures to map throws, they don't return false)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryMap(out IUnmanagedReadOnlyMemory<Byte> mem, string filename, int maxLength = int.MaxValue)
             => TryMap<Byte>(out mem, new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read), false, maxLength);
@@ -211,32 +259,47 @@ namespace SysWeaver
         /// <summary>
         /// Try to get the content of a file as memory, the file is not read, just mapped into the process.
         /// </summary>
-        /// <param name="mem">The content of the file if successful</param>
+        /// <typeparam name="T">The element type, the file is reinterpreted as an array of T (a trailing partial element is ignored)</typeparam>
+        /// <param name="mem">The content of the file if successful (dispose it when done), else null</param>
         /// <param name="filename">The name of the file to map</param>
-        /// <param name="maxLength">The maximum length of the file, if the file is larger than this, the function returns false</param>
-        /// <returns>True if the file could be mapped (is smaller than the maximum) else false</returns>
+        /// <param name="maxLength">The maximum length of the file in bytes, if the file is larger than this, the function returns false</param>
+        /// <returns>True if the file was mapped (its length is at most <paramref name="maxLength"/>) else false (the file is closed)</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="filename"/> is null</exception>
+        /// <exception cref="FileNotFoundException">The file doesn't exist</exception>
+        /// <exception cref="IOException">The file can't be opened or read (ex: it's opened for writing by someone else)</exception>
+        /// <exception cref="UnauthorizedAccessException">Access to the file is denied</exception>
+        /// <exception cref="IOException">The file can't be mapped (failures to map throws, they don't return false)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryMap<T>(out IUnmanagedReadOnlyMemory<T> mem, string filename, int maxLength = int.MaxValue) where T : unmanaged
             => TryMap<T>(out mem, new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read), false, maxLength);
 
         /// <summary>
-        /// Get the content of a file as memory, the file is not read, just mapped into the process.
-        /// The length of the file may not be larger than int.MaxValue (2GB), in that case an exception is thrown.
+        /// Get the remaining content of a file stream (from the current position) as memory, the file is not read, just mapped into the process.
+        /// The remaining length may not be larger than int.MaxValue (2GB), in that case an exception is thrown.
         /// </summary>
         /// <param name="fileStream">The file stream, must be open for reading</param>
-        /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
-        /// <returns>The content of the file</returns>
+        /// <param name="leaveOpen">If true, the stream is left open (and positioned at the end of the mapped data on success), the caller must dispose it.
+        /// If false, the stream is owned by the returned memory (disposed with it), or disposed immediately if the data is empty or the mapping fails</param>
+        /// <returns>The remaining content of the file, dispose it when done (a shared empty instance if there is no remaining data)</returns>
+        /// <exception cref="NullReferenceException"><paramref name="fileStream"/> is null</exception>
+        /// <exception cref="Exception">The remaining data is larger than int.MaxValue bytes</exception>
+        /// <exception cref="IOException">The file can't be mapped</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IUnmanagedReadOnlyMemory<Byte> Map(FileStream fileStream, bool leaveOpen = false)
             => Map<Byte>(fileStream, leaveOpen);
 
         /// <summary>
-        /// Get the content of a file as memory, the file is not read, just mapped into the process.
-        /// The length of the file may not be larger than int.MaxValue (2GB), in that case an exception is thrown.
+        /// Get the remaining content of a file stream (from the current position) as memory, the file is not read, just mapped into the process.
+        /// The remaining length may not be larger than int.MaxValue (2GB), in that case an exception is thrown.
         /// </summary>
+        /// <typeparam name="T">The element type, the file is reinterpreted as an array of T (a trailing partial element is ignored)</typeparam>
         /// <param name="fileStream">The file stream, must be open for reading</param>
-        /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
-        /// <returns>The content of the file</returns>
+        /// <param name="leaveOpen">If true, the stream is left open (and positioned at the end of the mapped data on success), the caller must dispose it.
+        /// If false, the stream is owned by the returned memory (disposed with it), or disposed immediately if the data is empty or the mapping fails</param>
+        /// <returns>The remaining content of the file, dispose it when done (a shared empty instance if there is no remaining data)</returns>
+        /// <exception cref="NullReferenceException"><paramref name="fileStream"/> is null</exception>
+        /// <exception cref="Exception">The remaining data is larger than int.MaxValue bytes</exception>
+        /// <exception cref="IOException">The file can't be mapped</exception>
         public static IUnmanagedReadOnlyMemory<T> Map<T>(FileStream fileStream, bool leaveOpen = false) where T : unmanaged
         {
             try
@@ -259,25 +322,32 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Try to get the content of a file as memory, the file is not read, just mapped into the process.
+        /// Try to get the remaining content of a file stream (from the current position) as memory, the file is not read, just mapped into the process.
         /// </summary>
-        /// <param name="mem">The content of the file if successful</param>
+        /// <param name="mem">The content of the file if successful (dispose it when done), else null</param>
         /// <param name="fileStream">The file stream, must be open for reading</param>
-        /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
-        /// <param name="maxLength">The maximum length of the file, if the file is larger than this, the function returns false</param>
-        /// <returns>True if the file could be mapped (is smaller than the maximum) else false</returns>
+        /// <param name="leaveOpen">Only affects the case when the function returns false: if true the caller must dispose the stream, else it's disposed.
+        /// If the function returns true, the stream is always owned by the returned memory (disposed with it, or immediately if the data is empty)</param>
+        /// <param name="maxLength">The maximum remaining length in bytes, if the remaining data is larger than this, the function returns false</param>
+        /// <returns>True if the file was mapped (the remaining length is at most <paramref name="maxLength"/>) else false</returns>
+        /// <exception cref="NullReferenceException"><paramref name="fileStream"/> is null</exception>
+        /// <exception cref="IOException">The file can't be mapped (failures to map throws, they don't return false)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryMap(out IUnmanagedReadOnlyMemory<Byte> mem, FileStream fileStream, bool leaveOpen = false, int maxLength = int.MaxValue)
             => TryMap<Byte>(out mem, fileStream, leaveOpen, maxLength);
 
         /// <summary>
-        /// Try to get the content of a file as memory, the file is not read, just mapped into the process.
+        /// Try to get the remaining content of a file stream (from the current position) as memory, the file is not read, just mapped into the process.
         /// </summary>
-        /// <param name="mem">The content of the file if successful</param>
+        /// <typeparam name="T">The element type, the file is reinterpreted as an array of T (a trailing partial element is ignored)</typeparam>
+        /// <param name="mem">The content of the file if successful (dispose it when done), else null</param>
         /// <param name="fileStream">The file stream, must be open for reading</param>
-        /// <param name="leaveOpen">If true and the function returns false, the callee must Dispose the stream, if the function returns true, the stream is Disposed automatically</param>
-        /// <param name="maxLength">The maximum length of the file, if the file is larger than this, the function returns false</param>
-        /// <returns>True if the file could be mapped (is smaller than the maximum) else false</returns>
+        /// <param name="leaveOpen">Only affects the case when the function returns false: if true the caller must dispose the stream, else it's disposed.
+        /// If the function returns true, the stream is always owned by the returned memory (disposed with it, or immediately if the data is empty)</param>
+        /// <param name="maxLength">The maximum remaining length in bytes, if the remaining data is larger than this, the function returns false</param>
+        /// <returns>True if the file was mapped (the remaining length is at most <paramref name="maxLength"/>) else false</returns>
+        /// <exception cref="NullReferenceException"><paramref name="fileStream"/> is null</exception>
+        /// <exception cref="IOException">The file can't be mapped (failures to map throws, they don't return false)</exception>
         public static bool TryMap<T>(out IUnmanagedReadOnlyMemory<T> mem, FileStream fileStream, bool leaveOpen = false, int maxLength = int.MaxValue) where T : unmanaged
         {
             try
@@ -314,9 +384,9 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// A MemoryManager over a raw pointer
+        /// A MemoryManager over a read only memory mapped view of a file, disposing it unmaps the view and closes the mapping (and the file stream unless leaveOpen was used).
         /// </summary>
-        /// <remarks>The pointer is assumed to be fully unmanaged, or externally pinned - no attempt will be made to pin this data</remarks>
+        /// <remarks>The mapped memory is never moved, so no pinning is required</remarks>
         sealed unsafe class MappedFileMemoryHandler<T> : MemoryManager<T>, IUnmanagedReadOnlyMemory<T>
             where T : unmanaged
         {
@@ -326,9 +396,12 @@ namespace SysWeaver
       
 
             /// <summary>
-            /// Create a new UnmanagedMemoryManager instance at the given pointer and size
+            /// Map a region of a file
             /// </summary>
-            /// <remarks>It is assumed that the span provided is already unmanaged or externally pinned</remarks>
+            /// <param name="fs">The file stream to map</param>
+            /// <param name="byteSize">The number of bytes to map</param>
+            /// <param name="pos">The file offset of the first byte to map</param>
+            /// <param name="leaveOpen">If true, the stream isn't disposed by the mapping and is positioned at the end of the mapped region, else the mapping owns the stream</param>
             public MappedFileMemoryHandler(FileStream fs, int byteSize, long pos = 0, bool leaveOpen = false)
             {
                 var file = MemoryMappedFile.CreateFromFile(fs, null, 0, MemoryMappedFileAccess.Read, HandleInheritability.None, leaveOpen);
@@ -367,8 +440,9 @@ namespace SysWeaver
             }
 
             /// <summary>
-            /// Releases all resources associated with this object
+            /// Unmap the view and close the mapping (thread safe, only the first call has an effect)
             /// </summary>
+            /// <param name="disposing">Ignored</param>
             protected override void Dispose(bool disposing) {
 
                 var h = Interlocked.Exchange(ref H, null);
@@ -412,7 +486,7 @@ namespace SysWeaver
 
 
             /// <summary>
-            /// Get some readonly memory
+            /// The mapped region as readonly memory
             /// </summary>
             public readonly ReadOnlyMemory<T> ReadOnlyMemory;
 

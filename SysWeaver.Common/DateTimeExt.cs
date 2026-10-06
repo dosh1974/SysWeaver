@@ -100,6 +100,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Get a human friendly text from a time span, ex: "3 years", "12 days", "15 hours", "34 minutes", "12.3 seconds", "543.2 ms", "12.0 µs" or "800.0 ns".
+        /// The largest unit giving a value of at least 10 is used (at least 3 for days, at least 3 * 365 days for years), years / days / hours / minutes are rounded to whole numbers.
         /// Negative time spans are prefixed with a '-', ex: "-3 days".
         /// </summary>
         /// <param name="value">The time span</param>
@@ -197,7 +198,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The time stamp</param>
         /// <param name="extraMonths">Number of months to add to the start of the year</param>
-        /// <param name="extraDays">Number of days to add to the start of the month</param>
+        /// <param name="extraDays">Number of days to add (after <paramref name="extraMonths"/> has been added)</param>
         /// <returns>A new time stamp (with the same kind)</returns>
         /// <exception cref="ArgumentOutOfRangeException">The resulting time stamp is outside of the range of a DateTime</exception>
         public static DateTime ToStartOfYear(this DateTime value, int extraMonths = 0, double extraDays = 0)
@@ -285,7 +286,7 @@ namespace SysWeaver
         /// Example: 2024-03-15 11:05:33,123 => 2024-03-15 11:05:33,000.
         /// </summary>
         /// <param name="value">The time stamp</param>
-        /// <param name="extraMs">Number of millie seconds to add to the start of the second</param>
+        /// <param name="extraMs">Number of milliseconds to add to the start of the second</param>
         /// <returns>A new time stamp (with the same kind)</returns>
         /// <exception cref="ArgumentOutOfRangeException">The resulting time stamp is outside of the range of a DateTime</exception>
         public static DateTime ToStartOSecond(this DateTime value, double extraMs = 0)

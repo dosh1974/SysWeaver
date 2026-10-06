@@ -2,13 +2,31 @@ using System;
 
 namespace SysWeaver.Auth
 {
+    /// <summary>
+    /// Generates random, human friendly names (ex: for default nick names), formatted as "[adjective] [entity] [first name]".
+    /// </summary>
+    /// <remarks>
+    /// Not cryptographically random, use a seeded <see cref="Random"/> to get deterministic names.
+    /// </remarks>
     public static class NameGen
     {
 
+        /// <summary>
+        /// The gender of the generated name.
+        /// </summary>
         public enum Genus
         {
+            /// <summary>
+            /// Any gender (randomly selected).
+            /// </summary>
             Any,
+            /// <summary>
+            /// A male name.
+            /// </summary>
             Male,
+            /// <summary>
+            /// A female name.
+            /// </summary>
             Female,
         }
 
@@ -48,7 +66,7 @@ namespace SysWeaver.Auth
         /// <summary>
         /// Generate a random name
         /// </summary>
-        /// <param name="maxLength">The maximum length of the generated name, must be at least 16 or null will be returned(</param>
+        /// <param name="maxLength">The maximum length of the generated name, must be at least 16 or null will be returned</param>
         /// <param name="genus">The genus to use</param>
         /// <param name="rng">The rng to use, use null for a random rng</param>
         /// <returns>A random name</returns>

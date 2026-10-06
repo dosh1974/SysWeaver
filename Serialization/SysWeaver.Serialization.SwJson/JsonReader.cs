@@ -13,18 +13,29 @@ namespace SysWeaver.Serialization.SwJson
 
 
     /// <summary>
-    /// Methods for creating an object given some json
+    /// Deserializes UTF8 (or string) json into typed objects, the read side of the SysWeaver json format (see <see cref="JsonWriter"/>).
     /// </summary>
+    /// <remarks>
+    /// Parsing is done directly on the UTF8 bytes using compiled expression trees (built and cached per type on first use, so the first call for a type is slow).
+    /// All methods are thread safe.
+    /// <para>Supported: public read/write properties and public non-readonly fields, arrays, <see cref="List{T}"/>, <see cref="HashSet{T}"/> and other <see cref="ICollection{T}"/> types with a public parameterless (or <see cref="List{T}"/>) constructor,
+    /// generic dictionaries (keys of any number/date/<see cref="Guid"/>/<see cref="String"/> type), enums (names or numbers), nullable value types, <see cref="Byte"/> arrays (base64 or number arrays) and boxed <see cref="Object"/> values.</para>
+    /// <para>Polymorphism: an object starting with a <c>"$type"</c> member is created as that type (resolved with <see cref="TypeNameResolver"/>), <c>"$value"</c> / <c>"$values"</c> hold the boxed value or array of such an object.</para>
+    /// <para>The parser is lenient: unquoted keys, numbers / booleans in quotes, <c>//</c> and <c>/* */</c> comments and trailing commas are accepted.
+    /// Unknown members are skipped, but only when the value is a string or a scalar (unknown object or array values throw).
+    /// Numbers are parsed with the invariant culture. Integers are not range checked (out of range values wrap) and in release builds digits are not validated.</para>
+    /// </remarks>
     [SkipLocalsInit]
     public unsafe static class JsonReader
     {
         /// <summary>
-        /// Create an object from a byte array, containing an UTF8 encoded json string
+        /// Create an object from UTF8 encoded json.
         /// </summary>
-        /// <typeparam name="T">The type of the object to create</typeparam>
-        /// <param name="data">UTF8 encoded data containing a json representation of an object</param>
-        /// <param name="filename">An optional filename to use when reporting exceptions</param>
-        /// <returns>The object represented in the supplied json</returns>
+        /// <typeparam name="T">The type of the object to create (the declared type, a <c>"$type"</c> member in the json can create a derived type)</typeparam>
+        /// <param name="data">UTF8 encoded json (without a byte order mark)</param>
+        /// <param name="filename">Not used (reserved for including a filename in exception messages)</param>
+        /// <returns>The object represented by the json, the default of <typeparamref name="T"/> if the data is empty, white space only or <c>null</c></returns>
+        /// <exception cref="Exception">The json is invalid or can't be converted to <typeparamref name="T"/>, the message contains the (row, column) and an excerpt of the json around the error position, the inner exception is the actual error</exception>
         public static T Create<T>(ReadOnlySpan<Byte> data, String filename = null)
         {
             fixed (Byte* ptr = data)
@@ -42,12 +53,14 @@ namespace SysWeaver.Serialization.SwJson
         }
 
         /// <summary>
-        /// Create an object from a json string
+        /// Create an object from a json string.
         /// </summary>
-        /// <typeparam name="T">The type of the object to create</typeparam>
-        /// <param name="s">The json object string</param>
-        /// <param name="filename">An optional filename to use when reporting exceptions</param>
-        /// <returns>The object represented in the supplied json string</returns>
+        /// <remarks>The string is transcoded to UTF8 first (on the stack for short strings, else in a pooled buffer).</remarks>
+        /// <typeparam name="T">The type of the object to create (the declared type, a <c>"$type"</c> member in the json can create a derived type)</typeparam>
+        /// <param name="s">The json text, must not be null</param>
+        /// <param name="filename">Not used (reserved for including a filename in exception messages)</param>
+        /// <returns>The object represented by the json, the default of <typeparamref name="T"/> if the string is empty, white space only or <c>null</c></returns>
+        /// <exception cref="Exception">The json is invalid or can't be converted to <typeparamref name="T"/>, the message contains the (row, column) and an excerpt of the json around the error position, the inner exception is the actual error</exception>
         public static T Create<T>(String s, String filename = null)
         {
             var utf8 = Utf8Parser.UTF8;
@@ -75,12 +88,13 @@ namespace SysWeaver.Serialization.SwJson
         }
 
         /// <summary>
-        /// Create an object from a byte array, containing an UTF8 encoded json string
+        /// Create an object of a runtime type from UTF8 encoded json.
         /// </summary>
-        /// <param name="type">The type of object to create</param>
-        /// <param name="data">UTF8 encoded data containing a json representation of an object</param>
-        /// <param name="filename">An optional filename to use when reporting exceptions</param>
-        /// <returns>The object represented in the supplied json</returns>
+        /// <param name="type">The type of object to create (the declared type, a <c>"$type"</c> member in the json can create a derived type)</param>
+        /// <param name="data">UTF8 encoded json (without a byte order mark)</param>
+        /// <param name="filename">Not used (reserved for including a filename in exception messages)</param>
+        /// <returns>The (boxed) object represented by the json, null if the data is empty or white space only</returns>
+        /// <exception cref="Exception">The json is invalid or can't be converted to <paramref name="type"/>, the message contains the (row, column) and an excerpt of the json around the error position, the inner exception is the actual error</exception>
         public static Object Create(Type type, ReadOnlySpan<Byte> data, String filename = null)
         {
             fixed (Byte* ptr = data)
@@ -98,12 +112,14 @@ namespace SysWeaver.Serialization.SwJson
         }
 
         /// <summary>
-        /// Create an object from a json string
+        /// Create an object of a runtime type from a json string.
         /// </summary>
-        /// <param name="type">The type of object to create</param>
-        /// <param name="s">The json object string</param>
-        /// <param name="filename">An optional filename to use when reporting exceptions</param>
-        /// <returns>The object represented in the supplied json string</returns>
+        /// <remarks>The string is transcoded to UTF8 first (on the stack for short strings, else in a pooled buffer).</remarks>
+        /// <param name="type">The type of object to create (the declared type, a <c>"$type"</c> member in the json can create a derived type)</param>
+        /// <param name="s">The json text, must not be null</param>
+        /// <param name="filename">Not used (reserved for including a filename in exception messages)</param>
+        /// <returns>The (boxed) object represented by the json, null if the string is empty or white space only</returns>
+        /// <exception cref="Exception">The json is invalid or can't be converted to <paramref name="type"/>, the message contains the (row, column) and an excerpt of the json around the error position, the inner exception is the actual error</exception>
         public static Object Create(Type type, String s, String filename = null)
         {
             var utf8 = Utf8Parser.UTF8;
@@ -133,6 +149,12 @@ namespace SysWeaver.Serialization.SwJson
 
         #region Arrays
 
+        /// <summary>
+        /// Read a <see cref="Byte"/> array, either a base64 string or a json array of numbers (or null).
+        /// </summary>
+        /// <param name="state">The parser state, positioned at the value</param>
+        /// <param name="endOn">The end condition of the enclosing container</param>
+        /// <returns>The bytes read</returns>
         internal static Byte[] CreateByteArray(JsonParserState state, Func<Char, bool> endOn)
         {
             ref var d = ref state.D;
@@ -146,6 +168,14 @@ namespace SysWeaver.Serialization.SwJson
             return CreateArray<Byte>(state, endOn);
         }
 
+        /// <summary>
+        /// Read an array/collection that was written as an object (after the '{'): <c>{"$type":"name","$values":[..]}</c> (or <c>"$value"</c>).
+        /// </summary>
+        /// <typeparam name="T">The declared array/collection type</typeparam>
+        /// <param name="state">The parser state, positioned after the '{'</param>
+        /// <param name="endOn">The end condition of the enclosing container</param>
+        /// <returns>The value of the type named by <c>"$type"</c></returns>
+        /// <exception cref="Exception">The object doesn't start with <c>"$type"</c>, or isn't followed by <c>"$value"</c> / <c>"$values"</c></exception>
         internal static T ReadArrayLikeObject<T>(JsonParserState state, Func<Char, bool> endOn)
         {
             ref var d = ref state.D;
@@ -188,6 +218,14 @@ namespace SysWeaver.Serialization.SwJson
             return v;
         }
 
+        /// <summary>
+        /// Read an array (or null, or a <c>"$type"</c> wrapped array object).
+        /// </summary>
+        /// <remarks>Items are read into a buffer rented from <see cref="ArrayPool{T}.Shared"/>, only the final exact sized array is allocated.</remarks>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="state">The parser state, positioned at the value</param>
+        /// <param name="endOn">The end condition of the enclosing container</param>
+        /// <returns>The array read, null for a json null</returns>
         internal static T[] CreateArray<T>(JsonParserState state, Func<Char, bool> endOn)
         {
             ref var d = ref state.D;
@@ -222,8 +260,11 @@ namespace SysWeaver.Serialization.SwJson
         }
 
         /// <summary>
-        /// Read the items of an array (after the '['), into a pooled buffer that is replaced by a larger one as needed
+        /// Read the items of an array (after the '[' and any white space), into a pooled buffer that is replaced by a larger one as needed.
+        /// The position is set to after the closing ']' (a trailing comma before the ']' is accepted).
         /// </summary>
+        /// <param name="state">The parser state</param>
+        /// <param name="buf">A buffer rented from <see cref="ArrayPool{T}.Shared"/>, can be replaced (the old one is returned to the pool)</param>
         /// <returns>The number of items read</returns>
         static int ReadItems<T>(JsonParserState state, ref T[] buf)
         {
@@ -260,6 +301,9 @@ namespace SysWeaver.Serialization.SwJson
         /// <summary>
         /// Read an array item, common primitives are parsed directly (the same code as the generated creator, without the delegate call)
         /// </summary>
+        /// <param name="state">The parser state, positioned at the item</param>
+        /// <param name="create">The compiled creator for <typeparamref name="T"/></param>
+        /// <returns>The item read</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static T ReadItem<T>(JsonParserState state, ReadTyped<T>.TypedCreator create)
         {
@@ -288,6 +332,9 @@ namespace SysWeaver.Serialization.SwJson
             return create(state, endOn);
         }
 
+        /// <summary>
+        /// Rent a buffer twice the size, copy the first <paramref name="count"/> items and return the old buffer to the pool.
+        /// </summary>
         static T[] GrowRented<T>(T[] buf, int count)
         {
             var pool = ArrayPool<T>.Shared;
@@ -297,6 +344,14 @@ namespace SysWeaver.Serialization.SwJson
             return nb;
         }
 
+        /// <summary>
+        /// Read a collection (or null, or a <c>"$type"</c> wrapped array object).
+        /// </summary>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <typeparam name="C">The collection type to create (see <see cref="CollectionFactory{T, C}"/>)</typeparam>
+        /// <param name="state">The parser state, positioned at the value</param>
+        /// <param name="endOn">The end condition of the enclosing container</param>
+        /// <returns>The collection read, null for a json null</returns>
         internal static ICollection<T> CreateCollection<T, C>(JsonParserState state, Func<Char, bool> endOn)
         {
             ref var d = ref state.D;
@@ -327,7 +382,9 @@ namespace SysWeaver.Serialization.SwJson
         }
 
         /// <summary>
-        /// Creates a collection from the items read
+        /// Creates a collection of type <typeparamref name="C"/> from the items read (computed once per type).
+        /// <see cref="List{T}"/> and <see cref="HashSet{T}"/> are created directly, other types with a compiled call to a public constructor taking a <see cref="List{T}"/>
+        /// (or something it's assignable to), else with <see cref="Activator.CreateInstance(Type, object[])"/>.
         /// </summary>
         static class CollectionFactory<T, C>
         {
@@ -373,18 +430,33 @@ namespace SysWeaver.Serialization.SwJson
 
         #region Object
 
+        /// <summary>
+        /// Read a (non sealed) reference type object, or null. A <c>"$type"</c> member can create a derived type.
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static T CreateNullableObject<T>(JsonParserState state, Func<Char, bool> endOn)
         {
             return Utf8JsonParser.IsNullState(state) ? default(T) : CreateObject<T>(state, endOn);
         }
 
+        /// <summary>
+        /// Read a sealed reference type object, or null (no <c>"$type"</c> handling, it would be read as an unknown member).
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static T CreateSealedNullableObject<T>(JsonParserState state, Func<Char, bool> endOn)
         {
             return Utf8JsonParser.IsNullState(state) ? default(T) : CreateSealedObject<T>(state, endOn);
         }
 
+        /// <summary>
+        /// Read a value declared as <see cref="Object"/>.
+        /// Objects must have a <c>"$type"</c> member (else a plain new <see cref="Object"/> is returned and all members are skipped).
+        /// For Newtonsoft compatibility: strings that <see cref="DateTime.TryParse(string, IFormatProvider, DateTimeStyles, out DateTime)"/> accepts (using the current culture) become a <see cref="DateTime"/>,
+        /// <c>true</c>/<c>false</c> a <see cref="Boolean"/>, integral numbers an <see cref="Int64"/> and other numbers a <see cref="Double"/> (numbers are parsed as <see cref="Decimal"/>, so exponents are not supported).
+        /// </summary>
+        /// <param name="state">The parser state, positioned at the value</param>
+        /// <param name="endOn">The end condition of the enclosing container</param>
+        /// <returns>The value read, null for a json null</returns>
         internal static Object CreateBoxedObject(JsonParserState state, Func<Char, bool> endOn)
         {
             ref var d = ref state.D;
@@ -413,6 +485,9 @@ namespace SysWeaver.Serialization.SwJson
             return CreateObject<Object>(state, endOn);
         }
 
+        /// <summary>
+        /// Read a value type object (no null or <c>"$type"</c> handling).
+        /// </summary>
         internal static T CreateStruct<T>(JsonParserState state, Func<Char, bool> endOn)
         {
             ref var d = ref state.D;
@@ -429,6 +504,9 @@ namespace SysWeaver.Serialization.SwJson
             return NewAndPopulate<T>(header, state, endOn);
         }
 
+        /// <summary>
+        /// Read a sealed reference type object (not null, no <c>"$type"</c> handling).
+        /// </summary>
         internal static T CreateSealedObject<T>(JsonParserState state, Func<Char, bool> endOn)
         {
             ref var d = ref state.D;
@@ -445,6 +523,14 @@ namespace SysWeaver.Serialization.SwJson
             return NewAndPopulate<T>(header, state, endOn);
         }
 
+        /// <summary>
+        /// Read a reference type object (not null). If the first member is <c>"$type"</c> the named type is created instead,
+        /// and a following <c>"$value"</c> / <c>"$values"</c> member is read as the complete value of that type.
+        /// </summary>
+        /// <remarks>
+        /// The <c>"$type"</c> type is not checked to be assignable to <typeparamref name="T"/> in release builds, it's created and populated before the cast to <typeparamref name="T"/>.
+        /// Don't read untrusted json into types that allows polymorphism (including <see cref="Object"/>).
+        /// </remarks>
         internal static T CreateObject<T>(JsonParserState state, Func<Char, bool> endOn)
         {
             ref var d = ref state.D;
@@ -496,6 +582,11 @@ namespace SysWeaver.Serialization.SwJson
             return isNew ? (T)ReadTypeCache.Get(t).Cp(spanVal, state, endOn) : NewAndPopulate<T>(spanVal, state, endOn);
         }
 
+        /// <summary>
+        /// Create a dictionary and add all key-value pairs, starting with the already read first <paramref name="key"/>.
+        /// The position is set to after the closing '}'.
+        /// </summary>
+        /// <remarks>Uses the dictionary's Add method, so a duplicated key throws.</remarks>
         internal static T NewAndPopulateDictionary<T>(ReadOnlySpan<Byte> key, JsonParserState state, Func<Char, bool> endOn)
         {
             ref var d = ref state.D;
@@ -526,6 +617,15 @@ namespace SysWeaver.Serialization.SwJson
             return v;
         }
 
+        /// <summary>
+        /// Create an object (or dictionary) and populate it, starting with the already read first <paramref name="key"/> (the position is after the key).
+        /// Unknown members are skipped. The position is set to after the closing '}'.
+        /// </summary>
+        /// <typeparam name="T">The type to create</typeparam>
+        /// <param name="key">The UTF8 name of the first member (unescaped)</param>
+        /// <param name="state">The parser state</param>
+        /// <param name="endOn">The end condition of the enclosing container</param>
+        /// <returns>The populated object</returns>
         internal static T NewAndPopulate<T>(ReadOnlySpan<Byte> key, JsonParserState state, Func<Char, bool> endOn)
         {
             ref var d = ref state.D;
@@ -586,6 +686,10 @@ namespace SysWeaver.Serialization.SwJson
         static readonly Utf8Range ValueKey = Utf8Range.Create("$value");
         static readonly Utf8Range ValuesKey = Utf8Range.Create("$values");
 
+        /// <summary>
+        /// Skip the '}' of an empty object and return a new (empty) instance.
+        /// </summary>
+        /// <remarks>Uses <see cref="ReadTyped{T}.GetMembers(out T)"/>, so the member look up is built even for dictionaries (indexers are excluded from the look up).</remarks>
         static T ReturnEmpty<T>(ref Byte* d)
         {
             ++d;
@@ -593,6 +697,9 @@ namespace SysWeaver.Serialization.SwJson
             return v;
         }
 
+        /// <summary>
+        /// Read the root value of a runtime type (null if there is no data).
+        /// </summary>
         static Object InternalCreate(Type t, JsonParserState state)
         {
             ref var d = ref state.D;
@@ -613,6 +720,9 @@ namespace SysWeaver.Serialization.SwJson
 #endif//VERBOSE
         }
 
+        /// <summary>
+        /// Read the root value (default if there is no data).
+        /// </summary>
         static T InternalCreate<T>(JsonParserState state)
         {
             ref var d = ref state.D;
@@ -641,6 +751,11 @@ namespace SysWeaver.Serialization.SwJson
 
         #region Exception details
 
+        /// <summary>
+        /// Create a description of the current position: "(row,col) : Near ==&gt;text before^text after&lt;==".
+        /// </summary>
+        /// <remarks>Rows are counted on CR characters only. The <paramref name="filename"/> is not used.
+        /// The byte offset is used as a char index into the decoded text, so the position is off (and this can throw) when the text before the error contains non ASCII chars.</remarks>
         static String GetThrowDetails(JsonParserState state, String filename)
         {
             var start = state.S;
@@ -665,6 +780,9 @@ namespace SysWeaver.Serialization.SwJson
             return loc;
         }
 
+        /// <summary>
+        /// Replace all control chars (below 32) with a space.
+        /// </summary>
         static String Filter(String s)
         {
             var l = s.Length;

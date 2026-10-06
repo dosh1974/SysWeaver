@@ -8,14 +8,24 @@ using System.Runtime.CompilerServices;
 
 namespace SysWeaver.Serialization.SwJson.Reader
 {
+    /// <summary>
+    /// Parsers from raw UTF8/ASCII bytes to primitive types (integers, floating point, decimal, dates and times, guid and boolean),
+    /// and the expressions that call them for the compiled readers.
+    /// </summary>
+    /// <remarks>
+    /// All parsing is culture invariant. Fast paths handle the common formats directly, anything else uses the .NET parse methods
+    /// (with <see cref="NumberStyles.Float"/>, <see cref="CultureInfo.InvariantCulture"/> and <see cref="DateTimeStyles.RoundtripKind"/>).
+    /// Integer parsing is NOT validated in release builds and never range checked: a sign or any non digit (".", "e") produces garbage, and out of range values wrap.
+    /// The date/time/guid fallbacks copy the text to a stack buffer of the same length.
+    /// </remarks>
     static class SpanParsers
     {
 
         /// <summary>
-        /// Return an expression that parses a ReadOnlySpan´Byte array of UTF8-bytes to the desired type
+        /// Return an expression that parses a ReadOnlySpan&lt;Byte&gt; of UTF8 bytes to the desired type
         /// </summary>
         /// <param name="t">The type to parse to</param>
-        /// <param name="e">The parametyer expression, must be of the ReadOnlySpan´Byte  type</param>
+        /// <param name="e">The parameter expression, must be of the ReadOnlySpan&lt;Byte&gt; type</param>
         /// <returns>An expression to convert or null if the type isn't supported</returns>
         public static Expression GetExpression(Type t, Expression e)
         {
@@ -24,9 +34,15 @@ namespace SysWeaver.Serialization.SwJson.Reader
             return fn(e);
         }
 
+        /// <summary>
+        /// The types that <see cref="GetExpression(Type, Expression)"/> supports.
+        /// </summary>
         public static IEnumerable<Type> SupportedTypes => TypeToExp.Keys;
 
 
+        /// <summary>
+        /// Parse decimal digits (no sign), empty is 0. Not range checked, digits are only validated in VALIDATE (debug) builds.
+        /// </summary>
         public static UInt32 ToUInt32(ReadOnlySpan<Byte> d)
         {
             var l = d.Length;
@@ -49,6 +65,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
             return v;
         }
 
+        /// <summary>
+        /// Parse decimal digits (no sign), empty is 0. Not range checked, digits are only validated in VALIDATE (debug) builds.
+        /// </summary>
         public static UInt64 ToUInt64(ReadOnlySpan<Byte> d)
         {
             var l = d.Length;
@@ -72,6 +91,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
         }
 
 
+        /// <summary>
+        /// Parse [-]digits, empty is 0. Not range checked, digits are only validated in VALIDATE (debug) builds.
+        /// </summary>
         public static Int32 ToInt32(ReadOnlySpan<Byte> d)
         {
             var l = d.Length;
@@ -90,6 +112,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
             return (Int32)ToUInt32(d);
         }
 
+        /// <summary>
+        /// Parse [-]digits, empty is 0. Not range checked, digits are only validated in VALIDATE (debug) builds.
+        /// </summary>
         public static Int64 ToInt64(ReadOnlySpan<Byte> d)
         {
             var l = d.Length;
@@ -286,6 +311,11 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         #endregion//Fast paths
 
+        /// <summary>
+        /// Parse a <see cref="DateTime"/> like <see cref="DateTime.Parse(string, IFormatProvider, DateTimeStyles)"/> with the invariant culture and <see cref="DateTimeStyles.RoundtripKind"/>.
+        /// "yyyy-MM-ddTHH:mm:ss[.fffffff][Z]" is parsed directly.
+        /// </summary>
+        /// <exception cref="FormatException">The text isn't a valid date and time</exception>
         public static DateTime ToDateTime(ReadOnlySpan<Byte> d)
         {
             //  Like DateTime.Parse with RoundtripKind: no suffix is Unspecified, Z is Utc (an offset is converted to local time, left to DateTime.Parse)
@@ -303,6 +333,12 @@ namespace SysWeaver.Serialization.SwJson.Reader
             return DateTime.Parse(t, ParseCulture, DateTimeStyle);
         }
 
+        /// <summary>
+        /// Parse a <see cref="TimeSpan"/> like <see cref="TimeSpan.Parse(string, IFormatProvider)"/> with the invariant culture.
+        /// "[-][d.]hh:mm:ss[.fffffff]" is parsed directly.
+        /// </summary>
+        /// <exception cref="FormatException">The text isn't a valid time span</exception>
+        /// <exception cref="OverflowException">The time span is out of range</exception>
         public static TimeSpan ToTimeSpan(ReadOnlySpan<Byte> d)
         {
             //  [-][d.]hh:mm:ss[.fffffff]
@@ -353,6 +389,10 @@ namespace SysWeaver.Serialization.SwJson.Reader
             return TimeSpan.Parse(t, ParseCulture);
         }
 
+        /// <summary>
+        /// Parse a <see cref="DateOnly"/> ("yyyy-MM-dd" is parsed directly, else <see cref="DateOnly.Parse(ReadOnlySpan{char}, IFormatProvider, DateTimeStyles)"/> with the invariant culture).
+        /// </summary>
+        /// <exception cref="FormatException">The text isn't a valid date</exception>
         public static DateOnly ToDateOnly(ReadOnlySpan<Byte> d)
         {
             if ((d.Length == 10) && TryDate(d, out var date))
@@ -364,6 +404,10 @@ namespace SysWeaver.Serialization.SwJson.Reader
             return DateOnly.Parse(t, ParseCulture, DateTimeStyles.AllowWhiteSpaces);
         }
 
+        /// <summary>
+        /// Parse a <see cref="TimeOnly"/> ("HH:mm:ss[.fffffff]" is parsed directly, else <see cref="TimeOnly.Parse(ReadOnlySpan{char}, IFormatProvider, DateTimeStyles)"/> with the invariant culture).
+        /// </summary>
+        /// <exception cref="FormatException">The text isn't a valid time</exception>
         public static TimeOnly ToTimeOnly(ReadOnlySpan<Byte> d)
         {
             if (TryTimeOfDay(d, 0, out var time))
@@ -379,6 +423,11 @@ namespace SysWeaver.Serialization.SwJson.Reader
             return TimeOnly.Parse(t, ParseCulture, DateTimeStyles.AllowWhiteSpaces);
         }
 
+        /// <summary>
+        /// Parse a <see cref="DateTimeOffset"/> like <see cref="DateTimeOffset.Parse(string, IFormatProvider, DateTimeStyles)"/> with the invariant culture and <see cref="DateTimeStyles.RoundtripKind"/>.
+        /// "yyyy-MM-ddTHH:mm:ss[.fffffff](Z|+hh:mm|-hh:mm)" is parsed directly, no offset means the local offset.
+        /// </summary>
+        /// <exception cref="FormatException">The text isn't a valid date and time</exception>
         public static DateTimeOffset ToDateTimeOffset(ReadOnlySpan<Byte> d)
         {
             //  yyyy-MM-ddTHH:mm:ss[.fffffff](Z|+hh:mm|-hh:mm), no suffix is the local offset (left to DateTimeOffset.Parse)
@@ -406,6 +455,10 @@ namespace SysWeaver.Serialization.SwJson.Reader
             return DateTimeOffset.Parse(t, ParseCulture, DateTimeStyle);
         }
 
+        /// <summary>
+        /// Parse a <see cref="Guid"/> in any format <see cref="Guid.Parse(ReadOnlySpan{char})"/> accepts ("D" is parsed directly).
+        /// </summary>
+        /// <exception cref="FormatException">The text isn't a valid guid</exception>
         public static Guid ToGuid(ReadOnlySpan<Byte> d)
         {
             //  The "D" format (the common one), directly from the UTF8
@@ -418,6 +471,10 @@ namespace SysWeaver.Serialization.SwJson.Reader
             return Guid.Parse(t);
         }
 
+        /// <summary>
+        /// Parse <c>true</c>, <c>false</c>, <c>1</c> or <c>0</c> (case sensitive).
+        /// </summary>
+        /// <exception cref="Exception">Any other value</exception>
         public static Boolean ToBoolean(ReadOnlySpan<Byte> d)
         {
             var l = d.Length;

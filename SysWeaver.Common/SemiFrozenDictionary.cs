@@ -10,15 +10,21 @@ namespace SysWeaver
 {
 
     /// <summary>
-    /// Use this dictionary when number of reads far exceeds the number of modificatiions.
-    /// This is thread safe in the same sense as a ConcurrentDictionary.
-    /// Reads are done on a frozen copy of the underlaying dictionary.
-    /// Mutating underlaying dictionary is done using locks and the frozen copy is invalidated.
-    /// After a modification, reads are done on the underlaying (concurrent) dictionary until it has been read enough times without modifications
-    /// to make freezing it worth the cost (freezing allocates a copy, so freezing after every modification of a growing cache was O(n^2)).
+    /// A dictionary for data where the number of reads far exceeds the number of modifications.
+    /// This is thread safe in the same sense as a <see cref="ConcurrentDictionary{TKey, TValue}"/>.
+    /// Reads are done on a frozen copy of the underlying dictionary (see <see cref="DictionaryExt.Freeze{K, V}(IReadOnlyDictionary{K, V}, IEqualityComparer{K})"/>).
+    /// Modifications of the underlying dictionary are done while holding a lock, and the frozen copy is invalidated.
+    /// After a modification, reads are done on the underlying (concurrent) dictionary until it has been read enough times without modifications
+    /// to make freezing it worth the cost (freezing allocates a copy, so freezing after every modification of a growing cache would be O(n^2)).
     /// </summary>
-    /// <typeparam name="TKey"></typeparam>
-    /// <typeparam name="TValue"></typeparam>
+    /// <remarks>
+    /// Reads are lock free, modifications are serialized (a single lock per dictionary).
+    /// A read that races with a modification may see the state before the modification.
+    /// <see cref="Keys"/>, <see cref="Values"/> and enumeration operate on a snapshot (they force a freeze if needed).
+    /// Null keys are not allowed (<see cref="ArgumentNullException"/> from the underlying dictionary when not frozen).
+    /// </remarks>
+    /// <typeparam name="TKey">The key type</typeparam>
+    /// <typeparam name="TValue">The value type</typeparam>
     public sealed class SemiFrozenDictionary<TKey, TValue> : IDictionary<TKey, TValue>
     {
         /// <summary>
@@ -93,36 +99,74 @@ namespace SysWeaver
         /// </summary>
         const int DefaultCapacity = 31;
 
+        /// <summary>
+        /// Create an empty dictionary using the default key comparer
+        /// </summary>
         public SemiFrozenDictionary()
             : this(DefaultCapacity, null)
         {
         }
 
+        /// <summary>
+        /// Create a dictionary with a copy of the entries of another dictionary, using the default key comparer (not the comparer of <paramref name="other"/>)
+        /// </summary>
+        /// <param name="other">The entries to copy</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="other"/> or a key is null</exception>
+        /// <exception cref="ArgumentException">Thrown if <paramref name="other"/> contains duplicate keys (according to the default comparer)</exception>
         public SemiFrozenDictionary(IDictionary<TKey, TValue> other)
             : this(other, null)
         {
         }
 
+        /// <summary>
+        /// Create a dictionary with a copy of some key-value pairs, using the default key comparer
+        /// </summary>
+        /// <param name="other">The entries to copy</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="other"/> or a key is null</exception>
+        /// <exception cref="ArgumentException">Thrown if <paramref name="other"/> contains duplicate keys</exception>
         public SemiFrozenDictionary(IEnumerable<KeyValuePair<TKey, TValue>> other)
             : this(other, null)
         {
         }
 
+        /// <summary>
+        /// Create an empty dictionary using the default key comparer
+        /// </summary>
+        /// <param name="size">The initial capacity of the underlying dictionary</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="size"/> is negative</exception>
         public SemiFrozenDictionary(int size)
             : this(size, null)
         {
         }
 
+        /// <summary>
+        /// Create an empty dictionary
+        /// </summary>
+        /// <param name="comparer">The key comparer, if null the default comparer is used</param>
         public SemiFrozenDictionary(IEqualityComparer<TKey> comparer)
             : this(DefaultCapacity, comparer)
         {
         }
 
+        /// <summary>
+        /// Create a dictionary with a copy of the entries of another dictionary
+        /// </summary>
+        /// <param name="other">The entries to copy</param>
+        /// <param name="comparer">The key comparer, if null the default comparer is used</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="other"/> or a key is null</exception>
+        /// <exception cref="ArgumentException">Thrown if <paramref name="other"/> contains duplicate keys (according to the comparer)</exception>
         public SemiFrozenDictionary(IDictionary<TKey, TValue> other, IEqualityComparer<TKey> comparer)
             : this((IEnumerable<KeyValuePair<TKey, TValue>>)other, comparer)
         {
         }
 
+        /// <summary>
+        /// Create a dictionary with a copy of some key-value pairs
+        /// </summary>
+        /// <param name="other">The entries to copy</param>
+        /// <param name="comparer">The key comparer, if null the default comparer is used</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="other"/> or a key is null</exception>
+        /// <exception cref="ArgumentException">Thrown if <paramref name="other"/> contains duplicate keys (according to the comparer)</exception>
         public SemiFrozenDictionary(IEnumerable<KeyValuePair<TKey, TValue>> other, IEqualityComparer<TKey> comparer)
         {
             ArgumentNullException.ThrowIfNull(other);
@@ -136,6 +180,12 @@ namespace SysWeaver
             FreezeAfter = MinReadsBeforeFreeze + ReadsPerItemBeforeFreeze * u.Count;
         }
 
+        /// <summary>
+        /// Create an empty dictionary
+        /// </summary>
+        /// <param name="size">The initial capacity of the underlying dictionary</param>
+        /// <param name="comparer">The key comparer, if null the default comparer is used</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="size"/> is negative</exception>
         public SemiFrozenDictionary(int size, IEqualityComparer<TKey> comparer)
         {
             ArgumentOutOfRangeException.ThrowIfNegative(size);
@@ -144,6 +194,13 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Get or set the value of a key.
+        /// Setting adds or replaces the value (takes the lock and invalidates the frozen copy).
+        /// </summary>
+        /// <param name="key">The key, must not be null</param>
+        /// <exception cref="KeyNotFoundException">Thrown by the getter if the key doesn't exist</exception>
+        /// <exception cref="ArgumentNullException">Thrown by the setter (and by the getter while not frozen) if <paramref name="key"/> is null</exception>
         public TValue this[TKey key]
         {
             get
@@ -163,10 +220,19 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// A snapshot of the keys (a new list on every call, freezes the dictionary if needed)
+        /// </summary>
         public ICollection<TKey> Keys => Get().Keys.ToList();
 
+        /// <summary>
+        /// A snapshot of the values (a new list on every call, freezes the dictionary if needed)
+        /// </summary>
         public ICollection<TValue> Values => Get().Values.ToList();
 
+        /// <summary>
+        /// The number of entries (lock free if frozen, else read under the lock)
+        /// </summary>
         public int Count
         {
             get
@@ -180,8 +246,18 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Always false
+        /// </summary>
         public bool IsReadOnly => false;
 
+        /// <summary>
+        /// Add a new key (takes the lock and invalidates the frozen copy)
+        /// </summary>
+        /// <param name="key">The key, must not be null</param>
+        /// <param name="value">The value</param>
+        /// <exception cref="ArgumentException">Thrown if the key already exists</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
         public void Add(TKey key, TValue value)
         {
             var u = Underlaying;
@@ -193,9 +269,22 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Add a new key (see <see cref="Add(TKey, TValue)"/>)
+        /// </summary>
+        /// <param name="item">The key and value</param>
+        /// <exception cref="ArgumentException">Thrown if the key already exists</exception>
+        /// <exception cref="ArgumentNullException">Thrown if the key is null</exception>
         public void Add(KeyValuePair<TKey, TValue> item)
             => Add(item.Key, item.Value);
 
+        /// <summary>
+        /// Add a new key if it doesn't exist (takes the lock, the frozen copy is only invalidated if the key was added)
+        /// </summary>
+        /// <param name="key">The key, must not be null</param>
+        /// <param name="value">The value</param>
+        /// <returns>True if the key was added, false if it already existed (the value is not updated)</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
         public bool TryAdd(TKey key, TValue value)
         {
             var u = Underlaying;
@@ -208,9 +297,17 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Add a new key if it doesn't exist (see <see cref="TryAdd(TKey, TValue)"/>)
+        /// </summary>
+        /// <param name="item">The key and value</param>
+        /// <returns>True if the key was added, false if it already existed</returns>
         public bool TryAdd(KeyValuePair<TKey, TValue> item)
             => TryAdd(item.Key, item.Value);
 
+        /// <summary>
+        /// Remove all entries (takes the lock and invalidates the frozen copy)
+        /// </summary>
         public void Clear()
         {
             var u = Underlaying;
@@ -221,6 +318,11 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Check if a key exists with a specific value (the value is compared using <see cref="EqualityComparer{T}.Default"/>)
+        /// </summary>
+        /// <param name="item">The key and value to find</param>
+        /// <returns>True if the key exists and has the value</returns>
         public bool Contains(KeyValuePair<TKey, TValue> item)
         {
             if (!TryGetValue(item.Key, out var result))
@@ -228,9 +330,22 @@ namespace SysWeaver
             return EqualityComparer<TValue>.Default.Equals(item.Value, result);
         }
 
+        /// <summary>
+        /// Check if a key exists (lock free)
+        /// </summary>
+        /// <param name="key">The key to find</param>
+        /// <returns>True if the key exists</returns>
         public bool ContainsKey(TKey key)
             => TryGetValue(key, out _);
 
+        /// <summary>
+        /// Copy a snapshot of the entries to an array (freezes the dictionary if needed)
+        /// </summary>
+        /// <param name="array">The destination array</param>
+        /// <param name="arrayIndex">The index in <paramref name="array"/> to start writing at</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="array"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="arrayIndex"/> is negative or greater than the length of the array</exception>
+        /// <exception cref="ArgumentException">Thrown if the destination is too small</exception>
         public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
         {
             ArgumentNullException.ThrowIfNull(array);
@@ -246,12 +361,26 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Enumerate a snapshot of the entries (freezes the dictionary if needed), modifications during the enumeration are not visible
+        /// </summary>
         public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator()
             => Get().GetEnumerator();
 
+        /// <summary>
+        /// Remove a key (takes the lock, the frozen copy is only invalidated if the key was removed)
+        /// </summary>
+        /// <param name="key">The key to remove, must not be null</param>
+        /// <returns>True if the key was removed</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
         public bool Remove(TKey key)
             => TryRemove(key, out _);
 
+        /// <summary>
+        /// Remove a key only if it has a specific value (the value is compared using <see cref="EqualityComparer{T}.Default"/>), atomically
+        /// </summary>
+        /// <param name="item">The key and the expected value</param>
+        /// <returns>True if the key was removed</returns>
         public bool Remove(KeyValuePair<TKey, TValue> item)
         {
             var u = Underlaying;
@@ -265,6 +394,13 @@ namespace SysWeaver
             return true;
         }
 
+        /// <summary>
+        /// Remove a key (takes the lock, the frozen copy is only invalidated if the key was removed)
+        /// </summary>
+        /// <param name="key">The key to remove, must not be null</param>
+        /// <param name="value">The removed value, or default if the key wasn't found</param>
+        /// <returns>True if the key was removed</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
         public bool TryRemove(TKey key, [MaybeNullWhen(false)] out TValue value)
         {
             var u = Underlaying;
@@ -277,6 +413,13 @@ namespace SysWeaver
             return true;
         }
 
+        /// <summary>
+        /// Get the value of a key (lock free).
+        /// Reads the frozen copy if available, else the underlying dictionary (which is frozen after enough reads without modifications).
+        /// </summary>
+        /// <param name="key">The key to find</param>
+        /// <param name="value">The value, or default if the key wasn't found</param>
+        /// <returns>True if the key was found</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
         {

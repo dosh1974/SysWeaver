@@ -123,6 +123,9 @@ namespace SysWeaver
     /// </summary>
     static class FrozenCopy
     {
+        /// <summary>
+        /// Copy the entries of a dictionary (in enumeration order), the spans must have room for at least d.Count items
+        /// </summary>
         public static void To<K, V>(IReadOnlyDictionary<K, V> d, Span<K> keys, Span<V> values)
         {
             int i = 0;
@@ -144,6 +147,9 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Copy the items of a set (in enumeration order), the span must have room for at least s.Count items
+        /// </summary>
         public static void To<K>(IReadOnlySet<K> s, Span<K> keys)
         {
             int i = 0;
@@ -157,6 +163,9 @@ namespace SysWeaver
                 keys[i++] = x;
         }
 
+        /// <summary>
+        /// The first entry of a non-empty dictionary
+        /// </summary>
         public static KeyValuePair<K, V> First<K, V>(IReadOnlyDictionary<K, V> d)
         {
             if (d is Dictionary<K, V> dd)
@@ -167,6 +176,9 @@ namespace SysWeaver
             return d.First();
         }
 
+        /// <summary>
+        /// The first item of a non-empty set
+        /// </summary>
         public static K First<K>(IReadOnlySet<K> s)
         {
             if (s is HashSet<K> hs)
@@ -183,6 +195,9 @@ namespace SysWeaver
     /// </summary>
     sealed class SmallValueKeyReadonlyDictionary<K, V> : IReadOnlyDictionary<K, V>, IHaveComparere<K>
     {
+        /// <summary>
+        /// Copy the entries of a dictionary with 2 to 8 unique keys (see <see cref="SmallValueKeys{K}.CanUse"/>)
+        /// </summary>
         public SmallValueKeyReadonlyDictionary(IReadOnlyDictionary<K, V> d)
         {
             var l = d.Count;
@@ -262,10 +277,14 @@ namespace SysWeaver
     }
 
     /// <summary>
-    /// A frozen set with a few (2 to 8) keys of a 4 or 8 byte integer (or enum) type, using the default comparer (see <see cref="SmallValueKeys{K}"/>)
+    /// A frozen set with a few (2 to 8) keys of a 4 or 8 byte integer (or enum) type, using the default comparer (see <see cref="SmallValueKeys{K}"/>).
+    /// Contains, IsSupersetOf and Overlaps don't allocate, the other set operations copy the items to a <see cref="HashSet{T}"/>.
     /// </summary>
     sealed class SmallValueKeyReadonlySet<K> : IReadOnlySet<K>, IHaveComparere<K>
     {
+        /// <summary>
+        /// Copy the items of a set with 2 to 8 unique keys (see <see cref="SmallValueKeys{K}.CanUse"/>)
+        /// </summary>
         public SmallValueKeyReadonlySet(IReadOnlySet<K> s)
         {
             var l = s.Count;

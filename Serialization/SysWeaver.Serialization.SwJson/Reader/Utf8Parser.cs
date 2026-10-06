@@ -8,13 +8,23 @@ namespace SysWeaver.Serialization.SwJson.Reader
 {
 
 
+    /// <summary>
+    /// Low level UTF8 parsing on raw pointers: white space / comment skipping, ranges, strings (with and without escapes), base64.
+    /// </summary>
+    /// <remarks>
+    /// Positions are passed as <c>ref Byte*</c> and advanced; the data must be pinned. Callers must ensure that the position is before the end where a char is read.
+    /// UTF8 is not validated (invalid sequences decode to garbage, except in the vectorized paths that replace them with U+FFFD).
+    /// </remarks>
     static unsafe class Utf8Parser
     {
 
         /// <summary>
-        /// Read one char and move to the next char
+        /// Read one (UTF8 encoded) code point and move to the next char
         /// </summary>
-        /// <returns>A char</returns>
+        /// <param name="second">The low surrogate if the code point is above U+FFFF, else 0</param>
+        /// <param name="d">The position, must be before <paramref name="e"/></param>
+        /// <param name="e">The end of the data</param>
+        /// <returns>The char (the high surrogate if the code point is above U+FFFF)</returns>
         public static Char ReadUtf8Char(out Char second, ref Byte* d, Byte* e)
         {
             uint t = *d;
@@ -36,7 +46,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
         }
 
         /// <summary>
-        /// Read one char and move to the next char
+        /// Read one byte as a char and move to the next (non ASCII bytes throw in VALIDATE builds only)
         /// </summary>
         /// <returns>A char</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -55,10 +65,10 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <summary>
         /// Compare an ascii string to the data, if deemed equal the position is adjusted to the end
         /// </summary>
-        /// <param name="d"></param>
-        /// <param name="e"></param>
-        /// <param name="s"></param>
-        /// <returns></returns>
+        /// <param name="d">The position, moved to after the string if equal</param>
+        /// <param name="e">The end of the data</param>
+        /// <param name="s">The ASCII string to compare</param>
+        /// <returns>True if the data at the position starts with <paramref name="s"/></returns>
         public static bool CompareAscii(ref Byte* d, Byte* e, String s)
         {
             var pl = s.Length;
@@ -74,6 +84,10 @@ namespace SysWeaver.Serialization.SwJson.Reader
             return true;
         }
 
+        /// <summary>
+        /// Check if a non ASCII char is white space (see <see cref="Char.IsWhiteSpace(char)"/>).
+        /// </summary>
+        /// <remarks>Decodes from the lead byte itself (the position isn't advanced past it first), so multi byte chars are decoded wrongly and the position is not set to after the char.</remarks>
         static bool IsUtf8White(uint t, ref Byte* d, Byte* e)
         {
             var test = d;
@@ -85,6 +99,10 @@ namespace SysWeaver.Serialization.SwJson.Reader
             return false;
         }
 
+        /// <summary>
+        /// At a '/': skip a <c>//</c> line comment or a <c>/* */</c> block comment.
+        /// </summary>
+        /// <returns>True if a comment was skipped</returns>
         static bool IsBlockWhite(ref Byte* d, Byte* e)
         {
             var no = d + 1;
@@ -105,9 +123,11 @@ namespace SysWeaver.Serialization.SwJson.Reader
         }
 
         /// <summary>
-        /// Move to to the next non-whitespace char (or end of data)
+        /// Move to the next non white space char (or end of data), skipping <c>//</c> and <c>/* */</c> comments
         /// </summary>
+        /// <remarks>All ASCII control chars and space (0-32) are white space.</remarks>
         /// <returns>True if the end was reached</returns>
+        /// <exception cref="Exception">A block comment isn't terminated</exception>
         public static bool SkipWhite(ref Byte* d, Byte* e)
         {
             //  A local copy of the position, so that it can be kept in a register (d usually points to a field)
@@ -138,8 +158,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
         #region Span
 
         /// <summary>
-        /// Detect the range that make up a Utf8 string ending in a char, position is set to after the ending char
+        /// Detect the range that make up a Utf8 string ending in a char (escapes are not considered), position is set to after the ending char
         /// </summary>
+        /// <exception cref="Exception">The end char wasn't found</exception>
         public static void GetUtf8Range(ref ReadOnlySpan<Byte> ret, ref Byte* d, Byte* e, Char until)
         {
             var u = (uint)until;
@@ -166,8 +187,10 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
 
         /// <summary>
-        /// Detect the range that make up a Utf8 string ending in a char, position is set to after the ending char
+        /// Find the end of a Utf8 string ending in a char (escaped end chars are skipped), position is set to after the ending char
         /// </summary>
+        /// <returns>True if the string contains escapes</returns>
+        /// <exception cref="Exception">The end char wasn't found, or an escape is invalid</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool DetectUtf8RangeEscaped(ref Byte* d, Byte* e, Char until)
         {
@@ -202,8 +225,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
         }
 
         /// <summary>
-        /// Detect the range that make up a Utf8 string ending in a char, position is set to before the ending char
+        /// Detect the range that make up a Utf8 string ending in a char that meets the condition, position is set to before the ending char
         /// </summary>
+        /// <exception cref="Exception">No end char was found</exception>
         public static void GetUtf8RangeNoLast(ref ReadOnlySpan<Byte> ret, ref Byte* d, Byte* e, Func<Char, bool> until)
         {
             var s = d;
@@ -240,8 +264,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
         }
 
         /// <summary>
-        /// Detect the range that make up an ASCII string ending in a char, position is set to after the ending char
+        /// Detect the range that make up an ASCII string ending in a char (escapes are not considered), position is set to after the ending char
         /// </summary>
+        /// <exception cref="Exception">The end char wasn't found</exception>
         public static void GetAsciiRange(ref ReadOnlySpan<Byte> ret, ref Byte* d, Byte* e, Char until)
         {
             var u = (uint)until;
@@ -274,7 +299,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
         }
 
         /// <summary>
-        /// Detect the range that make up an ASCII string ending in a char, position is set to before the ending char
+        /// Detect the range that make up an ASCII string ending in a char that meets the condition, position is set to before the ending char (or the end of data, no exception)
         /// </summary>
         public static void GetAsciiRangeNoLast(ref ReadOnlySpan<Byte> ret, ref Byte* d, Byte* e, Func<Char, bool> until)
         {
@@ -326,8 +351,12 @@ namespace SysWeaver.Serialization.SwJson.Reader
         #region String
 
         /// <summary>
-        /// Read a string until the supplied char is found, position is set to after the found char
+        /// Read a string (no escapes) until the supplied char or the end of data is found, position is set to after the found char
         /// </summary>
+        /// <param name="buf">A temp buffer, replaced by a larger one if needed</param>
+        /// <param name="d">The current read position, advanced to after the found char (or to <paramref name="e"/>)</param>
+        /// <param name="e">The end of the data (exclusive)</param>
+        /// <param name="until">The char that terminates the read (not included)</param>
         public static String ReadUtf8String(ref Char[] buf, ref Byte* d, Byte* e, Char until)
         {
             var index = ReadUtf8Chars(ref buf, ref d, e, until);
@@ -335,8 +364,12 @@ namespace SysWeaver.Serialization.SwJson.Reader
         }
 
         /// <summary>
-        /// Read chars into the buffer until the supplied char is found, position is set to after the found char
+        /// Read chars (no escapes) into the buffer until the supplied char or the end of data is found, position is set to after the found char
         /// </summary>
+        /// <param name="buf">A temp buffer, replaced by a larger one if needed</param>
+        /// <param name="d">The current read position, advanced to after the found char (or to <paramref name="e"/>)</param>
+        /// <param name="e">The end of the data (exclusive)</param>
+        /// <param name="until">The char that terminates the read (not included)</param>
         /// <returns>The number of chars read</returns>
         public static int ReadUtf8Chars(ref Char[] buf, ref Byte* d, Byte* e, Char until)
         {
@@ -364,9 +397,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <summary>
         /// Read a string until a char is found that meets the end condition, position is set to before the char that met the condition
         /// </summary>
-        /// <param name="buf"></param>
-        /// <param name="d"></param>
-        /// <param name="e"></param>
+        /// <param name="buf">A temp buffer, replaced by a larger one if needed</param>
+        /// <param name="d">The position</param>
+        /// <param name="e">The end of the data</param>
         /// <param name="until">Evaluated per char, return true to stop reading the string</param>
         /// <returns>The string read</returns>
         public static String ReadUtf8StringNoLast(ref Char[] buf, ref Byte* d, Byte* e, Func<Char, bool> until)
@@ -410,8 +443,8 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <summary>
         /// Read a string, assuming only ASCII codes (char codes less than 128) until the supplied char is found, position is set to after the found char
         /// </summary>
-        /// <param name="d"></param>
-        /// <param name="e"></param>
+        /// <param name="d">The position</param>
+        /// <param name="e">The end of the data</param>
         /// <param name="until">The char that stops the string reading</param>
         /// <returns>The string read</returns>
         public static String ReadAsciiString(ref Byte* d, Byte* e, Char until)
@@ -440,8 +473,8 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <summary>
         /// Read a string until a char is found that meets the end condition, assuming only ASCII codes (char codes less than 128), position is set to before the char that met the condition
         /// </summary>
-        /// <param name="d"></param>
-        /// <param name="e"></param>
+        /// <param name="d">The position</param>
+        /// <param name="e">The end of the data</param>
         /// <param name="until">Evaluated per char, return true to stop reading the string</param>
         /// <returns>The string read</returns>
         public static String ReadAsciiStringNoLast(ref Byte* d, Byte* e, Func<Char, bool> until)
@@ -491,13 +524,16 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
 
         /// <summary>
-        /// Read a string until the supplied char is found, with JSON escape supprt \ is the escape char
+        /// Read chars into the buffer until the supplied char (or the end of data, no exception) is found, decoding JSON escapes (\ is the escape char), position is set to after the found char
         /// </summary>
-        /// <param name="buf"></param>
-        /// <param name="d"></param>
-        /// <param name="e"></param>
+        /// <remarks>Supports \" \\ \/ \' \b \f \n \r \t and \uXXXX (surrogate pairs are two escapes, each decoded to one char).
+        /// A \uXXXX escape must be followed by at least one more byte before <paramref name="e"/>.</remarks>
+        /// <param name="buf">A temp buffer, replaced by a larger one if needed</param>
+        /// <param name="d">The position</param>
+        /// <param name="e">The end of the data</param>
         /// <param name="until">The char that stops the string reading</param>
-        /// <returns>The string read</returns>
+        /// <returns>The number of chars read</returns>
+        /// <exception cref="Exception">An escape sequence is invalid or truncated</exception>
         public static int ReadEscapedUtf8CharArray(ref Char[] buf, ref Byte* d, Byte* e, Char until)
         {
             int index = 0;
@@ -558,11 +594,11 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
 
         /// <summary>
-        /// Read a string until the supplied char is found, with JSON escape supprt \ is the escape char
+        /// Read a string until the supplied char is found, decoding JSON escapes, see <see cref="ReadEscapedUtf8CharArray(ref char[], ref byte*, byte*, char)"/>
         /// </summary>
-        /// <param name="buf"></param>
-        /// <param name="d"></param>
-        /// <param name="e"></param>
+        /// <param name="buf">A temp buffer, replaced by a larger one if needed</param>
+        /// <param name="d">The position</param>
+        /// <param name="e">The end of the data</param>
         /// <param name="until">The char that stops the string reading</param>
         /// <returns>The string read</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -576,6 +612,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// Read a json string (after the opening quote), position is set to after the closing quote.
         /// Strings without escapes (the common case) are decoded directly from the data.
         /// </summary>
+        /// <remarks>An unterminated string returns the rest of the data (no exception).</remarks>
         public static String ReadJsonString(ref Char[] buf, ref Byte* d, Byte* e)
         {
             var rem = new ReadOnlySpan<Byte>(d, (int)(e - d));
@@ -638,11 +675,11 @@ namespace SysWeaver.Serialization.SwJson.Reader
         }
 
         /// <summary>
-        /// Read a string until the supplied char is found, with JSON escape supprt \ is the escape char
+        /// Read an ASCII string until the supplied char is found, decoding JSON escapes (\ is the escape char)
         /// </summary>
-        /// <param name="buf"></param>
-        /// <param name="d"></param>
-        /// <param name="e"></param>
+        /// <param name="buf">A temp buffer, replaced by a larger one if needed</param>
+        /// <param name="d">The position</param>
+        /// <param name="e">The end of the data</param>
         /// <param name="until">The char that stops the string reading</param>
         /// <returns>The string read</returns>
         public static String ReadEscapedAsciiString(ref Char[] buf, ref Byte* d, Byte* e, Char until)
@@ -672,12 +709,14 @@ namespace SysWeaver.Serialization.SwJson.Reader
         #endregion//String
 
         /// <summary>
-        /// Read a byte array from a Base64 encoded string
+        /// Read a byte array from a Base64 encoded string (standard alphabet with padding, no white space or escapes)
         /// </summary>
-        /// <param name="d"></param>
-        /// <param name="e"></param>
+        /// <remarks>Invalid base64 chars are only detected in VALIDATE (debug) builds, in release builds they silently produce wrong bytes.</remarks>
+        /// <param name="d">The position (after the opening quote), set to after the end char</param>
+        /// <param name="e">The end of the data</param>
         /// <param name="until">The char that stops the reading</param>
         /// <returns>The data read</returns>
+        /// <exception cref="Exception">The length isn't a multiple of 4, or a non ASCII char was found</exception>
         public static Byte[] ReadBase64Bytes(ref Byte* d, Byte* e, Char until)
         {
             var rem = new ReadOnlySpan<Byte>(d, (int)(e - d));
@@ -801,6 +840,13 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         #region UTF8
         
+        /// <summary>
+        /// Decode the continuation bytes of a multi byte UTF8 char.
+        /// </summary>
+        /// <param name="t">The lead byte</param>
+        /// <param name="ptr">The position after the lead byte, set to after the char</param>
+        /// <param name="end">The end of the data</param>
+        /// <returns>The code point</returns>
         static uint CompleteUtf8Char(uint t, ref byte* ptr, byte* end)
         {
             var a = t;
@@ -1037,7 +1083,13 @@ namespace SysWeaver.Serialization.SwJson.Reader
         static readonly SpanAction<char, IntPtr> WriteAciiStringAction = WriteAsciiString;
 
 
+        /// <summary>
+        /// <see cref="Encoding.UTF8"/>
+        /// </summary>
         public static readonly Encoding UTF8 = Encoding.UTF8;
+        /// <summary>
+        /// <see cref="Encoding.ASCII"/>
+        /// </summary>
         public static readonly Encoding ASCII = Encoding.ASCII;
 
     }

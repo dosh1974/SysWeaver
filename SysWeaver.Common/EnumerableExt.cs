@@ -244,7 +244,7 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Process all elements in a list in revered order
+        /// Process all elements in a list in reversed order (last to first)
         /// </summary>
         /// <typeparam name="T">The element type</typeparam>
         /// <param name="list">The list to process, if null nothing is done</param>
@@ -298,7 +298,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Process all elements in a list.
-        /// Elements are processed in paralell (async).
+        /// Elements are processed in parallel (async).
         /// </summary>
         /// <typeparam name="T">The element type</typeparam>
         /// <param name="list">The list to process, if null nothing is done</param>
@@ -331,7 +331,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Process all elements in an enumerable.
-        /// Elements are processed in paralell (async).
+        /// Elements are processed in parallel (async).
         /// </summary>
         /// <remarks>
         /// If the <paramref name="enumerable"/> is a <see cref="IReadOnlyList{T}"/> (arrays, List etc) it's used directly, else the elements are first copied to a list.
@@ -360,7 +360,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Process all elements in a list.
-        /// Elements are processed in paralell (async).
+        /// Elements are processed in parallel (async).
         /// </summary>
         /// <typeparam name="T">The element type</typeparam>
         /// <param name="list">The list to process, if null nothing is done</param>
@@ -393,7 +393,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Process all elements in an enumerable.
-        /// Elements are processed in paralell (async).
+        /// Elements are processed in parallel (async).
         /// </summary>
         /// <remarks>
         /// Same as <see cref="ProcessAsync{T}(IEnumerable{T}, Func{T, Task}, int)"/>.
@@ -421,7 +421,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Process all elements in a list.
-        /// Elements are processed in paralell (async).
+        /// Elements are processed in parallel (async).
         /// </summary>
         /// <typeparam name="T">The element type</typeparam>
         /// <param name="list">The list to process, if null nothing is done</param>
@@ -454,7 +454,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Process all elements in an enumerable.
-        /// Elements are processed in paralell (async).
+        /// Elements are processed in parallel (async).
         /// </summary>
         /// <remarks>
         /// If the <paramref name="enumerable"/> is a <see cref="IReadOnlyList{T}"/> (arrays, List etc) it's used directly, else the elements are first copied to a list.
@@ -477,7 +477,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Process all elements in a list.
-        /// Elements are processed in paralell (async).
+        /// Elements are processed in parallel (async).
         /// </summary>
         /// <remarks>
         /// Same as <see cref="ProcessAsync{T}(IReadOnlyList{T}, Func{T, int, Task}, int)"/>.
@@ -513,7 +513,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Process all elements in an enumerable.
-        /// Elements are processed in paralell (async).
+        /// Elements are processed in parallel (async).
         /// </summary>
         /// <remarks>
         /// If the <paramref name="enumerable"/> is a <see cref="IReadOnlyList{T}"/> (arrays, List etc) it's used directly, else the elements are first copied to a list.

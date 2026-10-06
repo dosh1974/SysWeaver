@@ -9,6 +9,9 @@ namespace SysWeaver.Data
 {
 
 
+    /// <summary>
+    /// Describes a single member (field / property) or enum value of a documented type, see <see cref="TypeTable"/>.
+    /// </summary>
     public sealed class TypeTableMember
     {
         /// <summary>
@@ -16,28 +19,57 @@ namespace SysWeaver.Data
         /// </summary>
         public String Name;
         /// <summary>
-        /// Name of the member type
+        /// Name of the member type (short name, collections are written as "Element[]").
+        /// For enum values this is the value (hex for flags) followed by " : " and the underlying type name.
         /// </summary>
         public String Type;
         /// <summary>
-        /// Optional documentation
+        /// Optional documentation (the XML doc summary of the member), null if not available
         /// </summary>
         [TableDataWordWrap]
         public String Description;
     }
 
 
+    /// <summary>
+    /// Documentation of a single type, created by <see cref="TypeDocumentation.GetTypeTable(Type, Func{Type, bool}, Func{MemberInfo, bool})"/>.
+    /// </summary>
     public sealed class TypeTable
     {
+        /// <summary>
+        /// The (short) name of the type, enums are prefixed with "enum " or "enum flags ".
+        /// </summary>
         public String TypeName;
+        /// <summary>
+        /// The XML doc summary of the type, null if not available.
+        /// </summary>
         public String Description;
+        /// <summary>
+        /// The members of a concrete type or the values of an enum, null for abstract types and interfaces.
+        /// </summary>
         public TypeTableMember[] Members;
+        /// <summary>
+        /// For abstract types and interfaces: the documentation of all public, concrete implementations found in the loaded assemblies, else null.
+        /// </summary>
         public TypeTable[] Implementations;
     }
 
 
+    /// <summary>
+    /// Creates human readable documentation (tables of members) for a type and all types that it references, using reflection and XML docs.
+    /// </summary>
+    /// <remarks>
+    /// Currently not used within the framework.
+    /// </remarks>
     public static class TypeDocumentation
     {
+        /// <summary>
+        /// The default filter for which types to document, excludes types in the "System" and "Microsoft" namespaces,
+        /// types in assemblies signed with the .NET framework public keys and special name types.
+        /// </summary>
+        /// <param name="type">The type to test</param>
+        /// <returns>True if a table should be created for the type</returns>
+        /// <remarks>Throws a <see cref="NullReferenceException"/> for types without a namespace.</remarks>
         public static bool DefaultMakeFn(Type type)
         {
             var ns = type.Namespace;
@@ -59,6 +91,12 @@ namespace SysWeaver.Data
             return true;
         }
 
+        /// <summary>
+        /// The default filter for which members to include: public, non-static, non-readonly fields and
+        /// properties with a public getter and a public setter.
+        /// </summary>
+        /// <param name="mi">The member to test</param>
+        /// <returns>True if the member should be included</returns>
         public static bool DefaultIncludeFn(MemberInfo mi)
         {
             if (mi.MemberType == MemberTypes.Field)
@@ -91,6 +129,17 @@ namespace SysWeaver.Data
         }
 
 
+        /// <summary>
+        /// Get documentation tables for a type and (recursively) all types referenced by its members (element types of arrays and collections are used).
+        /// </summary>
+        /// <param name="type">The type to document</param>
+        /// <param name="makeTableFn">Determines if a table should be created for a type, defaults to <see cref="DefaultMakeFn(Type)"/></param>
+        /// <param name="includeMemberFn">Determines if a member should be included, defaults to <see cref="DefaultIncludeFn(MemberInfo)"/></param>
+        /// <returns>One table per documented type, the requested type first (if it passes <paramref name="makeTableFn"/>).
+        /// Implementations of abstract types / interfaces are nested in <see cref="TypeTable.Implementations"/></returns>
+        /// <remarks>
+        /// Documenting an abstract type or interface scans all types of all loaded assemblies, which can be slow.
+        /// </remarks>
         public static TypeTable[] GetTypeTable(Type type, Func<Type, bool> makeTableFn = null, Func<MemberInfo, bool> includeMemberFn = null)
         {
             makeTableFn = makeTableFn ?? DefaultMakeFn;
@@ -102,6 +151,16 @@ namespace SysWeaver.Data
         }
 
 
+        /// <summary>
+        /// Append Mark Down documentation (a heading, the description and a member table per type) for a type and all types that it references.
+        /// </summary>
+        /// <param name="sb">The string builder to append the Mark Down to</param>
+        /// <param name="type">The type to document</param>
+        /// <param name="seenTypes">Optional set of types that have already been documented, types in the set are skipped and newly documented types are added to it.
+        /// Use this to avoid duplicates when documenting multiple types into the same output</param>
+        /// <param name="makeTableFn">Determines if a table should be created for a type, defaults to <see cref="DefaultMakeFn(Type)"/></param>
+        /// <param name="includeMemberFn">Determines if a member should be included, defaults to <see cref="DefaultIncludeFn(MemberInfo)"/></param>
+        /// <param name="linePrefix">Optional prefix for every line, implementations of abstract types / interfaces are nested using block quotes ("&gt; ")</param>
         public static void AddTypeTableToMD(StringBuilder sb, Type type, HashSet<Type> seenTypes = null, Func<Type, bool> makeTableFn = null, Func<MemberInfo, bool> includeMemberFn = null, String linePrefix = null)
         {
             if (seenTypes != null)

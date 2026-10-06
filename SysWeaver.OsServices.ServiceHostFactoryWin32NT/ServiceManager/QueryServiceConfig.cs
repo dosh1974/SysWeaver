@@ -4,6 +4,9 @@ using System.Runtime.InteropServices;
 
 namespace SysWeaver.OsServices.ServiceManager
 {
+    /// <summary>
+    /// Managed version of the Win32 QUERY_SERVICE_CONFIG structure (returned by QueryServiceConfig).
+    /// </summary>
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     sealed class QueryServiceConfig
     {

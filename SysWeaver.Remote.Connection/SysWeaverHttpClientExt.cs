@@ -11,8 +11,11 @@ using System.Threading.Tasks;
 namespace SysWeaver
 {
     /// <summary>
-    /// Extensions to HttpClient to perform some action against SysWeaver services
+    /// Extensions to HttpClient to perform some actions against SysWeaver services: login / logout (session cookie based) and file upload.
     /// </summary>
+    /// <remarks>
+    /// The client must keep cookies (the default <see cref="HttpClientHandler"/> does) for the login session to be used by later requests.
+    /// </remarks>
     public static class SysWeaverHttpClientExt
     {
         #region Login
@@ -59,6 +62,9 @@ namespace SysWeaver
             public String[] Tokens { get; set; }
         }
 
+        /// <summary>
+        /// The login request payload sent to "Api/auth/Login".
+        /// </summary>
         sealed class LoginReq
         {
             /// <summary>
@@ -81,8 +87,13 @@ namespace SysWeaver
         /// <param name="client">The http client to login</param>
         /// <param name="server">The base address to a SysWeaver service</param>
         /// <param name="username">Username</param>
-        /// <param name="password">Password (never sent in plaintext, nor sent using the same hash twice) or password hash</param>
-        /// <returns>User information if successful else null</returns>
+        /// <param name="password">Password (never sent in plaintext, nor sent using the same hash twice) or password hash.
+        /// A 44 character base64 string that decodes to 32 bytes is treated as the already salted password hash.</param>
+        /// <returns>User information, check <see cref="AuthInfo.Succeeded"/></returns>
+        /// <remarks>
+        /// Requests a salt and one time pad from "Api/auth/GetUserSalt" and then posts the double SHA256 hash to "Api/auth/Login".
+        /// </remarks>
+        /// <exception cref="Exception">A request failed (non 200 response).</exception>
         public async static Task<AuthInfo> SysWeaverLogin(this HttpClient client, String server, String username, String password)
         {
             String hash = null;
@@ -110,11 +121,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Log out the currentgly logged in user
+        /// Log out the currently logged in user (GET "logout").
         /// </summary>
-        /// <param name="client">The http client to login</param>
+        /// <param name="client">The http client to log out</param>
         /// <param name="server">The base address to a SysWeaver service</param>
-        /// <returns></returns>
+        /// <returns>Always true (the response status is ignored).</returns>
         public async static Task<bool> SysWeaverLogout(this HttpClient client, String server)
         {
             var urlbase = server.TrimEnd('/') + '/';
@@ -133,6 +144,10 @@ namespace SysWeaver
         /// </summary>
         public sealed class FileInfo
         {
+            /// <summary>
+            /// Returns the file name and the status.
+            /// </summary>
+            /// <returns>Ex: "file.txt [Upload]".</returns>
             public override string ToString() => String.Concat(Name.ToFilename(), " [", Status, ']');
 
             /// <summary>
@@ -144,11 +159,11 @@ namespace SysWeaver
             /// </summary>
             public long Length;
             /// <summary>
-            /// The MD5 checksum of the file content, encoded using hex values, "abcd...", where a = is the high nibble of the first byte, b is the low nibble of the first byte and so on...
+            /// The hash of the file content (as computed by <see cref="FileHash.GetHashAsync(string)"/>), encoded using lower case hex values, "abcd...", where a = is the high nibble of the first byte, b is the low nibble of the first byte and so on...
             /// </summary>
             public String Hash;
             /// <summary>
-            /// Numer of milliseconds since the Unix epoch
+            /// Number of milliseconds since the Unix epoch (UTC) of the last modification
             /// </summary>
             public double LastModified;
 
@@ -161,6 +176,10 @@ namespace SysWeaver
                 LastModified = new DateTimeOffset(utcLastModified).ToUnixTimeMilliseconds();
             }
 
+            /// <summary>
+            /// Get the status reported by the server (from <see cref="SysWeaverFileUploadPrepare"/>).
+            /// </summary>
+            /// <returns>The status.</returns>
             public FileStatus GetStatus() => Status;
 
             internal FileStatus Status;
@@ -179,15 +198,15 @@ namespace SysWeaver
             /// </summary>
             DiscQuotaExceeded = -7,
             /// <summary>
-            /// Not autharized to upload this file
+            /// Not authorized to upload this file
             /// </summary>
             NotAuthorized = -6,
             /// <summary>
-            /// Some paramaters are wrong
+            /// Some parameters are wrong
             /// </summary>
             InvalidParams = -5,
             /// <summary>
-            /// The file extension is not accepeted
+            /// The file extension is not accepted
             /// </summary>
             RefuseExtension = -4,
             /// <summary>
@@ -237,11 +256,12 @@ namespace SysWeaver
         /// <summary>
         /// Prepare file(s) for upload to a SysWeaver service (get information from the server about the files)
         /// </summary>
-        /// <param name="client">The http client to login</param>
+        /// <param name="client">The http client to use</param>
         /// <param name="server">The base address to a SysWeaver service</param>
         /// <param name="repo">The repository</param>
         /// <param name="filenames">File(s) to prepare for upload</param>
-        /// <returns>Information about the files</returns>
+        /// <returns>Information about the files (with the server status), or null if no files were specified or the server response was invalid</returns>
+        /// <exception cref="Exception">A file doesn't exist, or the request failed.</exception>
         public async static Task<FileInfo[]> SysWeaverFileUploadPrepare(this HttpClient client, String server, String repo, params String[] filenames)
         {
             var urlbase = server.TrimEnd('/') + '/';
@@ -286,11 +306,12 @@ namespace SysWeaver
         /// <summary>
         /// Upload the files previously prepared
         /// </summary>
-        /// <param name="client">The http client to login</param>
+        /// <param name="client">The http client to use</param>
         /// <param name="server">The base address to a SysWeaver service</param>
         /// <param name="repo">The repository</param>
-        /// <param name="info">The files as returned byFileUploadPrepare</param>
-        /// <returns>True if the upload request(s) was performed and status was updated in the file info(s). True does NOT mean that the file(s) was uploaded succesfully, need to check status</returns>
+        /// <param name="info">The files as returned by <see cref="SysWeaverFileUploadPrepare"/>, only files with the status <see cref="FileStatus.Upload"/> are uploaded (concurrently)</param>
+        /// <returns>True if the upload request(s) were performed, false if <paramref name="info"/> is empty. True does NOT mean that the file(s) were uploaded successfully.
+        /// NOTE: the per file upload result is currently NOT written back to the file info(s).</returns>
         public async static Task<bool> SysWeaverFileUploadPrepared(this HttpClient client, String server, String repo, FileInfo[] info)
         {
             var urlbase = server.TrimEnd('/') + '/';
@@ -305,7 +326,7 @@ namespace SysWeaver
         /// <summary>
         /// Upload one or more files to a SysWeaver service
         /// </summary>
-        /// <param name="client">The http client to login</param>
+        /// <param name="client">The http client to use</param>
         /// <param name="server">The base address to a SysWeaver service</param>
         /// <param name="repo">The repository</param>
         /// <param name="filenames">File(s) to upload</param>

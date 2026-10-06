@@ -6,8 +6,21 @@ using System.Threading.Tasks;
 namespace SysWeaver
 {
 
+    /// <summary>
+    /// A rate limiter for http requests, a request that is over the limit can be delayed (async) for a while instead of being rejected immediately.
+    /// </summary>
+    /// <remarks>
+    /// Used by the http server to limit requests per server, per api and per session (a rejected request typically returns http status 429).
+    /// Waiting requests poll the limit (they are not queued in order), so they are not served in a fair (FIFO) order.
+    /// </remarks>
     public class HttpRateLimiter : RateLimiter
     {
+        /// <summary>
+        /// Create a new http rate limiter
+        /// </summary>
+        /// <param name="p">The parameters</param>
+        /// <exception cref="ArgumentException">The count or duration is zero or negative</exception>
+        /// <exception cref="NullReferenceException"><paramref name="p"/> is null</exception>
         public HttpRateLimiter(HttpRateLimiterParams p) : base(p)
         {
             MaxQueue = p.MaxQueue;
@@ -15,17 +28,17 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// The maximum number of request to keep queued
+        /// The maximum number of requests that may be delayed at the same time
         /// </summary>
         public readonly int MaxQueue;
 
         /// <summary>
-        /// The maximum time to delay a request
+        /// The maximum time to delay a request, in <see cref="TimeSpan"/> ticks
         /// </summary>
         public readonly long MaxWait;
 
         /// <summary>
-        /// Number of waiting threads now
+        /// Number of requests that are currently delayed (waiting for a free slot)
         /// </summary>
         public long Waiting => Interlocked.Read(ref WaitCount);
 
@@ -33,9 +46,11 @@ namespace SysWeaver
         long WaitCount;
 
         /// <summary>
-        /// Check if we're exceeding the limit, wait if enabled and required
+        /// Check if a request is over the limit, if it is, the request may be delayed (async) until a slot is free.
         /// </summary>
-        /// <returns>True if the limit is exceeded (return 429)</returns>
+        /// <returns>False if the request is allowed (possibly after a delay), true if the limit is exceeded and the request should be rejected (return 429).
+        /// The returned value task is completed synchronously (no allocation) if the request is within the limit</returns>
+        /// <remarks>A request is rejected immediately if <see cref="MaxQueue"/> requests are already delayed, or if the remaining allowed delay (<see cref="MaxWait"/>) isn't enough to reach a free slot</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ValueTask<bool> IsOverTheLimit()
             => IsOverLimit(out var timeToNext) ? InternalIsOverTheLimit(timeToNext) : TaskExt.FalseValueTask;

@@ -32,13 +32,23 @@ sequenceDiagram
 
 ## Key features
 
-- Service registration with display name, description and restart-on-failure actions.
-- Elevation through the standard Windows "run as administrator" mechanism.
-- Start/stop/pause/continue mapped onto the service manager.
+- Service registration (own process, LocalSystem, command line `[exe] daemon`) with display name, description, start-up type (disabled, manual, automatic or delayed automatic) and restart-on-failure actions (restart on 1st/2nd failure after `RestartDelaySeconds`, later failures after `RestartDelayLastSeconds`).
+- Elevation through the standard Windows "run as administrator" mechanism (`runas` verb, UAC prompt).
+- Start/stop/pause/continue mapped onto the service manager (`ServiceBase` pause/continue/stop/shutdown pause, resume or dispose all services).
+- Direct advapi32 interop (`Win32ServiceManager`, internal) for install, uninstall, configuration and control.
+
+| Type | Role |
+|---|---|
+| `ServiceHostFactoryWin32NT` | `IServiceHostFactory` found by name by `ServiceHost.Run` |
+| `ElevatedProcessWin32NT` | `IsElevated` (Administrators role) and `RunElevated` |
+| `ServiceHostWindows`, `ServiceInstance`, `Win32ServiceManager` | Internal `IServiceHost`, `ServiceBase` and SCM interop implementations |
 
 ## Limitations and considerations
 
 - Windows only; must be referenced or deployed with the executable so `ServiceHost` can find it.
+- The service always runs as LocalSystem; change the account in the Services console if needed.
+- `start` does not resume a paused service (use `continue`).
+- `uninstall` marks the service for deletion; Windows removes it once all handles are closed.
 
 ## Using it
 

@@ -12,10 +12,24 @@ using SysWeaver.MicroService;
 namespace SysWeaver.OsServices
 {
 
+    /// <summary>
+    /// <see cref="IServiceHost"/> for Linux SysV init.
+    /// Installs an LSB init script "/etc/init.d/[Name]" (using start-stop-daemon to run "[command] daemon") and registers it using update-rc.d.
+    /// </summary>
+    /// <remarks>
+    /// The runtime status and pid of the daemon is tracked in "/var/run/[Name].service.pid" ("Status Pid"), written by the daemon process.
+    /// Pause and continue are implemented by sending SIGINT and SIGCONT to the daemon; SIGTERM, SIGHUP and SIGQUIT stop it.
+    /// All verbs that change the service require root.
+    /// </remarks>
     sealed class ServiceHostSysVinit : IServiceHost
     {
+        /// <inheritdoc/>
         public String Name => "Linux SysV init";
 
+        /// <summary>
+        /// Creates the host.
+        /// </summary>
+        /// <param name="p">The service parameters.</param>
         public ServiceHostSysVinit(ServiceParams p)
         {
             P = p;
@@ -32,6 +46,7 @@ namespace SysWeaver.OsServices
 
         #region Elevation
 
+        /// <inheritdoc/>
         public bool IsElevated { get; private set; }
 
         static readonly IReadOnlySet<ServiceVerbs> IntNeedElevation = ReadOnlyData.Set(
@@ -45,13 +60,16 @@ namespace SysWeaver.OsServices
             ServiceVerbs.Continue
         );
 
+        /// <inheritdoc/>
         public bool NeedElevation(ServiceVerbs verb) => IntNeedElevation.Contains(verb);
 
+        /// <inheritdoc cref="UnixHelpers.RunElevated(string, bool, bool)"/>
         public int RunElevated(String commandLine, bool terminal, bool noWait) => UnixHelpers.RunElevated(commandLine, terminal, noWait);
 
         #endregion//Elevation
 
 
+        /// <inheritdoc/>
         public ServiceStatus Status()
         {
             if (!IsInstalled())
@@ -74,6 +92,7 @@ namespace SysWeaver.OsServices
             return false;
         }
 
+        /// <inheritdoc/>
         public ServiceResponse Install()
         {
             var fn = ScriptName;
@@ -160,6 +179,10 @@ namespace SysWeaver.OsServices
             }
         }
 
+        /// <summary>
+        /// Install (if needed) and start the service, a paused service is continued.
+        /// </summary>
+        /// <returns>The result.</returns>
         public ServiceResponse Start()
         {
             var i = Install();
@@ -208,6 +231,7 @@ namespace SysWeaver.OsServices
             return ServiceResponse.StartFailed;
         }
 
+        /// <inheritdoc/>
         public ServiceResponse Stop()
         {
             for (; ; )
@@ -244,6 +268,7 @@ namespace SysWeaver.OsServices
             return ServiceResponse.StopFailed;
         }
 
+        /// <inheritdoc/>
         public ServiceResponse Uninstall()
         {
             if (!IsInstalled())
@@ -269,6 +294,10 @@ namespace SysWeaver.OsServices
         }
 
 
+        /// <summary>
+        /// Pause the running service by sending SIGINT to the daemon (returns before the pause has completed).
+        /// </summary>
+        /// <returns>The result.</returns>
         public ServiceResponse Pause()
         {
             var status = GetRuntimeStatus(out var pid);
@@ -294,6 +323,10 @@ namespace SysWeaver.OsServices
             return ServiceResponse.Ok;
         }
 
+        /// <summary>
+        /// Resume the paused service by sending SIGCONT to the daemon (returns before the resume has completed).
+        /// </summary>
+        /// <returns>The result.</returns>
         public ServiceResponse Continue()
         {
             var status = GetRuntimeStatus(out var pid);
@@ -368,6 +401,11 @@ namespace SysWeaver.OsServices
         }
 
 
+        /// <summary>
+        /// The daemon main loop: creates the <see cref="ServiceManager"/>, writes the status file and handles signals until SIGTERM, SIGHUP or SIGQUIT is received.
+        /// </summary>
+        /// <param name="onStart">Optional callback to execute after all services in the manifest file have been created.</param>
+        /// <returns>Always 0.</returns>
         public int Run(Action<ServiceManager> onStart)
         {
             WriteStatus(ServiceStatus.StartPending);

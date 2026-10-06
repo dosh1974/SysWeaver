@@ -6,6 +6,14 @@ using SysWeaver.Translation;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// A set of named text templates read from "key: text" lines (one per line, lines starting with '#' are ignored, "\n" is replaced with a new line).
+    /// The source can be a file, an embedded resource or the lines themselves, see <see cref="ManagedTools.GetLines(string, System.Type, System.Action)"/>.
+    /// </summary>
+    /// <remarks>
+    /// Keys are case insensitive. The templates are parsed lazily and reloaded if the source file changes.
+    /// Templates can use <see cref="ManagedVars.TextVars"/>.
+    /// </remarks>
     public class ManagedTextLookup
     {
 
@@ -16,10 +24,11 @@ namespace SysWeaver
         public String Text { get; set; }
 
         /// <summary>
-        /// Get text
+        /// Get a text, evaluated with the given variables.
         /// </summary>
         /// <param name="key">The text key</param>
-        /// <param name="vars">The variables</param>
+        /// <param name="vars">The variables, if null an <see cref="Overrides"/> value (exact key match) is returned if present</param>
+        /// <returns>The text, or null if the key isn't found</returns>
         public String GetText(String key, IReadOnlyDictionary<String, String> vars = null)
         { 
             if (vars == null)
@@ -30,9 +39,15 @@ namespace SysWeaver
             return GetTemplate(key)?.Get(vars);
         }
 
+        /// <summary>
+        /// Texts that override the templates (case sensitive keys), only used by <see cref="GetText(string, IReadOnlyDictionary{string, string})"/> when no variables are supplied.
+        /// </summary>
         public readonly ConcurrentDictionary<String, String> Overrides = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
 
 
+        /// <summary>
+        /// All texts: the overrides followed by the template texts (unevaluated) of keys that are not overridden.
+        /// </summary>
         public IEnumerable<KeyValuePair<String, String>> AllTexts
         {
             get
@@ -52,10 +67,10 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get the text template for the body
+        /// Get the text template for a key
         /// </summary>
-        /// <param name="key">The text key</param>
-        /// <returns>A text template</returns>
+        /// <param name="key">The text key (case insensitive)</param>
+        /// <returns>A text template, or null if not found</returns>
         public TextTemplate GetTemplate(String key)
         {
             var t = GetTemplates();
@@ -65,9 +80,9 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get all texts
+        /// Get all text templates, loading them if needed
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The templates, key is the lower cased text key</returns>
         public IReadOnlyDictionary<String, TextTemplate> GetTemplates()
         {
             var t = Templates;
@@ -104,10 +119,17 @@ namespace SysWeaver
         volatile IReadOnlyDictionary<String, TextTemplate> Templates;
 
 
+        /// <summary>
+        /// Create an empty lookup, set <see cref="Text"/> before use.
+        /// </summary>
         public ManagedTextLookup()
         {
         }
 
+        /// <summary>
+        /// Create a lookup and load the templates immediately.
+        /// </summary>
+        /// <param name="text">A file name, embedded resource name or the actual "key: text" lines</param>
         public ManagedTextLookup(String text)
         {
             Text = text;
@@ -115,6 +137,10 @@ namespace SysWeaver
             GetTemplates();
         }
 
+        /// <summary>
+        /// Create a copy that shares the source and the currently loaded templates (but not the overrides).
+        /// </summary>
+        /// <param name="copy">The lookup to copy</param>
         protected ManagedTextLookup(ManagedTextLookup copy)
         {
             Text = copy.Text;

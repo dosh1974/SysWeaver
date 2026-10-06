@@ -2,6 +2,9 @@
 
 namespace SysWeaver.OsServices.ServiceManager
 {
+    /// <summary>
+    /// Win32 service start types, plus SERVICE_NO_CHANGE.
+    /// </summary>
     enum StartTypes : uint
     {
         /// <summary>
@@ -26,7 +29,7 @@ namespace SysWeaver.OsServices.ServiceManager
         SERVICE_DISABLED = 0x00000004,
 
         /// <summary>
-        /// Used when chaning config to signal that this should not change
+        /// Used when changing config to signal that this should not change
         /// </summary>
         SERVICE_NO_CHANGE = 0xffffffffu,
 

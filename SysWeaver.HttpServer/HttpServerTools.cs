@@ -17,10 +17,24 @@ using SysWeaver.Compression;
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// Helpers used by the http server and its modules: cookies, etags, url paths, url decoding, mime constants and shared handler instances.
+    /// </summary>
     public static class HttpServerTools
     {
+        /// <summary>
+        /// The default cookie path and attributes ("/" and HttpOnly, no Secure or SameSite).
+        /// </summary>
         public const String DefPath = "/;HttpOnly";
 
+        /// <summary>
+        /// Make a Set-Cookie value that expires at a given time (capped to one year from now).
+        /// </summary>
+        /// <param name="name">The cookie name</param>
+        /// <param name="value">The cookie value, inserted as is (must not contain ';' or control chars)</param>
+        /// <param name="exp">When the cookie expires (UTC), if not in the future a cookie deletion (empty value, max age 0) is made</param>
+        /// <param name="path">The path, optionally followed by attributes, ex: "/;HttpOnly;SameSite=None;Secure"</param>
+        /// <returns>The Set-Cookie value</returns>
         public static String MakeCookie(String name, String value, DateTime exp, String path = DefPath)
         {
             var now = DateTime.UtcNow;
@@ -35,10 +49,10 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Escape non-ascii using \uXXXX
+        /// Escape non-ASCII chars using \uXXXX (and backslashes as "\\").
         /// </summary>
-        /// <param name="value"></param>
-        /// <returns></returns>
+        /// <param name="value">The value, must not be null</param>
+        /// <returns>The escaped value (the same instance if nothing was escaped)</returns>
         public static string EncodeNonAsciiCharacters(this string value)
         {
             var len = value.Length;
@@ -71,36 +85,36 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Get the etag for an assembly (based last write time)
+        /// Get the etag for an assembly (based on its last write time).
         /// </summary>
-        /// <param name="asm"></param>
-        /// <returns>The etag or null if it can't be found</returns>
+        /// <param name="asm">The assembly</param>
+        /// <returns>The etag</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String GetAssemblyEtag(Assembly asm)
             => ToEtag(asm.GetLastWriteTimerUtc());
 
         /// <summary>
-        /// Create an etag from a DateTime
+        /// Create an etag from a DateTime (local and unspecified times are converted to UTC first).
         /// </summary>
-        /// <param name="t"></param>
-        /// <returns></returns>
+        /// <param name="t">The time</param>
+        /// <returns>The etag (can be decoded using <see cref="TryGetDateTimeFromETag"/>)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToEtag(DateTime t) => CompactAsciiString.Secure.Encode((t.Kind == DateTimeKind.Utc ? t : t.ToUniversalTime()).Ticks);
 
         /// <summary>
-        /// Create an etag from a long
+        /// Create an etag from a long.
         /// </summary>
-        /// <param name="l"></param>
-        /// <returns></returns>
+        /// <param name="l">The value</param>
+        /// <returns>The etag</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToEtag(long l) => CompactAsciiString.Secure.Encode(l);
 
 
         /// <summary>
-        /// Create an etag from some data (using a hash)
+        /// Create an etag from some data (using an MD5 hash, not for security purposes).
         /// </summary>
-        /// <param name="data"></param>
-        /// <returns></returns>
+        /// <param name="data">The data</param>
+        /// <returns>The etag</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToEtag(ReadOnlySpan<Byte> data)
         {
@@ -113,10 +127,10 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Decode a time stamp string
+        /// Decode a time stamp etag (made by <see cref="ToEtag(DateTime)"/>), anything after the first space is ignored.
         /// </summary>
-        /// <param name="lm"></param>
-        /// <returns></returns>
+        /// <param name="lm">The etag, may be null</param>
+        /// <returns>The UTC time, or null if the value can't be decoded or the year is outside 1900 - 2500</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static DateTime? TryGetDateTimeFromETag(String lm)
         {
@@ -157,10 +171,12 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Remove things like "../" in paths, ex "Api/../Test/Func" becomes "Test/Func"
+        /// Remove "./" and resolve "../" segments in paths, ex "Api/../Test/Func" becomes "Test/Func".
+        /// Empty segments (double slashes) are kept.
         /// </summary>
         /// <param name="p">A path</param>
-        /// <returns>A cleaned up path</returns>
+        /// <returns>A cleaned up path (the same instance if nothing changed)</returns>
+        /// <exception cref="Exception">Thrown if a "../" segment goes above the start of the path</exception>
         public static String CleanupPaths(String p)
         {
             var ps = p.Split('/');
@@ -188,7 +204,7 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Merges url paths, ignoring empty parts
+        /// Merges url paths, ignoring empty parts, and adds a trailing '/' if the result isn't empty.
         /// </summary>
         /// <param name="paths">The paths to merge, if a path is null or empty it's ignored</param>
         /// <returns>The merged path</returns>
@@ -207,20 +223,35 @@ namespace SysWeaver.Net
 
 
 
+        /// <summary>
+        /// The charset suffix for text mime types.
+        /// </summary>
         public const String TextMimeSuffix = "; charset=UTF-8";
 
+        /// <summary>
+        /// Plain UTF-8 text.
+        /// </summary>
         public const String TextMime = "text/plain" + TextMimeSuffix;
+        /// <summary>
+        /// UTF-8 json.
+        /// </summary>
         public const String JsonMime = "application/json" + TextMimeSuffix;
+        /// <summary>
+        /// UTF-8 html.
+        /// </summary>
         public const String HtmlMime = "text/html" + TextMimeSuffix;
+        /// <summary>
+        /// UTF-8 svg.
+        /// </summary>
         public const String SvgMime = "image/svg+xml" + TextMimeSuffix;
 
 
         /// <summary>
-        /// Get a plain text handler
+        /// Get a plain text handler.
         /// </summary>
-        /// <param name="text">The text to repsond with</param>
+        /// <param name="text">The text to respond with</param>
         /// <param name="statusCode">The status code to use</param>
-        /// <param name="contentEncoding">Content encoding methof to use, default is UTF8</param>
+        /// <param name="contentEncoding">Content encoding method to use, default is UTF8 (the mime type always says UTF-8)</param>
         /// <returns>A handler</returns>
         public static GenericHttpRequestHandler GetPlainTextHandler(String text, int statusCode = 200, Encoding contentEncoding = null)
         {
@@ -239,6 +270,10 @@ namespace SysWeaver.Net
 
         const String CacheChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
 
+        /// <summary>
+        /// Get a new unique (per process) cache key, ":" followed by a counter in base 64 chars.
+        /// </summary>
+        /// <returns>A completed task with the key</returns>
         public static ValueTask<String> GetStaticCacheUrl()
         {
             var num = Interlocked.Increment(ref CacheUrl);
@@ -254,19 +289,43 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// Return this from <see cref="IHttpRequestHandler.GetCacheKey"/> to prevent the response from being cached.
+        /// </summary>
         public const String PreventCacheKey = "";
 
+        /// <summary>
+        /// The maximum request cache duration in seconds (about 50 years, "forever").
+        /// </summary>
         public const int MaxRequestCache = 60 * 60 * 24 * 366 * 50;
 
+        /// <summary>
+        /// A completed task with a null handler (same as <see cref="NullHttpRequestHandlerValueTask"/>).
+        /// </summary>
         public static readonly ValueTask<IHttpRequestHandler> NullHttpRequestHandlerTask = ValueTask.FromResult<IHttpRequestHandler>(null);
+        /// <summary>
+        /// A completed task with a null handler (no handler found).
+        /// </summary>
         public static readonly ValueTask<IHttpRequestHandler> NullHttpRequestHandlerValueTask = ValueTask.FromResult<IHttpRequestHandler>(null);
 
 
+        /// <summary>
+        /// An empty end point list.
+        /// </summary>
         public static readonly IReadOnlyList<IHttpServerEndPoint> NoEndPoints = new List<IHttpServerEndPoint>();
 
+        /// <summary>
+        /// Return this handler when the response has already been written to the request (the server does nothing more).
+        /// </summary>
         public static readonly IHttpRequestHandler AlreadyHandled = new DummyHandler();
+        /// <summary>
+        /// A completed task with <see cref="AlreadyHandled"/>.
+        /// </summary>
         public static readonly ValueTask<IHttpRequestHandler> AlreadyHandledValueTask = ValueTask.FromResult(AlreadyHandled);
 
+        /// <summary>
+        /// The type of <see cref="AlreadyHandled"/>, all members except <see cref="IHttpRequestHandler.GetCacheKey"/> and <see cref="IHttpRequestHandler.Redirected"/> throw.
+        /// </summary>
         sealed class DummyHandler : IHttpRequestHandler
         {
             /// <summary>
@@ -289,10 +348,11 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Take a NameValueCollection and turn it into a dictionary with all keys lower-cased
+        /// Take a NameValueCollection and turn it into a frozen dictionary with all keys lower-cased (null keys are skipped).
+        /// Multiple values of a key are comma separated, if keys only differ in case the last one is used.
         /// </summary>
-        /// <param name="q"></param>
-        /// <returns></returns>
+        /// <param name="q">The collection</param>
+        /// <returns>The dictionary</returns>
         public static IReadOnlyDictionary<String, String> GetQueryParamsLowerKey(NameValueCollection q)
         {
             if (q.Count <= 0)
@@ -312,6 +372,11 @@ namespace SysWeaver.Net
         /// Make a Set-Cookie value: "name=value;Max-Age=maxAge;Path=path".
         /// Built on the stack, the only allocation is the returned string.
         /// </summary>
+        /// <param name="name">The cookie name</param>
+        /// <param name="value">The cookie value, inserted as is (must not contain ';' or control chars)</param>
+        /// <param name="maxAge">The max age in seconds, 0 deletes the cookie</param>
+        /// <param name="path">The path, optionally followed by attributes, ex: "/;HttpOnly"</param>
+        /// <returns>The Set-Cookie value</returns>
         [SkipLocalsInit]
         public static String MakeCookie(String name, String value, long maxAge, String path)
         {
@@ -397,9 +462,10 @@ namespace SysWeaver.Net
             //=> CookieCache.GetOrUpdate(newCookieStr ?? "", IntParseCookieString);
 
         /// <summary>
-        /// Parses the cookies found in the supplied strings and created a dictionary
+        /// Get the cookies of a cookie header as a dictionary.
         /// </summary>
-        /// <param name="newCookieStr"></param>
+        /// <param name="newCookieStr">The Cookie header, may be null</param>
+        /// <returns>The cookies (the last value is used if a name occurs multiple times)</returns>
         /// <remarks>Nothing is parsed up front, looking up a cookie scans the header and only allocates the value (see <see cref="CookieStringDictionary"/>)</remarks>
         public static IReadOnlyDictionary<String, String> ParseCookieString(String newCookieStr)
             => CookieStringDictionary.Create(newCookieStr);
@@ -411,9 +477,12 @@ namespace SysWeaver.Net
         const int MaxStackDecodeChars = 512;
 
         /// <summary>
+        /// Url decode a value (UTF-8 percent-decoding, "+" becomes a space, "%uXXXX" is supported, invalid escapes are kept as is and invalid UTF-8 becomes U+FFFD).
         /// Allocation-free, except for the final string (only if the value needs decoding).
-        /// Mimics HttpUtility.UrlDecode(string) using UTF-8 percent-decoding.
+        /// Mimics HttpUtility.UrlDecode(string).
         /// </summary>
+        /// <param name="value">The value, may be null</param>
+        /// <returns>The decoded value (the same instance if nothing needed decoding), null if <paramref name="value"/> is null</returns>
         [SkipLocalsInit]
         public static string UrlDecode(string value)
         {
@@ -449,6 +518,7 @@ namespace SysWeaver.Net
         /// <param name="destination">The destination, must be at least as long as the value</param>
         /// <param name="needsDecoding">True if the value needed decoding, else the decoded value is identical to the value</param>
         /// <returns>The number of chars written to the destination</returns>
+        /// <exception cref="ArgumentException">Thrown if the destination is shorter than the value</exception>
         public static int UrlDecode(ReadOnlySpan<char> value, Span<char> destination, out bool needsDecoding)
         {
             if (destination.Length < value.Length)

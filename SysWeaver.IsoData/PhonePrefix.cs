@@ -7,9 +7,31 @@ namespace SysWeaver
 {
 
 
+    /// <summary>
+    /// Information about an international telephone country calling code (optionally narrowed by a region prefix, ex: +1 684 for American Samoa),
+    /// including dialing prefixes and the valid number of local digits.
+    /// Use <see cref="Identify(string, bool)"/> to find the prefix(es) of a (partial) number, and
+    /// <see cref="GetValidatedPhoneNumber(out string, out string, string)"/> to validate and split a complete international number.
+    /// </summary>
+    /// <remarks>
+    /// The built-in <see cref="Codes"/> are indexed into a digit trie once (static constructor), lookups are allocation light and thread safe.
+    /// Also includes non-country entries (shared, satellite, reserved codes etc) where <see cref="IsoCountry"/> is null.
+    /// </remarks>
     [TableDataPrimaryKey(nameof(CountryCode), nameof(RegionPrefix))]
     public sealed class PhonePrefix
     {
+        /// <summary>
+        /// Creates a phone prefix entry.
+        /// Note that only the entries in <see cref="Codes"/> are used by the lookup methods.
+        /// </summary>
+        /// <param name="countryCode">The international country calling code digits (without '+'), ex: "46".</param>
+        /// <param name="name">Name of the country / service.</param>
+        /// <param name="iso3166a2">Two letter ISO 3166 Alpha 2 country code, or null if this is not a country.</param>
+        /// <param name="intPrefix">Prefix(es) for dialing an international number from the region, or null.</param>
+        /// <param name="natPrefix">Prefix(es) for dialing a national number in the region, or null if none is required.</param>
+        /// <param name="regionPrefix">Comma separated list of region prefix digits that follow the country code (no white space), or null.</param>
+        /// <param name="rank">Rank used to order multiple matches, higher is more important.</param>
+        /// <param name="localCounts">Valid number of local digits, in ascending order. Empty means that the code is not usable for phone numbers.</param>
         public PhonePrefix(String countryCode, String name, String iso3166a2, String intPrefix, String natPrefix, String regionPrefix, int rank, params int[] localCounts)
         {
             CountryCode = countryCode;
@@ -23,14 +45,14 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Flag (same as IsoCountry), don't use
+        /// The flag of the country (same value as <see cref="IsoCountry"/>, rendered as a flag in table data views), don't use.
         /// </summary>
         [TableDataIsoCountryImage]
         [TableDataOrder(-1)]
         public String Flag => IsoCountry;
 
         /// <summary>
-        /// The number of valid local digits 
+        /// The number of valid local digits as a human readable string, ex: "7, 8 or 9". Empty if no local counts are defined.
         /// </summary>
         [TableDataOrder(1)]
         public String NumLocalDigits
@@ -46,13 +68,14 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// International dialing prefix.
+        /// The international country calling code digits (without the leading '+'), ex: "46" for Sweden.
         /// </summary>
         [TableDataKey]
         public readonly String CountryCode;
 
         /// <summary>
-        /// Optional prefix(es) required to identify the region, can be multiple values seprated by a comma or null if no region is required.
+        /// Optional prefix(es) required to identify the region, can be multiple values separated by a comma or null if no region is required.
+        /// The region prefix digits follow the <see cref="CountryCode"/>, ex: "684" for American Samoa (+1 684).
         /// </summary>
         public readonly String RegionPrefix;
 
@@ -69,7 +92,7 @@ namespace SysWeaver
         public readonly String IsoCountry;
 
         /// <summary>
-        /// Prefix(es) for dialing international number in the region, null means that this is not a region.
+        /// Prefix(es) for dialing an international number from the region, ex: "00", null means that this is not a region.
         /// </summary>
         public readonly String IntPrefix;
 
@@ -79,17 +102,22 @@ namespace SysWeaver
         public readonly String NatPrefix;
 
         /// <summary>
-        /// Valid number of digits (excluding region prefix, national prefix and country code)
+        /// Valid number of local digits (excluding region prefix, national prefix and country code), in ascending order.
+        /// Empty for codes that can't be used for phone numbers (ex: reserved codes).
         /// </summary>
         public readonly IReadOnlyList<int> LocalCounts;
 
         /// <summary>
-        /// Approximate rank according to population density in the country.
+        /// Approximate rank (higher is more important), roughly according to the population of the country.
         /// Methods returning multiple phone prefixes should return the highest ranked first and so on.
         /// </summary>
         [TableDataKey]
         public readonly int Rank;
 
+        /// <summary>
+        /// Returns a debug friendly description, ex: "+1 (684) American Samoa [AS]".
+        /// </summary>
+        /// <returns>The calling code, region prefix (if any), name and country code (if any).</returns>
         public override string ToString() =>
             IsoCountry == null
                 ? (
@@ -111,12 +139,16 @@ namespace SysWeaver
         static readonly Level Root;
 
         /// <summary>
-        /// Given the start of an international telephone number, identify was phone code(s) that it can be
+        /// Given the start of an international telephone number, identify which phone code(s) it can be.
+        /// The number is matched digit by digit against all country codes + region prefixes (longest match).
         /// </summary>
-        /// <param name="nextChar">The position of the next character (the first character that wasn't parsed)</param>
-        /// <param name="internationalNumber">An international telephone number as a string, only digits are respected, all other chars are ignored</param>
-        /// <param name="matchExact">If true, only the exact matches are returned</param>
-        /// <returns>Null if no digits are found, else a list of phone codes that this number could be</returns>
+        /// <param name="nextChar">The position in <paramref name="internationalNumber"/> of the next character (the first character that wasn't parsed as part of the prefix), -1 if nothing was parsed.</param>
+        /// <param name="internationalNumber">An international telephone number as a string (without any international dialing prefix such as "00"), only digits are respected, all other chars are ignored</param>
+        /// <param name="matchExact">If true, only the exact matches are returned (the longest complete prefix found). This is also the behaviour when the number contains
+        /// more digits than any matching prefix.</param>
+        /// <returns>Null if the input is null/empty or no digits matches any prefix, else a list of phone codes that this number could be, highest <see cref="Rank"/> first.
+        /// The list can be empty when no complete prefix was found in exact mode.</returns>
+        /// <remarks>The returned list may be a shared internal list, do not modify it.</remarks>
         public static IReadOnlyList<PhonePrefix> Identify(out int nextChar, String internationalNumber, bool matchExact = false)
         {
             nextChar = -1;
@@ -173,11 +205,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Given the start of an international telephone number, identify was phone code(s) that it can be
+        /// Given the start of an international telephone number, identify which phone code(s) it can be.
+        /// Ex: "+4" returns all codes starting with 4, "+46 70 123" returns Sweden.
         /// </summary>
         /// <param name="internationalNumber">An international telephone number as a string, only digits are respected, all other chars are ignored</param>
         /// <param name="matchExact">If true, only the exact matches are returned</param>
-        /// <returns>Null if no digits are found, else a list of phone codes that this number could be</returns>
+        /// <returns>Null if no digits are found, else a list of phone codes that this number could be, highest <see cref="Rank"/> first.</returns>
+        /// <remarks>The returned list may be a shared internal list, do not modify it.</remarks>
         public static IReadOnlyList<PhonePrefix> Identify(String internationalNumber, bool matchExact = false)
             => Identify(out var _, internationalNumber, matchExact);
 
@@ -202,13 +236,14 @@ namespace SysWeaver
         static readonly HashSet<Char> Vowels = new HashSet<char>("AEIOUYÅÄÖaeiouyåäö");
 
         /// <summary>
-        /// Get the details of an international telephone number
+        /// Validate a complete international telephone number and split it into a prefix and a local number.
         /// </summary>
-        /// <param name="prefix">The prefix digits with a + at the start</param>
+        /// <param name="prefix">The prefix digits with a + at the start, with a space between the country code and any region prefix, ex: "+46" or "+1 684"</param>
         /// <param name="localNumber">The local number digits</param>
         /// <param name="internationalNumber">An international telephone number as a string, only digits are respected, all other chars are ignored</param>
-        /// <returns>The phone prefix(es) for this number</returns>
-        /// <exception cref="Exception"></exception>
+        /// <returns>The phone prefix(es) for this number whose <see cref="LocalCounts"/> accept the number of local digits (at least one).</returns>
+        /// <exception cref="Exception">If <paramref name="internationalNumber"/> is null, no known prefix matches, or the number of local digits isn't valid for any matching prefix.
+        /// The message is human readable (ex: "A Sweden phone number must contain at least 9 digits").</exception>
         public static IReadOnlyList<PhonePrefix> GetValidatedPhoneNumber(out String prefix, out String localNumber, String internationalNumber)
         {
             if (internationalNumber == null)
@@ -282,14 +317,16 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Get the details of an international telephone number
+        /// Validate a complete international telephone number of a country and split it into a prefix and a local number.
+        /// Same as <see cref="GetValidatedPhoneNumber(out string, out string, string)"/> but only country prefixes are accepted.
         /// </summary>
-        /// <param name="name">Name(s) of the countries that the number can be in</param>
+        /// <param name="name">Name(s) of the countries that the number can be in, ex: "Sweden" or "Canada or United States"</param>
         /// <param name="isoCountry">Two letter ISO-3166a2 country code of the highest ranked country</param>
         /// <param name="prefix">The prefix digits with a + at the start</param>
         /// <param name="localNumber">The local number digits</param>
         /// <param name="internationalNumber">An international telephone number as a string, only digits are respected, all other chars are ignored</param>
-        /// <returns>The phone prefix(es) for this number</returns>
+        /// <returns>The country phone prefix(es) for this number, highest <see cref="Rank"/> first</returns>
+        /// <exception cref="Exception">If the number isn't valid (see <see cref="GetValidatedPhoneNumber(out string, out string, string)"/>) or the prefix doesn't belong to a country.</exception>
         public static IReadOnlyList<PhonePrefix> GetValidatedPhoneNumber(out String name, out String isoCountry, out String prefix, out String localNumber, String internationalNumber)
         {
             var pcs = GetValidatedPhoneNumber(out prefix, out localNumber, internationalNumber);
@@ -302,6 +339,10 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// A node in the digit trie, <see cref="Partial"/> holds all codes whose prefix passes through this node and <see cref="Exact"/> the codes that end here.
+        /// <see cref="Next"/> is set to null for leaf nodes.
+        /// </summary>
         sealed class Level
         {
 #if DEBUG
@@ -380,7 +421,7 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// List of known phone codes
+        /// List of known phone codes (countries, territories and international services).
         /// </summary>
         public static readonly IReadOnlyList<PhonePrefix> Codes = new[]
         {

@@ -161,7 +161,7 @@ namespace SysWeaver
         /// <summary>
         /// If the collection is null or empty return null, else return an array with the elements
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The element type</typeparam>
         /// <param name="collection">The collection to convert to an array</param>
         /// <returns>null if the collection is null or empty, else an array of the elements (always a new array, even if the collection is an array)</returns>
         public static T[] ArrayOrNullIfEmpty<T>(this IReadOnlyCollection<T> collection)
@@ -170,7 +170,7 @@ namespace SysWeaver
         /// <summary>
         /// If the array is null or empty return null, else return the original array
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The element type</typeparam>
         /// <param name="array">The array to check</param>
         /// <returns>null if the array is null or empty, else the original array</returns>
         public static T[] ArrayOrNullIfEmpty<T>(this T[] array)
@@ -178,9 +178,9 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Drain the queue (oldest items first) and optionally try to keep a set number of entries
+        /// Drain the queue (oldest items first) and optionally try to keep a set number of entries (the newest ones)
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The element type</typeparam>
         /// <param name="col">The queue to drain</param>
         /// <param name="keepAtLeast">The number of items to keep (in rare cases when multiple threads are draining the queue, the number of items can drop below)</param>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="col"/> is null</exception>
@@ -194,9 +194,10 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Drain a linked list (last) optionally try to keep a set number of entries
+        /// Drain a linked list by removing items from the end (last first), optionally keeping a set number of entries (the first ones)
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <remarks>Not thread safe.</remarks>
+        /// <typeparam name="T">The element type</typeparam>
         /// <param name="col">The linked list to drain</param>
         /// <param name="keepAtLeast">The number of items to keep</param>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="col"/> is null</exception>

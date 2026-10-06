@@ -12,8 +12,15 @@ namespace SysWeaver.Compression
 {
 
     /// <summary>
-    /// A compression type that uses brotli for compression
+    /// A Brotli ("br") plug-in that calls the native brotli library shipped with the Brotli.NET package directly, through <see cref="CompStreamCodec{TEncoder, TDecoder}"/>.
+    /// Registered with priority 1, so it's preferred over the built-in <see cref="CompBrotliNETNew"/> (priority 0) once <see cref="Register"/> is called.
     /// </summary>
+    /// <remarks>
+    /// Uses brotli quality 1 / 4 / 11 for <see cref="CompEncoderLevels.Fast"/> / <see cref="CompEncoderLevels.Balanced"/> / <see cref="CompEncoderLevels.Best"/> with a 2^22 byte window.
+    /// A new native encoder / decoder state is created (and destroyed) per call, there is no one-shot api.
+    /// Concatenated brotli streams are not supported (data after the first stream is ignored).
+    /// Requires the Brolib native binaries for the current platform and architecture.
+    /// </remarks>
     public sealed class CompBrotliNativeNET : ICompType
     {
         const String CompName = "Native Brotli.NET";
@@ -45,18 +52,23 @@ namespace SysWeaver.Compression
 
         static readonly String CompTS = String.Concat('[', CompHttpCode, "] ", CompName, " @ prio ", CompPrio, " for extensions: ", String.Join(", ", CompExtensions));
 
+        /// <inheritdoc/>
         public override string ToString() => CompTS;
 
         #endregion//Lifetime
 
         #region Info
 
+        /// <inheritdoc/>
         public string Name => CompName;
 
+        /// <inheritdoc/>
         public string HttpCode => CompHttpCode;
 
+        /// <inheritdoc/>
         public int Prio => CompPrio;
 
+        /// <inheritdoc/>
         public IReadOnlyCollection<String> FileExtensions => CompExtensions;
 
         #endregion//Info
@@ -80,6 +92,7 @@ namespace SysWeaver.Compression
         {
             IntPtr State;
 
+            /// <inheritdoc/>
             public static NativeEncoder Create(CompEncoderLevels level)
             {
                 var state = Brolib.BrotliEncoderCreateInstance();
@@ -93,8 +106,10 @@ namespace SysWeaver.Compression
                 };
             }
 
+            /// <inheritdoc/>
             public static int GetMaxCompressedLength(int inputSize) => System.IO.Compression.BrotliEncoder.GetMaxCompressedLength(inputSize);
 
+            /// <inheritdoc/>
             public static bool TryCompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten, CompEncoderLevels level)
             {
                 var enc = Create(level);
@@ -108,6 +123,7 @@ namespace SysWeaver.Compression
                 }
             }
 
+            /// <inheritdoc/>
             public OperationStatus Compress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
             {
                 fixed (Byte* src = source)
@@ -128,6 +144,7 @@ namespace SysWeaver.Compression
                 }
             }
 
+            /// <inheritdoc/>
             public void Dispose()
             {
                 var s = State;
@@ -145,6 +162,7 @@ namespace SysWeaver.Compression
         {
             IntPtr State;
 
+            /// <inheritdoc/>
             public static NativeDecoder Create()
             {
                 var state = Brolib.BrotliDecoderCreateInstance();
@@ -170,8 +188,10 @@ namespace SysWeaver.Compression
             /// </summary>
             public static int NextHeaderSize => 0;
 
+            /// <inheritdoc/>
             public bool BeginNext(ReadOnlySpan<Byte> next) => false;
 
+            /// <inheritdoc/>
             public OperationStatus Decompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten)
             {
                 fixed (Byte* src = source)
@@ -194,6 +214,7 @@ namespace SysWeaver.Compression
                 }
             }
 
+            /// <inheritdoc/>
             public void Dispose()
             {
                 var s = State;
@@ -208,18 +229,25 @@ namespace SysWeaver.Compression
 
         #region Compress
 
+        /// <inheritdoc/>
         public void Compress(Stream from, Stream to, CompEncoderLevels level) => Codec.Compress(from, to, level);
 
+        /// <inheritdoc/>
         public int Compress(Stream from, Span<Byte> to, CompEncoderLevels level) => Codec.Compress(from, to, level);
 
+        /// <inheritdoc/>
         public int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level) => Codec.Compress(from, to, level);
 
+        /// <inheritdoc/>
         public void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level) => Codec.Compress(from, to, level);
 
+        /// <inheritdoc/>
         public Task CompressAsync(Stream from, Stream to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
 
+        /// <inheritdoc/>
         public Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
 
+        /// <inheritdoc/>
         public Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
 
         #endregion//Compress
@@ -227,18 +255,25 @@ namespace SysWeaver.Compression
 
         #region Decompress
 
+        /// <inheritdoc/>
         public void Decompress(Stream from, Stream to) => Codec.Decompress(from, to);
 
+        /// <inheritdoc/>
         public int Decompress(Stream from, Span<Byte> to) => Codec.Decompress(from, to);
 
+        /// <inheritdoc/>
         public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to) => Codec.Decompress(from, to);
 
+        /// <inheritdoc/>
         public void Decompress(ReadOnlySpan<Byte> from, Stream to) => Codec.Decompress(from, to);
 
+        /// <inheritdoc/>
         public Task DecompressAsync(Stream from, Stream to) => Codec.DecompressAsync(from, to);
 
+        /// <inheritdoc/>
         public Task<int> DecompressAsync(Stream from, Memory<Byte> to) => Codec.DecompressAsync(from, to);
 
+        /// <inheritdoc/>
         public Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to) => Codec.DecompressAsync(from, to);
 
         #endregion//Decompress

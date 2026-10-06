@@ -1,5 +1,8 @@
 ﻿namespace SysWeaver.Translation
 {
+    /// <summary>
+    /// How long a translation should be cached
+    /// </summary>
     public enum TranslationCacheRetention
     {
         /// <summary>

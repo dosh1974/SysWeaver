@@ -1,6 +1,7 @@
 ﻿using SysWeaver.Compression;
 
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -12,31 +13,54 @@ using System.Threading.Tasks;
 namespace SysWeaver.Net
 {
 
+    /// <summary>
+    /// A transformer that can replace the handler of a file served by <see cref="FileHttpServerModule"/>, selected by the query string of the request
+    /// (ex: "image.png?Thumb64x64" for a transformer registered with the key "Thumb64x64").
+    /// Register using <see cref="FileHttpServerModule.AddFileTransformer(string, IFileTransformer)"/>.
+    /// </summary>
     public interface IFileTransformer
     {
         /// <summary>
         /// Return a request handler for a given file.
         /// </summary>
-        /// <param name="key">The key as registered</param>
-        /// <param name="mime">The mime information</param>
-        /// <param name="fi">File information</param>
-        /// <param name="options">Request options</param>
-        /// <param name="isAccepted">True if the file is pre-compressed and a compressed copy is acceptable</param>
+        /// <param name="key">The key as registered (the query string of the request, without the '?')</param>
+        /// <param name="mime">The mime type of the file and a flag that is true if the type is compressible</param>
+        /// <param name="fi">File information (may be a pre-compressed variant of the requested file, see <paramref name="decoder"/>)</param>
+        /// <param name="options">Request options of the disc folder that the file belongs to</param>
+        /// <param name="isAccepted">True if the file isn't pre-compressed or if the pre-compressed format is accepted by the client</param>
         /// <param name="decoder">Non-null if the file is pre-compressed, else null</param>
-        /// <param name="updateAccessTime">If true, the file's access time is updated whenever the file is read</param>
-        /// <param name="isDynamic">If true, the file is probably changed frequenctly</param>
+        /// <param name="updateAccessTime">If true, the file's access time should be updated whenever the file is read</param>
+        /// <param name="isDynamic">If true, the file is probably changed frequently</param>
         /// <returns>Must return a valid request handler</returns>
+        /// <remarks>
+        /// Called concurrently. The returned handler may be cached by the module for a few seconds.
+        /// </remarks>
         Task<IHttpRequestHandler> Modify(String key, Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic);
     }
 
     /// <summary>
-    /// A http server module that serves files from disc
+    /// A http server module that serves files from one or more disc folders, mapped to web folders (GET and HEAD requests only).
     /// </summary>
+    /// <remarks>
+    /// Several disc folders can be mapped to the same web folder, the most recently added folder is searched first.
+    /// Longer (more specific) web folders are matched before shorter ones.
+    /// Optionally serves pre-compressed variants (ex: "file.js.br") in place of the original file, and supports "virtual" files that only exist pre-compressed.
+    /// Query strings can select an <see cref="IFileTransformer"/> (ex: thumbnails).
+    /// Folders can be added and removed at runtime (thread safe), handler lookups are cached for a few seconds.
+    /// </remarks>
     public sealed class FileHttpServerModule : IHttpServerModule, IPerfMonitored
     {
 
         delegate Task<IHttpRequestHandler> FtDel(String key, Tuple<String, bool> mime, FileInfo fi, RequestOptions options, bool isAccepted, ICompDecoder decoder, bool updateAccessTime, bool isDynamic);
 
+        /// <summary>
+        /// Create a file server module.
+        /// </summary>
+        /// <param name="p">Parameters (null to use defaults, i.e no folders)</param>
+        /// <remarks>
+        /// Folders whose disc folder doesn't exist are silently ignored.
+        /// If <see cref="FileHttpServerModuleParams.CacheSeconds"/> is positive, handler lookups are cached (currently always for 5 seconds, regardless of the value).
+        /// </remarks>
         public FileHttpServerModule(FileHttpServerModuleParams p = null)
         {
             p = p ?? new FileHttpServerModuleParams();
@@ -58,9 +82,23 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <summary>
+        /// Performance monitor of this module.
+        /// </summary>
         public PerfMonitor PerfMon { get; private set; } = new PerfMonitor(nameof(FileHttpServerModule));
 
 
+        /// <summary>
+        /// Change the disc path of an already added disc folder (keeping all other options).
+        /// </summary>
+        /// <param name="webFolder">The web folder that the disc folder is mapped to (ex: "site/"), a trailing '/' is added if missing</param>
+        /// <param name="currentDiscFolder">The current full path of the disc folder (as stored, without a trailing separator)</param>
+        /// <param name="newDiscFolder">The new full path (no trailing separator)</param>
+        /// <returns>True if the folder was found and changed</returns>
+        /// <remarks>
+        /// The disc-to-web lookup used by <see cref="LocalToWeb(string)"/> and the handler cache are not updated.
+        /// Note that the root web folder ("") can't be targeted, since a '/' is always appended.
+        /// </remarks>
         public bool ChangeDiscFolder(String webFolder, String currentDiscFolder, String newDiscFolder)
         {
             webFolder = webFolder.TrimEnd('/') + '/';
@@ -78,10 +116,12 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Add a folder (prefer to add folders using the constructor params)
+        /// Add a folder (prefer to add folders using the constructor params).
+        /// The added disc folder is searched before any previously added disc folders mapped to the same web folder.
         /// </summary>
-        /// <param name="folder">The folder to add</param>
-        /// <returns></returns>
+        /// <param name="folder">The folder to add, a null <see cref="FileHttpServerModuleFolder.DiscFolder"/> means "web" (relative to the current directory)</param>
+        /// <returns>True if the folder was added, false if the disc folder doesn't exist</returns>
+        /// <remarks>Thread safe. Cached handler lookups are not invalidated (they expire within seconds).</remarks>
         public bool AddFolder(FileHttpServerModuleFolder folder)
         {
             var df = folder.DiscFolder ?? "web";
@@ -118,6 +158,12 @@ namespace SysWeaver.Net
         Dictionary<String, String> DiscToWeb;
         StringTree DiscToWebPrefix;
 
+        /// <summary>
+        /// Remove a folder previously added (matched on the web folder and the full path of the disc folder).
+        /// </summary>
+        /// <param name="folder">The folder to remove</param>
+        /// <returns>True if the folder was found and removed</returns>
+        /// <remarks>Thread safe. Cached handler lookups are not invalidated, so files may still be served for a few seconds.</remarks>
         public bool RemoveFolder(FileHttpServerModuleFolder folder)
         {
             if (folder == null)
@@ -154,6 +200,15 @@ namespace SysWeaver.Net
             return true;
         }
 
+        /// <summary>
+        /// Map a local url (relative to the server root, no leading '/') to the full path of an existing file on disc.
+        /// </summary>
+        /// <param name="url">The local url, ex: "site/images/logo.png"</param>
+        /// <returns>The full path of the first matching existing file, or null if no such file exists</returns>
+        /// <remarks>
+        /// Paths that resolve to a location outside of a disc folder (ex: ".." segments or rooted paths) are ignored.
+        /// Pre-compressed variants are not considered.
+        /// </remarks>
         public String WebToLocal(String url)
         {
             var f = OrderedFolders;
@@ -168,8 +223,8 @@ namespace SysWeaver.Net
                 var localDiscPath = toDiscPath(url.Substring(rootFolder.Length));
                 foreach (var discFolder in webFolder.Value.DiscFolders)
                 {
-                    var absPath = Path.Combine(discFolder.Path, localDiscPath);
-                    if (File.Exists(absPath))
+                    var absPath = SafeCombine(discFolder.Path, localDiscPath);
+                    if ((absPath != null) && File.Exists(absPath))
                         return absPath;
                 }
 
@@ -177,6 +232,11 @@ namespace SysWeaver.Net
             return null;
         }
 
+        /// <summary>
+        /// Map the full path of a file on disc to the local url that serves it.
+        /// </summary>
+        /// <param name="localFile">The full path of a file</param>
+        /// <returns>The local url (no leading '/') or null if the file isn't inside any added disc folder</returns>
         public String LocalToWeb(String localFile)
         {
             var tree = DiscToWebPrefix;
@@ -208,6 +268,12 @@ namespace SysWeaver.Net
 
         const int ValidMethods = (1 << (int)HttpServerMethods.GET) | (1 << (int)HttpServerMethods.HEAD);
 
+        /// <summary>
+        /// Not used, this module always supplies an <see cref="AsyncHandler"/>.
+        /// </summary>
+        /// <param name="context">The request</param>
+        /// <returns>Never returns</returns>
+        /// <exception cref="NotImplementedException">Always thrown</exception>
         public IHttpRequestHandler Handler(HttpServerRequest context)
             => throw new NotImplementedException();
 
@@ -233,7 +299,9 @@ namespace SysWeaver.Net
                     var localDiscPath = toDiscPath(url.Substring(rootFolder.Length));
                     foreach (var discFolder in webFolder.Value.DiscFolders)
                     {
-                        var absPath = Path.Combine(discFolder.Path, localDiscPath);
+                        var absPath = SafeCombine(discFolder.Path, localDiscPath);
+                        if (absPath == null)
+                            continue;
                         var fi = new FileInfo(absPath);
                         var ext = fi.Extension;
                         ICompDecoder decoder = null;
@@ -281,7 +349,9 @@ namespace SysWeaver.Net
                 var localDiscPath = toDiscPath(url.Substring(rootFolder.Length));
                 foreach (var discFolder in webFolder.Value.DiscFolders)
                 {
-                    var absPath = Path.Combine(discFolder.Path, localDiscPath);
+                    var absPath = SafeCombine(discFolder.Path, localDiscPath);
+                    if (absPath == null)
+                        continue;
                     var fi = new FileInfo(absPath);
                     var ext = fi.Extension;
                     ICompDecoder decoder = null;
@@ -312,7 +382,8 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// An optional async handler
+        /// The handler lookup (always set): returns a handler for GET/HEAD requests whose local url maps to an existing file (or pre-compressed variant), else null.
+        /// The query string (if any) selects a registered <see cref="IFileTransformer"/>.
         /// </summary>
         public Func<HttpServerRequest, Task<IHttpRequestHandler>> AsyncHandler { get; init; }
 
@@ -323,8 +394,20 @@ namespace SysWeaver.Net
 
         static readonly FtDel NoFT = (fileTransform, mime, fi, discFolder, isAccepted, decoder, updateAccessTime, isDynamic) => Task.FromResult((IHttpRequestHandler)new FileHttpRequestHandler(mime, fi, discFolder, isAccepted, decoder, updateAccessTime, isDynamic));
 
+        /// <summary>
+        /// Register a file transformer, used when a file is requested with a query string that equals the <paramref name="suffix"/>.
+        /// </summary>
+        /// <param name="suffix">The query string (without the '?') that selects the transformer, case sensitive</param>
+        /// <param name="t">The transformer</param>
+        /// <returns>True if added, false if a transformer is already registered for the suffix</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="t"/> is null</exception>
         public bool AddFileTransformer(String suffix, IFileTransformer t) => FileTransformers.TryAdd(suffix, (t ?? throw new ArgumentNullException(nameof(t))).Modify);
 
+        /// <summary>
+        /// Remove a file transformer.
+        /// </summary>
+        /// <param name="suffix">The query string that the transformer was registered with</param>
+        /// <returns>True if removed</returns>
         public bool RemoveFileTransformer(String suffix) => FileTransformers.TryRemove(suffix, out var t);
 
         readonly ConcurrentDictionary<String, FtDel> FileTransformers = new ConcurrentDictionary<string, FtDel>(StringComparer.Ordinal);
@@ -362,6 +445,33 @@ namespace SysWeaver.Net
 
         static readonly Func<String, String> ToDiscPath = GetToDiscPath();
 
+        /// <summary>
+        /// Chars that are never allowed in the (url decoded) relative disc path: NUL, and on Windows ':' (drive letters and alternate data streams).
+        /// </summary>
+        static readonly SearchValues<Char> InvalidLocalPathChars = SearchValues.Create(OperatingSystem.IsWindows() ? "\0:" : "\0");
+
+        /// <summary>
+        /// Comparison used for file system paths (case insensitive on Windows).
+        /// </summary>
+        static readonly StringComparison PathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+        /// <summary>
+        /// Combine a disc folder with a relative path that comes from a (url decoded, untrusted) request url.
+        /// </summary>
+        /// <param name="discFolder">The full path of the disc folder (no trailing separator)</param>
+        /// <param name="localDiscPath">The relative path</param>
+        /// <returns>The full path, or null if the path contains invalid chars or resolves to a location outside of the disc folder (ex: ".." segments or rooted paths)</returns>
+        static String SafeCombine(String discFolder, String localDiscPath)
+        {
+            if (localDiscPath.AsSpan().ContainsAny(InvalidLocalPathChars))
+                return null;
+            var absPath = Path.GetFullPath(Path.Combine(discFolder, localDiscPath));
+            var l = discFolder.Length;
+            if ((absPath.Length <= l) || (absPath[l] != Path.DirectorySeparatorChar) || !absPath.StartsWith(discFolder, PathComparison))
+                return null;
+            return absPath;
+        }
+
         static readonly Func<String, String> ToUrlPath = GetToUrlPath();
 
         static String GetWebPreCompressed(String ext)
@@ -390,7 +500,7 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Given an uncompressed file, returns the smallest valied pre-compressed file (if any)
+        /// Given an uncompressed file, returns the smallest valid pre-compressed file (if any), preferring formats accepted by the client.
         /// </summary>
         /// <param name="decoder">Output of the decoder with the smallest size</param>
         /// <param name="isAccepted">True if the decoder is among the accepted encoders (typically meaning that there is no runtime decompression / compression)</param>
@@ -601,6 +711,10 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <inheritdoc/>
+        /// <remarks>
+        /// Scans the disc, enumerating with a null <paramref name="root"/> recursively scans all folders (slow).
+        /// </remarks>
         public IEnumerable<IHttpServerEndPoint> EnumEndPoints(String root = null)
         {
             IEnumerable<KeyValuePair<String, WebFolder>> wfs = OrderedFolders;

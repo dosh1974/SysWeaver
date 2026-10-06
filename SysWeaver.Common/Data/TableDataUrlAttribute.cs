@@ -3,7 +3,7 @@ using System;
 namespace SysWeaver.Data
 {
     /// <summary>
-    /// Format valus as:
+    /// Format values as:
     /// A clickable link.
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
@@ -43,7 +43,7 @@ namespace SysWeaver.Data
 
 
     /// <summary>
-    /// Format valus as a web color
+    /// Format values as a web color
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class TableDataWebColorAttribute : TableDataRawFormatAttribute

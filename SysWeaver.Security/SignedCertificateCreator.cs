@@ -10,16 +10,25 @@ namespace SysWeaver.Security
 {
 
     /// <summary>
-    /// Creates certificates
+    /// Creates RSA TLS server certificates (self-signed or signed by a CA certificate) from validated <see cref="CertificateParams"/>.
     /// </summary>
+    /// <remarks>
+    /// Generated certificates use SHA256 with PKCS#1 padding, are not CA certificates, have the "TLS server authentication" extended key usage,
+    /// and are valid from 4 days ago (to tolerate clock skew).
+    /// The subject alternative names are built from localhost, the machine name, <see cref="Names"/> and the local IP addresses (as configured).
+    /// The returned certificates are loaded with <see cref="X509KeyStorageFlags.MachineKeySet"/>, <see cref="X509KeyStorageFlags.PersistKeySet"/> and <see cref="X509KeyStorageFlags.Exportable"/>.
+    /// Immutable after construction and thread safe.
+    /// </remarks>
     public sealed class SignedCertificateCreator
     {
+        /// <inheritdoc/>
         public override string ToString() => CommonName;
 
         /// <summary>
-        /// Create a new certificate creator
+        /// Create a new certificate creator, resolving EnvInfo variables and validating all subject fields.
         /// </summary>
-        /// <param name="p">The paramaters to use when generating the certificate</param>
+        /// <param name="p">The parameters to use when generating the certificate, null uses the <see cref="SelfSignedCertificateProviderParams"/> defaults.</param>
+        /// <exception cref="Exception">A subject field contains '=' or ','.</exception>
         public SignedCertificateCreator(CertificateParams p)
         {
             p = p ?? new SelfSignedCertificateProviderParams();
@@ -52,6 +61,13 @@ namespace SysWeaver.Security
             IncludeMachineName = p.IncludeMachineName;
         }
 
+        /// <summary>
+        /// Get a common name, using "SysWeaver.App.$(AppName)" if none is supplied, with EnvInfo variables resolved and the result validated.
+        /// </summary>
+        /// <param name="cn">The configured common name, may be null or empty.</param>
+        /// <param name="propertyName">Name of the property (used in the exception message).</param>
+        /// <returns>The resolved common name.</returns>
+        /// <exception cref="Exception">The common name contains '=' or ','.</exception>
         public static String GetValidatedCommonName(String cn, String propertyName)
         {
             if (String.IsNullOrEmpty(cn))
@@ -59,6 +75,12 @@ namespace SysWeaver.Security
             return ValidateString(EnvInfo.ResolveText(cn), propertyName);
         }
 
+        /// <summary>
+        /// Get an ISO 3166 alpha-2 country code from a country value, using the current region if none is supplied.
+        /// </summary>
+        /// <param name="country">The configured country (any value understood by <c>IsoCountry.TryGet</c>, can use EnvInfo variables), may be null or empty.</param>
+        /// <param name="propertyName">Name of the property (used in the exception message).</param>
+        /// <returns>The two letter country code, or null if the country is unknown.</returns>
         public static String GetValidatedCountry(String country, String propertyName)
         {
             if (String.IsNullOrEmpty(country))
@@ -66,6 +88,13 @@ namespace SysWeaver.Security
             return ValidateString(IsoData.IsoCountry.TryGet(EnvInfo.ResolveText(country))?.Iso3166a2, propertyName);
         }
 
+        /// <summary>
+        /// Validate that a subject field value doesn't contain characters that would break the distinguished name ('=' and ',').
+        /// </summary>
+        /// <param name="s">The value to validate, null or empty is allowed.</param>
+        /// <param name="pname">Name of the property (used in the exception message).</param>
+        /// <returns>The input value.</returns>
+        /// <exception cref="Exception"><paramref name="s"/> contains '=' or ','.</exception>
         public static String ValidateString(String s, String pname)
         {
             if (String.IsNullOrEmpty(s))
@@ -78,33 +107,101 @@ namespace SysWeaver.Security
             return s;
         }
 
+        /// <summary>
+        /// Number of days that generated certificates are valid (at least 5).
+        /// </summary>
         public readonly int ValidDays;
+        /// <summary>
+        /// The resolved common name (CN).
+        /// </summary>
         public readonly string CommonName;
+        /// <summary>
+        /// The resolved locality (L), may be null.
+        /// </summary>
         public readonly String Locality;
+        /// <summary>
+        /// The resolved organization (O), may be null.
+        /// </summary>
         public readonly String Organization;
+        /// <summary>
+        /// The resolved organizational unit (OU), may be null.
+        /// </summary>
         public readonly String Unit;
+        /// <summary>
+        /// The ISO 3166 alpha-2 country code (C), may be null.
+        /// </summary>
         public readonly String Country;
+        /// <summary>
+        /// The resolved state or province (ST), may be null.
+        /// </summary>
         public readonly String State;
 
+        /// <summary>
+        /// The resolved distinguished name qualifier (dnQualifier), may be null.
+        /// </summary>
         public readonly String DistinguishedNameQualifier;
+        /// <summary>
+        /// The resolved subject serial number attribute (serialNumber), may be null. This is not the certificate serial number.
+        /// </summary>
         public readonly String SerialNumber;
+        /// <summary>
+        /// The resolved title, may be null.
+        /// </summary>
         public readonly String Title;
+        /// <summary>
+        /// The resolved surname (SN), may be null.
+        /// </summary>
         public readonly String SurName;
+        /// <summary>
+        /// The resolved given name (GN), may be null.
+        /// </summary>
         public readonly String GivenName;
+        /// <summary>
+        /// The resolved initials, may be null.
+        /// </summary>
         public readonly String Initials;
+        /// <summary>
+        /// The resolved pseudonym, may be null.
+        /// </summary>
         public readonly String Pseudonym;
+        /// <summary>
+        /// The resolved generation qualifier, may be null.
+        /// </summary>
         public readonly String GenerationQualifier;
+        /// <summary>
+        /// The resolved email (E), may be null.
+        /// </summary>
         public readonly String Email;
 
 
+        /// <summary>
+        /// Additional DNS names to add as SAN's (never null).
+        /// </summary>
         public readonly String[] Names;
+        /// <summary>
+        /// The RSA key size in bits (a power of two).
+        /// </summary>
         public readonly int RsaBits;
+        /// <summary>
+        /// True if the local IP addresses are added as SAN's.
+        /// </summary>
         public readonly bool IncludeLanIPs;
+        /// <summary>
+        /// True if "localhost" and the loopback addresses are added as SAN's.
+        /// </summary>
         public readonly bool IncludeLocalHost;
+        /// <summary>
+        /// True if the machine name is added as a SAN.
+        /// </summary>
         public readonly bool IncludeMachineName;
 
 
 
+        /// <summary>
+        /// Build the subject distinguished name, ex: "CN=SysWeaver.App.MyService,C=SE,O=SysWeaver,OU=Platform".
+        /// Only non-empty fields are included.
+        /// </summary>
+        /// <returns>The subject distinguished name.</returns>
         public String GetSubject()
         {
             var sb = new StringBuilder();
@@ -157,10 +254,16 @@ namespace SysWeaver.Security
 
 
         /// <summary>
-        /// Test if a certificate uses the same paramaters as this
+        /// Test if a certificate was generated using the same parameters as this creator, i.e. it has the same subject alternative names (in the same order)
+        /// and all non-empty subject fields of this creator are present in the certificate subject with the same value.
+        /// Used to decide if a cached certificate can be reused.
         /// </summary>
-        /// <param name="cert">Certificate to test</param>
-        /// <returns>True if it's the same, else false</returns>
+        /// <param name="cert">Certificate to test, may not be null.</param>
+        /// <returns>True if it's the same, else false.</returns>
+        /// <remarks>
+        /// The certificate subject is parsed by splitting on ',' and uses the attribute names as formatted by the platform.
+        /// Throws if the subject contains duplicate attribute names.
+        /// </remarks>
         public bool IsSame(X509Certificate2 cert)
         {
             var expectedNames = cert.GetSubjectAlternativeNames().ToList();
@@ -260,9 +363,9 @@ namespace SysWeaver.Security
         }
 
         /// <summary>
-        /// Creates a self signed certificate with the given params
+        /// Creates a new self-signed certificate (with a new RSA key) using the parameters of this creator.
         /// </summary>
-        /// <returns>A new certificate</returns>
+        /// <returns>A new certificate including the private key, the caller owns it and should dispose it.</returns>
         public X509Certificate2 CreateSelfSigned()
         {
             var subject = GetSubject();
@@ -297,10 +400,14 @@ namespace SysWeaver.Security
 
 
         /// <summary>
-        /// Create a certificated with the given paramaters, signed by the parent cert (must have private keys)
+        /// Create a new certificate (with a new RSA key) using the parameters of this creator, signed by a parent (CA) certificate.
+        /// The validity period is clamped to the validity period of the parent certificate.
         /// </summary>
-        /// <param name="parentCert">The parent certificate to use for signing (must have private keys)</param>
-        /// <returns>A new certificate</returns>
+        /// <param name="parentCert">The parent certificate to use for signing (must have a private key).</param>
+        /// <returns>A new certificate including the private key, the caller owns it and should dispose it.</returns>
+        /// <remarks>
+        /// Every certificate is issued with the same fixed serial number (01 02 03 04).
+        /// </remarks>
         public X509Certificate2 Create(X509Certificate2 parentCert)
         {
             var subject = GetSubject();

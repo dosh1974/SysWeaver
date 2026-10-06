@@ -8,13 +8,30 @@ using System.Collections.Generic;
 namespace SysWeaver
 {
 
+    /// <summary>
+    /// The default <see cref="IMessageHost"/> implementation: filters messages by level, keeps the latest 1000 messages in memory
+    /// and dispatches every accepted message to all registered <see cref="MessageHandler"/> instances.
+    /// </summary>
+    /// <remarks>
+    /// Thread safe. Handlers can be added and removed at any time.
+    /// Indentation applied by <see cref="Tab(int)"/> is shared by all threads using the host.
+    /// </remarks>
     public class MessageHost : IMessageHost
     {
+        /// <summary>
+        /// Create a message host without any handlers.
+        /// </summary>
+        /// <param name="depth">Initial indentation in spaces (negative values are treated as 0).</param>
         public MessageHost(int depth = 0)
         {
             InternalTabSpaces = Math.Max(0, depth);
         }
 
+        /// <summary>
+        /// Create a message host with some initial handlers.
+        /// </summary>
+        /// <param name="handlers">The handlers to add (duplicates are ignored).</param>
+        /// <exception cref="ArgumentNullException">One of the <paramref name="handlers"/> is null.</exception>
         public MessageHost(params MessageHandler[] handlers)
         {
             foreach (var h in handlers)
@@ -38,7 +55,8 @@ namespace SysWeaver
         readonly ConcurrentDictionary<MessageHandler, int> MessageHandlers = new ();
 
         /// <summary>
-        /// The default message filter level used
+        /// The default value of <see cref="AcceptMessageAbove"/>: <see cref="MessageLevels.All"/> in debug builds (all messages accepted)
+        /// and <see cref="MessageLevels.Debug"/> in release builds (debug messages are discarded).
         /// </summary>
 #if DEBUG
         public const MessageLevels DefaultMessageLevel = MessageLevels.All;
@@ -52,10 +70,15 @@ namespace SysWeaver
         public MessageLevels AcceptMessageAbove { get; set; } = DefaultMessageLevel;
 
         /// <summary>
-        /// Add a new message
+        /// Add a new message, it's discarded if <paramref name="level"/> isn't above <see cref="AcceptMessageAbove"/>.
         /// </summary>
-        /// <param name="message">The text to add</param>
+        /// <param name="message">The text to add (may not be null). A leading "[Prefix]" is treated as a prefix and aligned when rendered.</param>
         /// <param name="level">Optional message level</param>
+        /// <remarks>
+        /// Handlers in <see cref="MessageHandler.Modes.NativeSync"/> mode write on the calling thread,
+        /// and the call blocks on handlers in <see cref="MessageHandler.Modes.ForceSync"/> mode.
+        /// </remarks>
+        /// <exception cref="NullReferenceException"><paramref name="message"/> is null (and the message is accepted).</exception>
         public void AddMessage(String message, MessageLevels level = MessageLevels.Info)
         {
             if (level > AcceptMessageAbove)
@@ -63,11 +86,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Add a new message
+        /// Add a new message with an exception, it's discarded if <paramref name="level"/> isn't above <see cref="AcceptMessageAbove"/>.
         /// </summary>
-        /// <param name="message">The text to add</param>
-        /// <param name="ex">An exception</param>
+        /// <param name="message">The text to add (may not be null). A leading "[Prefix]" is treated as a prefix and aligned when rendered.</param>
+        /// <param name="ex">An exception (may be null), inner exceptions are included when rendered</param>
         /// <param name="level">Optional message level</param>
+        /// <exception cref="NullReferenceException"><paramref name="message"/> is null (and the message is accepted).</exception>
         public void AddMessage(String message, Exception ex, MessageLevels level = MessageLevels.Error)
         {
             if (level > AcceptMessageAbove)
@@ -96,10 +120,16 @@ namespace SysWeaver
 
         readonly ConcurrentQueue<Message> InternalMessages = new ConcurrentQueue<Message>();
 
+        /// <summary>
+        /// The most recent accepted messages (at most around 1000), oldest first.
+        /// </summary>
+        /// <remarks>
+        /// This is a live view of a concurrent queue, enumeration is thread safe and returns a moment-in-time snapshot.
+        /// </remarks>
         public IEnumerable<Message> Messages => InternalMessages;
 
         /// <summary>
-        /// Number of spaces per tab
+        /// Number of spaces per tab, used by <see cref="Tab(int)"/>
         /// </summary>
         public int TabSpaces { get; set; } = 4;
 
@@ -108,8 +138,12 @@ namespace SysWeaver
         /// <summary>
         /// Tabulate in, dispose the returned value to "un tab"
         /// </summary>
-        /// <param name="count">Number of tabs to apply</param>
-        /// <returns>An object that should be disposed to "un tab"</returns>
+        /// <param name="count">Number of tabs to apply (values less than 1 are treated as 1)</param>
+        /// <returns>An object that should be disposed (exactly once) to "un tab"</returns>
+        /// <remarks>
+        /// The indentation is global for the host (not per thread or async flow), so concurrent code using tabs will affect each other.
+        /// The number of spaces is computed using <see cref="TabSpaces"/> at the time of the call.
+        /// </remarks>
         public IDisposable Tab(int count = 1)
         {
             if (count < 1)
@@ -141,6 +175,9 @@ namespace SysWeaver
         /// <summary>
         /// Wait for all async handling to complete, and call flush on all message handlers
         /// </summary>
+        /// <remarks>
+        /// Blocks the calling thread (without a timeout for the background tasks).
+        /// </remarks>
         public void Flush()
         {
             List<Task> tasks = new List<Task>();

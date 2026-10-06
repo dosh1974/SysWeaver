@@ -11,7 +11,9 @@
 
 ## Purpose
 
-A service should expose tabular information by returning a collection — not by building a UI. `TableData` inspects the row type, applies the client's request (page, order, filters, search) and returns rows plus column metadata that the web UI renders generically, including formatting hints such as byte sizes, durations, links, images or flags.
+A service should expose tabular information by returning a collection — not by building a UI. `TableDataTools` inspects the row type, applies the client's request (page, order, filters, search) and returns rows plus column metadata that the web UI renders generically, including formatting hints such as byte sizes, durations, links, images or flags.
+
+The shared contracts (`TableData`, `TypedTableData<T>`, `TableDataRequest`, `TableDataColumn`, `TableDataFilter`, `ITableDataExporter` and the `TableData*` attributes) live in [SysWeaver.Common](../SysWeaver.Common/README.md) (namespace `SysWeaver.Data`); this project contains the engine that implements them.
 
 ## How it fits into SysWeaver
 
@@ -33,18 +35,23 @@ Menu entries created with `[WebMenuTable]` point the UI's generic table page at 
 
 ## Key features
 
-- Column definitions derived automatically from the row type, formatting attributes and XML documentation.
-- Filtering (including expression-based filters), ordering, free-text search and row limits.
-- Change counters so clients can skip unchanged data; refresh rate hints.
-- Translation of table content through the translation services.
-- Exporters (CSV, HTML, Markdown; JSON and Excel via other projects).
-- Data references: server-side stored datasets with scope (global, signed-in users, session) and expiry, which can be viewed or edited as tables through a reference id.
-- Column operations, merges, aggregations and new computed columns.
+- Column definitions derived automatically from the row type's public fields and properties, `TableData*` attributes (name, title, order, hide, key, sort, search weight, format, expand) and XML documentation. Per-type metadata and compiled (expression tree) code for extraction, sorting and filtering is built once and cached.
+- Per-column filters (`TableDataFilterOps`: equals/compare, contains/starts/ends with, any/none of a comma separated list, in/outside a range; optionally case sensitive or inverted), multi-column ordering, ranked free-text search, paging with look-ahead and row limits.
+- A column change counter (`Cc`, unique per server process) so column definitions and title are only sent when the client doesn't already have them; refresh rate hints.
+- Translation of `[AutoTranslate]` columns through an `ITranslator` (`TableDataTools.Translate`, `TypeTranslator`).
+- Typed tables (`GetTyped`, rows are the objects themselves) as well as boxed rows (`Get`).
+- Static tables from in-memory data or from untyped `object[]` rows with explicit column definitions (`GetStaticTableFn`, using dynamically emitted row types).
+- Exporters: `CsvTableDataExporter` (comma, tab, semicolon), `HtmlTableDataExporter.Simple` and `MarkDownTableDataExporter`; JSON and Excel exporters live in other projects.
+- Data references (`DataReferenceStorage`, `TableDataReference`, `DataScopes`): server-side stored tables with scope (global, signed-in users, session) and a sliding expiry, which can be viewed, exported or edited through a reference id.
+- Table editing (`TableDataEdit`, `TableDataOp`, `EditTableDataRequest`): select/remove columns, append tables, merge columns from two tables, add computed columns from expressions (`NewTableDataColumn`), filter/sort/limit; exposed to the web UI and AI tools by the HTTP server.
 
 ## Limitations and considerations
 
 - Processing happens in memory over the supplied sequence; for very large datasets filter at the source first.
-- The per-user data scope is declared but documented as not yet supported.
+- `TableDataTools.Get` applies no server-side cap to the requested row count (a request with no limit returns all rows), and swallows processing exceptions (returning an empty table).
+- Only supported primitive types (numbers, `bool`, `string`, date/time types, `Guid`, `Type`, `Exception`, `object`), enums and their nullables become columns; other members are skipped unless marked with `[TableDataExpand]`.
+- The per-user data scope (`DataScopes.User`) is declared but not supported yet. Data reference ids are sequential, not secret.
+- Column aggregation (`TableDataEdit.Aggregate`) is not implemented yet.
 
 ## Using it
 
@@ -54,7 +61,7 @@ public sealed class OrderRow { public long Id; public string Customer; public Ti
 [WebApi]
 [WebApiAuth(Roles.Ops)]
 [WebMenuTable(null, "Orders/{0}", "Orders", null, "IconTableServices")]
-public TableData OrdersTable(TableDataRequest r) => TableDataTools.Get(r, 5000, Rows);
+public TableData OrdersTable(TableDataRequest r) => TableDataTools.Get(r, 5000, Rows); // 5000 = refresh rate in ms
 ```
 
 ## Relationships

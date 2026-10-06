@@ -95,12 +95,25 @@ namespace SysWeaver
     }
 
 
+    /// <summary>
+    /// The (boxed struct) implementations of <see cref="IUnmanagedReadOnlyMemory{T}"/> and <see cref="IUnmanagedMemory{T}"/> used by <see cref="UnmanagedMemory"/>.
+    /// </summary>
+    /// <typeparam name="T">The element type</typeparam>
     internal static class UnmanagedMemory<T> where T : unmanaged
     {
+        /// <summary>
+        /// Shared empty readonly instance (dispose does nothing)
+        /// </summary>
         public static readonly IUnmanagedReadOnlyMemory<T> EmptyReadOnlyMemory = new CustomReadOnlyMemory(ReadOnlyMemory<T>.Empty);
 
+        /// <summary>
+        /// Shared empty writable instance (dispose does nothing)
+        /// </summary>
         public static readonly IUnmanagedMemory<T> EmptyMemory = new CustomMemory(Memory<T>.Empty);
 
+        /// <summary>
+        /// Wraps readonly memory, dispose does nothing
+        /// </summary>
         public struct CustomReadOnlyMemory : IUnmanagedReadOnlyMemory<T>
         {
             public CustomReadOnlyMemory(ReadOnlyMemory<T> mem)
@@ -117,6 +130,9 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Wraps readonly memory, dispose invokes an optional action (on every call)
+        /// </summary>
         public struct CustomReadOnlyMemoryD : IUnmanagedReadOnlyMemory<T>
         {
             public CustomReadOnlyMemoryD(ReadOnlyMemory<T> mem, Action<ReadOnlyMemory<T>> onDispose)
@@ -136,6 +152,9 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Wraps writable memory, dispose does nothing
+        /// </summary>
         public struct CustomMemory : IUnmanagedMemory<T>
         {
             public CustomMemory(Memory<T> mem)
@@ -154,6 +173,9 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Wraps writable memory, dispose invokes an optional action (on every call)
+        /// </summary>
         public struct CustomMemoryD : IUnmanagedMemory<T>
         {
             public CustomMemoryD(Memory<T> mem, Action<Memory<T>> onDispose)

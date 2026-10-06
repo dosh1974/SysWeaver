@@ -6,11 +6,11 @@
     public enum PasswordStatus
     {
         /// <summary>
-        /// Password is in some unkown state (error)
+        /// Password is in some unknown state (error)
         /// </summary>
         UnknownError,
         /// <summary>
-        /// Password is ok, fulfiiling the policy
+        /// Password is ok, fulfilling the policy
         /// </summary>
         Ok,
         /// <summary>

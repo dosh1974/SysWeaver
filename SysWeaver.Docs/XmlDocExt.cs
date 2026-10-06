@@ -11,6 +11,16 @@ using System.Xml.XPath;
 namespace SysWeaver.Docs
 {
 
+    /// <summary>
+    /// Extension methods that look up the XML documentation (summary, remarks, returns, params) of reflection objects at runtime.
+    /// </summary>
+    /// <remarks>
+    /// <para>The documentation is read from the "AssemblyName.xml" file next to each assembly's <see cref="Assembly.Location"/> the first time an assembly is needed,
+    /// and all results are cached (thread safe). Assemblies without a location (single-file publish, dynamic) or without a documentation file yield null.</para>
+    /// <para>Lookups also search the assemblies of the declaring type's interfaces and base types.
+    /// Fields, properties and methods are matched by name (and signature for methods) against members of the same or a related (base/derived) type.</para>
+    /// <para>Used for command line help (SysWeaver.CommandLine), config file comments (loaded by name from SysWeaver.Common), API/type info and table column descriptions.</para>
+    /// </remarks>
     public static class XmlDocExt
     {
 
@@ -65,6 +75,12 @@ namespace SysWeaver.Docs
 
 
 
+        /// <summary>
+        /// Get the documentation of a type.
+        /// </summary>
+        /// <param name="type">The type, may be null. By-ref and array types use their element type, constructed generic types use the generic type definition.</param>
+        /// <returns>The documentation, or null if not found (or <paramref name="type"/> is null).</returns>
+        /// <remarks>A type that only has documented members (but no own documentation) returns an instance with null texts.</remarks>
         public static IXmlDocInfo XmlDoc(this Type type)
         {
             if (type == null)
@@ -93,6 +109,12 @@ namespace SysWeaver.Docs
         }
 
 
+        /// <summary>
+        /// Get the documentation of an enum value (or any public static field).
+        /// </summary>
+        /// <param name="type">The enum type.</param>
+        /// <param name="enumValueName">The name of the enum value (case sensitive).</param>
+        /// <returns>The documentation, or null if not found.</returns>
         public static IXmlDocInfo XmlDocEnum(this Type type, String enumValueName)
         {
             var fi = type.GetField(enumValueName, BindingFlags.Public | BindingFlags.Static);
@@ -101,9 +123,24 @@ namespace SysWeaver.Docs
 
 
 
+        /// <summary>
+        /// Get the summary documentation of a property.
+        /// </summary>
+        /// <param name="mi">The property, may be null.</param>
+        /// <returns>The summary text, or null if not found.</returns>
         public static String XmlSummary(this PropertyInfo mi) => XmlDoc(mi)?.Summary;
+        /// <summary>
+        /// Get the summary documentation of a field.
+        /// </summary>
+        /// <param name="mi">The field, may be null.</param>
+        /// <returns>The summary text, or null if not found.</returns>
         public static String XmlSummary(this FieldInfo mi) => XmlDoc(mi)?.Summary;
 
+        /// <summary>
+        /// Get the documentation of a field (also used for enum values).
+        /// </summary>
+        /// <param name="mi">The field, may be null.</param>
+        /// <returns>The documentation, or null if not found.</returns>
         public static IXmlDocInfo XmlDoc(this FieldInfo mi)
         {
             if (mi == null)
@@ -124,6 +161,11 @@ namespace SysWeaver.Docs
             return docType;
         }
 
+        /// <summary>
+        /// Get the documentation of a property.
+        /// </summary>
+        /// <param name="mi">The property, may be null.</param>
+        /// <returns>The documentation, or null if not found.</returns>
         public static IXmlDocInfo XmlDoc(this PropertyInfo mi)
         {
             if (mi == null)
@@ -143,6 +185,11 @@ namespace SysWeaver.Docs
             return docType;
         }
 
+        /// <summary>
+        /// Get the documentation of a method, including its parameters and return value.
+        /// </summary>
+        /// <param name="mi">The method, may be null.</param>
+        /// <returns>The documentation, or null if not found.</returns>
         public static IXmlDocMethodInfo XmlDoc(this MethodInfo mi)
         {
             if (mi == null)
@@ -162,6 +209,11 @@ namespace SysWeaver.Docs
             return docType;
         }
 
+        /// <summary>
+        /// Get the documentation of a method or constructor parameter.
+        /// </summary>
+        /// <param name="mi">The parameter, may be null. For the return parameter (position -1) the &lt;returns&gt; text is used.</param>
+        /// <returns>The documentation, or null if not found.</returns>
         public static IXmlDocParameterInfo XmlDoc(this ParameterInfo mi)
         {
             if (mi == null)
@@ -189,6 +241,11 @@ namespace SysWeaver.Docs
             return docType;
         }
 
+        /// <summary>
+        /// Get the documentation of a constructor, including its parameters.
+        /// </summary>
+        /// <param name="mi">The constructor, may be null.</param>
+        /// <returns>The documentation, or null if not found.</returns>
         public static IXmlDocMethodInfo XmlDoc(this ConstructorInfo mi)
         {
             if (mi == null)
@@ -208,6 +265,11 @@ namespace SysWeaver.Docs
             return docType;
         }
 
+        /// <summary>
+        /// Get the documentation of a method or constructor.
+        /// </summary>
+        /// <param name="mi">The method or constructor, may be null.</param>
+        /// <returns>The documentation, or null if not found.</returns>
         public static IXmlDocMethodInfo XmlDoc(this MethodBase mi)
         {
             if (mi == null)
@@ -223,6 +285,11 @@ namespace SysWeaver.Docs
             return docType;
         }
 
+        /// <summary>
+        /// Get the documentation of a field, property, method or constructor.
+        /// </summary>
+        /// <param name="mi">The member, may be null.</param>
+        /// <returns>The documentation (an <see cref="IXmlDocMethodInfo"/> for methods and constructors), or null if not found or for other member kinds (types, events).</returns>
         public static IXmlDocInfo XmlDoc(this MemberInfo mi)
         {
             if (mi == null)
@@ -250,6 +317,11 @@ namespace SysWeaver.Docs
         }
 
 
+        /// <summary>
+        /// Combine the summary and remarks into a single text, suitable for a tool tip or title.
+        /// </summary>
+        /// <param name="i">The documentation, may be null.</param>
+        /// <returns>The summary, the remarks, or both separated by a "-------" line; null if <paramref name="i"/> is null or both are missing.</returns>
         public static String ToTitle(this IXmlDocInfo i)
         {
             if (i == null)
@@ -264,6 +336,9 @@ namespace SysWeaver.Docs
         }
 
 
+        /// <summary>
+        /// Immutable <see cref="IXmlDocInfo"/> implementation (texts are trimmed).
+        /// </summary>
         class DocInfo : IXmlDocInfo
         {
             public override string ToString()
@@ -283,6 +358,9 @@ namespace SysWeaver.Docs
         }
 
 
+        /// <summary>
+        /// Immutable <see cref="IXmlDocParameterInfo"/> implementation (text is trimmed).
+        /// </summary>
         class DocParameterInfo : IXmlDocParameterInfo
         {
             public override string ToString()
@@ -297,6 +375,9 @@ namespace SysWeaver.Docs
             String IXmlDocParameterInfo.Param => Summary;
         }
 
+        /// <summary>
+        /// Immutable <see cref="IXmlDocMethodInfo"/> implementation.
+        /// </summary>
         sealed class DocMethodInfo : DocInfo, IXmlDocMethodInfo
         {
             public override string ToString()
@@ -341,6 +422,9 @@ namespace SysWeaver.Docs
 
 
 
+        /// <summary>
+        /// Matches fields by name when the declaring types are the same or related by inheritance (so a member found on a derived type matches the documented base member).
+        /// </summary>
         sealed class FieldInfoComparer : IEqualityComparer<FieldInfo>
         {
             public bool Equals(FieldInfo x, FieldInfo y)
@@ -356,6 +440,9 @@ namespace SysWeaver.Docs
             public int GetHashCode([DisallowNull] FieldInfo obj) => obj.Name.GetHashCode();
         }
 
+        /// <summary>
+        /// Matches properties by name when the declaring types are the same or related by inheritance (so a member found on a derived type matches the documented base member).
+        /// </summary>
         sealed class PropertyInfoComparer : IEqualityComparer<PropertyInfo>
         {
             public bool Equals(PropertyInfo x, PropertyInfo y)
@@ -372,6 +459,9 @@ namespace SysWeaver.Docs
         }
 
 
+        /// <summary>
+        /// Matches methods by name, related declaring types, return type, static-ness and parameter names/types/in/out.
+        /// </summary>
         sealed class MethodInfoComparer : IEqualityComparer<MethodInfo>
         {
             public bool Equals(MethodInfo x, MethodInfo y)
@@ -413,6 +503,9 @@ namespace SysWeaver.Docs
         }
 
 
+        /// <summary>
+        /// Matches constructors by related declaring types, static-ness and parameter names/types/in/out.
+        /// </summary>
         sealed class ConstructorInfoComparer : IEqualityComparer<ConstructorInfo>
         {
             public bool Equals(ConstructorInfo x, ConstructorInfo y)
@@ -451,6 +544,9 @@ namespace SysWeaver.Docs
             public int GetHashCode([DisallowNull] ConstructorInfo obj) => obj.Name.GetHashCode();
         }
 
+        /// <summary>
+        /// The parsed documentation file of one assembly, keyed by reflection objects.
+        /// </summary>
         sealed class DocAssembly
         {
             public DocAssembly(String name)
@@ -543,6 +639,11 @@ namespace SysWeaver.Docs
             return true;
         }
 
+        /// <summary>
+        /// Loads (once) and parses the documentation file of an assembly. Parse errors are swallowed, keeping what was parsed so far.
+        /// </summary>
+        /// <param name="asm">The assembly.</param>
+        /// <returns>The parsed documentation, or null if the assembly has no location or documentation file.</returns>
         static DocAssembly GetAsm(Assembly asm)
         {
             if (asm == null)

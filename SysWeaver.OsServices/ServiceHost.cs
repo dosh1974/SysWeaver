@@ -15,9 +15,19 @@ namespace SysWeaver.OsServices
 
 
 
+    /// <summary>
+    /// Entry point for running an application as an OS service (Windows service, systemd or SysVinit), see <see cref="Run"/>.
+    /// Also contains helpers for backing up and recognizing backed up manifest (configuration) files.
+    /// </summary>
     public static class ServiceHost
     {
 
+        /// <summary>
+        /// Get the command line used to start this executable (<see cref="EnvInfo.ExecCommand"/>), optionally with arguments appended.
+        /// Used by the OS specific hosts when registering the service.
+        /// </summary>
+        /// <param name="args">Optional arguments to append (separated by a space), ex: "daemon".</param>
+        /// <returns>The command line.</returns>
         public static String GetCommand(String args = null)
         {
             var cmd = EnvInfo.ExecCommand;
@@ -293,9 +303,10 @@ namespace SysWeaver.OsServices
         }
 
         /// <summary>
-        /// Never call directly, used internally by OS specific hosts
+        /// Never call directly, used internally by OS specific hosts as the restart callback of the <see cref="ServiceManager"/>.
+        /// Starts a new hidden process of this executable with the "restart" verb (that stops and starts the service using the OS service system).
         /// </summary>
-        /// <param name="man"></param>
+        /// <param name="man">The service manager used to log the restart, or null to write to the console.</param>
         public static void RestartService(ServiceManager man)
         {
             var cmd = EnvInfo.HostExecutable;
@@ -448,6 +459,16 @@ namespace SysWeaver.OsServices
             return true;
         }
 
+        /// <summary>
+        /// Check if a file name is a backup name created by <see cref="GetConfigBackupName"/> ("Bak_[yyyy-MM-dd_HH_mm_ss]_[yyyy-MM-dd_HH_mm_ss].Name.ext"),
+        /// or a legacy backup name ("Name.[yyyy-MM-dd_HH_mm_ss].ext" or "Name.LastGood.ext").
+        /// </summary>
+        /// <param name="filename">The file name (no directory).</param>
+        /// <param name="orgName">If a backup name, the original file name, else undefined (may be non-null).</param>
+        /// <returns>True if the name is a backup name.</returns>
+        /// <remarks>
+        /// NOTE: new style names with a uniqueness suffix ("Bak_..._0.Name.ext") are currently NOT recognized.
+        /// </remarks>
         public static bool IsConfigBackupName(String filename, out string orgName)
         {
             if (NewIsConfigBackupName(filename, out orgName))
@@ -463,6 +484,13 @@ namespace SysWeaver.OsServices
             return fi;
         }
 
+        /// <summary>
+        /// Create a non-existing backup file name: "Bak_[Now]_[lastWrite]{_N}.filename" in the given folder, using local time formatted as yyyy-MM-dd_HH_mm_ss.
+        /// </summary>
+        /// <param name="path">The folder.</param>
+        /// <param name="filename">The original file name (no directory).</param>
+        /// <param name="lastWrite">The last write time of the file being backed up.</param>
+        /// <returns>The full path of a file that didn't exist when checked (not reserved, so racy with concurrent callers).</returns>
         public static String AppendDateAndMakeUnique(String path, String filename, DateTime lastWrite)
         {
             String unique = "";
@@ -482,6 +510,11 @@ namespace SysWeaver.OsServices
             }
         }
 
+        /// <summary>
+        /// Get a unique backup file name (in the same folder) for a file, if the file already is a backup the original name is used as the base.
+        /// </summary>
+        /// <param name="t">The file to backup.</param>
+        /// <returns>The full path of the backup file.</returns>
         public static String GetConfigBackupName(FileInfo t)
         {
             var name = t.Name;
@@ -490,6 +523,12 @@ namespace SysWeaver.OsServices
             return AppendDateAndMakeUnique(t.DirectoryName, name, t.LastWriteTime);
         }
 
+        /// <summary>
+        /// Copy a file to a new backup file (see <see cref="GetConfigBackupName"/>) in the same folder.
+        /// </summary>
+        /// <param name="filename">The file to backup.</param>
+        /// <param name="log">Optional message host for logging, if null messages are written to the console.</param>
+        /// <returns>True if the file was backed up or doesn't exist, false if the copy failed.</returns>
         public static bool BackupConfig(String filename, IMessageHost log = null)
         {
             var t = new FileInfo(filename);
@@ -628,16 +667,23 @@ namespace SysWeaver.OsServices
         }
 
         /// <summary>
-        /// Run this from the main entrypoint of a command line program to run as a serivce.
+        /// Run this from the main entrypoint of a command line program to run as a service.
+        /// The first command line argument is the verb (see <see cref="ServiceVerbs"/>), ex: "install", "start", "debug" or "daemon" (used by the OS).
         /// Services will be loaded and created from service manifest file named: "ExecutableFile.Services.json".
         /// You can have different manifest files depending on the OS, using the syntax "ExecutableFile.Services.[OS].json", where OS is one of the following:
         /// * Win32NT = The operating system is Windows NT or later.
         /// * Unix = The operating system is Unix.
         /// </summary>
-        /// <param name="p">Optional params</param>
+        /// <param name="p">Optional params, if null defaults are used. Name and display name are resolved and written back.</param>
         /// <param name="onStart">Optional callback to execute after all services in the manifest file have been created</param>
-        /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
+        /// <returns>The process exit code, a <see cref="ServiceResponse"/> value (or a <see cref="ServiceStatus"/> value for the "status" verb).
+        /// NOTE: the "help", "hash" and invalid command paths call <see cref="Environment.Exit"/> directly.</returns>
+        /// <remarks>
+        /// The OS specific <see cref="IServiceHost"/> is created by the <see cref="IServiceHostFactory"/> named "SysWeaver.OsServices.ServiceHostFactory[Platform]".
+        /// Verbs that need elevation are re-run elevated using <see cref="IServiceHost.RunElevated"/> when the process isn't elevated.
+        /// In console mode ("debug"/"execute") 'Esc' (or SIGINT/SIGTERM/SIGHUP/SIGQUIT) shuts down and 'Space' toggles pause; the process first waits up to 15 seconds for other processes with the same name to exit.
+        /// Exceptions are caught and reported as <see cref="ServiceResponse.GenericError"/>.
+        /// </remarks>
         public static int Run(ServiceParams p = null, Action<ServiceManager> onStart = null)
         {
             var setProgress = ConsoleTools.SetProgress;

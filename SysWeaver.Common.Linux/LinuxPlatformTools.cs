@@ -8,10 +8,26 @@ using System.Text;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Linux implementation of <see cref="IPlatformTools"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>Not referenced directly: <see cref="PlatformTools.Current"/> loads it by name ("SysWeaver.LinuxPlatformTools, SysWeaver.Common.Linux") when running on Linux,
+    /// so the assembly only needs to be deployed with the application.</para>
+    /// <para>Uses /etc/*-release for the OS name, /proc/meminfo for memory and the output of "top -b -n 1" for CPU usage.
+    /// <see cref="FlushToDisc(SafeHandle)"/> and <see cref="MakeDirectoryAccessableToEveryOne(string)"/> are no-ops.</para>
+    /// <para>Failures are counted in an <see cref="ExceptionTracker"/> exposed through <see cref="GetStats"/>.</para>
+    /// </remarks>
     public sealed class LinuxPlatformTools : IPlatformTools
     {
+        /// <summary>
+        /// Returns "Linux".
+        /// </summary>
         public string Name => "Linux";
 
+        /// <summary>
+        /// The PRETTY_NAME value from the /etc/*-release files (ex: "Ubuntu 24.04 LTS"), or <see cref="Environment.OSVersion"/> if not found.
+        /// </summary>
         public string OsFriendlyName { get; } = Get("PRETTY_NAME") ?? Environment.OSVersion.ToString();
 
         static String Get(String key) => OsData.TryGetValue(key.FastToLower(), out var v) ? v : Environment.OSVersion.ToString();
@@ -54,8 +70,16 @@ namespace SysWeaver
         static readonly IReadOnlyDictionary<String, String> OsData = GetOsData();
 
 
+        /// <summary>
+        /// Returns "/etc/keys".
+        /// </summary>
         public String DefaultKeyDir => @"/etc/keys";
 
+        /// <summary>
+        /// Not implemented on Linux: does nothing (no fsync is performed) and always returns true.
+        /// </summary>
+        /// <param name="h">The file handle (ignored).</param>
+        /// <returns>Always true.</returns>
         public bool FlushToDisc(SafeHandle h)
         {
             //  TODO: What?
@@ -65,6 +89,13 @@ namespace SysWeaver
         static readonly object _linuxMemoryLock = new();
         static readonly char[] _arrayForMemInfoRead = new char[200];
 
+        /// <summary>
+        /// Gets the physical memory size from the MemTotal and MemAvailable entries of /proc/meminfo.
+        /// </summary>
+        /// <param name="availableBytes">Receives the available memory in bytes (MemAvailable), 0 on failure.</param>
+        /// <param name="totalBytes">Receives the total memory in bytes (MemTotal), 0 on failure.</param>
+        /// <returns>True if successful, false on failure (the exception is tracked in the stats).</returns>
+        /// <remarks>Thread safe (serialized by a static lock, since a static buffer is reused). Only the first 200 characters of the file are read.</remarks>
         public bool GetMemorySize(out ulong availableBytes, out ulong totalBytes)
         {
             try
@@ -108,6 +139,10 @@ namespace SysWeaver
             return bytesCount;
         }
 
+        /// <summary>
+        /// Starts "/usr/bin/sudo /sbin/reboot" (requires that the process may run it via sudo without a password prompt).
+        /// </summary>
+        /// <returns>True if the process could be started (not that the reboot succeeded), false if starting it failed.</returns>
         public bool Reboot()
         {
             var pi = new ProcessStartInfo();
@@ -124,8 +159,19 @@ namespace SysWeaver
             return true;
         }
 
+        /// <summary>
+        /// Not implemented on Linux: does nothing.
+        /// </summary>
+        /// <param name="directoryName">The directory (ignored).</param>
+        /// <returns>Always null (reported as success).</returns>
         public Exception MakeDirectoryAccessableToEveryOne(String directoryName) => null;
 
+        /// <summary>
+        /// Gets the total CPU usage by running "top -b -n 1" through /bin/bash and parsing the idle value of the "%Cpu(s):" line.
+        /// </summary>
+        /// <param name="cpuUsage">Receives the CPU usage in percent [0, 100], 0 on failure.</param>
+        /// <returns>True if successful, false on failure (the exception is tracked in the stats).</returns>
+        /// <remarks>Starts a process on every call, so it is relatively expensive. The number is parsed using the current culture.</remarks>
         public bool GetCpuUsage(out double cpuUsage)
         {
             try
@@ -167,6 +213,10 @@ namespace SysWeaver
 
         readonly ExceptionTracker Exs = new ExceptionTracker();
 
+        /// <summary>
+        /// Returns the exception statistics (system "Linux.Platform", names prefixed with "Exception.").
+        /// </summary>
+        /// <returns>The statistics.</returns>
         public IEnumerable<Stats> GetStats()
             => Exs.GetStats("Linux.Platform", "Exception.");
 

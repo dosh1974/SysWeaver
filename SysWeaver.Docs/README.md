@@ -25,18 +25,23 @@ flowchart LR
   Docs --> Tables["Table column descriptions"]
 ```
 
-All SysWeaver projects enable XML documentation generation, which is what makes this work framework-wide. Some consumers load this assembly by name at runtime instead of referencing it, so it is an optional enhancement rather than a hard requirement.
+All SysWeaver projects enable XML documentation generation, which is what makes this work framework-wide. Some consumers (e.g. the config file writer in SysWeaver.Common) load `SysWeaver.Docs.XmlDocExt` by name at runtime instead of referencing it, so it is an optional enhancement rather than a hard requirement.
 
 ## Key features
 
-- Extension methods on `Type`, `MemberInfo`, `MethodInfo`, `ParameterInfo` etc. returning summaries, remarks, parameter and return documentation.
-- Enum value documentation.
-- Title extraction helpers for UI use.
+- `XmlDocExt.XmlDoc()` extension methods on `Type`, `MemberInfo`, `FieldInfo`, `PropertyInfo`, `MethodInfo`, `ConstructorInfo`, `MethodBase` and `ParameterInfo`, returning `IXmlDocInfo` (summary, remarks), `IXmlDocMethodInfo` (plus returns and per-parameter docs) or `IXmlDocParameterInfo`.
+- `XmlSummary()` shortcuts for fields and properties.
+- Enum value documentation (`XmlDocEnum`).
+- `ToTitle()` combines summary and remarks into one text for tool tips / UI titles.
+- Members are also found when looked up through a derived type, and documentation of interfaces/base types in other assemblies is searched.
+- Each documentation file is parsed once (lazily) and all lookups are cached; thread safe.
 
 ## Limitations and considerations
 
-- Only as good as the comments: undocumented members produce empty text.
-- Requires the `.xml` documentation files to be deployed next to the assemblies; publishing pipelines that drop them silently remove the documentation.
+- Only as good as the comments: undocumented members produce `null`.
+- Requires the `.xml` documentation files to be deployed next to the assemblies; publishing pipelines that drop them (or single-file publishing, where assemblies have no location) silently remove the documentation.
+- Texts are the plain inner text: `<see cref="..."/>` and similar self-closing tags vanish from the sentence, and `<inheritdoc/>` is not resolved.
+- Some signatures are not matched (e.g. types nested more than one level deep, constructors with nested-type parameters), these simply return `null`.
 
 ## Using it
 

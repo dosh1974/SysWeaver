@@ -13,6 +13,7 @@ namespace SysWeaver
     /// <remarks>
     /// Tasks are run one at a time, in the order that the Start calls acquire the internal lock.
     /// An exception thrown by a task is only reported once (by the next Start or Wait call), the original stack trace is preserved.
+    /// The internal lock is held while a task runs, so calling Start or Wait from within a running task will wait forever.
     /// </remarks>
     public sealed class SingleTaskRunner
     {

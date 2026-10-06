@@ -12,15 +12,25 @@ namespace SysWeaver.Auth
 
 
     /// <summary>
-    /// A simple authorizer
+    /// A simple authorizer with a static set of users defined in the parameters and/or a (monitored) file, and optional API keys.
     /// </summary>
+    /// <remarks>
+    /// Users are defined as "user:password:tokens:domain" strings, see <see cref="SimpleAuthorizerParams.Users"/>.
+    /// The password can be clear text (validated against the password policy) or a hash computed using <see cref="AuthTools.ComputeSimplePasswordHash(string, string)"/>
+    /// (the "Generate password hash" debug page can compute it).
+    /// API keys are stored in <see cref="KeyValueStore.AllApp"/> as "name:key" strings and are accepted as bearer tokens (and basic auth).
+    /// The user guids are "SI:" followed by a hash of the user name.
+    /// Thread safe, user changes are applied atomically and users whose password or tokens changed are asked to log out.
+    /// </remarks>
     [WebMenuPath(null, "Debug/SimpleAuth", "Authorizer", "Options and helpers for the basic authorizer", "icons/protect.svg")]
     [WebMenuEmbedded(null, "Debug/SimpleAuth/GenPwd", "Generate password hash", "auth/index.html", "Generate password hashes to be used for the simple authorizer", "IconLock", 0, "debug,ops")]
     [WebMenuEmbedded(null, "Debug/SimpleAuth/KeyMan", "API-key management", "auth/KeyMan.html", "Manage API-keys", "IconKey", 0, "", false, nameof(CanManageKeys))]
     public sealed class SimpleAuthorizer : AuthorizerBase, IDisposable, IRunTimeWebApiAuth
     {
+        /// <inheritdoc/>
         public override string Name => "Simple";
 
+        /// <inheritdoc/>
         public override string GuidPrefix => "SI";
 
         Task<bool> CanManageKeys(Authorization auth, WebMenuItem item)
@@ -39,10 +49,11 @@ namespace SysWeaver.Auth
         }
 
         /// <summary>
-        /// Constructor
+        /// Create a simple authorizer, users are loaded immediately (and reloaded if the user file changes).
         /// </summary>
         /// <param name="msg">Optional message host to be used for logging</param>
-        /// <param name="p">Parameters</param>
+        /// <param name="p">Parameters, null uses the defaults (no users)</param>
+        /// <exception cref="Exception">Loading the users failed and <see cref="ManagedFileParams.MustExist"/> is true.</exception>
         public SimpleAuthorizer(IMessageHost msg = null, SimpleAuthorizerParams p = null)
         {
             p = p ?? new SimpleAuthorizerParams();
@@ -77,6 +88,7 @@ namespace SysWeaver.Auth
 
         readonly IMessageHost Msg;
 
+        /// <inheritdoc/>
         public override PasswordPolicy PasswordPolicy => InternalPasswordPolicy;
 
         readonly PasswordPolicy InternalPasswordPolicy;
@@ -86,6 +98,9 @@ namespace SysWeaver.Auth
         readonly ExceptionTracker Fails = new ExceptionTracker();
         readonly SimpleAuthorizerParams Params;
 
+        /// <summary>
+        /// Stop monitoring the user file.
+        /// </summary>
         public void Dispose()
         {
             Interlocked.Exchange(ref UserFile, null)?.Dispose();
@@ -288,6 +303,7 @@ namespace SysWeaver.Auth
 
         static readonly Char[] TokenDelim = "|:".ToCharArray();
 
+        /// <inheritdoc/>
         public override string ToString() => String.Join(String.Join(", ", Auths.Keys.Select(x => x.ToQuoted())), "Users: [", ']');
 
         IReadOnlyDictionary<String, Tuple<Byte[], Authorization, String, Authorization>> Auths = new Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>>(StringComparer.Ordinal).Freeze();
@@ -345,10 +361,11 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Get the salt to use for a user password
+        /// Get the salt to use for a user password hash, see <see cref="AuthTools.ComputeSimpleSalt(string)"/>.
+        /// Returns a salt for any user name (known or not), used by the "Generate password hash" page.
         /// </summary>
         /// <param name="user">The name of the user</param>
-        /// <returns></returns>
+        /// <returns>The salt</returns>
         [WebApi("debug/simpleAuth/{0}")]
         [WebApiClientCache(30)]
         [WebApiRequestCache(30)]
@@ -359,14 +376,13 @@ namespace SysWeaver.Auth
         }
 
 
+        /// <summary>
+        /// Always 0, user changes are signalled by <see cref="Authorization.RequestLogout(string)"/> on the old authorizations instead.
+        /// </summary>
         public override long ChangeCounter => 0;
 
 
-        /// <summary>
-        /// Get information about a user (from it's guid)
-        /// </summary>
-        /// <param name="userGuid"></param>
-        /// <returns></returns>
+        /// <inheritdoc/>
         public override Task<AuthorizationInfo> FindUserFromGuid(String userGuid)
         {
             if (!AuthGuids.TryGetValue(userGuid, out var data))
@@ -376,11 +392,7 @@ namespace SysWeaver.Auth
 
         static readonly Task<AuthorizationInfo> NullFindUserFromGuid = Task.FromResult<AuthorizationInfo>(null);
 
-        /// <summary>
-        /// Get information about a user
-        /// </summary>
-        /// <param name="userName">Name of the user</param>
-        /// <returns></returns>
+        /// <inheritdoc/>
         public override Task<AuthorizationInfo> FindUser(String userName)
         {
             if (!Auths.TryGetValue(userName.FastToLower(), out var data))
@@ -390,6 +402,13 @@ namespace SysWeaver.Auth
 
         static readonly Task<AuthorizationInfo> NullTaskAuthorizationInfo = Task.FromResult<AuthorizationInfo>(null);
 
+        /// <summary>
+        /// Authorize a user using basic auth, only allowed if <see cref="SimpleAuthorizerParams.AllowBasicAuth"/> is true or the user has the "service" token.
+        /// The hash is compared in constant time.
+        /// </summary>
+        /// <param name="userName">The user name (case insensitive)</param>
+        /// <param name="hash">The password hash: SHA256(UTF8(password|salt))</param>
+        /// <returns>A weak authorization, or null</returns>
         public override Task<Authorization> BasicAuth(string userName, byte[] hash)
         {
             if (!Auths.TryGetValue(userName.FastToLower(), out var data))
@@ -403,9 +422,15 @@ namespace SysWeaver.Auth
             return Task.FromResult(ba);
         }
 
+        /// <summary>
+        /// Authorize using an API key (the key part of a "name:key" API key) as a bearer token.
+        /// </summary>
+        /// <param name="token">The API key</param>
+        /// <returns>A weak authorization for the API key user, or null</returns>
         public override Task<Authorization> BearerAuth(string token)
             => BearerAuths.TryGetValue(token, out var data) ? data : NoAuth;
 
+        /// <inheritdoc/>
         public override Task<Authorization> SecureAuth(string userName, byte[] hash, String oneTimePad)
         {
             if (!Auths.TryGetValue(userName.FastToLower(), out var data))
@@ -417,11 +442,21 @@ namespace SysWeaver.Auth
         }
 
 
+        /// <summary>
+        /// Authorize using an API key as a token (same as <see cref="BearerAuth(string)"/>, the key is not consumed).
+        /// </summary>
+        /// <param name="oneTimeToken">The API key</param>
+        /// <returns>A weak authorization for the API key user, or null</returns>
         public override Task<Authorization> TokenAuth(string oneTimeToken)
             => BearerAuths.TryGetValue(oneTimeToken, out var data) ? data : NoAuth;
 
         static readonly Task<String> TaskTupleStringStringNull = Task.FromResult<String>(null);
 
+        /// <summary>
+        /// Get the salt of a known user, see <see cref="AuthTools.ComputeSimpleSalt(string)"/>.
+        /// </summary>
+        /// <param name="userName">The user name (case insensitive), null is treated as empty</param>
+        /// <returns>The salt, or null if the user is unknown</returns>
         public override Task<String> GetSaltAsync(string userName)
         {
             userName = (userName ?? "").FastToLower();
@@ -430,6 +465,11 @@ namespace SysWeaver.Auth
             return Task.FromResult(AuthTools.ComputeSimpleSalt(userName));
         }
 
+        /// <summary>
+        /// Get the user name from an email, the simple authorizer uses the user name as email so this is a case insensitive user name lookup.
+        /// </summary>
+        /// <param name="email">The email (user name)</param>
+        /// <returns>The user name with the original casing, or null if unknown</returns>
         public Task<String> GetUserNameFromEmail(String email)
         {
             email = email.FastToLower();
@@ -478,7 +518,8 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Get app information
+        /// Get app information (for the API key management page).
+        /// Requires <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
         /// </summary>
         /// <returns>[EnvInfo.AppName, EnvInfo.AppDisplayName]</returns>
         [WebApi(ApiKeyPath)]
@@ -489,7 +530,8 @@ namespace SysWeaver.Auth
             => [EnvInfo.AppName, EnvInfo.AppDisplayName];
 
         /// <summary>
-        /// Check if API key management is enabled
+        /// Check if API key management is enabled.
+        /// Requires <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
         /// </summary>
         /// <returns>True if GetApiKeys, RemoveApiKey, AddApiKey is available</returns>
         [WebApi(ApiKeyPath)]
@@ -501,19 +543,21 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
-        /// Get a list of ALL api keys.
+        /// Get a list of ALL api keys (in clear text).
+        /// Requires <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
         /// </summary>
-        /// <returns>An array of strings with the user/password pairs excoded as "user:key"</returns>
+        /// <returns>An array of strings with the user/password pairs encoded as "user:key", or null if there are no keys</returns>
         [WebApi(ApiKeyPath)]
         [WebApiAuth(ApiKeyAuth)]
         public String[] GetApiKeys()
             => KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);
 
         /// <summary>
-        /// Remove an api key
+        /// Remove an api key.
+        /// Requires <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
         /// </summary>
-        /// <param name="keyName">The name of the key (user name)</param>
-        /// <returns>True if the key was removed, false if it doesn't exit</returns>
+        /// <param name="keyName">The name of the key (user name), or the full "name:key" string</param>
+        /// <returns>True if the key was removed, false if it doesn't exist</returns>
         [WebApi(ApiKeyPath)]
         [WebApiAuth(ApiKeyAuth)]
         [WebApiAudit(ApiKeyAuditGroup)]
@@ -575,11 +619,13 @@ namespace SysWeaver.Auth
         }
 
         /// <summary>
-        /// Add/create a new API key
+        /// Add/create a new API key with a random 40 char alpha numerical key (from a secure RNG).
+        /// Users authenticated with the key get the <see cref="SimpleAuthorizerParams.ApiKeyAuth"/> tokens.
+        /// Requires <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
         /// </summary>
-        /// <param name="keyName">The name of the new key, please use only alpha numericals</param>
-        /// <returns>Return a string with new user/password pair as "user:password"</returns>
-        /// <exception cref="Exception"></exception>
+        /// <param name="keyName">The name of the new key (used as user name), please use only alpha numericals</param>
+        /// <returns>Return a string with new user/password pair as "user:password", or null if a key with that name already exists</returns>
+        /// <exception cref="Exception">The key name is null, empty, contains a ':' or is too long.</exception>
         [WebApi(ApiKeyPath)]
         [WebApiAuth(ApiKeyAuth)]
         [WebApiAudit(ApiKeyAuditGroup)]
@@ -621,6 +667,9 @@ namespace SysWeaver.Auth
         }
 
 
+        /// <summary>
+        /// Runtime auth overrides for the API key management methods (uses <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/>), empty if API keys are disabled.
+        /// </summary>
         public IReadOnlyDictionary<String, String> MethodAuths { get; init; }
 
         #endregion//Api Keys

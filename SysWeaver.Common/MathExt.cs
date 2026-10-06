@@ -9,11 +9,11 @@ namespace SysWeaver
     public static class MathExt
     {
         /// <summary>
-        /// Compute the greatest common divisor of two number (the larges integer that evenly diveds both a and b)
+        /// Compute the greatest common divisor of two numbers (the largest integer that evenly divides both a and b)
         /// </summary>
-        /// <param name="a">One numbers</param>
+        /// <param name="a">First number</param>
         /// <param name="b">Second number</param>
-        /// <returns>The greatest common divisor of a and b (the larges integer that evenly diveds both a and b).
+        /// <returns>The greatest common divisor of a and b (the largest integer that evenly divides both a and b).
         /// Gcd(0, x) = Gcd(x, 0) = x, so Gcd(0, 0) = 0</returns>
         /// <remarks>Uses the Euclidean algorithm (a binary GCD was measured to be slower)</remarks>
         public static ulong Gcd(ulong a, ulong b)
@@ -29,11 +29,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Compute the greatest common divisor of two number (the larges integer that evenly diveds both a and b)
+        /// Compute the greatest common divisor of two numbers (the largest integer that evenly divides both a and b)
         /// </summary>
-        /// <param name="a">One numbers</param>
+        /// <param name="a">First number</param>
         /// <param name="b">Second number</param>
-        /// <returns>The greatest common divisor of a and b (the larges integer that evenly diveds both a and b), always positive or zero, except when the result is 2^63 (only possible if a or b is Int64.MinValue and the other is zero or Int64.MinValue), then Int64.MinValue is returned</returns>
+        /// <returns>The greatest common divisor of a and b (the largest integer that evenly divides both a and b), always positive or zero, except when the result is 2^63 (only possible if a or b is Int64.MinValue and the other is zero or Int64.MinValue), then Int64.MinValue is returned</returns>
         public static long Gcd(long a, long b)
         {
             static ulong Abs(long v) => v < 0 ? unchecked((ulong)-v) : (ulong)v;

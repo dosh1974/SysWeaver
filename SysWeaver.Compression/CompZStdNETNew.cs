@@ -12,8 +12,13 @@ using Codec = SysWeaver.Compression.CompStreamCodec<SysWeaver.Compression.CompZS
 namespace SysWeaver.Compression
 {
     /// <summary>
-    /// A compression type that uses Zstandard (the .NET 11+ System.IO.Compression.ZstandardEncoder / ZstandardDecoder) for compression
+    /// A Zstandard ("zstd") implementation using the .NET 11+ System.IO.Compression.ZstandardEncoder / ZstandardDecoder through <see cref="CompStreamCodec{TEncoder, TDecoder}"/>.
+    /// Only compiled for .NET 11 or later, and not registered by default.
     /// </summary>
+    /// <remarks>
+    /// Uses zstd level 1 / 9 / 22. The native encoders / decoders are pooled per level (see <see cref="CompInstancePool{T}"/>).
+    /// Concatenated (and skippable) zstd frames are decompressed.
+    /// </remarks>
     public sealed class CompZStdNETNew : ICompType
     {
         const String CompName = ".NET zstd";
@@ -45,6 +50,7 @@ namespace SysWeaver.Compression
 
         static readonly String CompTS = String.Concat('[', CompHttpCode, "] ", CompName, " @ prio ", CompPrio, " for extensions: ", String.Join(", ", CompExtensions));
 
+        /// <inheritdoc/>
         public override string ToString() => CompTS;
 
         #endregion//Lifetime
@@ -52,12 +58,16 @@ namespace SysWeaver.Compression
 
         #region Info
 
+        /// <inheritdoc/>
         public string Name => CompName;
 
+        /// <inheritdoc/>
         public string HttpCode => CompHttpCode;
 
+        /// <inheritdoc/>
         public int Prio => CompPrio;
 
+        /// <inheritdoc/>
         public IReadOnlyCollection<String> FileExtensions => CompExtensions;
 
         #endregion//Info
@@ -120,12 +130,14 @@ namespace SysWeaver.Compression
             System.IO.Compression.ZstandardEncoder E;
             CompEncoderLevels Level;
 
+            /// <inheritdoc/>
             public static ZstdEncoder Create(CompEncoderLevels level) => new ZstdEncoder
             {
                 E = RentEncoder(level),
                 Level = level,
             };
 
+            /// <inheritdoc/>
             public static int GetMaxCompressedLength(int inputSize) => (int)Math.Min(System.IO.Compression.ZstandardEncoder.GetMaxCompressedLength(inputSize), Array.MaxLength);
 
             /// <summary>
@@ -146,9 +158,11 @@ namespace SysWeaver.Compression
                 }
             }
 
+            /// <inheritdoc/>
             public OperationStatus Compress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock)
                 => E.Compress(source, destination, out bytesConsumed, out bytesWritten, isFinalBlock);
 
+            /// <inheritdoc/>
             public void Dispose()
             {
                 var e = E;
@@ -166,6 +180,7 @@ namespace SysWeaver.Compression
         {
             System.IO.Compression.ZstandardDecoder D;
 
+            /// <inheritdoc/>
             public static ZstdDecoder Create() => new ZstdDecoder
             {
                 D = RentDecoder(),
@@ -185,6 +200,7 @@ namespace SysWeaver.Compression
             /// </summary>
             public static int NextHeaderSize => 4;
 
+            /// <inheritdoc/>
             public bool BeginNext(ReadOnlySpan<Byte> next)
             {
                 if (!CompHelpers.IsZstdFrame(next))
@@ -193,9 +209,11 @@ namespace SysWeaver.Compression
                 return true;
             }
 
+            /// <inheritdoc/>
             public OperationStatus Decompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten)
                 => D.Decompress(source, destination, out bytesConsumed, out bytesWritten);
 
+            /// <inheritdoc/>
             public void Dispose()
             {
                 var d = D;
@@ -210,18 +228,25 @@ namespace SysWeaver.Compression
 
         #region Compress
 
+        /// <inheritdoc/>
         public void Compress(Stream from, Stream to, CompEncoderLevels level) => Codec.Compress(from, to, level);
 
+        /// <inheritdoc/>
         public int Compress(Stream from, Span<Byte> to, CompEncoderLevels level) => Codec.Compress(from, to, level);
 
+        /// <inheritdoc/>
         public int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level) => Codec.Compress(from, to, level);
 
+        /// <inheritdoc/>
         public void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level) => Codec.Compress(from, to, level);
 
+        /// <inheritdoc/>
         public Task CompressAsync(Stream from, Stream to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
 
+        /// <inheritdoc/>
         public Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
 
+        /// <inheritdoc/>
         public Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level) => Codec.CompressAsync(from, to, level);
 
         #endregion//Compress
@@ -229,18 +254,25 @@ namespace SysWeaver.Compression
 
         #region Decompress
 
+        /// <inheritdoc/>
         public void Decompress(Stream from, Stream to) => Codec.Decompress(from, to);
 
+        /// <inheritdoc/>
         public int Decompress(Stream from, Span<Byte> to) => Codec.Decompress(from, to);
 
+        /// <inheritdoc/>
         public int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to) => Codec.Decompress(from, to);
 
+        /// <inheritdoc/>
         public void Decompress(ReadOnlySpan<Byte> from, Stream to) => Codec.Decompress(from, to);
 
+        /// <inheritdoc/>
         public Task DecompressAsync(Stream from, Stream to) => Codec.DecompressAsync(from, to);
 
+        /// <inheritdoc/>
         public Task<int> DecompressAsync(Stream from, Memory<Byte> to) => Codec.DecompressAsync(from, to);
 
+        /// <inheritdoc/>
         public Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to) => Codec.DecompressAsync(from, to);
 
         #endregion//Decompress

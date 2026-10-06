@@ -8,7 +8,7 @@ using System.Runtime.Intrinsics;
 namespace SysWeaver
 {
     /// <summary>
-    /// The implementation of the string prefix lookups (StringPrefixLookup and StringPrefixLookup&lt;T&gt;), finds the longest string (from a set of strings) that a text starts with, using ordinal (case sensitive) compares.
+    /// The implementation of the string prefix lookups (<see cref="StringPrefixLookup"/> and <see cref="StringPrefixLookup{T}"/>), finds the longest string (from a set of strings) that a text starts with, using ordinal (case sensitive) compares.
     /// A leaf (the string, or an entry with the value) is stored for every string (as an object, the derived classes have the typed public api, so that all code is compiled for the exact type).
     /// Optimized for a few (up to ~32) short strings (4 - 16 chars), where most searches doesn't match, like the web page sub paths of special modules.
     /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
@@ -20,17 +20,18 @@ namespace SysWeaver
     ///   The slot have a chain of entries (the strings that hash to the slot, longest first).
     /// - An entry is a match if the key and the last 8 chars of the string (as a vector, or the last 4 chars as an integer for strings shorter than 8 chars) are equal to the text (and the chars in between, for long strings).
     /// - The hash multipliers are selected to minimize the collisions (typically there are none), so a miss is (typically) a hash and a compare.
-    /// Else a FrozenStringTreeList is used.
+    /// Else (or if 128 bit vectors aren't hardware accelerated) a case sensitive <see cref="FrozenStringTreeList{T}"/> is used.
+    /// Immutable after construction, so it's safe to use from multiple threads.
     /// </remarks>
     public abstract class StringPrefixLookupBase
     {
         /// <summary>
         /// Create a lookup
         /// </summary>
-        /// <param name="strings">The strings, may not contain null, empty strings or duplicates</param>
-        /// <param name="leafs">The leaf of every string</param>
-        /// <exception cref="ArgumentNullException"></exception>
-        /// <exception cref="Exception"></exception>
+        /// <param name="strings">The strings, may not contain null, empty strings or duplicates (ordinal)</param>
+        /// <param name="leafs">The leaf of every string (same order as the strings), returned by <see cref="StartsWithAnyLeaf(string, int)"/></param>
+        /// <exception cref="ArgumentNullException">A string is null</exception>
+        /// <exception cref="Exception">A string is a duplicate, or (in debug builds only) a string is empty</exception>
         private protected StringPrefixLookupBase(String[] strings, Object[] leafs)
         {
             HashSet<String> seen = new(StringComparer.Ordinal);
@@ -131,7 +132,7 @@ namespace SysWeaver
         /// Find the leaf of the longest string, that the text starts with
         /// </summary>
         /// <param name="text">The text to match against the strings, may not be empty (from the start offset)</param>
-        /// <param name="start">An optional start offset, must be less than the length of the text</param>
+        /// <param name="start">The start offset, must be less than the length of the text (in release builds a start at or beyond the end returns null, a negative start throws an <see cref="IndexOutOfRangeException"/>)</param>
         /// <returns>The leaf of the longest found match or null if no match is found</returns>
         private protected Object StartsWithAnyLeaf(String text, int start)
         {
@@ -216,6 +217,9 @@ namespace SysWeaver
         /// </summary>
         const int SlotCount = 256;
 
+        /// <summary>
+        /// A string in the hash table (a slot is a chain of entries)
+        /// </summary>
         struct Entry
         {
             /// <summary>
@@ -252,6 +256,9 @@ namespace SysWeaver
             public int Next;
         }
 
+        /// <summary>
+        /// The first entry index (a byte) of every hash slot
+        /// </summary>
         [InlineArray(SlotCount)]
         struct SlotBytes
         {

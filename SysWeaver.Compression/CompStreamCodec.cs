@@ -15,16 +15,24 @@ namespace SysWeaver.Compression
         /// <summary>
         /// Create (or rent) an encoder, it's disposed (or returned) when done
         /// </summary>
+        /// <param name="level">The compression level to use</param>
+        /// <returns>An encoder ready to encode a new stream</returns>
         static abstract TSelf Create(CompEncoderLevels level);
 
         /// <summary>
         /// Get the max size of the compressed data
         /// </summary>
+        /// <param name="inputSize">The number of uncompressed bytes</param>
+        /// <returns>The worst case number of compressed bytes</returns>
         static abstract int GetMaxCompressedLength(int inputSize);
 
         /// <summary>
         /// Compress all data in one go, <see cref="CompStreamCodec{TEncoder, TDecoder}.TryCompress(ref TEncoder, ReadOnlySpan{byte}, Span{byte}, out int)"/> can be used if there is no special one-shot api
         /// </summary>
+        /// <param name="source">The data to compress</param>
+        /// <param name="destination">The memory to write the compressed data to</param>
+        /// <param name="bytesWritten">The number of bytes written to the destination</param>
+        /// <param name="level">The compression level to use</param>
         /// <returns>False if the compressed data doesn't fit in the destination</returns>
         static abstract bool TryCompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten, CompEncoderLevels level);
 
@@ -33,6 +41,12 @@ namespace SysWeaver.Compression
         /// Returns Done when all source data is consumed (and if isFinalBlock is true, when all data is written),
         /// DestinationTooSmall if there is more data to write (or source data to consume), InvalidData on errors.
         /// </summary>
+        /// <param name="source">The uncompressed data</param>
+        /// <param name="destination">The memory to write compressed data to</param>
+        /// <param name="bytesConsumed">The number of source bytes consumed</param>
+        /// <param name="bytesWritten">The number of bytes written to the destination</param>
+        /// <param name="isFinalBlock">True if this is the last of the data, the stream is finished</param>
+        /// <returns>The status of the operation</returns>
         OperationStatus Compress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten, bool isFinalBlock);
     }
 
@@ -46,12 +60,17 @@ namespace SysWeaver.Compression
         /// <summary>
         /// Create (or rent) a decoder, it's disposed (or returned) when done
         /// </summary>
+        /// <returns>A decoder ready to decode a new stream</returns>
         static abstract TSelf Create();
 
         /// <summary>
         /// Decompress all data in one go using a special one-shot api.
         /// Return false to use the streaming decoder instead (also return false on any failure, the streaming decoder determines the exception to throw).
         /// </summary>
+        /// <param name="source">The compressed data</param>
+        /// <param name="destination">The memory to write the decompressed data to</param>
+        /// <param name="bytesWritten">The number of bytes written to the destination</param>
+        /// <returns>True if all data was decompressed</returns>
         static abstract bool TryDecompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesWritten);
 
         /// <summary>
@@ -73,15 +92,25 @@ namespace SysWeaver.Compression
         /// Returns Done when the end of the compressed data is reached, NeedMoreData if all source data is consumed,
         /// DestinationTooSmall if the destination is full (may also be returned for an empty destination), InvalidData if the data is invalid.
         /// </summary>
+        /// <param name="source">The compressed data</param>
+        /// <param name="destination">The memory to write uncompressed data to</param>
+        /// <param name="bytesConsumed">The number of source bytes consumed</param>
+        /// <param name="bytesWritten">The number of bytes written to the destination</param>
+        /// <returns>The status of the operation</returns>
         OperationStatus Decompress(ReadOnlySpan<Byte> source, Span<Byte> destination, out int bytesConsumed, out int bytesWritten);
     }
 
 
     /// <summary>
-    /// Implements all ICompEncoder and ICompDecoder methods for a streaming encoder and decoder.
+    /// Implements all <see cref="ICompEncoder"/> and <see cref="ICompDecoder"/> methods for a streaming encoder and decoder,
+    /// an <see cref="ICompType"/> implementation simply forwards each method to this class.
     /// Small data is compressed in one go, larger data is streamed in 64 KB chunks.
     /// All temporary buffers are pooled, so the only heap allocations are the ones done by the encoder / decoder (and the tasks of the async methods).
     /// </summary>
+    /// <remarks>
+    /// Thread safe, a new (or rented) encoder / decoder is used per call and it's always disposed (or returned) when done.
+    /// Destination streams are written to but never flushed or disposed.
+    /// </remarks>
     /// <typeparam name="TEncoder">The encoder</typeparam>
     /// <typeparam name="TDecoder">The decoder</typeparam>
     public static class CompStreamCodec<TEncoder, TDecoder>
@@ -295,6 +324,14 @@ namespace SysWeaver.Compression
 
         #region Compress
 
+        /// <summary>
+        /// Compress all remaining data of a stream to a stream.
+        /// Seekable sources with less than 64 KB remaining are compressed in one go, other sources are streamed in 64 KB chunks.
+        /// </summary>
+        /// <param name="from">The stream to read the uncompressed data from</param>
+        /// <param name="to">The stream to write the compressed data to</param>
+        /// <param name="level">The compression level to use</param>
+        /// <exception cref="InvalidOperationException">The encoder failed.</exception>
         public static void Compress(Stream from, Stream to, CompEncoderLevels level)
         {
             var len = GetBufferableLength(from);
@@ -334,6 +371,16 @@ namespace SysWeaver.Compression
             }
         }
 
+        /// <summary>
+        /// Compress all remaining data of a stream to memory.
+        /// Seekable sources with less than 64 KB remaining are compressed in one go, other sources are streamed in 64 KB chunks.
+        /// </summary>
+        /// <param name="from">The stream to read the uncompressed data from</param>
+        /// <param name="to">The memory to write the compressed data to</param>
+        /// <param name="level">The compression level to use</param>
+        /// <returns>The number of compressed bytes written</returns>
+        /// <exception cref="ArgumentException">The compressed data doesn't fit in <paramref name="to"/>.</exception>
+        /// <exception cref="InvalidOperationException">The encoder failed.</exception>
         public static int Compress(Stream from, Span<Byte> to, CompEncoderLevels level)
         {
             var len = GetBufferableLength(from);
@@ -378,6 +425,14 @@ namespace SysWeaver.Compression
             }
         }
 
+        /// <summary>
+        /// Compress memory to memory in one go (using the encoder's one-shot api).
+        /// </summary>
+        /// <param name="from">The memory to read uncompressed data from</param>
+        /// <param name="to">The memory to write the compressed data to</param>
+        /// <param name="level">The compression level to use</param>
+        /// <returns>The number of compressed bytes written</returns>
+        /// <exception cref="ArgumentException">The compressed data doesn't fit in <paramref name="to"/>.</exception>
         public static int Compress(ReadOnlySpan<Byte> from, Span<Byte> to, CompEncoderLevels level)
         {
             if (!TEncoder.TryCompress(from, to, out var written, level))
@@ -385,6 +440,14 @@ namespace SysWeaver.Compression
             return written;
         }
 
+        /// <summary>
+        /// Compress memory to a stream.
+        /// Data smaller than 64 KB is compressed in one go to a pooled buffer, larger data is streamed in 64 KB output chunks.
+        /// </summary>
+        /// <param name="from">The memory to read uncompressed data from</param>
+        /// <param name="to">The stream to write the compressed data to</param>
+        /// <param name="level">The compression level to use</param>
+        /// <exception cref="InvalidOperationException">The encoder failed.</exception>
         public static void Compress(ReadOnlySpan<Byte> from, Stream to, CompEncoderLevels level)
         {
             var len = from.Length;
@@ -416,6 +479,14 @@ namespace SysWeaver.Compression
             }
         }
 
+        /// <summary>
+        /// Compress all remaining data of a stream to a stream asynchronously.
+        /// Seekable sources with less than 64 KB remaining are compressed in one go, other sources are streamed in 64 KB chunks.
+        /// </summary>
+        /// <param name="from">The stream to read the uncompressed data from</param>
+        /// <param name="to">The stream to write the compressed data to</param>
+        /// <param name="level">The compression level to use</param>
+        /// <exception cref="InvalidOperationException">The encoder failed.</exception>
         public static async Task CompressAsync(Stream from, Stream to, CompEncoderLevels level)
         {
             var len = GetBufferableLength(from);
@@ -467,6 +538,16 @@ namespace SysWeaver.Compression
             }
         }
 
+        /// <summary>
+        /// Compress all remaining data of a stream to memory asynchronously.
+        /// Seekable sources with less than 64 KB remaining are compressed in one go, other sources are streamed in 64 KB chunks.
+        /// </summary>
+        /// <param name="from">The stream to read the uncompressed data from</param>
+        /// <param name="to">The memory to write the compressed data to</param>
+        /// <param name="level">The compression level to use</param>
+        /// <returns>The number of compressed bytes written</returns>
+        /// <exception cref="ArgumentException">The compressed data doesn't fit in <paramref name="to"/>.</exception>
+        /// <exception cref="InvalidOperationException">The encoder failed.</exception>
         public static async Task<int> CompressAsync(Stream from, Memory<Byte> to, CompEncoderLevels level)
         {
             var len = GetBufferableLength(from);
@@ -505,6 +586,14 @@ namespace SysWeaver.Compression
             }
         }
 
+        /// <summary>
+        /// Compress memory to a stream asynchronously.
+        /// Data smaller than 64 KB is compressed in one go to a pooled buffer, larger data is streamed in 64 KB output chunks.
+        /// </summary>
+        /// <param name="from">The memory to read uncompressed data from</param>
+        /// <param name="to">The stream to write the compressed data to</param>
+        /// <param name="level">The compression level to use</param>
+        /// <exception cref="InvalidOperationException">The encoder failed.</exception>
         public static async Task CompressAsync(ReadOnlyMemory<Byte> from, Stream to, CompEncoderLevels level)
         {
             var len = from.Length;
@@ -551,6 +640,14 @@ namespace SysWeaver.Compression
 
         #region Decompress
 
+        /// <summary>
+        /// Decompress a stream to a stream, in 64 KB chunks.
+        /// Concatenated streams are decompressed if the format supports them (<see cref="ICompStreamDecoder{TSelf}.NextHeaderSize"/> is greater than 0).
+        /// </summary>
+        /// <remarks>Input is read in chunks, so the source may be read past the end of the compressed data.</remarks>
+        /// <param name="from">The stream to read the compressed data from</param>
+        /// <param name="to">The stream to write the uncompressed data to</param>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static void Decompress(Stream from, Stream to)
         {
             var dec = TDecoder.Create();
@@ -589,6 +686,16 @@ namespace SysWeaver.Compression
             }
         }
 
+        /// <summary>
+        /// Decompress a stream to memory.
+        /// Seekable sources with less than 64 KB remaining are read into memory and decompressed in one go, other sources are streamed in 64 KB chunks.
+        /// </summary>
+        /// <remarks>Input is read in chunks, so the source may be read past the end of the compressed data.</remarks>
+        /// <param name="from">The stream to read the compressed data from</param>
+        /// <param name="to">The memory to write the uncompressed data to</param>
+        /// <returns>The number of uncompressed bytes written</returns>
+        /// <exception cref="ArgumentException">The decompressed data doesn't fit in <paramref name="to"/>.</exception>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static int Decompress(Stream from, Span<Byte> to)
         {
             var len = GetBufferableLength(from);
@@ -652,6 +759,16 @@ namespace SysWeaver.Compression
             }
         }
 
+        /// <summary>
+        /// Decompress memory to memory.
+        /// Uses the decoder's one-shot api if it has one (and it succeeds), else the streaming decoder.
+        /// </summary>
+        /// <remarks>Any data after the (last concatenated) compressed stream is ignored.</remarks>
+        /// <param name="from">The memory to read compressed data from</param>
+        /// <param name="to">The memory to write the uncompressed data to</param>
+        /// <returns>The number of uncompressed bytes written</returns>
+        /// <exception cref="ArgumentException">The decompressed data doesn't fit in <paramref name="to"/>.</exception>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static int Decompress(ReadOnlySpan<Byte> from, Span<Byte> to)
         {
             if (TDecoder.TryDecompress(from, to, out var written))
@@ -688,6 +805,13 @@ namespace SysWeaver.Compression
             }
         }
 
+        /// <summary>
+        /// Decompress memory to a stream, in 64 KB output chunks.
+        /// </summary>
+        /// <remarks>Any data after the (last concatenated) compressed stream is ignored.</remarks>
+        /// <param name="from">The memory to read compressed data from</param>
+        /// <param name="to">The stream to write the uncompressed data to</param>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static void Decompress(ReadOnlySpan<Byte> from, Stream to)
         {
             var dec = TDecoder.Create();
@@ -717,6 +841,14 @@ namespace SysWeaver.Compression
             }
         }
 
+        /// <summary>
+        /// Decompress a stream to a stream asynchronously, in 64 KB chunks.
+        /// Concatenated streams are decompressed if the format supports them (<see cref="ICompStreamDecoder{TSelf}.NextHeaderSize"/> is greater than 0).
+        /// </summary>
+        /// <remarks>Input is read in chunks, so the source may be read past the end of the compressed data.</remarks>
+        /// <param name="from">The stream to read the compressed data from</param>
+        /// <param name="to">The stream to write the uncompressed data to</param>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static async Task DecompressAsync(Stream from, Stream to)
         {
             var dec = TDecoder.Create();
@@ -755,6 +887,16 @@ namespace SysWeaver.Compression
             }
         }
 
+        /// <summary>
+        /// Decompress a stream to memory asynchronously.
+        /// Seekable sources with less than 64 KB remaining are read into memory and decompressed in one go, other sources are streamed in 64 KB chunks.
+        /// </summary>
+        /// <remarks>Input is read in chunks, so the source may be read past the end of the compressed data.</remarks>
+        /// <param name="from">The stream to read the compressed data from</param>
+        /// <param name="to">The memory to write the uncompressed data to</param>
+        /// <returns>The number of uncompressed bytes written</returns>
+        /// <exception cref="ArgumentException">The decompressed data doesn't fit in <paramref name="to"/>.</exception>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static async Task<int> DecompressAsync(Stream from, Memory<Byte> to)
         {
             var len = GetBufferableLength(from);
@@ -812,6 +954,13 @@ namespace SysWeaver.Compression
             }
         }
 
+        /// <summary>
+        /// Decompress memory to a stream asynchronously, in 64 KB output chunks.
+        /// </summary>
+        /// <remarks>Any data after the (last concatenated) compressed stream is ignored.</remarks>
+        /// <param name="from">The memory to read compressed data from</param>
+        /// <param name="to">The stream to write the uncompressed data to</param>
+        /// <exception cref="InvalidDataException">The compressed data is invalid or truncated.</exception>
         public static async Task DecompressAsync(ReadOnlyMemory<Byte> from, Stream to)
         {
             var dec = TDecoder.Create();

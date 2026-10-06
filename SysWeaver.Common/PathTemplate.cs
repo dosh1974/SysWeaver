@@ -21,10 +21,11 @@ namespace SysWeaver
     ///             $(ExecutableDir) = ExecutableDir, ex: "C:\MyServices"
     ///             $(ExecutableBase) = Full path to the executable, excluding it's extensions, ex: "C:\MyServices\MyService"
     ///             $(AppName) = Application name (defaults to exe app name, can be changed in config), ex: "MyService".
-    ///             $(AppGuid) = A "unique" id for this process
+    ///             $(AppGuid) = A guid derived from the application assembly name (stable between runs)
     ///             $(AppDisplayName) = Friendly application name (defaults to de-camel cased exe app name, can be changed in config), ex: "My service".
     ///             $(MachineName) = Machine name, ex: "DESKTOP-324VHA".
     ///             $(KeyFolder) = The folder where keys are stored. ex: "C:\Keys".
+    /// See <see cref="EnvInfo.TextVars"/> for all env info variables.
     /// </summary>
     public static class PathTemplate
     {
@@ -42,20 +43,26 @@ namespace SysWeaver
         ///             $(MyPictures) = The My Pictures folder.
         /// </summary>
         /// <param name="template">The template, variables start with "$(" and ends with ")".</param>
-        /// <param name="extra">Optional extra variables. If case insesitive is specified, all keys will be lower-cased</param>
+        /// <param name="extra">Optional extra variables. If case insensitive is specified, the keys in this dictionary must be lower-cased (names are lower cased before the lookup)</param>
         /// <param name="caseInSensitive">If true the variable names is case in-sensitive</param>
-        /// <param name="useEnv">Variable from EnvInfo.TextVars is available, examples:
+        /// <param name="useEnv">If true, variables from EnvInfo.TextVars are available, examples:
         ///             $(Executable) = Full path to the executable, ex: "C:\MyServices\MyService.exe"
         ///             $(ExeAppName) = Name of the executable, ex: "MyService" (this can be different from AppName)
         ///             $(ExecutableDir) = ExecutableDir, ex: "C:\MyServices"
         ///             $(ExecutableBase) = Full path to the executable, excluding it's extensions, ex: "C:\MyServices\MyService"
         ///             $(AppName) = Application name (defaults to exe app name, can be changed in config), ex: "MyService".
-        ///             $(AppGuid) = A "unique" id for this process
+        ///             $(AppGuid) = A guid derived from the application assembly name (stable between runs)
         ///             $(AppDisplayName) = Friendly application name (defaults to de-camel cased exe app name, can be changed in config), ex: "My service".
         ///             $(MachineName) = Machine name, ex: "DESKTOP-324VHA".
         ///             $(KeyFolder) = The folder where keys are stored. ex: "C:\Keys".
         /// </param>
-        /// <returns>The resolved path</returns>
+        /// <returns>The resolved path (null or empty if <paramref name="template"/> is null or empty). The result is not made absolute (see <see cref="EnvInfo.MakeAbsoulte(string, bool)"/>).</returns>
+        /// <remarks>
+        /// Lookup order: special folders (<see cref="Environment.SpecialFolder"/> names), then <paramref name="extra"/>, then env info variables.
+        /// Note: <paramref name="extra"/> is currently only used when <paramref name="useEnv"/> is true.
+        /// How unknown variables are handled is defined by <see cref="TextTemplate"/>.
+        /// Parsed templates are cached per template string (thread safe, unbounded), the variables are evaluated on every call.
+        /// </remarks>
         public static String Resolve(String template, IReadOnlyDictionary<String, String> extra = null, bool caseInSensitive = true, bool useEnv = true)
         {
             if (String.IsNullOrEmpty(template))

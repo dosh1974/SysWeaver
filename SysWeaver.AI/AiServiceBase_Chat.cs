@@ -691,7 +691,8 @@ namespace SysWeaver.AI
                     using var t = await us.ReadFile(request, x, false).ConfigureAwait(false);
                     if (t == null)
                         continue;
-                    bd = BinaryData.FromBytes(t.Memory);
+                    //  Must copy, the unmanaged memory is released when t is disposed (end of this scope)
+                    bd = BinaryData.FromBytes(t.Memory.ToArray());
                     var p = AiContentPart.CreateImagePart(bd, mime, true);
                     images.Add(ValueTuple.Create(p, fn));
                 }

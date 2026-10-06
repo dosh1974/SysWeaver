@@ -5,14 +5,28 @@ using SysWeaver.MicroService;
 
 namespace SysWeaver.Net
 {
+    /// <summary>
+    /// The built-in template variable groups that every <see cref="HttpServerBase"/> registers:
+    /// "Env" (process environment variables, ex: "${Env.PATH}") and "EnvInfo" (<see cref="EnvInfo.TextVars"/>, ex: "${EnvInfo.AppName}").
+    /// </summary>
+    /// <remarks>
+    /// Any template file can read any environment variable through the "Env" group, so secrets stored in environment variables
+    /// are exposed to whoever can author (or get served) a template.
+    /// </remarks>
     sealed class StaticVars : IHaveTemplateVariables
     {
         StaticVars()
         {
         }
 
+        /// <summary>
+        /// The singleton instance.
+        /// </summary>
         public static readonly StaticVars Inst = new StaticVars();
 
+        /// <summary>
+        /// The variable groups, keyed by group name ("Env" and "EnvInfo"), both are static (non-dynamic).
+        /// </summary>
         public IReadOnlyDictionary<String, ITemplateVariableGroup> TemplateVariableGroups { get; private set; } = new Dictionary<String, ITemplateVariableGroup>
         {
             { "Env",  new TemplateVariableGroup(Environment.GetEnvironmentVariable, GetEnv, false) },

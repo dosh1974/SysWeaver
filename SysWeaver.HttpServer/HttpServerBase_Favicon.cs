@@ -64,6 +64,18 @@ namespace SysWeaver.Net
             }
         }
 
+        /// <summary>
+        /// Get (or render and cache) a png (or a multi size .ico if <paramref name="sizeAndKey"/> is zero or negative) handler from an svg renderer.
+        /// Cached handlers are reused as long as they were rendered by the same renderer instance.
+        /// </summary>
+        /// <param name="data">The request</param>
+        /// <param name="session">Not used</param>
+        /// <param name="sizeAndKey">The width in pixels (and cache key), 0 or less for an .ico with the sizes in IconSizes</param>
+        /// <param name="bm">The renderer</param>
+        /// <param name="cache">The handler cache</param>
+        /// <param name="aslock">The lock serializing rendering</param>
+        /// <param name="height">The height in pixels, 0 or less for a square image</param>
+        /// <returns>The handler</returns>
         static async Task<IHttpRequestHandler> HandleSvgToPng(HttpServerRequest data, HttpSession session, int sizeAndKey, SvgBitmapRenderer bm, ConcurrentDictionary<int, Tuple<IHttpRequestHandler, SvgBitmapRenderer>> cache, AsyncLock aslock, int height = 0)
         {
             if (cache.TryGetValue(sizeAndKey, out var ico))
@@ -119,6 +131,9 @@ namespace SysWeaver.Net
 
         static readonly ICompType Comp = CompManager.GetFromHttp("br");
 
+        /// <summary>
+        /// Optional end point "icon.svg", a generated favicon (from the app name and colors) used when no module serves one.
+        /// </summary>
         ValueTask<IHttpRequestHandler> HandleFaviconSvg(HttpServerRequest data, HttpSession session)
         {
             var svg = CachedFaviconSvg;
@@ -143,6 +158,9 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// Optional end point "icon_debug.svg", a generated favicon using the color seed in the query string (requires the "debug" token).
+        /// </summary>
         ValueTask<IHttpRequestHandler> HandleFaviconDebugSvg(HttpServerRequest data, HttpSession session)
         {
             var auth = session?.Auth?.Tokens;
@@ -178,6 +196,10 @@ namespace SysWeaver.Net
         readonly ConcurrentDictionary<int, Tuple<IHttpRequestHandler, SvgBitmapRenderer>> CachedFaviconSizes = new();
 
 
+        /// <summary>
+        /// Get the renderer for the current "icon.svg" (whatever module serves it), re-reading the svg at most every 15 seconds (when the prune task sets the check flag) if it changed.
+        /// </summary>
+        /// <remarks>A replaced renderer is disposed immediately, even if other requests are still rendering with it.</remarks>
         async Task<SvgBitmapRenderer> GetFaviconBitmapRenderer(HttpServerRequest data, HttpSession session)
         {
             var bm = SvgFaviconBitmapRenderer;
@@ -247,6 +269,9 @@ namespace SysWeaver.Net
 
         #region Auto gen
 
+        /// <summary>
+        /// Optional end point "logo.svg", a generated logo (from the app name, display name and colors) used when no module serves one.
+        /// </summary>
         ValueTask<IHttpRequestHandler> HandleLogoSvg(HttpServerRequest data, HttpSession session)
         {
             var svg = CachedLogoSvg;
@@ -271,6 +296,9 @@ namespace SysWeaver.Net
         }
 
 
+        /// <summary>
+        /// Optional end point "logo_debug.svg", a generated logo using the color seed in the query string (requires the "debug" token).
+        /// </summary>
         ValueTask<IHttpRequestHandler> HandleLogoDebugSvg(HttpServerRequest data, HttpSession session)
         {
             var auth = session?.Auth?.Tokens;
@@ -306,6 +334,10 @@ namespace SysWeaver.Net
         readonly ConcurrentDictionary<int, Tuple<IHttpRequestHandler, SvgBitmapRenderer>> CachedLogoSizes = new();
 
 
+        /// <summary>
+        /// Get the renderer for the current "logo.svg" (whatever module serves it), re-reading the svg at most every 15 seconds if it changed.
+        /// </summary>
+        /// <remarks>A replaced renderer is disposed immediately, even if other requests are still rendering with it.</remarks>
         async Task<SvgBitmapRenderer> GetLogoBitmapRenderer(HttpServerRequest data, HttpSession session)
         {
             var bm = SvgLogoBitmapRenderer;

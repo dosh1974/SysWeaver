@@ -5,8 +5,14 @@ using System.Text;
 namespace SysWeaver.Compression
 {
     /// <summary>
-    /// A stream that takes a seekable input stream containing GZip compressed data, and presents it as a deflate compressed data stream
+    /// A stream that takes a seekable input stream containing GZip compressed data, and presents it as a raw deflate compressed data stream
+    /// (the GZip header and the 8 byte CRC32 / size trailer are skipped, no recompression is done).
     /// </summary>
+    /// <remarks>
+    /// Used by the HTTP server to serve pre-compressed ".gz" data to clients that only accept "deflate".
+    /// Only single member GZip data is supported (anything after the first member's deflate data is treated as part of it).
+    /// Not thread safe, the position of the underlying stream is used as the position of this stream.
+    /// </remarks>
     public sealed class TransformGZipToDeflateStream : Stream
     {
         const string Invalid = "Data is not valid GZip data";
@@ -15,8 +21,8 @@ namespace SysWeaver.Compression
         /// Get deflate memory from gzip memory
         /// </summary>
         /// <param name="gzipData">Memory containing GZip data</param>
-        /// <returns>Memory with the deflate portion of the memory data</returns>
-        /// <exception cref="Exception"></exception>
+        /// <returns>Memory with the deflate portion of the memory data (a slice of <paramref name="gzipData"/>, no copy is made)</returns>
+        /// <exception cref="Exception">The data isn't valid GZip data, or isn't deflate compressed.</exception>
         public static ReadOnlyMemory<Byte> GetDeflateData(ReadOnlyMemory<byte> gzipData)
         {
             var data = gzipData.Span;
@@ -71,11 +77,12 @@ namespace SysWeaver.Compression
 
 
         /// <summary>
-        /// Create a defalte data stream from a gzip data stream
+        /// Create a deflate data stream from a gzip data stream, the GZip header is read (and validated) from the current position
         /// </summary>
-        /// <param name="gzipData">Stream containing GZIp data (must be a complete file and nothing after that)</param>
-        /// <param name="leaveOpen">If true, the underlaying stream isn't disposed when this stream is disposed</param>
-        /// <exception cref="Exception"></exception>
+        /// <param name="gzipData">Seekable stream containing GZip data (must be a complete file and nothing after that)</param>
+        /// <param name="leaveOpen">If true, the underlying stream isn't disposed when this stream is disposed</param>
+        /// <exception cref="Exception">The data isn't valid GZip data, or isn't deflate compressed.</exception>
+        /// <exception cref="NotSupportedException"><paramref name="gzipData"/> isn't seekable.</exception>
         public TransformGZipToDeflateStream(Stream gzipData, bool leaveOpen = false)
         {
             var l = gzipData.Length - gzipData.Position;
@@ -131,21 +138,33 @@ namespace SysWeaver.Compression
             LeaveOpen = leaveOpen;
         }
 
+        /// <summary>
+        /// If true, the underlying stream isn't disposed when this stream is disposed
+        /// </summary>
         public readonly bool LeaveOpen;
+
+        /// <summary>
+        /// The stream containing the GZip data
+        /// </summary>
         public readonly Stream UnderlayingStream;
 
         readonly long InternalStart;
         readonly long InternalEnd;
         readonly long InternalLength;
 
+        /// <inheritdoc/>
         public override bool CanRead => true;
 
+        /// <inheritdoc/>
         public override bool CanSeek => true;
 
+        /// <inheritdoc/>
         public override bool CanWrite => false;
 
+        /// <inheritdoc/>
         public override long Length => InternalLength;
 
+        /// <inheritdoc/>
         public override long Position
         {
             get => UnderlayingStream.Position - InternalStart;
@@ -159,10 +178,12 @@ namespace SysWeaver.Compression
             }
         }
 
+        /// <inheritdoc/>
         public override void Flush()
         {
         }
 
+        /// <inheritdoc/>
         public override int Read(byte[] buffer, int offset, int count)
         {
             var pos = UnderlayingStream.Position;
@@ -175,6 +196,7 @@ namespace SysWeaver.Compression
             return UnderlayingStream.Read(buffer, offset, count);
         }
 
+        /// <inheritdoc/>
         public override long Seek(long offset, SeekOrigin origin)
         {
             switch (origin)
@@ -192,10 +214,13 @@ namespace SysWeaver.Compression
             throw new ArgumentException("Invalid SeekOrigin", nameof(origin));
         }
 
+        /// <inheritdoc/>
         public override void SetLength(long value) => throw new NotImplementedException();
 
+        /// <inheritdoc/>
         public override void Write(byte[] buffer, int offset, int count) => throw new NotImplementedException();
 
+        /// <inheritdoc/>
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);

@@ -16,7 +16,7 @@
 
 1. **Runtime environment** – where am I running, which files and folders belong to this application, how is it configured, where do log messages go.
 2. **General purpose toolbox** – high performance collections, string and memory helpers, hashing, scheduling and async coordination primitives that are reused throughout the framework.
-3. **Contract hub** – interfaces and attributes that let independent projects cooperate without referencing each other (translation, certificates, firewalls, table rendering, object editing, AI tools, platform tools, …).
+3. **Contract hub** – interfaces and attributes that let independent projects cooperate without referencing each other (translation, language identification, certificates, firewalls, table data and chart export, inspection, text search, object editing, AI tools, platform tools, …).
 
 ## How it fits into SysWeaver
 
@@ -26,7 +26,7 @@ flowchart TB
     Env["Environment and config<br/>EnvInfo, Config, Folders, PathTemplate"]
     Msg["Messaging<br/>MessageHost, MessageHandler"]
     Tools["Toolbox<br/>collections, memory, hashing, async"]
-    Contracts["Contracts and attributes<br/>ITranslator, ICertificateProvider,<br/>IPlatformTools, TableData, Edit, OpenAI"]
+    Contracts["Contracts and attributes<br/>ITranslator, ICertificateProvider, IFirewallHandler,<br/>IPlatformTools, ITableDataExporter, IChartExporter,<br/>IInspector, ITextSearch, TableData, Edit, AI"]
   end
   Win["SysWeaver.Common.Windows"] -.->|implements IPlatformTools| Contracts
   Lin["SysWeaver.Common.Linux"] -.->|implements IPlatformTools| Contracts
@@ -41,29 +41,58 @@ The `ServiceManager` *is* a `MessageHost`, so every service logs through the sam
 
 | Concept | What it gives you |
 |---|---|
-| **Environment info** (`EnvInfo`) | Executable location and base name, OS platform name, native library folder convention (`runtimes/<os>_<arch>`), application identity. The executable base name drives the names of the config, manifest and log files. |
-| **Layered configuration** (`Config`) | Settings are merged from a machine-wide default file, the application's own `<Executable>.Config.json` and a machine-wide *forced* file whose values applications cannot override. |
-| **Folders & path templates** (`Folders`, `PathTemplate`) | Standard data locations (all users / per user, shared / per application, key folder) and `$(Variable)` path expansion used in almost every configurable path in the framework. |
-| **Messaging** (`MessageHost`, `MessageHandler`, message levels) | A hub that distributes log/status messages to any number of handlers (console, debugger, file, …). |
+| **Environment info** (`EnvInfo`) | Executable location and base name, OS platform name, application identity and two native library folder conventions: `NativePath` (`runtimes/<os>_<arch>`, e.g. `windows_x64`) and `RuntimeFolder*` (.NET RID style `runtimes/<rid>/native\|lib`, e.g. `win-x64`). The executable base name drives the names of the config, manifest and log files. |
+| **Layered configuration** (`Config`) | Settings are merged from `[CommonApplicationData]/SysWeaver/DefaultSystemConfig.json`, the application's own `<ExecutableBase>.Config.json` and `[CommonApplicationData]/SysWeaver/ForcedSystemConfig.json`, whose values applications cannot override (both machine-wide files are created with a commented template if missing). Keys are case insensitive; only top-level scalar and array values are supported. `Config.ApplyConfig` maps a JSON file onto a parameter object, honouring `[ConfigIgnore]`. |
+| **Folders & path templates** (`Folders`, `PathTemplate`) | Standard data locations (all users / per user, shared / per application, `KeyFolder`) and `$(Variable)` path expansion used in almost every configurable path in the framework. Lists of folders are separated by `Path.PathSeparator` (`;` on Windows, `:` on Unix). `$(AppGuid)` is a GUID derived from the entry assembly name, stable between runs. |
+| **Messaging** (`MessageHost`, `MessageHandler`, `Message`, message levels) | A hub that distributes log/status messages to any number of handlers (console, `DebugMessageHandler`, `FileLogMessageHandler` which trims the oldest lines when the file exceeds its max size, …). Handlers run in `NativeSync`, `Async` or `ForceSync` mode; Debug-level messages are dropped by default in Release builds. |
+| **Templates** (`TextTemplate`, `LanguageTemplate`) | `$(Variable)` text templates with transform prefixes (`_ ^ ~ @ # % $ £ ¤ *`) used framework-wide, and a per-extension handler registry the HTTP server uses for localized files. |
 | **Plug-in loading** (`TypeFinder`, `PlatformTools`) | Resolve types by name — including loading `<Assembly>.dll` from the executable folder — which is what makes manifest-driven composition and OS-specific implementations possible. |
-| **Roles** | Standard auth token names (Admin, Ops, Dev, Debug, Service and combinations) used by `[WebApiAuth]` across the framework. |
-| **Attribute vocabularies** | Table-data rendering hints, object-editor hints, auto-translation markers and OpenAI tool markers. They only *describe*; the processing lives in the projects that consume them. |
+| **Roles** (`Roles`) | Standard auth token names (Admin, Ops, Dev, Debug, Service and combinations) used by `[WebApiAuth]` across the framework. |
+| **Attribute vocabularies** | Table-data rendering hints, object-editor hints, auto-translation markers and AI tool markers. They only *describe*; the processing lives in the projects that consume them (see below). |
+
+### Contracts and vocabularies
+
+| Area | Types | Consumed / implemented by |
+|---|---|---|
+| **Translation** (`SysWeaver.Translation`) | `ITranslator`, `TranslateRequest`, `AutoTranslate*` attributes, `TranslationTools.NoTranslatePrefix` (`"_ä_"` marks text that must not be translated) | Translation services and caches, the TableData type translator |
+| **Language identification** (`SysWeaver.LanguageIdentifier`) | `ILanguageIdentifier`, `IdentifiedLanguage` | SysWeaver.LanguageIdentifier.FastText |
+| **Security** (`SysWeaver.Security`) | `ICertificateProvider`, `IFirewallHandler`, `CertificateTools` (load PFX with a password or password file, install to LocalMachine\My, read SAN and expiry, PEM to DER) | HttpServer, AspHttpServer |
+| **Table data** (`SysWeaver.Data`) | Wire DTOs (`TableData`, `TypedTableData<T>`, `TableDataRequest`, `TableDataFilter`, `TableDataColumn`), `TableData*` attributes (formats, keys, search weighting, actions, …) and the `TableDataFormats` `Name;arg;arg` format mini-language rendered by the JS `ValueFormat` in the HTTP server | SysWeaver.TableData, the explore service |
+| **Table export** | `ITableDataExporter`, `IHaveTableDataExporters`, `TableDataExportOptions` | Explore service; implemented by TableData (Csv/Html/Markdown), Excel, Json, UserData |
+| **Chart export** (`SysWeaver.Chart`) | `IChartExporter`, `IHaveChartExporters`, `ChartExportOptions`, `ChartExportInputTypes` | ChartJs service; implemented by ChartJs.Excel (xlsx, pdf) |
+| **Inspection** (`SysWeaver.Inspection`) | `IInspector`, `IReadInspector`, `IWriteInspector`, `IDescribable`, `DescVersionAttribute` | SysWeaver.Inspection and its binary serializer |
+| **Text search** (`SysWeaver.Search`) | `ITextSearch`, `ITextSearcher<T>`, `ITextRanker`, `SimpleTextSearch` (linear scan, no index) | Default free-text ranking of TableData, Media.Svg font matching |
+| **Object editing** | `Edit*` attributes (display name, order, range, password, multiline, hide-if, …) | SysWeaver.MicroService.Edit (`TypeService`) |
+| **AI tools** (`SysWeaver.AI`) | Provider-agnostic: `AiToolAttribute` / `OpenAiUseAttribute` mark a method as a tool, `AiToolPrefixAttribute` / `AiToolNameAttribute` name it, `AiIgnore` / `AiOptional` shape the JSON schema, `AiHideMcpAttribute` hides it from MCP, `IHaveOpenAiTools` marks services for the AI chat, `IAiToolContext` lets tools attach links and files | SysWeaver.AI chat services and the MCP service |
+| **HTTP** (`SysWeaver.Net`) | `HttpResponseException` – throw it to return a specific HTTP status | HTTP server |
+| **Platform** | `IPlatformTools`, `PlatformTools.Current`, `DummyPlatformTools` | SysWeaver.Common.Windows / .Linux |
+| **Monitoring** | `IPerfMonitored` / `PerfMonitor`, `IHaveStats` / `Stats` | ServiceManager |
 
 ## Key features
 
 - Configuration and folder conventions shared by every SysWeaver application, with machine-wide defaults and enforced overrides.
-- Rich, allocation-conscious building blocks: prefix/string trees, read-optimised dictionaries, pooled and chunked streams, memory-mapped file access, unmanaged memory helpers.
-- Async coordination: locks, signals, concurrency and rate limiters, periodic tasks and a scheduler.
-- Hashing and code generation (fast non-cryptographic hashes, secure random, human-friendly codes that tolerate look-alike characters).
-- Performance and statistics interfaces (`IPerfMonitored`, `IHaveStats`) that the service manager collects and displays automatically.
+- **Strings:** culture-invariant, ASCII-vectorized case conversion and ordinal helpers (`StringExt.FastToLower`, `FastStartsWith`, …, returning the same instance when nothing changes), `StringTools` (quoting, sanitizing, fuzzy matching, hex, masking, line splitting), simplified (not RFC-complete) validators in `StringValidate`, and `CompactAsciiString` base-N integer encoding (used for ETags).
+- **Prefix lookups** – "longest contained string that a text starts with": mutable `StringTree` / `StringTreeList<T>`, immutable thread-safe `FrozenStringTree` / `FrozenStringTreeList<T>`, and hash based, case-sensitive `StringPrefixLookup` (used by the HTTP server for module prefixes and redirects). `IStringTreeExt` adds in-text searching. Empty strings are not supported.
+- **Read-optimised collections:** `SetExt.Freeze`, `DictionaryExt.Freeze` and `ReadOnlyData` pick an immutable implementation by content (shared empty, single item, SIMD compare for small integer/enum key sets, ordinal string fingerprinting, else `FrozenSet`/`FrozenDictionary`); `SemiFrozenDictionary` (lock-free reads against a frozen copy rebuilt after a run of unmodified reads); `LowAllocConcurrentDictionary` (segmented, open addressing, no per-item allocation, span-based string lookups); `DictionaryList` multi-map, `ObjectMerger` interning, `OrderedMerge`, `BinarySearch`, and async `Convert`/`Process` helpers with `maxConcurrency`.
+- **Caches:** `FastMemCache<K,V>` (TTL cache; per-key lock so a factory runs once per key at a time, expiry set on write and not extended on read, optional background build, stats) and `CachedValue<T>`.
+- **Memory, streams and files:** `ArrayPoolStream` (pooled `MemoryStream` replacement with zero-copy leases), `ChunkedStream`, memory-mapped `FileReadOnlyMemory`, `UnmanagedMemory` / `Mem` pointer and span wrappers, `PathExt` / `FileExt` operations with retries (`retryCount` is the total number of attempts), file watching (`OnFileChange`, `ManagedFileString`, `ManagedString`), `ManagedFile` (local or http(s) file with change callback and pluggable schemas), and `SysWeaver.IO` (`EndianAwareBinaryReader`, `LengthLimitedStream`).
+- **Hashing, random and codes:** `GxHash` (AES intrinsics), `QuickHash` (MurmurHash2), `ObjectHash`, `HashTools` (compact file-name-safe hash strings), `FileHash` (cached MD5 content hashes, not for security), array/memory equality comparers, pooled CSPRNG `SecureRng` (`using var rng = SecureRng.Get()`), and `AlphaNumericCodeGenerator` / `NumericCodeGenerator` human-friendly codes.
+- **Async coordination:** `AsyncLock` (N slots, not re-entrant), `AsyncObjectLock<T>` (per key), `AsyncSignal`, `BlockUntilChange` / `BlockUntilValueChange` (long-poll change notification), `ConcurrencyLimiter`, `RateLimiter` (sliding window) and `HttpRateLimiter` (delay, then 429), `ObjectPool` / `AsyncObjectPool` / `LimitedObjectPool<T>`, `SingleTaskRunner`, `PeriodicTask` (cannot be restarted after a stop), `PeriodicCancellationTokenSource`, a low-precision UTC `Scheduler`, `Retry`, `InterlockedEx`, `ConcurrentCount<TKey>` and `TaskExt`.
+- **Web and net helpers:** `WebTools` (shared `HttpClient`s, optional Tor via `TorService` when SysWeaver.Tor is deployed), `WebPath`, `NetworkTools` (LAN IPs, connectivity probing), `MimeTypeMap` / `Mimes`, `PushMessage` payloads used by HTTP sessions.
+- **Misc:** `ValueFormat`, `NiceRound`, `ColorTools` / `HtmlColors`, `ExternalProcess` / `SystemHelper`, console helpers.
+- Performance and statistics (`IPerfMonitored` / `PerfMonitor.Track()`, `IHaveStats`, `MovingAverage`, `ExceptionTracker`) that the service manager collects and displays automatically.
 - Contracts that let the framework be assembled from interchangeable parts.
 
 ## Limitations and considerations
 
 - It is a large, broad assembly; everything depends on it, so changes here ripple through the whole framework.
-- Some functionality depends on optional assemblies being present at runtime (platform tools, XML documentation reader). When they are missing the code falls back silently (e.g. dummy platform tools), which can hide deployment mistakes.
-- Several helpers use unsafe code and raw memory for performance; they assume correct usage by callers.
+- Some functionality depends on optional assemblies being present at runtime (platform tools, Tor support in `TorService`, XML documentation comments in generated config templates). When they are missing the code falls back silently (e.g. `DummyPlatformTools`), which can hide deployment mistakes.
+- Several helpers use unsafe code and raw memory for performance; they assume correct usage by callers. `GxHash` (and the memory comparers that use it for primitive element types) requires AES-NI or ARM AES and throws `PlatformNotSupportedException` otherwise.
+- `PathExt.CreateDataFolder` grants **Everyone** full control on Windows, and the all-user `Folders` are created and made accessible to everyone (through the platform tools) when first used.
+- Hashes from `QuickHash`, `ObjectHash` and `FileHash` are for in-process or caching use, not security; `QuickHash` is endian specific.
+- Not everything is thread safe: `DictionaryList`, `StringTree` / `StringTreeList<T>` (use the frozen variants for concurrent reads) and `CompactAsciiStringSet` before `Fix()` are not.
 - The attribute vocabularies have no effect on their own — they require the corresponding processing project (table data, editor, translation, AI) to be present.
+- The `Inspection` contracts live in a folder spelled `Inpsection`; the namespace is `SysWeaver.Inspection`. The public `SysWeaver.ReadOnlyDictionary<K,V>` clashes with `System.Collections.ObjectModel.ReadOnlyDictionary` when both namespaces are imported.
 
 ## Using it
 

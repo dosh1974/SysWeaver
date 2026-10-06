@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 namespace SysWeaver.Net
 {
 
+    /// <summary>
+    /// A request or response that is passed through a proxy: method, headers ("Name:value" strings), body and status code.
+    /// </summary>
     public class ProxyData
     {
         #if DEBUG
@@ -15,14 +18,36 @@ namespace SysWeaver.Net
         
         #endif//DEBUG
 
+        /// <summary>
+        /// The http method.
+        /// </summary>
         public HttpServerMethods Method;
+        /// <summary>
+        /// The headers as "Name:value" strings (see <see cref="ProxyTools.EncodeHeaders{T}"/>), may be null.
+        /// </summary>
         public String[] Headers;
+        /// <summary>
+        /// The body, may be null.
+        /// </summary>
         public Byte[] Data;
+        /// <summary>
+        /// The http status code (responses only).
+        /// </summary>
         public int StatusCode;
+        /// <summary>
+        /// Create an empty instance (for serialization).
+        /// </summary>
         public ProxyData()
         {
         }
 
+        /// <summary>
+        /// Create an instance.
+        /// </summary>
+        /// <param name="method">The http method</param>
+        /// <param name="headers">The headers as "Name:value" strings</param>
+        /// <param name="data">The body</param>
+        /// <param name="statusCode">The http status code</param>
         public ProxyData(HttpServerMethods method, string[] headers, byte[] data = null, int statusCode = 0)
         {
             Method = method;
@@ -32,6 +57,13 @@ namespace SysWeaver.Net
         }
     }
 
+    /// <summary>
+    /// Helpers for proxying http requests (read a request, forward it using an <see cref="HttpClient"/> and write the response back).
+    /// </summary>
+    /// <remarks>
+    /// All request headers except Host, Upgrade-Insecure-Requests and Transfer-Encoding are forwarded, including Cookie and Authorization.
+    /// No X-Forwarded-For / Forwarded headers are added.
+    /// </remarks>
     public static class ProxyTools
     {
 
@@ -61,6 +93,9 @@ namespace SysWeaver.Net
             "etag"
         );
 
+        /// <summary>
+        /// Lower cased names of headers that may occur multiple times (each value is kept as a separate header).
+        /// </summary>
         public static readonly IReadOnlySet<String> AllowMultipleHeaders = ReadOnlyData.Set(StringComparer.Ordinal,
             "set-cookie"
         );
@@ -78,6 +113,13 @@ namespace SysWeaver.Net
 
 
 
+        /// <summary>
+        /// Encode header collections into "Name:value" strings, ignored headers (host etc) are skipped.
+        /// Multiple values are joined with ',' except for headers in <see cref="AllowMultipleHeaders"/>.
+        /// </summary>
+        /// <typeparam name="T">The type of the header values</typeparam>
+        /// <param name="headers">The header collections, null collections are skipped</param>
+        /// <returns>The encoded headers</returns>
         public static String[] EncodeHeaders<T>(params IEnumerable<KeyValuePair<string, T>>[] headers) where T : IEnumerable<String>
         {
             List<String> h = new List<string>(16);
@@ -110,12 +152,14 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Get headers and other data required to proxy a request
+        /// Get headers and other data required to proxy a request (the body is read for POST requests).
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="prefixLength"></param>
-        /// <returns></returns>
-        /// <exception cref="HttpResponseException"></exception>
+        /// <param name="r">The request</param>
+        /// <param name="prefixLength">Number of chars to remove from the start of the Referer header value, null to use the length of the request's host prefix (making it relative).
+        /// The default 0 keeps the Referer as is.</param>
+        /// <returns>The request data</returns>
+        /// <exception cref="HttpResponseException">Thrown (404) if the method isn't GET, HEAD or POST</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if the Referer is shorter than the prefix length</exception>
         public static async Task<ProxyData> GetFromRequest(HttpServerRequest r, int? prefixLength = 0)
         {
             var m = r.HttpMethod;
@@ -140,11 +184,11 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Ser response headers from the result of a proxied request
+        /// Set the response status, headers (Content-Type, Content-Length and Set-Cookie are handled specially) and body of a request from a proxied response.
         /// </summary>
-        /// <param name="r"></param>
-        /// <param name="data"></param>
-        /// <returns></returns>
+        /// <param name="r">The request to write the response to</param>
+        /// <param name="data">The proxied response</param>
+        /// <returns>A task that completes when the body has been written</returns>
         public static Task SetToRequest(HttpServerRequest r, ProxyData data)
         {
             var sh = SpecialHeaders;
@@ -162,12 +206,13 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Make a proxied request 
+        /// Make a proxied request.
         /// </summary>
-        /// <param name="c"></param>
+        /// <param name="c">The http client to use</param>
         /// <param name="url">The url to do the request against</param>
-        /// <param name="data">The input data</param>
-        /// <returns></returns>
+        /// <param name="data">The input data (method, headers and body)</param>
+        /// <returns>The response (the whole body is read into memory).
+        /// Exceptions are not thrown, they are returned as a 500 response with the exception message as the body.</returns>
         public static async Task<ProxyData> ProxyRequest(HttpClient c, String url, ProxyData data)
         {
             var httpMethod = data.Method;

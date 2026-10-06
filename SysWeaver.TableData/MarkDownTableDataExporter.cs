@@ -10,16 +10,32 @@ namespace SysWeaver.Data
 {
 
     /// <summary>
-    /// Export table as markdown
+    /// Export table data as a UTF-8 Markdown (GitHub flavored) table, with padded columns for readability in plain text.
     /// </summary>
+    /// <remarks>
+    /// Values are Markdown escaped, line breaks in values are replaced with &lt;br&gt;.
+    /// Numeric columns are right aligned, columns without <see cref="TableDataColumnProps.WordWrap"/> use non breaking spaces.
+    /// Hidden columns (<see cref="TableDataColumnProps.Hide"/>) are omitted. Columns with a "Url" format are rendered as links.
+    /// The exporter is stateless and thread safe.
+    /// </remarks>
     public sealed class MarkDownTableDataExporter : ITableDataExporter
     {
 
 
+        /// <summary>
+        /// The shared instance.
+        /// </summary>
         public static readonly MarkDownTableDataExporter Instance = new MarkDownTableDataExporter();
 
+        /// <summary>
+        /// Returns the <see cref="Name"/>.
+        /// </summary>
+        /// <returns>The name of the exporter.</returns>
         public override string ToString() => Name;
 
+        /// <summary>
+        /// Create a Markdown exporter, prefer using the shared <see cref="Instance"/>.
+        /// </summary>
         public MarkDownTableDataExporter()
         {
         }
@@ -27,16 +43,31 @@ namespace SysWeaver.Data
 
 
 
+        /// <inheritdoc/>
         public String Name => "Mark down";
+
+        /// <inheritdoc/>
         public String Desc => "A mark down (MD) formatted text file";
 
+        /// <inheritdoc/>
         public String Icon => "IconFileMD";
 
+        /// <inheritdoc/>
         public double Order => 1000;
 
+        /// <summary>
+        /// Markdown emphasis wrapped around each column header (bold italic), not used when <see cref="TableDataExportOptions.NoHeaders"/> is set.
+        /// </summary>
         public const String ColHeaderStyle = "***";
+
+        /// <summary>
+        /// Prefix of the line containing the table title (a level 3 heading), only written if the table has a title.
+        /// </summary>
         public const String TitlePrefix = "### ";
 
+        /// <summary>
+        /// Always false, Markdown export doesn't require a signed in user.
+        /// </summary>
         public bool RequireUser => false;
 
         static String FormatUrl(TableDataExporterTools.Formatter f, Object value, Object nextValue, TableDataColumn col)
@@ -76,6 +107,16 @@ namespace SysWeaver.Data
         }.Freeze();
 
 
+        /// <summary>
+        /// Get the Markdown text for a table.
+        /// </summary>
+        /// <param name="tableData">The table to convert. Without columns, the column count is taken from the first row and the headers are numbered.</param>
+        /// <param name="context">Not used.</param>
+        /// <param name="options">Export options.
+        /// <see cref="TableDataExportOptions.Custom"/> is used as a prefix for every line (ex: for indentation or quoting),
+        /// <see cref="TableDataExportOptions.NoHeaders"/> only removes the header emphasis, a header line is always written (required by Markdown).</param>
+        /// <returns>The Markdown text.</returns>
+        /// <remarks>Every row must have at least as many values as there are columns.</remarks>
         public String GetMarkDownText(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
         {
             //  Measure and get data
@@ -209,6 +250,13 @@ namespace SysWeaver.Data
             return sb.ToString();
         }
 
+        /// <summary>
+        /// Export the table as a Markdown file (completes synchronously), see <see cref="GetMarkDownText(BaseTableData, object, TableDataExportOptions)"/>.
+        /// </summary>
+        /// <param name="tableData">The table to export.</param>
+        /// <param name="context">Not used.</param>
+        /// <param name="options">Export options, see <see cref="GetMarkDownText(BaseTableData, object, TableDataExportOptions)"/>.</param>
+        /// <returns>A file named "[Filename].md" (default "Table.md") with the <see cref="Mimes.MarkdownText"/> mime type.</returns>
         public Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TableDataExportOptions options = null)
         {
             options = options ?? new TableDataExportOptions();

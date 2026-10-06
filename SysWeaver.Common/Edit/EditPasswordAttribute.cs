@@ -12,11 +12,14 @@ namespace SysWeaver
         /// <summary>
         /// Put this to specify the value input should be masked (password)
         /// </summary>
-        /// <param name="isPassword">True to allow for multi line</param>
+        /// <param name="isPassword">True to mask the input</param>
         public EditPasswordAttribute(bool isPassword = true)
         {
             IsPassword = isPassword;
         }
+        /// <summary>
+        /// True if the input should be masked
+        /// </summary>
         public readonly bool IsPassword;
     }
 
@@ -36,6 +39,9 @@ namespace SysWeaver
         {
             Hide = hide;
         }
+        /// <summary>
+        /// True if the member should be hidden
+        /// </summary>
         public readonly bool Hide;
     }
 
@@ -55,6 +61,9 @@ namespace SysWeaver
         {
             ReadOnly = readOnly;
         }
+        /// <summary>
+        /// True if the member should be read only
+        /// </summary>
         public readonly bool ReadOnly;
     }
 

@@ -4,6 +4,12 @@ using System.Threading.Tasks;
 
 namespace SysWeaver.Translation
 {
+    /// <summary>
+    /// A translator with additional (non request based) methods, implemented by the translator services.
+    /// </summary>
+    /// <remarks>
+    /// Texts starting with <see cref="TranslationTools.NoTranslatePrefix"/> are returned as is (with the prefix removed) by the built in translators.
+    /// </remarks>
     public interface IInternalTranslator : ITranslator
     {
 
@@ -35,7 +41,7 @@ namespace SysWeaver.Translation
         /// <param name="effort">The effort to use when translating</param>
         /// <param name="retention">The duration to cache the translation</param>
         /// <param name="contentType">The type of text</param>
-        /// <returns>Translations in the same order as specified in the parameters</returns>
+        /// <returns>Translations in the same order as specified in the parameters, all texts for the first target language followed by all texts for the next target language and so on</returns>
         Task<string[]> TranslateMultiple(string[] texts, string to, string from = "en", String context = null, TranslationEffort effort = TranslationEffort.Medium, TranslationCacheRetention retention = TranslationCacheRetention.Medium, TranslationContentTypes contentType = TranslationContentTypes.Text);
 
 
@@ -84,15 +90,15 @@ namespace SysWeaver.Translation
         /// <summary>
         /// Returns a formatted from language if it's valid, else null
         /// </summary>
-        /// <param name="from"></param>
-        /// <returns></returns>
+        /// <param name="from">The source language code to check</param>
+        /// <returns>The normalized language code, or null if the language isn't supported as a source language</returns>
         String CanTranslateFrom(String from);
 
         /// <summary>
         /// Returns a formatted to language if it's valid, else null
         /// </summary>
-        /// <param name="to"></param>
-        /// <returns></returns>
+        /// <param name="to">The target language code to check</param>
+        /// <returns>The normalized language code, or null if the language isn't supported as a target language</returns>
         String CanTranslateTo(String to);
     }
 

@@ -9,9 +9,15 @@ using System.Threading.Tasks;
 namespace SysWeaver
 {
     /// <summary>
-    /// Quick and easy shell for creating tools that requires a input file and some optional destination folder
+    /// Quick and easy shell for creating tools that take input files (with wildcards, ';' separated masks, recursion and optional sequences) and an optional destination folder.
+    /// <para>Options are parsed into <typeparamref name="T"/> using <see cref="CommandLine.ParseObject{T}(out T, string[], IEnumerable{CommandLineArgument}, CommandLine.OptionMembers)"/> (fields and properties),
+    /// help and errors are written to the console using a synchronous <see cref="ConsoleMessageHandler"/>.</para>
     /// </summary>
-    /// <typeparam name="T">A type with optional options</typeparam>
+    /// <typeparam name="T">A type whose public fields/properties are the tool options</typeparam>
+    /// <remarks>
+    /// Configure the argument names/help (and <see cref="AllowSourceSequence"/>) before calling one of the processing methods.
+    /// For most uses the static <see cref="FilesToFolderTool"/> helpers (which use <see cref="Instance"/>) are enough.
+    /// </remarks>
     public sealed class FilesToFolderTool<T> where T : class, new()
     {
         /// <summary>
@@ -19,11 +25,11 @@ namespace SysWeaver
         /// </summary>
         public String SourceFilesName = "SourceFiles";
         /// <summary>
-        /// Optional help text
+        /// Optional help text for the source files argument, null for a default text describing the mask syntax
         /// </summary>
         public String SourceFilesHelp = null;
         /// <summary>
-        /// If true, input files will be treated as the first in a sequence, i.e "Frame_0.png" will result in "Frame_0.png", "Frame_1.png" etc will be processed
+        /// If true, input files will be treated as the first in a sequence, i.e "Frame_0.png" will result in "Frame_0.png", "Frame_1.png" etc being processed (as long as they exist)
         /// </summary>
         public bool AllowSourceSequence;
 
@@ -32,11 +38,14 @@ namespace SysWeaver
         /// </summary>
         public String DestFolderName = "DestFolder";
         /// <summary>
-        /// Help for the destination folder argument
+        /// Text shown as the default value tag of the destination folder argument, null for "&lt;Same as source file&gt;" (despite the name, it is not used as help text)
         /// </summary>
         public String DestFolderHelp;
 
 
+        /// <summary>
+        /// A shared default instance, used by the static <see cref="FilesToFolderTool"/> helpers.
+        /// </summary>
         public static FilesToFolderTool<T> Instance = new FilesToFolderTool<T>();
 
         static String MakeDir(String dest, KeyValuePair<String, String> source)
@@ -72,9 +81,16 @@ namespace SysWeaver
         /// Process the files specified on the command line with the specified options and destination folder
         /// </summary>
         /// <param name="commandLineArgs">The command line args (as passed to main)</param>
-        /// <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+        /// <param name="doOnFile">
+        /// Called once per input file with (message host, options, full source path, source path relative to its search folder, destination folder).
+        /// The destination folder is created if needed; it is the source file's folder when no destination argument is given, else the destination plus the relative sub folder.
+        /// A non-zero return value stops the processing and becomes the return value.
+        /// </param>
         /// <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
-        /// <returns>0 if sucessfull or the error code</returns>
+        /// <returns>
+        /// 0 if successful, 1 if help was requested, -1 if the command line was invalid, -2 if processing threw an exception,
+        /// otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
+        /// </returns>
         public int OnFiles(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, int> doOnFile, Func<T, int> validateParams = null)
         {
             return InternalOnFiles(commandLineArgs, (msg, opt, files, dest) =>
@@ -91,12 +107,20 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Process the files specified on the command line with the specified options and destination folder, files are processed async
+        /// Process the files specified on the command line with the specified options and destination folder, files are processed sequentially by an async function
+        /// (the calling thread blocks until all files are done)
         /// </summary>
         /// <param name="commandLineArgs">The command line args (as passed to main)</param>
-        /// <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+        /// <param name="doOnFile">
+        /// Called once per input file with (message host, options, full source path, source path relative to its search folder, destination folder).
+        /// The destination folder is created if needed; it is the source file's folder when no destination argument is given, else the destination plus the relative sub folder.
+        /// A non-zero return value stops the processing and becomes the return value.
+        /// </param>
         /// <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
-        /// <returns>0 if sucessfull or the error code</returns>
+        /// <returns>
+        /// 0 if successful, 1 if help was requested, -1 if the command line was invalid, -2 if processing threw an exception,
+        /// otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
+        /// </returns>
         public int OnFiles(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, Task<int>> doOnFile, Func<T, int> validateParams = null)
         {
             return InternalOnFiles(commandLineArgs, (msg, opt, files, dest) =>
@@ -121,10 +145,20 @@ namespace SysWeaver
         /// Process the files specified on the command line with the specified options and destination folder, files are processed async and in parallel
         /// </summary>
         /// <param name="commandLineArgs">The command line args (as passed to main)</param>
-        /// <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+        /// <param name="doOnFile">
+        /// Called once per input file with (message host, options, full source path, source path relative to its search folder, destination folder).
+        /// The destination folder is created if needed; it is the source file's folder when no destination argument is given, else the destination plus the relative sub folder.
+        /// A non-zero return value stops the processing and becomes the return value.
+        /// </param>
         /// <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
-        /// <param name="threadCount">Maximum number of threads to execute, if 0 or less it's the number of CPU threads + the thread count</param>
-        /// <returns>0 if sucessfull or the error code</returns>
+        /// <param name="threadCount">Maximum number of concurrent files, if 0 or less it's the number of CPU threads minus the thread count (so -1 gives one more than the CPU count)</param>
+        /// <returns>
+        /// 0 if successful, 1 if help was requested, -1 if the command line was invalid, -2 if processing threw an exception,
+        /// otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
+        /// </returns>
+        /// <remarks>
+        /// Blocks the calling thread until all files have been processed.
+        /// </remarks>
         public int OnFilesParallel(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, Task<int>> doOnFile, Func<T, int> validateParams = null, int threadCount = -1)
         {
             var count = threadCount > 0 ? threadCount : Environment.ProcessorCount - threadCount;
@@ -145,7 +179,7 @@ namespace SysWeaver
                     var r = await doOnFile(msg, opt, src.Key, src.Value, d).ConfigureAwait(false);
                     if (r != 0)
                         InterlockedEx.Min(ref ret, r);
-                }); 
+                }).GetAwaiter().GetResult();
                 return ret;
             }, validateParams);
         }
@@ -154,12 +188,19 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Process the files specified on the command line with the specified options and destination folder, files are processed async
+        /// Process the files specified on the command line with the specified options and destination folder, files are processed sequentially and asynchronously
         /// </summary>
         /// <param name="commandLineArgs">The command line args (as passed to main)</param>
-        /// <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+        /// <param name="doOnFile">
+        /// Called once per input file with (message host, options, full source path, source path relative to its search folder, destination folder).
+        /// The destination folder is created if needed; it is the source file's folder when no destination argument is given, else the destination plus the relative sub folder.
+        /// A non-zero return value stops the processing and becomes the return value.
+        /// </param>
         /// <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
-        /// <returns>0 if sucessfull or the error code</returns>
+        /// <returns>
+        /// 0 if successful, 1 if help was requested, -1 if the command line was invalid, -2 if processing threw an exception,
+        /// otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
+        /// </returns>
         public Task<int> OnFilesAsync(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, Task<int>> doOnFile, Func<T, int> validateParams = null)
         {
             return InternalOnFilesAsync(commandLineArgs, async (msg, opt, files, dest) =>
@@ -179,10 +220,21 @@ namespace SysWeaver
         /// Process the files specified on the command line with the specified options and destination folder, files are processed async and in parallel
         /// </summary>
         /// <param name="commandLineArgs">The command line args (as passed to main)</param>
-        /// <param name="doOnFile">The custom function to execute once for every frame, if the return value isn't zero, processing of files is aborted and an error is displayed</param>
+        /// <param name="doOnFile">
+        /// Called once per input file with (message host, options, full source path, source path relative to its search folder, destination folder).
+        /// The destination folder is created if needed; it is the source file's folder when no destination argument is given, else the destination plus the relative sub folder.
+        /// A non-zero return value stops the processing and becomes the return value.
+        /// </param>
         /// <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
-        /// <param name="threadCount">Maximum number of threads to execute, if 0 or less it's the number of CPU threads + the thread count</param>
-        /// <returns>0 if sucessfull or the error code</returns>
+        /// <param name="threadCount">Maximum number of concurrent files, if 0 or less it's the number of CPU threads plus the thread count (so -1 gives one less than the CPU count), at least 1</param>
+        /// <returns>
+        /// 0 if successful, 1 if help was requested, -1 if the command line was invalid, -2 if processing threw an exception,
+        /// otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
+        /// </returns>
+        /// <remarks>
+        /// Once a file returns a non-zero value, files not yet started are skipped; the smallest non-zero value is returned.
+        /// <paramref name="doOnFile"/> must be thread safe.
+        /// </remarks>
         public Task<int> OnFilesParallelAsync(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, Task<int>> doOnFile, Func<T, int> validateParams = null, int threadCount = -1)
         {
             var count = threadCount > 0 ? threadCount : Environment.ProcessorCount + threadCount;

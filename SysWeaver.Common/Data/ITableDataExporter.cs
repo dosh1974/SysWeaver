@@ -4,12 +4,16 @@ using System.Threading.Tasks;
 namespace SysWeaver.Data
 {
     /// <summary>
-    /// Interface that can be used for exporting data
+    /// Interface that can be used for exporting table data to some file format.
     /// </summary>
+    /// <remarks>
+    /// Exporters are exposed by services implementing <see cref="IHaveTableDataExporters"/> and are registered by the explore service (SysWeaver.MicroService.HttpServer),
+    /// which shows them as menu items and calls <see cref="Export"/> through its web API.
+    /// </remarks>
     public interface ITableDataExporter
     {
         /// <summary>
-        /// Menu name
+        /// Menu name, also used as the unique (case sensitive) key of the exporter, an exporter with a name that is already registered is ignored
         /// </summary>
         String Name { get; }
 
@@ -19,12 +23,12 @@ namespace SysWeaver.Data
         String Desc { get; }
 
         /// <summary>
-        /// Menu icon
+        /// Menu icon (icon class)
         /// </summary>
         String Icon { get; }
 
         /// <summary>
-        /// Used to sort data exportes
+        /// Used to sort data exporters in the menu (ascending)
         /// </summary>
         double Order { get; }
 
@@ -32,6 +36,10 @@ namespace SysWeaver.Data
         /// <summary>
         /// Require the user to be logged in.
         /// </summary>
+        /// <remarks>
+        /// The menu item is hidden from anonymous users, but not every export API checks this,
+        /// so exporters that must have a user should verify that themselves in <see cref="Export"/>.
+        /// </remarks>
         bool RequireUser { get; }
 
 
@@ -40,8 +48,8 @@ namespace SysWeaver.Data
         /// </summary>
         /// <param name="tableData">The data to export</param>
         /// <param name="context">The HttpServerRequest context (wrapped in an object for exporters that don't need the dependency)</param>
-        /// <param name="options">Export options</param>
-        /// <returns>A file or linq in memory</returns>
+        /// <param name="options">Export options, null to use the defaults</param>
+        /// <returns>A file (or link) in memory, may be null if the export couldn't be performed</returns>
         Task<MemoryFile> Export(BaseTableData tableData, Object context = null, TableDataExportOptions options = null);
     }
 
