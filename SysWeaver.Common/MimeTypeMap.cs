@@ -1,12 +1,14 @@
-using System;
+﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.Text;
 using System.Linq;
 using SysWeaver.Data;
 
 namespace SysWeaver
 {
     /// <summary>
-    /// Class MimeTypeMap.
+    /// Maps file extensions to MIME types (and if the content is compressible) and MIME types to file extensions.
     /// </summary>
     public static class MimeTypeMap
     {
@@ -79,24 +81,33 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Tries to get the type of the MIME from the provided file extension.
+        /// Tries to get the MIME type from a file extension (with or without the leading '.', ex: ".png" or "png") or from a MIME type (ex: "text/html").
         /// </summary>
-        /// <param name="str">The file extension.</param>
-        /// <param name="mimeType">The variable to store the MIME type.</param>
-        /// <param name="withCharset">Adds a charset=UTF-8 to text documents</param>
-        /// <returns>The MIME type and if the type is compressible</returns>
-        /// <remarks>The lookup is case insensitive</remarks>
-        public static bool TryGetMimeType(string str, out Tuple<string, bool> mimeType, bool withCharset = true) => (withCharset ? MapWithCharSet : Map).TryGetValue(str.FastToLower(), out mimeType);
+        /// <param name="str">The file extension (with or without the leading '.') or a MIME type (with or without the "; charset=UTF-8" suffix).</param>
+        /// <param name="mimeType">The MIME type and true if the type is compressible, null if not found.</param>
+        /// <param name="withCharset">If true a "; charset=UTF-8" is added to the MIME type of text documents.</param>
+        /// <returns>True if the MIME type was found, else false.</returns>
+        /// <exception cref="ArgumentNullException">If <paramref name="str"/> is null</exception>
+        /// <remarks>The lookup is case insensitive (the input is converted to lower case using the invariant culture).
+        /// Multi part extensions such as ".dll.config" are supported, but a file name (ex: "file.png") is not, use <see cref="GetMimeFromUrl(string, bool)"/> for that.</remarks>
+        public static bool TryGetMimeType(string str, out Tuple<string, bool> mimeType, bool withCharset = true)
+        {
+            ArgumentNullException.ThrowIfNull(str);
+            return (withCharset ? MapWithCharSet : Map).TryGetValue(str.FastToLower(), out mimeType);
+        }
 
         /// <summary>
-        /// Gets the type of the MIME from the provided file extension.
+        /// Gets the MIME type from a file extension (with or without the leading '.', ex: ".png" or "png") or from a MIME type (ex: "text/html").
         /// </summary>
-        /// <param name="str">The file extension.</param>
-        /// <param name="withCharset">Adds a charset=UTF-8 to text documents</param>
-        /// <returns>The MIME type and if the type is compressible</returns>
-        /// <remarks>The lookup is case insensitive</remarks>
+        /// <param name="str">The file extension (with or without the leading '.') or a MIME type (with or without the "; charset=UTF-8" suffix).</param>
+        /// <param name="withCharset">If true a "; charset=UTF-8" is added to the MIME type of text documents.</param>
+        /// <returns>The MIME type and true if the type is compressible, "application/octet-stream" (not compressible) if not found.</returns>
+        /// <exception cref="ArgumentNullException">If <paramref name="str"/> is null</exception>
+        /// <remarks>The lookup is case insensitive (the input is converted to lower case using the invariant culture).
+        /// The returned tuple is shared, all unknown extensions returns the same instance.</remarks>
         public static Tuple<string, bool> GetMimeType(string str, bool withCharset = true)
         {
+            ArgumentNullException.ThrowIfNull(str);
             (withCharset ? MapWithCharSet : Map).TryGetValue(str.FastToLower(), out var result);
             return result ?? DefaultMimeType;
         }
@@ -104,22 +115,50 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Gets the type of the MIME from the provided url.
+        /// Gets the MIME type from the file extension of the last segment of an url (or a file name / path).
         /// </summary>
-        /// <param name="url">The url.</param>
-        /// <param name="withCharset">Adds a charset=UTF-8 to text documents</param>
-        /// <returns>The MIME type and if the type is compressible</returns>
+        /// <param name="url">The url, ex: "https://example.com/a/file.png?v=1", "/a/file.png" or "file.png".</param>
+        /// <param name="withCharset">If true a "; charset=UTF-8" is added to the MIME type of text documents.</param>
+        /// <returns>The MIME type and true if the type is compressible, "application/octet-stream" (not compressible) if the url has no known extension.</returns>
+        /// <exception cref="ArgumentNullException">If <paramref name="url"/> is null</exception>
+        /// <remarks>
+        /// The query string ('?') and the fragment ('#') are ignored.
+        /// Only the text after the last '.' in the last path segment is used, so multi part extensions such as ".dll.config" resolves to ".config".
+        /// The lookup is case insensitive, at most one allocation is made (the lower cased extension).
+        /// </remarks>
         public static Tuple<string, bool> GetMimeFromUrl(string url, bool withCharset = true)
         {
-            var s = url.SplitFirst('?');
+            ArgumentNullException.ThrowIfNull(url);
+            var s = url.AsSpan();
+            var q = s.IndexOfAny('?', '#');
+            if (q >= 0)
+                s = s.Slice(0, q);
             var ep = s.LastIndexOf('.');
             if (ep < 0)
                 return DefaultMimeType;
-            var ext = s.Substring(ep + 1).FastToLower();
+            ++ep;
+            var el = s.Length - ep;
+            //  An extension can't contain a '/' (the dot is in a directory name or the extension would match a mime type)
+            if ((el <= 0) || (el > MaxExtLength) || (s.Slice(ep).IndexOf('/') >= 0))
+                return DefaultMimeType;
+            var ext = String.Create(el, (url, ep), static (dst, state) =>
+            {
+                var src = state.url.AsSpan(state.ep, dst.Length);
+                if (Ascii.ToLower(src, dst, out var done) != OperationStatus.Done)
+                    src.Slice(done).ToLowerInvariant(dst.Slice(done));
+            });
             (withCharset ? MapWithCharSet : Map).TryGetValue(ext, out var result);
             return result ?? DefaultMimeType;
         }
 
+        /// <summary>
+        /// The length of the longest file extension (without the leading '.')
+        /// </summary>
+        static readonly int MaxExtLength;
+
+        /// <summary>
+        /// Information about a file extension
+        /// </summary>
         public sealed class ExtensionEntry
         {
             /// <summary>
@@ -128,6 +167,9 @@ namespace SysWeaver
             [TableDataFileExtension]
             public String Extension;
 
+            /// <summary>
+            /// The file extension (displayed as an icon of the file extension)
+            /// </summary>
             [TableDataFileExtensionImage]
             public String I;
 
@@ -149,6 +191,9 @@ namespace SysWeaver
             public bool Compressed;
         }
 
+        /// <summary>
+        /// Information about a MIME type
+        /// </summary>
         public sealed class MimeEntry
         {
             /// <summary>
@@ -169,14 +214,21 @@ namespace SysWeaver
             public bool Compressed;
             
             /// <summary>
-            /// The file extensions associated with the mime
+            /// The file extensions associated with the mime (sorted and separated by ", ", ex: ".jpe, .jpeg, .jpg")
             /// </summary>
             public String Extensions;
 
         }
 
 
+        /// <summary>
+        /// All known file extensions (lower case with a leading '.') sorted by the extension
+        /// </summary>
         public static readonly ExtensionEntry[] AllExtensionEntries;
+
+        /// <summary>
+        /// All known MIME types (without any charset) sorted by the MIME type
+        /// </summary>
         public static readonly MimeEntry[] AllMimeEntries;
         
 
@@ -192,18 +244,27 @@ namespace SysWeaver
         /// <summary>
         /// Get file extensions associated with a mime
         /// </summary>
-        /// <param name="mime">The mime</param>
-        /// <param name="extensions">A list of extensions that maps to the mime</param>
+        /// <param name="mime">The mime, with or without the "; charset=UTF-8" suffix, ex: "image/png" or "text/html; charset=UTF-8"</param>
+        /// <param name="extensions">A sorted list of extensions (lower case with a leading '.') that maps to the mime, null if not found</param>
         /// <returns>True if some extensions are found</returns>
+        /// <exception cref="ArgumentNullException">If <paramref name="mime"/> is null</exception>
+        /// <remarks>The lookup is case sensitive (the mime must be in the same case as the table, use the result of <see cref="GetMimeType(string, bool)"/>)</remarks>
         public static bool TryGetExtensions(String mime, out IReadOnlyList<String> extensions)
         {
+            ArgumentNullException.ThrowIfNull(mime);
             var r = MimeExtensions.TryGetValue(mime, out var e);
             extensions = e;
             return r;
         }
 
+        /// <summary>
+        /// All lookup keys (lower case extensions with and without the leading '.' and lower case MIME types with and without the charset) and the MIME type (without charset) and if it's compressible
+        /// </summary>
         public static IEnumerable<KeyValuePair<string, Tuple<string, bool>>> AllMimes => Map;
 
+        /// <summary>
+        /// All lookup keys (lower case extensions with and without the leading '.' and lower case MIME types with and without the charset) and the MIME type (with charset for text documents) and if it's compressible
+        /// </summary>
         public static IEnumerable<KeyValuePair<string, Tuple<string, bool>>> AllMimesWithEncoding => MapWithCharSet;
 
         static readonly IReadOnlySet<String> CompressibleApps = ReadOnlyData.Set(StringComparer.Ordinal,
@@ -965,6 +1026,11 @@ namespace SysWeaver
                 mimeExtsF[x.Key] = x.Value.OrderBy(x => x).ToArray();
             MimeExtensions = mimeExtsF.Freeze();
             Map = mimes.Freeze();
+            int maxExtLength = 0;
+            foreach (var x in mimes.Keys)
+                if ((x.Length > maxExtLength) && (x.IndexOf('/') < 0))
+                    maxExtLength = x.Length;
+            MaxExtLength = maxExtLength;
             var s = mimesWithCharSet.Freeze();
             MapWithCharSet = s;
             AllExtensionEntries = Map.Where(x => x.Key[0] == '.').OrderBy(x => x.Key).Select(x => new ExtensionEntry

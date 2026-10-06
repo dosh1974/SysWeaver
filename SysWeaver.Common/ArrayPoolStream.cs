@@ -7,8 +7,23 @@ using System.Threading.Tasks;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// A seekable, readable and writable in-memory stream (like MemoryStream) that uses buffers rented from the shared ArrayPool.
+    /// Dispose the stream when done to return the buffer to the pool.
+    /// The data can be retrieved without a copy using GetMemory (pooled, dispose the result), GetBuffer, GetBufferMemory or ToArray (the buffer is handed out and never returned to the pool).
+    /// </summary>
+    /// <remarks>
+    /// Differences from MemoryStream: Position and Seek are clamped to [0, Length] (no exception, and no gap can be created).
+    /// Buffers that have been handed out are never modified (copy on write).
+    /// The stream is not thread safe.
+    /// </remarks>
     public sealed class ArrayPoolStream : Stream
     {
+        /// <summary>
+        /// Create an empty stream.
+        /// </summary>
+        /// <param name="minInitialSize">The minimum initial capacity in bytes, values less than 1 are treated as 1</param>
+        /// <exception cref="OutOfMemoryException">The initial size is too large</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ArrayPoolStream(int minInitialSize = 4096)
         {
@@ -16,6 +31,13 @@ namespace SysWeaver
             State = BufferState.Owned;
         }
 
+        /// <summary>
+        /// Rent a byte buffer from the pool used by all ArrayPoolStream's (the shared ArrayPool).
+        /// Return it using <see cref="Return"/> when done.
+        /// </summary>
+        /// <param name="size">The minimum size of the buffer in bytes</param>
+        /// <returns>A buffer with at least size bytes (the content is undefined), may be an empty array for a size of 0</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="size"/> is negative</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Byte[] Rent(int size)
         {
@@ -28,10 +50,18 @@ namespace SysWeaver
             //return GC.AllocateUninitializedArray<Byte>(size);
         }
 
+        /// <summary>
+        /// Return a buffer that was rented using <see cref="Rent"/> to the pool.
+        /// The buffer must not be used after it's returned (and must not be returned twice).
+        /// </summary>
+        /// <param name="buf">The buffer to return</param>
+        /// <exception cref="ArgumentNullException"><paramref name="buf"/> is null</exception>
+        /// <exception cref="ArgumentException"><paramref name="buf"/> is not from the pool (has a size that the pool doesn't use)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Return(Byte[] buf)
         {
 #if DEBUG
+            ArgumentNullException.ThrowIfNull(buf);
             Interlocked.Increment(ref ReturnCount);
             Interlocked.Add(ref ReturnBytes, buf.Length);
             Pool.Return(buf, true);
@@ -89,20 +119,38 @@ namespace SysWeaver
         /// <summary>
         /// Internal buffer, never set manually.
         /// Only the first Length bytes are valid, the buffer must not be modified.
+        /// Null when the stream is disposed.
         /// </summary>
         public Byte[] Data;
         int Len;
         int Pos;
 
 
+        /// <summary>
+        /// True until the stream is disposed
+        /// </summary>
         public override bool CanRead => Data != null;
 
+        /// <summary>
+        /// True until the stream is disposed
+        /// </summary>
         public override bool CanSeek => Data != null;
 
+        /// <summary>
+        /// True until the stream is disposed
+        /// </summary>
         public override bool CanWrite => Data != null;
 
+        /// <summary>
+        /// The number of bytes in the stream (also valid after the stream is disposed)
+        /// </summary>
         public override long Length => Len;
 
+        /// <summary>
+        /// The current position in the stream.
+        /// Setting the position clamps the value to [0, Length] (no exception is thrown for out of range values, unlike MemoryStream).
+        /// </summary>
+        /// <exception cref="ObjectDisposedException">The position is set and the stream is disposed</exception>
         public override long Position
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -129,21 +177,45 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.NoInlining)]
         void ThrowDisposed() => throw new ObjectDisposedException(nameof(ArrayPoolStream));
 
+        /// <summary>
+        /// Does nothing (all data is in memory)
+        /// </summary>
         public override void Flush()
         {
         }
 
+        /// <summary>
+        /// Does nothing (all data is in memory)
+        /// </summary>
+        /// <param name="cancellationToken">The cancellation token</param>
+        /// <returns>A completed task (or a cancelled task if the token is cancelled)</returns>
         public override Task FlushAsync(CancellationToken cancellationToken)
             => cancellationToken.IsCancellationRequested ? Task.FromCanceled(cancellationToken) : Task.CompletedTask;
 
         #region Read
 
+        /// <summary>
+        /// Read bytes from the current position (and advance the position).
+        /// </summary>
+        /// <param name="buffer">The buffer to read into</param>
+        /// <param name="offset">The offset in the buffer to write the first byte to</param>
+        /// <param name="count">The max number of bytes to read</param>
+        /// <returns>The number of bytes read, 0 at the end of the stream</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="buffer"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> or <paramref name="count"/> is negative, or the range is outside of the buffer</exception>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
         public override int Read(byte[] buffer, int offset, int count)
         {
             ValidateBufferArguments(buffer, offset, count);
             return Read(new Span<Byte>(buffer, offset, count));
         }
 
+        /// <summary>
+        /// Read bytes from the current position (and advance the position).
+        /// </summary>
+        /// <param name="buffer">The buffer to read into</param>
+        /// <returns>The number of bytes read, 0 at the end of the stream (or if the buffer is empty)</returns>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
         public override int Read(Span<byte> buffer)
         {
             ThrowIfDisposed();
@@ -158,6 +230,11 @@ namespace SysWeaver
             return count;
         }
 
+        /// <summary>
+        /// Read a byte from the current position (and advance the position).
+        /// </summary>
+        /// <returns>The byte (0 - 255) or -1 at the end of the stream</returns>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
         public override int ReadByte()
         {
             ThrowIfDisposed();
@@ -173,6 +250,17 @@ namespace SysWeaver
         /// </summary>
         Task<int> LastReadTask;
 
+        /// <summary>
+        /// Read bytes from the current position (and advance the position), completes synchronously.
+        /// The returned task is reused if the same number of bytes is read again.
+        /// </summary>
+        /// <param name="buffer">The buffer to read into</param>
+        /// <param name="offset">The offset in the buffer to write the first byte to</param>
+        /// <param name="count">The max number of bytes to read</param>
+        /// <param name="cancellationToken">The cancellation token</param>
+        /// <returns>The number of bytes read, 0 at the end of the stream. A cancelled task if the token is cancelled, a faulted task (ObjectDisposedException) if the stream is disposed</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="buffer"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> or <paramref name="count"/> is negative, or the range is outside of the buffer</exception>
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             ValidateBufferArguments(buffer, offset, count);
@@ -192,6 +280,12 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Read bytes from the current position (and advance the position), completes synchronously.
+        /// </summary>
+        /// <param name="buffer">The buffer to read into</param>
+        /// <param name="cancellationToken">The cancellation token</param>
+        /// <returns>The number of bytes read, 0 at the end of the stream. A cancelled task if the token is cancelled, a faulted task (ObjectDisposedException) if the stream is disposed</returns>
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
             if (cancellationToken.IsCancellationRequested)
@@ -206,6 +300,15 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Write the data from the current position to the end of the stream to another stream (in a single write), the position is moved to the end.
+        /// </summary>
+        /// <param name="destination">The stream to write to</param>
+        /// <param name="bufferSize">Not used (must be positive)</param>
+        /// <exception cref="ArgumentNullException"><paramref name="destination"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="bufferSize"/> is not positive</exception>
+        /// <exception cref="NotSupportedException"><paramref name="destination"/> doesn't support writing</exception>
+        /// <exception cref="ObjectDisposedException">This stream or the destination is disposed</exception>
         public override void CopyTo(Stream destination, int bufferSize)
         {
             ValidateCopyToArguments(destination, bufferSize);
@@ -218,6 +321,18 @@ namespace SysWeaver
             destination.Write(Data, pos, count);
         }
 
+        /// <summary>
+        /// Write the data from the current position to the end of the stream to another stream (in a single write), the position is moved to the end.
+        /// This stream must not be modified or disposed until the returned task completes.
+        /// </summary>
+        /// <param name="destination">The stream to write to</param>
+        /// <param name="bufferSize">Not used (must be positive)</param>
+        /// <param name="cancellationToken">The cancellation token</param>
+        /// <returns>The write task of the destination</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="destination"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="bufferSize"/> is not positive</exception>
+        /// <exception cref="NotSupportedException"><paramref name="destination"/> doesn't support writing</exception>
+        /// <exception cref="ObjectDisposedException">This stream or the destination is disposed</exception>
         public override Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
         {
             ValidateCopyToArguments(destination, bufferSize);
@@ -234,6 +349,14 @@ namespace SysWeaver
 
         #endregion//Read
 
+        /// <summary>
+        /// Set the position, the new position is clamped to [0, Length] (no exception is thrown for out of range values, unlike MemoryStream).
+        /// </summary>
+        /// <param name="offset">The offset relative to the origin</param>
+        /// <param name="origin">The origin of the offset</param>
+        /// <returns>The new position</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="origin"/> is not a valid SeekOrigin</exception>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
         public override long Seek(long offset, SeekOrigin origin)
         {
             ThrowIfDisposed();
@@ -256,6 +379,12 @@ namespace SysWeaver
             return p;
         }
 
+        /// <summary>
+        /// Set the length of the stream, new bytes are zero. The position is clamped to the new length.
+        /// </summary>
+        /// <param name="value">The new length</param>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> is negative or larger than Array.MaxLength</exception>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
         public override void SetLength(long value)
         {
             ThrowIfDisposed();
@@ -306,12 +435,28 @@ namespace SysWeaver
             Data = next;
         }
 
+        /// <summary>
+        /// Write bytes at the current position (and advance the position), the stream grows as needed.
+        /// </summary>
+        /// <param name="buffer">The buffer to write from</param>
+        /// <param name="offset">The offset of the first byte in the buffer to write</param>
+        /// <param name="count">The number of bytes to write</param>
+        /// <exception cref="ArgumentNullException"><paramref name="buffer"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> or <paramref name="count"/> is negative, or the range is outside of the buffer</exception>
+        /// <exception cref="IOException">The stream would be longer than Array.MaxLength</exception>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
         public override void Write(byte[] buffer, int offset, int count)
         {
             ValidateBufferArguments(buffer, offset, count);
             Write(new ReadOnlySpan<Byte>(buffer, offset, count));
         }
 
+        /// <summary>
+        /// Write bytes at the current position (and advance the position), the stream grows as needed.
+        /// </summary>
+        /// <param name="buffer">The bytes to write</param>
+        /// <exception cref="IOException">The stream would be longer than Array.MaxLength</exception>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
         public override void Write(ReadOnlySpan<byte> buffer)
         {
             ThrowIfDisposed();
@@ -330,6 +475,12 @@ namespace SysWeaver
             Pos = iend;
         }
 
+        /// <summary>
+        /// Write a byte at the current position (and advance the position), the stream grows as needed.
+        /// </summary>
+        /// <param name="value">The byte to write</param>
+        /// <exception cref="IOException">The stream would be longer than Array.MaxLength</exception>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
         public override void WriteByte(byte value)
         {
             ThrowIfDisposed();
@@ -344,6 +495,16 @@ namespace SysWeaver
             Pos = end;
         }
 
+        /// <summary>
+        /// Write bytes at the current position (and advance the position), completes synchronously.
+        /// </summary>
+        /// <param name="buffer">The buffer to write from</param>
+        /// <param name="offset">The offset of the first byte in the buffer to write</param>
+        /// <param name="count">The number of bytes to write</param>
+        /// <param name="cancellationToken">The cancellation token</param>
+        /// <returns>A completed task. A cancelled task if the token is cancelled, a faulted task (ObjectDisposedException, IOException) if the write failed</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="buffer"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> or <paramref name="count"/> is negative, or the range is outside of the buffer</exception>
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             ValidateBufferArguments(buffer, offset, count);
@@ -360,6 +521,12 @@ namespace SysWeaver
             }
         }
 
+        /// <summary>
+        /// Write bytes at the current position (and advance the position), completes synchronously.
+        /// </summary>
+        /// <param name="buffer">The bytes to write</param>
+        /// <param name="cancellationToken">The cancellation token</param>
+        /// <returns>A completed task. A cancelled task if the token is cancelled, a faulted task (ObjectDisposedException, IOException) if the write failed</returns>
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
             if (cancellationToken.IsCancellationRequested)
@@ -395,7 +562,12 @@ namespace SysWeaver
         /// The internal buffer or trimmed array.
         /// Please consider using GetMemory with the using pattern instead.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>
+        /// An array where the first Length bytes are the data (the array may be longer, a trimmed copy is returned if the buffer is a lot larger than the data).
+        /// If the internal buffer is returned it's never returned to the pool or modified by the stream (later writes copies it).
+        /// An empty array if the stream is empty.
+        /// </returns>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
         public Byte[] GetBuffer()
         {
             ThrowIfDisposed();
@@ -419,7 +591,8 @@ namespace SysWeaver
         /// Please consider using GetMemory with the using pattern instead.
         /// </summary>
         /// <param name="trim">If true, a trimmed copy is returned if the internal buffer is a lot larger than the data</param>
-        /// <returns></returns>
+        /// <returns>The data (Length bytes), the memory is never returned to the pool or modified by the stream (later writes copies it)</returns>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
         public Memory<Byte> GetBufferMemory(bool trim = true)
         {
             ThrowIfDisposed();
@@ -479,7 +652,8 @@ namespace SysWeaver
         /// Get the data as memory, dispose the returned object when done to return the buffer to the pool.
         /// The stream can still be used (also after the returned object is disposed), writes are safe (the buffer is copied).
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The data (Length bytes), dispose it when done (the memory must not be used after that). An empty instance if the stream is empty</returns>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
         public IUnmanagedReadOnlyMemory<Byte> GetMemory()
         {
             ThrowIfDisposed();
@@ -501,6 +675,14 @@ namespace SysWeaver
             return lease;
         }
 
+        /// <summary>
+        /// Get the data as an array.
+        /// </summary>
+        /// <returns>
+        /// An array with exactly Length bytes (the internal buffer if it has the exact size, it's then never returned to the pool or modified by the stream).
+        /// An empty array if the stream is empty.
+        /// </returns>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
         public Byte[] ToArray()
         {
             ThrowIfDisposed();
@@ -515,8 +697,57 @@ namespace SysWeaver
             return t;
         }
 
+        /// <summary>
+        /// Wrap a buffer rented with <see cref="Rent"/> as memory that returns the buffer to the pool when disposed.
+        /// The ownership of the buffer is transferred to the returned object.
+        /// </summary>
+        /// <param name="pooled">A buffer rented using <see cref="Rent"/></param>
+        /// <param name="length">The number of valid bytes in the buffer</param>
+        /// <returns>The memory (an empty instance if the length is 0, the buffer is then returned immediately)</returns>
+        internal static IUnmanagedReadOnlyMemory<Byte> Lend(Byte[] pooled, int length)
+        {
+            if (length <= 0)
+            {
+                Return(pooled);
+                return UnmanagedMemory.Empty<Byte>();
+            }
+            return new Lease(pooled, length, 1);
+        }
+
+        /// <summary>
+        /// Take the pooled buffer from the stream and dispose the stream.
+        /// The caller must return the buffer with <see cref="Return"/>.
+        /// </summary>
+        /// <param name="length">The number of valid bytes in the buffer (the Length of the stream)</param>
+        /// <returns>A buffer rented using <see cref="Rent"/></returns>
+        /// <exception cref="ObjectDisposedException">The stream is disposed</exception>
+        internal Byte[] Detach(out int length)
+        {
+            ThrowIfDisposed();
+            var l = Len;
+            length = l;
+            var d = Data;
+            if (State != BufferState.Owned)
+            {
+                //  Someone else have the buffer, copy it
+                var c = Rent(l);
+                new ReadOnlySpan<Byte>(d, 0, l).CopyTo(c.AsSpan());
+                Dispose();
+                return c;
+            }
+            Data = null;
+            State = BufferState.Released;
+            Dispose();
+            return d;
+        }
+
         #endregion//Get data
 
+        /// <summary>
+        /// Release the buffer (it's returned to the pool unless it's handed out).
+        /// Length is still valid after the stream is disposed, all other members throws an ObjectDisposedException.
+        /// </summary>
+        /// <param name="disposing">True if called from Dispose</param>
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);

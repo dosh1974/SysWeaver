@@ -2,26 +2,33 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace SysWeaver
 {
 
 
+    /// <summary>
+    /// Converts an integer in the [0, MaxInput) interval to a short human friendly code (and back).
+    /// Implemented by <see cref="AlphaNumericCodeGenerator"/> and <see cref="NumericCodeGenerator"/>.
+    /// </summary>
     public interface ICodeGenerator
     {
-        
+
         /// <summary>
-        /// Length of string
+        /// Length of string (number of symbols, excluding any group separators)
         /// </summary>
         int StrLen { get; }
 
         /// <summary>
-        /// Length of string with grouping
+        /// Length of string with grouping (number of symbols plus the number of hyphens)
         /// </summary>
         int GroupStrLen { get; }
 
         /// <summary>
-        /// The maximum allowed value
+        /// The exclusive upper bound of the values that can be encoded, the valid range is [0, MaxValue)
         /// </summary>
         long MaxValue { get; }
 
@@ -31,7 +38,7 @@ namespace SysWeaver
         int MaxBits { get; }
 
         /// <summary>
-        /// Max input value 
+        /// The exclusive upper bound of the values that can be encoded, the valid range is [0, MaxInput) (same as MaxValue)
         /// </summary>
         long MaxInput { get; }
 
@@ -47,13 +54,16 @@ namespace SysWeaver
         /// <param name="upperCase">Output upper or lower case letters</param>
         /// <param name="group">Add a hypen to create groups</param>
         /// <returns>A string with the encoded value</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The value is negative or greater than or equal to <see cref="MaxInput"/></exception>
         String Encode(long value, bool upperCase = true, bool group = true);
 
         /// <summary>
-        /// Decodes a value from a string
+        /// Decodes a value from a string.
+        /// Decoding is case insensitive, similar looking symbols are treated as the same symbol and any char that isn't a symbol (such as hyphens and white space) is ignored.
         /// </summary>
         /// <param name="value">A value encoded as a string</param>
-        /// <returns>The value or -1 if the input string is invalid</returns>
+        /// <returns>The value or -1 if the input string is invalid (not exactly <see cref="StrLen"/> symbols, or a value that is outside of [0, MaxInput))</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="value"/> is null</exception>
         long Decode(String value);
 
     }
@@ -61,56 +71,94 @@ namespace SysWeaver
     static class CodeGeneratorHelper
     {
 
-
-        public static long Pow(long v, long e)
+        /// <summary>
+        /// Create a look up table for all ASCII chars, the value is the symbol index or -1 if the char isn't a symbol.
+        /// Symbols are case insensitive (invariant culture) and similar looking chars are mapped to the same symbol (l = i = 1, o = 0, v = w).
+        /// </summary>
+        /// <param name="s">The symbols (ASCII only)</param>
+        /// <returns>A 128 entry look up table</returns>
+        public static sbyte[] GetValueTable(String s)
         {
-            long r = 1;
-            while (e > 0)
-            {
-                r *= v;
-                --e;
-            }
-            return r;
-        }
-
-        public static int Log2(long v)
-        {
-            int s = 0;
-            while (v > 1)
-            {
-                ++s;
-                v >>= 1;
-            }
-            return s;
-        }
-
-
-        public static Dictionary<Char, int> GetValueLookUp(String s)
-        {
-            var exp = new Dictionary<char, String>()
-        {
-            { 'l', "i1" },
-            { 'o', "0" },
-            { 'v', "w" },
-        };
-            var d = new Dictionary<Char, int>();
+            var d = new sbyte[128];
+            Array.Fill(d, (sbyte)-1);
             var sc = s.Length;
             for (int i = 0; i < sc; ++i)
             {
                 var c = s[i];
-                d[c] = i;
-                d[Char.ToLower(c)] = i;
-                d[Char.ToUpper(c)] = i;
-                if (!exp.TryGetValue(c, out var e))
+                Set(d, c, i);
+                var e = c switch
+                {
+                    'l' => "i1",
+                    'o' => "0",
+                    'v' => "w",
+                    _ => null,
+                };
+                if (e == null)
                     continue;
                 foreach (var x in e)
-                {
-                    d[x] = i;
-                    d[Char.ToUpper(x)] = i;
-                    d[Char.ToLower(x)] = i;
-                }
+                    Set(d, x, i);
             }
             return d;
+        }
+
+        static void Set(sbyte[] d, Char c, int i)
+        {
+            d[c] = (sbyte)i;
+            d[Char.ToLowerInvariant(c)] = (sbyte)i;
+            d[Char.ToUpperInvariant(c)] = (sbyte)i;
+        }
+
+        /// <summary>
+        /// Decode a string
+        /// </summary>
+        /// <param name="value">The string to decode</param>
+        /// <param name="table">The look up table (from GetValueTable)</param>
+        /// <param name="strLen">The required number of symbols</param>
+        /// <param name="bitsPerChar">Number of bits per symbol</param>
+        /// <param name="maxBits">Max number of bits in the result</param>
+        /// <returns>The value or -1 if the string is invalid</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static long Decode(String value, sbyte[] table, int strLen, int bitsPerChar, int maxBits)
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            // Before a shift the value must be below this limit, else the result would be outside of [0, 1 << maxBits)
+            long limit = 1L << (maxBits - bitsPerChar);
+            long v = 0;
+            int taken = 0;
+            ref var tr = ref MemoryMarshal.GetArrayDataReference(table);
+            for (int t = value.Length - 1; t >= 0; --t)
+            {
+                uint c = value[t];
+                if (c >= 128)
+                    continue;
+                int p = Unsafe.Add(ref tr, (nint)c);
+                if (p < 0)
+                    continue;
+                if ((taken == strLen) || (v >= limit))
+                    return -1;
+                v = (v << bitsPerChar) | (long)p;
+                ++taken;
+            }
+            return taken == strLen ? v : -1;
+        }
+
+        /// <summary>
+        /// Thread safe get or create of a cached generator
+        /// </summary>
+        /// <param name="gens">The cache</param>
+        /// <param name="strLen">The length</param>
+        /// <param name="create">Creates a new generator</param>
+        /// <returns>The cached generator</returns>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        public static ICodeGenerator GetOrCreate(ICodeGenerator[] gens, int strLen, Func<int, ICodeGenerator> create)
+        {
+            if ((strLen <= 0) || (strLen >= gens.Length))
+                throw new ArgumentOutOfRangeException(nameof(strLen), strLen, "The length must be in the [1, " + (gens.Length - 1) + "] range!");
+            var gen = Volatile.Read(ref gens[strLen]);
+            if (gen != null)
+                return gen;
+            gen = create(strLen);
+            return Interlocked.CompareExchange(ref gens[strLen], gen, null) ?? gen;
         }
 
     }
@@ -122,10 +170,14 @@ namespace SysWeaver
     /// Length 2 = 10 bits = [0, 1023]
     /// Length 4 = 20 bits = [0, 1048575]
     /// Length 6 = 30 bits = [0, 1073741823]
-    /// ..and so on.
+    /// ..and so on, lengths [1, 15] are supported (lengths of 13 or more are capped to 62 bits).
+    /// Encoded symbols: abcdefghjklmnopqrstuvxyz23456789 (no i, w, 0 or 1), the least significant symbol is written first.
     /// </summary>
     public sealed class AlphaNumericCodeGenerator : ICodeGenerator
-    { 
+    {
+        /// <summary>
+        /// Number of bits encoded by every symbol
+        /// </summary>
         public const int BitsPerChar = 5;
 
         const String Symbols = "abcdefghjklmnopqrstuvxyz23456789";
@@ -178,23 +230,15 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get a code generator with the specified length
+        /// Get a code generator with the specified length (instances are cached, the same instance is always returned for a given length)
         /// </summary>
-        /// <param name="strLen">The desired length, every char add 5 bits of possible data</param>
+        /// <param name="strLen">The desired length [1, 15], every char add 5 bits of possible data (up to a max of 62 bits)</param>
         /// <returns>A code generator</returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="strLen"/> is less than 1 or greater than 15</exception>
         public static ICodeGenerator Get(int strLen)
-        {
-            var gens = Gens;
-            if ((strLen <= 0) || (strLen >= gens.Length))
-                throw new Exception("Invalid length!");
-            var gen = gens[strLen];
-            if (gen != null)
-                return gen;
-            gen = new AlphaNumericCodeGenerator(strLen);
-            gens[strLen] = gen;
-            return gen;
-        }
+            => CodeGeneratorHelper.GetOrCreate(Gens, strLen, Create);
+
+        static readonly Func<int, ICodeGenerator> Create = static len => new AlphaNumericCodeGenerator(len);
 
         AlphaNumericCodeGenerator(int strLen)
         {
@@ -208,20 +252,24 @@ namespace SysWeaver
             GroupStrLen = SepLens[strLen];
         }
 
+        /// <summary>
+        /// Returns a description of the generator
+        /// </summary>
+        /// <returns>The string length and the valid range, ex: "4: [0, 1048576)"</returns>
         public override string ToString() => String.Concat(StrLen.ToString(), ": [0, ", MaxValue.ToString(), ')');
 
         /// <summary>
-        /// Length of string
+        /// Length of string (number of symbols, excluding any group separators)
         /// </summary>
         public int StrLen { get; init; }
 
         /// <summary>
-        /// Length of string with grouping
+        /// Length of string with grouping (number of symbols plus the number of hyphens)
         /// </summary>
         public int GroupStrLen { get; init; }
 
         /// <summary>
-        /// The maximum allowed value
+        /// The exclusive upper bound of the values that can be encoded, the valid range is [0, MaxValue)
         /// </summary>
         public long MaxValue { get; init; }
 
@@ -231,7 +279,7 @@ namespace SysWeaver
         public int MaxBits { get; init; }
 
         /// <summary>
-        /// Max input value 
+        /// The exclusive upper bound of the values that can be encoded, the valid range is [0, MaxInput) (same as MaxValue)
         /// </summary>
         public long MaxInput { get; init; }
 
@@ -243,7 +291,7 @@ namespace SysWeaver
         static readonly String SymbolsU = Symbols.FastToUpper();
 
 
-        static readonly Dictionary<Char, int> ValueLookUp = CodeGeneratorHelper.GetValueLookUp(Symbols);
+        static readonly sbyte[] ValueTable = CodeGeneratorHelper.GetValueTable(Symbols);
 
 
         static void StringEncode(Span<char> to, long value)
@@ -322,8 +370,9 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The value to encode in the [0, MaxInput)</param>
         /// <param name="upperCase">Output upper or lower case letters</param>
-        /// <param name="group">Add a hypen every 4th character to create groups</param>
+        /// <param name="group">Add a hypen between groups of 3 or 4 characters</param>
         /// <returns>A string with the encoded value</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The value is negative or greater than or equal to <see cref="MaxInput"/></exception>
         public String Encode(long value, bool upperCase = true, bool group = true)
         {
             if ((value >= MaxInput) || (value < 0))
@@ -334,34 +383,14 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Decodes a value from a string
+        /// Decodes a value from a string.
+        /// Decoding is case insensitive, similar looking symbols are treated as the same symbol and any char that isn't a symbol (such as hyphens and white space) is ignored.
         /// </summary>
         /// <param name="value">A value encoded as a string</param>
-        /// <returns>The value or -1 if the input string is invalid</returns>
+        /// <returns>The value or -1 if the input string is invalid (not exactly <see cref="StrLen"/> symbols, or a value that is outside of [0, MaxInput))</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="value"/> is null</exception>
         public long Decode(String value)
-        {
-            var l = ValueLookUp;
-            long v = 0;
-            int taken = 0;
-            var t = value.Length;
-            var strLen = StrLen;
-            while (t > 0)
-            {
-                --t;
-                if (!l.TryGetValue(value[t], out var p))
-                    continue;
-                v <<= 5;
-                v |= (long)p;
-                ++taken;
-                if (taken == strLen)
-                {
-                    if (t != 0)
-                        break;
-                    return v;
-                }
-            }
-            return -1;
-        }
+            => CodeGeneratorHelper.Decode(value, ValueTable, StrLen, BitsPerChar, MaxBits);
 
 
 
@@ -369,16 +398,19 @@ namespace SysWeaver
     }
 
     /// <summary>
-    /// Bundles similar symbols to the same meaning, ex: 1il, o0 etc.
-    /// A class that converts an integer range into a string of alphanumerics.
+    /// A class that converts an integer range into a string of digits (only 2-9 are used, so that the codes can't be confused with letters).
     /// The valid range starts at 0 and the max value depends on the string length.
-    /// Length 2 = 10 bits = [0, 1023]
-    /// Length 4 = 20 bits = [0, 1048575]
-    /// Length 6 = 30 bits = [0, 1073741823]
-    /// ..and so on.
+    /// Length 2 = 6 bits = [0, 63]
+    /// Length 4 = 12 bits = [0, 4095]
+    /// Length 6 = 18 bits = [0, 262143]
+    /// ..and so on, lengths [1, 21] are supported (length 21 is capped to 62 bits).
+    /// The least significant symbol is written first.
     /// </summary>
     public sealed class NumericCodeGenerator : ICodeGenerator
     {
+        /// <summary>
+        /// Number of bits encoded by every symbol
+        /// </summary>
         public const int BitsPerChar = 3;
 
         const String Symbols = "23456789";
@@ -443,23 +475,15 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Get a code generator with the specified length
+        /// Get a code generator with the specified length (instances are cached, the same instance is always returned for a given length)
         /// </summary>
-        /// <param name="strLen">The desired length, every char add 5 bits of possible data</param>
+        /// <param name="strLen">The desired length [1, 21], every char add 3 bits of possible data (up to a max of 62 bits)</param>
         /// <returns>A code generator</returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="strLen"/> is less than 1 or greater than 21</exception>
         public static ICodeGenerator Get(int strLen)
-        {
-            var gens = Gens;
-            if ((strLen <= 0) || (strLen >= gens.Length))
-                throw new Exception("Invalid length!");
-            var gen = gens[strLen];
-            if (gen != null)
-                return gen;
-            gen = new NumericCodeGenerator(strLen);
-            gens[strLen] = gen;
-            return gen;
-        }
+            => CodeGeneratorHelper.GetOrCreate(Gens, strLen, Create);
+
+        static readonly Func<int, ICodeGenerator> Create = static len => new NumericCodeGenerator(len);
 
         NumericCodeGenerator(int strLen)
         {
@@ -473,20 +497,24 @@ namespace SysWeaver
             GroupStrLen = SepLens[strLen];
         }
 
+        /// <summary>
+        /// Returns a description of the generator
+        /// </summary>
+        /// <returns>The string length and the valid range, ex: "4: [0, 1048576)"</returns>
         public override string ToString() => String.Concat(StrLen.ToString(), ": [0, ", MaxValue.ToString(), ')');
 
         /// <summary>
-        /// Length of string
+        /// Length of string (number of symbols, excluding any group separators)
         /// </summary>
         public int StrLen { get; init; }
 
         /// <summary>
-        /// Length of string with grouping
+        /// Length of string with grouping (number of symbols plus the number of hyphens)
         /// </summary>
         public int GroupStrLen { get; init; }
 
         /// <summary>
-        /// The maximum allowed value
+        /// The exclusive upper bound of the values that can be encoded, the valid range is [0, MaxValue)
         /// </summary>
         public long MaxValue { get; init; }
 
@@ -496,7 +524,7 @@ namespace SysWeaver
         public int MaxBits { get; init; }
 
         /// <summary>
-        /// Max input value 
+        /// The exclusive upper bound of the values that can be encoded, the valid range is [0, MaxInput) (same as MaxValue)
         /// </summary>
         public long MaxInput { get; init; }
 
@@ -508,7 +536,7 @@ namespace SysWeaver
         static readonly String SymbolsU = Symbols.FastToUpper();
 
 
-        static readonly Dictionary<Char, int> ValueLookUp = CodeGeneratorHelper.GetValueLookUp(Symbols);
+        static readonly sbyte[] ValueTable = CodeGeneratorHelper.GetValueTable(Symbols);
 
 
         static void StringEncode(Span<char> to, long value)
@@ -587,8 +615,9 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The value to encode in the [0, MaxInput)</param>
         /// <param name="upperCase">Output upper or lower case letters</param>
-        /// <param name="group">Add a hypen every 4th character to create groups</param>
+        /// <param name="group">Add a hypen between groups of 3 or 4 characters</param>
         /// <returns>A string with the encoded value</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The value is negative or greater than or equal to <see cref="MaxInput"/></exception>
         public String Encode(long value, bool upperCase = true, bool group = true)
         {
             if ((value >= MaxInput) || (value < 0))
@@ -599,34 +628,14 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Decodes a value from a string
+        /// Decodes a value from a string.
+        /// Decoding is case insensitive, similar looking symbols are treated as the same symbol and any char that isn't a symbol (such as hyphens and white space) is ignored.
         /// </summary>
         /// <param name="value">A value encoded as a string</param>
-        /// <returns>The value or -1 if the input string is invalid</returns>
+        /// <returns>The value or -1 if the input string is invalid (not exactly <see cref="StrLen"/> symbols, or a value that is outside of [0, MaxInput))</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="value"/> is null</exception>
         public long Decode(String value)
-        {
-            var l = ValueLookUp;
-            long v = 0;
-            int taken = 0;
-            var t = value.Length;
-            var strLen = StrLen;
-            while (t > 0)
-            {
-                --t;
-                if (!l.TryGetValue(value[t], out var p))
-                    continue;
-                v <<= 3;
-                v |= (long)p;
-                ++taken;
-                if (taken == strLen)
-                {
-                    if (t != 0)
-                        break;
-                    return v;
-                }
-            }
-            return -1;
-        }
+            => CodeGeneratorHelper.Decode(value, ValueTable, StrLen, BitsPerChar, MaxBits);
 
 
 

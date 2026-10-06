@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -8,7 +10,9 @@ using System.Threading.Tasks;
 namespace SysWeaver
 {
 
-
+    /// <summary>
+    /// Contains array (and list / dictionary) helpers: creation, conversion (sync and async), cloning, sorting and intersection.
+    /// </summary>
     public static class ArrayExt
     {
 
@@ -17,8 +21,8 @@ namespace SysWeaver
         /// Get a value from an array, return a value on fail.
         /// Will fail if array is null or if the index is out of bound.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="a"></param>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="a">The array to get a value from (may be null)</param>
         /// <param name="index">The array index to get a value for (may be outside the array)</param>
         /// <param name="onFail">The value to return when failing (null or out of bounds)</param>
         /// <returns>The value at the index or the onFail value if failed</returns>
@@ -38,10 +42,10 @@ namespace SysWeaver
         /// Push an item to the end of an array, reallocation will happen = slow
         /// If the array is null a new array with the val is returned
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="a"></param>
-        /// <param name="val"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="a">The array to add an item to (may be null), it's not modified</param>
+        /// <param name="val">The value to add</param>
+        /// <returns>A new array with the elements of <paramref name="a"/> followed by <paramref name="val"/></returns>
         public static T[] Push<T>(this T[] a, T val)
         {
             if (a == null)
@@ -54,10 +58,10 @@ namespace SysWeaver
         /// Insert an item to the start of an array, reallocation will happen = slow
         /// If the array is null a new array with the val is returned
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="a"></param>
-        /// <param name="val"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="a">The array to add an item to (may be null), it's not modified</param>
+        /// <param name="val">The value to add</param>
+        /// <returns>A new array with <paramref name="val"/> followed by the elements of <paramref name="a"/></returns>
         public static T[] PushFront<T>(this T[] a, T val)
         {
             if (a == null)
@@ -69,12 +73,12 @@ namespace SysWeaver
         /// <summary>
         /// Concat two arrays.
         /// If both arrays are null, null is returned.
-        /// If any array is null, the other array is returned.
+        /// If any array is null (or empty), the other array is returned.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="a"></param>
-        /// <param name="b"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="a">The first array (may be null)</param>
+        /// <param name="b">The second array (may be null)</param>
+        /// <returns>A new array with the elements of <paramref name="a"/> followed by the elements of <paramref name="b"/>, or one of the input arrays (not a copy) if the other one is null or empty</returns>
         public static T[] Concat<T>(this T[] a, T[] b)
         {
             if (a == null)
@@ -94,28 +98,32 @@ namespace SysWeaver
         /// <summary>
         /// Create and initiate an array with a scalar value
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="count"></param>
-        /// <param name="value"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="count">The number of elements in the array</param>
+        /// <param name="value">The value to assign to all elements</param>
+        /// <returns>A new array with <paramref name="count"/> elements, all set to <paramref name="value"/></returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="count"/> is negative</exception>
         public static T[] Create<T>(int count, T value)
         {
+            ArgumentOutOfRangeException.ThrowIfNegative(count);
             var t = GC.AllocateUninitializedArray<T>(count);
-            var p = t.AsSpan();
-            for (int i = 0; i < count; ++i)
-                p[i] = value;
+            // Fill is vectorized
+            t.AsSpan().Fill(value);
             return t;
         }
 
         /// <summary>
-        /// Create and initiate an array with a scalar value
+        /// Create and initiate an array with a value per element
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="count"></param>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="count">The number of elements in the array</param>
         /// <param name="getValue">The function that given an index returned the value to use</param>
-        /// <returns></returns>
+        /// <returns>A new array with <paramref name="count"/> elements, element i is set to getValue(i)</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="count"/> is negative</exception>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="getValue"/> is null and <paramref name="count"/> is positive</exception>
         public static T[] Create<T>(int count, Func<int, T> getValue)
         {
+            ArgumentOutOfRangeException.ThrowIfNegative(count);
             var t = GC.AllocateUninitializedArray<T>(count);
             var p = t.AsSpan();
             for (int i = 0; i < count; ++i)
@@ -127,8 +135,8 @@ namespace SysWeaver
         /// <summary>
         /// Create and initiate an array async with a value per element
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="count"></param>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="count">The number of elements in the array, if zero or negative, an empty array is returned</param>
         /// <param name="getValue">The function that given an index returned the value to use</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
@@ -138,7 +146,9 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A new array with <paramref name="count"/> elements, element i is set to the result of getValue(i).
+        /// If any of the tasks fails, the returned task is faulted (after all tasks have completed).</returns>
+        /// <exception cref="NullReferenceException">Thrown (by the returned task) if <paramref name="getValue"/> is null and <paramref name="count"/> is positive</exception>
         public static async Task<T[]> CreateAsync<T>(int count, Func<int, Task<T>> getValue, int maxConcurrency = 0)
         {
             if (count <= 0)
@@ -149,18 +159,16 @@ namespace SysWeaver
             var tt = GC.AllocateUninitializedArray<Task<T>>(count);
             for (int i = 0; i < count; ++i)
                 tt[i] = getValue(i);
-            await Task.WhenAll(tt).ConfigureAwait(false);
-            var t = GC.AllocateUninitializedArray<T>(count);
-            for (int i = 0; i < count; ++i)
-                t[i] = tt[i].GetAwaiter().GetResult();
-            return t;
+            // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
+            await Task.WhenAll((Task[])tt).ConfigureAwait(false);
+            return GetResults(tt);
         }
 
         /// <summary>
         /// Create and initiate an array async with a value per element
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="count"></param>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="count">The number of elements in the array, if zero or negative, an empty array is returned</param>
         /// <param name="getValue">The function that given an index returned the value to use</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
@@ -170,7 +178,8 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A new array with <paramref name="count"/> elements, element i is set to the result of getValue(i)</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="getValue"/> is null and <paramref name="count"/> is positive</exception>
         public static ValueTask<T[]> CreateAsyncValue<T>(int count, Func<int, ValueTask<T>> getValue, int maxConcurrency = 0)
         {
             if (count <= 0)
@@ -188,34 +197,47 @@ namespace SysWeaver
         /// <summary>
         /// Take N elements from an enumerable and create an array of them
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="values"></param>
-        /// <param name="count"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="values">The values to enumerate (only the first <paramref name="count"/> elements are enumerated)</param>
+        /// <param name="count">The number of elements in the returned array</param>
+        /// <returns>A new array with <paramref name="count"/> elements.
+        /// If the sequence contains fewer elements than <paramref name="count"/>, the remaining elements are default(T).</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="values"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="count"/> is negative</exception>
         public static T[] ToArray<T>(this IEnumerable<T> values, int count)
         {
+            ArgumentNullException.ThrowIfNull(values);
+            ArgumentOutOfRangeException.ThrowIfNegative(count);
             var t = GC.AllocateUninitializedArray<T>(count);
             var p = t.AsSpan();
             using var e = values.GetEnumerator();
             int i;
             for (i = 0; i < count; ++i)
-                p[i] = e.MoveNext() ? e.Current : default(T);
+            {
+                // Don't call MoveNext after the end of the sequence
+                if (!e.MoveNext())
+                    break;
+                p[i] = e.Current;
+            }
             if (i < count)
-                Array.Resize(ref t, i);
+                p.Slice(i).Clear();
             return t;
         }
 
         /// <summary>
         /// Create a new re-ordered array
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The element type</typeparam>
         /// <param name="values">The original array</param>
-        /// <param name="order">The new order, ex: newArray[0] = values[order[0]]</param>
-        /// <returns>A ew array with the elements ordered according to the order</returns>
+        /// <param name="order">The new order, ex: newArray[0] = values[order[0]]. Must contain at least as many elements as <paramref name="values"/> (any extra elements are ignored), the same index may be used multiple times</param>
+        /// <returns>A new array (with the same length as <paramref name="values"/>) with the elements ordered according to the order, or null if <paramref name="values"/> is null</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="order"/> is null and <paramref name="values"/> is non-null</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown by the list (arrays, List etc) if an index is out of range or if <paramref name="order"/> is too short</exception>
         public static T[] Reordered<T>(this IReadOnlyList<T> values, IReadOnlyList<int> order)
         {
             if (values == null)
                 return null;
+            ArgumentNullException.ThrowIfNull(order);
             var c = values.Count;
             var r = new T[c];
             for (int i = 0; i < c; ++i)
@@ -227,41 +249,41 @@ namespace SysWeaver
         /// <summary>
         /// Clones (shallow) an array of primitive types (using a fast mem copy).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="array"></param>
-        /// <returns></returns>
-        public unsafe static T[] ShallowClonePrimitive<T>(this T[] array) where T : unmanaged
+        /// <typeparam name="T">The (unmanaged) element type</typeparam>
+        /// <param name="array">The array to clone (may be null)</param>
+        /// <returns>A new array with the same elements, or null if <paramref name="array"/> is null</returns>
+        public static T[] ShallowClonePrimitive<T>(this T[] array) where T : unmanaged
         {
             if (array == null)
                 return array;
-            var t = new T[array.Length];
-            array.AsSpan().CopyTo(t);
+            // No need to zero the memory since everything is overwritten
+            var t = GC.AllocateUninitializedArray<T>(array.Length);
+            new ReadOnlySpan<T>(array).CopyTo(t);
             return t;
         }
 
         /// <summary>
         /// Clones (shallow) an array (if the type T is primitive, please use the faster ShallowClonePrimitive instead).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="array"></param>
-        /// <returns></returns>
-        public unsafe static T[] ShallowClone<T>(this T[] array) where T : class
+        /// <typeparam name="T">The (reference) element type</typeparam>
+        /// <param name="array">The array to clone (may be null)</param>
+        /// <returns>A new array (of type T[], even if <paramref name="array"/> is an array of a derived type) with the same references, or null if <paramref name="array"/> is null</returns>
+        public static T[] ShallowClone<T>(this T[] array) where T : class
         {
             if (array == null)
                 return array;
-            var c = array.Length;
-            var t = new T[c];
-            for (int i = 0; i < c; ++i)
-                t[i] = array[i];
+            var t = new T[array.Length];
+            // ReadOnlySpan doesn't have the array variance check (Span does), so this works for covariant arrays (bulk copy)
+            new ReadOnlySpan<T>(array).CopyTo(t);
             return t;
         }
 
         /// <summary>
         /// Deep clones an array (the T must implement the IClone_T interface)
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="array"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="array">The array to clone (may be null)</param>
+        /// <returns>A new array where each element is a clone of the element in <paramref name="array"/> (null elements are kept null), or null if <paramref name="array"/> is null</returns>
         public static T[] DeepClone<T>(this T[] array) where T : class, ICloneable<T>
         {
             if (array == null)
@@ -276,9 +298,9 @@ namespace SysWeaver
         /// <summary>
         /// Deep clones an array (the T must implement the IClone interface)
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="array"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="array">The array to clone (may be null)</param>
+        /// <returns>A new array where each element is a clone of the element in <paramref name="array"/> (null elements are kept null, if the clone isn't a T the element is set to null), or null if <paramref name="array"/> is null</returns>
         public static T[] Clone<T>(this T[] array) where T : class, System.ICloneable
         {
             if (array == null)
@@ -292,12 +314,12 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Deep clones an array (the D must implement the IClone_T interface)
+        /// Deep converts an array of some type to an array of a base type, a new instance of <typeparamref name="D"/> is created for each element and initialized using <see cref="ICloneable{T}.CopyFrom(T)"/>
         /// </summary>
-        /// <typeparam name="D"></typeparam>
-        /// <typeparam name="S"></typeparam>
-        /// <param name="array"></param>
-        /// <returns></returns>
+        /// <typeparam name="D">The destination element type</typeparam>
+        /// <typeparam name="S">The source element type (must derive from <typeparamref name="D"/>)</typeparam>
+        /// <param name="array">The array to convert (may be null)</param>
+        /// <returns>A new array where each element is a new <typeparamref name="D"/> initialized from the element in <paramref name="array"/> (null elements are kept null), or null if <paramref name="array"/> is null</returns>
         public static D[] DeepCovert<D, S>(this S[] array) where D : class, ICloneable<D>, new() where S: class, D
         {
             if (array == null)
@@ -317,9 +339,21 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// Create a new array with an element removed, reallocation will happen = slow
+        /// </summary>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="array">The array to remove an element from, it's not modified</param>
+        /// <param name="index">The index of the element to remove</param>
+        /// <returns>A new array with all elements except the one at <paramref name="index"/></returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="array"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="index"/> is negative or greater than or equal to the length of the <paramref name="array"/></exception>
         public static T[] RemoveAt<T>(this T[] array, int index)
         {
+            ArgumentNullException.ThrowIfNull(array);
             var l = array.Length;
+            if ((uint)index >= (uint)l)
+                ThrowIndexOutOfRange(index, l);
             var n = new T[l - 1];
             if (index > 0)
                 Array.Copy(array, 0, n, 0, index);
@@ -329,8 +363,19 @@ namespace SysWeaver
             return n;
         }
 
+        [DoesNotReturn]
+        static void ThrowIndexOutOfRange(int index, int length)
+            => throw new ArgumentOutOfRangeException(nameof(index), index, "The index must be non-negative and less than the length of the array (" + length + ")");
 
 
+        /// <summary>
+        /// Sort an array in-place using insertion sort (stable, fast for small or almost sorted arrays, O(N^2) worst case)
+        /// </summary>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="array">The array to sort (may be null)</param>
+        /// <param name="compareFn">The compare function, should return a negative value if the first argument should be placed before the second argument, zero if they are equal and a positive value if the first argument should be placed after the second</param>
+        /// <returns>The same array instance (sorted) or null if <paramref name="array"/> is null</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="compareFn"/> is null and the <paramref name="array"/> contains more than one element</exception>
         public static T[] InsertionSort<T>(this T[] array, Func<T, T, int> compareFn)
         {
             if (array == null)
@@ -338,7 +383,7 @@ namespace SysWeaver
             int n = array.Length;
             if (n <= 1)
                 return array;
-
+            ArgumentNullException.ThrowIfNull(compareFn);
             for (int i = 1; i < n; i++)
             {
                 var key = array[i];
@@ -357,16 +402,18 @@ namespace SysWeaver
         /// <summary>
         /// Convert dictionary values from one type to another
         /// </summary>
-        /// <typeparam name="Key"></typeparam>
-        /// <typeparam name="CurrentValue"></typeparam>
-        /// <typeparam name="NewValue"></typeparam>
-        /// <param name="dictionary"></param>
-        /// <param name="func"></param>
-        /// <returns></returns>
+        /// <typeparam name="Key">The key type</typeparam>
+        /// <typeparam name="CurrentValue">The current value type</typeparam>
+        /// <typeparam name="NewValue">The new value type</typeparam>
+        /// <param name="dictionary">The dictionary to convert (may be null)</param>
+        /// <param name="func">The function that convert a value, the first argument is the key and the second argument is the current value</param>
+        /// <returns>A new dictionary (using the same comparer if it can be determined) with the same keys and converted values, or null if <paramref name="dictionary"/> is null</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="dictionary"/> is non-null</exception>
         public static Dictionary<Key, NewValue> ConvertValues<Key, CurrentValue, NewValue>(this IReadOnlyDictionary<Key, CurrentValue> dictionary, Func<Key, CurrentValue, NewValue> func)
         {
             if (dictionary == null)
                 return null;
+            ArgumentNullException.ThrowIfNull(func);
             var d = new Dictionary<Key, NewValue>(dictionary.Count, dictionary.GetComparer());
             foreach (var kv in dictionary)
                 d.TryAdd(kv.Key, func(kv.Key, kv.Value));
@@ -376,16 +423,18 @@ namespace SysWeaver
         /// <summary>
         /// Convert dictionary values from one type to another
         /// </summary>
-        /// <typeparam name="Key"></typeparam>
-        /// <typeparam name="CurrentValue"></typeparam>
-        /// <typeparam name="NewValue"></typeparam>
-        /// <param name="dictionary"></param>
-        /// <param name="func"></param>
-        /// <returns></returns>
+        /// <typeparam name="Key">The key type</typeparam>
+        /// <typeparam name="CurrentValue">The current value type</typeparam>
+        /// <typeparam name="NewValue">The new value type</typeparam>
+        /// <param name="dictionary">The dictionary to convert (may be null)</param>
+        /// <param name="func">The function that convert a value</param>
+        /// <returns>A new dictionary (using the same comparer if it can be determined) with the same keys and converted values, or null if <paramref name="dictionary"/> is null</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="dictionary"/> is non-null</exception>
         public static Dictionary<Key, NewValue> ConvertValues<Key, CurrentValue, NewValue>(this IReadOnlyDictionary<Key, CurrentValue> dictionary, Func<CurrentValue, NewValue> func)
         {
             if (dictionary == null)
                 return null;
+            ArgumentNullException.ThrowIfNull(func);
             var d = new Dictionary<Key, NewValue>(dictionary.Count, dictionary.GetComparer());
             foreach (var kv in dictionary)
                 d.TryAdd(kv.Key, func(kv.Value));
@@ -398,11 +447,12 @@ namespace SysWeaver
         /// <summary>
         /// Convert an array to another element type using a function
         /// </summary>
-        /// <typeparam name="E"></typeparam>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="array"></param>
-        /// <param name="func"></param>
-        /// <returns></returns>
+        /// <typeparam name="E">The source element type</typeparam>
+        /// <typeparam name="T">The destination element type</typeparam>
+        /// <param name="array">The list to convert (may be null)</param>
+        /// <param name="func">The function that converts an element</param>
+        /// <returns>A new array with the converted elements (in the same order as the source), or null if <paramref name="array"/> is null</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="array"/> is non-empty</exception>
         public static T[] Convert<E, T>(this IReadOnlyList<E> array, Func<E, T> func)
         {
             if (array == null)
@@ -410,6 +460,7 @@ namespace SysWeaver
             var l = array.Count;
             if (l <= 0)
                 return Array.Empty<T>();
+            ArgumentNullException.ThrowIfNull(func);
             var t = GC.AllocateUninitializedArray<T>(l);
             var p = t.AsSpan();
             for (int i = 0; i < l; ++i)
@@ -421,10 +472,10 @@ namespace SysWeaver
         /// Convert an array to another element type using a function.
         /// Elements are converted in paralell (async).
         /// </summary>
-        /// <typeparam name="E"></typeparam>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="array"></param>
-        /// <param name="func"></param>
+        /// <typeparam name="E">The source element type</typeparam>
+        /// <typeparam name="T">The destination element type</typeparam>
+        /// <param name="array">The list to convert (may be null)</param>
+        /// <param name="func">The function that converts an element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -433,7 +484,9 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A new array with the converted elements (in the same order as the source), or null if <paramref name="array"/> is null.
+        /// If any conversion fails, the returned task is faulted (after all conversions have completed).</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="func"/> is null and the <paramref name="array"/> is non-empty</exception>
         public static async Task<T[]> ConvertAsync<E, T>(this IReadOnlyList<E> array, Func<E, Task<T>> func, int maxConcurrency = 0)
         {
             if (array == null)
@@ -447,11 +500,9 @@ namespace SysWeaver
             var tt = GC.AllocateUninitializedArray<Task<T>>(l);
             for (int i = 0; i < l; ++i)
                 tt[i] = func(array[i]);
-            await Task.WhenAll(tt).ConfigureAwait(false);
-            var t = GC.AllocateUninitializedArray<T>(l);
-            for (int i = 0; i < l; ++i)
-                t[i] = tt[i].GetAwaiter().GetResult();
-            return t;
+            // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
+            await Task.WhenAll((Task[])tt).ConfigureAwait(false);
+            return GetResults(tt);
         }
 
 
@@ -460,10 +511,10 @@ namespace SysWeaver
         /// Convert an array to another element type using a function.
         /// Elements are converted in paralell (async).
         /// </summary>
-        /// <typeparam name="E"></typeparam>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="array"></param>
-        /// <param name="func"></param>
+        /// <typeparam name="E">The source element type</typeparam>
+        /// <typeparam name="T">The destination element type</typeparam>
+        /// <param name="array">The list to convert (may be null)</param>
+        /// <param name="func">The function that converts an element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -472,7 +523,9 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A new array with the converted elements (in the same order as the source), or null if <paramref name="array"/> is null.
+        /// If any conversion fails, the returned task is faulted (after all conversions have completed).</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="func"/> is null and the <paramref name="array"/> is non-empty</exception>
         public static ValueTask<T[]> ConvertAsyncValue<E, T>(this IReadOnlyList<E> array, Func<E, ValueTask<T>> func, int maxConcurrency = 0)
         {
             if (array == null)
@@ -489,6 +542,18 @@ namespace SysWeaver
             return TaskExt.WhenAll(tt);
         }
 
+        /// <summary>
+        /// Get the results of some completed tasks as an array
+        /// </summary>
+        static T[] GetResults<T>(Task<T>[] tasks)
+        {
+            var l = tasks.Length;
+            var t = GC.AllocateUninitializedArray<T>(l);
+            for (int i = 0; i < l; ++i)
+                t[i] = tasks[i].GetAwaiter().GetResult();
+            return t;
+        }
+
         static async ValueTask<T[]> ValueTaskToArray<T>(ValueTask<T> t)
             => [await t.ConfigureAwait(false)];
 
@@ -497,11 +562,12 @@ namespace SysWeaver
         /// <summary>
         /// Convert an array to another element type using a function
         /// </summary>
-        /// <typeparam name="E"></typeparam>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="array"></param>
-        /// <param name="func"></param>
-        /// <returns></returns>
+        /// <typeparam name="E">The source element type</typeparam>
+        /// <typeparam name="T">The destination element type</typeparam>
+        /// <param name="array">The list to convert (may be null)</param>
+        /// <param name="func">The function that converts an element, the second argument is the index of the element</param>
+        /// <returns>A new array with the converted elements (in the same order as the source), or null if <paramref name="array"/> is null</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="array"/> is non-empty</exception>
         public static T[] Convert<E, T>(this IReadOnlyList<E> array, Func<E, int, T> func)
         {
             if (array == null)
@@ -509,6 +575,7 @@ namespace SysWeaver
             var l = array.Count;
             if (l <= 0)
                 return Array.Empty<T>();
+            ArgumentNullException.ThrowIfNull(func);
             var t = GC.AllocateUninitializedArray<T>(l);
             var p = t.AsSpan();
             for (int i = 0; i < l; ++i)
@@ -520,10 +587,10 @@ namespace SysWeaver
         /// Convert an array to another element type using a function.
         /// Elements are converted in paralell (async).
         /// </summary>
-        /// <typeparam name="E"></typeparam>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="array"></param>
-        /// <param name="func"></param>
+        /// <typeparam name="E">The source element type</typeparam>
+        /// <typeparam name="T">The destination element type</typeparam>
+        /// <param name="array">The list to convert (may be null)</param>
+        /// <param name="func">The function that converts an element, the second argument is the index of the element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -532,7 +599,9 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A new array with the converted elements (in the same order as the source), or null if <paramref name="array"/> is null.
+        /// If any conversion fails, the returned task is faulted (after all conversions have completed).</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="func"/> is null and the <paramref name="array"/> is non-empty</exception>
         public static async Task<T[]> ConvertAsync<E, T>(this IReadOnlyList<E> array, Func<E, int, Task<T>> func, int maxConcurrency = 0)
         {
             if (array == null)
@@ -546,7 +615,9 @@ namespace SysWeaver
             var tt = GC.AllocateUninitializedArray<Task<T>>(l);
             for (int i = 0; i < l; ++i)
                 tt[i] = func(array[i], i);
-            return await Task.WhenAll(tt).ConfigureAwait(false);
+            // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
+            await Task.WhenAll((Task[])tt).ConfigureAwait(false);
+            return GetResults(tt);
         }
 
 
@@ -555,10 +626,10 @@ namespace SysWeaver
         /// Convert an array to another element type using a function.
         /// Elements are converted in paralell (async).
         /// </summary>
-        /// <typeparam name="E"></typeparam>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="array"></param>
-        /// <param name="func"></param>
+        /// <typeparam name="E">The source element type</typeparam>
+        /// <typeparam name="T">The destination element type</typeparam>
+        /// <param name="array">The list to convert (may be null)</param>
+        /// <param name="func">The function that converts an element, the second argument is the index of the element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -567,7 +638,9 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A new array with the converted elements (in the same order as the source), or null if <paramref name="array"/> is null.
+        /// If any conversion fails, the returned task is faulted (after all conversions have completed).</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="func"/> is null and the <paramref name="array"/> is non-empty</exception>
         public static ValueTask<T[]> ConvertAsyncValue<E, T>(this IReadOnlyList<E> array, Func<E, int, ValueTask<T>> func, int maxConcurrency = 0)
         {
             if (array == null)
@@ -588,12 +661,13 @@ namespace SysWeaver
         /// <summary>
         /// Converts a dictionary to an array of some type
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="dict">The dictionary to convert</param>
-        /// <param name="func">The function to use for instance creation</param>
-        /// <returns>An array</returns>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <typeparam name="T">The destination element type</typeparam>
+        /// <param name="dict">The dictionary to convert (may be null)</param>
+        /// <param name="func">The function to use for instance creation, the last argument is the index of the element</param>
+        /// <returns>A new array with the converted elements (in the enumeration order of the source), or null if the source is null</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the source is non-empty</exception>
         public static T[] ToArray<K, V, T>(this IReadOnlyDictionary<K, V> dict, Func<K, V, int, T> func)
         {
             if (dict == null)
@@ -601,6 +675,7 @@ namespace SysWeaver
             var l = dict.Count;
             if (l <= 0)
                 return Array.Empty<T>();
+            ArgumentNullException.ThrowIfNull(func);
             var tt = GC.AllocateUninitializedArray<T>(l);
             int i = 0;
             foreach (var kv in dict)
@@ -614,11 +689,11 @@ namespace SysWeaver
         /// <summary>
         /// Converts a dictionary to an array of some type in parallel
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="dict">The dictionary to convert</param>
-        /// <param name="func">The function to use for instance creation</param>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <typeparam name="T">The destination element type</typeparam>
+        /// <param name="dict">The dictionary to convert (may be null)</param>
+        /// <param name="func">The function to use for instance creation, the last argument is the index of the element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -627,7 +702,9 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns>An array</returns>
+        /// <returns>A new array with the converted elements (in the enumeration order of the source), or null if the source is null.
+        /// If any conversion fails, the returned task is faulted (after all conversions have completed).</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="func"/> is null and the source is non-empty</exception>
         public static async Task<T[]> ToArrayAsync<K, V, T>(this IReadOnlyDictionary<K, V> dict, Func<K, V, int, Task<T>> func, int maxConcurrency = 0)
         {
             if (dict == null)
@@ -648,21 +725,19 @@ namespace SysWeaver
                 tt[i] = func(kv.Key, kv.Value, i);
                 ++i;
             }
-            await Task.WhenAll(tt).ConfigureAwait(false);
-            var t = GC.AllocateUninitializedArray<T>(l);
-            for (i = 0; i < l; ++i)
-                t[i] = tt[i].GetAwaiter().GetResult();
-            return t;
+            // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
+            await Task.WhenAll((Task[])tt).ConfigureAwait(false);
+            return GetResults(tt);
         }
 
         /// <summary>
         /// Converts a dictionary to an array of some type in parallel
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="dict">The dictionary to convert</param>
-        /// <param name="func">The function to use for instance creation</param>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <typeparam name="T">The destination element type</typeparam>
+        /// <param name="dict">The dictionary to convert (may be null)</param>
+        /// <param name="func">The function to use for instance creation, the last argument is the index of the element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -671,7 +746,9 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns>An array</returns>
+        /// <returns>A new array with the converted elements (in the enumeration order of the source), or null if the source is null.
+        /// If any conversion fails, the returned task is faulted (after all conversions have completed).</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="func"/> is null and the source is non-empty</exception>
         public static ValueTask<T[]> ToArrayValueAsync<K, V, T>(this IReadOnlyDictionary<K, V> dict, Func<K, V, int, ValueTask<T>> func, int maxConcurrency = 0)
         {
             if (dict == null)
@@ -699,11 +776,12 @@ namespace SysWeaver
         /// <summary>
         /// Converts a collection to an array of some type
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="col">The collection to convert</param>
-        /// <param name="func">The function to use for instance creation</param>
-        /// <returns>An array</returns>
+        /// <typeparam name="K">The source element type</typeparam>
+        /// <typeparam name="T">The destination element type</typeparam>
+        /// <param name="col">The collection to convert (may be null)</param>
+        /// <param name="func">The function to use for instance creation, the last argument is the index of the element</param>
+        /// <returns>A new array with the converted elements (in the enumeration order of the source), or null if the source is null</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the source is non-empty</exception>
         public static T[] ToArray<K, T>(this IReadOnlyCollection<K> col, Func<K, int, T> func)
         {
             if (col == null)
@@ -711,6 +789,7 @@ namespace SysWeaver
             var l = col.Count;
             if (l <= 0)
                 return Array.Empty<T>();
+            ArgumentNullException.ThrowIfNull(func);
             var tt = GC.AllocateUninitializedArray<T>(l);
             int i = 0;
             foreach (var kv in col)
@@ -724,10 +803,10 @@ namespace SysWeaver
         /// <summary>
         /// Converts a collection to an array of some type in parallel
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="col">The collection to convert</param>
-        /// <param name="func">The function to use for instance creation</param>
+        /// <typeparam name="K">The source element type</typeparam>
+        /// <typeparam name="T">The destination element type</typeparam>
+        /// <param name="col">The collection to convert (may be null)</param>
+        /// <param name="func">The function to use for instance creation, the last argument is the index of the element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -736,7 +815,9 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns>An array</returns>
+        /// <returns>A new array with the converted elements (in the enumeration order of the source), or null if the source is null.
+        /// If any conversion fails, the returned task is faulted (after all conversions have completed).</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="func"/> is null and the source is non-empty</exception>
         public static async Task<T[]> ToArrayAsync<K, T>(this IReadOnlyCollection<K> col, Func<K, int, Task<T>> func, int maxConcurrency = 0)
         {
             if (col == null)
@@ -754,20 +835,18 @@ namespace SysWeaver
                 tt[i] = func(kv, i);
                 ++i;
             }
-            await Task.WhenAll(tt).ConfigureAwait(false);
-            var t = GC.AllocateUninitializedArray<T>(l);
-            for (i = 0; i < l; ++i)
-                t[i] = tt[i].GetAwaiter().GetResult();
-            return t;
+            // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
+            await Task.WhenAll((Task[])tt).ConfigureAwait(false);
+            return GetResults(tt);
         }
 
         /// <summary>
         /// Converts a collection to an array of some type in parallel
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="col">The collection to convert</param>
-        /// <param name="func">The function to use for instance creation</param>
+        /// <typeparam name="K">The source element type</typeparam>
+        /// <typeparam name="T">The destination element type</typeparam>
+        /// <param name="col">The collection to convert (may be null)</param>
+        /// <param name="func">The function to use for instance creation, the last argument is the index of the element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -776,7 +855,9 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns>An array</returns>
+        /// <returns>A new array with the converted elements (in the enumeration order of the source), or null if the source is null.
+        /// If any conversion fails, the returned task is faulted (after all conversions have completed).</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="func"/> is null and the source is non-empty</exception>
         public static ValueTask<T[]> ToArrayValueAsync<K, T>(this IReadOnlyCollection<K> col, Func<K, int, ValueTask<T>> func, int maxConcurrency = 0)
         {
             if (col == null)
@@ -798,11 +879,19 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// In-place stable sort using 4n bytes of memory (stackallocated if less than 4kb)
+        /// The maximum number of elements where the temporary index buffer of StableSort is stack allocated (4 KB)
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="list">List</param>
-        /// <param name="fn">Compare function with indices and values</param>
+        const int StableSortMaxStack = 1024;
+
+        /// <summary>
+        /// In-place stable sort using 4n bytes of memory (stack allocated if less than 4kb, else rented from the array pool)
+        /// </summary>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="list">List to sort (may be null)</param>
+        /// <param name="fn">Compare function with values and their (original) indices, should return a negative value if the first element should be placed before the second element, zero if they are equal and a positive value if the first element should be placed after the second.
+        /// Elements that compare equal keep their original order.</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="fn"/> is null and the <paramref name="list"/> contains more than one element</exception>
+        /// <exception cref="NotSupportedException">Thrown if the <paramref name="list"/> is read only</exception>
         public static void StableSort<T>(this IList<T> list, Func<T, int, T, int, int> fn)
         {
             if (list == null)
@@ -810,7 +899,14 @@ namespace SysWeaver
             var count = list.Count;
             if (count <= 1)
                 return;
-            Span<int> temp = count <= 1024 ? stackalloc int[count] : GC.AllocateUninitializedArray<int>(count).AsSpan();
+            ArgumentNullException.ThrowIfNull(fn);
+            if (count > StableSortMaxStack)
+            {
+                StableSortPooled(list, fn, count);
+                return;
+            }
+            // NOTE: Keep the stack allocated (common) path free from the array pool handling, it makes it significantly slower (measured)
+            Span<int> temp = stackalloc int[count];
             for (int i = 0; i < count; ++i)
                 temp[i] = i;
             temp.Sort((a, b) =>
@@ -818,31 +914,39 @@ namespace SysWeaver
                 var c = fn(list[a], a, list[b], b);
                 return c == 0 ? a.CompareTo(b) : c;
             });
-            for (int i = 0; i < count; ++i)
+            ApplyPermutation(list, temp);
+        }
+
+        static void StableSortPooled<T>(IList<T> list, Func<T, int, T, int, int> fn, int count)
+        {
+            var rented = ArrayPool<int>.Shared.Rent(count);
+            try
             {
-                var s = temp[i];
-                if (s == i)
-                    continue;
-                var v = list[i];
-                var j = i;
-                while (s != i)
+                var temp = rented.AsSpan(0, count);
+                for (int i = 0; i < count; ++i)
+                    temp[i] = i;
+                temp.Sort((a, b) =>
                 {
-                    list[j] = list[s];
-                    temp[j] = j;
-                    j = s;
-                    s = temp[j];
-                }
-                list[j] = v;
-                temp[j] = j;
+                    var c = fn(list[a], a, list[b], b);
+                    return c == 0 ? a.CompareTo(b) : c;
+                });
+                ApplyPermutation(list, temp);
+            }
+            finally
+            {
+                ArrayPool<int>.Shared.Return(rented);
             }
         }
 
         /// <summary>
-        /// In-place stable sort using 4n bytes of memory (stackallocated if less than 4kb)
+        /// In-place stable sort using 4n bytes of memory (stack allocated if less than 4kb, else rented from the array pool)
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="list">List</param>
-        /// <param name="fn">Compare function with values</param>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="list">List to sort (may be null)</param>
+        /// <param name="fn">Compare function with values, should return a negative value if the first element should be placed before the second element, zero if they are equal and a positive value if the first element should be placed after the second.
+        /// Elements that compare equal keep their original order.</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="fn"/> is null and the <paramref name="list"/> contains more than one element</exception>
+        /// <exception cref="NotSupportedException">Thrown if the <paramref name="list"/> is read only</exception>
         public static void StableSort<T>(this IList<T> list, Func<T, T, int> fn)
         {
             if (list == null)
@@ -850,7 +954,14 @@ namespace SysWeaver
             var count = list.Count;
             if (count <= 1)
                 return;
-            Span<int> temp = count <= 1024 ? stackalloc int[count] : GC.AllocateUninitializedArray<int>(count).AsSpan();
+            ArgumentNullException.ThrowIfNull(fn);
+            if (count > StableSortMaxStack)
+            {
+                StableSortPooled(list, fn, count);
+                return;
+            }
+            // NOTE: Keep the stack allocated (common) path free from the array pool handling, it makes it significantly slower (measured)
+            Span<int> temp = stackalloc int[count];
             for (int i = 0; i < count; ++i)
                 temp[i] = i;
             temp.Sort((a, b) =>
@@ -858,6 +969,36 @@ namespace SysWeaver
                 var c = fn(list[a], list[b]);
                 return c == 0 ? a.CompareTo(b) : c;
             });
+            ApplyPermutation(list, temp);
+        }
+
+        static void StableSortPooled<T>(IList<T> list, Func<T, T, int> fn, int count)
+        {
+            var rented = ArrayPool<int>.Shared.Rent(count);
+            try
+            {
+                var temp = rented.AsSpan(0, count);
+                for (int i = 0; i < count; ++i)
+                    temp[i] = i;
+                temp.Sort((a, b) =>
+                {
+                    var c = fn(list[a], list[b]);
+                    return c == 0 ? a.CompareTo(b) : c;
+                });
+                ApplyPermutation(list, temp);
+            }
+            finally
+            {
+                ArrayPool<int>.Shared.Return(rented);
+            }
+        }
+
+        /// <summary>
+        /// Re-order the elements of a list in-place so that list[i] = original list[temp[i]] (the temp is modified)
+        /// </summary>
+        static void ApplyPermutation<T>(IList<T> list, Span<int> temp)
+        {
+            var count = temp.Length;
             for (int i = 0; i < count; ++i)
             {
                 var s = temp[i];
@@ -880,26 +1021,31 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// List1 and List2 must be sorted and contain no diplicates!
+        /// Get the intersection of two sorted lists (the elements that exists in both lists).
+        /// List1 and List2 must be sorted (using the same comparer) and contain no duplicates!
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="list1"></param>
-        /// <param name="list2"></param>
-        /// <param name="comparer"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="list1">The first sorted list</param>
+        /// <param name="list2">The second sorted list</param>
+        /// <param name="comparer">An optional comparer (the lists must be sorted using this comparer), if null <see cref="Comparer{T}.Default"/> is used</param>
+        /// <returns>A new list with the elements (from <paramref name="list1"/>) that exists in both lists, in sorted order</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="list1"/> or <paramref name="list2"/> is null</exception>
         public static List<T> IntersectSorted<T>(this IReadOnlyList<T> list1, IReadOnlyList<T> list2, IComparer<T> comparer = default)
         {
-            var result = new List<T>(Math.Min(list1.Count, list2.Count));
+            ArgumentNullException.ThrowIfNull(list1);
+            ArgumentNullException.ThrowIfNull(list2);
+            var c1 = list1.Count;
+            var c2 = list2.Count;
+            var result = new List<T>(Math.Min(c1, c2));
             int i = 0, j = 0;
             comparer = comparer ?? Comparer<T>.Default;
-            while (i < list1.Count && j < list2.Count)
+            while (i < c1 && j < c2)
             {
-                // Ordinal comparison is significantly faster than culture-aware comparisons
-                int cmp = comparer.Compare(list1[i], list2[j]);
-
+                var v = list1[i];
+                int cmp = comparer.Compare(v, list2[j]);
                 if (cmp == 0)
                 {
-                    result.Add(list1[i]);
+                    result.Add(v);
                     i++;
                     j++;
                 }

@@ -229,7 +229,7 @@ namespace SysWeaver.MicroService
             if (auth == null)
                 return null;
             var hh = AuthTools.ComputeHash(auth.Pwd, oneTimePad);
-            if (!SpanExt.ContentEqual(hh, hash))
+            if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(hh, hash))
                 return null;
             var a = await InternalAuthUser(c, id).ConfigureAwait(false);
             if (a == null)

@@ -3,71 +3,52 @@ using System.Runtime.CompilerServices;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Extension methods for byte spans (content compare and hexadecimal formatting)
+    /// </summary>
     public static class SpanExt
     {
 
-        public unsafe static bool ContentEqual(this ReadOnlySpan<Byte> firstArray, ReadOnlySpan<Byte> secondArray)
-        {
-            var arrayLength = firstArray.Length;
-            if (secondArray.Length != arrayLength)
-                return false;
-            var ulCount = arrayLength >> 3;
-            fixed (byte* a = firstArray, b = secondArray)
-            {
-                ulong* aa = (ulong*)a;
-                ulong* bb = (ulong*)b;
-                for (int i = 0; i < ulCount; ++i)
-                {
-                    if (aa[i] != bb[i])
-                        return false;
-                }
-                for (int i = ulCount << 3; i < arrayLength; ++i)
-                {
-                    if (a[i] != b[i])
-                        return false;
-                }
-            }
-            return true;
-        }
+        /// <summary>
+        /// Check if two byte spans have the same length and content.
+        /// </summary>
+        /// <param name="firstArray">The first data</param>
+        /// <param name="secondArray">The second data</param>
+        /// <returns>True if both spans have the same length and the same bytes (two empty spans are equal)</returns>
+        /// <remarks>
+        /// The compare is vectorized and exits on the first difference, so it is NOT a constant time compare
+        /// (use System.Security.Cryptography.CryptographicOperations.FixedTimeEquals for secrets if timing attacks are a concern).
+        /// </remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool ContentEqual(this ReadOnlySpan<Byte> firstArray, ReadOnlySpan<Byte> secondArray)
+            => firstArray.SequenceEqual(secondArray);
 
 
-
-
-
-
+        /// <summary>
+        /// The lower case hexadecimal digits, indexed by the nibble value (0 - 15).
+        /// </summary>
         public static readonly Char[] HexChars = "0123456789abcdef".ToCharArray();
 
 
         /// <summary>
-        /// Create a hexadecimal string representation of the data, uses the stack so don't call on to large data blobs
+        /// Create a lower case hexadecimal string representation of the data (two chars per byte).
+        /// Only the returned string is allocated.
         /// </summary>
-        /// <param name="data"></param>
-        /// <returns></returns>
+        /// <param name="data">The data to format</param>
+        /// <returns>A lower case hexadecimal string with two chars for every byte (empty if the data is empty)</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The data is too large (the string would be longer than int.MaxValue chars)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String ToHexString(this Span<Byte> data) => ToHexString((ReadOnlySpan<Byte>)data);
+        public static String ToHexString(this Span<Byte> data) => Convert.ToHexStringLower(data);
 
         /// <summary>
-        /// Create a hexadecimal string representation of the data, uses the stack so don't call on to large data blobs
+        /// Create a lower case hexadecimal string representation of the data (two chars per byte).
+        /// Only the returned string is allocated.
         /// </summary>
-        /// <param name="data"></param>
-        /// <returns></returns>
-        public static String ToHexString(this ReadOnlySpan<Byte> data)
-        {
-            var l = data.Length;
-            if (l <= 0)
-                return String.Empty;
-            var h = HexChars;
-            Span<Char> temp = l < 2048 ? stackalloc Char[l + l] : GC.AllocateUninitializedArray<Char>(l + l);
-            for (int i = 0, o = 0; i < l; ++i)
-            {
-                var b = data[i];
-                temp[o] = h[b >> 4];
-                ++o;
-                temp[o] = h[b & 0xf];
-                ++o;
-            }
-            return new String(temp);
-        }
+        /// <param name="data">The data to format</param>
+        /// <returns>A lower case hexadecimal string with two chars for every byte (empty if the data is empty)</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The data is too large (the string would be longer than int.MaxValue chars)</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static String ToHexString(this ReadOnlySpan<Byte> data) => Convert.ToHexStringLower(data);
 
 
     }

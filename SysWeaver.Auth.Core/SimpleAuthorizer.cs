@@ -398,7 +398,7 @@ namespace SysWeaver.Auth
             var ba = data.Item4;
             if (ba == null)
                 return NoAuth;
-            if (!SpanExt.ContentEqual(hash, data.Item1))
+            if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(hash, data.Item1))
                 return NoAuth;
             return Task.FromResult(ba);
         }
@@ -411,7 +411,7 @@ namespace SysWeaver.Auth
             if (!Auths.TryGetValue(userName.FastToLower(), out var data))
                 return NoAuth;
             var dhash = AuthTools.ComputeHash(data.Item3, oneTimePad);
-            if (!SpanExt.ContentEqual(hash, dhash))
+            if (!System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(hash, dhash))
                 return NoAuth;
             return Task.FromResult(data.Item2);
         }

@@ -10,6 +10,15 @@ using X86Aes = System.Runtime.Intrinsics.X86.Aes;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// GxHash, a very fast non-cryptographic hash algorithm using AES hardware intrinsics (a port of the reference implementation, https://github.com/ogxd/gxhash).
+    /// This is NOT a secure hash, do not use for security!
+    /// Requires AES intrinsics (X86 AES-NI or ARM AES), a <see cref="PlatformNotSupportedException"/> is thrown if not available.
+    /// The hash of an empty input only depends on the seed.
+    /// </summary>
+    /// <remarks>
+    /// Inputs of up to 16 bytes are read using a single (masked) vector read, that may read beyond the end of the input if that is known to be safe (within the same memory page).
+    /// </remarks>
     public class GxHash
     {
         // Internal usage only because T cannot be checked at compile time via generic type constrains
@@ -25,7 +34,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="bytes">The input bytes to hash</param>
         /// <param name="seed">A 128-bit seed</param>
-        /// <returns></returns>
+        /// <returns>The 32-bit hash (the low 32 bits of <see cref="Hash128(ReadOnlySpan{byte}, UInt128)"/>)</returns>
+        /// <exception cref="PlatformNotSupportedException">If AES intrinsics aren't supported by the CPU</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int Hash32(ReadOnlySpan<byte> bytes, UInt128 seed)
         {
@@ -34,11 +44,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Hash a span of bytes into an 32-bit signed integer, using the given seed
+        /// Hash a span of bytes into an 32-bit unsigned integer, using the given seed
         /// </summary>
         /// <param name="bytes">The input bytes to hash</param>
         /// <param name="seed">A 128-bit seed</param>
-        /// <returns></returns>
+        /// <returns>The 32-bit hash (the low 32 bits of <see cref="Hash128(ReadOnlySpan{byte}, UInt128)"/>)</returns>
+        /// <exception cref="PlatformNotSupportedException">If AES intrinsics aren't supported by the CPU</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint HashU32(ReadOnlySpan<byte> bytes, UInt128 seed)
         {
@@ -51,7 +62,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="bytes">The input bytes to hash</param>
         /// <param name="seed">A 128-bit seed</param>
-        /// <returns></returns>
+        /// <returns>The 64-bit hash (the low 64 bits of <see cref="Hash128(ReadOnlySpan{byte}, UInt128)"/>)</returns>
+        /// <exception cref="PlatformNotSupportedException">If AES intrinsics aren't supported by the CPU</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static long Hash64(ReadOnlySpan<byte> bytes, UInt128 seed)
         {
@@ -64,7 +76,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="bytes">The input bytes to hash</param>
         /// <param name="seed">A 128-bit seed</param>
-        /// <returns></returns>
+        /// <returns>The 64-bit hash (the low 64 bits of <see cref="Hash128(ReadOnlySpan{byte}, UInt128)"/>)</returns>
+        /// <exception cref="PlatformNotSupportedException">If AES intrinsics aren't supported by the CPU</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ulong HashU64(ReadOnlySpan<byte> bytes, UInt128 seed)
         {
@@ -77,7 +90,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="bytes">The input bytes to hash</param>
         /// <param name="seed">A 128-bit seed</param>
-        /// <returns></returns>
+        /// <returns>The 128-bit hash</returns>
+        /// <exception cref="PlatformNotSupportedException">If AES intrinsics aren't supported by the CPU</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static UInt128 Hash128(ReadOnlySpan<byte> bytes, UInt128 seed)
         {
@@ -273,11 +287,11 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Vector128<byte> CompressFast(Vector128<byte> a, Vector128<byte> b)
         {
-            if (ArmBase.IsSupported)
+            if (ArmAes.IsSupported)
             {
                 return AdvSimd.Xor(ArmAes.MixColumns(ArmAes.Encrypt(a, Vector128<byte>.Zero)), b);
             }
-            if (X86Base.IsSupported)
+            if (X86Aes.IsSupported)
             {
                 return X86Aes.Encrypt(a, b);
             }
@@ -290,8 +304,8 @@ namespace SysWeaver
         /// This is done using the pointer address and making sure we aren't going to
         /// read past the end of the current memory page (which could produce segfaults)
         /// </summary>
-        /// <param name="reference"></param>
-        /// <returns></returns>
+        /// <param name="reference">A reference to the (pinned) memory to read</param>
+        /// <returns>True if 16 bytes can be read from the reference without crossing into another memory page</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe bool IsReadBeyondSafe(ref Vector128<byte> reference)
         {

@@ -3,11 +3,15 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Contains extensions for enumerables and lists (min/max, conversions and processing, sync and async)
+    /// </summary>
     public static class EnumerableExt
     {
 
@@ -18,18 +22,44 @@ namespace SysWeaver
         /// <typeparam name="E">The element type (value to extract from T)</typeparam>
         /// <param name="enumerable">The sequence to enumerate</param>
         /// <param name="predicate">A function to extract a value from an element in the sequence</param>
-        /// <param name="comparer">An optional comaprer to use</param>
-        /// <returns>The min and max value found, if sequence is empty, two default(E) is returned</returns>
+        /// <param name="comparer">An optional comparer to use, if null <see cref="Comparer{T}.Default"/> is used</param>
+        /// <returns>The min and max value found, if sequence is empty, two default(E) is returned.
+        /// If multiple values are equal to the min (or max), the first one is returned.</returns>
+        /// <remarks>Arrays are accessed directly (no enumerator is allocated)</remarks>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="enumerable"/> or <paramref name="predicate"/> is null</exception>
         public static Tuple<E, E> MinMax<T, E>(this IEnumerable<T> enumerable, Func<T, E> predicate, IComparer<E> comparer = null)
         {
+            ArgumentNullException.ThrowIfNull(enumerable);
+            ArgumentNullException.ThrowIfNull(predicate);
             if (comparer == null)
                 comparer = Comparer<E>.Default;
+            E min;
+            E max;
+            if (enumerable is T[] a)
+            {
+                var s = new ReadOnlySpan<T>(a);
+                var sl = s.Length;
+                if (sl <= 0)
+                    return Tuple.Create<E, E>(default, default);
+                var v = predicate(s[0]);
+                min = v;
+                max = v;
+                for (int i = 1; i < sl; ++i)
+                {
+                    v = predicate(s[i]);
+                    if (comparer.Compare(v, min) < 0)
+                        min = v;
+                    if (comparer.Compare(v, max) > 0)
+                        max = v;
+                }
+                return Tuple.Create(min, max);
+            }
             using var e = enumerable.GetEnumerator();
             if (!e.MoveNext())
                 return Tuple.Create<E, E>(default, default);
             var c = predicate(e.Current);
-            E min = c;
-            E max = c;
+            min = c;
+            max = c;
             while (e.MoveNext())
             {
                 c = predicate(e.Current);
@@ -47,18 +77,43 @@ namespace SysWeaver
         /// </summary>
         /// <typeparam name="T">The enumerable type</typeparam>
         /// <param name="enumerable">The sequence to enumerate</param>
-        /// <param name="comparer">An optional comaprer to use</param>
-        /// <returns>The min and max value found, if sequence is empty, two default(T) is returned</returns>
+        /// <param name="comparer">An optional comparer to use, if null <see cref="Comparer{T}.Default"/> is used</param>
+        /// <returns>The min and max value found, if sequence is empty, two default(T) is returned.
+        /// If multiple values are equal to the min (or max), the first one is returned.</returns>
+        /// <remarks>Arrays are accessed directly (no enumerator is allocated)</remarks>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="enumerable"/> is null</exception>
         public static Tuple<T, T> MinMax<T>(this IEnumerable<T> enumerable, IComparer<T> comparer = null)
         {
+            ArgumentNullException.ThrowIfNull(enumerable);
             if (comparer == null)
                 comparer = Comparer<T>.Default;
+            T min;
+            T max;
+            if (enumerable is T[] a)
+            {
+                var s = new ReadOnlySpan<T>(a);
+                var sl = s.Length;
+                if (sl <= 0)
+                    return Tuple.Create<T, T>(default, default);
+                var v = s[0];
+                min = v;
+                max = v;
+                for (int i = 1; i < sl; ++i)
+                {
+                    v = s[i];
+                    if (comparer.Compare(v, min) < 0)
+                        min = v;
+                    if (comparer.Compare(v, max) > 0)
+                        max = v;
+                }
+                return Tuple.Create(min, max);
+            }
             using var e = enumerable.GetEnumerator();
             if (!e.MoveNext())
                 return Tuple.Create<T, T>(default, default);
             var c = e.Current;
-            T min = c;
-            T max = c;
+            min = c;
+            max = c;
             while (e.MoveNext())
             {
                 c = e.Current;
@@ -95,14 +150,17 @@ namespace SysWeaver
         /// Create a concurrent dictionary from some values.
         /// Will not throw on duplicate keys, rather the last value will be used.
         /// </summary>
-        /// <typeparam name="TKey"></typeparam>
-        /// <typeparam name="TVal"></typeparam>
-        /// <param name="enumerable"></param>
+        /// <typeparam name="TKey">The key type</typeparam>
+        /// <typeparam name="TVal">The value type (the element type of the enumerable)</typeparam>
+        /// <param name="enumerable">The values to add</param>
         /// <param name="keyExtractor">A function that extract / creates the key for the given value</param>
-        /// <param name="comparer">Optional comparer</param>
+        /// <param name="comparer">Optional comparer, if null the default comparer is used</param>
         /// <returns>A concurrent dictionary with the values</returns>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="enumerable"/> or <paramref name="keyExtractor"/> is null, or if the <paramref name="keyExtractor"/> returns a null key</exception>
         public static ConcurrentDictionary<TKey, TVal> ToConcurrentDictionary<TKey, TVal>(this IEnumerable<TVal> enumerable, Func<TVal, TKey> keyExtractor, IEqualityComparer<TKey> comparer = null)
         {
+            ArgumentNullException.ThrowIfNull(enumerable);
+            ArgumentNullException.ThrowIfNull(keyExtractor);
             var d = comparer == null ? new ConcurrentDictionary<TKey, TVal>() : new ConcurrentDictionary<TKey, TVal>(comparer);
             foreach (var v in enumerable)
                 d[keyExtractor(v)] = v;
@@ -113,21 +171,40 @@ namespace SysWeaver
         /// <summary>
         /// Return a single value as an enumerable
         /// </summary>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="T">The type of the value</typeparam>
         /// <param name="value">The value to return as an IEnumerable</param>
-        /// <returns></returns>
-        public static IEnumerable<T> AsEnumerable<T>(T value) => new IntEnum<T>(value);
+        /// <returns>An enumerable that contains the <paramref name="value"/> (once).
+        /// The enumerable can be enumerated any number of times.
+        /// The first enumeration (on the creating thread) doesn't allocate an enumerator.</returns>
+        public static IEnumerable<T> AsEnumerable<T>(T value) => new SingleEnum<T>(value);
 
-        struct IntEnum<T> : IEnumerable<T>, IEnumerator<T>
+        /// <summary>
+        /// An enumerable that contains a single value.
+        /// Same pattern as a compiler generated iterator, the first GetEnumerator call (on the creating thread) returns this instance (so only one allocation is needed in the typical use case).
+        /// </summary>
+        sealed class SingleEnum<T> : IEnumerable<T>, IEnumerator<T>
         {
-            public IntEnum(T val)
+            public SingleEnum(T val)
             {
                 Value = val;
-                State = 0;
+                State = -2;
+                ThreadId = Environment.CurrentManagedThreadId;
+            }
+
+            SingleEnum(T val, int state)
+            {
+                Value = val;
+                State = state;
             }
 
             readonly T Value;
+
+            /// <summary>
+            /// -2 = Not used as an enumerator yet, 0 = Before the value, 1 = At the value, 2 = After the value
+            /// </summary>
             int State;
+
+            readonly int ThreadId;
 
             public T Current => State == 1 ? Value : default;
 
@@ -137,7 +214,15 @@ namespace SysWeaver
             {
             }
 
-            public IEnumerator<T> GetEnumerator() => this;
+            public IEnumerator<T> GetEnumerator()
+            {
+                if ((State == -2) && (ThreadId == Environment.CurrentManagedThreadId))
+                {
+                    State = 0;
+                    return this;
+                }
+                return new SingleEnum<T>(Value, 0);
+            }
 
             public bool MoveNext()
             {
@@ -161,13 +246,15 @@ namespace SysWeaver
         /// <summary>
         /// Process all elements in a list in revered order
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="list">The list to process</param>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="list">The list to process, if null nothing is done</param>
         /// <param name="action">The action to perform on each element</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="action"/> is null and the <paramref name="list"/> is non-null</exception>
         public static void ProcessReverse<T>(this IReadOnlyList<T> list, Action<T> action)
         {
             if (list == null)
                 return;
+            ArgumentNullException.ThrowIfNull(action);
             var l = list.Count;
             while (l > 0)
             {
@@ -179,13 +266,15 @@ namespace SysWeaver
         /// <summary>
         /// Process all elements in a list.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="list">The list to process</param>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="list">The list to process, if null nothing is done</param>
         /// <param name="action">The action to perform on each element</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="action"/> is null and the <paramref name="list"/> is non-null</exception>
         public static void Process<T>(this IReadOnlyList<T> list, Action<T> action)
         {
             if (list == null)
                 return;
+            ArgumentNullException.ThrowIfNull(action);
             var l = list.Count;
             for (int i = 0; i < l; i++)
                 action(list[i]);
@@ -194,13 +283,15 @@ namespace SysWeaver
         /// <summary>
         /// Process all elements in an enumerable.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="enumerable">The enumerable to process</param>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="enumerable">The enumerable to process, if null nothing is done</param>
         /// <param name="action">The action to perform on each element</param>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="action"/> is null and the <paramref name="enumerable"/> is non-null</exception>
         public static void Process<T>(this IEnumerable<T> enumerable, Action<T> action)
         {
             if (enumerable == null)
                 return;
+            ArgumentNullException.ThrowIfNull(action);
             foreach (var i in enumerable)
                 action(i);
         }
@@ -209,8 +300,8 @@ namespace SysWeaver
         /// Process all elements in a list.
         /// Elements are processed in paralell (async).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="list">The list to process</param>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="list">The list to process, if null nothing is done</param>
         /// <param name="action">The action to perform on each element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
@@ -220,7 +311,8 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all elements are processed, if any action fails, the task is faulted (after all actions have completed)</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="action"/> is null and the <paramref name="list"/> is non-empty</exception>
         public static Task ProcessAsync<T>(this IReadOnlyList<T> list, Func<T, Task> action, int maxConcurrency = 0)
         {
             if (list == null)
@@ -241,8 +333,11 @@ namespace SysWeaver
         /// Process all elements in an enumerable.
         /// Elements are processed in paralell (async).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="enumerable">The enumerable to process</param>
+        /// <remarks>
+        /// If the <paramref name="enumerable"/> is a <see cref="IReadOnlyList{T}"/> (arrays, List etc) it's used directly, else the elements are first copied to a list.
+        /// </remarks>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="enumerable">The enumerable to process, if null nothing is done</param>
         /// <param name="action">The action to perform on each element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
@@ -252,16 +347,23 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all elements are processed, if any action fails, the task is faulted (after all actions have completed)</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="action"/> is null and the <paramref name="enumerable"/> is non-empty</exception>
         public static Task ProcessAsync<T>(this IEnumerable<T> enumerable, Func<T, Task> action, int maxConcurrency = 0)
-            => ProcessAsync(enumerable.ToList(), action, maxConcurrency);
+            => ProcessAsync(AsList(enumerable), action, maxConcurrency);
+
+        /// <summary>
+        /// Get an enumerable as a read only list, without copying if possible
+        /// </summary>
+        static IReadOnlyList<T> AsList<T>(IEnumerable<T> enumerable)
+            => enumerable == null ? null : (enumerable as IReadOnlyList<T> ?? enumerable.ToList());
 
         /// <summary>
         /// Process all elements in a list.
         /// Elements are processed in paralell (async).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="list">The list to process</param>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="list">The list to process, if null nothing is done</param>
         /// <param name="action">The action to perform on each element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
@@ -271,7 +373,8 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all elements are processed, if any action fails, the task is faulted (after all actions have completed)</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="action"/> is null and the <paramref name="list"/> is non-empty</exception>
         public static ValueTask ProcessAsyncValue<T>(this IReadOnlyList<T> list, Func<T, ValueTask> action, int maxConcurrency = 0)
         {
             if (list == null)
@@ -292,8 +395,12 @@ namespace SysWeaver
         /// Process all elements in an enumerable.
         /// Elements are processed in paralell (async).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="enumerable">The enumerable to process</param>
+        /// <remarks>
+        /// Same as <see cref="ProcessAsync{T}(IEnumerable{T}, Func{T, Task}, int)"/>.
+        /// If the <paramref name="enumerable"/> is a <see cref="IReadOnlyList{T}"/> (arrays, List etc) it's used directly, else the elements are first copied to a list.
+        /// </remarks>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="enumerable">The enumerable to process, if null nothing is done</param>
         /// <param name="action">The action to perform on each element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
@@ -303,9 +410,10 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all elements are processed, if any action fails, the task is faulted (after all actions have completed)</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="action"/> is null and the <paramref name="enumerable"/> is non-empty</exception>
         public static Task ProcessAsyncValue<T>(this IEnumerable<T> enumerable, Func<T, Task> action, int maxConcurrency = 0)
-            => ProcessAsync(enumerable.ToList(), action, maxConcurrency);
+            => ProcessAsync(AsList(enumerable), action, maxConcurrency);
 
 
 
@@ -315,9 +423,9 @@ namespace SysWeaver
         /// Process all elements in a list.
         /// Elements are processed in paralell (async).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="list">The list to process</param>
-        /// <param name="action">The action to perform on each element</param>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="list">The list to process, if null nothing is done</param>
+        /// <param name="action">The action to perform on each element, the second argument is the index of the element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -326,7 +434,8 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all elements are processed, if any action fails, the task is faulted (after all actions have completed)</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="action"/> is null and the <paramref name="list"/> is non-empty</exception>
         public static Task ProcessAsync<T>(this IReadOnlyList<T> list, Func<T, int, Task> action, int maxConcurrency = 0)
         {
             if (list == null)
@@ -347,9 +456,12 @@ namespace SysWeaver
         /// Process all elements in an enumerable.
         /// Elements are processed in paralell (async).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="enumerable">The enumerable to process</param>
-        /// <param name="action">The action to perform on each element</param>
+        /// <remarks>
+        /// If the <paramref name="enumerable"/> is a <see cref="IReadOnlyList{T}"/> (arrays, List etc) it's used directly, else the elements are first copied to a list.
+        /// </remarks>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="enumerable">The enumerable to process, if null nothing is done</param>
+        /// <param name="action">The action to perform on each element, the second argument is the index of the element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -358,17 +470,21 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all elements are processed, if any action fails, the task is faulted (after all actions have completed)</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="action"/> is null and the <paramref name="enumerable"/> is non-empty</exception>
         public static Task ProcessAsync<T>(this IEnumerable<T> enumerable, Func<T, int, Task> action, int maxConcurrency = 0)
-            => ProcessAsync(enumerable.ToList(), action, maxConcurrency);
+            => ProcessAsync(AsList(enumerable), action, maxConcurrency);
 
         /// <summary>
         /// Process all elements in a list.
         /// Elements are processed in paralell (async).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="list">The list to process</param>
-        /// <param name="action">The action to perform on each element</param>
+        /// <remarks>
+        /// Same as <see cref="ProcessAsync{T}(IReadOnlyList{T}, Func{T, int, Task}, int)"/>.
+        /// </remarks>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="list">The list to process, if null nothing is done</param>
+        /// <param name="action">The action to perform on each element, the second argument is the index of the element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -377,7 +493,8 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all elements are processed, if any action fails, the task is faulted (after all actions have completed)</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="action"/> is null and the <paramref name="list"/> is non-empty</exception>
         public static Task ProcessAsyncValue<T>(this IReadOnlyList<T> list, Func<T, int, Task> action, int maxConcurrency = 0)
         {
             if (list == null)
@@ -398,9 +515,12 @@ namespace SysWeaver
         /// Process all elements in an enumerable.
         /// Elements are processed in paralell (async).
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="enumerable">The enumerable to process</param>
-        /// <param name="action">The action to perform on each element</param>
+        /// <remarks>
+        /// If the <paramref name="enumerable"/> is a <see cref="IReadOnlyList{T}"/> (arrays, List etc) it's used directly, else the elements are first copied to a list.
+        /// </remarks>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <param name="enumerable">The enumerable to process, if null nothing is done</param>
+        /// <param name="action">The action to perform on each element, the second argument is the index of the element</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -409,21 +529,27 @@ namespace SysWeaver
         /// -200 = 200% of the number of processors (so 16 if there are 8 processors).
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
-        /// <returns></returns>
+        /// <returns>A task that completes when all elements are processed, if any action fails, the task is faulted (after all actions have completed)</returns>
+        /// <exception cref="NullReferenceException">Thrown if <paramref name="action"/> is null and the <paramref name="enumerable"/> is non-empty</exception>
         public static Task ProcessAsyncValue<T>(this IEnumerable<T> enumerable, Func<T, int, Task> action, int maxConcurrency = 0)
-            => ProcessAsyncValue(enumerable.ToList(), action, maxConcurrency);
+            => ProcessAsyncValue(AsList(enumerable), action, maxConcurrency);
 
 
 
 
         /// <summary>
-        /// Only return unqiue keys
+        /// Only return unique keys, the first key-value pair with a given key is returned, later pairs with the same key are skipped.
+        /// The order of the pairs is preserved.
         /// </summary>
-        /// <typeparam name="K"></typeparam>
-        /// <typeparam name="V"></typeparam>
-        /// <param name="enumerable"></param>
-        /// <param name="comparer"></param>
-        /// <returns></returns>
+        /// <remarks>
+        /// The enumeration is lazy (deferred), argument validation and enumeration of the source happens when the result is enumerated.
+        /// </remarks>
+        /// <typeparam name="K">The key type</typeparam>
+        /// <typeparam name="V">The value type</typeparam>
+        /// <param name="enumerable">The key-value pairs</param>
+        /// <param name="comparer">An optional key comparer, if null the default comparer is used</param>
+        /// <returns>The key-value pairs with unique keys</returns>
+        /// <exception cref="NullReferenceException">Thrown (when enumerated) if <paramref name="enumerable"/> is null</exception>
         public static IEnumerable<KeyValuePair<K, V>> WithUniqueKeys<K, V>(this IEnumerable<KeyValuePair<K, V>> enumerable, IEqualityComparer<K> comparer = default)
         {
             var seen = new HashSet<K>(comparer);

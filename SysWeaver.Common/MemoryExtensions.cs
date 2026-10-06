@@ -10,6 +10,9 @@ using System.Text;
 namespace SysWeaver
 {
 
+    /// <summary>
+    /// Extension methods for memory (hexadecimal formatting and decoding text into lines)
+    /// </summary>
     public static class MemoryExtensions
     {
 
@@ -18,7 +21,8 @@ namespace SysWeaver
         /// Converts some data into a hexadecimal string
         /// </summary>
         /// <param name="bytes">The data</param>
-        /// <returns>A hexadecimal string (lower case)</returns>
+        /// <returns>A hexadecimal string (lower case, two chars per byte, empty if the data is empty)</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The data is too large (the string would be longer than int.MaxValue chars)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static String ToHex(this ReadOnlyMemory<Byte> bytes)
             => Convert.ToHexStringLower(bytes.Span);
@@ -31,7 +35,10 @@ namespace SysWeaver
         /// <param name="encoding">The text encoding, defaults to UTF8</param>
         /// <param name="trim">True to trim whitespaces from every line</param>
         /// <param name="removeEmpty">True to remove empty lines</param>
-        /// <returns></returns>
+        /// <returns>The lines of text (an empty array if the data is empty)</returns>
+        /// <exception cref="DecoderFallbackException">The data is invalid and the encoding uses an exception fallback</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The data is too large to be decoded</exception>
+        /// <remarks>The text is decoded into a temporary (stack or pooled) buffer, only the lines are allocated</remarks>
         [SkipLocalsInit]
         public static String[] ToStringArray(this ReadOnlySpan<Byte> bytes, Encoding encoding = null, bool trim = false, bool removeEmpty = false)
         {
@@ -65,14 +72,6 @@ namespace SysWeaver
         const int MaxStackChars = 2048;
 
 
-        /// <summary>
-        /// Write lower case hexadecimal digits (to must have room for 2 chars for every byte)
-        /// </summary>
-        static void WriteHex(Span<Char> to, ReadOnlyMemory<Byte> data)
-            => Convert.TryToHexStringLower(data.Span, to, out _);
-
-        internal static readonly SpanAction<Char, ReadOnlyMemory<Byte>> WriteHexAction = WriteHex;
-
 
     }
 
@@ -102,10 +101,20 @@ namespace SysWeaver
 
 
 
+        /// <summary>
+        /// Get a lexicographic comparer (the elements are compared using Comparer.Default, if all common elements are equal the shorter is first)
+        /// </summary>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <returns>A shared comparer instance</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IComparer<ReadOnlyMemory<T>> GetComparer<T>() => Cmp<T>.Instance;
 
 
+        /// <summary>
+        /// Get an equality comparer that compares the content (the elements are compared using EqualityComparer.Default, the hash code is based on the content).
+        /// </summary>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <returns>A shared comparer instance</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEqualityComparer<ReadOnlyMemory<T>> GetEqualityComparer<T>() => Cmp<T>.Instance;
 
@@ -141,10 +150,20 @@ namespace SysWeaver
 
 
 
+        /// <summary>
+        /// Get a comparer that orders by length (shortest first), then lexicographic (the elements are compared using Comparer.Default)
+        /// </summary>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <returns>A shared comparer instance</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IComparer<Memory<T>> GetComparer<T>() => Cmp<T>.Instance;
 
 
+        /// <summary>
+        /// Get an equality comparer that compares the content (the elements are compared using EqualityComparer.Default, the hash code is based on the content).
+        /// </summary>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <returns>A shared comparer instance</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEqualityComparer<Memory<T>> GetEqualityComparer<T>() => Cmp<T>.Instance;
 

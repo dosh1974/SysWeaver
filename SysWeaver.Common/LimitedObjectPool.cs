@@ -5,17 +5,29 @@ using System.Threading;
 namespace SysWeaver
 {
     /// <summary>
-    /// An concurrent object pool with a limited number of cached objects.
+    /// A concurrent object pool with a limited number of cached objects.
     /// There is a small chance that the number of objects exceeds the maximum.
     /// The object must implement IDisposable and call the supplied Action there.
-    /// Do not perform any acutal disposing of required internal resources, resetting the object for re-use is fine.
+    /// Do not perform any actual disposing of required internal resources, resetting the object for re-use is fine.
     /// If disposing of required internal resources is required, supply a disposer that will be called when an instance in no longer needed.
     /// </summary>
-    /// <typeparam name="T"></typeparam>
+    /// <typeparam name="T">The type of the pooled objects</typeparam>
+    /// <remarks>
+    /// The pool is lock free, cached objects are re-used in LIFO order (the most recently returned object is returned first).
+    /// Objects must only be returned (disposed) once per <see cref="Get"/>.
+    /// </remarks>
     public sealed class LimitedObjectPool<T> : IDisposable where T : IDisposable
     {
+        /// <summary>
+        /// Create a new pool
+        /// </summary>
+        /// <param name="creator">A function that creates a new object, the supplied action must be called by the object's Dispose method (this returns the object to the pool)</param>
+        /// <param name="maxCached">The maximum number of objects to keep in the cache, values less than one are treated as one</param>
+        /// <param name="disposer">An optional action that disposes the internal resources of an object, called when an object is no longer needed (not cached), exceptions thrown by it are ignored when the pool is disposed</param>
+        /// <exception cref="ArgumentNullException"><paramref name="creator"/> is null</exception>
         public LimitedObjectPool(Func<Action<T>, T> creator, int maxCached, Action<T> disposer = null)
         {
+            ArgumentNullException.ThrowIfNull(creator);
             maxCached = Math.Max(1, maxCached);
             MaxCached = maxCached;
             InternalMaxCached = maxCached;
@@ -28,6 +40,7 @@ namespace SysWeaver
         /// Get a cached object or create a new one, use the using pattern (calling Dispose when the object can be re-used)
         /// </summary>
         /// <returns>An instance</returns>
+        /// <remarks>Any exception thrown by the creator function is propagated</remarks>
         public T Get()
         {
             Interlocked.Increment(ref InternalInUse);
@@ -36,16 +49,27 @@ namespace SysWeaver
                 Interlocked.Decrement(ref InternalInCache);
                 return t;
             }
-            t = Creator(OnDispose);
+            try
+            {
+                t = Creator(OnDispose);
+            }
+            catch
+            {
+                // No instance is in use
+                Interlocked.Decrement(ref InternalInUse);
+                throw;
+            }
             Interlocked.Increment(ref InternalCreated);
             return t;
         }
 
         /// <summary>
-        /// This will remove all objects from the cache and call there disposer function.
+        /// This will remove all objects from the cache and call their disposer function.
         /// Any subsequent calls to Get will return a new instance.
         /// Any Dispose calls to objects not in the cache will call the disposer functions directly.
+        /// Calling Dispose more than once does nothing.
         /// </summary>
+        /// <remarks>If a disposer function is supplied, this method may sleep a few milliseconds to make sure that objects returned concurrently are disposed too</remarks>
         public void Dispose()
         {
             if (Interlocked.Exchange(ref InternalMaxCached, 0) == 0)

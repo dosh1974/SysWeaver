@@ -3,6 +3,14 @@ using System.Threading.Tasks;
 
 namespace SysWeaver
 {
+    /// <summary>
+    /// Limits the number of concurrent executions of async functions, by replacing a function with a function that takes a slot in an <see cref="AsyncLock"/> before calling the original function.
+    /// </summary>
+    /// <remarks>
+    /// A typical usage is to limit the number of concurrent tasks when processing a list of items in parallel.
+    /// The function is only wrapped if the number of items is greater than the computed concurrency (otherwise there is nothing to limit).
+    /// No arguments are validated, a null function is wrapped (and the wrapped function throws a <see cref="NullReferenceException"/> when invoked).
+    /// </remarks>
     public static class ConcurrencyLimiter
     {
 
@@ -13,19 +21,21 @@ namespace SysWeaver
 
 
 
-
+        /// <summary>
+        /// The number of logical processors (Environment.ProcessorCount), used to compute the concurrency when maxConcurrency is zero or negative.
+        /// </summary>
         public static readonly int ProcessorCount = Environment.ProcessorCount;
 
 
         /// <summary>
-        /// The default maximum concurrency used by default (when maxConcurrency is zero).
+        /// The default maximum concurrency used by default (when maxConcurrency is zero), the number of processors minus one (but at least two).
         /// </summary>
         public static readonly int DefaultLimit = ProcessorCount <= 2 ? 2 : (ProcessorCount - 1);
 
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -35,6 +45,8 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
+        /// <typeparam name="T">The type of the result of the function</typeparam>
         public static void LimitConcurrency<K, T>(ref Func<K, int, Task<T>> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -51,7 +63,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -61,6 +73,8 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
+        /// <typeparam name="T">The type of the result of the function</typeparam>
         public static void LimitConcurrency<K, T>(ref Func<K, int, ValueTask<T>> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -77,7 +91,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -87,6 +101,8 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
+        /// <typeparam name="T">The type of the result of the function</typeparam>
         public static void LimitConcurrency<K, T>(ref Func<K, Task<T>> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -103,7 +119,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -113,6 +129,8 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
+        /// <typeparam name="T">The type of the result of the function</typeparam>
         public static void LimitConcurrency<K, T>(ref Func<K, ValueTask<T>> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -132,7 +150,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -142,6 +160,9 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
+        /// <typeparam name="V">The type of the second argument of the function</typeparam>
+        /// <typeparam name="T">The type of the result of the function</typeparam>
         public static void LimitConcurrency<K, V, T>(ref Func<K, V, int, Task<T>> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -158,7 +179,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -168,6 +189,9 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
+        /// <typeparam name="V">The type of the second argument of the function</typeparam>
+        /// <typeparam name="T">The type of the result of the function</typeparam>
         public static void LimitConcurrency<K, V, T>(ref Func<K, V, int, ValueTask<T>> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -184,7 +208,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -194,6 +218,9 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
+        /// <typeparam name="V">The type of the second argument of the function</typeparam>
+        /// <typeparam name="T">The type of the result of the function</typeparam>
         public static void LimitConcurrency<K, V, T>(ref Func<K, V, Task<T>> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -210,7 +237,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -220,6 +247,9 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
+        /// <typeparam name="V">The type of the second argument of the function</typeparam>
+        /// <typeparam name="T">The type of the result of the function</typeparam>
         public static void LimitConcurrency<K, V, T>(ref Func<K, V, ValueTask<T>> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -240,7 +270,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -250,6 +280,7 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         public static void LimitConcurrency<K>(ref Func<K, int, Task> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -266,7 +297,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -276,6 +307,7 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         public static void LimitConcurrency<K>(ref Func<K, int, ValueTask> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -292,7 +324,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -302,6 +334,7 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         public static void LimitConcurrency<K>(ref Func<K, Task> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -318,7 +351,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -328,6 +361,7 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
         public static void LimitConcurrency<K>(ref Func<K, ValueTask> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -347,7 +381,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -357,6 +391,8 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
+        /// <typeparam name="V">The type of the second argument of the function</typeparam>
         public static void LimitConcurrency<K, V>(ref Func<K, V, int, Task> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -373,7 +409,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -383,6 +419,8 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
+        /// <typeparam name="V">The type of the second argument of the function</typeparam>
         public static void LimitConcurrency<K, V>(ref Func<K, V, int, ValueTask> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -399,7 +437,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -409,6 +447,8 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
+        /// <typeparam name="V">The type of the second argument of the function</typeparam>
         public static void LimitConcurrency<K, V>(ref Func<K, V, Task> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -425,7 +465,7 @@ namespace SysWeaver
         /// <summary>
         /// Applies a concurrency limiter to some task function
         /// </summary>
-        /// <param name="fn">The function to limit</param>
+        /// <param name="fn">The function to limit, it is replaced with a function that waits for a free slot before calling the original function (it is left unchanged if no limiting is needed)</param>
         /// <param name="maxConcurrency">The maximum number of concurrent operations.
         /// If less than zero, it's a percentage of the number of available logical processors.
         /// If zero the concurrency is the number of processors minus one.
@@ -435,6 +475,8 @@ namespace SysWeaver
         /// 0 = Number of processors minus one (so 7 if there are 8 processors).
         /// </param>
         /// <param name="numberOfItems">The lock is only created if the number of items is greater than the computed concurrency</param>
+        /// <typeparam name="K">The type of the first argument of the function (typically the item)</typeparam>
+        /// <typeparam name="V">The type of the second argument of the function</typeparam>
         public static void LimitConcurrency<K, V>(ref Func<K, V, ValueTask> fn, int maxConcurrency, int numberOfItems)
         {
             var l = CreateLock(maxConcurrency, numberOfItems);
@@ -473,13 +515,9 @@ namespace SysWeaver
                 maxConcurrency = DefaultLimit;
             if (maxConcurrency < 0)
             {
-                var p = ProcessorCount;
-                maxConcurrency = -maxConcurrency;
-                maxConcurrency *= p;
-                maxConcurrency += 50;
-                maxConcurrency /= 100;
-                if (maxConcurrency < 1)
-                    maxConcurrency = 1;
+                // Use 64 bit math, large negative values (percentages) would overflow (and incorrectly result in a concurrency of one)
+                var m = ((-(long)maxConcurrency) * ProcessorCount + 50) / 100;
+                maxConcurrency = m < 1 ? 1 : (m >= NoLimit ? NoLimit : (int)m);
             }
             return numberOfItems <= maxConcurrency ? null : new AsyncLock(maxConcurrency);
         }

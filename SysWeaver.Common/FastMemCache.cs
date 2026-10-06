@@ -15,33 +15,62 @@ namespace SysWeaver
 
 
     /// <summary>
-    /// Implements a cache that removes it's items after the specified duration (after last request).
+    /// Implements a thread safe cache that removes it's items after the specified duration (or at the time returned by an expiration function).
     /// Item's have the same expiration duration.
-    /// If you need to have per itgem life times, use the MemCache class instead.
+    /// If you need to have per item life times, use the MemCache class instead.
     /// </summary>
+    /// <remarks>
+    /// The expiration time of an item is computed when the item is added / updated, reading an item doesn't extend it's life time.
+    /// Expired items are never returned, they are removed (pruned) from the cache on any write (or when <see cref="Prune"/> is called).
+    /// Updates of the same key are serialized using a per key lock, so a value factory is only executed once for a key at the same time.
+    /// Keys can't be null.
+    /// </remarks>
     /// <typeparam name="K">The type of the key</typeparam>
     /// <typeparam name="V">The type of the value</typeparam>
     public sealed class FastMemCache<K, V> : IEnumerable<ValueTuple<DateTime, K, V>>
     {
 
         /// <summary>
-        /// Creates a cache that removes it's items after the specified duration (after last request)
+        /// Creates a cache that removes it's items after the specified duration (after they are added or updated)
         /// </summary>
-        /// <param name="timeout">The duration to keep items in the cache (after last request)</param>
-        /// <param name="comparer">An optional comparer</param>
+        /// <param name="timeout">The duration to keep items in the cache (after they are added or updated).
+        /// A zero or negative duration means that items expire immediately (nothing is cached).
+        /// A very large duration (like <see cref="TimeSpan.MaxValue"/>) means that items never expire.</param>
+        /// <param name="comparer">An optional key comparer, null to use the default comparer</param>
         public FastMemCache(TimeSpan timeout, IEqualityComparer<K> comparer = null)
-            : this(x => DateTime.UtcNow + timeout, comparer)
+            : this(GetTimeoutFunc(timeout), comparer)
         {
+        }
+
+        /// <summary>
+        /// Get the expiration function to use for a fixed timeout
+        /// </summary>
+        /// <param name="timeout">The timeout</param>
+        /// <returns>A function that returns the expiration time</returns>
+        static Func<V, DateTime> GetTimeoutFunc(TimeSpan timeout)
+        {
+            //  Adding a large time span to the current time would overflow (throw), clamp to DateTime.MaxValue (never expire)
+            var maxTicks = (DateTime.MaxValue.Ticks - DateTime.UtcNow.Ticks) >> 1;
+            if (timeout.Ticks < maxTicks)
+                return x => DateTime.UtcNow + timeout;
+            return x =>
+            {
+                var now = DateTime.UtcNow;
+                return (DateTime.MaxValue - now) > timeout ? now + timeout : DateTime.MaxValue;
+            };
         }
 
 
         /// <summary>
         /// Creates a cache that removes it's items after the specified duration (after last request)
         /// </summary>
-        /// <param name="getExpirationTimeUtc">A function that gets the expiration time (as UTC) of a value</param>
-        /// <param name="comparer">An optional comparer</param>
+        /// <param name="getExpirationTimeUtc">A function that gets the expiration time (as UTC) of a value, called every time a value is added or updated.
+        /// Return <see cref="DateTime.MaxValue"/> for items that should never expire.</param>
+        /// <param name="comparer">An optional key comparer, null to use the default comparer</param>
+        /// <exception cref="ArgumentNullException"><paramref name="getExpirationTimeUtc"/> is null</exception>
         public FastMemCache(Func<V, DateTime> getExpirationTimeUtc, IEqualityComparer<K> comparer = null)
         {
+            ArgumentNullException.ThrowIfNull(getExpirationTimeUtc);
             GetExpirationDate = getExpirationTimeUtc;
             if (comparer == null)
             {
@@ -56,10 +85,12 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Set a new value
+        /// Set a new value (adds a new item or replaces an existing item)
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <param name="key">The key</param>
         /// <param name="value">The new value</param>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null</exception>
+        /// <remarks>Must not be called for the same key from within a value factory (dead lock).</remarks>
         public void Set(K key, V value)
         {
             var c = C;
@@ -79,8 +110,12 @@ namespace SysWeaver
         /// <summary>
         /// Try add new value
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <param name="key">The key</param>
         /// <param name="value">The new value</param>
+        /// <returns>True if the value was added, false if a (non-expired) item with the key already exist (the value is not updated)</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null</exception>
+        /// <remarks>An expired item (that haven't been pruned yet) is treated as missing (and is replaced).
+        /// Must not be called for the same key from within a value factory (dead lock).</remarks>
         public bool TryAdd(K key, V value)
         {
             var c = C;
@@ -107,9 +142,12 @@ namespace SysWeaver
         /// <summary>
         /// Get an item if it's cached
         /// </summary>
-        /// <param name="key">Tke key</param>
-        /// <param name="value">The cached value or default it it deosn't exist</param>
-        /// <returns>True if a value exist</returns>
+        /// <param name="key">The key</param>
+        /// <param name="value">The cached value or default it it doesn't exist</param>
+        /// <returns>True if a (non-expired) value exist</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null</exception>
+        /// <remarks>An item that is being created in the background (async methods with waitUntilReady = false) doesn't exist until it's completed.
+        /// Doesn't affect the hit / miss statistics.</remarks>
         public bool TryGet(K key, out V value)
         {
             if (!C.TryGetValue(key, out var v))
@@ -117,7 +155,7 @@ namespace SysWeaver
                 value = default;
                 return false;
             }
-            if (DateTime.UtcNow < v.Item1)
+            if ((DateTime.UtcNow < v.Item1) && (v.Item3 == null))
             {
                 value = v.Item2;
                 return true;
@@ -133,9 +171,15 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <returns>The value of the item</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
+        /// </remarks>
         public V GetOrUpdateWithExisting(K key, Func<K, V, V> func)
         {
             var c = C;
@@ -160,6 +204,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 var value = func(key, val.Item2);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
@@ -176,10 +221,17 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <typeparam name="A">The type of the custom argument</typeparam>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
         /// <returns>The value of the item</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
+        /// </remarks>
         public V GetOrUpdateWithExisting<A>(K key, Func<K, V, A, V> func, A arg)
         {
             var c = C;
@@ -204,6 +256,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 var value = func(key, val.Item2, arg);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
@@ -221,11 +274,19 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <typeparam name="A0">The type of the first custom argument</typeparam>
+        /// <typeparam name="A1">The type of the second custom argument</typeparam>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
         /// <returns>The value of the item</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
+        /// </remarks>
         public V GetOrUpdateWithExisting<A0, A1>(K key, Func<K, V, A0, A1, V> func, A0 arg0, A1 arg1)
         {
             var c = C;
@@ -250,6 +311,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 var value = func(key, val.Item2, arg0, arg1);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
@@ -269,10 +331,18 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
         /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
+        /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
+        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// </remarks>
         public ValueTask<V> GetOrUpdateWithExistingAsync(K key, Func<K, V, Task<V>> func, bool waitUntilReady = true)
         {
             if (C.TryGetValue(key, out var val))
@@ -297,11 +367,20 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <typeparam name="A">The type of the custom argument</typeparam>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item</returns>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
+        /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
+        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// </remarks>
         public ValueTask<V> GetOrUpdateWithExistingAsync<A>(K key, Func<K, V, A, Task<V>> func, A arg, bool waitUntilReady = true)
         {
             if (C.TryGetValue(key, out var val))
@@ -327,12 +406,22 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <typeparam name="A0">The type of the first custom argument</typeparam>
+        /// <typeparam name="A1">The type of the second custom argument</typeparam>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item</returns>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
+        /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
+        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// </remarks>
         public ValueTask<V> GetOrUpdateWithExistingAsync<A0, A1>(K key, Func<K, V, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
         {
             if (C.TryGetValue(key, out var val))
@@ -361,10 +450,18 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
         /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
+        /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
+        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// </remarks>
         public ValueTask<V> GetOrUpdateWithExistingValueAsync(K key, Func<K, V, ValueTask<V>> func, bool waitUntilReady = true)
         {
             if (C.TryGetValue(key, out var val))
@@ -389,11 +486,20 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <typeparam name="A">The type of the custom argument</typeparam>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item</returns>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
+        /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
+        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// </remarks>
         public ValueTask<V> GetOrUpdateWithExistingValueAsync<A>(K key, Func<K, V, A, ValueTask<V>> func, A arg, bool waitUntilReady = true)
         {
             if (C.TryGetValue(key, out var val))
@@ -419,12 +525,22 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <typeparam name="A0">The type of the first custom argument</typeparam>
+        /// <typeparam name="A1">The type of the second custom argument</typeparam>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item</returns>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// The existing value passed to <paramref name="func"/> is the expired value (if it still exist in the cache) or default.
+        /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
+        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// </remarks>
         public ValueTask<V> GetOrUpdateWithExistingValueAsync<A0, A1>(K key, Func<K, V, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
         {
             if (C.TryGetValue(key, out var val))
@@ -457,9 +573,14 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <returns>The value of the item</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// </remarks>
         public V GetOrUpdate(K key, Func<K, V> func)
         {
             var c = C;
@@ -484,6 +605,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 var value = func(key);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
@@ -500,10 +622,16 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <typeparam name="A">The type of the custom argument</typeparam>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
         /// <returns>The value of the item</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// </remarks>
         public V GetOrUpdate<A>(K key, Func<K, A, V> func, A arg)
         {
             var c = C;
@@ -528,6 +656,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 var value = func(key, arg);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
@@ -545,11 +674,18 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <typeparam name="A0">The type of the first custom argument</typeparam>
+        /// <typeparam name="A1">The type of the second custom argument</typeparam>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
         /// <returns>The value of the item</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// </remarks>
         public V GetOrUpdate<A0, A1>(K key, Func<K, A0, A1, V> func, A0 arg0, A1 arg1)
         {
             var c = C;
@@ -574,6 +710,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 var value = func(key, arg0, arg1);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
@@ -595,10 +732,17 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
         /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
+        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// </remarks>
         public ValueTask<V> GetOrUpdateAsync(K key, Func<K, Task<V>> func, bool waitUntilReady = true)
         {
             if (C.TryGetValue(key, out var val))
@@ -623,11 +767,19 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <typeparam name="A">The type of the custom argument</typeparam>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item</returns>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
+        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// </remarks>
         public ValueTask<V> GetOrUpdateAsync<A>(K key, Func<K, A, Task<V>> func, A arg, bool waitUntilReady = true)
         {
             if (C.TryGetValue(key, out var val))
@@ -653,12 +805,21 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <typeparam name="A0">The type of the first custom argument</typeparam>
+        /// <typeparam name="A1">The type of the second custom argument</typeparam>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item</returns>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
+        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// </remarks>
         public ValueTask<V> GetOrUpdateAsync<A0, A1>(K key, Func<K, A0, A1, Task<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
         {
             if (C.TryGetValue(key, out var val))
@@ -687,10 +848,17 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
         /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
+        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// </remarks>
         public ValueTask<V> GetOrUpdateValueAsync(K key, Func<K, ValueTask<V>> func, bool waitUntilReady = true)
         {
             if (C.TryGetValue(key, out var val))
@@ -715,11 +883,19 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <typeparam name="A">The type of the custom argument</typeparam>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item</returns>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
+        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// </remarks>
         public ValueTask<V> GetOrUpdateValueAsync<A>(K key, Func<K, A, ValueTask<V>> func, A arg, bool waitUntilReady = true)
         {
             if (C.TryGetValue(key, out var val))
@@ -745,12 +921,21 @@ namespace SysWeaver
         /// Get an item from the cache, if it doesn't exist in the cache, the supplied delegate is executed to create the item.
         /// Only one item can be created at the same time (locked using the key), so no risk for "double" effort. 
         /// </summary>
-        /// <param name="key">Tke key</param>
+        /// <typeparam name="A0">The type of the first custom argument</typeparam>
+        /// <typeparam name="A1">The type of the second custom argument</typeparam>
+        /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="waitUntilReady">If the item have to be updated, wait for the update before returning, else the default value will be returned and the update will be started concurrently</param>
-        /// <returns>The value of the item</returns>
+        /// <returns>The value of the item or default if wait until ready is false and the update haven't completed yet</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (the returned task is faulted)</exception>
+        /// <remarks>
+        /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
+        /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
+        /// If <paramref name="waitUntilReady"/> is false and <paramref name="func"/> doesn't complete synchronously, the update continues in the background, callers that doesn't wait will get default until it completes.
+        /// If a background update fails, the entry is removed (and the exception is thrown to any callers waiting for it).
+        /// </remarks>
         public ValueTask<V> GetOrUpdateValueAsync<A0, A1>(K key, Func<K, A0, A1, ValueTask<V>> func, A0 arg0, A1 arg1, bool waitUntilReady = true)
         {
             if (C.TryGetValue(key, out var val))
@@ -779,6 +964,10 @@ namespace SysWeaver
         /// <summary>
         /// Call to manually prune (remove) old items, no real need to call this unless memory usage is the primary concern
         /// </summary>
+        /// <remarks>
+        /// Pruning is performed automatically after every write.
+        /// Items that are locked (being updated) at the time of the prune are pruned later.
+        /// </remarks>
         public void Prune()
         {
             var q = Q;
@@ -791,31 +980,43 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Peform the actual prune, move to own method to make it easiier for the JIT to inline the Prune method (checking for pruning)
+        /// Perform the actual prune, moved to it's own method to make it easier for the JIT to inline the Prune method (checking for pruning)
         /// </summary>
-        /// <param name="exp"></param>
+        /// <param name="exp">Items that expires at or before this time are removed</param>
         void InternalPrune(DateTime exp)
         {
             var q = Q;
             var c = C;
             var locks = Locks;
+            List<ValueTuple<DateTime, K>> busy = null;
             lock (q)
             {
                 for (; ; )
                 {
                     if (!q.TryPeek(out var v))
-                        return;
+                        break;
                     if (exp < v.Item1)
-                        return;
+                        break;
                     q.TryDequeue(out v);
                     var key = v.Item2;
-                    SpinWait.SpinUntil(() => locks.TryAdd(key, 0));
+                    //  Never wait for a key lock here, the key could be locked by this thread (a value factory using the cache) or by a long running (async) value factory
+                    if (!locks.TryAdd(key, 0))
+                    {
+                        (busy ??= new List<ValueTuple<DateTime, K>>()).Add(v);
+                        continue;
+                    }
                     if (c.TryGetValue(key, out var val))
                     {
                         if (val.Item1 == v.Item1)
                             c.TryRemove(key, out var _);
                     }
                     locks.TryRemove(key, out var _);
+                }
+                //  Try again later
+                if (busy != null)
+                {
+                    foreach (var v in busy)
+                        q.Enqueue(v);
                 }
             }
         }
@@ -824,8 +1025,10 @@ namespace SysWeaver
         /// <summary>
         /// Remove an entry from the cache
         /// </summary>
-        /// <param name="key"></param>
-        /// <returns></returns>
+        /// <param name="key">The key of the item to remove</param>
+        /// <returns>True if an item was removed (expired items that haven't been pruned yet are also removed), false if there was no item with the key</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null</exception>
+        /// <remarks>Waits for any ongoing update of the key, must not be called for the same key from within a value factory (dead lock).</remarks>
         public bool Remove(K key)
         {
             var c = C;
@@ -847,25 +1050,41 @@ namespace SysWeaver
         /// <summary>
         /// Clear cached values
         /// </summary>
+        /// <remarks>
+        /// Items that are being updated concurrently (or created in the background) may remain in the cache.
+        /// The statistics are not reset, use <see cref="ResetStats"/> for that.
+        /// </remarks>
         public void Clear()
         {
             var q = Q;
             var c = C;
             var locks = Locks;
+            List<ValueTuple<DateTime, K>> busy = null;
             lock (q)
             {
                 for (; ; )
                 {
                     if (!q.TryDequeue(out var v))
-                        return;
+                        break;
                     var key = v.Item2;
-                    SpinWait.SpinUntil(() => locks.TryAdd(key, 0));
+                    //  Never wait for a key lock here, the key could be locked by this thread (a value factory using the cache) or by a long running (async) value factory
+                    if (!locks.TryAdd(key, 0))
+                    {
+                        (busy ??= new List<ValueTuple<DateTime, K>>()).Add(v);
+                        continue;
+                    }
                     if (c.TryGetValue(key, out var val))
                     {
                         if (val.Item1 == v.Item1)
                             c.TryRemove(key, out var _);
                     }
                     locks.TryRemove(key, out var _);
+                }
+                //  Keys that are being updated are kept (the update will replace the value anyway), keep them in the queue so that they are pruned later
+                if (busy != null)
+                {
+                    foreach (var v in busy)
+                        q.Enqueue(v);
                 }
             }
         }
@@ -874,8 +1093,8 @@ namespace SysWeaver
         /// Get some stats for the cache using Stats type
         /// </summary>
         /// <param name="system">A system name for the cache</param>
-        /// <param name="prefix">An optional prefix to add to the stats name</param>
-        /// <returns>Stats</returns>
+        /// <param name="prefix">An optional prefix to add to the stats name (null is treated as an empty string)</param>
+        /// <returns>Stats: "Size", "Total count", "Hit ratio", "Semi hit ratio" and "Miss ratio" (ratios are in percent)</returns>
         public IEnumerable<Stats> GetStats(String system, String prefix = "")
         {
             prefix = prefix ?? "";
@@ -956,7 +1175,24 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         void Lock(K key)
         {
-            SpinWait.SpinUntil(() => Locks.TryAdd(key, 0));
+            if (!Locks.TryAdd(key, 0))
+                LockSlow(key);
+        }
+
+        /// <summary>
+        /// Spin until the key lock is acquired (same as SpinWait.SpinUntil, but without allocating a closure + delegate)
+        /// </summary>
+        /// <param name="key">The key to lock</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        void LockSlow(K key)
+        {
+            var locks = Locks;
+            SpinWait spinner = default;
+            do
+            {
+                spinner.SpinOnce();
+            }
+            while (!locks.TryAdd(key, 0));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -971,6 +1207,85 @@ namespace SysWeaver
 
         static async ValueTask<V> WaitUntilReady(Task<V> task)
             => await task.ConfigureAwait(false);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ValueTask<V> AsValueTask(Task<V> task) => new ValueTask<V>(task);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static ValueTask<V> AsValueTask(ValueTask<V> task) => task;
+
+        /// <summary>
+        /// Store a new value in the cache (the key lock must be held, or the value must be the result of a build started while holding the lock)
+        /// </summary>
+        /// <param name="key">The key</param>
+        /// <param name="value">The value</param>
+        void Store(K key, V value)
+        {
+            var val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
+            C[key] = val;
+            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+        }
+
+        /// <summary>
+        /// Await the work and store the result in the cache, if the work fails the entry is removed
+        /// </summary>
+        /// <param name="key">The key</param>
+        /// <param name="work">The pending value</param>
+        /// <returns>The value</returns>
+        async Task<V> BuildAsync(K key, ValueTask<V> work)
+        {
+            V v;
+            try
+            {
+                v = await work.ConfigureAwait(false);
+            }
+            catch
+            {
+                C.TryRemove(key, out var _);
+                throw;
+            }
+            Store(key, v);
+            return v;
+        }
+
+        /// <summary>
+        /// Start a background build (waitUntilReady = false), must be called while holding the key lock.
+        /// </summary>
+        /// <param name="key">The key</param>
+        /// <param name="work">The pending value (as returned by the value factory)</param>
+        /// <returns>The value if it completed synchronously, else default</returns>
+        V StartBuild(K key, ValueTask<V> work)
+        {
+            if (work.IsCompletedSuccessfully)
+            {
+                var r = work.Result;
+                Store(key, r);
+                return r;
+            }
+            var task = BuildAsync(key, work);
+            if (task.IsCompleted)
+                return task.GetAwaiter().GetResult();
+            var c = C;
+            var pending = ValueTuple.Create(DateTime.MaxValue, default(V), task);
+            c[key] = pending;
+            if (task.IsCompleted)
+            {
+                //  The build completed before the pending entry was written, so the pending entry may have overwritten the result (or the removal of a failed build).
+                //  Replace / remove the pending entry (unless the build already did it).
+                if (task.IsCompletedSuccessfully)
+                {
+                    var r = task.Result;
+                    var val = ValueTuple.Create(GetExpirationDate(r), r, (Task<V>)null);
+                    if (c.TryUpdate(key, val, pending))
+                        Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                }
+                else
+                {
+                    c.TryRemove(new KeyValuePair<K, ValueTuple<DateTime, V, Task<V>>>(key, pending));
+                }
+            }
+            return default;
+        }
 
 
         #region With existing
@@ -999,6 +1314,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 if (waitUntilReady)
                 {
                     var value = await func(key, val.Item2, arg).ConfigureAwait(false);
@@ -1009,36 +1325,17 @@ namespace SysWeaver
                 }
                 else
                 {
-                    async Task<V> build()
+                    ValueTask<V> work;
+                    try
                     {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, val.Item2, arg).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
+                        work = AsValueTask(func(key, val.Item2, arg));
                     }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.GetAwaiter().GetResult();
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default;
+                    catch
+                    {
+                        c.TryRemove(key, out var _);
+                        throw;
+                    }
+                    return StartBuild(key, work);
                 }
             }
             finally
@@ -1069,6 +1366,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 if (waitUntilReady)
                 {
                     var value = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
@@ -1079,36 +1377,17 @@ namespace SysWeaver
                 }
                 else
                 {
-                    async Task<V> build()
+                    ValueTask<V> work;
+                    try
                     {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
+                        work = AsValueTask(func(key, val.Item2, arg0, arg1));
                     }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.GetAwaiter().GetResult();
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default;
+                    catch
+                    {
+                        c.TryRemove(key, out var _);
+                        throw;
+                    }
+                    return StartBuild(key, work);
                 }
             }
             finally
@@ -1139,6 +1418,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 if (waitUntilReady)
                 {
                     var value = await func(key, val.Item2).ConfigureAwait(false);
@@ -1149,36 +1429,17 @@ namespace SysWeaver
                 }
                 else
                 {
-                    async Task<V> build()
+                    ValueTask<V> work;
+                    try
                     {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, val.Item2).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
+                        work = AsValueTask(func(key, val.Item2));
                     }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.GetAwaiter().GetResult();
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default;
+                    catch
+                    {
+                        c.TryRemove(key, out var _);
+                        throw;
+                    }
+                    return StartBuild(key, work);
                 }
             }
             finally
@@ -1215,6 +1476,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 if (waitUntilReady)
                 {
                     var value = await func(key, val.Item2, arg).ConfigureAwait(false);
@@ -1225,36 +1487,17 @@ namespace SysWeaver
                 }
                 else
                 {
-                    async Task<V> build()
+                    ValueTask<V> work;
+                    try
                     {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, val.Item2, arg).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
+                        work = AsValueTask(func(key, val.Item2, arg));
                     }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.GetAwaiter().GetResult();
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default;
+                    catch
+                    {
+                        c.TryRemove(key, out var _);
+                        throw;
+                    }
+                    return StartBuild(key, work);
                 }
             }
             finally
@@ -1285,6 +1528,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 if (waitUntilReady)
                 {
                     var value = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
@@ -1295,36 +1539,17 @@ namespace SysWeaver
                 }
                 else
                 {
-                    async Task<V> build()
+                    ValueTask<V> work;
+                    try
                     {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, val.Item2, arg0, arg1).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
+                        work = AsValueTask(func(key, val.Item2, arg0, arg1));
                     }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.GetAwaiter().GetResult();
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default;
+                    catch
+                    {
+                        c.TryRemove(key, out var _);
+                        throw;
+                    }
+                    return StartBuild(key, work);
                 }
             }
             finally
@@ -1355,6 +1580,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 if (waitUntilReady)
                 {
                     var value = await func(key, val.Item2).ConfigureAwait(false);
@@ -1365,36 +1591,17 @@ namespace SysWeaver
                 }
                 else
                 {
-                    async Task<V> build()
+                    ValueTask<V> work;
+                    try
                     {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, val.Item2).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
+                        work = AsValueTask(func(key, val.Item2));
                     }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.GetAwaiter().GetResult();
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default;
+                    catch
+                    {
+                        c.TryRemove(key, out var _);
+                        throw;
+                    }
+                    return StartBuild(key, work);
                 }
             }
             finally
@@ -1435,6 +1642,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 if (waitUntilReady)
                 {
                     var value = await func(key, arg).ConfigureAwait(false);
@@ -1445,36 +1653,17 @@ namespace SysWeaver
                 }
                 else
                 {
-                    async Task<V> build()
+                    ValueTask<V> work;
+                    try
                     {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, arg).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
+                        work = AsValueTask(func(key, arg));
                     }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.GetAwaiter().GetResult();
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default;
+                    catch
+                    {
+                        c.TryRemove(key, out var _);
+                        throw;
+                    }
+                    return StartBuild(key, work);
                 }
             }
             finally
@@ -1505,6 +1694,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 if (waitUntilReady)
                 {
                     var value = await func(key, arg0, arg1).ConfigureAwait(false);
@@ -1515,36 +1705,17 @@ namespace SysWeaver
                 }
                 else
                 {
-                    async Task<V> build()
+                    ValueTask<V> work;
+                    try
                     {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, arg0, arg1).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
+                        work = AsValueTask(func(key, arg0, arg1));
                     }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.GetAwaiter().GetResult();
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default;
+                    catch
+                    {
+                        c.TryRemove(key, out var _);
+                        throw;
+                    }
+                    return StartBuild(key, work);
                 }
             }
             finally
@@ -1575,6 +1746,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 if (waitUntilReady)
                 {
                     var value = await func(key).ConfigureAwait(false);
@@ -1585,36 +1757,17 @@ namespace SysWeaver
                 }
                 else
                 {
-                    async Task<V> build()
+                    ValueTask<V> work;
+                    try
                     {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
+                        work = AsValueTask(func(key));
                     }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.GetAwaiter().GetResult();
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default;
+                    catch
+                    {
+                        c.TryRemove(key, out var _);
+                        throw;
+                    }
+                    return StartBuild(key, work);
                 }
             }
             finally
@@ -1653,6 +1806,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 if (waitUntilReady)
                 {
                     var value = await func(key, arg).ConfigureAwait(false);
@@ -1663,36 +1817,17 @@ namespace SysWeaver
                 }
                 else
                 {
-                    async Task<V> build()
+                    ValueTask<V> work;
+                    try
                     {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, arg).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
+                        work = AsValueTask(func(key, arg));
                     }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.GetAwaiter().GetResult();
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default;
+                    catch
+                    {
+                        c.TryRemove(key, out var _);
+                        throw;
+                    }
+                    return StartBuild(key, work);
                 }
             }
             finally
@@ -1723,6 +1858,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 if (waitUntilReady)
                 {
                     var value = await func(key, arg0, arg1).ConfigureAwait(false);
@@ -1733,36 +1869,17 @@ namespace SysWeaver
                 }
                 else
                 {
-                    async Task<V> build()
+                    ValueTask<V> work;
+                    try
                     {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key, arg0, arg1).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
+                        work = AsValueTask(func(key, arg0, arg1));
                     }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.GetAwaiter().GetResult();
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default;
+                    catch
+                    {
+                        c.TryRemove(key, out var _);
+                        throw;
+                    }
+                    return StartBuild(key, work);
                 }
             }
             finally
@@ -1793,6 +1910,7 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+                ArgumentNullException.ThrowIfNull(func);
                 if (waitUntilReady)
                 {
                     var value = await func(key).ConfigureAwait(false);
@@ -1803,36 +1921,17 @@ namespace SysWeaver
                 }
                 else
                 {
-                    async Task<V> build()
+                    ValueTask<V> work;
+                    try
                     {
-                        V v = default;
-                        try
-                        {
-                            v = await func(key).ConfigureAwait(false);
-                        }
-                        catch
-                        {
-                            c.TryRemove(key, out var _);
-                            throw;
-                        }
-                        val = ValueTuple.Create(GetExpirationDate(v), v, (Task<V>)null);
-                        try
-                        {
-                            c[key] = val;
-                            Q.Enqueue(ValueTuple.Create(val.Item1, key));
-                        }
-                        finally
-                        {
-                        }
-                        return v;
+                        work = AsValueTask(func(key));
                     }
-                    var task = build();
-                    if (task.IsCompleted)
-                        return task.GetAwaiter().GetResult();
-                    val = ValueTuple.Create(DateTime.MaxValue, default(V), task);
-                    c[key] = val;
-                    TaskExt.StartNewAsyncChain(() => task);
-                    return default;
+                    catch
+                    {
+                        c.TryRemove(key, out var _);
+                        throw;
+                    }
+                    return StartBuild(key, work);
                 }
             }
             finally
@@ -1864,12 +1963,18 @@ namespace SysWeaver
         /// <summary>
         /// Get the count of cached items (somewhat slow)
         /// </summary>
-        /// <returns>Number of cached items</returns>
+        /// <returns>Number of cached items (including expired items that haven't been pruned yet, and items being created in the background)</returns>
         public int GetCount() => C.Count;
 
+        /// <summary>
+        /// Enumerate all items in the cache (a moment in time snapshot is not guaranteed)
+        /// </summary>
+        /// <returns>An enumerator of (expiration time, key, value) tuples.
+        /// Includes expired items that haven't been pruned yet and items being created in the background (expiration time is <see cref="DateTime.MaxValue"/> and the value is default)</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public IEnumerator<(DateTime, K, V)> GetEnumerator() => C.Select(x => (x.Value.Item1, x.Key, x.Value.Item2)).GetEnumerator();
 
+        /// <inheritdoc/>
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     }

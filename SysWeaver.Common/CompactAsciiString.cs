@@ -11,6 +11,7 @@ namespace SysWeaver
 
     /// <summary>
     /// Class that takes some data and represents it as a compact string.
+    /// An integer is written in base N (where N is the number of valid chars), least significant digit first, using the printable ASCII chars [33, 127] that aren't invalid.
     /// </summary>
     public sealed class CompactAsciiString
     {
@@ -62,6 +63,12 @@ namespace SysWeaver
             return c;
         }
 
+        /// <summary>
+        /// Create a compact string encoder / decoder.
+        /// The alphabet is all chars in the [33, 127] range (printable ASCII excluding space) that aren't in the <paramref name="invalid"/> set.
+        /// </summary>
+        /// <param name="invalid">The chars that must not be used, null to use <see cref="InvalidDefaults"/></param>
+        /// <exception cref="ArgumentException">Less than 2 chars remain valid</exception>
         public CompactAsciiString(IReadOnlySet<Char> invalid = null)
         {
             invalid = invalid ?? InvalidDefaults;
@@ -77,8 +84,47 @@ namespace SysWeaver
             }
             if (valid.Count < 2)
                 throw new ArgumentException("At least 2 chars must be valid", nameof(invalid));
-            Valid = valid.ToArray();
+            var va = valid.ToArray();
+            Valid = va;
             Values = vals.Freeze();
+            ValidChars = va;
+            Base = (uint)va.Length;
+            var lookup = new byte[128];
+            Array.Fill(lookup, InvalidChar);
+            for (int i = 0; i < va.Length; ++i)
+                lookup[va[i]] = (byte)i;
+            Lookup = lookup;
+        }
+
+        const byte InvalidChar = 0xff;
+
+        /// <summary>
+        /// Same as Valid (but faster)
+        /// </summary>
+        readonly Char[] ValidChars;
+
+        /// <summary>
+        /// The base (number of valid chars)
+        /// </summary>
+        readonly uint Base;
+
+        /// <summary>
+        /// Same as Values (but faster), indexed by the char, InvalidChar if not valid
+        /// </summary>
+        readonly Byte[] Lookup;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        static void ThrowInvalidChar(Char c)
+            => throw new KeyNotFoundException("The char '" + c + "' (" + (int)c + ") is not valid in a compact string!");
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        uint GetValue(String compactString, int index)
+        {
+            uint c = compactString[index];
+            uint v = c < 128 ? Lookup[c] : InvalidChar;
+            if (v == InvalidChar)
+                ThrowInvalidChar((Char)c);
+            return v;
         }
 
 #if DEBUG
@@ -130,7 +176,7 @@ namespace SysWeaver
 #endif//DEBUG
 
         /// <summary>
-        /// Encode an 64-bit signed integer.
+        /// Encode an 64-bit signed integer (the bits are encoded as an unsigned integer, so negative values use the most chars).
         /// </summary>
         /// <param name="value">The value to encode</param>
         /// <returns>The compact string that represents it</returns>
@@ -143,10 +189,11 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The value to encode</param>
         /// <returns>The compact string that represents it</returns>
+        [SkipLocalsInit]
         public String Encode(UInt64 value)
         {
-            var v = Valid;
-            var vl = (UInt32)Valid.Count;
+            var v = ValidChars;
+            ulong vl = Base;
             // A 64 bit value needs at most 64 digits (base 2)
             Span<Char> temp = stackalloc char[64];
             for (int i = 0; ;)
@@ -166,6 +213,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null</exception>
+        /// <exception cref="KeyNotFoundException"><paramref name="compactString"/> contains a char that isn't valid (not in <see cref="Valid"/>)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Int64 DecodeInt64(String compactString)
             => (Int64)DecodeUInt64(compactString);
@@ -175,6 +224,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null</exception>
+        /// <exception cref="KeyNotFoundException"><paramref name="compactString"/> contains a char that isn't valid (not in <see cref="Valid"/>)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Int32 DecodeInt32(String compactString)
             => (Int32)DecodeUInt32(compactString);
@@ -184,17 +235,20 @@ namespace SysWeaver
         /// </summary>
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string</returns>
+        /// <remarks>No overflow checks are made, a string that represents a value larger than UInt64.MaxValue will wrap around</remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null</exception>
+        /// <exception cref="KeyNotFoundException"><paramref name="compactString"/> contains a char that isn't valid (not in <see cref="Valid"/>)</exception>
         public UInt64 DecodeUInt64(String compactString)
         {
-            var v = Values;
-            var vl = (UInt32)v.Count;
+            ArgumentNullException.ThrowIfNull(compactString);
+            ulong vl = Base;
             var l = compactString.Length;
             UInt64 r = 0;
             while (l > 0)
             {
                 --l;
                 r *= vl;
-                r += v[compactString[l]];
+                r += GetValue(compactString, l);
             }
             return r;
         }
@@ -203,24 +257,34 @@ namespace SysWeaver
         /// Decode a compact string to the 32-bit unsigned integer that it represents.
         /// </summary>
         /// <param name="compactString">The compact value representation</param>
-        /// <returns>The value that was represented by the string</returns>
+        /// <returns>The value that was represented by the string (always in the [0, UInt32.MaxValue] range)</returns>
+        /// <remarks>No overflow checks are made, a string that represents a value larger than UInt32.MaxValue will wrap around</remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null</exception>
+        /// <exception cref="KeyNotFoundException"><paramref name="compactString"/> contains a char that isn't valid (not in <see cref="Valid"/>)</exception>
         public UInt64 DecodeUInt32(String compactString)
         {
-            var v = Values;
-            var vl = (UInt32)v.Count;
+            ArgumentNullException.ThrowIfNull(compactString);
+            var vl = Base;
             var l = compactString.Length;
             UInt32 r = 0;
             while (l > 0)
             {
                 --l;
                 r *= vl;
-                r += v[compactString[l]];
+                r += GetValue(compactString, l);
             }
             return r;
         }
 
 
+        /// <summary>
+        /// The valid chars (the alphabet), the index is the digit value
+        /// </summary>
         public readonly IReadOnlyList<Char> Valid;
+
+        /// <summary>
+        /// The digit value of every valid char
+        /// </summary>
         public readonly IReadOnlyDictionary<Char, uint> Values;
 
 

@@ -61,6 +61,7 @@ namespace SysWeaver.AI
             new Opt { Model = "o1", Temp = false, PTools = null, CanReason = false, HaveTiers = false },
             new Opt { Model = "o3-mini", Temp = false, PTools = null, CanReason = false, HaveTiers = false },
             new Opt { Model = "gpt-5", Temp = false, CanReason = true, HaveTiers = true },
+            new Opt { Model = "gpt-6", Temp = false, CanReason = true, HaveTiers = true },
         ];
 
         #region Chat completions

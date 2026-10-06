@@ -3,6 +3,8 @@ using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -21,7 +23,9 @@ namespace SysWeaver
         /// Convert a compact hash of length 26 to a hexadecimal hash of length 32
         /// </summary>
         /// <param name="hashStringh16">A string of length 26 with an encoded hash</param>
-        /// <returns>Hex hash</returns>
+        /// <returns>Hex hash (32 lower case hexadecimal chars)</returns>
+        /// <exception cref="ArgumentNullException">If <paramref name="hashStringh16"/> is null</exception>
+        /// <exception cref="ArgumentException">If <paramref name="hashStringh16"/> is shorter than 26 chars</exception>
         public static String ToHexHash(String hashStringh16)
         {
             Span<Byte> d = stackalloc byte[16];
@@ -37,7 +41,9 @@ namespace SysWeaver
         /// </summary>
         /// <param name="a">One file</param>
         /// <param name="b">Another file</param>
-        /// <returns>True if the files are identical, else false</returns>
+        /// <returns>True if the files are identical, else false (also false if the content of a file couldn't be read)</returns>
+        /// <exception cref="ArgumentNullException">If <paramref name="a"/> or <paramref name="b"/> is null</exception>
+        /// <exception cref="ArgumentException">If <paramref name="a"/> or <paramref name="b"/> is an invalid path</exception>
         public static bool FilesAreEqual(String a, String b)
         {
             var fa = new FileInfo(a);
@@ -49,16 +55,22 @@ namespace SysWeaver
             if (fa.Length != fb.Length)
                 return false;
             var ha = GetHash(a);
+            if (ha == null)
+                return false;
             var hb = GetHash(b);
-            return ha == hb;
+            return String.Equals(ha, hb, StringComparison.Ordinal);
         }
 
         /// <summary>
-        /// Do never use! 
+        /// Do never use!
         /// Use GetHash instead, this version don't do any caching or smart stuff
         /// </summary>
-        /// <param name="filename"></param>
-        /// <returns></returns>
+        /// <param name="filename">The file to compute the MD5 hash of the content for</param>
+        /// <returns>A hash string (26 chars)</returns>
+        /// <exception cref="ArgumentNullException">If <paramref name="filename"/> is null</exception>
+        /// <exception cref="FileNotFoundException">If the file doesn't exist</exception>
+        /// <exception cref="IOException">If the file can't be read</exception>
+        /// <exception cref="UnauthorizedAccessException">If the file can't be accessed</exception>
         public static String UncachedGetHash(String filename)
         {
             Span<Byte> hash = stackalloc Byte[MD5.HashSizeInBytes];
@@ -83,11 +95,15 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Do never use! 
+        /// Do never use!
         /// Use GetHashAsync instead, this version don't do any caching or smart stuff
         /// </summary>
-        /// <param name="filename"></param>
-        /// <returns></returns>
+        /// <param name="filename">The file to compute the MD5 hash of the content for</param>
+        /// <returns>A hash string (26 chars)</returns>
+        /// <exception cref="ArgumentNullException">If <paramref name="filename"/> is null</exception>
+        /// <exception cref="FileNotFoundException">If the file doesn't exist</exception>
+        /// <exception cref="IOException">If the file can't be read</exception>
+        /// <exception cref="UnauthorizedAccessException">If the file can't be accessed</exception>
         public static async Task<String> UncachedGetHashAsync(String filename)
         {
             var s = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -112,9 +128,10 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get a hash of the contents of the supplied file
+        /// Get a hash of the contents of the supplied file (the MD5 hash encoded using <see cref="HashTools.GetHashString16(ReadOnlySpan{byte})"/>).
+        /// The hash is cached on disk (using the file name, creation time, last write time and length as the key).
         /// </summary>
-        /// <param name="filename">The existing file to get the hash of the content</param>
+        /// <param name="filename">The existing file to get the hash of the content, may also be a http or https url (see <see cref="IsWeb(string)"/>)</param>
         /// <returns>A hash string (26 chars) or null if there is some error</returns>
         public static String GetHash(String filename)
         {
@@ -170,9 +187,10 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get a hash of the contents of the supplied file
+        /// Get a hash of the contents of the supplied file (the MD5 hash encoded using <see cref="HashTools.GetHashString16(ReadOnlySpan{byte})"/>).
+        /// The hash is cached in memory and on disk (using the file name, creation time, last write time and length as the key).
         /// </summary>
-        /// <param name="filename">The existing file to get the hash of the content</param>
+        /// <param name="filename">The existing file to get the hash of the content, may also be a http or https url (see <see cref="IsWeb(string)"/>)</param>
         /// <returns>A hash string (26 chars) or null if there is some error</returns>
         public static Task<String> GetHashAsync(String filename)
         {
@@ -234,7 +252,7 @@ namespace SysWeaver
                 {
                     var client = WebTools.HttpClient;
                     using var request = new HttpRequestMessage(HttpMethod.Get, filename);
-                    using var response = await client.SendAsync(request);
+                    using var response = await client.SendAsync(request).ConfigureAwait(false);
                     // Ensure we got a successful response
                     if (!response.IsSuccessStatusCode)
                         return null;
@@ -277,19 +295,19 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// The functions used to determine if the file is a web file or a local file
+        /// The functions used to determine if the file is a web file or a local file.
+        /// A file is a web file if it starts with "http://" or "https://" (case sensitive).
         /// </summary>
-        /// <param name="filename"></param>
+        /// <param name="filename">The file name or url, null is treated as an empty string</param>
         /// <returns>True if the file will be downloaded</returns>
         public static bool IsWeb(string filename)
         {
-            var t = filename.FastIndexOf("://");
+            var s = filename.AsSpan();
+            var t = s.IndexOf("://");
             if (t < 0)
                 return false;
-            var x = filename.Substring(0, t);
-            if (String.Equals(x, "http", StringComparison.Ordinal))
-                return true;
-            return String.Equals(x, "https", StringComparison.Ordinal);
+            var x = s.Slice(0, t);
+            return x.SequenceEqual("http") || x.SequenceEqual("https");
         }
 
 
@@ -299,21 +317,23 @@ namespace SysWeaver
             {
                 var client = WebTools.HttpClient;
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                using var response = await client.SendAsync(request);
+                // Only the headers are needed, don't download the content
+                using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
                 // Ensure we got a successful response
                 if (!response.IsSuccessStatusCode)
                     return null;
                 var h = response.Headers;
-
+                // Last-Modified and Content-Length are content headers (never found in the response headers)
+                var ch = response.Content.Headers;
                 String lm = null;
-                if (h.TryGetValues("Last-Modified", out var lmh))
+                if (ch.TryGetValues("Last-Modified", out var lmh))
                     lm = lmh.FirstOrDefault();
                 if (h.TryGetValues("ETag", out var eth))
                     lm = lm == null ? eth.FirstOrDefault() : String.Join('|', lm, eth.FirstOrDefault());
                 if (lm == null)
                     lm = DateOnly.FromDateTime(DateTime.UtcNow).ToString();
                 long length = 0;
-                if (h.TryGetValues("Content-Length", out var x2))
+                if (ch.TryGetValues("Content-Length", out var x2))
                     long.TryParse(x2.FirstOrDefault() ?? "0", out length);
                 return String.Join('|', url, lm, length);
             }
@@ -324,61 +344,82 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Given a file, compute name for meta data
+        /// Given a file, compute name for meta data.
+        /// The key is a hash (26 chars) of the full name, creation time, last write time and length of the file.
         /// </summary>
         /// <param name="filename">The existing file to get the hash of the content</param>
-        /// <returns>The key name for this file</returns>
+        /// <returns>The key name for this file, null if the file doesn't exist or is invalid</returns>
         public static String GetCacheKey(String filename)
         {
-            String keyName;
             try
             {
-                var fi = new FileInfo(filename);
-                if (!fi.Exists)
-                    return null;
-                keyName = String.Join('|', fi.FullName, fi.CreationTimeUtc, fi.LastWriteTimeUtc, fi.Length);
+                return GetCacheKey(new FileInfo(filename));
             }
             catch
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Compute the cache key for a file.
+        /// Same as hashing String.Join('|', fi.FullName, fi.CreationTimeUtc, fi.LastWriteTimeUtc, fi.Length) (current culture), but without any heap allocations (for normal path lengths).
+        /// </summary>
+        /// <param name="fi">The file</param>
+        /// <returns>The key or null if the file doesn't exist</returns>
+        [SkipLocalsInit]
+        static String GetCacheKey(FileInfo fi)
+        {
+            if (!fi.Exists)
+                return null;
+            var fullName = fi.FullName;
             Span<Byte> keyHash = stackalloc Byte[MD5.HashSizeInBytes];
-            MD5.HashData(System.Runtime.InteropServices.MemoryMarshal.Cast<Char, Byte>(keyName.AsSpan()), keyHash);
-            keyName = HashTools.GetHashString16(keyHash);
-            return keyName;
+            Span<Char> temp = stackalloc Char[1024];
+            // Formatting with a null provider uses the current culture, same as String.Join (ToString)
+            if (temp.TryWrite(null, $"{fullName}|{fi.CreationTimeUtc}|{fi.LastWriteTimeUtc}|{fi.Length}", out var written))
+            {
+                MD5.HashData(MemoryMarshal.AsBytes(temp.Slice(0, written)), keyHash);
+            }
+            else
+            {
+                var keyName = String.Join('|', fullName, fi.CreationTimeUtc, fi.LastWriteTimeUtc, fi.Length);
+                MD5.HashData(MemoryMarshal.AsBytes(keyName.AsSpan()), keyHash);
+            }
+            return HashTools.GetHashString16(keyHash);
         }
 
 
         /// <summary>
-        /// Given a file, compute name for meta data
+        /// Given a file, compute name for meta data.
+        /// The key is a hash (26 chars) of the full name, creation time, last write time and length of the file (same as <see cref="GetCacheKey(string)"/>).
         /// </summary>
-        /// <param name="filename">The existing file to get the hash of the content</param>
+        /// <param name="filename">The existing file to get the hash of the content (not used, the file info is used)</param>
         /// <param name="fi">File information</param>
-        /// <returns>The key name for this file</returns>
-        public static async Task<String> GetCacheKeyAsync(String filename, FileInfo fi)
+        /// <returns>The key name for this file, null if the file doesn't exist or is invalid (or if <paramref name="fi"/> is null)</returns>
+        public static Task<String> GetCacheKeyAsync(String filename, FileInfo fi)
         {
             String keyName;
             try
             {
-                if (!fi.Exists)
-                    return null;
-                keyName = String.Join('|', fi.FullName, fi.CreationTimeUtc, fi.LastWriteTimeUtc, fi.Length);
+                keyName = GetCacheKey(fi);
             }
             catch
             {
-                return null;
+                keyName = null;
             }
-            var keyHash = MD5.HashData(System.Runtime.InteropServices.MemoryMarshal.Cast<Char, Byte>(keyName.AsSpan()));
-            keyName = HashTools.GetHashString16(keyHash);
-            return keyName;
+            return keyName == null ? NullTask : Task.FromResult(keyName);
         }
 
+        static readonly Task<String> NullTask = Task.FromResult<String>(null);
+
         /// <summary>
-        /// Given a file, compute name for meta data
+        /// Given a file, compute name for meta data.
+        /// For a local file the key is a hash (26 chars) of the full name, creation time, last write time and length of the file (same as <see cref="GetCacheKey(string)"/>).
+        /// For a web file the key is a hash of the url, the Last-Modified and ETag headers and the Content-Length (a GET request is made, but only the headers are read).
         /// </summary>
-        /// <param name="filename">The existing file to get the hash of the content</param>
+        /// <param name="filename">The existing file (or url) to get the hash of the content</param>
         /// <param name="isWeb">Set to true if the file is on the web</param>
-        /// <returns>The key name for this file</returns>
+        /// <returns>The key name for this file, null if the file doesn't exist, is invalid or the request failed</returns>
         public static async Task<String> GetCacheKeyAsync(String filename, bool isWeb = false)
         {
             String keyName;
@@ -400,14 +441,16 @@ namespace SysWeaver
                     return null;
                 }
             }
-            var keyHash = MD5.HashData(System.Runtime.InteropServices.MemoryMarshal.Cast<Char, Byte>(keyName.AsSpan()));
-            keyName = HashTools.GetHashString16(keyHash);
-            return keyName;
+            Span<Byte> keyHash = stackalloc Byte[MD5.HashSizeInBytes];
+            MD5.HashData(MemoryMarshal.AsBytes(keyName.AsSpan()), keyHash);
+            return HashTools.GetHashString16(keyHash);
         }
 
         /// <summary>
         /// Get the location of the cache folder, create one if none exist
         /// </summary>
+        /// <param name="filename">The file to get the cache folder for (the folder is selected based on the location of the file)</param>
+        /// <returns>The cache folder to use for the file</returns>
         public static String GetCacheFolder(String filename)
             => Folders.SelectFolder(C.P, filename);
 
