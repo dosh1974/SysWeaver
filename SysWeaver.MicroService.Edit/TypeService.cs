@@ -473,7 +473,7 @@ namespace SysWeaver.MicroService
             desc.Min = min;
             desc.Max = max;
             if (DateTypes.Contains(type))
-                if (p.GetAttribute<EditDateUnspecifiedAttribute> != null)
+                if (p.GetAttribute<EditDateUnspecifiedAttribute>() != null)
                     desc.Flags |= TypeMemberFlags.DateUnspecified;
         }
 

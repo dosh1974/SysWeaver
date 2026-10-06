@@ -822,6 +822,9 @@ namespace SysWeaver.MicroService
         {
             if (!ChartExporters.TryGetValue(export.ExportAs, out var exporter))
                 throw new Exception(export.ExportAs.ToQuoted() + " is not a reqistered chart exporter!");
+            if (exporter.RequireUser)
+                if (context.Session?.Auth == null)
+                    throw new Exception("Session is not authorized to use the chart exporter: " + export.ExportAs.ToQuoted());
             switch (exporter.InputType)
             {
                 case ChartExportInputTypes.Data:

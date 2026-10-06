@@ -9,8 +9,7 @@ namespace SysWeaver
     /// A forward only, read only stream that is the concatenation of several streams (chunks), the chunks are opened lazily (one at a time) and disposed when fully read.
     /// </summary>
     /// <remarks>
-    /// A chunk is considered fully read as soon as a read returns fewer bytes than requested, so chunk streams must fill the buffer completely unless they are at the end
-    /// (true for memory streams and files, but not for network, pipe or most decompression streams).
+    /// A chunk is considered fully read when a read from it returns 0 bytes, so any kind of chunk stream (including network, pipe and decompression streams that may return short reads) can be used.
     /// Seeking, writing, <see cref="Length"/> and <see cref="Flush"/> are not supported (throws <see cref="NotImplementedException"/>).
     /// The stream is not thread safe.
     /// Used by CompressedChunkedStream (SysWeaver.Storage) to read content defined chunks as one stream.
@@ -174,7 +173,13 @@ namespace SysWeaver
                 Position += numBytesRead;
                 if (count <= 0)
                     break;
-                offset += numBytesRead;
+                if (numBytesRead > 0)
+                {
+                    // A short read doesn't mean that the chunk is done, keep reading from the same chunk
+                    offset += numBytesRead;
+                    continue;
+                }
+                // End of this chunk, move to the next one
                 currentSteam.Dispose();
                 currentSteam = GetNextStream();
             }
@@ -202,7 +207,13 @@ namespace SysWeaver
                 Position += numBytesRead;
                 if (count <= 0)
                     break;
-                buffer = buffer[numBytesRead..];
+                if (numBytesRead > 0)
+                {
+                    // A short read doesn't mean that the chunk is done, keep reading from the same chunk
+                    buffer = buffer[numBytesRead..];
+                    continue;
+                }
+                // End of this chunk, move to the next one
                 currentSteam.Dispose();
                 currentSteam = GetNextStream();
             }
@@ -232,7 +243,13 @@ namespace SysWeaver
                 Position += numBytesRead;
                 if (count <= 0)
                     break;
-                offset += numBytesRead;
+                if (numBytesRead > 0)
+                {
+                    // A short read doesn't mean that the chunk is done, keep reading from the same chunk
+                    offset += numBytesRead;
+                    continue;
+                }
+                // End of this chunk, move to the next one
                 currentSteam.Dispose();
                 currentSteam = GetNextStream();
             }
@@ -261,7 +278,13 @@ namespace SysWeaver
                 Position += numBytesRead;
                 if (count <= 0)
                     break;
-                buffer = buffer[numBytesRead..];
+                if (numBytesRead > 0)
+                {
+                    // A short read doesn't mean that the chunk is done, keep reading from the same chunk
+                    buffer = buffer[numBytesRead..];
+                    continue;
+                }
+                // End of this chunk, move to the next one
                 currentSteam.Dispose();
                 currentSteam = GetNextStream();
             }

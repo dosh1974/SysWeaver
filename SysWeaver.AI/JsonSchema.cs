@@ -226,7 +226,8 @@ namespace SysWeaver.AI
                             continue;
                         isOpt = pi.GetCustomAttribute<AiOptionalAttribute>()?.Optional ?? false;
                         props.Add(x.Name, Get(pi.PropertyType, isOutput, pi.XmlDoc()?.Summary, isOpt));
-                        required.Add(x.Name);
+                        if (!isOpt)
+                            required.Add(x.Name);
                         break;
                 }
             }

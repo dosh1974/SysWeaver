@@ -139,6 +139,9 @@ namespace SysWeaver.MicroService
         {
             if (!TableExporters.TryGetValue(export.ExportAs, out var exporter))
                 throw new Exception(export.ExportAs.ToQuoted() + " is not a reqistered data table exporter!");
+            if (exporter.RequireUser)
+                if (request.Session?.Auth == null)
+                    throw new Exception("Session is not authorized to use the data table exporter: " + export.ExportAs.ToQuoted());
             var opt = export.Options;
             if (opt != null)
             {

@@ -13,7 +13,9 @@ namespace SysWeaver
     /// <typeparam name="T">The type of the cached value</typeparam>
     /// <remarks>
     /// Thread safe. Reading a valid value is lock free, creating a value is serialized by an <see cref="AsyncLock"/> (so the value is only created once even with concurrent callers).
-    /// If auto dispose is enabled the previous value is disposed when it's replaced, even if another thread obtained it just before (and may still be using it).
+    /// If auto dispose is enabled the previous value is disposed when it's replaced or cleared (unless the same instance is cached again), exceptions thrown by dispose are recorded in <see cref="AutoDisposeErrors"/>.
+    /// Values are not reference counted, so a replaced value is disposed even if another thread obtained it just before (and may still be using it),
+    /// don't use auto dispose for values that may be in use when they expire (dispose them some time after they are replaced instead).
     /// Exceptions thrown by the get function are propagated and nothing is cached.
     /// </remarks>
     public sealed class CachedValue<T> : IDisposable
@@ -105,8 +107,7 @@ namespace SysWeaver
                 val = getFn();
                 old = Interlocked.Exchange(ref Data, Tuple.Create(DateTime.UtcNow + DefaultCacheDuration, val));
             }
-            if (WillDispose && (old != null))
-                InternalDispose(old.Item2);
+            DisposeOld(old, val);
             return val;
         }
 
@@ -140,8 +141,7 @@ namespace SysWeaver
                 val = valD.Item2;
                 old = Interlocked.Exchange(ref Data, valD);
             }
-            if (WillDispose && (old != null))
-                InternalDispose(old.Item2);
+            DisposeOld(old, val);
             return val;
         }
 
@@ -174,9 +174,8 @@ namespace SysWeaver
                 var valD = getFn();
                 val = valD.Item2;
                 old = Interlocked.Exchange(ref Data, Tuple.Create(valD.Item1, val));
-                if (WillDispose && (old != null))
-                    InternalDispose(old.Item2);
             }
+            DisposeOld(old, val);
             return val;
         }
 
@@ -296,14 +295,13 @@ namespace SysWeaver
         /// Set a new value, cached for <see cref="DefaultCacheDuration"/>
         /// </summary>
         /// <param name="value">The new value</param>
-        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed (exceptions thrown by it are propagated)</remarks>
+        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed (unless it's the same instance as <paramref name="value"/>), exceptions thrown by it are recorded in <see cref="AutoDisposeErrors"/></remarks>
         public void Set(T value)
         {
             Tuple<DateTime, T> old;
             using (var l = Lock.LockSync())
                 old = Interlocked.Exchange(ref Data, Tuple.Create(DateTime.UtcNow + DefaultCacheDuration, value));
-            if (WillDispose && (old != null))
-                (old.Item2 as IDisposable).Dispose();
+            DisposeOld(old, value);
         }
 
         /// <summary>
@@ -311,48 +309,61 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The new value</param>
         /// <param name="expirationTime">When this value will expire (UTC)</param>
-        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed (exceptions thrown by it are propagated)</remarks>
+        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed (unless it's the same instance as <paramref name="value"/>), exceptions thrown by it are recorded in <see cref="AutoDisposeErrors"/></remarks>
         public void Set(T value, DateTime expirationTime)
         {
             Tuple<DateTime, T> old;
             using (var l = Lock.LockSync())
                 old = Interlocked.Exchange(ref Data, Tuple.Create(expirationTime, value));
-            if (WillDispose && (old != null))
-                (old.Item2 as IDisposable).Dispose();
+            DisposeOld(old, value);
 
         }
 
         /// <summary>
         /// Clear the cache (the next get will create a new value)
         /// </summary>
-        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed (exceptions thrown by it are propagated)</remarks>
+        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed, exceptions thrown by it are recorded in <see cref="AutoDisposeErrors"/></remarks>
         public void Clear()
         {
             Tuple<DateTime, T> old;
             using (var l = Lock.LockSync())
                 old = Interlocked.Exchange(ref Data, null);
             if (WillDispose && (old != null))
-                (old.Item2 as IDisposable).Dispose();
+                InternalDispose(old.Item2);
         }
 
 
         /// <summary>
-        /// Remove the value from the cache if it has expired
+        /// Remove the value from the cache if it has expired (does nothing if the cache is empty)
         /// </summary>
-        /// <exception cref="NullReferenceException">The cache is empty (no value have been set, or it was cleared)</exception>
-        /// <remarks>If <see cref="WillDispose"/> is true the removed value is disposed (exceptions thrown by it are propagated)</remarks>
+        /// <remarks>If <see cref="WillDispose"/> is true the removed value is disposed, exceptions thrown by it are recorded in <see cref="AutoDisposeErrors"/></remarks>
         public void Prune()
         {
             Tuple<DateTime, T> old;
             using (var l = Lock.LockSync())
             {
                 var d = Data;
-                if (DateTime.UtcNow < d.Item1)
+                if ((d == null) || (DateTime.UtcNow < d.Item1))
                     return;
                 old = Interlocked.Exchange(ref Data, null);
             }
             if (WillDispose && (old != null))
-                (old.Item2 as IDisposable).Dispose();
+                InternalDispose(old.Item2);
+        }
+
+        /// <summary>
+        /// Dispose a replaced value (if <see cref="WillDispose"/> is true), unless it's the same instance as the new value (that would dispose a value that is still cached)
+        /// </summary>
+        /// <param name="old">The replaced entry (can be null)</param>
+        /// <param name="val">The new value</param>
+        void DisposeOld(Tuple<DateTime, T> old, T val)
+        {
+            if (!WillDispose || (old == null))
+                return;
+            var o = old.Item2;
+            if (ReferenceEquals(o, val))
+                return;
+            InternalDispose(o);
         }
 
         /// <summary>
@@ -457,8 +468,7 @@ namespace SysWeaver
                 val = await getFn().ConfigureAwait(false);
                 old = Interlocked.Exchange(ref Data, Tuple.Create(DateTime.UtcNow + DefaultCacheDuration, val));
             }
-            if (WillDispose && (old != null))
-                InternalDispose(old.Item2);
+            DisposeOld(old, val);
             return val;
         }
 
@@ -487,8 +497,7 @@ namespace SysWeaver
                 val = valD.Item2;
                 old = Interlocked.Exchange(ref Data, valD);
             }
-            if (WillDispose && (old != null))
-                InternalDispose(old.Item2);
+            DisposeOld(old, val);
             return val;
         }
 
@@ -517,8 +526,7 @@ namespace SysWeaver
                 val = valD.Item2;
                 old = Interlocked.Exchange(ref Data, Tuple.Create(valD.Item1, val));
             }
-            if (WillDispose && (old != null))
-                InternalDispose(old.Item2);
+            DisposeOld(old, val);
             return val;
         }
 
@@ -546,8 +554,7 @@ namespace SysWeaver
                 val = await getFn().ConfigureAwait(false);
                 old = Interlocked.Exchange(ref Data, Tuple.Create(DateTime.UtcNow + DefaultCacheDuration, val));
             }
-            if (WillDispose && (old != null))
-                InternalDispose(old.Item2);
+            DisposeOld(old, val);
             return val;
         }
 
@@ -576,8 +583,7 @@ namespace SysWeaver
                 val = valD.Item2;
                 old = Interlocked.Exchange(ref Data, valD);
             }
-            if (WillDispose && (old != null))
-                InternalDispose(old.Item2);
+            DisposeOld(old, val);
             return val;
         }
 
@@ -606,8 +612,7 @@ namespace SysWeaver
                 val = valD.Item2;
                 old = Interlocked.Exchange(ref Data, Tuple.Create(valD.Item1, val));
             }
-            if (WillDispose && (old != null))
-                InternalDispose(old.Item2);
+            DisposeOld(old, val);
             return val;
         }
 

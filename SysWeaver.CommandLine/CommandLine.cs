@@ -237,12 +237,10 @@ namespace SysWeaver
         /// The parser table is a plain <see cref="Dictionary{TKey, TValue}"/> (not thread safe): register parsers at startup, before any parsing happens.
         /// Enums, arrays, <see cref="List{T}"/> and <see cref="IEnumerable{T}"/> are handled automatically and need no registration.
         /// </remarks>
-        /// <exception cref="ArgumentNullException"><paramref name="type"/> or <paramref name="parser"/> is null.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="parser"/> is null, or <paramref name="type"/> is null (thrown by the dictionary, with parameter name "key").</exception>
         /// <exception cref="ArgumentException">A parser for <paramref name="type"/> is already registered.</exception>
         public static void AddParser(Type type, Func<String, Object> parser)
         {
-            if (type == null)
-                throw new ArgumentNullException(nameof(type));
             if (parser == null)
                 throw new ArgumentNullException(nameof(parser));
             Parsers.Add(type, parser);

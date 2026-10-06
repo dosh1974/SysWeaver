@@ -63,7 +63,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">A value encoded as a string</param>
         /// <returns>The value or -1 if the input string is invalid (not exactly <see cref="StrLen"/> symbols, or a value that is outside of [0, MaxInput))</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="value"/> is null</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="value"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         long Decode(String value);
 
     }
@@ -123,7 +123,9 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static long Decode(String value, sbyte[] table, int strLen, int bitsPerChar, int maxBits)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(value);
+#endif//DEBUG
             // Before a shift the value must be below this limit, else the result would be outside of [0, 1 << maxBits)
             long limit = 1L << (maxBits - bitsPerChar);
             long v = 0;
@@ -391,7 +393,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">A value encoded as a string</param>
         /// <returns>The value or -1 if the input string is invalid (not exactly <see cref="StrLen"/> symbols, or a value that is outside of [0, MaxInput))</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="value"/> is null</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="value"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public long Decode(String value)
             => CodeGeneratorHelper.Decode(value, ValueTable, StrLen, BitsPerChar, MaxBits);
 
@@ -637,7 +639,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">A value encoded as a string</param>
         /// <returns>The value or -1 if the input string is invalid (not exactly <see cref="StrLen"/> symbols, or a value that is outside of [0, MaxInput))</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="value"/> is null</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="value"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public long Decode(String value)
             => CodeGeneratorHelper.Decode(value, ValueTable, StrLen, BitsPerChar, MaxBits);
 

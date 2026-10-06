@@ -36,8 +36,8 @@ namespace SysWeaver.Chart
         /// Require the user to be logged in.
         /// </summary>
         /// <remarks>
-        /// The ChartJs service only uses this to hide the menu item from anonymous users, it does not prevent anonymous calls to the export API.
-        /// Exporters that must have a user should verify that themselves in <see cref="Export"/>.
+        /// The ChartJs service hides the menu item from anonymous users and rejects anonymous calls to the export API for this exporter.
+        /// Other callers of <see cref="Export"/> are not checked.
         /// </remarks>
         bool RequireUser { get; }
 

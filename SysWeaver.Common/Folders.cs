@@ -23,7 +23,6 @@ namespace SysWeaver
     /// <remarks>
     /// All folders are resolved and created (if missing) in the static constructor, which also marks them as not content indexed.
     /// Folders shared by all users are made accessible to everyone (using <see cref="IPlatformTools.MakeDirectoryAccessableToEveryOne(string)"/>).
-    /// Note: the "UserSharedFolders" override key is currently not read, the "UserFolders" key is used instead.
     /// </remarks>
     public static class Folders
     {
@@ -66,7 +65,7 @@ namespace SysWeaver
         /// <param name="allowAll">Make newly validated folders accessible to all users</param>
         /// <returns>Resulting paths (a new array)</returns>
         /// <remarks>
-        /// A folder is only resolved and created the first time it's seen (process wide). Note: a path that has been seen before is currently returned as is (not resolved or made absolute).
+        /// Paths are always resolved and made absolute, but a folder is only created the first time it's seen (process wide).
         /// </remarks>
         /// <exception cref="IOException">A folder couldn't be created.</exception>
         public static String[] Append(IReadOnlyList<String> roots, String paths, bool allowAll = false)
@@ -172,6 +171,8 @@ namespace SysWeaver
             for (int i = 0; i < ti; ++i)
             {
                 var fp = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(paths[i]));
+                paths[i] = fp;
+                //  Only create and set attributes the first time a folder is seen
                 if (!seen.TryAdd(fp, 0))
                     continue;
                 PathExt.EnsureFolderExist(fp);
@@ -188,7 +189,6 @@ namespace SysWeaver
                     {
                     }
                 }
-                paths[i] = fp;
             }
         }
 
@@ -207,7 +207,7 @@ namespace SysWeaver
             //  Derived folders
             AllSharedFolders = FromConfig("AllSharedFolders", allFolders, "Shared", true);
             AllAppFolders = FromConfig("AllAppFolders", allFolders, "$(*AppAssemblyName)_$(*AppGuid)", true);
-            UserSharedFolders = FromConfig("UserFolders", userFolders, "Shared");
+            UserSharedFolders = FromConfig("UserSharedFolders", userFolders, "Shared");
             UserAppFolders = FromConfig("UserAppFolders", userFolders, "$(*AppAssemblyName)_$(*AppGuid)");
 
         }

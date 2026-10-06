@@ -17,7 +17,7 @@ namespace SysWeaver
     /// <remarks>
     /// A single process wide <see cref="PeriodicTask"/> checks the schedule every <see cref="CheckFrequencyMs"/> ms while there are scheduled entries (it's stopped when the schedule is empty).
     /// An entry never runs concurrently with itself. Exceptions thrown by tasks are recorded on the entry and in <see cref="TaskExceptions"/>.
-    /// Disposing an entry from within its own task will dead lock (dispose waits for the running task to complete).
+    /// Disposing an entry waits for a running execution to complete, except when called from within the entry's own task (then it returns immediately and the entry is not re-scheduled).
     /// </remarks>
     public static class Scheduler
     {
@@ -40,7 +40,7 @@ namespace SysWeaver
         /// <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous scheduled execution time (UTC), returns the next execution time (that must be later).
         /// It's called repeatedly until a time in the future is returned (so missed executions are skipped). If it returns a time that isn't later than it's input, the entry is not re-scheduled and the error is recorded in <see cref="TaskExceptions"/>.</param>
         /// <param name="runAsync">If true the task runs in it's own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
-        /// <returns>The scheduled <see cref="Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed)</returns>
+        /// <returns>The scheduled <see cref="Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed, unless called from within the task itself)</returns>
         public static IDisposable Add(DateTime when, Action task, String name = null, Func<DateTime, DateTime> repeatFn = null, bool runAsync = true)
         {
             if (when.Kind != DateTimeKind.Utc)
@@ -67,7 +67,7 @@ namespace SysWeaver
         /// <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous scheduled execution time (UTC), returns the next execution time (that must be later).
         /// It's called repeatedly until a time in the future is returned (so missed executions are skipped). If it returns a time that isn't later than it's input, the entry is not re-scheduled and the error is recorded in <see cref="TaskExceptions"/>.</param>
         /// <param name="runAsync">If true the task runs in it's own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
-        /// <returns>The scheduled <see cref="Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed)</returns>
+        /// <returns>The scheduled <see cref="Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed, unless called from within the task itself)</returns>
         public static IDisposable AddTask(DateTime when, Func<Task> task, String name = null, Func<DateTime, DateTime> repeatFn = null, bool runAsync = true)
         {
             if (when.Kind != DateTimeKind.Utc)
@@ -94,7 +94,7 @@ namespace SysWeaver
         /// <param name="repeatFn">An optional function that is executed after the task completed to re-schedule the task, given the previous scheduled execution time (UTC), returns the next execution time (that must be later).
         /// It's called repeatedly until a time in the future is returned (so missed executions are skipped). If it returns a time that isn't later than it's input, the entry is not re-scheduled and the error is recorded in <see cref="TaskExceptions"/>.</param>
         /// <param name="runAsync">If true the task runs in it's own async chain (independent of other tasks), else all non async tasks that are due at the same check are executed one after another in a shared async chain</param>
-        /// <returns>The scheduled <see cref="Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed)</returns>
+        /// <returns>The scheduled <see cref="Entry"/>, dispose it to prevent execution of the task in the future (disposing blocks until a currently running execution has completed, unless called from within the task itself)</returns>
         public static IDisposable AddValueTask(DateTime when, Func<ValueTask> task, String name = null, Func<DateTime, DateTime> repeatFn = null, bool runAsync = true)
         {
             if (when.Kind != DateTimeKind.Utc)
@@ -379,7 +379,8 @@ namespace SysWeaver
             /// Remove the task from the schedule, if it's currently executing this blocks (sleeping) until the execution has completed.
             /// Calling it more than once does nothing.
             /// </summary>
-            /// <remarks>Never call this from within the task itself, that will block forever. An execution that was already queued (but not started) will still run.</remarks>
+            /// <remarks>When called from within the task itself (including it's async continuations) it doesn't wait, the current execution completes and the task is not re-scheduled.
+            /// An execution that was already picked (but not started) is skipped.</remarks>
             public void Dispose() => DoRemove(this);
 
 
@@ -441,6 +442,9 @@ namespace SysWeaver
 
             internal long Removed;
 
+            /// <summary>
+            /// 0 = idle, 1 = picked for execution (not started), 2 = executing
+            /// </summary>
             internal long Guard;
 
             internal long Time;
@@ -456,8 +460,22 @@ namespace SysWeaver
         }
 
 
+        /// <summary>
+        /// The entry being executed by the current async flow (used to detect an entry disposing itself)
+        /// </summary>
+        static readonly AsyncLocal<Entry> Current = new AsyncLocal<Entry>();
+
         static async Task ExecuteOne(Entry ee)
         {
+            //  Mark as executing before checking Removed (DoRemove does the opposite), so either we skip it or DoRemove waits for it
+            Interlocked.Exchange(ref ee.Guard, 2);
+            if (Interlocked.Read(ref ee.Removed) != 0)
+            {
+                Interlocked.Exchange(ref ee.Guard, 0);
+                return;
+            }
+            //  Only flows to the task (and it's continuations), restored when this async method returns to it's caller
+            Current.Value = ee;
             //  Execute the task
             var start = DateTime.UtcNow.Ticks;
             try
@@ -482,6 +500,7 @@ namespace SysWeaver
                 ee.LastExceptionEx = ex.ToString();
                 TaskExceptions.OnException(new Exception(ee.ToString() + " failed with an exception", ex));
             }
+            Current.Value = null;
             var end = DateTime.UtcNow.Ticks;
             var duration = end - start;
             Interlocked.Exchange(ref ee.InternalLastStart, start);
@@ -566,9 +585,13 @@ namespace SysWeaver
                     return false;
                 e.Remove(ee);
             }
+            //  Disposed from within it's own task, waiting would block forever (Removed prevents re-scheduling)
+            if (Current.Value == ee)
+                return true;
             for (; ;)
             {
-                if (Interlocked.Read(ref ee.Guard) == 0)
+                //  0 = idle, 1 = picked but not started (ExecuteOne will see Removed and skip it), only wait for a running execution
+                if (Interlocked.Read(ref ee.Guard) != 2)
                     return true;
                 Thread.Sleep(1);
             }

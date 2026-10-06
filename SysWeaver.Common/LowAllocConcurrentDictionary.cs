@@ -1499,17 +1499,17 @@ namespace SysWeaver
         /// </summary>
         /// <param name="array">The destination array</param>
         /// <param name="arrayIndex">The index in <paramref name="array"/> to start writing at</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="array"/> is null</exception>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="arrayIndex"/> is negative</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="array"/> is null (in release builds thrown by the internal copy, for the destination array)</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="arrayIndex"/> is negative (in release builds thrown by the internal copy, for the destination index)</exception>
         /// <exception cref="ArgumentException">Thrown if the destination is too small for the snapshot</exception>
         public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(array);
             ArgumentOutOfRangeException.ThrowIfNegative(arrayIndex);
+#endif//DEBUG
             // Take a snapshot, the number of items may change while copying
             var items = ToList();
-            if (items.Count > array.Length - arrayIndex)
-                throw new ArgumentException("The destination array is too small", nameof(array));
             items.CopyTo(array, arrayIndex);
         }
 

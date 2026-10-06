@@ -102,10 +102,12 @@ namespace SysWeaver
         /// <param name="count">The number of elements in the array</param>
         /// <param name="value">The value to assign to all elements</param>
         /// <returns>A new array with <paramref name="count"/> elements, all set to <paramref name="value"/></returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="count"/> is negative</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="count"/> is negative (debug builds only; release builds throw an <see cref="OverflowException"/>)</exception>
         public static T[] Create<T>(int count, T value)
         {
+#if DEBUG
             ArgumentOutOfRangeException.ThrowIfNegative(count);
+#endif//DEBUG
             var t = GC.AllocateUninitializedArray<T>(count);
             // Fill is vectorized
             t.AsSpan().Fill(value);
@@ -119,11 +121,13 @@ namespace SysWeaver
         /// <param name="count">The number of elements in the array</param>
         /// <param name="getValue">The function that given an index returned the value to use</param>
         /// <returns>A new array with <paramref name="count"/> elements, element i is set to getValue(i)</returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="count"/> is negative</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="count"/> is negative (debug builds only; release builds throw an <see cref="OverflowException"/>)</exception>
         /// <exception cref="NullReferenceException">Thrown if <paramref name="getValue"/> is null and <paramref name="count"/> is positive</exception>
         public static T[] Create<T>(int count, Func<int, T> getValue)
         {
+#if DEBUG
             ArgumentOutOfRangeException.ThrowIfNegative(count);
+#endif//DEBUG
             var t = GC.AllocateUninitializedArray<T>(count);
             var p = t.AsSpan();
             for (int i = 0; i < count; ++i)
@@ -202,12 +206,14 @@ namespace SysWeaver
         /// <param name="count">The number of elements in the returned array</param>
         /// <returns>A new array with <paramref name="count"/> elements.
         /// If the sequence contains fewer elements than <paramref name="count"/>, the remaining elements are default(T).</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="values"/> is null</exception>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="count"/> is negative</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="values"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="count"/> is negative (debug builds only; release builds throw an <see cref="OverflowException"/>)</exception>
         public static T[] ToArray<T>(this IEnumerable<T> values, int count)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(values);
             ArgumentOutOfRangeException.ThrowIfNegative(count);
+#endif//DEBUG
             var t = GC.AllocateUninitializedArray<T>(count);
             var p = t.AsSpan();
             using var e = values.GetEnumerator();
@@ -231,13 +237,15 @@ namespace SysWeaver
         /// <param name="values">The original array</param>
         /// <param name="order">The new order, ex: newArray[0] = values[order[0]]. Must contain at least as many elements as <paramref name="values"/> (any extra elements are ignored), the same index may be used multiple times</param>
         /// <returns>A new array (with the same length as <paramref name="values"/>) with the elements ordered according to the order, or null if <paramref name="values"/> is null</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="order"/> is null and <paramref name="values"/> is non-null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="order"/> is null and <paramref name="values"/> is non-null (debug builds only; release builds throw a <see cref="NullReferenceException"/> if <paramref name="values"/> is non-empty)</exception>
         /// <exception cref="ArgumentOutOfRangeException">Thrown by the list (arrays, List etc) if an index is out of range or if <paramref name="order"/> is too short</exception>
         public static T[] Reordered<T>(this IReadOnlyList<T> values, IReadOnlyList<int> order)
         {
             if (values == null)
                 return null;
+#if DEBUG
             ArgumentNullException.ThrowIfNull(order);
+#endif//DEBUG
             var c = values.Count;
             var r = new T[c];
             for (int i = 0; i < c; ++i)
@@ -346,14 +354,18 @@ namespace SysWeaver
         /// <param name="array">The array to remove an element from, it's not modified</param>
         /// <param name="index">The index of the element to remove</param>
         /// <returns>A new array with all elements except the one at <paramref name="index"/></returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="array"/> is null</exception>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="index"/> is negative or greater than or equal to the length of the <paramref name="array"/></exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="array"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="index"/> is negative or greater than or equal to the length of the <paramref name="array"/> (debug builds only; release builds throw an <see cref="OverflowException"/> if the <paramref name="array"/> is empty, else an <see cref="ArgumentException"/> or <see cref="ArgumentOutOfRangeException"/> from <see cref="Array.Copy(Array, int, Array, int, int)"/>)</exception>
         public static T[] RemoveAt<T>(this T[] array, int index)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(array);
+#endif//DEBUG
             var l = array.Length;
+#if DEBUG
             if ((uint)index >= (uint)l)
                 ThrowIndexOutOfRange(index, l);
+#endif//DEBUG
             var n = new T[l - 1];
             if (index > 0)
                 Array.Copy(array, 0, n, 0, index);
@@ -363,9 +375,11 @@ namespace SysWeaver
             return n;
         }
 
+#if DEBUG
         [DoesNotReturn]
         static void ThrowIndexOutOfRange(int index, int length)
             => throw new ArgumentOutOfRangeException(nameof(index), index, "The index must be non-negative and less than the length of the array (" + length + ")");
+#endif//DEBUG
 
 
         /// <summary>
@@ -408,13 +422,15 @@ namespace SysWeaver
         /// <param name="dictionary">The dictionary to convert (may be null)</param>
         /// <param name="func">The function that convert a value, the first argument is the key and the second argument is the current value</param>
         /// <returns>A new dictionary (using the same comparer as the source) with the same keys and converted values, or null if <paramref name="dictionary"/> is null</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="dictionary"/> is non-null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="dictionary"/> is non-null (debug builds only; release builds throw a <see cref="NullReferenceException"/> if the <paramref name="dictionary"/> is non-empty)</exception>
         /// <exception cref="Exception">Thrown if the comparer of the source can't be determined (only Dictionary, ConcurrentDictionary, FrozenDictionary and the frozen dictionaries of this library are supported, see <see cref="DictionaryExt.GetComparer{K, V}(IReadOnlyDictionary{K, V})"/>)</exception>
         public static Dictionary<Key, NewValue> ConvertValues<Key, CurrentValue, NewValue>(this IReadOnlyDictionary<Key, CurrentValue> dictionary, Func<Key, CurrentValue, NewValue> func)
         {
             if (dictionary == null)
                 return null;
+#if DEBUG
             ArgumentNullException.ThrowIfNull(func);
+#endif//DEBUG
             var d = new Dictionary<Key, NewValue>(dictionary.Count, dictionary.GetComparer());
             foreach (var kv in dictionary)
                 d.TryAdd(kv.Key, func(kv.Key, kv.Value));
@@ -430,13 +446,15 @@ namespace SysWeaver
         /// <param name="dictionary">The dictionary to convert (may be null)</param>
         /// <param name="func">The function that convert a value</param>
         /// <returns>A new dictionary (using the same comparer as the source) with the same keys and converted values, or null if <paramref name="dictionary"/> is null</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="dictionary"/> is non-null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="dictionary"/> is non-null (debug builds only; release builds throw a <see cref="NullReferenceException"/> if the <paramref name="dictionary"/> is non-empty)</exception>
         /// <exception cref="Exception">Thrown if the comparer of the source can't be determined (only Dictionary, ConcurrentDictionary, FrozenDictionary and the frozen dictionaries of this library are supported, see <see cref="DictionaryExt.GetComparer{K, V}(IReadOnlyDictionary{K, V})"/>)</exception>
         public static Dictionary<Key, NewValue> ConvertValues<Key, CurrentValue, NewValue>(this IReadOnlyDictionary<Key, CurrentValue> dictionary, Func<CurrentValue, NewValue> func)
         {
             if (dictionary == null)
                 return null;
+#if DEBUG
             ArgumentNullException.ThrowIfNull(func);
+#endif//DEBUG
             var d = new Dictionary<Key, NewValue>(dictionary.Count, dictionary.GetComparer());
             foreach (var kv in dictionary)
                 d.TryAdd(kv.Key, func(kv.Value));
@@ -454,7 +472,7 @@ namespace SysWeaver
         /// <param name="array">The list to convert (may be null)</param>
         /// <param name="func">The function that converts an element</param>
         /// <returns>A new array with the converted elements (in the same order as the source), or null if <paramref name="array"/> is null</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="array"/> is non-empty</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="array"/> is non-empty (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public static T[] Convert<E, T>(this IReadOnlyList<E> array, Func<E, T> func)
         {
             if (array == null)
@@ -462,7 +480,9 @@ namespace SysWeaver
             var l = array.Count;
             if (l <= 0)
                 return Array.Empty<T>();
+#if DEBUG
             ArgumentNullException.ThrowIfNull(func);
+#endif//DEBUG
             var t = GC.AllocateUninitializedArray<T>(l);
             var p = t.AsSpan();
             for (int i = 0; i < l; ++i)
@@ -569,7 +589,7 @@ namespace SysWeaver
         /// <param name="array">The list to convert (may be null)</param>
         /// <param name="func">The function that converts an element, the second argument is the index of the element</param>
         /// <returns>A new array with the converted elements (in the same order as the source), or null if <paramref name="array"/> is null</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="array"/> is non-empty</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="array"/> is non-empty (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public static T[] Convert<E, T>(this IReadOnlyList<E> array, Func<E, int, T> func)
         {
             if (array == null)
@@ -577,7 +597,9 @@ namespace SysWeaver
             var l = array.Count;
             if (l <= 0)
                 return Array.Empty<T>();
+#if DEBUG
             ArgumentNullException.ThrowIfNull(func);
+#endif//DEBUG
             var t = GC.AllocateUninitializedArray<T>(l);
             var p = t.AsSpan();
             for (int i = 0; i < l; ++i)
@@ -669,7 +691,7 @@ namespace SysWeaver
         /// <param name="dict">The dictionary to convert (may be null)</param>
         /// <param name="func">The function to use for instance creation, the last argument is the index of the element</param>
         /// <returns>A new array with the converted elements (in the enumeration order of the source), or null if the source is null</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the source is non-empty</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the source is non-empty (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public static T[] ToArray<K, V, T>(this IReadOnlyDictionary<K, V> dict, Func<K, V, int, T> func)
         {
             if (dict == null)
@@ -677,7 +699,9 @@ namespace SysWeaver
             var l = dict.Count;
             if (l <= 0)
                 return Array.Empty<T>();
+#if DEBUG
             ArgumentNullException.ThrowIfNull(func);
+#endif//DEBUG
             var tt = GC.AllocateUninitializedArray<T>(l);
             int i = 0;
             foreach (var kv in dict)
@@ -783,7 +807,7 @@ namespace SysWeaver
         /// <param name="col">The collection to convert (may be null)</param>
         /// <param name="func">The function to use for instance creation, the last argument is the index of the element</param>
         /// <returns>A new array with the converted elements (in the enumeration order of the source), or null if the source is null</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the source is non-empty</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the source is non-empty (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public static T[] ToArray<K, T>(this IReadOnlyCollection<K> col, Func<K, int, T> func)
         {
             if (col == null)
@@ -791,7 +815,9 @@ namespace SysWeaver
             var l = col.Count;
             if (l <= 0)
                 return Array.Empty<T>();
+#if DEBUG
             ArgumentNullException.ThrowIfNull(func);
+#endif//DEBUG
             var tt = GC.AllocateUninitializedArray<T>(l);
             int i = 0;
             foreach (var kv in col)
@@ -892,7 +918,7 @@ namespace SysWeaver
         /// <param name="list">List to sort (may be null)</param>
         /// <param name="fn">Compare function with values and their (original) indices, should return a negative value if the first element should be placed before the second element, zero if they are equal and a positive value if the first element should be placed after the second.
         /// Elements that compare equal keep their original order.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="fn"/> is null and the <paramref name="list"/> contains more than one element</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="fn"/> is null and the <paramref name="list"/> contains more than one element (debug builds only; release builds throw an <see cref="InvalidOperationException"/> from the sort, before the <paramref name="list"/> is modified)</exception>
         /// <exception cref="NotSupportedException">Thrown if the <paramref name="list"/> is read only</exception>
         public static void StableSort<T>(this IList<T> list, Func<T, int, T, int, int> fn)
         {
@@ -901,7 +927,9 @@ namespace SysWeaver
             var count = list.Count;
             if (count <= 1)
                 return;
+#if DEBUG
             ArgumentNullException.ThrowIfNull(fn);
+#endif//DEBUG
             if (count > StableSortMaxStack)
             {
                 StableSortPooled(list, fn, count);
@@ -947,7 +975,7 @@ namespace SysWeaver
         /// <param name="list">List to sort (may be null)</param>
         /// <param name="fn">Compare function with values, should return a negative value if the first element should be placed before the second element, zero if they are equal and a positive value if the first element should be placed after the second.
         /// Elements that compare equal keep their original order.</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="fn"/> is null and the <paramref name="list"/> contains more than one element</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="fn"/> is null and the <paramref name="list"/> contains more than one element (debug builds only; release builds throw an <see cref="InvalidOperationException"/> from the sort, before the <paramref name="list"/> is modified)</exception>
         /// <exception cref="NotSupportedException">Thrown if the <paramref name="list"/> is read only</exception>
         public static void StableSort<T>(this IList<T> list, Func<T, T, int> fn)
         {
@@ -956,7 +984,9 @@ namespace SysWeaver
             var count = list.Count;
             if (count <= 1)
                 return;
+#if DEBUG
             ArgumentNullException.ThrowIfNull(fn);
+#endif//DEBUG
             if (count > StableSortMaxStack)
             {
                 StableSortPooled(list, fn, count);
@@ -1031,11 +1061,13 @@ namespace SysWeaver
         /// <param name="list2">The second sorted list</param>
         /// <param name="comparer">An optional comparer (the lists must be sorted using this comparer), if null <see cref="Comparer{T}.Default"/> is used</param>
         /// <returns>A new list with the elements (from <paramref name="list1"/>) that exists in both lists, in sorted order</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="list1"/> or <paramref name="list2"/> is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="list1"/> or <paramref name="list2"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public static List<T> IntersectSorted<T>(this IReadOnlyList<T> list1, IReadOnlyList<T> list2, IComparer<T> comparer = default)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(list1);
             ArgumentNullException.ThrowIfNull(list2);
+#endif//DEBUG
             var c1 = list1.Count;
             var c2 = list2.Count;
             var result = new List<T>(Math.Min(c1, c2));

@@ -77,8 +77,8 @@ namespace SysWeaver
     /// When the file is created, changed or renamed to the monitored name, <see cref="Notify"/> is called once the file hasn't been written to for the specified delay.
     /// </summary>
     /// <remarks>
-    /// Only one notification is pending / running at a time, changes made while <see cref="Notify"/> is executing are ignored.
-    /// The folder of the file must exist when the instance is created, else the file is never monitored (no error is reported).
+    /// Only one notification is pending / running at a time, changes made while waiting or while <see cref="Notify"/> is executing causes another wait and notification afterwards.
+    /// The folder of the file must exist when the instance is created, else the file is never monitored (a <see cref="DirectoryNotFoundException"/> is recorded in <see cref="LastExceptiion"/>).
     /// Exceptions are never thrown from the background notification, they are recorded in <see cref="LastExceptiion"/> and <see cref="ExceptionCount"/>.
     /// Derived classes must call <see cref="Start"/> at the end of their constructor.
     /// </remarks>
@@ -93,17 +93,26 @@ namespace SysWeaver
         /// <summary>
         /// Set up the monitoring (call <see cref="Start"/> to begin raising events)
         /// </summary>
-        /// <param name="filename">The file to monitor (the folder part must be non-empty and exist, so use a full or relative path with a folder)</param>
+        /// <param name="filename">The file to monitor, a relative path is relative to the current folder (the folder of the file must exist)</param>
         /// <param name="delayMs">The time in ms that the file must be unchanged (based on its last write time) before <see cref="Notify"/> is called</param>
+        /// <exception cref="ArgumentException"><paramref name="filename"/> is null, empty or not a valid path (from <see cref="Path.GetFullPath(string)"/>)</exception>
         protected OnFileChangeBase(string filename, int delayMs = 5000)
         {
             var thread = Thread.CurrentThread;
             Name = filename;
             DelayMs = delayMs;
-            var f = Path.GetFileName(filename);
+            //  Use the full path, so that a file name without a folder is watched in the current folder
+            var fullName = Path.GetFullPath(filename);
+            FullName = fullName;
+            var f = Path.GetFileName(fullName);
             Filter = f;
-            var folder = Path.GetDirectoryName(filename);
-            if (Directory.Exists(folder))
+            var folder = Path.GetDirectoryName(fullName);
+            if (!Directory.Exists(folder))
+            {
+                Ex = Tuple.Create<Exception, DateTime>(new DirectoryNotFoundException("The folder " + folder.ToQuoted() + " doesn't exist, the file " + fullName.ToQuoted() + " will not be monitored!"), DateTime.UtcNow);
+                Interlocked.Increment(ref ExCount);
+            }
+            else
             {
                 var w = new FileSystemWatcher(folder);
                 W = w;
@@ -143,6 +152,7 @@ namespace SysWeaver
         /// The name of the monitored file (as supplied to the constructor)
         /// </summary>
         protected readonly String Name;
+        readonly String FullName;
         readonly int DelayMs;
 
         void OnChanged(object sender, FileSystemEventArgs e)
@@ -153,9 +163,11 @@ namespace SysWeaver
         }
 
         int Running;
+        int Dirty;
 
         void OnCreated(object sender, FileSystemEventArgs e)
         {
+            Interlocked.Exchange(ref Dirty, 1);
             if (Interlocked.CompareExchange(ref Running, 1, 0) != 0)
                 return;
             TaskExt.RunAsync(Wait());
@@ -191,55 +203,64 @@ namespace SysWeaver
         long ExCount;
 
         /// <summary>
-        /// Wait until the file hasn't been written to for the delay, then notify (gives up after 5 failures to read the file time)
+        /// Wait until the file hasn't been written to for the delay, then notify (gives up after 5 failures to read the file time).
+        /// Repeats if a change event was received after the wait started or while notifying.
         /// </summary>
         async Task Wait()
         {
-            try
+            for (; ; )
             {
-                var minAge = DelayMs;
-                var d = minAge;
-                var n = Name;
-                for (int err = 0; err < 5;)
+                try
                 {
-                    await Task.Delay(d + 100).ConfigureAwait(false);
-                    try
+                    Interlocked.Exchange(ref Dirty, 0);
+                    var minAge = DelayMs;
+                    var d = minAge;
+                    var n = FullName;
+                    for (int err = 0; err < 5;)
                     {
-                        var now = DateTime.UtcNow;
-                        var dt = new FileInfo(n).LastWriteTimeUtc;
-                        var age = now - dt;
-                        if (age.TotalMilliseconds >= minAge)
+                        await Task.Delay(d + 100).ConfigureAwait(false);
+                        try
                         {
-                            try
+                            var now = DateTime.UtcNow;
+                            var dt = new FileInfo(n).LastWriteTimeUtc;
+                            var age = now - dt;
+                            if (age.TotalMilliseconds >= minAge)
                             {
-                                await Notify().ConfigureAwait(false);
+                                //  Any change event after this point will cause another notification
+                                Interlocked.Exchange(ref Dirty, 0);
+                                try
+                                {
+                                    await Notify().ConfigureAwait(false);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Ex = Tuple.Create(ex, DateTime.UtcNow);
+                                    Interlocked.Increment(ref ExCount);
+                                }
+                                break;
                             }
-                            catch (Exception ex)
-                            {
-                                Ex = Tuple.Create(ex, DateTime.UtcNow);
-                                Interlocked.Increment(ref ExCount);
-                            }
-                            return;
                         }
+                        catch (Exception ex)
+                        {
+                            Ex = Tuple.Create(ex, DateTime.UtcNow);
+                            Interlocked.Increment(ref ExCount);
+                            ++err;
+                        }
+                        if (d > 1000)
+                            d = 1000;
                     }
-                    catch (Exception ex)
-                    {
-                        Ex = Tuple.Create(ex, DateTime.UtcNow);
-                        Interlocked.Increment(ref ExCount);
-                        ++err;
-                    }
-                    if (d > 1000)
-                        d = 1000;
                 }
-            }
-            catch (Exception ex)
-            {
-                Ex = Tuple.Create(ex, DateTime.UtcNow);
-                Interlocked.Increment(ref ExCount);
-            }
-            finally
-            {
+                catch (Exception ex)
+                {
+                    Ex = Tuple.Create(ex, DateTime.UtcNow);
+                    Interlocked.Increment(ref ExCount);
+                }
                 Interlocked.Exchange(ref Running, 0);
+                //  A change event received while running (that didn't start a new wait) must be handled
+                if (Volatile.Read(ref Dirty) == 0)
+                    return;
+                if (Interlocked.CompareExchange(ref Running, 1, 0) != 0)
+                    return;
             }
         }
 

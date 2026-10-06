@@ -424,11 +424,13 @@ namespace SysWeaver
         /// <param name="index">The index of the first hash code in <paramref name="p"/> to mix</param>
         /// <param name="len">The number of hash codes to mix, a negative value mixes all hash codes from <paramref name="index"/> to the end of <paramref name="p"/></param>
         /// <returns>The mixed hash code, 42 if no hash codes are mixed</returns>
-        /// <exception cref="ArgumentNullException">If <paramref name="p"/> is null</exception>
+        /// <exception cref="ArgumentNullException">If <paramref name="p"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="ArgumentOutOfRangeException">If <paramref name="index"/> is negative or larger than the number of elements, or if <paramref name="index"/> + <paramref name="len"/> is larger than the number of elements in <paramref name="p"/></exception>
         public static int Mix(IReadOnlyList<int> p, int index = 0, int len = -1)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(p);
+#endif//DEBUG
             var count = p.Count;
             if ((uint)index > (uint)count)
                 throw new ArgumentOutOfRangeException(nameof(index), index, "Index must be within the list!");
@@ -536,11 +538,13 @@ namespace SysWeaver
         /// </summary>
         /// <param name="p">The objects to mix the hash codes of</param>
         /// <returns>The mixed hash code, 42 if there are no objects</returns>
-        /// <exception cref="ArgumentNullException">If <paramref name="p"/> is null</exception>
+        /// <exception cref="ArgumentNullException">If <paramref name="p"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <remarks>Value types are boxed by the caller, prefer the fixed arity overloads if possible</remarks>
         public static int Mix(params Object[] p)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(p);
+#endif//DEBUG
             int hash = 42;
             int index = 0;
             int len = p.Length;
@@ -592,14 +596,16 @@ namespace SysWeaver
         /// </summary>
         /// <param name="obj">The sequence of elements</param>
         /// <returns>The mixed hash code, 42 if the sequence is empty</returns>
-        /// <exception cref="ArgumentNullException">If <paramref name="obj"/> is null</exception>
+        /// <exception cref="ArgumentNullException">If <paramref name="obj"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <remarks>
         /// Arrays and lists of int and arrays of objects are handled without enumerating (no boxing), other sequences box value type elements.
         /// Note that a single string argument binds to this overload (a string is a sequence of chars), use <see cref="Get{T}(T)"/> to get the hash code of the string itself.
         /// </remarks>
         public static int Mix(IEnumerable obj)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(obj);
+#endif//DEBUG
             // Fast paths (same result), the hash code of an int is the value itself
             if (obj is int[] ia)
                 return MixSpan(ia);

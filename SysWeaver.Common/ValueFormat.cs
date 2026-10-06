@@ -76,13 +76,15 @@ namespace SysWeaver
         /// <param name="value">The value</param>
         /// <param name="level">The level to show (the smallest unit that is included), smaller units are truncated (not rounded)</param>
         /// <returns>A string representation of the time stamp, ex: "2024-03-05 09:07:03" (the kind of the time stamp isn't included)</returns>
-        /// <exception cref="ArgumentOutOfRangeException"><paramref name="level"/> is not a valid DateTimeLevels value</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="level"/> is not a valid DateTimeLevels value (debug builds only; release builds throw an <see cref="IndexOutOfRangeException"/>)</exception>
         /// <remarks>The output is always formatted using the gregorian calendar, ':' as the time separator and ',' as the decimal separator (regardless of the current culture)</remarks>
         public static String ToValueString(this DateTime value, DateTimeLevels level = DateTimeLevels.Default)
         {
             var l = (uint)level;
+#if DEBUG
             if (l > (uint)DateTimeLevels.Year)
                 throw new ArgumentOutOfRangeException(nameof(level), level, "Invalid level!");
+#endif//DEBUG
             return String.Create(DateTimeLengths[(int)l], new DateTimeState(value, level), DateTimeWriteAction);
         }
 

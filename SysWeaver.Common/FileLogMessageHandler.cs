@@ -100,7 +100,8 @@ namespace SysWeaver
                                         //  Read 1kb at the target position
                                         fs.Position = s;
                                         var bl = fs.Read(buf, 0, searchSize);
-                                        if (bl < 0)
+                                        //  EOF reached without finding the start of a new line, truncate everything (dest = 0)
+                                        if (bl <= 0)
                                             break;
                                         //  Find a new line
                                         for (int i = 0; i < bl; ++i)

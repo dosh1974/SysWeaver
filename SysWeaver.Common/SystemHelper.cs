@@ -53,7 +53,7 @@ namespace SysWeaver
         /// <param name="commandline">The command line, ex "ls -l". The program is started directly (not through a shell), so shell built-ins and redirections don't work.</param>
         /// <returns>The text outputted to stdout from the executed program or null if it failed to start</returns>
         /// <remarks>
-        /// Blocks until the process exits, no timeout. Stderr is redirected but not read, so a process writing a lot to stderr may block forever.
+        /// Blocks until the process exits, no timeout. Stderr is redirected and discarded (not returned and not written to the console).
         /// </remarks>
         public static String GetStdOutFrom(out int exitCode, String commandline)
         {
@@ -67,7 +67,10 @@ namespace SysWeaver
                 s.RedirectStandardError = true;
                 s.FileName = cmd;
                 s.Arguments = args;
+                //  Drain (and discard) stderr asynchronously, so that the process can't block on a full stderr pipe
+                p.ErrorDataReceived += (sender, e) => { };
                 p.Start();
+                p.BeginErrorReadLine();
                 var o = p.StandardOutput.ReadToEnd();
                 p.WaitForExit();
                 exitCode = p.ExitCode;

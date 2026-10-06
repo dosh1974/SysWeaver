@@ -503,7 +503,7 @@ namespace SysWeaver
                 foreach (var x in n)
                 {
                     var sl = sb.Length;
-                    sb.Append(x);
+                    sb.Append(x.Key);
                     var next = x.Value;
                     if (next.IsLeaf)
                         yield return sb.ToString();
@@ -529,7 +529,7 @@ namespace SysWeaver
                 foreach (var x in n.OrderBy(x => x.Key))
                 {
                     var sl = sb.Length;
-                    sb.Append(x);
+                    sb.Append(x.Key);
                     var next = x.Value;
                     if (next.IsLeaf)
                         yield return sb.ToString();
@@ -555,10 +555,10 @@ namespace SysWeaver
                 foreach (var x in n.Reverse())
                 {
                     var sl = sb.Length;
-                    sb.Append(x);
+                    sb.Append(x.Key);
                     var next = x.Value;
                     var isLeaf = next.IsLeaf;
-                    foreach (var r in next.GetAllInReverseOrder())
+                    foreach (var r in next.InternalAllInReverseOrder(sb))
                         yield return r;
                     if (isLeaf)
                         yield return sb.ToString();

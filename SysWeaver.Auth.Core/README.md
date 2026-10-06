@@ -51,7 +51,8 @@ flowchart TB
 - Clear-text passwords in configuration are supported but should be replaced with hashes, generated on the *Debug/SimpleAuth/Generate password hash* page (requires the debug or ops token).
 - Password hashes are a single SHA256 (fast to brute force if leaked); keep user files and configuration private.
 - API keys are stored in clear text in the application key/value store.
-- `SimpleAuthorizer.ChangeCounter` is always 0, so Authorization header results cached by the `AuthManager` are not invalidated when users or API keys change (a restart is required for removed keys or changed passwords to take effect on cached headers).
+- Only successful Authorization header results are cached, for `CacheDuration` seconds (default 30) and at most `MaxCachedHeaders` (default 10 000) entries, keyed by a SHA256 hash of the header.
+  `SimpleAuthorizer.ChangeCounter` is always 0, so a removed API key or a changed password can still be used with a cached header until the entry expires (at most `CacheDuration` seconds).
 
 ## Using it
 

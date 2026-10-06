@@ -14,8 +14,8 @@ namespace SysWeaver.Serialization
     /// <remarks>
     /// Serialization uses <see cref="NewtonsoftJson.MemberResolver"/>: fields are included and read-only fields/get-only properties are not written.
     /// "$type" information is written only where needed for <see cref="SerializerOptions.Compact"/>, on every object (and indented) for <see cref="SerializerOptions.Verbose"/> and never for <see cref="SerializerOptions.Typeless"/>.
-    /// Deserialization honors "$type" (<see cref="TypeNameHandling.Auto"/>) and resolves names with <see cref="TypeNameResolver"/> without any allow list,
-    /// so untrusted input can make the deserializer instantiate any loaded type assignable to an <see cref="Object"/>/interface/base class typed member. Do not deserialize untrusted data into such types.
+    /// Deserialization honors "$type" (<see cref="TypeNameHandling.Auto"/>) and resolves names with <see cref="TypeNameResolver.GetForData"/>,
+    /// so only types allowed by the <see cref="DataTypePolicy"/> (and assignable to the declared type) can be instantiated.
     /// Deserializers are pooled (<see cref="LimitedObjectPool{T}"/>) so concurrent calls are safe.
     /// </remarks>
     public sealed class NewtonsoftJsonSerializer : ITextSerializerType

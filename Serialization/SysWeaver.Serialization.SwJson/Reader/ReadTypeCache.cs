@@ -274,17 +274,22 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
             public int GetHashCode([DisallowNull] ReadOnlyMemory<Byte> obj)
             {
-                return (obj.Length << 16) | obj.Span[0];
+                HashCode h = new();
+                h.AddBytes(obj.Span);
+                return h.ToHashCode();
             }
         }
 
-        static readonly ConcurrentDictionary<ReadOnlyMemory<Byte>, Type> TypenameCache = new ConcurrentDictionary<ReadOnlyMemory<Byte>, Type>(new Cmp());
+        /// <summary>
+        /// Resolved (and allowed) "$type" names, keyed by the raw UTF8 bytes, at most <see cref="TypeFinder.MaxCachedNames"/> entries (the same type can be named in many ways)
+        /// </summary>
+        static readonly LowAllocConcurrentDictionary<ReadOnlyMemory<Byte>, Type> TypenameCache = new (new Cmp());
         static readonly Expression ExpFalse = Expression.Constant(false);
 
         //static Assembly LastAsm;
 
         /// <summary>
-        /// Resolve a <c>"$type"</c> type name using <see cref="TypeNameResolver"/>, cached by the raw (still escaped) UTF8 bytes.
+        /// Resolve a <c>"$type"</c> type name using <see cref="TypeNameResolver.GetForData"/>, cached by the raw (still escaped) UTF8 bytes.
         /// </summary>
         /// <param name="state">The parser state</param>
         /// <param name="ptr">The start of the name (after the quote)</param>
@@ -292,7 +297,8 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <param name="isEscaped">True if the name contains escapes</param>
         /// <returns>The type</returns>
         /// <exception cref="Exception">No type with the name was found</exception>
-        /// <remarks>Any type in any loaded assembly can be resolved, the reader doesn't restrict the types that json can instantiate.</remarks>
+        /// <exception cref="DataTypeNotAllowedException">The type isn't allowed by the <see cref="DataTypePolicy"/></exception>
+        /// <remarks>Only types allowed by the <see cref="DataTypePolicy"/> can be resolved, the callers also checks that the type is assignable to the declared type.</remarks>
         public unsafe static Type ResolveType(JsonParserState state, Byte* ptr, int len, bool isEscaped)
         {
             var c = TypenameCache;
@@ -303,10 +309,11 @@ namespace SysWeaver.Serialization.SwJson.Reader
             ref var buf = ref state.Temp;
             var newKey = new ReadOnlySpan<Byte>(ptr, len).ToArray();
             String typename = isEscaped ? Utf8Parser.ReadEscapedUtf8String(ref buf, ref ptr, ptr + len, (Char)0) : Utf8Parser.ReadUtf8String(ref buf, ref ptr, ptr + len , (Char)0);
-            t = TypeNameResolver.Get(typename);
+            t = TypeNameResolver.GetForData(typename);
             if (t != null)
             {
-                c.TryAdd(newKey, t);
+                if (c.Count < TypeFinder.MaxCachedNames)
+                    c.TryAdd(newKey, t);
                 return t;
             }
             throw new Exception("Can't find a type named \"" + typename + "\"");

@@ -400,8 +400,14 @@ namespace SysWeaver.Net
         /// <param name="suffix">The query string (without the '?') that selects the transformer, case sensitive</param>
         /// <param name="t">The transformer</param>
         /// <returns>True if added, false if a transformer is already registered for the suffix</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="t"/> is null</exception>
-        public bool AddFileTransformer(String suffix, IFileTransformer t) => FileTransformers.TryAdd(suffix, (t ?? throw new ArgumentNullException(nameof(t))).Modify);
+        /// <exception cref="ArgumentNullException"><paramref name="t"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
+        public bool AddFileTransformer(String suffix, IFileTransformer t)
+        {
+#if DEBUG
+            ArgumentNullException.ThrowIfNull(t);
+#endif//DEBUG
+            return FileTransformers.TryAdd(suffix, t.Modify);
+        }
 
         /// <summary>
         /// Remove a file transformer.

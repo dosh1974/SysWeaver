@@ -46,7 +46,7 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 - Member names are matched case-sensitively; unknown members holding objects or arrays cause an error instead of being skipped.
 - `NaN` / `Infinity` are written as bare tokens, which the SysWeaver reader accepts but strict JSON parsers reject.
 - Integer values are not range-checked when reading (out-of-range values wrap silently).
-- `$type` in the input can create any loaded type; only read data from trusted sources into `object` / base class members.
+- `$type` in the input can only name types allowed by the `DataTypePolicy` (see `TypeFinder.GetForData`), and the type must be assignable to the declared type.
 - Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered.
 
 ## Using it

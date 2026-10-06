@@ -178,7 +178,7 @@ namespace SysWeaver
         /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <returns>The value of the item</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (for <paramref name="func"/>: debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
         /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
@@ -208,7 +208,9 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+#if DEBUG
                 ArgumentNullException.ThrowIfNull(func);
+#endif//DEBUG
                 var value = func(key, val.Item2);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
@@ -230,7 +232,7 @@ namespace SysWeaver
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
         /// <returns>The value of the item</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (for <paramref name="func"/>: debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
         /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
@@ -260,7 +262,9 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+#if DEBUG
                 ArgumentNullException.ThrowIfNull(func);
+#endif//DEBUG
                 var value = func(key, val.Item2, arg);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
@@ -285,7 +289,7 @@ namespace SysWeaver
         /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
         /// <returns>The value of the item</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (for <paramref name="func"/>: debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
         /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
@@ -315,7 +319,9 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+#if DEBUG
                 ArgumentNullException.ThrowIfNull(func);
+#endif//DEBUG
                 var value = func(key, val.Item2, arg0, arg1);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
@@ -580,7 +586,7 @@ namespace SysWeaver
         /// <param name="key">The key</param>
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <returns>The value of the item</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (for <paramref name="func"/>: debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
         /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
@@ -609,7 +615,9 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+#if DEBUG
                 ArgumentNullException.ThrowIfNull(func);
+#endif//DEBUG
                 var value = func(key);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
@@ -631,7 +639,7 @@ namespace SysWeaver
         /// <param name="func">The delegate used to create a non-existing item</param>
         /// <param name="arg">A custom argument that is passed to the delegate if invoked</param>
         /// <returns>The value of the item</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (for <paramref name="func"/>: debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
         /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
@@ -660,7 +668,9 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+#if DEBUG
                 ArgumentNullException.ThrowIfNull(func);
+#endif//DEBUG
                 var value = func(key, arg);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
@@ -685,7 +695,7 @@ namespace SysWeaver
         /// <param name="arg0">A custom argument that is passed to the delegate if invoked</param>
         /// <param name="arg1">A custom argument that is passed to the delegate if invoked</param>
         /// <returns>The value of the item</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="key"/> is null, or <paramref name="func"/> is null and the item have to be created (for <paramref name="func"/>: debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <remarks>
         /// Any exception thrown by <paramref name="func"/> is propagated to the caller (nothing is cached).
         /// The key is locked while <paramref name="func"/> executes, so <paramref name="func"/> may use the cache, but must not request the same key (dead lock).
@@ -714,7 +724,9 @@ namespace SysWeaver
                     }
                 }
                 Interlocked.Increment(ref MissCount);
+#if DEBUG
                 ArgumentNullException.ThrowIfNull(func);
+#endif//DEBUG
                 var value = func(key, arg0, arg1);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;

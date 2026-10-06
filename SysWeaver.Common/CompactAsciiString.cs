@@ -235,7 +235,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="KeyNotFoundException"><paramref name="compactString"/> contains a char that isn't valid (not in <see cref="Valid"/>)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Int64 DecodeInt64(String compactString)
@@ -246,7 +246,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="KeyNotFoundException"><paramref name="compactString"/> contains a char that isn't valid (not in <see cref="Valid"/>)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Int32 DecodeInt32(String compactString)
@@ -258,11 +258,13 @@ namespace SysWeaver
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string, an empty string decodes to 0</returns>
         /// <remarks>No overflow checks are made, a string that represents a value larger than UInt64.MaxValue will wrap around</remarks>
-        /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="KeyNotFoundException"><paramref name="compactString"/> contains a char that isn't valid (not in <see cref="Valid"/>)</exception>
         public UInt64 DecodeUInt64(String compactString)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(compactString);
+#endif//DEBUG
             ulong vl = Base;
             var l = compactString.Length;
             UInt64 r = 0;
@@ -281,11 +283,13 @@ namespace SysWeaver
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string (always in the [0, UInt32.MaxValue] range), an empty string decodes to 0</returns>
         /// <remarks>No overflow checks are made, a string that represents a value larger than UInt32.MaxValue will wrap around</remarks>
-        /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="KeyNotFoundException"><paramref name="compactString"/> contains a char that isn't valid (not in <see cref="Valid"/>)</exception>
         public UInt64 DecodeUInt32(String compactString)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(compactString);
+#endif//DEBUG
             var vl = Base;
             var l = compactString.Length;
             UInt32 r = 0;

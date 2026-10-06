@@ -634,7 +634,7 @@ namespace SysWeaver
             if (valType == typeof(UInt64))
             {
                 var v = (UInt64)data;
-                value = (Decimal)data;
+                value = (Decimal)v;
                 return true;
             }
             return false;
@@ -865,7 +865,6 @@ namespace SysWeaver
         /// <param name="key">The config key (case insensitive).</param>
         /// <param name="value">The value, or the default value if not found or not convertible.</param>
         /// <returns>True if the key exists and the value could be converted, else false.</returns>
-        /// <exception cref="InvalidCastException">The value is a non-negative JSON integer (ex: 5), currently not handled correctly.</exception>
         public static bool TryGetDecimal(String key, out Decimal value)
         {
             value = default;

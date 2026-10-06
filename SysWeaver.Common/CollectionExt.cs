@@ -57,10 +57,12 @@ namespace SysWeaver
         /// </remarks>
         /// <param name="t">The enumerable instance</param>
         /// <returns>True if the instance <paramref name="t"/> is empty, else false</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="t"/> is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="t"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public static bool IsEmpty(this IEnumerable t)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(t);
+#endif//DEBUG
             // Avoid the (heap allocated) enumerator for collections
             if (t is ICollection c)
                 return c.Count <= 0;
@@ -81,10 +83,13 @@ namespace SysWeaver
         /// <param name="t">The enumerable instance</param>
         /// <param name="predicate">A function that is evaluated for each value, return true to stop enumeration and return the index</param>
         /// <returns>The index of the element that first returned true from the predicate, or -1 if not found</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="t"/> or <paramref name="predicate"/> is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="predicate"/> is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="t"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public static int IndexOf<T>(this IEnumerable<T> t, Func<T, bool> predicate)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(t);
+#endif//DEBUG
             ArgumentNullException.ThrowIfNull(predicate);
             if (t is T[] a)
                 return IndexOf(new ReadOnlySpan<T>(a), predicate);
@@ -124,10 +129,13 @@ namespace SysWeaver
         /// <param name="t">The enumerable instance</param>
         /// <param name="predicate">A function that is evaluated for each value, return true to return the index</param>
         /// <returns>The index of the element that last returned true from the predicate, or -1 if not found</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="t"/> or <paramref name="predicate"/> is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="predicate"/> is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="t"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public static int LastIndexOf<T>(this IEnumerable<T> t, Func<T, bool> predicate)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(t);
+#endif//DEBUG
             ArgumentNullException.ThrowIfNull(predicate);
             if (t is T[] a)
                 return LastIndexOf(new ReadOnlySpan<T>(a), predicate);
@@ -183,11 +191,13 @@ namespace SysWeaver
         /// <typeparam name="T">The element type</typeparam>
         /// <param name="col">The queue to drain</param>
         /// <param name="keepAtLeast">The number of items to keep (in rare cases when multiple threads are draining the queue, the number of items can drop below)</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="col"/> is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="col"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="keepAtLeast"/> is negative</exception>
         public static void Drain<T>(this ConcurrentQueue<T> col, int keepAtLeast = 0)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(col);
+#endif//DEBUG
             ArgumentOutOfRangeException.ThrowIfNegative(keepAtLeast);
             while (col.Count > keepAtLeast)
                 col.TryDequeue(out var _);
@@ -200,11 +210,13 @@ namespace SysWeaver
         /// <typeparam name="T">The element type</typeparam>
         /// <param name="col">The linked list to drain</param>
         /// <param name="keepAtLeast">The number of items to keep</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="col"/> is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="col"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="keepAtLeast"/> is negative</exception>
         public static void Drain<T>(this LinkedList<T> col, int keepAtLeast = 0)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(col);
+#endif//DEBUG
             ArgumentOutOfRangeException.ThrowIfNegative(keepAtLeast);
             while (col.Count > keepAtLeast)
                 col.RemoveLast();

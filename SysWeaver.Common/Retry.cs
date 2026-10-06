@@ -130,46 +130,47 @@ namespace SysWeaver
         /// <param name="delayInMs">Number of milli seconds to wait between attempts</param>
         /// <returns>A value task that completes when an attempt succeeded, it faults with the exception of the last attempt if all attempts failed</returns>
         /// <remarks>
-        /// If the first attempt returns an already completed value task it's returned as is, a synchronously faulted value task is therefore NOT retried.
-        /// If the first attempt throws synchronously, the second attempt is made immediately (without a delay).
+        /// If the first attempt returns a successfully completed value task it's returned as is (no allocation).
+        /// If the first attempt throws synchronously and it's the last attempt, the exception is thrown synchronously (instead of returning a faulted value task).
         /// </remarks>
         public static ValueTask OpAsync(Func<ValueTask> op, int retryCount = 10, int delayInMs = 100)
         {
-            bool needTask = true;
-            ValueTask task = ValueTask.CompletedTask;
+            ValueTask task;
             try
             {
                 task = op();
-                if (task.IsCompleted)
+                if (task.IsCompletedSuccessfully)
                     return task;
-                needTask = false;
             }
             catch
             {
                 --retryCount;
                 if (retryCount <= 0)
                     throw;
+                return doIt(default, true, retryCount);
             }
-            return doIt();
+            return doIt(task, false, retryCount);
 
-            async ValueTask doIt()
-            { 
+            //  needTask is true if the previous attempt failed (delay and make a new attempt), else t is the (pending or faulted) result of the previous attempt
+            async ValueTask doIt(ValueTask t, bool needTask, int count)
+            {
                 for (; ; )
                 {
                     try
                     {
                         if (needTask)
-                            task = op();
-                        if (!task.IsCompleted)
-                            await task.ConfigureAwait(false);
+                        {
+                            await Task.Delay(delayInMs).ConfigureAwait(false);
+                            t = op();
+                        }
+                        await t.ConfigureAwait(false);
                         return;
                     }
                     catch
                     {
-                        --retryCount;
-                        if (retryCount <= 0)
+                        --count;
+                        if (count <= 0)
                             throw;
-                        await Task.Delay(delayInMs).ConfigureAwait(false);
                     }
                     needTask = true;
                 }
@@ -185,46 +186,46 @@ namespace SysWeaver
         /// <typeparam name="R">The result type</typeparam>
         /// <returns>The result of the first successful attempt, the value task faults with the exception of the last attempt if all attempts failed</returns>
         /// <remarks>
-        /// If the first attempt returns an already completed value task it's returned as is, a synchronously faulted value task is therefore NOT retried.
-        /// If the first attempt throws synchronously, the second attempt is made immediately (without a delay).
+        /// If the first attempt returns a successfully completed value task it's returned as is (no allocation).
+        /// If the first attempt throws synchronously and it's the last attempt, the exception is thrown synchronously (instead of returning a faulted value task).
         /// </remarks>
         public static ValueTask<R> OpAsync<R>(Func<ValueTask<R>> op, int retryCount = 10, int delayInMs = 100)
         {
-            bool needTask = true;
-            ValueTask<R> task = ValueTask.FromResult<R>(default);
+            ValueTask<R> task;
             try
             {
                 task = op();
-                if (task.IsCompleted)
+                if (task.IsCompletedSuccessfully)
                     return task;
-                needTask = false;
             }
             catch
             {
                 --retryCount;
                 if (retryCount <= 0)
                     throw;
+                return doIt(default, true, retryCount);
             }
-            return doIt();
+            return doIt(task, false, retryCount);
 
-            async ValueTask<R> doIt()
+            //  needTask is true if the previous attempt failed (delay and make a new attempt), else t is the (pending or faulted) result of the previous attempt
+            async ValueTask<R> doIt(ValueTask<R> t, bool needTask, int count)
             {
                 for (; ; )
                 {
                     try
                     {
                         if (needTask)
-                            task = op();
-                        if (!task.IsCompleted)
-                            return await task.ConfigureAwait(false);
-                        return task.GetAwaiter().GetResult();
+                        {
+                            await Task.Delay(delayInMs).ConfigureAwait(false);
+                            t = op();
+                        }
+                        return await t.ConfigureAwait(false);
                     }
                     catch
                     {
-                        --retryCount;
-                        if (retryCount <= 0)
+                        --count;
+                        if (count <= 0)
                             throw;
-                        await Task.Delay(delayInMs).ConfigureAwait(false);
                     }
                     needTask = true;
                 }

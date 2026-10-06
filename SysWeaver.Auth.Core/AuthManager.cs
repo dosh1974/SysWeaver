@@ -12,11 +12,12 @@ namespace SysWeaver.Auth
 {
 
     /// <summary>
-    /// Validates users across any number of <see cref="AuthorizerBase"/> instances (asked in the order they were added), and caches HTTP Authorization header results.
+    /// Validates users across any number of <see cref="AuthorizerBase"/> instances (asked in the order they were added), and caches successful HTTP Authorization header results.
     /// </summary>
     /// <remarks>
     /// Typically created by the AuthManagerService and used by the HTTP server for every request with an Authorization header, and for login requests.
-    /// Cached header results are re-validated when the owning authorizer's <see cref="AuthorizerBase.ChangeCounter"/> changes.
+    /// Cached header results expire after <see cref="AuthManagerParams.CacheDuration"/> seconds, at most <see cref="AuthManagerParams.MaxCachedHeaders"/> results are cached,
+    /// and they are re-validated earlier when the owning authorizer's <see cref="AuthorizerBase.ChangeCounter"/> changes.
     /// Thread safe.
     /// </remarks>
     public sealed class AuthManager : IDisposable
@@ -43,8 +44,11 @@ namespace SysWeaver.Auth
             }
             p = p ?? new AuthManagerParams();
             Realm = p.Realm ?? EnvInfo.AppAssemblyName;
+            var cacheMs = Math.Max(1, p.CacheDuration) * 1000;
+            CacheDurationMs = cacheMs;
+            MaxCachedHeaders = p.MaxCachedHeaders;
             UpdateCommonPolicy();
-            RetryAuth = new PeriodicTask(PruneCache, Math.Max(1, p.CacheDuration) * 1000);
+            RetryAuth = new PeriodicTask(PruneCache, cacheMs);
         }
 
 
@@ -88,34 +92,48 @@ namespace SysWeaver.Auth
         /// <summary>
         /// Get authorization from the Authorization HTTP header.
         /// Supports the "Basic" (user:password, base64 encoded) and "Bearer" / "*key" (token) schemes.
-        /// Results (including failures) are cached using the full header value as key.
+        /// Successful results are cached for <see cref="AuthManagerParams.CacheDuration"/> seconds (keyed by a SHA256 hash of the header value),
+        /// failures are never cached (so unauthenticated requests can't grow the cache).
         /// </summary>
         /// <param name="authHeaderString">The Authorization header of the http request</param>
-        /// <returns>Item1 is the authorization for the given user, null means unknown user or invalid password / token.
-        /// Item2 is true if the basic scheme was used (so the caller can request basic credentials again).
-        /// The tuple itself is null for unsupported schemes.</returns>
-        /// <exception cref="FormatException">The basic credentials are not valid base64.</exception>
+        /// <returns>Item1 is the authorization for the given user, null means unknown user, invalid password / token,
+        /// an unsupported scheme, malformed basic credentials or a header longer than <see cref="MaxAuthHeaderLength"/> chars.
+        /// Item2 is true if the basic scheme was used (so the caller can request basic credentials again).</returns>
         public async Task<Tuple<Authorization, bool>> Http(String authHeaderString)
         {
-            var cache = HttpCache;
             var s = authHeaderString.Trim();
-            var key = s.SplitFirst(' ', out var p, false, true);
-            var isBasic = key.FastEquals("Basic");
-            Authorization aa;
-            if (cache.TryGetValue(s, out var auth))
+            var scheme = s.SplitFirst(' ', out var p, false, true);
+            var isBasic = scheme.FastEquals("Basic");
+            var fail = isBasic ? NoAuthBasic : NoAuth;
+            if (s.Length > MaxAuthHeaderLength)
+                return fail;
+            var maxCached = MaxCachedHeaders;
+            Byte[] cacheKey = null;
+            if (maxCached > 0)
             {
-                aa = auth.Item1;
-                if (aa == null)
-                    return isBasic ? NoAuthBasic : NoAuth;
-                if (aa.Cc == aa.Auth.ChangeCounter)
-                    return auth;
+                cacheKey = SHA256.HashData(MemoryMarshal.AsBytes(s.AsSpan()));
+                if (HttpCache.TryGetValue(cacheKey, out var e) && (e.ExpiresAt > Environment.TickCount64))
+                {
+                    var c = e.Auth.Item1;
+                    if (c.Cc == c.Auth.ChangeCounter)
+                        return e.Auth;
+                }
             }
-            aa = null;
-            //  Parse
+            Authorization aa = null;
             if (isBasic)
             {
-            //  Handling basic auth
-                var userPwd = Encoding.UTF8.GetString(Convert.FromBase64String(p));
+                //  Handling basic auth
+                if (String.IsNullOrEmpty(p))
+                    return fail;
+                String userPwd;
+                try
+                {
+                    userPwd = Encoding.UTF8.GetString(Convert.FromBase64String(p));
+                }
+                catch (FormatException)
+                {
+                    return fail;
+                }
                 var sp = userPwd.IndexOf(':');
                 if (sp > 0)
                 {
@@ -128,18 +146,42 @@ namespace SysWeaver.Auth
                     if (aa == null)
                         aa = await BasicAuth(username, hash).ConfigureAwait(false);
                 }
-                auth = Tuple.Create(aa, true);
             }
-            if (key.FastEquals("Bearer") || key.FastEquals("*key"))
+            else if (scheme.FastEquals("Bearer") || scheme.FastEquals("*key"))
             {
                 //  Handling Bearer auth
                 aa = await BearerAuth(p).ConfigureAwait(false);
-                auth = Tuple.Create(aa, false);
             }
-            //  Get auth
-            cache[s] = auth;
+            //  Failures are never cached
+            if (aa == null)
+            {
+                if (cacheKey != null)
+                    HttpCache.TryRemove(cacheKey, out _);
+                return fail;
+            }
+            var auth = Tuple.Create(aa, isBasic);
+            //  Cache the result (a refresh of an existing entry is always allowed, new entries only while below the limit)
+            if (cacheKey != null)
+            {
+                var entry = new HttpCacheEntry(auth, Environment.TickCount64 + CacheDurationMs);
+                var cache = HttpCache;
+                if (cache.TryGetValue(cacheKey, out _) || (cache.Count < maxCached))
+                    cache[cacheKey] = entry;
+            }
             return auth;
         }
+
+        /// <summary>
+        /// Authorization headers longer than this (in chars) are rejected without any processing.
+        /// </summary>
+        public const int MaxAuthHeaderLength = 8192;
+
+        /// <summary>
+        /// A cached Authorization header result
+        /// </summary>
+        /// <param name="Auth">The successful result</param>
+        /// <param name="ExpiresAt">When the entry expires (<see cref="Environment.TickCount64"/>)</param>
+        sealed record HttpCacheEntry(Tuple<Authorization, bool> Auth, long ExpiresAt);
 
 
 
@@ -296,12 +338,24 @@ namespace SysWeaver.Auth
             return null;
         }
 
+        /// <summary>
+        /// Remove cached Authorization header results that have expired or belong to an authorizer that has been removed.
+        /// </summary>
+        /// <returns>Always true (keeps the periodic task running)</returns>
         bool PruneCache()
         {
-            var cache = Cache;
-            var nulls = cache.Where(x => x.Value == null).Select(x => x.Key).ToList();
-            foreach (var n in nulls)
-                cache.TryRemove(n, out var _);
+            var cache = HttpCache;
+            if (cache.Count <= 0)
+                return true;
+            var now = Environment.TickCount64;
+            var auths = Auths;
+            foreach (var x in cache)
+            {
+                var v = x.Value;
+                //  Only removed if the entry wasn't refreshed by another thread (atomic compare)
+                if ((v.ExpiresAt <= now) || !auths.ContainsKey(v.Auth.Item1.Auth))
+                    cache.Remove(x);
+            }
             return true;
         }
 
@@ -326,7 +380,7 @@ namespace SysWeaver.Auth
 
         /// <summary>
         /// Remove an authorizer.
-        /// Note that already cached Authorization header results are not invalidated.
+        /// Cached Authorization header results of the authorizer are removed too.
         /// </summary>
         /// <param name="auth">The authorizer to remove</param>
         /// <returns>True if removed, false if it wasn't added</returns>
@@ -336,6 +390,7 @@ namespace SysWeaver.Auth
                 return false;
             GuidPrefixMap.TryRemove(auth.GuidPrefix, out var _);
             UpdateCommonPolicy();
+            PruneCache();
             return true;
         }
 
@@ -362,9 +417,20 @@ namespace SysWeaver.Auth
 
         readonly ConcurrentDictionary<String, AuthorizerBase> GuidPrefixMap = new ConcurrentDictionary<String, AuthorizerBase>(StringComparer.Ordinal);
 
-        readonly ConcurrentDictionary<String, Authorization> Cache = new (StringComparer.Ordinal);
+        /// <summary>
+        /// Successful Authorization header results, keyed by the SHA256 hash of the header value (so no credentials are kept in memory)
+        /// </summary>
+        readonly LowAllocConcurrentDictionary<Byte[], HttpCacheEntry> HttpCache = new (ByteArrayEqualityComparer.Instance);
 
-        readonly ConcurrentDictionary<String, Tuple<Authorization, bool>> HttpCache = new (StringComparer.Ordinal);
+        /// <summary>
+        /// How long a successful Authorization header result is cached, in ms
+        /// </summary>
+        readonly long CacheDurationMs;
+
+        /// <summary>
+        /// The maximum number of cached Authorization header results (0 or less disables the cache)
+        /// </summary>
+        readonly int MaxCachedHeaders;
 
 
         volatile PasswordPolicy InternalCommonPasswordPolicy = new PasswordPolicy();

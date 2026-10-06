@@ -226,14 +226,11 @@ namespace SysWeaver
 
         /// <summary>
         /// Create a text template where the specified strings (the keys of the dictionary) can be replaced (any occurrence of the strings in the text, no begin / end tokens).
-        /// Unresolved variables are removed (rendered as an empty string).
+        /// Unresolved variables (including transformed ones) are rendered using the default value from the dictionary (a null default is rendered as an empty string).
+        /// When transforms are allowed, a transform prefix is inserted before the first letter or digit of each string, ex: "[Name]" can be used as "[_Name]".
         /// </summary>
-        /// <remarks>
-        /// Note: the dictionary values (defaults) are currently not used, and transformed variables are always rendered as empty strings (the transform lookup is frozen before it's populated).
-        /// Pass the dictionary to <see cref="Get(IReadOnlyDictionary{string, string})"/> to use its values.
-        /// </remarks>
         /// <param name="text">The original text</param>
-        /// <param name="varsWithDefaults">A dictionary whose keys are the strings that can be replaced</param>
+        /// <param name="varsWithDefaults">A dictionary whose keys are the strings that can be replaced, and whose values are the default values to use if a variable is unresolved</param>
         /// <param name="caseInSensitive">If true, the variable is case insensitive</param>
         /// <param name="allowTransforms">If true, the variable can be transformed according to:
         /// [Var] = Variable, ex: "Hello world!".
@@ -256,10 +253,11 @@ namespace SysWeaver
             var tree = StringTree.Build(varsWithDefaults.Keys, caseInSensitive);
             var transforms = AddTransforms(ref tree, varsWithDefaults.Keys, caseInSensitive, allowTransforms);
             Dictionary<String, Tuple<String, Func<String, String>>> transformedVars = null;
+            Dictionary<String, String> transformDefaults = null;
             if (allowTransforms)
             {
                 transformedVars = caseInSensitive ? new Dictionary<string, Tuple<string, Func<string, string>>>(StringComparer.InvariantCultureIgnoreCase) : new Dictionary<string, Tuple<string, Func<string, string>>>(StringComparer.Ordinal);
-                TransformedVars = transformedVars.Freeze();
+                transformDefaults = new Dictionary<string, string>(caseInSensitive ? StringComparer.InvariantCultureIgnoreCase : StringComparer.Ordinal);
             }
 
             BuildAction = Build;
@@ -282,12 +280,21 @@ namespace SysWeaver
                     staticLen += flen;
                 }
                 start = f + key.Length;
+                String defValue;
                 if (transforms.TryGetValue(key, out var transform))
+                {
                     transformedVars[key] = transform;
+                    varsWithDefaults.TryGetValue(transform.Item1, out defValue);
+                    transformDefaults[transform.Item1] = defValue;
+                }
+                else
+                {
+                    varsWithDefaults.TryGetValue(key, out defValue);
+                }
                 bool isTransformed = transform != null;
                 blocks.Add(new Block(key, isTransformed));
                 vars.TryGetValue(key, out var v);
-                vars[key] = new Tuple<int, String, bool>(1 + (v?.Item1 ?? 0), null, isTransformed);
+                vars[key] = new Tuple<int, String, bool>(1 + (v?.Item1 ?? 0), defValue, isTransformed);
             }
             if (start < len)
             {
@@ -297,6 +304,8 @@ namespace SysWeaver
             }
             BuildAction = Build;
             Template = text;
+            TransformedVars = transformedVars.Freeze();
+            TransformDefaults = transformDefaults.Freeze();
             VarsAndFrequency = vars.Freeze();
             Blocks = blocks;
             StaticLen = staticLen;
@@ -354,9 +363,13 @@ namespace SysWeaver
             {
                 transformed = new Dictionary<string, string>(tr.GetComparer());
                 getTrans = kk => transformed.TryGetValue(kk, out var t) ? t : null;
+                var defs = TransformDefaults;
                 foreach (var x in tr)
                 {
-                    var v = getVars(x.Value.Item1) ?? x.Key;
+                    var v = getVars(x.Value.Item1);
+                    //  Unresolved: use the default (dictionary constructor) or the variable name
+                    if (v == null)
+                        v = defs == null ? x.Key : (defs.TryGetValue(x.Value.Item1, out var dv) ? dv : null) ?? String.Empty;
                     v = x.Value.Item2(v);
                     transformed[x.Key] = v;
                 }
@@ -465,6 +478,11 @@ namespace SysWeaver
         readonly IReadOnlyDictionary<String, Tuple<int, String, bool>> VarsAndFrequency;
 
         readonly IReadOnlyDictionary<String, Tuple<String, Func<String, String>>> TransformedVars;
+
+        /// <summary>
+        /// Default values of the (untransformed) variables used by transformed variables, only set by the dictionary constructor (else null).
+        /// </summary>
+        readonly IReadOnlyDictionary<String, String> TransformDefaults;
 
         static readonly IReadOnlyDictionary<String, Func<String, String>> Transforms = new Dictionary<String, Func<String, String>>(StringComparer.Ordinal)
         {

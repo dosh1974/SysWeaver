@@ -26,10 +26,12 @@ namespace SysWeaver
         /// <returns>The min and max value found, if sequence is empty, two default(E) is returned.
         /// If multiple values are equal to the min (or max), the first one is returned.</returns>
         /// <remarks>Arrays are accessed directly (no enumerator is allocated)</remarks>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="enumerable"/> or <paramref name="predicate"/> is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="predicate"/> is null, or if <paramref name="enumerable"/> is null (debug builds only for <paramref name="enumerable"/>; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public static Tuple<E, E> MinMax<T, E>(this IEnumerable<T> enumerable, Func<T, E> predicate, IComparer<E> comparer = null)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(enumerable);
+#endif//DEBUG
             ArgumentNullException.ThrowIfNull(predicate);
             if (comparer == null)
                 comparer = Comparer<E>.Default;
@@ -81,10 +83,12 @@ namespace SysWeaver
         /// <returns>The min and max value found, if sequence is empty, two default(T) is returned.
         /// If multiple values are equal to the min (or max), the first one is returned.</returns>
         /// <remarks>Arrays are accessed directly (no enumerator is allocated)</remarks>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="enumerable"/> is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="enumerable"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public static Tuple<T, T> MinMax<T>(this IEnumerable<T> enumerable, IComparer<T> comparer = null)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(enumerable);
+#endif//DEBUG
             if (comparer == null)
                 comparer = Comparer<T>.Default;
             T min;
@@ -156,10 +160,12 @@ namespace SysWeaver
         /// <param name="keyExtractor">A function that extract / creates the key for the given value</param>
         /// <param name="comparer">Optional comparer, if null the default comparer is used</param>
         /// <returns>A concurrent dictionary with the values</returns>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="enumerable"/> or <paramref name="keyExtractor"/> is null, or if the <paramref name="keyExtractor"/> returns a null key</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="keyExtractor"/> is null, if the <paramref name="keyExtractor"/> returns a null key, or if <paramref name="enumerable"/> is null (debug builds only for <paramref name="enumerable"/>; release builds throw a <see cref="NullReferenceException"/>)</exception>
         public static ConcurrentDictionary<TKey, TVal> ToConcurrentDictionary<TKey, TVal>(this IEnumerable<TVal> enumerable, Func<TVal, TKey> keyExtractor, IEqualityComparer<TKey> comparer = null)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(enumerable);
+#endif//DEBUG
             ArgumentNullException.ThrowIfNull(keyExtractor);
             var d = comparer == null ? new ConcurrentDictionary<TKey, TVal>() : new ConcurrentDictionary<TKey, TVal>(comparer);
             foreach (var v in enumerable)
@@ -249,12 +255,14 @@ namespace SysWeaver
         /// <typeparam name="T">The element type</typeparam>
         /// <param name="list">The list to process, if null nothing is done</param>
         /// <param name="action">The action to perform on each element</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="action"/> is null and the <paramref name="list"/> is non-null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="action"/> is null and the <paramref name="list"/> is non-null (debug builds only; release builds throw a <see cref="NullReferenceException"/> if the <paramref name="list"/> is non-empty)</exception>
         public static void ProcessReverse<T>(this IReadOnlyList<T> list, Action<T> action)
         {
             if (list == null)
                 return;
+#if DEBUG
             ArgumentNullException.ThrowIfNull(action);
+#endif//DEBUG
             var l = list.Count;
             while (l > 0)
             {
@@ -269,12 +277,14 @@ namespace SysWeaver
         /// <typeparam name="T">The element type</typeparam>
         /// <param name="list">The list to process, if null nothing is done</param>
         /// <param name="action">The action to perform on each element</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="action"/> is null and the <paramref name="list"/> is non-null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="action"/> is null and the <paramref name="list"/> is non-null (debug builds only; release builds throw a <see cref="NullReferenceException"/> if the <paramref name="list"/> is non-empty)</exception>
         public static void Process<T>(this IReadOnlyList<T> list, Action<T> action)
         {
             if (list == null)
                 return;
+#if DEBUG
             ArgumentNullException.ThrowIfNull(action);
+#endif//DEBUG
             var l = list.Count;
             for (int i = 0; i < l; i++)
                 action(list[i]);

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers.Binary;
 using System.IO;
 using System.Text;
 
@@ -9,8 +10,8 @@ namespace SysWeaver.IO
     /// (i.e. big endian on little endian machines). Created using <see cref="EndianAwareBinaryReader"/>.
     /// </summary>
     /// <remarks>
-    /// Only the 16, 32 and 64 bit integers, <see cref="float"/> and <see cref="double"/> are reversed, other members (ex: ReadDecimal, ReadHalf, ReadChar, strings) behaves as the base <see cref="BinaryReader"/>.
-    /// Unlike the base reader, the overridden members do NOT throw an <see cref="EndOfStreamException"/> if the stream ends (or a read returns fewer bytes), the missing bytes are treated as zero.
+    /// Only the 16, 32 and 64 bit integers, <see cref="Half"/>, <see cref="float"/> and <see cref="double"/> are reversed, other members (ex: ReadDecimal, ReadChar, strings) behaves as the base <see cref="BinaryReader"/>.
+    /// As with the base reader, an <see cref="EndOfStreamException"/> is thrown if the stream ends before all bytes of a value are read.
     /// </remarks>
     public sealed class ReversedEndianBinaryReader : BinaryReader
     {
@@ -37,170 +38,73 @@ namespace SysWeaver.IO
         /// Read an 8 byte floating point value stored with the reversed byte order
         /// </summary>
         /// <returns>The value</returns>
+        /// <exception cref="EndOfStreamException">The end of the stream is reached</exception>
         public override Double ReadDouble()
-        {
-            Span<Byte> t = stackalloc Byte[8];
-            Read(t);
-            Byte b0 = t[0];
-            Byte b1 = t[1];
-            Byte b2 = t[2];
-            Byte b3 = t[3];
-            Byte b4 = t[4];
-            Byte b5 = t[5];
-            Byte b6 = t[6];
-            Byte b7 = t[7];
-            t[4] = b3;
-            t[5] = b2;
-            t[6] = b1;
-            t[7] = b0;
-            t[0] = b7;
-            t[1] = b6;
-            t[2] = b5;
-            t[3] = b4;
-            return BitConverter.ToDouble(t);
-        }
-        
+            => BitConverter.Int64BitsToDouble(BinaryPrimitives.ReverseEndianness(base.ReadInt64()));
+
         /// <summary>
         /// Read a 4 byte floating point value stored with the reversed byte order
         /// </summary>
         /// <returns>The value</returns>
+        /// <exception cref="EndOfStreamException">The end of the stream is reached</exception>
         public override Single ReadSingle()
-        {
-            Span<Byte> t = stackalloc Byte[4];
-            Read(t);
-            Byte b0 = t[0];
-            Byte b1 = t[1];
-            Byte b2 = t[2];
-            Byte b3 = t[3];
-            t[2] = b1;
-            t[3] = b0;
-            t[0] = b3;
-            t[1] = b2;
-            return BitConverter.ToSingle(t);
-        }
+            => BitConverter.Int32BitsToSingle(BinaryPrimitives.ReverseEndianness(base.ReadInt32()));
 
+        /// <summary>
+        /// Read a 2 byte floating point value stored with the reversed byte order
+        /// </summary>
+        /// <returns>The value</returns>
+        /// <exception cref="EndOfStreamException">The end of the stream is reached</exception>
+        public override Half ReadHalf()
+            => BitConverter.Int16BitsToHalf(BinaryPrimitives.ReverseEndianness(base.ReadInt16()));
 
         /// <summary>
         /// Read a 2 byte signed integer stored with the reversed byte order
         /// </summary>
         /// <returns>The value</returns>
+        /// <exception cref="EndOfStreamException">The end of the stream is reached</exception>
         public override Int16 ReadInt16()
-        {
-            Span<Byte> t = stackalloc Byte[2];
-            Read(t);
-            Byte b0 = t[0];
-            Byte b1 = t[1];
-            t[1] = b0;
-            t[0] = b1;
-            return BitConverter.ToInt16(t);
-        }
+            => BinaryPrimitives.ReverseEndianness(base.ReadInt16());
 
         /// <summary>
         /// Read a 4 byte signed integer stored with the reversed byte order
         /// </summary>
         /// <returns>The value</returns>
+        /// <exception cref="EndOfStreamException">The end of the stream is reached</exception>
         public override Int32 ReadInt32()
-        {
-            Span<Byte> t = stackalloc Byte[4];
-            Read(t);
-            Byte b0 = t[0];
-            Byte b1 = t[1];
-            Byte b2 = t[2];
-            Byte b3 = t[3];
-            t[2] = b1;
-            t[3] = b0;
-            t[0] = b3;
-            t[1] = b2;
-            return BitConverter.ToInt32(t);
-        }
+            => BinaryPrimitives.ReverseEndianness(base.ReadInt32());
 
         /// <summary>
         /// Read an 8 byte signed integer stored with the reversed byte order
         /// </summary>
         /// <returns>The value</returns>
+        /// <exception cref="EndOfStreamException">The end of the stream is reached</exception>
         public override Int64 ReadInt64()
-        {
-            Span<Byte> t = stackalloc Byte[8];
-            Read(t);
-            Byte b0 = t[0];
-            Byte b1 = t[1];
-            Byte b2 = t[2];
-            Byte b3 = t[3];
-            Byte b4 = t[4];
-            Byte b5 = t[5];
-            Byte b6 = t[6];
-            Byte b7 = t[7];
-            t[4] = b3;
-            t[5] = b2;
-            t[6] = b1;
-            t[7] = b0;
-            t[0] = b7;
-            t[1] = b6;
-            t[2] = b5;
-            t[3] = b4;
-            return BitConverter.ToInt64(t);
-        }
+            => BinaryPrimitives.ReverseEndianness(base.ReadInt64());
 
         /// <summary>
         /// Read a 2 byte unsigned integer stored with the reversed byte order
         /// </summary>
         /// <returns>The value</returns>
+        /// <exception cref="EndOfStreamException">The end of the stream is reached</exception>
         public override UInt16 ReadUInt16()
-        {
-            Span<Byte> t = stackalloc Byte[2];
-            Read(t);
-            Byte b0 = t[0];
-            Byte b1 = t[1];
-            t[1] = b0;
-            t[0] = b1;
-            return BitConverter.ToUInt16(t);
-        }
+            => BinaryPrimitives.ReverseEndianness(base.ReadUInt16());
 
         /// <summary>
         /// Read a 4 byte unsigned integer stored with the reversed byte order
         /// </summary>
         /// <returns>The value</returns>
+        /// <exception cref="EndOfStreamException">The end of the stream is reached</exception>
         public override UInt32 ReadUInt32()
-        {
-            Span<Byte> t = stackalloc Byte[4];
-            Read(t);
-            Byte b0 = t[0];
-            Byte b1 = t[1];
-            Byte b2 = t[2];
-            Byte b3 = t[3];
-            t[2] = b1;
-            t[3] = b0;
-            t[0] = b3;
-            t[1] = b2;
-            return BitConverter.ToUInt32(t);
-        }
+            => BinaryPrimitives.ReverseEndianness(base.ReadUInt32());
 
         /// <summary>
         /// Read an 8 byte unsigned integer stored with the reversed byte order
         /// </summary>
         /// <returns>The value</returns>
+        /// <exception cref="EndOfStreamException">The end of the stream is reached</exception>
         public override UInt64 ReadUInt64()
-        {
-            Span<Byte> t = stackalloc Byte[8];
-            Read(t);
-            Byte b0 = t[0];
-            Byte b1 = t[1];
-            Byte b2 = t[2];
-            Byte b3 = t[3];
-            Byte b4 = t[4];
-            Byte b5 = t[5];
-            Byte b6 = t[6];
-            Byte b7 = t[7];
-            t[4] = b3;
-            t[5] = b2;
-            t[6] = b1;
-            t[7] = b0;
-            t[0] = b7;
-            t[1] = b6;
-            t[2] = b5;
-            t[3] = b4;
-            return BitConverter.ToUInt64(t);
-        }
+            => BinaryPrimitives.ReverseEndianness(base.ReadUInt64());
 
     }
 }

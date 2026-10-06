@@ -37,8 +37,8 @@ namespace SysWeaver.Data
         /// Require the user to be logged in.
         /// </summary>
         /// <remarks>
-        /// The menu item is hidden from anonymous users, but not every export API checks this,
-        /// so exporters that must have a user should verify that themselves in <see cref="Export"/>.
+        /// The menu item is hidden from anonymous users and the explore export APIs reject anonymous calls for this exporter.
+        /// Other callers of <see cref="Export"/> are not checked.
         /// </remarks>
         bool RequireUser { get; }
 

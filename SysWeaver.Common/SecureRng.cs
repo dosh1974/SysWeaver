@@ -20,14 +20,11 @@ namespace SysWeaver
         /// <param name="maxValue">The maximum values (exclusive)</param>
         /// <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask() (0 means that it's computed)</param>
         /// <returns>A random value in the [0, maxValue) interval</returns>
-        /// <exception cref="Exception">Debug builds only: <paramref name="maxValue"/> is 0</exception>
-        /// <remarks>A <paramref name="maxValue"/> of 0 is invalid, in release builds it never returns (infinite loop)</remarks>
+        /// <exception cref="Exception"><paramref name="maxValue"/> is 0</exception>
         public static UInt32 GetUInt32Max(this SecureRng r, UInt32 maxValue, UInt32 mask = 0)
         {
-#if DEBUG
             if (maxValue == 0)
                 throw new Exception("Invalid max value!");
-#endif//DEBUG
             if (mask == 0)
                 mask = maxValue.MaxMask();
             for (; ; )
@@ -45,14 +42,11 @@ namespace SysWeaver
         /// <param name="maxValue">The maximum values (exclusive)</param>
         /// <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask() (0 means that it's computed)</param>
         /// <returns>A random value in the [0, maxValue) interval</returns>
-        /// <exception cref="Exception">Debug builds only: <paramref name="maxValue"/> is 0</exception>
-        /// <remarks>A <paramref name="maxValue"/> of 0 is invalid, in release builds it never returns (infinite loop)</remarks>
+        /// <exception cref="Exception"><paramref name="maxValue"/> is 0</exception>
         public static UInt64 GetUInt64Max(this SecureRng r, UInt64 maxValue, UInt64 mask = 0)
         {
-#if DEBUG
             if (maxValue == 0)
                 throw new Exception("Invalid max value!");
-#endif//DEBUG
             if (mask == 0)
                 mask = maxValue.MaxMask();
             for (; ; )
@@ -71,14 +65,11 @@ namespace SysWeaver
         /// <param name="maxValue">The maximum values (exclusive)</param>
         /// <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask() (0 means that it's computed)</param>
         /// <returns>A random value in the [0, maxValue) interval</returns>
-        /// <exception cref="Exception">Debug builds only: <paramref name="maxValue"/> is 0 or negative</exception>
-        /// <remarks>A <paramref name="maxValue"/> that is 0 or negative is invalid, in release builds the result is undefined (a negative value, or it never returns)</remarks>
+        /// <exception cref="Exception"><paramref name="maxValue"/> is 0 or negative</exception>
         public static Int32 GetInt32Max(this SecureRng r, Int32 maxValue, Int32 mask = 0)
         {
-#if DEBUG
             if (maxValue <= 0)
                 throw new Exception("Invalid max value!");
-#endif//DEBUG
             if (mask == 0)
                 mask = maxValue.MaxMask();
             for (; ; )
@@ -96,14 +87,11 @@ namespace SysWeaver
         /// <param name="maxValue">The maximum values (exclusive)</param>
         /// <param name="mask">An optional precomputed mask value for speed, use mask = maxValue.MaxMask() (0 means that it's computed)</param>
         /// <returns>A random value in the [0, maxValue) interval</returns>
-        /// <exception cref="Exception">Debug builds only: <paramref name="maxValue"/> is 0 or negative</exception>
-        /// <remarks>A <paramref name="maxValue"/> that is 0 or negative is invalid, in release builds the result is undefined (a negative value, or it never returns)</remarks>
+        /// <exception cref="Exception"><paramref name="maxValue"/> is 0 or negative</exception>
         public static Int64 GetInt64Max(this SecureRng r, Int64 maxValue, Int64 mask = 0)
         {
-#if DEBUG
             if (maxValue <= 0)
                 throw new Exception("Invalid max value!");
-#endif//DEBUG
             if (mask == 0)
                 mask = maxValue.MaxMask();
             for (; ; )
@@ -121,19 +109,18 @@ namespace SysWeaver
         /// <param name="min">The minimum inclusive value</param>
         /// <param name="max">The maximum inclusive value</param>
         /// <returns>A random value in the [min, max] interval</returns>
-        /// <remarks>The range is computed without overflow checks, the difference between max and min must be less than Int32.MaxValue (else the result is wrong or the call never returns)</remarks>
+        /// <remarks>Any range is supported, including [Int32.MinValue, Int32.MaxValue], all values in the range are equally likely</remarks>
         public static Int32 InRangeInt32(this SecureRng r, Int32 min, Int32 max)
         {
-            var range = max - min;
-            if (range < 0)
-            {
-                range = -range;
-                min = max;
-            }
-            if (range <= 0)
+            if (min > max)
+                (min, max) = (max, min);
+            // The difference always fits in an unsigned value (wraps correctly in unchecked arithmetic)
+            var range = unchecked((UInt32)(max - min));
+            if (range == 0)
                 return min;
-            ++range;
-            return r.GetInt32Max(range) + min;
+            if (range == UInt32.MaxValue)
+                return r.GetInt32();
+            return unchecked(min + (Int32)r.GetUInt32Max(range + 1));
         }
 
         /// <summary>
@@ -143,19 +130,18 @@ namespace SysWeaver
         /// <param name="min">The minimum inclusive value</param>
         /// <param name="max">The maximum inclusive value</param>
         /// <returns>A random value in the [min, max] interval</returns>
-        /// <remarks>The range is computed without overflow checks, the difference between max and min must be less than Int64.MaxValue (else the result is wrong or the call never returns)</remarks>
+        /// <remarks>Any range is supported, including [Int64.MinValue, Int64.MaxValue], all values in the range are equally likely</remarks>
         public static Int64 InRangeInt64(this SecureRng r, Int64 min, Int64 max)
         {
-            var range = max - min;
-            if (range < 0)
-            {
-                range = -range;
-                min = max;
-            }
-            if (range <= 0)
+            if (min > max)
+                (min, max) = (max, min);
+            // The difference always fits in an unsigned value (wraps correctly in unchecked arithmetic)
+            var range = unchecked((UInt64)(max - min));
+            if (range == 0)
                 return min;
-            ++range;
-            return r.GetInt64Max(range) + min;
+            if (range == UInt64.MaxValue)
+                return r.GetInt64();
+            return unchecked(min + (Int64)r.GetUInt64Max(range + 1));
         }
 
         /// <summary>
@@ -165,19 +151,17 @@ namespace SysWeaver
         /// <param name="min">The minimum inclusive value</param>
         /// <param name="max">The maximum inclusive value</param>
         /// <returns>A random value in the [min, max] interval</returns>
-        /// <remarks>The range is computed without overflow checks, the full range [0, UInt32.MaxValue] is not supported (else the result is wrong or the call never returns)</remarks>
+        /// <remarks>Any range is supported, including [0, UInt32.MaxValue], all values in the range are equally likely</remarks>
         public static UInt32 InRangeUInt32(this SecureRng r, UInt32 min, UInt32 max)
         {
-            var range = max - min;
             if (min > max)
-            {
-                range = min - max;
-                min = max;
-            }
-            if (range <= 0)
+                (min, max) = (max, min);
+            var range = max - min;
+            if (range == 0)
                 return min;
-            ++range;
-            return r.GetUInt32Max(range) + min;
+            if (range == UInt32.MaxValue)
+                return r.GetUInt32();
+            return r.GetUInt32Max(range + 1) + min;
         }
 
         /// <summary>
@@ -187,19 +171,17 @@ namespace SysWeaver
         /// <param name="min">The minimum inclusive value</param>
         /// <param name="max">The maximum inclusive value</param>
         /// <returns>A random value in the [min, max] interval</returns>
-        /// <remarks>The range is computed without overflow checks, the full range [0, UInt64.MaxValue] is not supported (else the result is wrong or the call never returns)</remarks>
+        /// <remarks>Any range is supported, including [0, UInt64.MaxValue], all values in the range are equally likely</remarks>
         public static UInt64 InRangeUInt64(this SecureRng r, UInt64 min, UInt64 max)
         {
-            var range = max - min;
             if (min > max)
-            {
-                range = min - max;
-                min = max;
-            }
-            if (range <= 0)
+                (min, max) = (max, min);
+            var range = max - min;
+            if (range == 0)
                 return min;
-            ++range;
-            return r.GetUInt64Max(range) + min;
+            if (range == UInt64.MaxValue)
+                return r.GetUInt64();
+            return r.GetUInt64Max(range + 1) + min;
         }
 
 

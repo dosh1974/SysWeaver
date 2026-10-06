@@ -36,10 +36,12 @@ namespace SysWeaver
         /// A '.' in a directory name (followed by a '/' or '\') is not considered to be an extension, both '/' and '\' are treated as separators on all platforms.
         /// A file name starting with a '.' (ex: ".gitignore") is treated as an extension, so the file name part becomes empty.
         /// </remarks>
-        /// <exception cref="ArgumentNullException"><paramref name="path"/> is null.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="path"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>).</exception>
         public static String StripExtension(String path)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(path);
+#endif//DEBUG
             var e = path.LastIndexOf('.');
             if (e < 0)
                 return path;
@@ -1348,12 +1350,14 @@ namespace SysWeaver
         /// <param name="pathWithMask">Path (directory and file mask), ex: "D:\Temp\*.png"</param>
         /// <param name="fileMask">Will be filled in with the file mask</param>
         /// <returns>Will return the rooted (full) directory part of the path, the directory doesn't have to exist (it may end with a directory separator)</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="pathWithMask"/> is null.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="pathWithMask"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>).</exception>
         /// <exception cref="ArgumentException">The directory part is invalid (ex: contains a '\0').</exception>
         /// <exception cref="PathTooLongException">The directory part is too long.</exception>
         public static String GetDirectoryAndMask(String pathWithMask, out String fileMask)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(pathWithMask);
+#endif//DEBUG
             var x = pathWithMask.AsSpan().LastIndexOfAny(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, Path.VolumeSeparatorChar) + 1;
             var dir = pathWithMask.Substring(0, x);
             if (!Path.IsPathRooted(dir))

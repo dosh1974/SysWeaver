@@ -241,9 +241,10 @@ namespace SysWeaver
             Interlocked.Increment(ref InternalChangeCount);
             if (HashCheck)
             {
-                if (old != null)
+                //  Data from a failed read has no hash, treat it as different
+                if (old?.Hash != null && data.Hash != null)
                 {
-                    if (old.Hash.SequenceEqual(data.Hash))
+                    if (old.Hash.AsSpan().SequenceEqual(data.Hash))
                     {
                         Interlocked.Increment(ref InternalHashEqualCount);
                         return;

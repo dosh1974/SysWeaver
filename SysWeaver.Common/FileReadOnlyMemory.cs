@@ -419,7 +419,7 @@ namespace SysWeaver
                         V = view;
                         H = h;
                         _pointer = (T*)ptr;
-                        _length = (int)byteSize / Marshal.SizeOf<T>();
+                        _length = (int)byteSize / sizeof(T);
                         ReadOnlyMemory = Memory;
                         if (leaveOpen)
                             fs.Position = pos + byteSize;

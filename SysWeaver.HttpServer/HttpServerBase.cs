@@ -1485,7 +1485,7 @@ namespace SysWeaver.Net
             rateLimiter = session.RateLimiter;
             if ((rateLimiter != null) && (await HandleLimit(data, rateLimiter).ConfigureAwait(false)))
                 return;
-            if ((ExternalRootUri == null) || (!ExternalRootUriFromRequest))
+            if (ExternalRootUri == null)
             {
                 ExternalRootUriFromRequest = true;
                 ExternalRootUri = data.Prefix;

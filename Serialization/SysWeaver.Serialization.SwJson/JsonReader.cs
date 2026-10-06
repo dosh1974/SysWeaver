@@ -194,10 +194,9 @@ namespace SysWeaver.Serialization.SwJson
                 ReadException.ThrowExpectedTypename();
             var newType = Utf8JsonParser.ReadAndResolveType(ref d, e, state);
             var t = typeof(T);
-#if VERBOSE
+            //  Always checked before anything is created (the type must be compatible with the declared type)
             if (!t.IsAssignableFrom(newType))
-                throw new Exception("Can't assign a value of type \"" + newType.CleanTypename() + "\" to a member of type \"" + t.CleanTypename() + "\"");
-#endif//VERBOSE
+                throw new DataTypeNotAllowedException(newType.FullName, newType, t);
             bool isNew = t != newType;
             t = newType;
             if (Utf8Parser.SkipWhite(ref d, e) || (Utf8Parser.ReadAsciiChar(ref d, e) != ','))
@@ -528,8 +527,7 @@ namespace SysWeaver.Serialization.SwJson
         /// and a following <c>"$value"</c> / <c>"$values"</c> member is read as the complete value of that type.
         /// </summary>
         /// <remarks>
-        /// The <c>"$type"</c> type is not checked to be assignable to <typeparamref name="T"/> in release builds, it's created and populated before the cast to <typeparamref name="T"/>.
-        /// Don't read untrusted json into types that allows polymorphism (including <see cref="Object"/>).
+        /// The <c>"$type"</c> type must be allowed by the <see cref="DataTypePolicy"/> and assignable to <typeparamref name="T"/> (checked before anything is created).
         /// </remarks>
         internal static T CreateObject<T>(JsonParserState state, Func<Char, bool> endOn)
         {
@@ -551,10 +549,9 @@ namespace SysWeaver.Serialization.SwJson
             if (Utf8Parser.SkipWhite(ref d, e))
                 ReadException.ThrowExpectedTypename();
             var newType = Utf8JsonParser.ReadAndResolveType(ref d, e, state);
-#if VERBOSE
+            //  Always checked before anything is created (the type must be compatible with the declared type)
             if (!t.IsAssignableFrom(newType))
-                throw new Exception("Can't assign a value of type \"" + newType.CleanTypename() + "\" to a member of type \"" + t.CleanTypename() + "\"");
-#endif//VERBOSE
+                throw new DataTypeNotAllowedException(newType.FullName, newType, t);
             bool isNew = t != newType;
             t = newType;
             if (Utf8Parser.SkipWhite(ref d, e))

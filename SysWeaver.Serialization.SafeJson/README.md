@@ -34,7 +34,7 @@ flowchart LR
 
 - Reading and writing use different engines; types must serialize compatibly with both.
 - Pulls in both the SysWeaver JSON and Newtonsoft JSON plug-ins.
-- Reading goes through Newtonsoft with `$type` handling enabled and no type allow list, so despite the name it is not hardened against hostile input (see [SysWeaver.Serialization.NewtonsoftJson](../Serialization/SysWeaver.Serialization.NewtonsoftJson/README.md)).
+- Reading goes through Newtonsoft with `$type` handling enabled; `$type` names are restricted by the `DataTypePolicy` (see [SysWeaver.Serialization.NewtonsoftJson](../Serialization/SysWeaver.Serialization.NewtonsoftJson/README.md)). Avoid `object` members in input models where possible.
 - Registering it does not register the Newtonsoft and SysWeaver.Json serializers themselves; they are only used internally.
 
 ## Using it

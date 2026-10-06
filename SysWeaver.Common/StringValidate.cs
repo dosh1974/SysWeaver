@@ -70,7 +70,6 @@ namespace SysWeaver
         /// </summary>
         /// <param name="name">The string to test</param>
         /// <exception cref="Exception">The name is null or invalid</exception>
-        /// <exception cref="IndexOutOfRangeException">The name contains non ASCII chars (the UTF-8 byte count is used as the char count)</exception>
         public static void DnsName(String name)
         {
             if (name == null)
@@ -78,10 +77,10 @@ namespace SysWeaver
             var l = name.Length;
             if (name.Trim().Length != l)
                 throw new Exception("A DNS name may not start or end with a whitespace");
-            l = Encoding.UTF8.GetByteCount(name);
-            if (l < 2)
+            var bytes = Encoding.UTF8.GetByteCount(name);
+            if (bytes < 2)
                 throw new Exception("A DNS name must be at least 2 characters in length");
-            if (l > 255)
+            if (bytes > 255)
                 throw new Exception("A DNS name may not exceed 255 bytes in length");
             if (name[0] == '-')
                 throw new Exception("A DNS name may not start with a '-'");
@@ -131,8 +130,9 @@ namespace SysWeaver
 
         /// <summary>
         /// Validate that the input is valid for an IPv6 address, with an optional "/prefix length" (1 - 128).
-        /// The address must have 2 - 8 parts separated by ':', where every non empty part must be a DECIMAL number 0 - 65535
-        /// (so addresses with hex digits a - f, like "fe80::1", are rejected).
+        /// The address must have eight groups of 1 - 4 hex digits separated by ':', where one run of zero groups may be compressed to "::" (ex: "fe80::1", "::", "1:2:3:4:5:6:7::").
+        /// The last group(s) may be an embedded IPv4 address (ex: "::ffff:192.168.0.1"), counting as two groups.
+        /// Zone ids ("%eth0") and brackets ("[::1]") are not accepted.
         /// </summary>
         /// <param name="name">The string to test</param>
         /// <exception cref="Exception">The address is null or invalid</exception>
@@ -151,19 +151,60 @@ namespace SysWeaver
                 Numeric(name.Substring(x + 1), "The prefix length of an IPv6 address ", 1, 128);
                 name = name.Substring(0, x);
             }
-            var p = name.Split(':');
-            var pl = p.Length;
-            if (pl < 2)
-                throw new Exception("An IPv6 address must contain at least two ':'");
-            if (pl > 8)
-                throw new Exception("An IPv6 address must contain at most eight ':'");
-            for (int i = 0; i < pl; ++i)
+            var dc = name.IndexOf("::", StringComparison.Ordinal);
+            if (dc < 0)
             {
-                var part = p[i];
-                if (part.Length == 0)
-                    continue;
-                Numeric(part, "An IPv6 address part ", 0, 65535);
+                if (IpV6Groups(name, true) != 8)
+                    throw new Exception("An IPv6 address must contain eight groups (unless \"::\" is used)");
+                return;
             }
+            if (name.IndexOf("::", dc + 1, StringComparison.Ordinal) >= 0)
+                throw new Exception("An IPv6 address may only contain one \"::\"");
+            var groups = IpV6Groups(name.Substring(0, dc), false) + IpV6Groups(name.Substring(dc + 2), true);
+            if (groups > 7)
+                throw new Exception("An IPv6 address with a \"::\" may contain at most seven groups");
+        }
+
+        /// <summary>
+        /// Validate the ':' separated groups of (a part of) an IPv6 address
+        /// </summary>
+        /// <param name="s">The groups to validate (an empty string is zero groups)</param>
+        /// <param name="allowIpV4">If true, the last group may be an IPv4 address</param>
+        /// <returns>The number of 16-bit groups (an IPv4 address counts as two)</returns>
+        /// <exception cref="Exception">A group is invalid</exception>
+        static int IpV6Groups(String s, bool allowIpV4)
+        {
+            if (s.Length == 0)
+                return 0;
+            var t = s.Split(':');
+            var tl = t.Length;
+            var count = tl;
+            for (int i = 0; i < tl; ++i)
+            {
+                var part = t[i];
+                var pl = part.Length;
+                if (pl == 0)
+                    throw new Exception("An IPv6 address part may not be empty (except for a single \"::\")");
+                if (allowIpV4 && (i == (tl - 1)) && (part.IndexOf('.') >= 0))
+                {
+                    try
+                    {
+                        IpV4(part);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new Exception("An IPv6 address with an embedded IPv4 address: " + ex.Message);
+                    }
+                    ++count;
+                    continue;
+                }
+                if (pl > 4)
+                    throw new Exception("An IPv6 address part may not exceed 4 hex digits");
+                foreach (var c in part)
+                    if (!Char.IsAsciiHexDigit(c))
+                        throw new Exception("An IPv6 address part may only contain hex digits ('0' - '9', 'a' - 'f', 'A' - 'F')");
+            }
+            return count;
         }
 
         /// <summary>

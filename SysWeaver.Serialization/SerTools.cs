@@ -173,92 +173,26 @@ namespace SysWeaver.Serialization
 
 
     /// <summary>
-    /// Try (real hard) to find a type for the given type name.
-    /// Used when deserializing type information (Newtonsoft "$type" names and SysWeaver.Json type names).
+    /// Resolves type names used in serialized data (Newtonsoft "$type" names and SysWeaver.Json type names), see <see cref="TypeFinder"/>.
     /// </summary>
     public static class TypeNameResolver
     {
-
-        static Assembly LastAsm;
-
-
         /// <summary>
-        /// Get the type for a given type name or null if it can't be found.
-        /// Tries, in order: <see cref="Type.GetType(string, bool)"/> (case sensitive, then case insensitive), the assembly where the last app domain scan succeeded,
-        /// and finally every assembly loaded in the current app domain using the name with the last comma separated part removed.
+        /// Get the type for a trusted type name, see <see cref="TypeFinder.Get"/>.
         /// </summary>
         /// <param name="typeName">The name of the type to find (full name or assembly qualified name).</param>
         /// <returns>The type or null if it can't be found (or <paramref name="typeName"/> is null or empty).</returns>
-        /// <remarks>
-        /// Thread safe. Results are cached forever, including failed lookups, so a type in an assembly that is loaded after a failed lookup is never found.
-        /// Generic type names are not specially handled.
-        /// Any loaded type can be resolved, so names from untrusted input must be validated by the caller.
-        /// </remarks>
-        public static Type Get(String typeName)
-        {
-            if (String.IsNullOrEmpty(typeName))
-                return null;
-            var types = Types;
-            if (types.TryGetValue(typeName, out var t))
-                return t;
-            t = Type.GetType(typeName, false);
-            if (t != null)
-            {
-                types.TryAdd(typeName, t);
-                return t;
-            }
-            t = Type.GetType(typeName, false, true);
-            if (t != null)
-            {
-                types.TryAdd(typeName, t);
-                return t;
-            }
-            var la = LastAsm;
-            if (la != null)
-            {
-                t = la.GetType(typeName, false);
-                if (t != null)
-                {
-                    types.TryAdd(typeName, t);
-                    return t;
-                }
-                t = la.GetType(typeName, false, true);
-                if (t != null)
-                {
-                    types.TryAdd(typeName, t);
-                    return t;
-                }
-            }
-            // TODO: Handle generics
-            var s = typeName.LastIndexOf(',');
-            var tt = s < 0 ? typeName : typeName.Substring(0, s).TrimEnd();
-            var cdAsms = AppDomain.CurrentDomain.GetAssemblies();
-            foreach (var asm in cdAsms)
-            {
-                t = asm.GetType(tt, false);
-                if (t != null)
-                {
-                    types.TryAdd(typeName, t);
-                    LastAsm = asm;
-                    return t;
-                }
-            }
-            foreach (var asm in cdAsms)
-            {
-                t = asm.GetType(tt, false, true);
-                if (t != null)
-                {
-                    types.TryAdd(typeName, t);
-                    LastAsm = asm;
-                    return t;
-                }
-            }
-            types.TryAdd(typeName, null);
-            return null;
-        }
+        /// <remarks>Any type can be resolved, use <see cref="GetForData"/> for names from (untrusted) serialized data.</remarks>
+        public static Type Get(String typeName) => TypeFinder.Get(typeName);
 
-        static readonly ConcurrentDictionary<String, Type> Types = new ConcurrentDictionary<string, Type>(StringComparer.Ordinal);
-
+        /// <summary>
+        /// Get the type for a type name from (untrusted) serialized data, see <see cref="TypeFinder.GetForData"/> and <see cref="DataTypePolicy"/>.
+        /// </summary>
+        /// <param name="typeName">The name of the type to find (full name or assembly qualified name).</param>
+        /// <param name="expectedType">The type that the value must be assignable to (the declared type), null for any type</param>
+        /// <returns>The type or null if no type with the name exists (or <paramref name="typeName"/> is null or empty).</returns>
+        /// <exception cref="DataTypeNotAllowedException">The type isn't allowed by the <see cref="DataTypePolicy"/>, or it isn't assignable to <paramref name="expectedType"/></exception>
+        public static Type GetForData(String typeName, Type expectedType = null) => TypeFinder.GetForData(typeName, expectedType);
     }
 
 }

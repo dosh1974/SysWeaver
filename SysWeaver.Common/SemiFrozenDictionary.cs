@@ -111,7 +111,7 @@ namespace SysWeaver
         /// Create a dictionary with a copy of the entries of another dictionary, using the default key comparer (not the comparer of <paramref name="other"/>)
         /// </summary>
         /// <param name="other">The entries to copy</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="other"/> or a key is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if a key is null, or if <paramref name="other"/> is null (for <paramref name="other"/>: debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="ArgumentException">Thrown if <paramref name="other"/> contains duplicate keys (according to the default comparer)</exception>
         public SemiFrozenDictionary(IDictionary<TKey, TValue> other)
             : this(other, null)
@@ -122,7 +122,7 @@ namespace SysWeaver
         /// Create a dictionary with a copy of some key-value pairs, using the default key comparer
         /// </summary>
         /// <param name="other">The entries to copy</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="other"/> or a key is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if a key is null, or if <paramref name="other"/> is null (for <paramref name="other"/>: debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="ArgumentException">Thrown if <paramref name="other"/> contains duplicate keys</exception>
         public SemiFrozenDictionary(IEnumerable<KeyValuePair<TKey, TValue>> other)
             : this(other, null)
@@ -133,7 +133,7 @@ namespace SysWeaver
         /// Create an empty dictionary using the default key comparer
         /// </summary>
         /// <param name="size">The initial capacity of the underlying dictionary</param>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="size"/> is negative</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="size"/> is negative (release builds report the parameter of the underlying dictionary, "capacity")</exception>
         public SemiFrozenDictionary(int size)
             : this(size, null)
         {
@@ -153,7 +153,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="other">The entries to copy</param>
         /// <param name="comparer">The key comparer, if null the default comparer is used</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="other"/> or a key is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if a key is null, or if <paramref name="other"/> is null (for <paramref name="other"/>: debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="ArgumentException">Thrown if <paramref name="other"/> contains duplicate keys (according to the comparer)</exception>
         public SemiFrozenDictionary(IDictionary<TKey, TValue> other, IEqualityComparer<TKey> comparer)
             : this((IEnumerable<KeyValuePair<TKey, TValue>>)other, comparer)
@@ -165,11 +165,13 @@ namespace SysWeaver
         /// </summary>
         /// <param name="other">The entries to copy</param>
         /// <param name="comparer">The key comparer, if null the default comparer is used</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="other"/> or a key is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if a key is null, or if <paramref name="other"/> is null (for <paramref name="other"/>: debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="ArgumentException">Thrown if <paramref name="other"/> contains duplicate keys (according to the comparer)</exception>
         public SemiFrozenDictionary(IEnumerable<KeyValuePair<TKey, TValue>> other, IEqualityComparer<TKey> comparer)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(other);
+#endif//DEBUG
             Comparer = comparer ?? EqualityComparer<TKey>.Default;
             var u = new ConcurrentDictionary<TKey, TValue>(ConcurrencyLevel, other is ICollection<KeyValuePair<TKey, TValue>> c ? Math.Max(c.Count, DefaultCapacity) : DefaultCapacity, Comparer);
             // Duplicate keys throws (like the Dictionary constructor)
@@ -185,10 +187,12 @@ namespace SysWeaver
         /// </summary>
         /// <param name="size">The initial capacity of the underlying dictionary</param>
         /// <param name="comparer">The key comparer, if null the default comparer is used</param>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="size"/> is negative</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="size"/> is negative (release builds report the parameter of the underlying dictionary, "capacity")</exception>
         public SemiFrozenDictionary(int size, IEqualityComparer<TKey> comparer)
         {
+#if DEBUG
             ArgumentOutOfRangeException.ThrowIfNegative(size);
+#endif//DEBUG
             Comparer = comparer ?? EqualityComparer<TKey>.Default;
             Underlaying = new ConcurrentDictionary<TKey, TValue>(ConcurrencyLevel, size, Comparer);
         }
@@ -343,12 +347,14 @@ namespace SysWeaver
         /// </summary>
         /// <param name="array">The destination array</param>
         /// <param name="arrayIndex">The index in <paramref name="array"/> to start writing at</param>
-        /// <exception cref="ArgumentNullException">Thrown if <paramref name="array"/> is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="array"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="arrayIndex"/> is negative or greater than the length of the array</exception>
         /// <exception cref="ArgumentException">Thrown if the destination is too small</exception>
         public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
         {
+#if DEBUG
             ArgumentNullException.ThrowIfNull(array);
+#endif//DEBUG
             ArgumentOutOfRangeException.ThrowIfNegative(arrayIndex);
             ArgumentOutOfRangeException.ThrowIfGreaterThan(arrayIndex, array.Length);
             var d = Get();
