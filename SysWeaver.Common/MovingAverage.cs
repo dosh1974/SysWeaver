@@ -1,65 +1,166 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace SysWeaver
 {
     /// <summary>
-    /// Computes the moving average of some value within a time window.
-    /// A thread safe, lock free (mostly) and allocation free (mostly).
-    /// Locks and allocated when internal buffers have to be resized.
+    /// Computes the moving average (and rates) of some value within a sliding time window.
+    /// - Thread safe.
+    /// - Accurate: the rates are computed over the full window (or the time since this instance was created if that is less than the window),
+    ///   so the result is correct even if there are only one or two samples in the window, or if the samples stopped coming in a while ago.
+    /// - Bounded memory: samples that are closer in time than 1/1024 of the window are merged (so the window edge has a precision of 1/1024 of the window).
+    /// - Allocation free (except when the internal buffer has to grow, at most log2(2048 / InitSize) times).
     /// </summary>
+    [SkipLocalsInit]
     public sealed class MovingAverage
     {
         /// <summary>
         /// Create a new moving average tracker
         /// </summary>
-        /// <param name="averageOverDuration">The duration of the window to computer the moving average over</param>
-        public MovingAverage(TimeSpan averageOverDuration)
+        /// <param name="averageOverDuration">The duration of the window to compute the moving average over</param>
+        public MovingAverage(TimeSpan averageOverDuration) : this(averageOverDuration, null)
         {
-            InternalDur = averageOverDuration.Ticks;
         }
-        
+
         /// <summary>
-        /// Number of times the underlaying data structures have to be resized (this is slow)
+        /// Create a new moving average tracker
         /// </summary>
-        public int ResizeCount => InternalResizeCount;
+        /// <param name="averageOverDuration">The duration of the window to compute the moving average over</param>
+        /// <param name="timeProvider">The time provider to use, null = the system time provider</param>
+        public MovingAverage(TimeSpan averageOverDuration, TimeProvider timeProvider)
+        {
+            if (averageOverDuration <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(averageOverDuration), averageOverDuration, "The duration must be positive");
+            Duration = averageOverDuration;
+            long freq;
+            long start;
+            if ((timeProvider == null) || ReferenceEquals(timeProvider, TimeProvider.System))
+            {
+                //  Use the stop watch directly (no virtual call)
+                freq = Stopwatch.Frequency;
+                start = Stopwatch.GetTimestamp();
+            }
+            else
+            {
+                Time = timeProvider;
+                freq = timeProvider.TimestampFrequency;
+                start = timeProvider.GetTimestamp();
+            }
+            Start = start;
+            var ticks = averageOverDuration.Ticks;
+            var window = freq == TimeSpan.TicksPerSecond ? ticks : (long)((decimal)ticks * freq / TimeSpan.TicksPerSecond);
+            if (window < 1)
+                window = 1;
+            Window = window;
+            var res = window / Resolution;
+            Merge = res < 1 ? 1 : res;
+            //  Converting time stamps to ticks
+            if ((TimeSpan.TicksPerSecond % freq) == 0)
+                TicksScale = TimeSpan.TicksPerSecond / freq;
+            else if ((freq % TimeSpan.TicksPerSecond) == 0)
+                TicksScale = -(freq / TimeSpan.TicksPerSecond);
+            Entries = new Entry[InitSize];
+        }
+
+        /// <summary>
+        /// The duration of the window that the moving average is computed over
+        /// </summary>
+        public TimeSpan Duration { get; }
+
+        /// <summary>
+        /// Number of times the underlaying data structures have been resized
+        /// </summary>
+        public int ResizeCount => Volatile.Read(ref InternalResizeCount);
 
         /// <summary>
         /// Add a value to the moving average
         /// </summary>
-        /// <param name="value"></param>
+        /// <param name="value">The value to add</param>
         public void Add(decimal value)
-             => InternalAdd(out var now, value);
+        {
+            var now = Now();
+            Enter();
+            try
+            {
+                Expire(now);
+                var e = Entries;
+                var mask = e.Length - 1;
+                var count = Count;
+                var head = Head;
+                if (count > 0)
+                {
+                    ref var last = ref e[(head + count - 1) & mask];
+                    if ((now - last.Time) < Merge)
+                    {
+                        //  Merge with the last entry (the last entry isn't part of the closed sum)
+                        last.Sum += value;
+                        ++last.Count;
+                        ++Samples;
+                        return;
+                    }
+                    //  Close the last entry
+                    var closed = ClosedSum + last.Sum;
+                    if (count == e.Length)
+                    {
+                        e = Grow(e, head, count);
+                        mask = e.Length - 1;
+                        head = 0;
+                    }
+                    ClosedSum = closed;
+                }
+                ref var n = ref e[(head + count) & mask];
+                n.Time = now;
+                n.Sum = value;
+                n.Count = 1;
+                Count = count + 1;
+                ++Samples;
+            }
+            finally
+            {
+                Exit();
+            }
+        }
 
         /// <summary>
         /// Get the moving average
         /// </summary>
         /// <param name="sum">Total sum of the values in the time window</param>
         /// <param name="count">Number of values within the time window</param>
-        /// <param name="dt">Number of ticks between the last and first values within the time window</param>
-        /// <returns>The values per second (sum / dt)</returns>
-        public Decimal GetAverage(out decimal sum, out int count, out long dt)
+        /// <param name="dt">The duration (in ticks) that the window covers (the window duration, or the time since this instance was created if that is less)</param>
+        /// <returns>The average value (sum / count)</returns>
+        public decimal GetAverage(out decimal sum, out int count, out long dt)
         {
-            var n = InternalGet(out var now);
-            Compute(n, now, out sum, out count, out dt);
+            GetData(out sum, out count, out dt);
             return count <= 0 ? 0 : (sum / count);
         }
-
 
         /// <summary>
         /// Get the sum per second
         /// </summary>
         /// <param name="sum">Total sum of the values in the time window</param>
         /// <param name="count">Number of values within the time window</param>
-        /// <param name="dt">Number of ticks between the last and first values within the time window</param>
-        /// <returns>The values per second (sum / dt)</returns>
-        public Decimal GetVolume(out decimal sum, out int count, out long dt)
+        /// <param name="dt">The duration (in ticks) that the window covers (the window duration, or the time since this instance was created if that is less)</param>
+        /// <returns>The sum of the values per second (sum / dt)</returns>
+        public decimal GetVolume(out decimal sum, out int count, out long dt)
         {
-            var n = InternalGet(out var now);
-            Compute(n, now, out sum, out count, out dt);
+            GetData(out sum, out count, out dt);
             return dt <= 0 ? 0 : (sum * TimeSpan.TicksPerSecond / dt);
+        }
+
+        /// <summary>
+        /// Get the number of values per second
+        /// </summary>
+        /// <param name="sum">Total sum of the values in the time window</param>
+        /// <param name="count">Number of values within the time window</param>
+        /// <param name="dt">The duration (in ticks) that the window covers (the window duration, or the time since this instance was created if that is less)</param>
+        /// <returns>The number of values per second (count / dt)</returns>
+        public decimal GetRate(out decimal sum, out int count, out long dt)
+        {
+            GetData(out sum, out count, out dt);
+            return dt <= 0 ? 0 : ((decimal)count * TimeSpan.TicksPerSecond / dt);
         }
 
         /// <summary>
@@ -67,11 +168,41 @@ namespace SysWeaver
         /// </summary>
         /// <param name="sum">Total sum of the values in the time window</param>
         /// <param name="count">Number of values within the time window</param>
-        /// <param name="dt">Number of ticks between the last and first values within the time window</param>
+        /// <param name="dt">The duration (in ticks) that the window covers (the window duration, or the time since this instance was created if that is less)</param>
         public void GetData(out decimal sum, out int count, out long dt)
         {
-            var n = InternalGet(out var now);
-            Compute(n, now, out sum, out count, out dt);
+            var now = Now();
+            decimal closed, open;
+            Enter();
+            try
+            {
+                Expire(now);
+                var c = Count;
+                if (c > 0)
+                {
+                    var e = Entries;
+                    closed = ClosedSum;
+                    open = e[(Head + c - 1) & (e.Length - 1)].Sum;
+                    count = Samples;
+                }
+                else
+                {
+                    closed = 0;
+                    open = 0;
+                    count = 0;
+                }
+            }
+            finally
+            {
+                Exit();
+            }
+            sum = closed + open;
+            var dts = now - Start;
+            if (dts > Window)
+                dts = Window;
+            if (dts < 0)
+                dts = 0;
+            dt = ToTicks(dts);
         }
 
         /// <summary>
@@ -86,223 +217,357 @@ namespace SysWeaver
         /// <param name="valueDesc">Description of the average value stats, null = use default, set to "" to exclude average value stats</param>
         /// <param name="volumeDesc">Description of the volume stats, null = use default, set to "" to exclude volume stats</param>
         /// <returns>The stats</returns>
-        public IEnumerable<Stats> GetStats(String system, String prefix = null, String countName = null, String avgName = null, String volumeName = null,  String countDesc = null, String valueDesc = null, String volumeDesc = null)
+        public IEnumerable<Stats> GetStats(String system, String prefix = null, String countName = null, String avgName = null, String volumeName = null, String countDesc = null, String valueDesc = null, String volumeDesc = null)
         {
-            prefix = prefix ?? "";
+            //  The texts are usually the same for every call (from the same call site), so reuse them
+            var t = Texts;
+            if ((t == null) || !t.IsSame(prefix, countName, avgName, volumeName, countDesc, valueDesc, volumeDesc))
+                Texts = t = new StatsTexts(Duration, prefix, countName, avgName, volumeName, countDesc, valueDesc, volumeDesc);
             GetData(out var sum, out var count, out var dt);
-            var dur = TimeSpan.FromTicks(InternalDur).ElapsedTime();
-            if ((countName != "") || (countDesc != ""))
-                yield return new Stats(system, prefix + (countName ?? "Values"), dt <= 0 ? 0 : (count * TimeSpan.TicksPerSecond / dt), ((countDesc ?? "per second") + " over the last " + dur).TrimStart().MakeFirstUppercase());
-            if ((avgName != "") || (valueDesc != ""))
-                yield return new Stats(system, prefix + (avgName ?? "Average"), count <= 0 ? 0 : (sum / count), ((valueDesc ?? "") + " over the last " + dur).TrimStart().MakeFirstUppercase());
-            if ((volumeName != "") || (volumeDesc != ""))
-                yield return new Stats(system, prefix + (volumeName ?? "Volume"), dt <= 0 ? 0 : (sum * TimeSpan.TicksPerSecond / dt), ((volumeDesc ?? "per second") + " over the last " + dur).TrimStart().MakeFirstUppercase());
+            var c = t.CountName == null ? null : new Stats(system, t.CountName, Box(dt <= 0 ? 0 : ((decimal)count * TimeSpan.TicksPerSecond / dt)), t.CountDesc, DecimalTypeName);
+            var a = t.AvgName == null ? null : new Stats(system, t.AvgName, Box(count <= 0 ? 0 : (sum / count)), t.AvgDesc, DecimalTypeName);
+            var v = t.VolumeName == null ? null : new Stats(system, t.VolumeName, Box(dt <= 0 ? 0 : (sum * TimeSpan.TicksPerSecond / dt)), t.VolumeDesc, DecimalTypeName);
+            return new StatsList(c, a, v);
         }
 
-
-        State InternalGet(out long now)
+        /// <summary>
+        /// Enumerates up to three stats (null's are skipped).
+        /// Smaller than a compiler generated iterator, it's its own enumerator the first time it's enumerated
+        /// </summary>
+        sealed class StatsList : IEnumerable<Stats>, IEnumerator<Stats>
         {
-            var dur = InternalDur;
-            var sw = new SpinWait();
-            State n;
-            for (; ; )
+            public StatsList(Stats s0, Stats s1, Stats s2)
             {
-                var current = P;
-                now = DateTime.UtcNow.Ticks;
-                n = current.MoveHeader(now - dur);
-                if (n == current)
-                    break;
-                if (Interlocked.CompareExchange(ref P, n, current) == current)
-                    break;
-                FreeState(n);
-                sw.SpinOnce();
+                S0 = s0;
+                S1 = s1;
+                S2 = s2;
             }
+
+            readonly Stats S0;
+            readonly Stats S1;
+            readonly Stats S2;
+            Stats C;
+            /// <summary>
+            /// -1 = not enumerated yet, 0-3 = next stats to check
+            /// </summary>
+            int State = -1;
+
+            public IEnumerator<Stats> GetEnumerator()
+            {
+                if (Interlocked.CompareExchange(ref State, 0, -1) == -1)
+                    return this;
+                var n = new StatsList(S0, S1, S2);
+                n.State = 0;
+                return n;
+            }
+
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+
+            public Stats Current => C;
+
+            Object System.Collections.IEnumerator.Current => C;
+
+            public bool MoveNext()
+            {
+                for (; ; )
+                {
+                    Stats s;
+                    switch (State)
+                    {
+                        case 0:
+                            s = S0;
+                            break;
+                        case 1:
+                            s = S1;
+                            break;
+                        case 2:
+                            s = S2;
+                            break;
+                        default:
+                            C = null;
+                            return false;
+                    }
+                    ++State;
+                    if (s != null)
+                    {
+                        C = s;
+                        return true;
+                    }
+                }
+            }
+
+            public void Reset()
+            {
+                State = 0;
+                C = null;
+            }
+
+            public void Dispose()
+            {
+            }
+        }
+
+        /// <summary>
+        /// Box a decimal (zero is common, so use a shared instance for that)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static Object Box(decimal value) => value == 0 ? BoxedZero : value;
+
+        static readonly Object BoxedZero = 0m;
+
+        static readonly String DecimalTypeName = typeof(decimal).CleanTypename();
+
+        /// <summary>
+        /// The names and descriptions of the stats (immutable)
+        /// </summary>
+        sealed class StatsTexts
+        {
+            public StatsTexts(TimeSpan duration, String prefix, String countName, String avgName, String volumeName, String countDesc, String valueDesc, String volumeDesc)
+            {
+                InPrefix = prefix;
+                InCountName = countName;
+                InAvgName = avgName;
+                InVolumeName = volumeName;
+                InCountDesc = countDesc;
+                InValueDesc = valueDesc;
+                InVolumeDesc = volumeDesc;
+                prefix = prefix ?? "";
+                var over = " over the last " + duration.ElapsedTime();
+                if ((countName != "") && (countDesc != ""))
+                {
+                    CountName = prefix + (countName ?? "Values");
+                    CountDesc = ((countDesc ?? "per second") + over).TrimStart().MakeFirstUppercase();
+                }
+                if ((avgName != "") && (valueDesc != ""))
+                {
+                    AvgName = prefix + (avgName ?? "Average");
+                    AvgDesc = ((valueDesc ?? "") + over).TrimStart().MakeFirstUppercase();
+                }
+                if ((volumeName != "") && (volumeDesc != ""))
+                {
+                    VolumeName = prefix + (volumeName ?? "Volume");
+                    VolumeDesc = ((volumeDesc ?? "per second") + over).TrimStart().MakeFirstUppercase();
+                }
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public bool IsSame(String prefix, String countName, String avgName, String volumeName, String countDesc, String valueDesc, String volumeDesc)
+                => ReferenceEquals(prefix, InPrefix)
+                && ReferenceEquals(countName, InCountName)
+                && ReferenceEquals(avgName, InAvgName)
+                && ReferenceEquals(volumeName, InVolumeName)
+                && ReferenceEquals(countDesc, InCountDesc)
+                && ReferenceEquals(valueDesc, InValueDesc)
+                && ReferenceEquals(volumeDesc, InVolumeDesc);
+
+            readonly String InPrefix;
+            readonly String InCountName;
+            readonly String InAvgName;
+            readonly String InVolumeName;
+            readonly String InCountDesc;
+            readonly String InValueDesc;
+            readonly String InVolumeDesc;
+
+            /// <summary>
+            /// Null if the stats should be excluded
+            /// </summary>
+            public readonly String CountName;
+            public readonly String CountDesc;
+            /// <summary>
+            /// Null if the stats should be excluded
+            /// </summary>
+            public readonly String AvgName;
+            public readonly String AvgDesc;
+            /// <summary>
+            /// Null if the stats should be excluded
+            /// </summary>
+            public readonly String VolumeName;
+            public readonly String VolumeDesc;
+        }
+
+        /// <summary>
+        /// Get the current time stamp
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        long Now()
+        {
+            var t = Time;
+            return t == null ? Stopwatch.GetTimestamp() : t.GetTimestamp();
+        }
+
+        /// <summary>
+        /// Convert a duration in time stamp units to ticks
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        long ToTicks(long stamps)
+        {
+            var s = TicksScale;
+            if (s > 0)
+                return stamps * s;
+            if (s < 0)
+                return stamps / -s;
+            return ToTicksSlow(stamps);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        long ToTicksSlow(long stamps)
+            => (long)((decimal)stamps * TimeSpan.TicksPerSecond / (Time?.TimestampFrequency ?? Stopwatch.Frequency));
+
+        /// <summary>
+        /// Acquire the (spin) lock
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        void Enter()
+        {
+            if (Interlocked.CompareExchange(ref LockFlag, 1, 0) != 0)
+                EnterSlow();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        void EnterSlow()
+        {
+            var sw = new SpinWait();
+            do
+            {
+                //  Never Sleep(1), the lock is only held for a few ns
+                sw.SpinOnce(-1);
+            }
+            while ((Volatile.Read(ref LockFlag) != 0) || (Interlocked.CompareExchange(ref LockFlag, 1, 0) != 0));
+        }
+
+        /// <summary>
+        /// Release the (spin) lock
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        void Exit() => Volatile.Write(ref LockFlag, 0);
+
+        /// <summary>
+        /// Remove all entries that are older than the window (must be called with the lock held)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        void Expire(long now)
+        {
+            if ((Count > 0) && (Entries[Head].Time < (now - Window)))
+                ExpireSlow(now - Window);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        void ExpireSlow(long expire)
+        {
+            var e = Entries;
+            var mask = e.Length - 1;
+            var head = Head;
+            var count = Count;
+            //  Entry times are strictly increasing, the last entry isn't part of the closed sum
+            var closed = ClosedSum;
+            var samples = Samples;
+            while (count > 1)
+            {
+                ref var h = ref e[head];
+                if (h.Time >= expire)
+                    break;
+                closed -= h.Sum;
+                samples -= h.Count;
+                head = (head + 1) & mask;
+                --count;
+            }
+            if ((count == 1) && (e[head].Time < expire))
+            {
+                //  Everything expired
+                Head = 0;
+                Count = 0;
+                ClosedSum = 0;
+                Samples = 0;
+                return;
+            }
+            Head = head;
+            Count = count;
+            ClosedSum = closed;
+            Samples = samples;
+        }
+
+        /// <summary>
+        /// Double the size of the buffer (must be called with the lock held), the head is moved to index 0
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        Entry[] Grow(Entry[] e, int head, int count)
+        {
+            Interlocked.Increment(ref InternalResizeCount);
+            Interlocked.Increment(ref InternalResizeTotalCount);
+            var size = e.Length;
+            var n = GC.AllocateUninitializedArray<Entry>(size + size);
+            var src = e.AsSpan();
+            var first = size - head;
+            if (first > count)
+                first = count;
+            src.Slice(head, first).CopyTo(n);
+            src.Slice(0, count - first).CopyTo(n.AsSpan(first));
+            Entries = n;
+            Head = 0;
             return n;
         }
 
+        /// <summary>
+        /// Samples closer in time than the window duration divided by this value are merged into a single entry
+        /// </summary>
+        public const int Resolution = 1024;
 
-        State InternalAdd(out long now, decimal value)
+        /// <summary>
+        /// The initial number of entries
+        /// </summary>
+        public const int InitSize = 4;
+
+        struct Entry
         {
-            var dur = InternalDur;
-            State n;
-            var sw = new SpinWait();
-            for (; ; )
-            {
-                now = DateTime.UtcNow.Ticks;
-                var current = P;
-                n = current.Add(out var tail, value, now - dur);
-                if (n == null)
-                {
-                    //  Resize
-                    lock (Lock)
-                    {
-                        now = DateTime.UtcNow.Ticks;
-                        current = P;
-                        n = current.Add(out tail, value, now - dur);
-                        if (n == null)
-                        {
-                            Interlocked.Increment(ref InternalResizeCount);
-                            n = Resize(current, value, now);
-                            n.MoveHeader(now - dur);
-                            if (Interlocked.CompareExchange(ref P, n, current) == current)
-                            {
-                                FreeState(current);
-                                return n;
-                            }
-                            // Should never happen
-                            FreeState(n);
-                            sw.SpinOnce();
-                            continue;
-                        }
-                    }
-                }
-                if (Interlocked.CompareExchange(ref P, n, current) == current)
-                {
-                    n.Values[tail] = value;
-                    n.Times[tail] = now;
-                    FreeState(current);
-                    return n;
-                }
-                FreeState(n);
-                sw.SpinOnce();
-            }
+            /// <summary>
+            /// Time stamp of the first sample in this entry
+            /// </summary>
+            public long Time;
+            /// <summary>
+            /// Sum of the samples in this entry
+            /// </summary>
+            public decimal Sum;
+            /// <summary>
+            /// Number of samples in this entry
+            /// </summary>
+            public int Count;
         }
 
-        void Compute(State n, long now, out decimal sum, out int count, out long dt)
-        {
-            var times = n.Times;
-            var h = n.Head;
-            var t = n.Tail;
-            if (t < h)
-                t += n.Size;
-            count = t - h;
-            if (count <= 0)
-            {
-                dt = 0;
-                sum = 0;
-                return;
-            }
-            dt = now - times[h];
-            sum = n.Sum;
-        }
+        /// <summary>
+        /// Null = use the stop watch
+        /// </summary>
+        readonly TimeProvider Time;
+        readonly long Window;
+        readonly long Merge;
+        readonly long Start;
+        /// <summary>
+        /// Positive: multiply time stamps with this to get ticks, negative: divide time stamps with -this to get ticks, zero: use decimal math
+        /// </summary>
+        readonly long TicksScale;
 
-        static State Resize(State s, decimal value, long now)
-        {
-            Interlocked.Increment(ref InternalResizeTotalCount);
-            var size = s.Size;
-            var mask = size - 1;
-            size += size;
-            var srcTimes = s.Times;
-            var newTimes = GC.AllocateUninitializedArray<long>(size);
-            var srcValues = s.Values;
-            var newValues = GC.AllocateUninitializedArray<Decimal>(size);
-            var head = s.Head;
-            var tail = s.Tail;
-            int dest = 0;
-            while (head != tail)
-            {
-                newTimes[dest] = srcTimes[head];
-                newValues[dest] = srcValues[head];
-                ++head;
-                ++dest;
-                head &= mask;
-            }
-            newTimes[dest] = now;
-            newValues[dest] = value;
-            ++dest;
-            return AllocState(0, dest, s.Sum + value, size, newTimes, newValues);
-        }
-
-        readonly Object Lock = new object();
-        readonly long InternalDur;
-        volatile int InternalResizeCount;
-        volatile State P = AllocState(0, 0, 0, InitSize, GC.AllocateUninitializedArray<long>(InitSize), GC.AllocateUninitializedArray<Decimal>(InitSize));
-
-        ~MovingAverage()
-        {
-            var t = Interlocked.Exchange(ref P, null);
-            if (t != null)
-                FreeState(t);
-        }
-
-        sealed class State
-        {
-            public State NextFree;
-
-            public int Head;
-            public int Tail;
-            public Decimal Sum;
-            public int Size;
-            public long[] Times;
-            public decimal[] Values;
-
-            public State Add(out int tail, decimal value, long expire)
-            {
-                tail = Tail;
-                var head = Head;
-                var sum = Sum;
-                var times = Times;
-                var values = Values;
-                var size = Size;
-                var mask = size - 1;
-                //  Insert new value 
-                var next = (tail + 1) & mask;
-                if (next == head)
-                    return null; // Need to resize
-                sum += value;
-                //  Move head (remove old values)
-                while (head != tail)
-                {
-                    if (times[head] >= expire)
-                        break;
-                    sum -= values[head];
-                    ++head;
-                    head &= mask;
-                }
-                return AllocState(head, next, sum, size, times, values);
-            }
-
-            public State MoveHeader(long expire)
-            {
-                var tail = Tail;
-                var head = Head;
-                var orgHead = head;
-                var sum = Sum;
-                var times = Times;
-                var values = Values;
-                var size = Size;
-                var mask = size - 1;
-                //  Move head (remove old values)
-                while (head != tail)
-                {
-                    if (times[head] >= expire)
-                        break;
-                    sum -= values[head];
-                    ++head;
-                    head &= mask;
-                }
-                if (head == orgHead)
-                    return this;
-                return AllocState(head, tail, sum, size, times, values);
-            }
-
-            public State(int head, int tail, decimal sum, int size, long[] times, decimal[] values)
-            {
-                Head = head;
-                Tail = tail;
-                Sum = sum;
-                Size = size;
-                Times = times;
-                Values = values;
-            }
-        }
-
-        public const int InitSize = 4096;
-
-
-
-        #region Allocation pool
-
+        /// <summary>
+        /// Ring buffer of entries (power of 2 size)
+        /// </summary>
+        Entry[] Entries;
+        /// <summary>
+        /// Sum of all entries except the last one
+        /// </summary>
+        decimal ClosedSum;
+        /// <summary>
+        /// Index of the oldest entry
+        /// </summary>
+        int Head;
+        /// <summary>
+        /// Number of entries
+        /// </summary>
+        int Count;
+        /// <summary>
+        /// Number of samples in all entries
+        /// </summary>
+        int Samples;
+        int LockFlag;
+        int InternalResizeCount;
+        StatsTexts Texts;
 
         /// <summary>
         /// Get global stats
@@ -311,91 +576,14 @@ namespace SysWeaver
         public static IEnumerable<Stats> GetGlobalStats()
         {
             var system = nameof(MovingAverage);
-            yield return new Stats(system, "Free count", FreeCount, "Number of state nodes ready to be used (pre-allocated)");
-            yield return new Stats(system, "Alloc count", AllocCount, "Total number of state node allocations");
-            yield return new Stats(system, "In use count", InUseCount, "Number of states nodes in use");
-            yield return new Stats(system, "Resize count", ResizeTotalCount, "Number of times the underlaying data structures have to be resized (this is slow)");
+            yield return new Stats(system, "Resize count", ResizeTotalCount, "Number of times the underlaying data structures have been resized");
         }
 
-        static volatile State Free;
-
         /// <summary>
-        /// Number of state nodes ready to be used (pre-allocated)
-        /// </summary>
-        public static long FreeCount => Interlocked.Read(ref InternalFreeCount);
-        
-        /// <summary>
-        /// Total number of state node allocations
-        /// </summary>
-        public static long AllocCount => Interlocked.Read(ref InternalAllocCount);
-
-        /// <summary>
-        /// Number of states nodes in use
-        /// </summary>
-        public static long InUseCount => Interlocked.Read(ref InternalInUseCount);
-
-        /// <summary>
-        /// Number of times the underlaying data structures have to be resized (this is slow)
+        /// Number of times the underlaying data structures have been resized (all instances)
         /// </summary>
         public static long ResizeTotalCount => Interlocked.Read(ref InternalResizeTotalCount);
 
-        static long InternalFreeCount;
-        static long InternalAllocCount;
-        static long InternalInUseCount;
         static long InternalResizeTotalCount;
-
-        static State AllocState(int head, int tail, decimal sum, int size, long[] times, decimal[] values)
-        {
-            State free;
-            for (; ; )
-            {
-                free = Free;
-                if (free == null)
-                {
-                    Interlocked.Increment(ref InternalAllocCount);
-                    Interlocked.Increment(ref InternalInUseCount);
-                    return new State(head, tail, sum, size, times, values);
-                }
-                var next = free.NextFree;
-                if (Interlocked.CompareExchange(ref Free, next, free) == free)
-                    break;
-            }
-            Interlocked.Decrement(ref InternalFreeCount);
-            free.Head = head;
-            free.Tail = tail;
-            free.Sum = sum;
-            free.Size = size;
-            free.Times = times;
-            free.Values = values;
-            free.NextFree = null;
-            Interlocked.Increment(ref InternalInUseCount);
-            return free;
-        }
-
-        static void FreeState(State state)
-        {
-            Interlocked.Decrement(ref InternalInUseCount);
-            var fc = Interlocked.Increment(ref InternalFreeCount);
-            if (fc > 64)
-            {
-            //  Drop state if we have enough nodes
-                Interlocked.Decrement(ref InternalFreeCount);
-                return;
-            }
-            for (; ; )
-            {
-                var free = Free;
-                state.NextFree = free;
-                if (Interlocked.CompareExchange(ref Free, state, free) == free)
-                    break;
-            }
-        }
-
-        #endregion//Allocation pool
-
-
-
     }
-
-
 }
