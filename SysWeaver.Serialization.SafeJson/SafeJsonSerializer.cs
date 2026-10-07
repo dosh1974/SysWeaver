@@ -12,16 +12,17 @@ namespace SysWeaver.Serialization
     /// All deserialization goes through Newtonsoft with type name handling enabled (see <see cref="NewtonsoftJsonSerializer"/>), so the security considerations for that serializer apply to untrusted input.
     /// Types must serialize compatibly with both engines.
     /// </remarks>
-    public sealed class SafeJsonSerializer : ITextSerializerType
+    [Obsolete]
+    public sealed class SafeJsonSerializerX : ITextSerializerType
     {
-        SafeJsonSerializer()
+        SafeJsonSerializerX()
         {
         }
 
         /// <summary>
         /// The singleton instance of this serializer.
         /// </summary>
-        public static ITextSerializerType Instance = new SafeJsonSerializer();
+        public static ITextSerializerType Instance = new SafeJsonSerializerX();
 
         /// <summary>
         /// Call once to register this serializer type to the serializer manager
