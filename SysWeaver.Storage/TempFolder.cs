@@ -126,7 +126,7 @@ namespace SysWeaver
                     if (p != null)
                         p = Path.Combine(p, "SysWeaver_" + keyType);
                 }
-                p = p ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SysWeaver_" + keyType);
+                p = p ?? Path.Combine(PathTemplate.CommonApplicationData, "SysWeaver_" + keyType);
                 P = PathExt.RootExecutable(p);
                 PathExt.CreateDataFolder(P);
 

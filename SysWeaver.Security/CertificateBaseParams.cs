@@ -31,7 +31,7 @@ namespace SysWeaver.Security
         ///             $(MachineName) = Machine name, ex: "DESKTOP-324VHA".
         ///             $(KeyFolder) = The folder where keys are stored. ex: "C:\Keys".
         /// </summary>
-        public String Filename = @"$(CommonApplicationData)\SysWeaver_AppData_$(AppName)\Cert.pfx";
+        public String Filename = @"$(CommonApplicationData)/SysWeaver_AppData_$(AppName)/Cert.pfx";
 
         /// <summary>
         /// The password used to protect the private key of the cached .pfx file.

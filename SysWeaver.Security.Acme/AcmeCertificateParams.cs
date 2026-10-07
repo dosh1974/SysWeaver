@@ -6,7 +6,7 @@ namespace SysWeaver.Security
     {
         public AcmeCertificateParams()
         {
-            Filename = @"$(CommonApplicationData)\SysWeaver_AcmeCertificates\$(AuthApi)_$(Email)_$(DomainName)_$(Hash).pfx";
+            Filename = @"$(CommonApplicationData)/SysWeaver_AcmeCertificates/$(AuthApi)_$(Email)_$(DomainName)_$(Hash).pfx";
         }
 
         /// <summary>
@@ -38,7 +38,7 @@ namespace SysWeaver.Security
         ///             $(MachineName) = Machine name, ex: "DESKTOP-324VHA".
         ///             $(KeyFolder) = The folder where keys are stored. ex: "C:\Keys".
         /// </summary>
-        public String AccountFilename = @"$(CommonApplicationData)\SysWeaver_AcmeAccounts\$(AuthApi)_$(Email)_$(DomainName)_$(Hash).key";
+        public String AccountFilename = @"$(CommonApplicationData)/SysWeaver_AcmeAccounts/$(AuthApi)_$(Email)_$(DomainName)_$(Hash).key";
 
 
         /// <summary>

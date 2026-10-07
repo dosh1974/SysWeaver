@@ -89,7 +89,7 @@ namespace SysWeaver.AI
         ///             $(MachineName) = Machine name, ex: "DESKTOP-324VHA".
         ///             $(KeyFolder) = The folder where keys are stored. ex: "C:\Keys".
         /// </summary>
-        public String TokenCacheFolder = @"$(CommonApplicationData)\SysWeaver_Tiktoken\";
+        public String TokenCacheFolder = @"$(CommonApplicationData)/SysWeaver_Tiktoken/";
 
         /// <summary>
         /// List of models or token encoding algorithms to download cache on load (as opposed to on use)

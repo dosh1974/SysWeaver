@@ -7,7 +7,7 @@ namespace SysWeaver.MicroService
     {
         public LanCertificateManagerParams()
         {
-            Filename = @"$(CommonApplicationData)\SysWeaver_AppData_$(AppName)\ManagedCerts\$(AuthApi)_$(Email)_$(DomainName)_$(Hash).pfx";
+            Filename = @"$(CommonApplicationData)/SysWeaver_AppData_$(AppName)/ManagedCerts/$(AuthApi)_$(Email)_$(DomainName)_$(Hash).pfx";
 
         }
 

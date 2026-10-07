@@ -11,7 +11,7 @@ namespace SysWeaver.ExchangeRate
         {
             cacheFolder = PathTemplate.Resolve(cacheFolder);
             if (String.IsNullOrEmpty(cacheFolder))
-                cacheFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SysWeaver_ExchangeRateCache_" + EnvInfo.AppGuid);
+                cacheFolder = Path.Combine(PathTemplate.CommonApplicationData, "SysWeaver_ExchangeRateCache_" + EnvInfo.AppGuid);
             cacheFolder = Path.GetFullPath(cacheFolder);
             var ex = PathExt.EnsureFolderExist(cacheFolder);
             if (ex != null)

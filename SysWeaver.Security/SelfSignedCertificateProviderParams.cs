@@ -10,7 +10,7 @@
         /// </summary>
         public SelfSignedCertificateProviderParams()
         {
-            Filename = @"$(CommonApplicationData)\SysWeaver_AppData_$(AppName)\SelfSigned.pfx";
+            Filename = @"$(CommonApplicationData)/SysWeaver_AppData_$(AppName)/SelfSigned.pfx";
         }
 
 

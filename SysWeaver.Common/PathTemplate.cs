@@ -30,6 +30,16 @@ namespace SysWeaver
     public static class PathTemplate
     {
         /// <summary>
+        /// The folder for application data shared by all users, this is what "$(CommonApplicationData)" resolves to.
+        /// Windows (and other platforms): <see cref="Environment.SpecialFolder.CommonApplicationData"/>, ex: "C:\ProgramData".
+        /// Linux: "/var/lib" (.NET returns "/usr/share", which is meant for read only data).
+        /// </summary>
+        /// <remarks>
+        /// On Linux only root can create folders in "/var/lib", see <see cref="Folders"/> for how the SysWeaver folder is set up.
+        /// </remarks>
+        public static readonly String CommonApplicationData = OperatingSystem.IsLinux() ? "/var/lib" : Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+
+        /// <summary>
         /// Resolve a "path" template to a full path.
         /// Variables in the template starts with "$(" and ends with ")".
         /// Variables can be any value of the Environment.SpecialFolder enum, or any of the ones in the supplied dictionary.
@@ -192,7 +202,7 @@ namespace SysWeaver
                 return false;
             if (!Enum.IsDefined(e))
                 return false;
-            folder = Environment.GetFolderPath(e);
+            folder = e == Environment.SpecialFolder.CommonApplicationData ? CommonApplicationData : Environment.GetFolderPath(e);
             return true;
         }
 

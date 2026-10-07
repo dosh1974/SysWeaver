@@ -13,7 +13,7 @@ namespace SysWeaver.Security
         /// </summary>
         public LanCertificateProviderParams()
         {
-            Filename = @"$(CommonApplicationData)\SysWeaver_AppData_$(AppName)\Lan.pfx";
+            Filename = @"$(CommonApplicationData)/SysWeaver_AppData_$(AppName)/Lan.pfx";
         }
 
         /// <summary>

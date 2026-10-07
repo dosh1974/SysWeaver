@@ -49,7 +49,7 @@ namespace SysWeaver.AI
                 UserAgentApplicationId = String.IsNullOrEmpty(p.UserAgentApplicationId) ? null : p.UserAgentApplicationId,
                 NetworkTimeout = TimeSpan.FromSeconds(Math.Max(5, p.NetworkTimeoutSeconds)),
             };
-            var tokenCache = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.TokenCacheFolder ?? @"$(CommonApplicationData)\SysWeaver_Tiktoken\"));
+            var tokenCache = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.TokenCacheFolder ?? @"$(CommonApplicationData)/SysWeaver_Tiktoken/"));
             PathExt.EnsureFolderExist(tokenCache);
             TikToken.PBEFileDirectory = tokenCache;
             var cache = p.CacheTokensFor;

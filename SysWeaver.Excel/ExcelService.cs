@@ -85,7 +85,7 @@ namespace SysWeaver.Excel
         /// <param name="fileOrApiKey">Filename or api key</param>
         /// <param name="isFile">True it the first parameter is a file, else false</param>
         /// <param name="mustExist">If p is non-null and there isn't a valid license, throw an exception, else use the free</param>
-        public static void SetLicense(String fileOrApiKey = @"$(KeyFolder)\GemBox.Spreadsheet.txt", bool isFile = true, bool mustExist = true)
+        public static void SetLicense(String fileOrApiKey = @"$(KeyFolder)/GemBox.Spreadsheet.txt", bool isFile = true, bool mustExist = true)
             => SetLicense(new ApiKeyParams
             {
                 CredFile = isFile ? fileOrApiKey : null,

@@ -12,7 +12,7 @@ namespace SysWeaver.Security
         /// </summary>
         public SignedCertificateProviderParams()
         {
-            Filename = @"$(CommonApplicationData)\SysWeaver_AppData_$(AppName)\Signed.pfx";
+            Filename = @"$(CommonApplicationData)/SysWeaver_AppData_$(AppName)/Signed.pfx";
         }
 
         /// <summary>

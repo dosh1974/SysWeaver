@@ -82,7 +82,7 @@ namespace SysWeaver.MicroService
                 s.AddManagedFolder(f).RunAsync();
             }
 
-            var destFolders = PathTemplate.Resolve(String.IsNullOrEmpty(p.ServiceFolder) ? @"$(CommonApplicationData)\SysWeaver\ManagedServices" : p.ServiceFolder).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var destFolders = PathTemplate.Resolve(String.IsNullOrEmpty(p.ServiceFolder) ? @"$(CommonApplicationData)/SysWeaver/ManagedServices" : p.ServiceFolder).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             foreach (var f in destFolders)
                 PathExt.CreateDataFolder(f);
             DestFolders = destFolders;

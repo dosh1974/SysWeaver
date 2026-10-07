@@ -22,20 +22,25 @@ namespace SysWeaver
     /// </summary>
     /// <remarks>
     /// All folders are resolved and created (if missing) in the static constructor, which also marks them as not content indexed.
-    /// Folders shared by all users are made accessible to everyone (using <see cref="IPlatformTools.MakeDirectoryAccessableToEveryOne(string)"/>).
+    /// Folders shared by all users are made accessible to everyone (using <see cref="IPlatformTools.MakeDirectoryAccessableToEveryOne(string)"/>),
+    /// so data written by a service (ex: running as SYSTEM or root) stays modifiable by users and vice versa.
+    /// On Linux "$(CommonApplicationData)" is "/var/lib" (see <see cref="PathTemplate.CommonApplicationData"/>), where only root can create folders:
+    /// when root runs first, the "SysWeaver" root folder is created with rwx for everyone and the sticky bit (so any user can create application folders in it).
+    /// If an all user folder doesn't exist and can't be created (ex: a normal user runs before root), the matching user folders are used instead
+    /// (<see cref="AllSharedFolders"/> = <see cref="UserSharedFolders"/>, <see cref="AllAppFolders"/> = <see cref="UserAppFolders"/>) and a warning is written to the console.
     /// </remarks>
     public static class Folders
     {
 
         /// <summary>
         /// Folders to use for shared data between all SysWeaver apps, shared for all OS users.
-        /// Default: "$(CommonApplicationData)/SysWeaver/Shared".
+        /// Default: "$(CommonApplicationData)/SysWeaver/Shared" (Windows: "C:\ProgramData\SysWeaver\Shared", Linux: "/var/lib/SysWeaver/Shared").
         /// </summary>
         public static readonly IReadOnlyList<String> AllSharedFolders;
 
         /// <summary>
         /// Folders to use for private data for this app, shared for all OS users.
-        /// Default: "$(CommonApplicationData)/SysWeaver/[AppAssemblyName]_[AppGuid]".
+        /// Default: "$(CommonApplicationData)/SysWeaver/[AppAssemblyName]_[AppGuid]" (Windows: "C:\ProgramData\SysWeaver\...", Linux: "/var/lib/SysWeaver/...").
         /// </summary>
         public static readonly IReadOnlyList<String> AllAppFolders;
 
@@ -97,7 +102,10 @@ namespace SysWeaver
         public static String[] FromConfig(String keyName, IReadOnlyList<String> defaultRoots, String defaultPath, bool allowAll = false)
         {
             Config.TryGetString(keyName, out var x);
-            var f = SplitFolders(x) ?? Append(defaultRoots, defaultPath);
+            var f = SplitFolders(x);
+            //  Append validates (a folder is only set up the first time it's seen, so allowAll must be passed on)
+            if (f == null)
+                return Append(defaultRoots, defaultPath, allowAll);
             Validate(f, allowAll);
             return f;
         }
@@ -112,7 +120,10 @@ namespace SysWeaver
         /// <returns>The absolute folder paths (folders are created if missing)</returns>
         public static String[] FromString(String paths, IReadOnlyList<String> defaultRoots, String defaultPath, bool allowAll = false)
         {
-            var f = SplitFolders(paths) ?? Append(defaultRoots, defaultPath);
+            var f = SplitFolders(paths);
+            //  Append validates (a folder is only set up the first time it's seen, so allowAll must be passed on)
+            if (f == null)
+                return Append(defaultRoots, defaultPath, allowAll);
             Validate(f, allowAll);
             return f;
         }
@@ -162,7 +173,10 @@ namespace SysWeaver
         }
 
 
-        static readonly ConcurrentDictionary<String, int> Seen = new(StringComparer.Ordinal);
+        /// <summary>
+        /// Folders that have been validated, the value is true if the folder was made accessible to everyone
+        /// </summary>
+        static readonly ConcurrentDictionary<String, bool> Seen = new(StringComparer.Ordinal);
 
         static void Validate(String[] paths, bool allowAll)
         {
@@ -172,9 +186,10 @@ namespace SysWeaver
             {
                 var fp = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(paths[i]));
                 paths[i] = fp;
-                //  Only create and set attributes the first time a folder is seen
-                if (!seen.TryAdd(fp, 0))
+                //  Only create and set attributes the first time a folder is seen (or the first time all access is requested)
+                if (seen.TryGetValue(fp, out var wasAll) && (wasAll || !allowAll))
                     continue;
+                seen[fp] = allowAll;
                 PathExt.EnsureFolderExist(fp);
                 if (allowAll)
                     PlatformTools.Current.MakeDirectoryAccessableToEveryOne(fp);
@@ -204,12 +219,65 @@ namespace SysWeaver
             var allFolders = SplitFolders(x) ?? [@"$(CommonApplicationData)" + Path.DirectorySeparatorChar + "SysWeaver"];
             Config.TryGetString("UserFolders", out x);
             var userFolders = SplitFolders(x) ?? [@"$(LocalApplicationData)" + Path.DirectorySeparatorChar + "SysWeaver"];
+            if (OperatingSystem.IsLinux())
+                SetupLinuxRoots(allFolders);
             //  Derived folders
-            AllSharedFolders = FromConfig("AllSharedFolders", allFolders, "Shared", true);
-            AllAppFolders = FromConfig("AllAppFolders", allFolders, "$(*AppAssemblyName)_$(*AppGuid)", true);
-            UserSharedFolders = FromConfig("UserSharedFolders", userFolders, "Shared");
-            UserAppFolders = FromConfig("UserAppFolders", userFolders, "$(*AppAssemblyName)_$(*AppGuid)");
+            var userShared = FromConfig("UserSharedFolders", userFolders, "Shared");
+            var userApp = FromConfig("UserAppFolders", userFolders, "$(*AppAssemblyName)_$(*AppGuid)");
+            UserSharedFolders = userShared;
+            UserAppFolders = userApp;
+            AllSharedFolders = AllOrUser("AllSharedFolders", FromConfig("AllSharedFolders", allFolders, "Shared", true), userShared);
+            AllAppFolders = AllOrUser("AllAppFolders", FromConfig("AllAppFolders", allFolders, "$(*AppAssemblyName)_$(*AppGuid)", true), userApp);
+        }
 
+        /// <summary>
+        /// Use the all user folders if they all exist, else fall back to the user folders (ex: on Linux only root can create folders in "/var/lib")
+        /// </summary>
+        static IReadOnlyList<String> AllOrUser(String name, String[] all, IReadOnlyList<String> user)
+        {
+            foreach (var x in all)
+            {
+                if (Directory.Exists(x))
+                    continue;
+                Console.WriteLine("Folders - Warning: The folder " + x.ToQuoted() + " couldn't be created, using " + String.Join(Path.PathSeparator, user).ToQuoted() + " for " + name + " (data isn't shared with other users)!");
+                if (OperatingSystem.IsLinux())
+                    Console.WriteLine("Folders - Warning: Run the application once as root, or create the folder using: sudo mkdir -p " + Path.GetDirectoryName(x).ToQuoted() + " && sudo chmod 1777 " + Path.GetDirectoryName(x).ToQuoted());
+                return user;
+            }
+            return all;
+        }
+
+        /// <summary>
+        /// On Linux the all user root folders (ex: "/var/lib/SysWeaver") must allow anyone to create entries (application folders),
+        /// they get rwx for everyone and the sticky bit (like "/tmp": users can't delete or rename each others entries).
+        /// The content (ex: the "Shared" and application folders) is made accessible to everyone by <see cref="Validate(string[], bool)"/>.
+        /// Only root (or the owner) can create or change the folder, failures are ignored (see <see cref="AllOrUser(string, string[], IReadOnlyList{string})"/>).
+        /// </summary>
+        [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+        static void SetupLinuxRoots(String[] roots)
+        {
+            const UnixFileMode all = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute
+                | UnixFileMode.StickyBit;
+            foreach (var r in roots)
+            {
+                try
+                {
+                    var fp = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(r));
+                    if (PathExt.EnsureFolderExist(fp) != null)
+                        continue;
+                    var di = new DirectoryInfo(fp);
+                    if (di.LinkTarget != null)
+                        continue;
+                    var m = di.UnixFileMode;
+                    if ((m & all) != all)
+                        di.UnixFileMode = m | all;
+                }
+                catch
+                {
+                }
+            }
         }
 
 

@@ -5,6 +5,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 
@@ -70,6 +72,10 @@ namespace SysWeaver
     /// Only the top level properties of the root JSON object are used. Comments and trailing commas are allowed.
     /// Keys are case insensitive. Supported values are strings, numbers, booleans, null and arrays of those.
     /// Parse errors are written to the console and otherwise ignored (the file or key is skipped).
+    /// The system wide files (in "[CommonApplicationData]/SysWeaver", see <see cref="PathTemplate.CommonApplicationData"/>) are readable by everyone but only writable by admins / root:
+    /// missing templates are only created by privileged processes (<see cref="Environment.IsPrivilegedProcess"/>, other processes just use the defaults),
+    /// and privileged processes restrict existing files (Windows: owner Administrators, no inherited rules, read for Everyone; Linux: mode 0644)
+    /// and remove Everyone rules that older versions added to the folder (Windows).
     /// Typical keys read through this class are folder settings (see <see cref="Folders"/>), ex: "AllFolders", "UserFolders", "KeyFolder", "FileHashFolders".
     /// </remarks>
     public static class Config
@@ -91,6 +97,8 @@ namespace SysWeaver
                 GetProperty = x => null;
             }
 
+            if (Environment.IsPrivilegedProcess)
+                RemoveEveryoneFromSystemConfigFolder();
             var keys = new Dictionary<string, Tuple<JsonValueKind, Object>>(StringComparer.Ordinal);
             //  System wide default config
             ReadConfig(keys, "DefaultSystemConfig.json", "This configuration is the defaults for all SysWeaver applications running on this system.\nThese settings can be overriden by the application in their '{exe}.Config.json' file.", typeof(DefaultConfig));
@@ -104,6 +112,110 @@ namespace SysWeaver
 
         static readonly Func<FieldInfo, String> GetField;
         static readonly Func<PropertyInfo, String> GetProperty;
+
+        /// <summary>
+        /// The folder of the system wide config files, "[CommonApplicationData]/SysWeaver"
+        /// </summary>
+        static readonly String SystemConfigFolder = Path.Combine(PathTemplate.CommonApplicationData, "SysWeaver");
+
+#pragma warning disable CA1416 // Guarded by OperatingSystem checks
+
+        /// <summary>
+        /// Make a system wide config file readable by everyone but only writable by admins / root.
+        /// Windows: owned by Administrators, no inherited rules, full control for SYSTEM and Administrators, read for Everyone.
+        /// Linux: mode 0644 (files written by root are owned by root).
+        /// Only changes the file if needed, failures are ignored (the process isn't allowed to change it).
+        /// </summary>
+        /// <param name="file">The config file</param>
+        static void RestrictToAdmins(String file)
+        {
+            try
+            {
+                if (OperatingSystem.IsWindows())
+                {
+                    var fi = new FileInfo(file);
+                    var admins = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+                    var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+                    var everyone = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
+                    if (IsRestricted(fi.GetAccessControl(), admins, system))
+                        return;
+                    var s = new FileSecurity();
+                    s.SetOwner(admins);
+                    s.SetAccessRuleProtection(true, false);
+                    s.AddAccessRule(new FileSystemAccessRule(system, FileSystemRights.FullControl, AccessControlType.Allow));
+                    s.AddAccessRule(new FileSystemAccessRule(admins, FileSystemRights.FullControl, AccessControlType.Allow));
+                    s.AddAccessRule(new FileSystemAccessRule(everyone, FileSystemRights.ReadAndExecute | FileSystemRights.Synchronize, AccessControlType.Allow));
+                    fi.SetAccessControl(s);
+                    return;
+                }
+                if (OperatingSystem.IsLinux())
+                {
+                    const UnixFileMode mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
+                    if (File.GetUnixFileMode(file) != mode)
+                        File.SetUnixFileMode(file, mode);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        const FileSystemRights WriteRights = FileSystemRights.Write | FileSystemRights.Delete | FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership;
+
+        /// <summary>
+        /// True if the file is owned by admins / SYSTEM, doesn't inherit rules and only admins / SYSTEM may change it
+        /// </summary>
+        static bool IsRestricted(FileSecurity s, SecurityIdentifier admins, SecurityIdentifier system)
+        {
+            if (!s.AreAccessRulesProtected)
+                return false;
+            var owner = s.GetOwner(typeof(SecurityIdentifier));
+            if ((owner != admins) && (owner != system))
+                return false;
+            foreach (FileSystemAccessRule x in s.GetAccessRules(true, true, typeof(SecurityIdentifier)))
+            {
+                if (x.AccessControlType != AccessControlType.Allow)
+                    continue;
+                if ((x.FileSystemRights & WriteRights) == 0)
+                    continue;
+                var id = x.IdentityReference;
+                if ((id != admins) && (id != system))
+                    return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Older versions gave Everyone full control of the system config folder ("C:\ProgramData\SysWeaver") itself,
+        /// so anyone could delete (and recreate) the system wide config files, remove those rules (Windows only).
+        /// The data folders in it (ex: "Shared") get their own rules (see <see cref="Folders"/>).
+        /// </summary>
+        static void RemoveEveryoneFromSystemConfigFolder()
+        {
+            try
+            {
+                if (!OperatingSystem.IsWindows())
+                    return;
+                var di = new DirectoryInfo(SystemConfigFolder);
+                if (!di.Exists)
+                    return;
+                var everyone = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
+                var s = di.GetAccessControl();
+                bool found = false;
+                foreach (FileSystemAccessRule x in s.GetAccessRules(true, false, typeof(SecurityIdentifier)))
+                    if (x.IdentityReference == everyone)
+                        found = true;
+                if (!found)
+                    return;
+                s.PurgeAccessRules(everyone);
+                di.SetAccessControl(s);
+            }
+            catch
+            {
+            }
+        }
+
+#pragma warning restore CA1416
 
 
         static readonly ConcurrentDictionary<Type, String> TypeComments = new ConcurrentDictionary<Type, string>();
@@ -192,14 +304,16 @@ namespace SysWeaver
         {
             try
             {
-                if (!Path.IsPathRooted(name))
-                {
-                    var appData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-                    name = Path.Combine(appData, "SysWeaver", name);
-                }
+                //  System wide config files may only be written by admin / root (but read by everyone)
+                bool isSystem = !Path.IsPathRooted(name);
+                if (isSystem)
+                    name = Path.Combine(SystemConfigFolder, name);
                 if (!File.Exists(name))
                 {
                     if (comment == null)
+                        return;
+                    //  The generated file only contains defaults, skip it if the process isn't allowed to create system wide config files
+                    if (isSystem && !Environment.IsPrivilegedProcess)
                         return;
                     comment = String.Concat("/*\n * ", String.Join("\n * ", comment.Split('\n', StringSplitOptions.TrimEntries)), "\n*/\n\n");
                     String s;
@@ -320,15 +434,21 @@ namespace SysWeaver
                     }
                     try
                     {
-                        var dir = Path.GetDirectoryName(name);
-                        PathExt.CreateDataFolder(dir);
+                        //  The folder isn't made accessible to everyone (config files must not be writable by everyone)
+                        if (PathExt.EnsureFolderExist(Path.GetDirectoryName(name)) != null)
+                            return;
                         File.WriteAllText(name, s);
+                        if (isSystem)
+                            RestrictToAdmins(name);
                     }
                     catch
                     {
                     }
                     return;
                 }
+                //  Fix the permissions of existing files (ex: written by older versions, that made them writable by everyone)
+                if (isSystem && Environment.IsPrivilegedProcess)
+                    RestrictToAdmins(name);
                 var data = FileExt.ReadText(name);
                 var options = new JsonDocumentOptions
                 {
