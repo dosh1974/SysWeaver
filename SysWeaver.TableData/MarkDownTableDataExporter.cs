@@ -15,7 +15,7 @@ namespace SysWeaver.Data
     /// <remarks>
     /// Values are Markdown escaped, line breaks in values are replaced with &lt;br&gt;.
     /// Numeric columns are right aligned, columns without <see cref="TableDataColumnProps.WordWrap"/> use non breaking spaces.
-    /// Hidden columns (<see cref="TableDataColumnProps.Hide"/>) are omitted. Columns with a "Url" format are rendered as links.
+    /// Hidden columns (<see cref="TableDataColumnProps.Hide"/>) are omitted. Columns with a "Url" format are rendered as links (unless the link uses an unsafe scheme, see <see cref="TableDataExporterTools.IsSafeLink(string)"/>).
     /// The exporter is stateless and thread safe.
     /// </remarks>
     public sealed class MarkDownTableDataExporter : ITableDataExporter
@@ -94,6 +94,8 @@ namespace SysWeaver.Data
                     link = link.Substring(1);
                     break;
             }
+            if (!TableDataExporterTools.IsSafeLink(link))
+                return text;
             var title = String.Format(TableDataExporterTools.GetIndexed(t, 3, "Click to open \"{3}\"."), value, nextValue, text, link);
             if (!String.IsNullOrEmpty(title))
                 return String.Concat((Char)1, '[', StringTools.EscapeMD(text, true), "](", StringTools.EscapeMD(link), " \"", StringTools.EscapeMD(title).Replace("\"", "\\\""), "\")");

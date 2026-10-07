@@ -298,6 +298,64 @@ namespace SysWeaver
             return n;
         }
 
+        /// <summary>
+        /// Make a DateTime round to the nearest interval (round half up)
+        /// </summary>
+        /// <param name="value">The time stamp</param>
+        /// <param name="interval">The interval to round to</param>
+        /// <returns>A new time stamp (with the same kind)</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The resulting time stamp is outside of the range of a DateTime</exception>
+        public static DateTime Round(this DateTime value, TimeSpan interval)
+        {
+#if DEBUG
+            if (interval <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be greater than zero.");
+#endif//DEBUG
+            var ticks = value.Ticks;
+            var intervalTicks = interval.Ticks;
+            var roundedTicks = ((ticks + (intervalTicks >> 1)) / intervalTicks) * intervalTicks;
+            return new DateTime(roundedTicks, value.Kind);
+        }
+
+        /// <summary>
+        /// Make a DateTime round down to the nearest interval (floor)
+        /// </summary>
+        /// <param name="value">The time stamp</param>
+        /// <param name="interval">The interval to round to</param>
+        /// <returns>A new time stamp (with the same kind)</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The resulting time stamp is outside of the range of a DateTime</exception>
+        public static DateTime Floor(this DateTime value, TimeSpan interval)
+        {
+#if DEBUG
+            if (interval <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be greater than zero.");
+#endif//DEBUG
+            var ticks = value.Ticks;
+            var intervalTicks = interval.Ticks;
+            var roundedTicks = (ticks / intervalTicks) * intervalTicks;
+            return new DateTime(roundedTicks, value.Kind);
+        }
+
+        /// <summary>
+        /// Make a DateTime round up to the nearest interval (ceiling)
+        /// </summary>
+        /// <param name="value">The time stamp</param>
+        /// <param name="interval">The interval to round to</param>
+        /// <returns>A new time stamp (with the same kind)</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The resulting time stamp is outside of the range of a DateTime</exception>
+        public static DateTime Ceiling(this DateTime value, TimeSpan interval)
+        {
+#if DEBUG
+            if (interval <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException(nameof(interval), "Interval must be greater than zero.");
+#endif//DEBUG
+            var ticks = value.Ticks;
+            var intervalTicks = interval.Ticks;
+            var roundedTicks = ((ticks + intervalTicks - 1) / intervalTicks) * intervalTicks;
+            return new DateTime(roundedTicks, value.Kind);
+        }
+
+
     }
 
 }

@@ -85,7 +85,7 @@ namespace SysWeaver.Net
         /// <param name="lastModified">The last modified time (null to use the last write time of the assembly)</param>
         /// <param name="etag">The etag to use for all resources (null to derive it from the last modified time)</param>
         /// <param name="auth">Required authorization tokens, null = no auth required, "" = auth required but no specific tokens, or comma separated list of required security tokens</param>
-        /// <param name="doAdd">Optional function to determine if a resource should be included or not (it may also rename the resource, but the rename is discarded if <paramref name="rootNamespace"/> is used)</param>
+        /// <param name="doAdd">Optional function to determine if a resource should be included or not (it may also rename the resource, the root namespace is stripped from the new name if it starts with it)</param>
         /// <remarks>
         /// Resources with a compression extension (ex: "app.js.br") are served both as is and as the uncompressed name ("app.js", with the data marked as pre-compressed).
         /// The <see cref="ResourceOrderAttribute"/> and <see cref="ReplaceEmbeddedFilesAttribute"/> of the assembly control which assembly wins if several assemblies supply the same url.
@@ -110,9 +110,12 @@ namespace SysWeaver.Net
                 }
                 if (rootNamespace != null)
                 {
-                    if (!x.StartsWith(rootNamespace, StringComparison.Ordinal))
+                    var nsl = rootNamespace.Length;
+                    if ((x.Length <= nsl) || (x[nsl] != '.') || (!x.StartsWith(rootNamespace, StringComparison.Ordinal)))
                         continue;
-                    name = x.Substring(rootNamespace.Length + 1);
+                    //  Strip the namespace from the (possibly renamed) name
+                    if ((name.Length > nsl) && (name[nsl] == '.') && name.StartsWith(rootNamespace, StringComparison.Ordinal))
+                        name = name.Substring(nsl + 1);
                 }
                 var s = name.Split('.');
                 var sl = s.Length;

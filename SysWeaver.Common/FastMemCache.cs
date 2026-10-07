@@ -20,8 +20,9 @@ namespace SysWeaver
     /// <remarks>
     /// The expiration time of an item is computed when the item is added / updated, reading an item doesn't extend its life time.
     /// Expired items are never returned, they are removed (pruned) from the cache on any write (or when <see cref="Prune"/> is called).
-    /// Pruning walks a queue in insertion order and stops at the first item that hasn't expired, so it works best when the expiration times are (roughly) increasing,
-    /// like with a fixed duration.
+    /// With a fixed duration, pruning walks a queue in insertion order (the expiration times are increasing) and stops at the first item that hasn't expired.
+    /// With an expiration function, the expiration times are kept in a priority queue (min-heap), so items are pruned in expiration order (a long lived item doesn't delay the pruning of other items).
+    /// Items that never expire (<see cref="DateTime.MaxValue"/>) are not tracked for pruning at all.
     /// Updates of the same key are serialized using a per key spin lock (a lock entry in a concurrent dictionary), so a value factory is only executed once for a key at the same time.
     /// The synchronous methods hold the key lock while the value factory runs (other callers for the key spin / sleep).
     /// The async methods only hold the key lock while starting an update: a running update is a pending entry, callers with waitUntilReady = true await it (without blocking a thread),
@@ -42,7 +43,7 @@ namespace SysWeaver
         /// A very large duration (like <see cref="TimeSpan.MaxValue"/>) means that items never expire.</param>
         /// <param name="comparer">An optional key comparer, null to use the default comparer</param>
         public FastMemCache(TimeSpan timeout, IEqualityComparer<K> comparer = null)
-            : this(GetTimeoutFunc(timeout), comparer)
+            : this(GetTimeoutFunc(timeout), comparer, true)
         {
         }
 
@@ -70,13 +71,27 @@ namespace SysWeaver
         /// </summary>
         /// <param name="getExpirationTimeUtc">A function that gets the expiration time (as UTC) of a value, called every time a value is added or updated (while holding the key lock).
         /// Return <see cref="DateTime.MaxValue"/> for items that should never expire.
-        /// Note that an item that expires later than items added after it delays the pruning of those items (see <see cref="Prune"/>).</param>
+        /// The expiration times doesn't have to be increasing, items are pruned in expiration order (see <see cref="Prune"/>).</param>
         /// <param name="comparer">An optional key comparer, null to use the default comparer</param>
         /// <exception cref="ArgumentNullException"><paramref name="getExpirationTimeUtc"/> is null</exception>
         public FastMemCache(Func<V, DateTime> getExpirationTimeUtc, IEqualityComparer<K> comparer = null)
+            : this(getExpirationTimeUtc, comparer, false)
+        {
+        }
+
+        /// <summary>
+        /// Creates a cache
+        /// </summary>
+        /// <param name="getExpirationTimeUtc">A function that gets the expiration time (as UTC) of a value</param>
+        /// <param name="comparer">An optional key comparer, null to use the default comparer</param>
+        /// <param name="increasing">True if the expiration times are increasing in insertion order (fixed duration), then the cheaper (lock free) FIFO queue is used for pruning,
+        /// else a priority queue is used</param>
+        FastMemCache(Func<V, DateTime> getExpirationTimeUtc, IEqualityComparer<K> comparer, bool increasing)
         {
             ArgumentNullException.ThrowIfNull(getExpirationTimeUtc);
             GetExpirationDate = getExpirationTimeUtc;
+            if (!increasing)
+                H = new PriorityQueue<ValueTuple<DateTime, K>, DateTime>();
             if (comparer == null)
             {
                 C = new ConcurrentDictionary<K, (DateTime, V, Task<V>)>();
@@ -104,7 +119,7 @@ namespace SysWeaver
             {
                 var val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                Track(val.Item1, key);
             }
             finally
             {
@@ -135,7 +150,7 @@ namespace SysWeaver
                         return false;
                     c[key] = val;
                 }
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                Track(val.Item1, key);
                 return true;
             }
             finally
@@ -215,7 +230,7 @@ namespace SysWeaver
                 var value = func(key, val.Item2);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                Track(val.Item1, key);
                 return val.Item2;
             }
             finally
@@ -269,7 +284,7 @@ namespace SysWeaver
                 var value = func(key, val.Item2, arg);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                Track(val.Item1, key);
                 return val.Item2;
             }
             finally
@@ -326,7 +341,7 @@ namespace SysWeaver
                 var value = func(key, val.Item2, arg0, arg1);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                Track(val.Item1, key);
                 return val.Item2;
             }
             finally
@@ -616,7 +631,7 @@ namespace SysWeaver
                 var value = func(key);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                Track(val.Item1, key);
                 return val.Item2;
             }
             finally
@@ -669,7 +684,7 @@ namespace SysWeaver
                 var value = func(key, arg);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                Track(val.Item1, key);
                 return val.Item2;
             }
             finally
@@ -725,7 +740,7 @@ namespace SysWeaver
                 var value = func(key, arg0, arg1);
                 val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
                 c[key] = val;
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                Track(val.Item1, key);
                 return val.Item2;
             }
             finally
@@ -971,18 +986,26 @@ namespace SysWeaver
         /// </summary>
         /// <remarks>
         /// Pruning is performed automatically after every write.
-        /// Items are pruned in insertion order, pruning stops at the first item (in insertion order) that hasn't expired yet.
+        /// With a fixed duration, items are pruned in insertion order (same as expiration order), pruning stops at the first item that hasn't expired yet.
+        /// With an expiration function, items are pruned in expiration order (using a priority queue).
         /// Items that are locked (being updated) at the time of the prune are pruned later.
         /// </remarks>
         public void Prune()
         {
-            var q = Q;
-            if (!q.TryPeek(out var v))
-                return;
-            var exp = DateTime.UtcNow;
-            if (exp < v.Item1)
-                return;
-            InternalPrune(exp);
+            var now = DateTime.UtcNow;
+            if (H == null)
+            {
+                if (!Q.TryPeek(out var v))
+                    return;
+                if (now < v.Item1)
+                    return;
+            }
+            else
+            {
+                if (now.Ticks < Volatile.Read(ref NextExpiration))
+                    return;
+            }
+            InternalPrune(now);
         }
 
         /// <summary>
@@ -992,38 +1015,138 @@ namespace SysWeaver
         void InternalPrune(DateTime exp)
         {
             var q = Q;
-            var c = C;
-            var locks = Locks;
             List<ValueTuple<DateTime, K>> busy = null;
             lock (q)
             {
+                var h = H;
+                if (h == null)
+                {
+                    for (; ; )
+                    {
+                        if (!q.TryPeek(out var v))
+                            break;
+                        if (exp < v.Item1)
+                            break;
+                        q.TryDequeue(out v);
+                        if (!TryRemoveTracked(v))
+                            (busy ??= new List<ValueTuple<DateTime, K>>()).Add(v);
+                    }
+                    //  Try again later
+                    if (busy != null)
+                    {
+                        foreach (var v in busy)
+                            q.Enqueue(v);
+                    }
+                    return;
+                }
                 for (; ; )
                 {
-                    if (!q.TryPeek(out var v))
+                    if (!h.TryPeek(out var v, out var p))
                         break;
-                    if (exp < v.Item1)
+                    if (exp < p)
                         break;
-                    q.TryDequeue(out v);
-                    var key = v.Item2;
-                    //  Never wait for a key lock here, the key could be locked by this thread (a value factory using the cache) or by a long running (async) value factory
-                    if (!locks.TryAdd(key, 0))
-                    {
+                    h.Dequeue();
+                    if (!TryRemoveTracked(v))
                         (busy ??= new List<ValueTuple<DateTime, K>>()).Add(v);
-                        continue;
-                    }
-                    if (c.TryGetValue(key, out var val))
-                    {
-                        if (val.Item1 == v.Item1)
-                            c.TryRemove(key, out var _);
-                    }
-                    locks.TryRemove(key, out var _);
                 }
-                //  Try again later
+                //  Try again a bit later (else every write would retry while the key is locked)
                 if (busy != null)
                 {
+                    var retry = exp + BusyRetryDelay;
                     foreach (var v in busy)
-                        q.Enqueue(v);
+                        h.Enqueue(v, retry);
                 }
+                UpdateNextExpiration(h);
+            }
+        }
+
+        /// <summary>
+        /// Remove a tracked item from the cache, if it haven't been updated since it was tracked (the expiration time is the same)
+        /// </summary>
+        /// <param name="v">The expiration time and key of the tracked item</param>
+        /// <returns>False if the key is locked (being updated), true if it was handled (removed or already updated / removed)</returns>
+        bool TryRemoveTracked(ValueTuple<DateTime, K> v)
+        {
+            var key = v.Item2;
+            var locks = Locks;
+            //  Never wait for a key lock here, the key could be locked by this thread (a value factory using the cache) or by a long running (async) value factory
+            if (!locks.TryAdd(key, 0))
+                return false;
+            var c = C;
+            if (c.TryGetValue(key, out var val))
+            {
+                if (val.Item1 == v.Item1)
+                    c.TryRemove(key, out var _);
+            }
+            locks.TryRemove(key, out var _);
+            return true;
+        }
+
+        /// <summary>
+        /// Track an item for pruning (items that never expires are not tracked)
+        /// </summary>
+        /// <param name="exp">The expiration time of the item</param>
+        /// <param name="key">The key of the item</param>
+        void Track(DateTime exp, K key)
+        {
+            if (exp == DateTime.MaxValue)
+                return;
+            var h = H;
+            if (h == null)
+            {
+                Q.Enqueue(ValueTuple.Create(exp, key));
+                return;
+            }
+            lock (Q)
+            {
+                h.Enqueue(ValueTuple.Create(exp, key), exp);
+                if (h.Count >= HeapLimit)
+                {
+                    //  The heap contains entries of items that have been updated / removed since, rebuild it from the cache to keep it's size bounded (amortized O(1) per write)
+                    var items = new List<(ValueTuple<DateTime, K>, DateTime)>();
+                    foreach (var kv in C)
+                    {
+                        var e = kv.Value;
+                        if ((e.Item3 != null) || (e.Item1 == DateTime.MaxValue))
+                            continue;
+                        items.Add((ValueTuple.Create(e.Item1, kv.Key), e.Item1));
+                    }
+                    //  Writes that happens concurrently are tracked after this (we hold the lock), so nothing is lost (duplicates are harmless)
+                    h.Clear();
+                    h.EnqueueRange(items);
+                    HeapLimit = Math.Max(MinHeapLimit, h.Count * 2);
+                    UpdateNextExpiration(h);
+                    return;
+                }
+                if (exp.Ticks < NextExpiration)
+                    Volatile.Write(ref NextExpiration, exp.Ticks);
+            }
+        }
+
+        /// <summary>
+        /// Update the next expiration time (the lock must be held)
+        /// </summary>
+        /// <param name="h">The priority queue</param>
+        void UpdateNextExpiration(PriorityQueue<ValueTuple<DateTime, K>, DateTime> h)
+            => Volatile.Write(ref NextExpiration, h.TryPeek(out var _, out var p) ? p.Ticks : long.MaxValue);
+
+        /// <summary>
+        /// Remove items that never expires (they are not tracked for pruning), unless they are locked (being updated) or pending (the lock must be held)
+        /// </summary>
+        void ClearUntracked()
+        {
+            var c = C;
+            var locks = Locks;
+            foreach (var kv in c)
+            {
+                var e = kv.Value;
+                if ((e.Item1 != DateTime.MaxValue) || (e.Item3 != null))
+                    continue;
+                var key = kv.Key;
+                if (!locks.TryAdd(key, 0))
+                    continue;
+                c.TryRemove(kv);
+                locks.TryRemove(key, out var _);
             }
         }
 
@@ -1034,23 +1157,22 @@ namespace SysWeaver
         /// <param name="key">The key of the item to remove</param>
         /// <returns>True if an item was removed (expired items that haven't been pruned yet are also removed), false if there was no item with the key</returns>
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is null</exception>
-        /// <remarks>If an item exists, waits for any ongoing update of the key (must not be called for the same key from within a value factory, dead lock).
-        /// If no item exists, false is returned immediately (an ongoing update will add its value afterwards).</remarks>
+        /// <remarks>Waits for any ongoing synchronous update of the key and removes it's value too, so a value created by an update that started before the remove isn't kept (must not be called for the same key from within a value factory, dead lock).
+        /// An ongoing asynchronous update is represented by a pending entry, it's removed and the result of the update is not cached.</remarks>
         public bool Remove(K key)
         {
             var c = C;
-            if (!c.TryRemove(key, out var _))
-                return false;
+            var removed = c.TryRemove(key, out var _);
             Lock(key);
             try
             {
-                c.TryRemove(key, out _);
+                removed |= c.TryRemove(key, out _);
             }
             finally
             {
                 Unlock(key);
             }
-            return true;
+            return removed;
         }
 
 
@@ -1064,35 +1186,43 @@ namespace SysWeaver
         public void Clear()
         {
             var q = Q;
-            var c = C;
-            var locks = Locks;
             List<ValueTuple<DateTime, K>> busy = null;
             lock (q)
             {
-                for (; ; )
+                var h = H;
+                if (h == null)
                 {
-                    if (!q.TryDequeue(out var v))
-                        break;
-                    var key = v.Item2;
-                    //  Never wait for a key lock here, the key could be locked by this thread (a value factory using the cache) or by a long running (async) value factory
-                    if (!locks.TryAdd(key, 0))
+                    for (; ; )
                     {
-                        (busy ??= new List<ValueTuple<DateTime, K>>()).Add(v);
-                        continue;
+                        if (!q.TryDequeue(out var v))
+                            break;
+                        if (!TryRemoveTracked(v))
+                            (busy ??= new List<ValueTuple<DateTime, K>>()).Add(v);
                     }
-                    if (c.TryGetValue(key, out var val))
+                    //  Keys that are being updated are kept (the update will replace the value anyway), keep them in the queue so that they are pruned later
+                    if (busy != null)
                     {
-                        if (val.Item1 == v.Item1)
-                            c.TryRemove(key, out var _);
+                        foreach (var v in busy)
+                            q.Enqueue(v);
                     }
-                    locks.TryRemove(key, out var _);
                 }
-                //  Keys that are being updated are kept (the update will replace the value anyway), keep them in the queue so that they are pruned later
-                if (busy != null)
+                else
                 {
-                    foreach (var v in busy)
-                        q.Enqueue(v);
+                    while (h.TryDequeue(out var v, out var _))
+                    {
+                        if (!TryRemoveTracked(v))
+                            (busy ??= new List<ValueTuple<DateTime, K>>()).Add(v);
+                    }
+                    //  Keys that are being updated are kept (the update will replace the value anyway), keep them in the queue so that they are pruned later
+                    if (busy != null)
+                    {
+                        foreach (var v in busy)
+                            h.Enqueue(v, v.Item1);
+                    }
+                    UpdateNextExpiration(h);
                 }
+                //  Items that never expires are not tracked
+                ClearUntracked();
             }
         }
 
@@ -1326,7 +1456,7 @@ namespace SysWeaver
         {
             var val = ValueTuple.Create(GetExpirationDate(value), value, (Task<V>)null);
             C[key] = val;
-            Q.Enqueue(ValueTuple.Create(val.Item1, key));
+            Track(val.Item1, key);
         }
 
         /// <summary>
@@ -1352,14 +1482,18 @@ namespace SysWeaver
             catch (Exception ex)
             {
                 if (hadPrevious)
-                    C.TryUpdate(key, previous, pending);
+                {
+                    //  The previous entry may have been dropped from the prune queue (while the pending entry was cached), track it again
+                    if (C.TryUpdate(key, previous, pending))
+                        Track(previous.Item1, key);
+                }
                 else
                     C.TryRemove(new KeyValuePair<K, ValueTuple<DateTime, V, Task<V>>>(key, pending));
                 tcs.SetException(ex);
                 return;
             }
             if (C.TryUpdate(key, val, pending))
-                Q.Enqueue(ValueTuple.Create(val.Item1, key));
+                Track(val.Item1, key);
             tcs.SetResult(v);
         }
 
@@ -1436,7 +1570,36 @@ namespace SysWeaver
 
         readonly ConcurrentDictionary<K, int> Locks;
         readonly ConcurrentDictionary<K, ValueTuple<DateTime, V, Task<V>>> C;
+        /// <summary>
+        /// The prune queue (expiration time and key in insertion order) when the expiration times are increasing (fixed duration), also used as the prune lock
+        /// </summary>
         readonly ConcurrentQueue<ValueTuple<DateTime, K>> Q = new ();
+
+        /// <summary>
+        /// The prune queue (expiration time and key ordered by expiration time) when an expiration function is used (null if the expiration times are increasing).
+        /// Access requires the lock (Q).
+        /// </summary>
+        readonly PriorityQueue<ValueTuple<DateTime, K>, DateTime> H;
+
+        /// <summary>
+        /// The ticks of the earliest prune time in <see cref="H"/> (long.MaxValue if empty), so that <see cref="Prune"/> can check without taking the lock
+        /// </summary>
+        long NextExpiration = long.MaxValue;
+
+        /// <summary>
+        /// When <see cref="H"/> reaches this size it's rebuilt from the cache (removing entries of items that have been updated or removed since they were tracked)
+        /// </summary>
+        int HeapLimit = MinHeapLimit;
+
+        /// <summary>
+        /// The minimum size of <see cref="H"/> before it's rebuilt
+        /// </summary>
+        const int MinHeapLimit = 1024;
+
+        /// <summary>
+        /// The time to wait before trying to prune an expired item that was locked (being updated) again
+        /// </summary>
+        static readonly TimeSpan BusyRetryDelay = TimeSpan.FromMilliseconds(100);
 
         readonly Func<V, DateTime> GetExpirationDate;
 
@@ -1450,9 +1613,9 @@ namespace SysWeaver
         /// Enumerate all items in the cache (a moment in time snapshot is not guaranteed)
         /// </summary>
         /// <returns>An enumerator of (expiration time, key, value) tuples.
-        /// Includes expired items that haven't been pruned yet and items being created in the background (expiration time is <see cref="DateTime.MaxValue"/> and the value is default)</returns>
+        /// Includes expired items that haven't been pruned yet, items that are being created (pending entries without a value) are skipped</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public IEnumerator<(DateTime, K, V)> GetEnumerator() => C.Select(x => (x.Value.Item1, x.Key, x.Value.Item2)).GetEnumerator();
+        public IEnumerator<(DateTime, K, V)> GetEnumerator() => C.Where(x => x.Value.Item3 == null).Select(x => (x.Value.Item1, x.Key, x.Value.Item2)).GetEnumerator();
 
         /// <inheritdoc/>
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

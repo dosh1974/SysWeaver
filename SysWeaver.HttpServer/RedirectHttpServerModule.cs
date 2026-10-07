@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -19,7 +20,7 @@ namespace SysWeaver.Net
     /// <remarks>
     /// Redirections come from <see cref="RedirectHttpServerModuleParams.Redirections"/> or from a monitored text file (<see cref="RedirectHttpServerModuleParams.Filename"/>).
     /// If no redirections are configured (and no file is used), <see cref="HttpRedirection.HttpToHttps"/> is used.
-    /// A '*' in a redirection is replaced with the host of the request, the resolved redirections are cached per host.
+    /// A '*' in a redirection is replaced with the bare host name of the request (ex: "example.com") and default ports are removed (request urls never contain them), the resolved redirections are cached per host.
     /// The redirect response is written directly (<see cref="HttpServerTools.AlreadyHandled"/>), so no auth checks are made.
     /// </remarks>
     public sealed class RedirectHttpServerModule : IHttpServerModule, IDisposable
@@ -284,11 +285,11 @@ namespace SysWeaver.Net
 
         static readonly IReadOnlyDictionary<String, Func<String, String>> ExternalInfos = new Dictionary<string, Func<string, string>>(StringComparer.OrdinalIgnoreCase)
         {
-            { "country", v => "https://countrycode.org/" + v },
+            { "country", v => "https://countrycode.org/" + Uri.EscapeDataString(v) },
             { "currency", v => CurrencyLinks.TryGetValue(v.FastToLower(), out var x) ? ("https://www.xe.com/currency/" + x) : null },
-            { "useragent", v => "https://gs.statcounter.com/detect?useragent=" + v },
-            { "ip", v => "https://ip.me/ip/" + v },
-            { "mac", v => "https://maclookup.app/search/result?mac=" + v },
+            { "useragent", v => "https://gs.statcounter.com/detect?useragent=" + Uri.EscapeDataString(v) },
+            { "ip", v => "https://ip.me/ip/" + Uri.EscapeDataString(v).Replace("%3A", ":") },
+            { "mac", v => "https://maclookup.app/search/result?mac=" + Uri.EscapeDataString(v) },
         }.Freeze();
 
         /// <summary>
@@ -296,7 +297,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="context">The request, the local url must start with <see cref="TableDataConsts.ExternalInfoPath"/></param>
         /// <returns><see cref="HttpServerTools.AlreadyHandled"/> if a redirect was written, else null</returns>
-        /// <remarks>The value is appended to the external url as is (it's not url encoded).</remarks>
+        /// <remarks>The (decoded) value is url encoded before it's appended to the external url.</remarks>
         public IHttpRequestHandler ExternalInfoHandler(HttpServerRequest context)
         {
             var lp = context.LocalUrl.Substring(TableDataConsts.ExternalInfoPath.Length);
@@ -313,7 +314,209 @@ namespace SysWeaver.Net
             return HttpServerTools.AlreadyHandled;
         }
 
-        static readonly Char[] HostEnd = ['/', ':'];
+        const String IndexFile = "index.html";
+
+        static readonly Char[] HostEnd = ['/', ':', '?', '#'];
+        static readonly Char[] AuthorityEnd = ['/', '?', '#'];
+
+        /// <summary>
+        /// Get the bare host name of an absolute url (the part between "://" and the port / path), ex: "example.com" for "http://example.com:8080/a".
+        /// IPv6 hosts are returned with brackets (ex: "[::1]").
+        /// </summary>
+        static String GetHostName(String url)
+        {
+            var start = url.IndexOf("://", StringComparison.Ordinal);
+            if (start < 0)
+                return String.Empty;
+            start += 3;
+            var ul = url.Length;
+            int end;
+            if ((start < ul) && (url[start] == '['))
+            {
+                end = url.IndexOf(']', start);
+                end = end < 0 ? ul : end + 1;
+            }
+            else
+            {
+                end = url.IndexOfAny(HostEnd, start);
+                if (end < 0)
+                    end = ul;
+            }
+            return url.Substring(start, end - start);
+        }
+
+        /// <summary>
+        /// Remove an explicit default port (":80" for http, ":443" for https) from an absolute url, since request urls never contain a default port.
+        /// </summary>
+        static String RemoveDefaultPort(String url)
+        {
+            String port;
+            int start;
+            if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            {
+                port = ":80";
+                start = 7;
+            }
+            else if (url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                port = ":443";
+                start = 8;
+            }
+            else
+                return url;
+            var end = url.IndexOfAny(AuthorityEnd, start);
+            if (end < 0)
+                end = url.Length;
+            var pl = port.Length;
+            if (((end - start) <= pl) || (String.CompareOrdinal(url, end - pl, port, 0, pl) != 0))
+                return url;
+            return String.Concat(url.AsSpan(0, end - pl), url.AsSpan(end));
+        }
+
+        /// <summary>
+        /// Chars that can be copied as is to a Location header (printable ASCII that is valid in an url, '%' is handled separately).
+        /// </summary>
+        static readonly SearchValues<Char> SafeLocationChars = SearchValues.Create(
+            Enumerable.Range(0x21, 0x7f - 0x21).Select(x => (Char)x).Where(x => "%\"<>\\^`{|}".IndexOf(x) < 0).ToArray());
+
+        const String HexChars = "0123456789ABCDEF";
+
+        /// <summary>
+        /// True if there is a valid "%XX" escape at the given index
+        /// </summary>
+        static bool IsEscape(ReadOnlySpan<Char> s, int i)
+            => ((i + 2) < s.Length) && Char.IsAsciiHexDigit(s[i + 1]) && Char.IsAsciiHexDigit(s[i + 2]);
+
+        /// <summary>
+        /// Percent encode the chars of an url (remainder) that are invalid in an url or in a header value (controls, space, non-ASCII as UTF-8, '"', '&lt;', '&gt;', '\', '^', '`', '{', '|', '}'),
+        /// and any '%' that doesn't start a valid "%XX" escape. Valid escapes and reserved chars ('?', '#', '/', '&amp;' etc) are kept as is.
+        /// </summary>
+        /// <param name="s">The text</param>
+        /// <param name="start">The index of the first char to use</param>
+        /// <returns>The (possibly escaped) text from <paramref name="start"/></returns>
+        static String EscapeLocation(String s, int start)
+        {
+            var span = s.AsSpan(start);
+            var safe = SafeLocationChars;
+            var i = span.IndexOfAnyExcept(safe);
+            //  Skip valid escapes
+            while ((i >= 0) && (span[i] == '%') && IsEscape(span, i))
+            {
+                var n = span.Slice(i + 3).IndexOfAnyExcept(safe);
+                i = n < 0 ? -1 : (i + 3 + n);
+            }
+            //  Nothing to escape (the common case)
+            if (i < 0)
+                return start == 0 ? s : s.Substring(start);
+            var sb = new StringBuilder(span.Length + 16);
+            sb.Append(span.Slice(0, i));
+            Span<Byte> utf8 = stackalloc Byte[4];
+            var l = span.Length;
+            while (i < l)
+            {
+                var c = span[i];
+                if (safe.Contains(c))
+                {
+                    sb.Append(c);
+                    ++i;
+                    continue;
+                }
+                if (c == '%')
+                {
+                    if (IsEscape(span, i))
+                    {
+                        sb.Append(span.Slice(i, 3));
+                        i += 3;
+                    }
+                    else
+                    {
+                        sb.Append("%25");
+                        ++i;
+                    }
+                    continue;
+                }
+                //  Encode the code point as UTF-8 (a lone surrogate becomes U+FFFD)
+                int cl = (Char.IsHighSurrogate(c) && ((i + 1) < l) && Char.IsLowSurrogate(span[i + 1])) ? 2 : 1;
+                var bl = Encoding.UTF8.GetBytes(span.Slice(i, cl), utf8);
+                for (int j = 0; j < bl; ++j)
+                {
+                    var b = utf8[j];
+                    sb.Append('%');
+                    sb.Append(HexChars[b >> 4]);
+                    sb.Append(HexChars[b & 15]);
+                }
+                i += cl;
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Find the index in the raw (undecoded) url where a decoded prefix ends, i.e the smallest index where the url decoded part of the raw url equals the decoded prefix.
+        /// </summary>
+        /// <param name="raw">The raw url</param>
+        /// <param name="url">The decoded url</param>
+        /// <param name="pl">The length of the decoded prefix</param>
+        /// <returns>The index in the raw url, -1 if the decoded prefix can't be mapped to the raw url</returns>
+        static int GetRawPrefixLength(String raw, String url, int pl)
+        {
+            var rl = raw.Length;
+            if (rl < pl)
+                return -1;
+            var dp = url.AsSpan(0, pl);
+            //  Fast path: the prefix part isn't encoded (normally the case, the authority is never encoded)
+            var rp = raw.AsSpan(0, pl);
+            if (!rp.ContainsAny('%', '+'))
+                return rp.SequenceEqual(dp) ? pl : -1;
+            //  Slow path (only if the matched prefix contains encoded chars): decode increasingly longer parts of the raw url until it matches the prefix.
+            //  A decoded char comes from at most 9 raw chars (a 3 byte UTF-8 sequence)
+            var max = (int)Math.Min(rl, (pl * 9L) + 9);
+            var rented = ArrayPool<Char>.Shared.Rent(max);
+            try
+            {
+                for (int k = pl; k <= max; ++k)
+                {
+                    var n = HttpServerTools.UrlDecode(raw.AsSpan(0, k), rented, out _);
+                    if ((n == pl) && rented.AsSpan(0, n).SequenceEqual(dp))
+                        return k;
+                }
+            }
+            finally
+            {
+                ArrayPool<Char>.Shared.Return(rented);
+            }
+            return -1;
+        }
+
+        /// <summary>
+        /// Get the part of the request url after the matched prefix, as it should be appended to the redirect url.
+        /// </summary>
+        /// <param name="context">The request</param>
+        /// <param name="url">The decoded request url</param>
+        /// <param name="pl">The length of the matched (decoded) prefix</param>
+        /// <returns>The remainder, url encoded</returns>
+        static String GetRemainder(HttpServerRequest context, String url, int pl)
+        {
+            var raw = context.RawUrl;
+            //  Prefer the raw url (not decoded and without any inserted "index.html"), so that encoded chars keeps their encoding
+            if ((raw != null) && !String.Equals(raw, url, StringComparison.Ordinal))
+            {
+                var rs = GetRawPrefixLength(raw, url, pl);
+                if (rs >= 0)
+                    return EscapeLocation(raw, rs);
+            }
+            //  Fallback: the raw url is the decoded url (ex: manual requests), or the prefix couldn't be mapped to the raw url
+            if (context.DidIndex)
+            {
+                //  Don't redirect to the "index.html" inserted by the server for directory requests (keep the url as requested)
+                //  QueryStringStart is the index after the '?' (0 if there is no query string)
+                var qs = context.QueryStringStart - 1;
+                var e = qs < 0 ? url.Length : qs;
+                var s = e - IndexFile.Length;
+                if ((s >= pl) && (String.CompareOrdinal(url, s, IndexFile, 0, IndexFile.Length) == 0))
+                    url = String.Concat(url.AsSpan(0, s), url.AsSpan(e));
+            }
+            return EscapeLocation(url, pl);
+        }
 
         /// <summary>
         /// If the request url starts with a configured prefix, writes a redirect response (the matched prefix is replaced, the rest of the url is kept).
@@ -321,14 +524,21 @@ namespace SysWeaver.Net
         /// <param name="context">The request</param>
         /// <returns><see cref="HttpServerTools.AlreadyHandled"/> if a redirect was written, else null</returns>
         /// <remarks>
-        /// The remainder is taken from the decoded request url (<see cref="HttpServerRequest.Url"/>), so percent encoded characters are not re-encoded.
+        /// A '*' in a redirection is replaced with the bare host name of the request (ex: "example.com"), and default ports (":80" for http, ":443" for https)
+        /// are removed from the resolved redirections, since request urls never contain them (ex: "http://*:80/" matches "http://example.com/").
+        /// The prefix is matched against the decoded request url (<see cref="HttpServerRequest.Url"/>), but the remainder is taken from the undecoded url (<see cref="HttpServerRequest.RawUrl"/>),
+        /// so percent encoded chars (ex: "%3F", "%23", "%25", "%20", "%0D%0A") keep their encoding (no changed meaning, no header injection).
+        /// If the raw url is the decoded url (ex: <see cref="ManualHttpServerRequest"/>), or the prefix can't be mapped to the raw url, the remainder is taken from the decoded url.
+        /// Chars that are invalid in an url or in a header (controls, space, non-ASCII etc) are always percent encoded.
+        /// The "index.html" inserted by the server for directory requests (<see cref="HttpServerRequest.DidIndex"/>) is not included in the remainder.
         /// </remarks>
         public IHttpRequestHandler Handler(HttpServerRequest context)
         {
             if (context.LocalUrl.FastStartsWith(TableDataConsts.ExternalInfoPath))
                 return ExternalInfoHandler(context);
 
-            var host = context.Host.Name;
+            var url = context.Url;
+            var host = GetHostName(url);
             var c = Cache;
             var cs = CaseSensitive;
             if (!c.TryGetValue(host, out var fn))
@@ -341,7 +551,11 @@ namespace SysWeaver.Net
                         foreach (var x in Redirs)
                         {
                             var rd = x.Value;
-                            map[x.Key.Replace("*", host)] = Tuple.Create(rd.Item1.Replace("*", host), rd.Item2);
+                            var from = RemoveDefaultPort(x.Key.Replace("*", host));
+                            //  A from of only "*" resolves to an empty string for an empty host, empty strings can't be added to a string tree (and would match every url)
+                            if (from.Length <= 0)
+                                continue;
+                            map[from] = Tuple.Create(RemoveDefaultPort(rd.Item1.Replace("*", host)), rd.Item2);
                         }
                         fn = Tuple.Create(map, StringTree.Build(map.Keys, cs));
                         //  The host name may be client controlled (wild card prefixes), so limit the cache size
@@ -351,12 +565,11 @@ namespace SysWeaver.Net
                     }
                 }
             }
-            var url = context.Url;
             var pre = fn.Item2.StartsWithAny(url);
             if (pre == null)
                 return null;
             var to = fn.Item1[pre];
-            var newUrl = to.Item1 + url.Substring(pre.Length);
+            var newUrl = to.Item1 + GetRemainder(context, url, pre.Length);
             context.SetResStatusCode(to.Item2);
             context.SetResHeader("Location", newUrl);
             return HttpServerTools.AlreadyHandled;

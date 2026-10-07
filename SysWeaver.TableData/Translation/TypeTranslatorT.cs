@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using SysWeaver.Docs;
 
@@ -115,7 +116,10 @@ namespace SysWeaver.Translation
     /// <typeparam name="T">The type to translate</typeparam>
     /// <remarks>
     /// Supports classes / structs (public instance fields and properties), arrays, <see cref="IEnumerable{T}"/> and dictionaries (values only).
-    /// Translations of struct members are written to a copy and are lost.
+    /// Value types are translated in place inside a <see cref="StrongBox{T}"/> (see <see cref="TranslateBox"/>), struct members (writable fields and properties,
+    /// recursively for nested structs) and struct array elements are written back to their containing member / element once their translations completed.
+    /// Struct values that can't be written back (read only fields, get only properties, nullable structs, elements of other collections and dictionary values,
+    /// a struct passed by value to <see cref="Translate"/> or <see cref="TranslateObj"/>) are translated in a copy and the translations are lost.
     /// All translations of an object are started concurrently and awaited using <see cref="Task.WhenAll(IEnumerable{Task})"/>.
     /// Invalid attribute usage (ex: unknown context member names) throws while generating the code, i.e. a <see cref="TypeInitializationException"/>.
     /// Instances are stateless, they only expose the static members through <see cref="ITypeTranslator"/>.
@@ -131,6 +135,12 @@ namespace SysWeaver.Translation
         /// Same as <see cref="Translate"/> but takes a boxed instance, null if <typeparamref name="T"/> have nothing to translate.
         /// </summary>
         public static readonly Func<ITranslator, String, Object, TranslationEffort, TranslationCacheRetention, Task> TranslateObj;
+        /// <summary>
+        /// Translates the instance of <typeparamref name="T"/> stored in a <see cref="StrongBox{T}"/> in place (i.e. <see cref="StrongBox{T}.Value"/> holds the
+        /// translated value when the task completes, also for value types), null if <typeparamref name="T"/> have nothing to translate.
+        /// Arguments: translator, target language ISO code, box (null is ignored), effort, cache retention.
+        /// </summary>
+        public static readonly Func<ITranslator, String, StrongBox<T>, TranslationEffort, TranslationCacheRetention, Task> TranslateBox;
         /// <summary>
         /// The expression tree that <see cref="Translate"/> was compiled from, null if <typeparamref name="T"/> have nothing to translate.
         /// </summary>
@@ -196,7 +206,7 @@ namespace SysWeaver.Translation
         /// the source language from the attribute or the member named by <paramref name="fromLanguageMember"/>.
         /// </summary>
         /// <returns>The variable that holds the original value (must be added to the block variables)</returns>
-        static ParameterExpression TranslateString(ref bool haveDynamicSourceLanguage, Dictionary<String, Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task<String>>> members, List<Expression> prog, ParameterExpression p, Expression src, IXmlDocInfo context, AutoTranslateAttribute attr, IEnumerable<AutoTranslateContextAttribute> contextAttributes, String memberName, TranslatorTypes trTypes, String fromLanguageMember)
+        static ParameterExpression TranslateString(ref bool haveDynamicSourceLanguage, Dictionary<String, Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task<String>>> members, List<Expression> prog, Expression p, Expression src, IXmlDocInfo context, AutoTranslateAttribute attr, IEnumerable<AutoTranslateContextAttribute> contextAttributes, String memberName, TranslatorTypes trTypes, String fromLanguageMember)
         {
             var strParams = TypeTranslator.ParamString;
             var value = Expression.Variable(src.Type);
@@ -443,7 +453,11 @@ namespace SysWeaver.Translation
         /// <summary>
         /// Builds code that translates all public instance fields and properties of an object, null if there is nothing to translate.
         /// </summary>
-        static Expression BuildObject(ref bool haveDynamicSourceLanguage, Dictionary<String, Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task<String>>> members, Type t, ParameterExpression p)
+        /// <param name="haveDynamicSourceLanguage">Set to true if any member uses a dynamic source language</param>
+        /// <param name="members">Receives the translation functions of the string members</param>
+        /// <param name="t">The type of the instance</param>
+        /// <param name="p">The instance, for value types this is the <see cref="StrongBox{T}.Value"/> field of a box so that members are written in place.</param>
+        static Expression BuildObject(ref bool haveDynamicSourceLanguage, Dictionary<String, Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task<String>>> members, Type t, Expression p)
         {
             var taskList = TypeTranslator.VarTaskList;
             List<Expression> prog = new()
@@ -490,7 +504,19 @@ namespace SysWeaver.Translation
             return pr;
         }
 
-        static void AddMember(ref bool haveDynamicSourceLanguage, Dictionary<String, Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task<String>>> members, Type et, MemberInfo mi, List<ParameterExpression> progP, List<Expression> prog, ParameterExpression p, Expression src)
+        /// <summary>
+        /// Check if a member can be assigned (used to write back translated struct values).
+        /// </summary>
+        static bool IsWritable(MemberInfo mi)
+        {
+            if (mi is FieldInfo fi)
+                return !(fi.IsInitOnly || fi.IsLiteral);
+            if (mi is PropertyInfo pi)
+                return pi.CanWrite && (pi.GetIndexParameters().Length == 0);
+            return false;
+        }
+
+        static void AddMember(ref bool haveDynamicSourceLanguage, Dictionary<String, Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task<String>>> members, Type et, MemberInfo mi, List<ParameterExpression> progP, List<Expression> prog, Expression p, Expression src)
         {
             if (et == typeof(String))
             {
@@ -503,6 +529,25 @@ namespace SysWeaver.Translation
             var seen = new HashSet<Type>();
             if (!TypeTranslationTest.HaveTranslations(seen, et))
                 return;
+            if (et.IsValueType && (Nullable.GetUnderlyingType(et) == null) && IsWritable(mi))
+            {
+                //  Struct member: translate a boxed copy and write it back to the member when done
+                if (!seen.Contains(mi.DeclaringType))
+                {
+                    //  Generate the struct translator now (as for other members), so that invalid attribute usage is detected here
+                    if (!TypeTranslator.TryGetTranslator(et, out var _))
+                        throw new Exception("Internal error!");
+                }
+                var v = Expression.Parameter(et, "v");
+                var save = Expression.Lambda(typeof(Action<>).MakeGenericType(et), Expression.Assign(src, v), v);
+                var transStruct = Expression.Call(
+                    TypeTranslator.TranslateStructMethod.MakeGenericMethod(et),
+                    Expression.Call(TypeTranslator.GetBoxFuncMethod.MakeGenericMethod(et)),
+                    TypeTranslator.ParamTranslator, TypeTranslator.ParamTo, src, TypeTranslator.ParamEffort, TypeTranslator.ParamRetention,
+                    save);
+                prog.Add(Expression.Call(TypeTranslator.VarTaskList, TypeTranslator.ListAddMethod, transStruct));
+                return;
+            }
             Expression trElement;
             if (seen.Contains(mi.DeclaringType))
             {
@@ -527,22 +572,34 @@ namespace SysWeaver.Translation
         /// <summary>
         /// Builds code that translates all elements of a (single dimensional) array, null if the element type have nothing to translate.
         /// </summary>
-        static Expression BuildArray(out Type et, Type t, ParameterExpression p)
+        static Expression BuildArray(out Type et, Type t, Expression p)
         {
             et = t.GetElementType();
             if (!TypeTranslationTest.HaveTranslations(new HashSet<Type>(), et))
                 return null;
-            var elFunc = Expression.Variable(typeof(Func<,,,,,>).MakeGenericType(typeof(ITranslator), typeof(String), et, typeof(TranslationEffort), typeof(TranslationCacheRetention), typeof(Task)), "fn");
+            //  Struct elements are translated in a boxed copy that is written back to the array element when done
+            var byElement = et.IsValueType && (Nullable.GetUnderlyingType(et) == null);
+            var elFunc = byElement
+                ? Expression.Variable(typeof(Func<,,,,,>).MakeGenericType(typeof(ITranslator), typeof(String), typeof(StrongBox<>).MakeGenericType(et), typeof(TranslationEffort), typeof(TranslationCacheRetention), typeof(Task)), "fn")
+                : Expression.Variable(typeof(Func<,,,,,>).MakeGenericType(typeof(ITranslator), typeof(String), et, typeof(TranslationEffort), typeof(TranslationCacheRetention), typeof(Task)), "fn");
             var len = TypeTranslator.VarLen;
             var taskList = TypeTranslator.VarTaskArray;
             List<Expression> prog = new()
             {
                 Expression.Assign(taskList, Expression.NewArrayBounds(typeof(Task), len)),
-                Expression.Assign(elFunc, Expression.Call(TypeTranslator.GetFuncMethod.MakeGenericMethod(et))),
+                Expression.Assign(elFunc, Expression.Call((byElement ? TypeTranslator.GetBoxFuncMethod : TypeTranslator.GetFuncMethod).MakeGenericMethod(et))),
             };
             var subOne = Expression.PreDecrementAssign(len);
-            var getOne = Expression.ArrayIndex(p, len);
-            var transOne = Expression.Invoke(elFunc, TypeTranslator.ParamTranslator, TypeTranslator.ParamTo, getOne, TypeTranslator.ParamEffort, TypeTranslator.ParamRetention);
+            Expression transOne;
+            if (byElement)
+            {
+                transOne = Expression.Call(TypeTranslator.TranslateArrayElementMethod.MakeGenericMethod(et), elFunc, TypeTranslator.ParamTranslator, TypeTranslator.ParamTo, p, len, TypeTranslator.ParamEffort, TypeTranslator.ParamRetention);
+            }
+            else
+            {
+                var getOne = Expression.ArrayIndex(p, len);
+                transOne = Expression.Invoke(elFunc, TypeTranslator.ParamTranslator, TypeTranslator.ParamTo, getOne, TypeTranslator.ParamEffort, TypeTranslator.ParamRetention);
+            }
             var addOne = Expression.Assign(Expression.ArrayAccess(taskList, len), transOne);
             prog.Add(
                 Expression.Loop(
@@ -570,7 +627,7 @@ namespace SysWeaver.Translation
         /// Builds code that enumerates a sequence and translates every element (or the value selected by <paramref name="getVal"/>),
         /// null if the element type have nothing to translate.
         /// </summary>
-        static Expression BuildEnumerable(Type t, Type enumerableType, Type et, ParameterExpression p, Func<Expression, Expression> getVal)
+        static Expression BuildEnumerable(Type t, Type enumerableType, Type et, Expression p, Func<Expression, Expression> getVal)
         {
             if (!TypeTranslator.TryGetTranslator(et, out var vt))
                 return null;
@@ -628,10 +685,13 @@ namespace SysWeaver.Translation
             bool haveDynamicSourceLanguage = false;
 
             var p = Expression.Parameter(t, "p");
+            //  Value types are translated inside a box, so that all writes (strings and nested structs) end up in the box
+            ParameterExpression box = t.IsValueType ? Expression.Parameter(typeof(StrongBox<T>), "box") : null;
+            Expression inst = box == null ? p : Expression.Field(box, nameof(StrongBox<T>.Value));
             Expression program = null;
             if (t.IsArray)
             {
-                program = BuildArray(out var et, t, p);
+                program = BuildArray(out var et, t, inst);
                 ElementTypes = [et];
             }else
             {
@@ -644,7 +704,7 @@ namespace SysWeaver.Translation
                             var et = ga[0];
                             if (typeof(IEnumerable<>).MakeGenericType(et).IsAssignableFrom(t))
                             {
-                                program = BuildEnumerable(t, et, et, p, e => e);
+                                program = BuildEnumerable(t, et, et, inst, e => e);
                                 if (program == null)
                                     return;
                                 ElementTypes = [et];
@@ -654,7 +714,7 @@ namespace SysWeaver.Translation
                             var enumType = typeof(KeyValuePair<,>).MakeGenericType(ga);
                             if (typeof(IEnumerable<>).MakeGenericType(enumType).IsAssignableFrom(t))
                             {
-                                program = BuildEnumerable(t, enumType, ga[1], p, e => Expression.Property(e, nameof(KeyValuePair<int,int>.Value)));
+                                program = BuildEnumerable(t, enumType, ga[1], inst, e => Expression.Property(e, nameof(KeyValuePair<int,int>.Value)));
                                 if (program == null)
                                     return;
                                 ElementTypes = ga;
@@ -665,16 +725,28 @@ namespace SysWeaver.Translation
 
                 }
                 if (program == null)
-                    program = BuildObject(ref haveDynamicSourceLanguage, members, t, p);
+                    program = BuildObject(ref haveDynamicSourceLanguage, members, t, inst);
             }
             if (program == null)
                 return;
-            if (!t.IsValueType)
+            if (box != null)
+            {
+                //  Value type: the box translator writes in place, the by value translator translates a boxed copy (translations are lost)
+                program = Expression.Condition(Expression.Equal(box, Expression.Constant(null, box.Type)), TypeTranslator.ConstCompletedTask, program);
+                var boxExp = Expression.Lambda<Func<ITranslator, String, StrongBox<T>, TranslationEffort, TranslationCacheRetention, Task>>(program, TypeTranslator.ParamTranslator, TypeTranslator.ParamTo, box, TypeTranslator.ParamEffort, TypeTranslator.ParamRetention);
+                TranslateBox = boxExp.Compile();
+                program = Expression.Invoke(boxExp, TypeTranslator.ParamTranslator, TypeTranslator.ParamTo, Expression.New(typeof(StrongBox<T>).GetConstructor([t]), p), TypeTranslator.ParamEffort, TypeTranslator.ParamRetention);
+            }
+            else
+            {
                 program = Expression.Condition(Expression.Equal(p, Expression.Constant(null, t)), TypeTranslator.ConstCompletedTask, program);
+            }
             var transExp = Expression.Lambda<Func<ITranslator, String, T, TranslationEffort, TranslationCacheRetention, Task>>(program, TypeTranslator.ParamTranslator, TypeTranslator.ParamTo, p, TypeTranslator.ParamEffort, TypeTranslator.ParamRetention);
             var translate = transExp.Compile();
             Translate = translate;
             Exp = transExp;
+            if (box == null)
+                TranslateBox = (tr, to, b, effort, retention) => b == null ? Task.CompletedTask : translate(tr, to, b.Value, effort, retention);
 
             var o = TypeTranslator.ParamObj;
             var prExp = Expression.Invoke(transExp, TypeTranslator.ParamTranslator, TypeTranslator.ParamTo, Expression.Convert(o, t), TypeTranslator.ParamEffort, TypeTranslator.ParamRetention);

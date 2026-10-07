@@ -148,7 +148,7 @@ namespace SysWeaver.Security
         /// <param name="filename">.pfx file containing the cert</param>
         /// <param name="password">Password or password file</param>
         /// <param name="passwordCanBeFile">True if password may be a file, if the password is the name of an existing file, the (trimmed) content of that file is used as the password (environment variables are resolved using EnvInfo.ResolveText)</param>
-        /// <returns>The certificate (with an exportable private key, stored in the machine key set)</returns>
+        /// <returns>The certificate (with an exportable private key, imported into the machine key set but not persisted: the key is deleted when the certificate is disposed, see <see cref="InMemoryKeyStorageFlags"/>), the caller should dispose it</returns>
         /// <exception cref="FileNotFoundException">The file doesn't exist</exception>
         /// <exception cref="Exception">The certificate couldn't be loaded (the inner exception contains the reason)</exception>
         public static async Task<X509Certificate2> Load(String filename, String password = null, bool passwordCanBeFile = true)
@@ -168,7 +168,7 @@ namespace SysWeaver.Security
             }
             try
             {
-                return X509CertificateLoader.LoadPkcs12FromFile(filename, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                return X509CertificateLoader.LoadPkcs12FromFile(filename, password, InMemoryKeyStorageFlags);
                 //return new X509Certificate2(filename, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
             }
             catch (Exception ex)
@@ -183,7 +183,7 @@ namespace SysWeaver.Security
         /// <param name="data">Contents of a .pfx file containing the cert</param>
         /// <param name="password">Password or password file</param>
         /// <param name="passwordCanBeFile">True if password may be a file, if the password is the name of an existing file, the (trimmed) content of that file is used as the password (environment variables are resolved using EnvInfo.ResolveText)</param>
-        /// <returns>The certificate (with an exportable private key, stored in the machine key set)</returns>
+        /// <returns>The certificate (with an exportable private key, imported into the machine key set but not persisted: the key is deleted when the certificate is disposed, see <see cref="InMemoryKeyStorageFlags"/>), the caller should dispose it</returns>
         /// <exception cref="Exception">The certificate couldn't be loaded (the inner exception contains the reason)</exception>
         public static async Task<X509Certificate2> Create(ReadOnlyMemory<Byte> data, String password = null, bool passwordCanBeFile = true)
         {
@@ -200,7 +200,7 @@ namespace SysWeaver.Security
             }
             try
             {
-                return X509CertificateLoader.LoadPkcs12(data.Span, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                return X509CertificateLoader.LoadPkcs12(data.Span, password, InMemoryKeyStorageFlags);
                 //return new X509Certificate2(data, password, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
             }
             catch (Exception ex)
@@ -211,11 +211,33 @@ namespace SysWeaver.Security
 
 
         /// <summary>
+        /// The key storage flags used when loading certificates for in-memory use (TLS servers etc).
+        /// The private key is exportable and imported into the machine key set, but not persisted:
+        /// on Windows the temporary key file (in %ProgramData%\Microsoft\Crypto\...\MachineKeys) is deleted when the certificate is disposed
+        /// (so loading certificates repeatedly doesn't accumulate key files).
+        /// <see cref="X509KeyStorageFlags.EphemeralKeySet"/> isn't used since SslStream (SChannel) on Windows can't use ephemeral keys.
+        /// Use <see cref="Install(X509Certificate2)"/> to install a certificate into the machine store (a persisted copy of the key is created).
+        /// </summary>
+        public const X509KeyStorageFlags InMemoryKeyStorageFlags = X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable;
+
+        /// <summary>
+        /// The key storage flags used for certificates that are added to a certificate store (the private key must outlive the certificate instance).
+        /// </summary>
+        const X509KeyStorageFlags PersistedKeyStorageFlags = X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable;
+
+
+        /// <summary>
         /// Install a certificate in the local machine personal ("My") store (if it's not already installed)
         /// </summary>
         /// <param name="cert">The certificate to check/install</param>
         /// <returns>True if the cert was installed (was new)</returns>
-        /// <remarks>Requires write access to the local machine store (typically administrator rights).</remarks>
+        /// <remarks>
+        /// Requires write access to the local machine store (typically administrator rights).
+        /// Certificates are typically loaded without a persisted key (see <see cref="InMemoryKeyStorageFlags"/>, the key is deleted when the instance is disposed),
+        /// so if the certificate has an exportable private key, a copy with a persisted private key (in the machine key set) is added to the store
+        /// (required by http.sys / netsh sslcert bindings, the key stays valid after the supplied instance is disposed).
+        /// An installed certificate with the same thumb print whose private key can't be opened (ex: installed from an instance whose key was deleted) is replaced.
+        /// </remarks>
         public static bool Install(this X509Certificate2 cert)
         {
             bool isNew = false;
@@ -224,22 +246,57 @@ namespace SysWeaver.Security
                 store.Open(OpenFlags.ReadWrite);
                 var certs = store.Certificates.Find(X509FindType.FindByThumbprint, cert.Thumbprint, false).ToList();
                 int count = certs.Count;
+                var needKey = cert.HasPrivateKey;
                 foreach (var c in certs)
                 {
-                    if ((c.NotBefore != cert.NotBefore) || (c.NotAfter != cert.NotAfter))
+                    if ((c.NotBefore != cert.NotBefore) || (c.NotAfter != cert.NotAfter) || (needKey && (!CanOpenPrivateKey(c))))
                     {
                         store.Remove(c);
                         --count;
                     }
                 }
+                foreach (var c in certs)
+                    c.Dispose();
                 if (count <= 0)
                 {
                     isNew = true;
-                    store.Add(cert);
+                    X509Certificate2 persisted = null;
+                    try
+                    {
+                        if (needKey)
+                            persisted = X509CertificateLoader.LoadPkcs12(cert.Export(X509ContentType.Pfx), (String)null, PersistedKeyStorageFlags);
+                    }
+                    catch
+                    {
+                        //  Not exportable, add the instance as is (the key is persisted if it was loaded with PersistKeySet)
+                    }
+                    try
+                    {
+                        store.Add(persisted ?? cert);
+                    }
+                    finally
+                    {
+                        persisted?.Dispose();
+                    }
                 }
                 store.Close();
             }
             return isNew;
+        }
+
+        static bool CanOpenPrivateKey(X509Certificate2 c)
+        {
+            if (!c.HasPrivateKey)
+                return false;
+            try
+            {
+                using var k = (System.Security.Cryptography.AsymmetricAlgorithm)c.GetRSAPrivateKey() ?? c.GetECDsaPrivateKey();
+                return k != null;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
 

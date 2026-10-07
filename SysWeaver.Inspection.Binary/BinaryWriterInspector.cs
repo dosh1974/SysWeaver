@@ -384,11 +384,13 @@ namespace SysWeaver.Inspection
         {
             var l = v.Length;
             var buf = StringBuffer;
-            var bl = (l + l) + 512;
+            //  The worst case size for the encoding (any encoding can be passed to the constructor)
+            var bl = Encoding.GetMaxByteCount(l);
             var w = Writer;
             if ((buf == null) || (buf.Length < bl))
             {
-                buf = GC.AllocateUninitializedArray<Byte>(l + 1024);
+                //  Some slack, so that slightly longer strings don't allocate again
+                buf = GC.AllocateUninitializedArray<Byte>(bl + 512);
                 StringBuffer = buf;
             }
             int count = Encoding.GetBytes(v, 0, l, buf, 0);

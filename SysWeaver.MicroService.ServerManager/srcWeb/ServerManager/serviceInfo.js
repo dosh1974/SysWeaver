@@ -263,19 +263,20 @@ async function serviceInfoMain() {
     bakMapNew.set(31, '-');
     bakMapNew.set(34, '_');
     bakMapNew.set(37, '_');
+    bakMapNew.set(40, '_');
 
 
-
+    // "Bak_2012-12-01_09_40_20_2012-12-01_09_40_20.File.json" or "Bak_2012-12-01_09_40_20_2012-12-01_09_40_20_12.File.json" (same as ServiceHost.NewIsConfigBackupName)
     function isBackupNew(fn) {
-        const e = fn.indexOf('.');
-        if (e < 0)
-            return false;
-        if (e < 40)
-            return false;
         if (fn.substring(0, 4) !== "Bak_")
             return false;
+        let e = fn.indexOf('.');
+        if (e < 0)
+            e = fn.length;
+        if (e < 43)
+            return false;
         fn = fn.substring(0, e);
-        for (let i = 4; i < 40; ++i)
+        for (let i = 4; i < 43; ++i)
         {
             const c = fn[i];
             const m = bakMapNew.get(i);
@@ -288,11 +289,11 @@ async function serviceInfoMain() {
             if (c > '9')
                 return false;
         }
-        if (e === 40)
+        if (e === 43)
             return true;
-        if (fn[40] != '_')
+        if (fn[43] != '_')
             return false;
-        for (let i = 41; i < e; ++i)
+        for (let i = 44; i < e; ++i)
         {
             const c = fn[i];
             if (c < '0')

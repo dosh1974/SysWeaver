@@ -19,6 +19,16 @@ namespace SysWeaver.Data
         public override string ToString() => String.Concat("Table ", Cols.Length, 'x', Rows, ' ', base.ToString());
 
         /// <summary>
+        /// Validate the table before the base constructor schedules the expiration (so that nothing is scheduled for a rejected table).
+        /// </summary>
+        static BaseTableData Validate(BaseTableData data)
+        {
+            if (data.Cols == null)
+                throw new Exception("Only complete tables with columns may be used!");
+            return data;
+        }
+
+        /// <summary>
         /// Create a server side reference to a table, cloning the column definitions.
         /// </summary>
         /// <param name="scope">The scope (visibility) of the data.</param>
@@ -27,11 +37,9 @@ namespace SysWeaver.Data
         /// <param name="timeToLiveInSeconds">Number of seconds to keep the data alive after creation or last use (minimum 10).</param>
         /// <param name="removeAction">Invoked when the reference is removed.</param>
         /// <exception cref="Exception">The table has no columns.</exception>
-        internal TableDataReference(DataScopes scope, String id, BaseTableData data, int timeToLiveInSeconds, Action removeAction) : base(scope, id, data, timeToLiveInSeconds, removeAction)
+        internal TableDataReference(DataScopes scope, String id, BaseTableData data, int timeToLiveInSeconds, Action removeAction) : base(scope, id, Validate(data), timeToLiveInSeconds, removeAction)
         {
             var c = data.Cols;
-            if (c == null)
-                throw new Exception("Only complete tables with columns may be used!");
             var cl = c.Length;
             var cc = new TableDataBaseColumn[cl];
             for (int i = 0; i < cl; ++i)

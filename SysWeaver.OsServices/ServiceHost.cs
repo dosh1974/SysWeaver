@@ -523,6 +523,7 @@ namespace SysWeaver.OsServices
 
         /// <summary>
         /// Copy a file to a new backup file (see <see cref="GetConfigBackupName"/>) in the same folder.
+        /// A new backup is made on every call, even if an existing backup has identical content.
         /// </summary>
         /// <param name="filename">The file to backup.</param>
         /// <param name="log">Optional message host for logging, if null messages are written to the console.</param>
@@ -532,23 +533,9 @@ namespace SysWeaver.OsServices
             var t = new FileInfo(filename);
             if (!t.Exists)
                 return true;
+            //  The backup name is always a new (non-existing) file, so a new backup is always made (callers such as the server manager's
+            //  ActivateConfig rely on this, since they move an existing backup over the original afterwards).
             var fn = GetConfigBackupName(t);
-            try
-            {
-                if (File.Exists(fn))
-                    if (FileHash.FilesAreEqual(filename, fn))
-                        return true;
-            }
-            catch (Exception ex2)
-            {
-                if (log == null)
-                {
-                    Console.WriteLine("Failed to compare " + filename.ToQuoted() + " to " + fn.ToQuoted());
-                    Console.WriteLine("Exception: " + ex2);
-                }
-                else
-                    log.AddMessage("Failed to compare " + filename.ToQuoted() + " to " + fn.ToQuoted(), ex2, MessageLevels.Warning);
-            }
             var ex = PathExt.TryCopyFile(filename, fn);
             if (ex != null)
             {

@@ -33,7 +33,7 @@ namespace SysWeaver.Remote
             var b = BearerToken;
             if (!String.IsNullOrEmpty(b))
                 return String.Concat("Bearer ", b, '@', BaseUrl);
-            if (GetUserPassword(out var user, out var _))
+            if (GetUserPassword(out var user, out var _, false))
                 return String.Concat(user, "Basic ", '@', BaseUrl);
             return BaseUrl;
         }

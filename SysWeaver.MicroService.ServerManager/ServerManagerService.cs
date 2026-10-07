@@ -2676,7 +2676,7 @@ namespace SysWeaver.MicroService
         {
 
 
-            if (TextFiles.TryGetValue(name, out var x))
+            if ((name != null) && TextFiles.TryGetValue(name, out var x))
             {
                 var fn = x.Filename;
                 if ((fn != null) && File.Exists(fn))

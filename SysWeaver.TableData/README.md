@@ -38,7 +38,7 @@ Menu entries created with `[WebMenuTable]` point the UI's generic table page at 
 - Column definitions derived automatically from the row type's public fields and properties, `TableData*` attributes (name, title, order, hide, key, sort, search weight, format, expand) and XML documentation. Per-type metadata and compiled (expression tree) code for extraction, sorting and filtering is built once and cached.
 - Per-column filters (`TableDataFilterOps`: equals/compare, contains/starts/ends with, any/none of a comma separated list, in/outside a range; optionally case sensitive or inverted), multi-column ordering, ranked free-text search, paging with look-ahead and row limits.
 - A column change counter (`Cc`, unique per server process) so column definitions and title are only sent when the client doesn't already have them; refresh rate hints.
-- Translation of `[AutoTranslate]` columns through an `ITranslator` (`TableDataTools.Translate`, `TypeTranslator`).
+- Translation of `[AutoTranslate]` columns through an `ITranslator` (`TableDataTools.Translate`, `TypeTranslator`); struct members, struct array elements and struct table rows are written back after translation, use `TypeTranslator.TranslateValue` / `TranslateBoxed` for a struct root value (a struct passed by value to `TypeTranslator.Translate` is translated in a copy).
 - Typed tables (`GetTyped`, rows are the objects themselves) as well as boxed rows (`Get`).
 - Static tables from in-memory data or from untyped `object[]` rows with explicit column definitions (`GetStaticTableFn`, using dynamically emitted row types).
 - Exporters: `CsvTableDataExporter` (comma, tab, semicolon), `HtmlTableDataExporter.Simple` and `MarkDownTableDataExporter`; JSON and Excel exporters live in other projects.
@@ -48,10 +48,10 @@ Menu entries created with `[WebMenuTable]` point the UI's generic table page at 
 ## Limitations and considerations
 
 - Processing happens in memory over the supplied sequence; for very large datasets filter at the source first.
-- `TableDataTools.Get` applies no server-side cap to the requested row count (a request with no limit returns all rows), and swallows processing exceptions (returning an empty table).
+- `TableDataTools.Get` / `GetTyped` (and `TableDataType<T>.Get` / `GetTyped`) cap the requested row count server side: a request with no limit (`MaxRowCount` zero or negative) or above the cap gets at most `maxAllowedRows` rows (optional parameter, default `TableDataTools.DefaultMaxAllowedRows` = 100000; rows + look ahead never exceed it; zero or negative disables the cap for trusted server side callers). `ExtractGet` applies no cap, callers must cap client values themselves. Processing exceptions are swallowed (returning an empty table).
 - Only supported primitive types (numbers, `bool`, `string`, date/time types, `Guid`, `Type`, `Exception`, `object`), enums and their nullables become columns; other members are skipped unless marked with `[TableDataExpand]`.
-- The per-user data scope (`DataScopes.User`) is declared but not supported yet. Data reference ids are sequential, not secret.
-- Column aggregation (`TableDataEdit.Aggregate`) is not implemented yet.
+- The per-user data scope (`DataScopes.User`) is declared but not supported yet. Data reference ids are random (unguessable), but anyone who knows a global or any-user scoped id can access that data.
+- Column aggregation (`TableDataEdit.Aggregate`) is not implemented yet (throws `NotImplementedException`).
 
 ## Using it
 

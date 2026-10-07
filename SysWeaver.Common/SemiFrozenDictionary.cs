@@ -21,7 +21,7 @@ namespace SysWeaver
     /// Reads are lock free, modifications are serialized (a single lock per dictionary).
     /// A read that races with a modification may see the state before the modification.
     /// <see cref="Keys"/>, <see cref="Values"/> and enumeration operate on a snapshot (they force a freeze if needed).
-    /// Null keys are not allowed (<see cref="ArgumentNullException"/> from the underlying dictionary when not frozen).
+    /// Null keys are not allowed (<see cref="ArgumentNullException"/>, frozen or not).
     /// </remarks>
     /// <typeparam name="TKey">The key type</typeparam>
     /// <typeparam name="TValue">The value type</typeparam>
@@ -204,7 +204,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="key">The key, must not be null</param>
         /// <exception cref="KeyNotFoundException">Thrown by the getter if the key doesn't exist</exception>
-        /// <exception cref="ArgumentNullException">Thrown by the setter (and by the getter while not frozen) if <paramref name="key"/> is null</exception>
+        /// <exception cref="ArgumentNullException">Thrown if <paramref name="key"/> is null</exception>
         public TValue this[TKey key]
         {
             get

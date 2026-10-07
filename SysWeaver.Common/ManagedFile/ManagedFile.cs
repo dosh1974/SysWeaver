@@ -73,7 +73,8 @@ namespace SysWeaver
         /// <returns>The managed file data (check <see cref="ManagedFileData.Ex"/> if <see cref="ManagedFileParams.MustExist"/> is false)</returns>
         /// <exception cref="Exception">The read failed and <see cref="ManagedFileParams.MustExist"/> is true (the exception of the read)</exception>
         /// <remarks>
-        /// The result of the first read is cached (also a failed read), so only the first call can throw, later calls returns the cached data until a change is detected.
+        /// The result of the first read is cached until a change is detected (also a failed read if <see cref="ManagedFileParams.MustExist"/> is false).
+        /// A failed read is not cached if <see cref="ManagedFileParams.MustExist"/> is true, so the next call reads again (and throws again if it still fails).
         /// The read isn't synchronized, concurrent first calls may read the file more than once.
         /// </remarks>
         public async Task<ManagedFileData> TryGetNowAsync()
@@ -82,8 +83,10 @@ namespace SysWeaver
             if (x != null)
                 return x;
             var data = await Source.TryGetNow().ConfigureAwait(false);
-            Interlocked.Exchange(ref InternalData, data);
             var ex = data.Ex;
+            //  A failed read that throws isn't cached (else later calls would return the error data without throwing)
+            if ((ex == null) || (!MustExist))
+                Interlocked.Exchange(ref InternalData, data);
             if (ex != null)
             {
                 Exceptions.OnException(ex);
@@ -102,7 +105,8 @@ namespace SysWeaver
         /// <returns>The managed file data (check <see cref="ManagedFileData.Ex"/> if <see cref="ManagedFileParams.MustExist"/> is false)</returns>
         /// <exception cref="Exception">The read failed and <see cref="ManagedFileParams.MustExist"/> is true (the exception of the read)</exception>
         /// <remarks>
-        /// The result of the first read is cached (also a failed read), so only the first call can throw, later calls returns the cached data until a change is detected.
+        /// The result of the first read is cached until a change is detected (also a failed read if <see cref="ManagedFileParams.MustExist"/> is false).
+        /// A failed read is not cached if <see cref="ManagedFileParams.MustExist"/> is true, so the next call reads again (and throws again if it still fails).
         /// The sync version blocks on the async read (sync over async).
         /// </remarks>
         public ManagedFileData TryGetNow()
@@ -111,8 +115,10 @@ namespace SysWeaver
             if (x != null)
                 return x;
             var data = Source.TryGetNow().RunAsync();
-            Interlocked.Exchange(ref InternalData, data);
             var ex = data.Ex;
+            //  A failed read that throws isn't cached (else later calls would return the error data without throwing)
+            if ((ex == null) || (!MustExist))
+                Interlocked.Exchange(ref InternalData, data);
             if (ex != null)
             {
                 Exceptions.OnException(ex);

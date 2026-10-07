@@ -14,7 +14,7 @@ namespace SysWeaver.Data
     /// <remarks>
     /// Templates use <c>${Var}</c> variables (with the usual <see cref="TextTemplate"/> transforms, ex: <c>${#Text}</c> for HTML encoding).
     /// Variables: body: Title, Rows; row: Cells; header: Title (column description), Text, Class; cell: Title (raw value), Text (encoded by the template), TextFmt (pre-formatted markup), Class.
-    /// Hidden columns (<see cref="TableDataColumnProps.Hide"/>) are omitted. Columns with a "Url" format are rendered as links.
+    /// Hidden columns (<see cref="TableDataColumnProps.Hide"/>) are omitted. Columns with a "Url" format are rendered as links (unless the link uses an unsafe scheme, see <see cref="TableDataExporterTools.IsSafeLink(string)"/>).
     /// The exporter is immutable and thread safe.
     /// </remarks>
     public sealed class HtmlTableDataExporter : ITableDataExporter
@@ -165,6 +165,8 @@ namespace SysWeaver.Data
                     link = link.Substring(1);
                     break;
             }
+            if (!TableDataExporterTools.IsSafeLink(link))
+                return text;
             var title = String.Format(TableDataExporterTools.GetIndexed(t, 3, "Click to open \"{3}\"."), value, nextValue, text, link);
             if (!String.IsNullOrEmpty(title))
                 return String.Concat((Char)1,

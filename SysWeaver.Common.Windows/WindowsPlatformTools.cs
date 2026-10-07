@@ -20,8 +20,8 @@ namespace SysWeaver
     /// so the assembly only needs to be deployed with the application.</para>
     /// <para>Uses WMI for the OS name, a "Processor Information" performance counter for CPU usage, GlobalMemoryStatusEx for memory,
     /// FlushFileBuffers, ExitWindowsEx and directory ACLs.</para>
-    /// <para>The type initializer creates the performance counter and the constructor queries WMI; if either fails the instance can't be created
-    /// and <see cref="PlatformTools.Current"/> falls back to a dummy implementation.</para>
+    /// <para>The type initializer creates the performance counter and the constructor queries WMI; if the counter can't be created <see cref="GetCpuUsage(out double)"/> returns false,
+    /// and if WMI fails <see cref="OsFriendlyName"/> falls back to <see cref="RuntimeInformation.OSDescription"/>.</para>
     /// </remarks>
     public sealed class WindowsPlatformTools : IPlatformTools
     {
@@ -96,11 +96,21 @@ namespace SysWeaver
 
         static WindowsPlatformTools()
         {
-            var c = new PerformanceCounter("Processor Information", "% Processor Time", "_Total");
+            //  Performance counters may be corrupted or disabled, that should only affect GetCpuUsage
+            PerformanceCounter c = null;
+            try
+            {
+                c = new PerformanceCounter("Processor Information", "% Processor Time", "_Total");
+                c.NextValue();
+                Thread.Sleep(10);
+                c.NextValue();
+            }
+            catch
+            {
+                c?.Dispose();
+                c = null;
+            }
             CpuCounter = c;
-            c.NextValue();
-            Thread.Sleep(10);
-            c.NextValue();
         }
 
         /// <summary>
@@ -114,6 +124,11 @@ namespace SysWeaver
             try
             {
                 var c = CpuCounter;
+                if (c == null)
+                {
+                    cpuUsage = 0;
+                    return false;
+                }
                 lock (c)
                     cpuUsage = c.NextValue();
                 return true;
@@ -141,7 +156,7 @@ namespace SysWeaver
             Everyone,
             FileSystemRights.FullControl,
             InheritanceFlags.ObjectInherit | InheritanceFlags.ContainerInherit,
-            PropagationFlags.InheritOnly,
+            PropagationFlags.None,
             AccessControlType.Allow);
 
 
@@ -151,7 +166,12 @@ namespace SysWeaver
         /// <param name="directoryName">The directory.</param>
         /// <returns>null if successful, else the exception that occurred.</returns>
         /// <remarks>
-        /// The rule is inherited by files and sub directories but uses <see cref="PropagationFlags.InheritOnly"/>, so it does not apply to the directory itself.
+        /// The rule applies to the directory itself and is inherited by all files and sub directories.
+        /// An existing Everyone rule only counts if it grants full control to the directory itself and its descendants
+        /// (so directories processed by older versions, that only got an inherit-only rule, are fixed).
+        /// A non inherited rule added by older versions (using <see cref="PropagationFlags.NoPropagateInherit"/>, only inherited by direct children) is replaced,
+        /// same as <see cref="PathExt.AllowAllAccess(string)"/>.
+        /// This makes files and folders created by a service (ex: running as SYSTEM) modifiable by users (without an UAC prompt) and vice versa.
         /// </remarks>
         public Exception MakeDirectoryAccessableToEveryOne(String directoryName)
         {
@@ -160,16 +180,35 @@ namespace SysWeaver
                 var t = new DirectoryInfo(directoryName);
                 var ac = t.GetAccessControl();
                 bool exist = false;
+                bool foundOld = false;
                 foreach (FileSystemAccessRule x in ac.GetAccessRules(true, true, typeof(SecurityIdentifier)))
                 {
                     if (!x.IdentityReference.Value.FastEquals(Everyone.Value))
                         continue;
-                    exist = (x.FileSystemRights == FullAll.FileSystemRights) && (x.InheritanceFlags == FullAll.InheritanceFlags) && (x.PropagationFlags != PropagationFlags.NoPropagateInherit);
-                    break;
+                    if (x.AccessControlType != AccessControlType.Allow)
+                        continue;
+                    if ((x.FileSystemRights & FullAll.FileSystemRights) != FullAll.FileSystemRights)
+                        continue;
+                    if ((x.InheritanceFlags & FullAll.InheritanceFlags) != FullAll.InheritanceFlags)
+                        continue;
+                    if (x.PropagationFlags == PropagationFlags.NoPropagateInherit)
+                    {
+                        //  Rule added by older versions (only inherited by direct children), replace it
+                        if ((!x.IsInherited) && (x.FileSystemRights == FullAll.FileSystemRights) && (x.InheritanceFlags == FullAll.InheritanceFlags))
+                            foundOld = true;
+                        continue;
+                    }
+                    if (x.PropagationFlags != PropagationFlags.None)
+                        continue;
+                    exist = true;
                 }
-                if (!exist)
+                if ((!exist) || foundOld)
                 {
-                    ac.AddAccessRule(FullAll);
+                    if (foundOld)
+                        ac.RemoveAccessRuleSpecific(new FileSystemAccessRule(Everyone, FileSystemRights.FullControl, FullAll.InheritanceFlags, PropagationFlags.NoPropagateInherit, AccessControlType.Allow));
+                    if (!exist)
+                        ac.AddAccessRule(FullAll);
+                    //  Writing the security descriptor propagates the inheritable rule to all existing (inheriting) files and sub folders
                     t.SetAccessControl(ac);
                 }
                 return null;
@@ -196,10 +235,18 @@ namespace SysWeaver
 
         static string GetOsFriendlyName()
         {
-            ManagementObjectSearcher searcher = new("SELECT Caption FROM Win32_OperatingSystem");
-            ManagementObject os = searcher.Get().Cast<ManagementObject>().First();
-            if (os["Caption"].ToString() is string osResult)
-                return $"{osResult} build {Environment.OSVersion.Version.Build} ({GetARCHFriendlyBits(RuntimeInformation.OSArchitecture)} bits)";
+            //  WMI may be broken or disabled, fall back to the runtime description
+            try
+            {
+                using ManagementObjectSearcher searcher = new("SELECT Caption FROM Win32_OperatingSystem");
+                using var res = searcher.Get();
+                using ManagementObject os = res.Cast<ManagementObject>().First();
+                if (os["Caption"]?.ToString() is string osResult)
+                    return $"{osResult} build {Environment.OSVersion.Version.Build} ({GetARCHFriendlyBits(RuntimeInformation.OSArchitecture)} bits)";
+            }
+            catch
+            {
+            }
             return $"{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})";
         }
 

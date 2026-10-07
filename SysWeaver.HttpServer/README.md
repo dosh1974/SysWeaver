@@ -102,6 +102,8 @@ sequenceDiagram
 
 - Sessions with 3 or fewer requests and no strongly authenticated user expire 30 seconds after the last activity; other sessions expire after `SessionExtendLifetime` (default 15) minutes of inactivity.
 - The session cookie is `HttpOnly`; `Secure` and `SameSite` are only added when `CorsCookies` is set.
+- On login through `HttpServerBase.RunOnLogin(session, request)` (used by `auth/redirect` and header / API key auth) the session token is rotated: the session (and its data) is kept, a new session cookie is set on the response and the old token stops working (for `RotatedTokenGraceSeconds` requests with the old token get a temporary anonymous session without a new cookie). `RunOnLogin(session)` doesn't rotate the token.
+- `auth/redirect` only redirects to relative urls or urls on the same origin (else 400).
 
 ## Key features
 
@@ -117,8 +119,8 @@ sequenceDiagram
 - Certificate binding for the HttpListener based server uses Windows tooling; on other platforms use the Kestrel server for HTTPS.
 - The listeners' default listen prefix is external HTTPS on port 443 (`HttpServerPrefix.DefaultExternalHttps`), which requires a certificate provider (and, on Windows with HttpListener, elevated rights). Always configure prefixes explicitly for development with an explicit host (e.g. `http://localhost:8080`) rather than relying on the `DefaultLocalHttp(s)` presets.
 - HTTP range requests are not handled for cached content (marked as a TODO in the source), which matters for media streaming; suffix and multi-range requests are rejected.
-- The client IP is always the direct peer address. `Forwarded` / `X-Forwarded-For` headers are neither read nor added by the built-in proxy components (TODO in source), and the proxies forward the client's headers, including cookies and authorization.
-- Neither the server nor the API engine applies a request body size limit.
+- The client IP is always the direct peer address. `Forwarded` / `X-Forwarded-For` headers are neither read nor added by the built-in proxy components (TODO in source). The reverse proxy forwards the client's headers, including cookies and authorization; `FileProxy` strips the Cookie and Authorization headers unless `FileProxyParams.ForwardCookies` / `ForwardAuthorization` are set. The proxy cache keys responses on the forwarded Cookie and Authorization headers, never stores `private` / `no-store` responses and never caches `Set-Cookie` headers.
+- The API engine limits POST request bodies to `ApiHttpServerModuleParams.MaxRequestSize` (64 MB by default) and their decompressed size (`Content-Encoding`) to `MaxDecompressedSize` (64 MB by default), responding with 413 when exceeded. Other modules apply no request body size limit.
 - Request path handling and template output have known open hardening issues; expose only folders meant to be public and don't rely on the server as the only protection for sensitive files.
 - The build embeds pre-compressed assets produced by a Windows tool, so the project builds as-is only on Windows.
 

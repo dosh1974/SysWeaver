@@ -203,7 +203,7 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
-        /// Average of <see cref="TimeSpan"/> values (tick precision). Throws <see cref="DivideByZeroException"/> on an empty sequence.
+        /// Average of <see cref="TimeSpan"/> values (tick precision). Returns <see cref="TimeSpan.Zero"/> for an empty sequence.
         /// </summary>
         static Object TimeSpanAvg(IEnumerable<Object> values)
         {
@@ -220,12 +220,14 @@ namespace SysWeaver.Data
                 ++count;
                 first = false;
             }
+            if (count <= 0)
+                return TimeSpan.Zero;
             return TimeSpan.FromTicks(c.Ticks / count);
         }
 
         /// <summary>
         /// Average of <see cref="DateTime"/> values computed by summing ticks (using a 128 bit accumulator),
-        /// the <see cref="DateTimeKind"/> of the first value is used. Throws <see cref="DivideByZeroException"/> on an empty sequence.
+        /// the <see cref="DateTimeKind"/> of the first value is used. Returns a default <see cref="DateTime"/> for an empty sequence.
         /// </summary>
         static Object DateTimeAvg(IEnumerable<Object> values)
         {
@@ -247,6 +249,8 @@ namespace SysWeaver.Data
                 ++count;
                 first = false;
             }
+            if (count <= 0)
+                return default(DateTime);
             var res = (long)(c / count);
             return new DateTime(res, ff);
         }

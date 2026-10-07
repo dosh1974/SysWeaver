@@ -10,8 +10,8 @@ namespace SysWeaver.Data
     /// Export table data as a UTF-8 CSV text file.
     /// </summary>
     /// <remarks>
-    /// Values are never quoted: any occurrence of the separator char in a header or value is replaced by a replacement char instead.
-    /// Line breaks inside values are not escaped.
+    /// Any occurrence of the separator char in a header or value is replaced by a replacement char (separators are never quoted).
+    /// Headers and values containing a line break (CR or LF) or starting with a double quote are wrapped in double quotes (RFC 4180), with any embedded double quotes doubled.
     /// Hidden columns (<see cref="TableDataColumnProps.Hide"/>) are omitted.
     /// <see cref="Single"/>, <see cref="Double"/> and <see cref="Decimal"/> values are written using the invariant culture,
     /// other values using <see cref="Object.ToString"/> (current culture).
@@ -137,6 +137,19 @@ namespace SysWeaver.Data
 
 
         /// <summary>
+        /// Wrap a value in double quotes (doubling embedded quotes) if it contains a line break or starts with a double quote, else return it as is.
+        /// </summary>
+        static String Escape(String v)
+        {
+            if ((v.Length <= 0) || ((v[0] != '"') && (v.IndexOfAny(LineBreakChars) < 0)))
+                return v;
+            return String.Concat("\"", v.Replace("\"", "\"\""), "\"");
+        }
+
+        static readonly Char[] LineBreakChars = ['\r', '\n'];
+
+
+        /// <summary>
         /// Export the table as a CSV file (completes synchronously).
         /// </summary>
         /// <param name="tableData">The table to export, columns are optional (without columns no header line is written).</param>
@@ -175,7 +188,7 @@ namespace SysWeaver.Data
                         if (didFirst)
                             sb.Append(sep);
                         didFirst = true;
-                        sb.Append((col.Title ?? col.Name ?? "").Replace(sep, rep));
+                        sb.Append(Escape((col.Title ?? col.Name ?? "").Replace(sep, rep)));
                     }
                 }
                 if (headers)
@@ -202,7 +215,7 @@ namespace SysWeaver.Data
                                     sb.Append(sep);
                                 didFirst = true;
                                 var fn = x < colMax ? colToStrings[x] : def;
-                                sb.Append(fn(t[x]).Replace(sep, rep));
+                                sb.Append(Escape(fn(t[x]).Replace(sep, rep)));
                             }
                             sb.AppendLine();
                         }

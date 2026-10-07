@@ -20,7 +20,7 @@ namespace SysWeaver
         /// <summary>
         /// The only instance
         /// </summary>
-        public static IEqualityComparer<Exception> Instance = new ExceptionStackEqualityComparer();
+        public static readonly IEqualityComparer<Exception> Instance = new ExceptionStackEqualityComparer();
 
         ExceptionStackEqualityComparer()
         {
@@ -59,7 +59,10 @@ namespace SysWeaver
     /// <summary>
     /// Extension methods for exceptions
     /// </summary>
-    public static class ExceptionExt
+    /// <remarks>
+    /// <see cref="SafeMessage"/> and <see cref="SafeText"/> (in ExceptionExt.Safe.cs) returns exception texts with sensitive information removed, use them for texts that are sent to clients.
+    /// </remarks>
+    public static partial class ExceptionExt
     {
 
         static ExceptionExt()

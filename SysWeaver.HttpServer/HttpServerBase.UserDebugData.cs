@@ -10,7 +10,7 @@ namespace SysWeaver.Net
         /// A row in the active users debug table (<see cref="ActiveUsers"/>).
         /// </summary>
         /// <remarks>
-        /// <see cref="Sessions"/> contains the full (unredacted) session tokens of the user's sessions.
+        /// <see cref="Sessions"/> contains redacted session tokens (only the first 6 characters, same as <see cref="ActiveSessions"/>).
         /// </remarks>
         [TableDataPrimaryKey(nameof(Name))]
 
@@ -40,7 +40,12 @@ namespace SysWeaver.Net
                     ++c;
                     if (sb.Length > 0)
                         sb.Append(',');
-                    sb.Append(s.Token);
+                    //  Redact the token (same as ActiveSessions), the full token would allow anyone seeing this table to hijack the session
+                    var token = s.Token;
+                    if ((token != null) && (token.Length > 6))
+                        sb.Append(token, 0, 6).Append("****");
+                    else
+                        sb.Append("****");
                     sb.Append(':');
                     var dur = (nowTick - s.Start) / TimeSpan.TicksPerSecond;
                     sb.Append("Duration: ").Append(dur).AppendLine(" seconds.");

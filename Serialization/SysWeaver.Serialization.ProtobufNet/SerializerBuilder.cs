@@ -58,6 +58,7 @@ namespace SysWeaver.Serialization.ProtobufNet
         /// <summary>
         /// Add a type (and all types it depends on) to the model, if not already done.
         /// Types the model can already serialize (primitives, strings, collections etc) are not added, but their generic arguments are.
+        /// For an array type the element type is added.
         /// </summary>
         /// <param name="type">The type to build the serializer for.</param>
         /// <param name="model">The model to update.</param>
@@ -65,6 +66,14 @@ namespace SysWeaver.Serialization.ProtobufNet
         {
             if (BuiltTypes.ContainsKey(type))
             {
+                return;
+            }
+
+            //  An array is serialized as a repeated field of its element type, only the element type is added (an array type isn't generic, so BuildGenerics doesn't find it)
+            if (type.IsArray)
+            {
+                Build(type.GetElementType(), model);
+                BuiltTypes.TryAdd(type, 0);
                 return;
             }
 

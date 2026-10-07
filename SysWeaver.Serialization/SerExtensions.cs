@@ -9,14 +9,11 @@ namespace SysWeaver
     /// Convenience extension methods for converting objects to and from JSON using the "json" serializer registered in <see cref="SerManager"/>.
     /// </summary>
     /// <remarks>
-    /// The serializer is resolved with <see cref="SerManager.GetText(string)"/> on first use and then cached for the lifetime of the process,
-    /// so a higher priority JSON serializer registered after the first call is NOT picked up by these methods.
-    /// Register all serializers at startup before using these.
+    /// The serializer is resolved with <see cref="SerManager.GetText(string)"/> on every call (a cheap dictionary lookup),
+    /// so the output doesn't depend on whether a call was made before a higher priority JSON serializer was registered.
     /// </remarks>
     public static class SerExtensions
     {
-        static ITextSerializerType JsonSer;
-
         /// <summary>
         /// Create a json string from an object.
         /// </summary>
@@ -26,7 +23,7 @@ namespace SysWeaver
         /// <returns>The json text.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static string ToJsonString<T>(this T value, SerializerOptions options = SerializerOptions.Verbose)
-            => (JsonSer ??= SerManager.GetText("json")).ToString(value, options);
+            => SerManager.GetText("json").ToString(value, options);
 
         /// <summary>
         /// Create a UTF-8 encoded json data blob from an object.
@@ -37,7 +34,7 @@ namespace SysWeaver
         /// <returns>The UTF-8 encoded json data.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ReadOnlyMemory<Byte> ToJsonData<T>(this T value, SerializerOptions options = SerializerOptions.Verbose)
-            => (JsonSer ??= SerManager.GetText("json")).Serialize(value, options);
+            => SerManager.GetText("json").Serialize(value, options);
 
         /// <summary>
         /// Create an object from some UTF-8 encoded json data.
@@ -47,7 +44,7 @@ namespace SysWeaver
         /// <returns>The deserialized object.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T FromJsonData<T>(this ReadOnlyMemory<Byte> data)
-            => (JsonSer ??= SerManager.GetText("json")).Create<T>(data);
+            => SerManager.GetText("json").Create<T>(data);
 
         /// <summary>
         /// Create an object from some UTF-8 encoded json data.
@@ -57,7 +54,7 @@ namespace SysWeaver
         /// <returns>The deserialized object.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T FromJsonData<T>(this ReadOnlySpan<Byte> data)
-            => (JsonSer ??= SerManager.GetText("json")).Create<T>(data);
+            => SerManager.GetText("json").Create<T>(data);
 
         /// <summary>
         /// Create an object from some UTF-8 encoded json data.
@@ -67,7 +64,7 @@ namespace SysWeaver
         /// <returns>The deserialized object.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T FromJsonData<T>(this Byte[] data)
-            => (JsonSer ??= SerManager.GetText("json")).Create<T>(data);
+            => SerManager.GetText("json").Create<T>(data);
 
 
     }

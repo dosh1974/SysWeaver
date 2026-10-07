@@ -266,7 +266,8 @@ namespace SysWeaver.AI
                 var res = tasks[i].GetAwaiter().GetResult();
                 debugMsg?.AddCall(res);
                 var ex = res.Ex;
-                ret[i] = ex != null ? "Execution failed: " + ex.Message : (res.Ret ?? "");
+                //  The model may echo the error to the user, so sensitive information is removed
+                ret[i] = ex != null ? "Execution failed: " + ex.SafeMessage() : (res.Ret ?? "");
             }
             debugMsg?.EndBatch();
             return ret;

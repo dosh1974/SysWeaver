@@ -352,7 +352,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
         #region String
 
         /// <summary>
-        /// Read a string (no escapes) until the supplied char or the end of data is found, position is set to after the found char
+        /// Read a string (no escapes) until the supplied char is found, position is set to after the found char (a NUL <paramref name="until"/> char reads to the end of the data, else an unterminated string throws)
         /// </summary>
         /// <param name="buf">A temp buffer, replaced by a larger one if needed</param>
         /// <param name="d">The current read position, advanced to after the found char (or to <paramref name="e"/>)</param>
@@ -365,7 +365,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
         }
 
         /// <summary>
-        /// Read chars (no escapes) into the buffer until the supplied char or the end of data is found, position is set to after the found char
+        /// Read chars (no escapes) into the buffer until the supplied char is found, position is set to after the found char (a NUL <paramref name="until"/> char reads to the end of the data, else an unterminated string throws)
         /// </summary>
         /// <param name="buf">A temp buffer, replaced by a larger one if needed</param>
         /// <param name="d">The current read position, advanced to after the found char (or to <paramref name="e"/>)</param>
@@ -380,7 +380,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
             {
                 var c = ReadUtf8Char(out var s, ref d, e);
                 if (c == until)
-                    break;
+                    return index;
                 var ni = index + 1;
                 if (ni >= bufLen)
                     bufLen = Grow(ref buf);
@@ -392,6 +392,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
                     ++index;
                 }
             }
+            //  An unterminated string (a NUL until char reads to the end of the data)
+            if (until != 0)
+                ReadException.ThrowEndOfData(until);
             return index;
         }
 
@@ -452,12 +455,16 @@ namespace SysWeaver.Serialization.SwJson.Reader
         {
             var s = d;
             var p = s;
+            var found = false;
             while (p < e)
             {
                 var c = *p;
                 ++p;
                 if (c == until)
+                {
+                    found = true;
                     break;
+                }
 #if VALIDATE
                 if (c >= 128)
                 {
@@ -467,7 +474,10 @@ namespace SysWeaver.Serialization.SwJson.Reader
 #endif//VALIDATE
             }
             d = p;
-            var l = (int)(p - s - 1);
+            //  An unterminated string (a NUL until char reads to the end of the data)
+            if ((!found) && (until != 0))
+                ReadException.ThrowEndOfData(until);
+            var l = (int)(p - s - (found ? 1 : 0));
             return l <= 0 ? String.Empty : String.Create(l, new IntPtr(s), WriteAciiStringAction);
         }
 
@@ -525,7 +535,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
 
         /// <summary>
-        /// Read chars into the buffer until the supplied char (or the end of data, no exception) is found, decoding JSON escapes (\ is the escape char), position is set to after the found char
+        /// Read chars into the buffer until the supplied char is found (a NUL <paramref name="until"/> char reads to the end of the data, else an unterminated string throws), decoding JSON escapes (\ is the escape char), position is set to after the found char
         /// </summary>
         /// <remarks>Supports \" \\ \/ \' \b \f \n \r \t and \uXXXX (surrogate pairs are two escapes, each decoded to one char).</remarks>
         /// <param name="buf">A temp buffer, replaced by a larger one if needed</param>
@@ -558,6 +568,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
                     if (i < 0)
                     {
                         d = e;
+                        //  An unterminated string (a NUL until char reads to the end of the data)
+                        if (until != 0)
+                            ReadException.ThrowEndOfData(until);
                         return index;
                     }
                     d += i + 1;
@@ -575,7 +588,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
             {
                 var c = ReadUtf8Char(out var s, ref d, e);
                 if (c == until)
-                    break;
+                    return index;
                 if (c == '\\')
                     c = Esc(ref d, e);
                 var ni = index + 1;
@@ -589,6 +602,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
                     ++index;
                 }
             }
+            //  An unterminated string (a NUL until char reads to the end of the data)
+            if (until != 0)
+                ReadException.ThrowEndOfData(until);
             return index;
         }
 
@@ -612,7 +628,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// Read a json string (after the opening quote), position is set to after the closing quote.
         /// Strings without escapes (the common case) are decoded directly from the data.
         /// </summary>
-        /// <remarks>An unterminated string returns the rest of the data (no exception).</remarks>
+        /// <remarks>An unterminated string throws.</remarks>
         public static String ReadJsonString(ref Char[] buf, ref Byte* d, Byte* e)
         {
             var rem = new ReadOnlySpan<Byte>(d, (int)(e - d));
@@ -686,12 +702,16 @@ namespace SysWeaver.Serialization.SwJson.Reader
         {
             var bufLen = buf.Length;
             int index = 0;
+            var found = false;
             while (d < e)
             {
                 var c = (Char)(*d);
                 ++d;
                 if (c == until)
+                {
+                    found = true;
                     break;
+                }
                 if (c == '\\')
                     c = Esc(ref d, e);
 #if VALIDATE
@@ -703,6 +723,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
                 buf[index] = c;
                 ++index;
             }
+            //  An unterminated string (a NUL until char reads to the end of the data)
+            if ((!found) && (until != 0))
+                ReadException.ThrowEndOfData(until);
             return index <= 0 ? String.Empty : String.Create(index, buf, WriteUtf8StringAction);
         }
 

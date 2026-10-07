@@ -50,6 +50,11 @@ namespace SysWeaver.Compression
         /// </summary>
         public static ICompType Instance = new CompBrotliNativeNET();
 
+        /// <summary>
+        /// Implements <see cref="ICompType.Instance"/> (so it works through a generic type parameter), returns <see cref="Instance"/>
+        /// </summary>
+        static ICompType ICompType.Instance => Instance;
+
         static readonly String CompTS = String.Concat('[', CompHttpCode, "] ", CompName, " @ prio ", CompPrio, " for extensions: ", String.Join(", ", CompExtensions));
 
         /// <inheritdoc/>

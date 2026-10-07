@@ -115,12 +115,12 @@ namespace SysWeaver
 
         /// <summary>
         /// Format a string as a folder name (for messages), any trailing directory separator is replaced by a single platform separator.
-        /// Ex (windows): C:\Temp => file://"C:\Temp\" (note that the quote is placed after "file://", unlike <see cref="ToFilename(string)"/>)
+        /// Ex (windows): C:\Temp => "file://C:\Temp\" (same quoting as <see cref="ToFilename(string)"/>)
         /// </summary>
         /// <param name="s">The string to format as a folder name, may be null</param>
         /// <returns>A folder name formatted string, "null" if the input is null</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static String ToFolder(this String s) => s == null ? "null" : String.Concat("file://\"", Path.TrimEndingDirectorySeparator(s.AsSpan()), FolderEnd);
+        public static String ToFolder(this String s) => s == null ? "null" : String.Concat("\"file://", Path.TrimEndingDirectorySeparator(s.AsSpan()), FolderEnd);
 
 
         /// <summary>

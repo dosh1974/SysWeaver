@@ -7,7 +7,7 @@ namespace SysWeaver
 {
     /// <summary>
     /// Decides which types (serialized) data may name, ex: using "$type" in json, see <see cref="TypeFinder.GetForData"/>.
-    /// Any type that <see cref="TypeFinder"/> can resolve (in a loaded assembly, or an assembly in the executable folder) is allowed, except:
+    /// Any type that <see cref="TypeFinder"/> can resolve (in a loaded assembly, an assembly in the executable folder or a trusted platform assembly of the runtime) is allowed, except:
     /// <list type="bullet">
     /// <item>Denied types (see <see cref="Denied"/> and <see cref="IsDenied"/>), also as an array element or generic argument (ex: List&lt;Process&gt;).</item>
     /// <item>Delegates and reflection types (<see cref="MemberInfo"/> including <see cref="Type"/>, <see cref="Assembly"/>, <see cref="Module"/>, <see cref="ParameterInfo"/>), unless explicitly allowed using <see cref="AllowType"/>.</item>

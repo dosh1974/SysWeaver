@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 
 
 namespace SysWeaver.Data
@@ -56,6 +57,48 @@ namespace SysWeaver.Data
                 return def;
             var v = vars[index];
             return v ?? def;
+        }
+
+        /// <summary>
+        /// Check if a link is safe to put in an exported document, i.e. it's relative (no scheme), uses one of the schemes http, https, mailto or file,
+        /// or starts with a drive letter ("C:\...").
+        /// Prevents links like "javascript:..." or "data:..." (that would run code when clicked).
+        /// </summary>
+        /// <param name="link">The link to check (as it will be written, before any encoding).</param>
+        /// <returns>True if the link is safe to use, false if it uses any other scheme (or is null).</returns>
+        public static bool IsSafeLink(String link)
+        {
+            if (link == null)
+                return false;
+            //  Browsers ignore leading control chars / spaces and any tab or new line in an url
+            var l = link.Length;
+            var sb = new StringBuilder(l);
+            for (int i = 0; i < l; ++i)
+            {
+                var c = link[i];
+                if ((c == '\t') || (c == '\r') || (c == '\n'))
+                    continue;
+                if ((sb.Length == 0) && (c <= ' '))
+                    continue;
+                if ((c == '/') || (c == '?') || (c == '#') || (c == '\\'))
+                    return true;
+                if (c == ':')
+                {
+                    var scheme = sb.ToString();
+                    if ((scheme.Length == 1) && Char.IsAsciiLetter(scheme[0]))
+                        return true;
+                    return
+                        scheme.Equals("http", StringComparison.OrdinalIgnoreCase)
+                        ||
+                        scheme.Equals("https", StringComparison.OrdinalIgnoreCase)
+                        ||
+                        scheme.Equals("mailto", StringComparison.OrdinalIgnoreCase)
+                        ||
+                        scheme.Equals("file", StringComparison.OrdinalIgnoreCase);
+                }
+                sb.Append(c);
+            }
+            return true;
         }
 
         static String ApplyTextFormat(String s, Object nextValue, TableDataColumn col)

@@ -431,8 +431,27 @@ namespace SysWeaver.Inspection
                 buf = GC.AllocateUninitializedArray<Byte>(l + 1024);
                 StringBuf = buf;
             }
-            l = Reader.Read(buf, 0, l);
+            ReadFully(buf, l);
             return Encoding.GetString(buf, 0, l);
+        }
+
+        /// <summary>
+        /// Read exactly count bytes, a single read may return fewer bytes than requested (network streams etc)
+        /// </summary>
+        /// <param name="buf">The buffer to read to (starting at index 0)</param>
+        /// <param name="count">The number of bytes to read</param>
+        /// <exception cref="EndOfStreamException">The stream ends before count bytes are read</exception>
+        void ReadFully(Byte[] buf, int count)
+        {
+            var r = Reader;
+            int o = 0;
+            while (o < count)
+            {
+                var n = r.Read(buf, o, count - o);
+                if (n <= 0)
+                    throw new EndOfStreamException("Unexpected end of stream, expected " + count + " bytes, got " + o);
+                o += n;
+            }
         }
 
         Type ReadType<T>()
@@ -643,7 +662,7 @@ namespace SysWeaver.Inspection
 
         public void Array_ByteArray(int length, ref Byte[] value)
         {
-            Reader.Read(value, 0, length);
+            ReadFully(value, length);
         }
 
         public void Array_LevelUp(int rank)

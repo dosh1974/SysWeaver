@@ -33,7 +33,7 @@ namespace SysWeaver.Security
         /// </summary>
         /// <param name="msg">Optional message host, used to report failures to get a certificate from the manager.</param>
         /// <param name="p">Parameters, null uses the defaults.</param>
-        /// <exception cref="Exception">The domain name file couldn't be read, the domain name isn't a valid DNS name or a subject field is invalid.</exception>
+        /// <exception cref="Exception">The domain name file or the server config file couldn't be read (or contains no value), the domain name isn't a valid DNS name or a subject field is invalid.</exception>
         public LanCertificateProvider(IMessageHost msg = null, LanCertificateProviderParams p = null)
         {
             p = p ?? new LanCertificateProviderParams();
@@ -58,6 +58,8 @@ namespace SysWeaver.Security
             };
             var serverFilename = EnvInfo.MakeAbsoulte(PathTemplate.Resolve(p.ServerConfigFile ?? "$(KeyFolder)/LanCertificateProvider_Server.txt"));
             String server = FileExt.ReadNonCommentString(serverFilename);
+            if (server == null)
+                throw new Exception("Couldn't read a server address from \"" + serverFilename + "\"");
             Server = server.TrimEnd('/') + '/';
             Msg = msg;
             P = new SignedCertificateCreator(p);

@@ -247,7 +247,7 @@ namespace SysWeaver.Serialization.SwJson
         /// </summary>
         /// <remarks>
         /// Arrays (single dimensional) and <see cref="List{T}"/> are iterated by index, other collections by the pattern based enumerator or <see cref="IEnumerable{T}"/>.
-        /// The enumerator is never disposed (unlike foreach), so if writing an item throws, an enumerator holding resources (like a lock) isn't released.
+        /// The enumerator is disposed when done (or if writing an item throws), like foreach.
         /// </remarks>
         /// <param name="type">The collection type</param>
         /// <param name="itemType">The item type</param>
@@ -311,16 +311,39 @@ namespace SysWeaver.Serialization.SwJson
             }
             var enumerator = Expression.Variable(getEnum.ReturnType, "e");
             vars.Add(enumerator);
-            return Expression.Block(
-                Expression.Assign(enumerator, Expression.Call(enumerable, getEnum)),
-                Expression.IfThen(Expression.Call(enumerator, moveNext),
+            Expression loop = Expression.IfThen(Expression.Call(enumerator, moveNext),
                     Expression.Block(
                         writeItem(Expression.Property(enumerator, current), true),
                         Expression.Loop(
                             Expression.Block(
                                 Expression.IfThen(Expression.Not(Expression.Call(enumerator, moveNext)), Expression.Break(exit)),
                                 writeItem(Expression.Property(enumerator, current), false)
-                            ), exit))));
+                            ), exit)));
+            //  Dispose the enumerator (like foreach)
+            var dispose = GetDisposeExp(enumerator);
+            if (dispose != null)
+                loop = Expression.TryFinally(loop, dispose);
+            return Expression.Block(
+                Expression.Assign(enumerator, Expression.Call(enumerable, getEnum)),
+                loop);
+        }
+
+        /// <summary>
+        /// Build an expression that disposes an enumerator (like foreach does)
+        /// </summary>
+        /// <param name="enumerator">The enumerator variable</param>
+        /// <returns>The dispose expression, null if the enumerator type doesn't implement <see cref="IDisposable"/></returns>
+        static Expression GetDisposeExp(ParameterExpression enumerator)
+        {
+            var et = enumerator.Type;
+            if (!typeof(IDisposable).IsAssignableFrom(et))
+                return null;
+            //  Struct enumerators are disposed in place (no boxing), the method may be an explicit interface implementation
+            if (et.IsValueType)
+                return Expression.Call(enumerator, et.GetInterfaceMap(typeof(IDisposable)).TargetMethods[0]);
+            //  Not a static field, the static initialization order of the partial class files isn't defined (writers may be built during it)
+            var dispose = Helper.SafeGetMethod(typeof(IDisposable), nameof(IDisposable.Dispose), BindingFlags.Instance | BindingFlags.Public);
+            return Expression.IfThen(Expression.NotEqual(enumerator, Expression.Constant(null, et)), Expression.Call(Expression.Convert(enumerator, typeof(IDisposable)), dispose));
         }
 
         #endregion//Collections

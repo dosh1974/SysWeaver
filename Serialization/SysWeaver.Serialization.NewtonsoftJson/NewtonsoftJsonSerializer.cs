@@ -16,6 +16,7 @@ namespace SysWeaver.Serialization
     /// "$type" information is written only where needed for <see cref="SerializerOptions.Compact"/>, on every object (and indented) for <see cref="SerializerOptions.Verbose"/> and never for <see cref="SerializerOptions.Typeless"/>.
     /// Deserialization honors "$type" (<see cref="TypeNameHandling.Auto"/>) and resolves names with <see cref="TypeNameResolver.GetForData"/>,
     /// so only types allowed by the <see cref="DataTypePolicy"/> (and assignable to the declared type) can be instantiated.
+    /// A json null is read as NaN into a (not nullable) float / double (SysWeaver.Json writes NaN and infinities as null), see <see cref="NullAsNaNConverter"/>.
     /// Deserializers are pooled (<see cref="LimitedObjectPool{T}"/>) so concurrent calls are safe.
     /// </remarks>
     public sealed class NewtonsoftJsonSerializer : ITextSerializerType
@@ -93,6 +94,7 @@ namespace SysWeaver.Serialization
             ObjectCreationHandling = ObjectCreationHandling.Replace,
             TypeNameHandling = TypeNameHandling.Auto,
             SerializationBinder = SerializationBinder.Instance,
+            Converters = { NullAsNaNConverter.Instance },
         };
 
         /// <inheritdoc/>
@@ -101,7 +103,7 @@ namespace SysWeaver.Serialization
 
 
         /// <summary>
-        /// Factory for pooled deserializers (type name handling enabled, resolving type names using <see cref="SerializationBinder"/>).
+        /// Factory for pooled deserializers (type name handling enabled, resolving type names using <see cref="SerializationBinder"/>, null is read as NaN for float / double, see <see cref="NullAsNaNConverter"/>).
         /// </summary>
         static Func<Action<PooledJsonSerializer>, PooledJsonSerializer> DeserCreate = d =>
         {
@@ -109,6 +111,7 @@ namespace SysWeaver.Serialization
             ser.ObjectCreationHandling = ObjectCreationHandling.Replace;
             ser.TypeNameHandling = TypeNameHandling.Auto;
             ser.SerializationBinder = SerializationBinder.Instance;
+            ser.Converters.Add(NullAsNaNConverter.Instance);
             return ser;
         };
 
@@ -200,7 +203,8 @@ namespace SysWeaver.Serialization
             => JsonConvert.DeserializeObject<T>(new String(text), DeserFormats);
 
         /// <inheritdoc/>
-        /// <exception cref="NullReferenceException">The text deserialized to null but is not null or "null" (surrounding white space is allowed), ex: an empty or white space string.</exception>
+        /// <remarks>Null, empty or white space text and "null" (surrounding white space is allowed) return null (like the span overload).</remarks>
+        /// <exception cref="NullReferenceException">The text deserialized to null but is not null, white space or "null".</exception>
         public T FromString<T>(String text)
         {
             var t = JsonConvert.DeserializeObject<T>(text, DeserFormats);
@@ -208,7 +212,8 @@ namespace SysWeaver.Serialization
                 return t;
             if (text == null)
                 return t;
-            if (text.AsSpan().Trim().SequenceEqual("null".AsSpan()))
+            var trimmed = text.AsSpan().Trim();
+            if (trimmed.IsEmpty || trimmed.SequenceEqual("null".AsSpan()))
                 return t;
             throw new NullReferenceException();
         }

@@ -11,7 +11,7 @@ namespace SysWeaver
     /// The implementation of the string prefix lookups (<see cref="StringPrefixLookup"/> and <see cref="StringPrefixLookup{T}"/>), finds the longest string (from a set of strings) that a text starts with, using ordinal (case sensitive) compares.
     /// A leaf (the string, or an entry with the value) is stored for every string (as an object, the derived classes have the typed public api, so that all code is compiled for the exact type).
     /// Optimized for a few (up to ~32) short strings (4 - 16 chars), where most searches doesn't match, like the web page sub paths of special modules.
-    /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
+    /// Empty strings are not supported, they can't be added (throws an <see cref="ArgumentException"/>) and can't be searched for (throws in debug builds).
     /// </summary>
     /// <remarks>
     /// If all strings have at least 4 chars (and there are at most 254 strings):
@@ -31,7 +31,8 @@ namespace SysWeaver
         /// <param name="strings">The strings, may not contain null, empty strings or duplicates (ordinal)</param>
         /// <param name="leafs">The leaf of every string (same order as the strings), returned by <see cref="StartsWithAnyLeaf(string, int)"/></param>
         /// <exception cref="ArgumentNullException">A string is null</exception>
-        /// <exception cref="Exception">A string is a duplicate, or (in debug builds only) a string is empty</exception>
+        /// <exception cref="ArgumentException">A string is empty</exception>
+        /// <exception cref="Exception">A string is a duplicate</exception>
         private protected StringPrefixLookupBase(String[] strings, Object[] leafs)
         {
             HashSet<String> seen = new(StringComparer.Ordinal);

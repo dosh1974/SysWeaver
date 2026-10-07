@@ -27,12 +27,12 @@ namespace SysWeaver.Knowledge
         public readonly String Currency;
 
         /// <summary>
-        /// The population estimate (2020) of the country, a zero means no information
+        /// The population estimate (see IsoCountry.Population) of the country, a zero means no information
         /// </summary>
         public readonly long Population;
 
         /// <summary>
-        /// The land area estimate in km² (2020) of the country, a zero means no information
+        /// The land area estimate in km² (see IsoCountry.LandArea) of the country, a zero means no information
         /// </summary>
         public readonly int LandArea;
 
@@ -77,12 +77,12 @@ namespace SysWeaver.Knowledge
                     desc += "\nCommon currency: " + cc.Name + " (" + cc.Iso4217 + ").";
                 if (c.Population > 0)
                 {
-                    desc += "\nEstimated population: " + c.Population + " (as of 2020).";
+                    desc += "\nEstimated population: " + c.Population + ".";
                     if (c.LandArea > 0)
-                        desc += "\nPopulation density: " + Math.Round(c.PopDense) + " per km² (as of 2020).";
+                        desc += "\nPopulation density: " + Math.Round(c.PopDense) + " per km².";
                 }
                 if (c.LandArea > 0)
-                    desc += "\nLand area: " + c.LandArea+ " km² (as of 2020).";
+                    desc += "\nLand area: " + c.LandArea+ " km².";
                 tag = new Country(desc, c, cp);
                 tags.Add(name, tag);
                 cs.Add(ckey, tag);

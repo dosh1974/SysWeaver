@@ -62,4 +62,35 @@ namespace SysWeaver.Serialization.NewtonsoftBson
         }
 
     }
+
+    /// <summary>
+    /// Serialization binder that writes type names like the default Newtonsoft binder, but resolves type names using <see cref="TypeNameResolver.GetForData"/>.
+    /// </summary>
+    /// <remarks>
+    /// Only types allowed by the <see cref="DataTypePolicy"/> can be bound (Newtonsoft checks that the type is assignable to the declared type).
+    /// </remarks>
+    sealed class SerializationBinder : ISerializationBinder
+    {
+
+        /// <summary>
+        /// The shared instance.
+        /// </summary>
+        public static readonly ISerializationBinder Instance = new SerializationBinder();
+
+        SerializationBinder()
+        {
+            Def = new DefaultSerializationBinder();
+        }
+
+        readonly ISerializationBinder Def;
+
+        /// <inheritdoc/>
+        public void BindToName(Type serializedType, out string assemblyName, out string typeName)
+            => Def.BindToName(serializedType, out assemblyName, out typeName);
+
+        /// <inheritdoc/>
+        /// <exception cref="DataTypeNotAllowedException">The type isn't allowed by the <see cref="DataTypePolicy"/></exception>
+        public Type BindToType(string assemblyName, string typeName)
+            => TypeNameResolver.GetForData(String.IsNullOrEmpty(assemblyName) ? typeName : String.Join(", ", typeName, assemblyName));
+    }
 }

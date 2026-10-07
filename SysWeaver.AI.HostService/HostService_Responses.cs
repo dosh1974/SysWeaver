@@ -472,7 +472,7 @@ namespace SysWeaver.AI
                 await Send(sse, "error", w =>
                 {
                     HostHttp.WriteStringOrNull(w, "code", he.Code ?? he.Type);
-                    w.WriteString("message", he.Message);
+                    w.WriteString("message", he.SafeMessage());
                     HostHttp.WriteStringOrNull(w, "param", he.Param);
                 }).ConfigureAwait(false);
             });

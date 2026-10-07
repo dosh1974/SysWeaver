@@ -34,6 +34,18 @@ namespace SysWeaver.Net
         /// Comma separated tokens required to access the proxied urls, null for no auth.
         /// </summary>
         public String Auth;
+
+        /// <summary>
+        /// If true, the client's Cookie header (including the server's session and device id cookies) is forwarded to the remote server.
+        /// Default is false (no client cookies are sent to the remote server).
+        /// </summary>
+        public bool ForwardCookies;
+
+        /// <summary>
+        /// If true, the client's Authorization header is forwarded to the remote server.
+        /// Default is false (only the credentials of these parameters, if any, are sent to the remote server).
+        /// </summary>
+        public bool ForwardAuthorization;
     }
 
 }

@@ -16,7 +16,8 @@ namespace SysWeaver.Security
     /// Generated certificates use SHA256 with PKCS#1 padding, are not CA certificates, have the "TLS server authentication" extended key usage,
     /// and are valid from 4 days ago (to tolerate clock skew).
     /// The subject alternative names are built from localhost, the machine name, <see cref="Names"/> and the local IP addresses (as configured).
-    /// The returned certificates are loaded with <see cref="X509KeyStorageFlags.MachineKeySet"/>, <see cref="X509KeyStorageFlags.PersistKeySet"/> and <see cref="X509KeyStorageFlags.Exportable"/>.
+    /// The returned certificates are loaded with <see cref="CertificateTools.InMemoryKeyStorageFlags"/> (<see cref="X509KeyStorageFlags.MachineKeySet"/> and <see cref="X509KeyStorageFlags.Exportable"/>, the key isn't persisted:
+    /// on Windows the temporary key file is deleted when the certificate is disposed, <see cref="CertificateTools.Install(X509Certificate2)"/> installs a copy with a persisted key).
     /// Immutable after construction and thread safe.
     /// </remarks>
     public sealed class SignedCertificateCreator
@@ -261,8 +262,9 @@ namespace SysWeaver.Security
         /// <param name="cert">Certificate to test, may not be null.</param>
         /// <returns>True if it's the same, else false.</returns>
         /// <remarks>
-        /// The certificate subject is parsed by splitting on ',' and uses the attribute names as formatted by the platform.
-        /// Throws if the subject contains duplicate attribute names.
+        /// The certificate subject is parsed by splitting on ',' and matches both the attribute names as formatted by the platform (ex: "S", "G", "T", "I", "OID.2.5.4.46")
+        /// and the names used by <see cref="GetSubject"/>.
+        /// A subject containing duplicate attribute names is considered different (returns false).
         /// </remarks>
         public bool IsSame(X509Certificate2 cert)
         {
@@ -280,8 +282,12 @@ namespace SysWeaver.Security
             foreach (var s in cert.Subject.Split(','))
             {
                 var t = s.IndexOf('=');
+                if (t < 0)
+                    return false;
                 var key = s.Substring(0, t).FastTrimToLower();
-                vals.Add(key, s.Substring(t + 1).Trim());
+                //  Duplicate attribute names are never created by this creator, so it's not the same
+                if (!vals.TryAdd(key, s.Substring(t + 1).Trim()))
+                    return false;
             }
             bool Test(String value, params String[] keys)
             {
@@ -298,7 +304,8 @@ namespace SysWeaver.Security
                 return false;
             if (Test(Country, "c", "countryname"))
                 return false;
-            if (Test(State, "st", "stateorprovincename"))
+            //  .NET formats some attribute names Windows style (S, T, G, I, OID.2.5.4.x), test those as well
+            if (Test(State, "s", "st", "stateorprovincename"))
                 return false;
             if (Test(Locality, "l", "locality"))
                 return false;
@@ -306,21 +313,21 @@ namespace SysWeaver.Security
                 return false;
             if (Test(Unit, "ou", "organizationalunitname"))
                 return false;
-            if (Test(DistinguishedNameQualifier, "dnqualifier"))
+            if (Test(DistinguishedNameQualifier, "oid.2.5.4.46", "dnqualifier"))
                 return false;
             if (Test(SerialNumber, "serialnumber"))
                 return false;
-            if (Test(Title, "title"))
+            if (Test(Title, "t", "title"))
                 return false;
             if (Test(SurName, "sn", "surname"))
                 return false;
-            if (Test(GivenName, "gn", "givenname"))
+            if (Test(GivenName, "g", "gn", "givenname"))
                 return false;
-            if (Test(Initials, "initials"))
+            if (Test(Initials, "i", "initials"))
                 return false;
-            if (Test(Pseudonym, "pseudonym"))
+            if (Test(Pseudonym, "oid.2.5.4.65", "pseudonym"))
                 return false;
-            if (Test(GenerationQualifier, "generationqualifier"))
+            if (Test(GenerationQualifier, "oid.2.5.4.44", "generationqualifier"))
                 return false;
             if (Test(Email, "e"))
                 return false;
@@ -390,7 +397,7 @@ namespace SysWeaver.Security
                     using (var tc = temp.HasPrivateKey ? null : temp.CopyWithPrivateKey(rsa))
                     {
                         var pp = tc ?? temp;
-                        var wk = X509CertificateLoader.LoadPkcs12(pp.Export(X509ContentType.Pfx), (String)null, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                        var wk = X509CertificateLoader.LoadPkcs12(pp.Export(X509ContentType.Pfx), (String)null, CertificateTools.InMemoryKeyStorageFlags);
                         //var wk = new X509Certificate2(pp.Export(X509ContentType.Pfx), (String)null, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
                         return wk;
                     }
@@ -437,7 +444,7 @@ namespace SysWeaver.Security
                 using (var temp = req.Create(parentCert, from, to, serial))
                 using (var tc = temp.CopyWithPrivateKey(rsa))
                 {
-                    var wk = X509CertificateLoader.LoadPkcs12(tc.Export(X509ContentType.Pfx), (String)null, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                    var wk = X509CertificateLoader.LoadPkcs12(tc.Export(X509ContentType.Pfx), (String)null, CertificateTools.InMemoryKeyStorageFlags);
                     //var wk = new X509Certificate2(tc.Export(X509ContentType.Pfx), (String)null, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
                     return wk;
                 }

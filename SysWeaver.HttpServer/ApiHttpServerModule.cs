@@ -75,7 +75,11 @@ namespace SysWeaver.Net
                 GetSers<ISerializer>(pp.OutputSerializers, def),
                 def,
                 def
-                );
+                )
+            {
+                MaxRequestSize = pp.MaxRequestSize,
+                MaxDecompressedSize = pp.MaxDecompressedSize,
+            };
             DefaultSerializer = def;
         }
         /// <summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq.Expressions;
@@ -18,8 +19,11 @@ namespace SysWeaver.Serialization.SwJson
     /// <remarks>
     /// Parsing is done directly on the UTF8 bytes using compiled expression trees (built and cached per type on first use, so the first call for a type is slow).
     /// All methods are thread safe.
-    /// <para>Supported: public read/write properties and public non-readonly fields, arrays, <see cref="List{T}"/>, <see cref="HashSet{T}"/> and other <see cref="ICollection{T}"/> types with a public parameterless (or <see cref="List{T}"/>) constructor,
-    /// generic dictionaries (keys of any number/date/<see cref="Guid"/>/<see cref="String"/> type), enums (names or numbers), nullable value types, <see cref="Byte"/> arrays (base64 or number arrays) and boxed <see cref="Object"/> values.</para>
+    /// <para>Supported: public read/write properties and public non-readonly fields, arrays, <see cref="List{T}"/>, <see cref="HashSet{T}"/> and other <see cref="ICollection{T}"/> types with a public parameterless (or <see cref="List{T}"/>) constructor
+    /// (a <see cref="List{T}"/> or <see cref="HashSet{T}"/> is created for interfaces like <see cref="IList{T}"/> and <see cref="ISet{T}"/>),
+    /// other <see cref="IEnumerable{T}"/> types without serialized members (like <see cref="Queue{T}"/>, <see cref="Stack{T}"/>, <see cref="ConcurrentQueue{T}"/> and <see cref="ConcurrentBag{T}"/>,
+    /// a json array read as an <see cref="IEnumerable{T}"/>, <see cref="IReadOnlyCollection{T}"/> or <see cref="IReadOnlyList{T}"/> creates a <see cref="List{T}"/>),
+    /// generic dictionaries (keys of any number/date/<see cref="Guid"/>/<see cref="String"/>/enum type), enums (names or numbers), nullable value types, <see cref="Byte"/> arrays (base64 or number arrays) and boxed <see cref="Object"/> values.</para>
     /// <para>Polymorphism: an object starting with a <c>"$type"</c> member is created as that type (resolved with <see cref="TypeNameResolver"/>), <c>"$value"</c> / <c>"$values"</c> hold the boxed value or array of such an object.</para>
     /// <para>The parser is lenient: unquoted keys, numbers / booleans in quotes, <c>//</c> and <c>/* */</c> comments and trailing commas are accepted.
     /// Unknown members are skipped, but only when the value is a string or a scalar (unknown object or array values throw).
@@ -413,6 +417,14 @@ namespace SysWeaver.Serialization.SwJson
                     return CreateList;
                 if (ct == typeof(HashSet<T>))
                     return CreateHashSet;
+                //  Interfaces (like ICollection<T>, IList<T> or ISet<T>) can't be created, use a List<T> or HashSet<T>
+                if (ct.IsInterface)
+                {
+                    if (ct.IsAssignableFrom(typeof(List<T>)))
+                        return CreateList;
+                    if (ct.IsAssignableFrom(typeof(HashSet<T>)))
+                        return CreateHashSet;
+                }
                 //  The constructor that Activator.CreateInstance(ct, List<T>) would use (compiled instead of reflection)
                 var lt = typeof(List<T>);
                 var ctor = ct.GetConstructor(BindingFlags.Instance | BindingFlags.Public, Type.DefaultBinder, [lt], null);
@@ -422,6 +434,85 @@ namespace SysWeaver.Serialization.SwJson
                 var ctorParam = ctor.GetParameters()[0].ParameterType;
                 var create = Expression.Lambda<Func<List<T>, ICollection<T>>>(Expression.Convert(Expression.New(ctor, ctorParam == lt ? p : Expression.Convert(p, ctorParam)), typeof(ICollection<T>)), p).Compile();
                 return (items, count) => create((List<T>)CreateList(items, count));
+            }
+        }
+
+        /// <summary>
+        /// Read an <see cref="IEnumerable{T}"/> that isn't a collection (or null), see <see cref="ReadTypeCache"/>.
+        /// A json array is read into the type created by <see cref="EnumerableFactory{T, C}"/> (a <see cref="List{T}"/> for interfaces like <see cref="IEnumerable{T}"/>),
+        /// an object is read like any other object (a <c>"$type"</c> member can name the type, followed by <c>"$values"</c> or members).
+        /// </summary>
+        /// <typeparam name="T">The element type</typeparam>
+        /// <typeparam name="C">The (declared) type to create</typeparam>
+        /// <param name="state">The parser state, positioned at the value</param>
+        /// <param name="endOn">The end condition of the enclosing container</param>
+        /// <returns>The value read, null for a json null</returns>
+        internal static C CreateEnumerable<T, C>(JsonParserState state, Func<Char, bool> endOn) where C : class
+        {
+            ref var d = ref state.D;
+            var e = state.E;
+            if (Utf8JsonParser.IsNull(ref d, e))
+                return null;
+            if ((Char)(*d) != '[')
+                return CreateObject<C>(state, endOn);
+            ++d;
+            if (Utf8Parser.SkipWhite(ref d, e))
+                ReadException.ThrowExpectedArray();
+            //  The items are read into a pooled buffer, then the value is created
+            var pool = ArrayPool<T>.Shared;
+            var buf = pool.Rent(16);
+            try
+            {
+                var count = ReadItems(state, ref buf);
+                return EnumerableFactory<T, C>.Create(buf, count);
+            }
+            finally
+            {
+                pool.Return(buf, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            }
+        }
+
+        /// <summary>
+        /// Creates an <see cref="IEnumerable{T}"/> of type <typeparamref name="C"/> from the items read (computed once per type).
+        /// If a <see cref="List{T}"/> is assignable to <typeparamref name="C"/> (like <see cref="IEnumerable{T}"/>, <see cref="IReadOnlyCollection{T}"/> and <see cref="IReadOnlyList{T}"/>) a <see cref="List{T}"/> is created,
+        /// else a public constructor taking a <see cref="List{T}"/> (or something it's assignable to, like <see cref="IEnumerable{T}"/>) is used,
+        /// like for <see cref="Queue{T}"/>, <see cref="ConcurrentQueue{T}"/> and <see cref="ConcurrentBag{T}"/>.
+        /// The items of a <see cref="Stack{T}"/> and <see cref="ConcurrentStack{T}"/> are pushed in reverse order (they are written in enumeration order, top first).
+        /// Other types throw a <see cref="NotSupportedException"/> when read from a json array.
+        /// </summary>
+        static class EnumerableFactory<T, C> where C : class
+        {
+            public static readonly Func<T[], int, C> Create = GetCreate();
+
+            static List<T> CreateList(T[] items, int count)
+            {
+                var l = new List<T>(count);
+                CollectionsMarshal.SetCount(l, count);
+                items.AsSpan(0, count).CopyTo(CollectionsMarshal.AsSpan(l));
+                return l;
+            }
+
+            static Func<T[], int, C> GetCreate()
+            {
+                var ct = typeof(C);
+                var lt = typeof(List<T>);
+                if (ct.IsAssignableFrom(lt))
+                    return (items, count) => (C)(Object)CreateList(items, count);
+                var ctor = ct.IsAbstract ? null : ct.GetConstructor(BindingFlags.Instance | BindingFlags.Public, Type.DefaultBinder, [lt], null);
+                if (ctor == null)
+                    return (items, count) => throw new NotSupportedException("Can't create a \"" + ct.CleanTypename() + "\" from a json array, a public constructor taking an IEnumerable<" + typeof(T).CleanTypename() + "> is required");
+                var p = Expression.Parameter(lt, "l");
+                var ctorParam = ctor.GetParameters()[0].ParameterType;
+                var create = Expression.Lambda<Func<List<T>, C>>(Expression.New(ctor, ctorParam == lt ? p : Expression.Convert(p, ctorParam)), p).Compile();
+                var reverse = ct.IsGenericType && ((ct.GetGenericTypeDefinition() == typeof(Stack<>)) || (ct.GetGenericTypeDefinition() == typeof(ConcurrentStack<>)));
+                if (reverse)
+                    return (items, count) =>
+                    {
+                        var l = CreateList(items, count);
+                        l.Reverse();
+                        return create(l);
+                    };
+                return (items, count) => create(CreateList(items, count));
             }
         }
 
@@ -450,8 +541,8 @@ namespace SysWeaver.Serialization.SwJson
         /// <summary>
         /// Read a value declared as <see cref="Object"/>.
         /// Objects must have a <c>"$type"</c> member (else a plain new <see cref="Object"/> is returned and all members are skipped).
-        /// For Newtonsoft compatibility: strings that <see cref="DateTime.TryParse(string, IFormatProvider, DateTimeStyles, out DateTime)"/> accepts (using the current culture) become a <see cref="DateTime"/>,
-        /// <c>true</c>/<c>false</c> a <see cref="Boolean"/>, integral numbers (in the <see cref="Int64"/> range, without an exponent) an <see cref="Int64"/> and other numbers a <see cref="Double"/>.
+        /// For Newtonsoft compatibility: strings that <see cref="DateTime.TryParse(string, IFormatProvider, DateTimeStyles, out DateTime)"/> accepts (using the invariant culture) become a <see cref="DateTime"/>,
+        /// <c>true</c>/<c>false</c> a <see cref="Boolean"/>, integral numbers (in the <see cref="Int64"/> range, without an exponent) an <see cref="Int64"/> and other numbers (and the NaN, Infinity and -Infinity tokens of older versions) a <see cref="Double"/>.
         /// </summary>
         /// <param name="state">The parser state, positioned at the value</param>
         /// <param name="endOn">The end condition of the enclosing container</param>
@@ -469,7 +560,8 @@ namespace SysWeaver.Serialization.SwJson
                 if (c == '"')
                 {
                     var v = Utf8JsonParser.ReadQuotedString(state);
-                    if (DateTime.TryParse(v, null, DateTimeStyles.RoundtripKind, out var dts))
+                    //  Use the invariant culture so that the result doesn't depend on the culture of the current thread
+                    if (DateTime.TryParse(v, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dts))
                         return dts;
                     return v;
                 }
@@ -477,7 +569,8 @@ namespace SysWeaver.Serialization.SwJson
                 if (Boolean.TryParse(vv, out var br))
                     return br;
                 //  Numbers with an exponent can't be parsed as a Decimal (and may be out of its range)
-                if (vv.AsSpan().IndexOfAny('e', 'E') >= 0)
+                //  The tokens NaN, Infinity and -Infinity are written by older versions (NaN and infinities are now written as null)
+                if ((vv.AsSpan().IndexOfAny('e', 'E') >= 0) || (vv is "NaN" or "Infinity" or "-Infinity"))
                     return Double.Parse(vv, NumberStyles.Float, CultureInfo.InvariantCulture);
                 var val = Decimal.Parse(vv, CultureInfo.InvariantCulture);
                 if ((Math.Round(val) == val) && (val >= Int64.MinValue) && (val <= Int64.MaxValue))
@@ -579,7 +672,12 @@ namespace SysWeaver.Serialization.SwJson
                     ReadException.ThrowExpectedEndOfObject();
                 return v;
             }
-            return isNew ? (T)ReadTypeCache.Get(t).Cp(spanVal, state, endOn) : NewAndPopulate<T>(spanVal, state, endOn);
+            if (!isNew)
+                return NewAndPopulate<T>(spanVal, state, endOn);
+            var cp = ReadTypeCache.Get(t).Cp;
+            if (cp == null)
+                ReadException.ThrowCantCreate(t);
+            return (T)cp(spanVal, state, endOn);
         }
 
         /// <summary>
@@ -630,6 +728,9 @@ namespace SysWeaver.Serialization.SwJson
         {
             ref var d = ref state.D;
             var e = state.E;
+            var di = DictionaryInterface<T>.Created;
+            if (di != null)
+                return (T)di.Cp(key, state, endOn);
             if (DictionaryCheck<T>.IsDictionary)
                 return NewAndPopulateDictionary<T>(key, state, endOn);
             var members = ReadTyped<T>.GetMembers(out var v);
@@ -664,6 +765,23 @@ namespace SysWeaver.Serialization.SwJson
         #endregion // Object
 
         /// <summary>
+        /// The readers of the <see cref="Dictionary{TKey, TValue}"/> that is created for a dictionary interface (<see cref="IDictionary{TKey, TValue}"/> or <see cref="IReadOnlyDictionary{TKey, TValue}"/>),
+        /// null for other types (computed once per type), see <see cref="Helper.GetCreatedType(Type)"/>
+        /// </summary>
+        static class DictionaryInterface<T>
+        {
+            public static readonly ReadTypeCache Created = Get();
+
+            static ReadTypeCache Get()
+            {
+                var ct = Helper.GetCreatedType(typeof(T));
+                if ((ct == null) || (ct.GetGenericTypeDefinition() != typeof(Dictionary<,>)))
+                    return null;
+                return ReadTypeCache.Get(ct);
+            }
+        }
+
+        /// <summary>
         /// True if the type is a generic dictionary (computed once per type)
         /// </summary>
         static class DictionaryCheck<T>
@@ -693,6 +811,9 @@ namespace SysWeaver.Serialization.SwJson
         static T ReturnEmpty<T>(ref Byte* d)
         {
             ++d;
+            var di = DictionaryInterface<T>.Created;
+            if (di != null)
+                return (T)di.CreateNewBoxed();
             ReadTyped<T>.GetMembers(out var v);
             return v;
         }

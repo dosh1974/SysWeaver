@@ -40,10 +40,7 @@ namespace SysWeaver.Auth
             var p = Params;
             if (p.ApiKeyAuth == null)
                 return TaskExt.FalseTask;
-            var r = p.ApiKeyManagementAuth;
-            if (r == null)
-                return TaskExt.FalseTask;
-            if (auth.IsValid(r))
+            if (auth.IsValid(ManagementAuth))
                 return TaskExt.TrueTask;
             return TaskExt.FalseTask;
         }
@@ -61,9 +58,11 @@ namespace SysWeaver.Auth
             Params = p;
             InternalPasswordPolicy = p.PasswordPolicy ?? new PasswordPolicy();
             MustExist = p.MustExist;
+            //  null must never mean "no auth required" for the key management methods, use the default instead
+            ManagementAuth = p.ApiKeyManagementAuth ?? Roles.AdminOps;
             if (p.ApiKeyAuth != null)
             {
-                var aa = p.ApiKeyManagementAuth;
+                var aa = ManagementAuth;
                 MethodAuths = new Dictionary<String, String>(StringComparer.Ordinal)
                 {
                     { nameof(AppInfo), aa },
@@ -85,6 +84,11 @@ namespace SysWeaver.Auth
         }
 
         readonly bool MustExist;
+
+        /// <summary>
+        /// The effective auth required to manage API keys (<see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/>, null is mapped to <see cref="Roles.AdminOps"/>).
+        /// </summary>
+        readonly String ManagementAuth;
 
         readonly IMessageHost Msg;
 
@@ -160,60 +164,72 @@ namespace SysWeaver.Auth
             {
                 msg?.AddMessage(LogPrefix + "Updating users", MessageLevels.Debug);
                 using var _ = msg?.Tab();
-                var p = Params;
-                var tokenDelim = TokenDelim;
-                var a = new Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>>(StringComparer.Ordinal);
-                var guidMap = new Dictionary<String, AuthorizationInfo>(StringComparer.Ordinal);
-                var aba = p.AllowBasicAuth;
-                var apiKeyAuth = p.ApiKeyAuth;
-                Dictionary<String, Task<Authorization>> bearerAuths = new(StringComparer.Ordinal);
-                if ((p.Users?.Length ?? 0) > 0)
-                {
-                    msg?.AddMessage(LogPrefix + "Adding users from service config", MessageLevels.Debug);
-                    using (msg?.Tab())
-                        AddUsers(a, guidMap, p.Users, aba);
-                }
-                if ((FileLines?.Length ?? 0) > 0)
-                {
-                    msg?.AddMessage(LogPrefix + "Adding users from file", MessageLevels.Debug);
-                    using (msg?.Tab())
-                        AddUsers(a, guidMap, FileLines, aba);
-                }
-                if (apiKeyAuth != null)
-                {
-                    var apiKeys = KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);
-                    if ((apiKeys?.Length ?? 0) > 0)
-                    {
-                        msg?.AddMessage(LogPrefix + "Adding users from stored api keys", MessageLevels.Debug);
-                        using var __ = msg?.Tab();
-                        apiKeyAuth = ":" + apiKeyAuth;
-                        foreach (var kv in apiKeys)
-                        {
-                            var auth = AddUser(a, guidMap, kv + apiKeyAuth, true, true);
-                            bearerAuths[kv.Substring(kv.IndexOf(':') + 1)] = Task.FromResult(auth);
-                        }
-                    }
-                }
                 Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>> changed = new (StringComparer.Ordinal);
-                foreach (var x in Auths)
-                    changed.Add(x.Key, x.Value);
-                foreach (var x in a)
+                //  Serialize updates, so that a concurrent update (file change vs api key change) can't publish a stale snapshot
+                lock (ApiKeyLock)
                 {
-                    if (!changed.TryGetValue(x.Key, out var y))
-                        continue;
-                    if (x.Value.Item3 == y.Item3)
+                    var p = Params;
+                    var tokenDelim = TokenDelim;
+                    var a = new Dictionary<String, Tuple<Byte[], Authorization, String, Authorization>>(StringComparer.Ordinal);
+                    var guidMap = new Dictionary<String, AuthorizationInfo>(StringComparer.Ordinal);
+                    var aba = p.AllowBasicAuth;
+                    var apiKeyAuth = p.ApiKeyAuth;
+                    Dictionary<String, Task<Authorization>> bearerAuths = new(StringComparer.Ordinal);
+                    if ((p.Users?.Length ?? 0) > 0)
                     {
-                        if (SetsAreEqual(x.Value.Item2.Tokens, y.Item2.Tokens))
+                        msg?.AddMessage(LogPrefix + "Adding users from service config", MessageLevels.Debug);
+                        using (msg?.Tab())
+                            AddUsers(a, guidMap, p.Users, aba);
+                    }
+                    if ((FileLines?.Length ?? 0) > 0)
+                    {
+                        msg?.AddMessage(LogPrefix + "Adding users from file", MessageLevels.Debug);
+                        using (msg?.Tab())
+                            AddUsers(a, guidMap, FileLines, aba);
+                    }
+                    if (apiKeyAuth != null)
+                    {
+                        var apiKeys = KeyValueStore.AllApp.TryGet<String[]>(ApiKeyKey);
+                        if ((apiKeys?.Length ?? 0) > 0)
                         {
-                            changed.Remove(x.Key);
-                            continue;
+                            msg?.AddMessage(LogPrefix + "Adding users from stored api keys", MessageLevels.Debug);
+                            using var __ = msg?.Tab();
+                            apiKeyAuth = ":" + apiKeyAuth;
+                            //  Api keys may not replace configured users (same name => same user and guid)
+                            var configured = new HashSet<String>(a.Keys, StringComparer.Ordinal);
+                            foreach (var kv in apiKeys)
+                            {
+                                var keyName = kv.Substring(0, Math.Max(0, kv.IndexOf(':'))).Trim();
+                                if (configured.Contains(keyName.FastToLower()))
+                                {
+                                    msg?.AddMessage(LogPrefix + "Ignoring api key " + keyName.ToQuoted() + ", a user with that name already exists", MessageLevels.Warning);
+                                    continue;
+                                }
+                                var auth = AddUser(a, guidMap, kv + apiKeyAuth, true, true);
+                                bearerAuths[kv.Substring(kv.IndexOf(':') + 1)] = Task.FromResult(auth);
+                            }
                         }
                     }
+                    foreach (var x in Auths)
+                        changed.Add(x.Key, x.Value);
+                    foreach (var x in a)
+                    {
+                        if (!changed.TryGetValue(x.Key, out var y))
+                            continue;
+                        if (x.Value.Item3 == y.Item3)
+                        {
+                            if (SetsAreEqual(x.Value.Item2.Tokens, y.Item2.Tokens))
+                            {
+                                changed.Remove(x.Key);
+                                continue;
+                            }
+                        }
+                    }
+                    Interlocked.Exchange(ref Auths, a.Freeze());
+                    Interlocked.Exchange(ref BearerAuths, bearerAuths.Freeze());
+                    Interlocked.Exchange(ref AuthGuids, guidMap.Freeze());
+                    Interlocked.Increment(ref InternalChangeCounter);
                 }
-                Interlocked.Exchange(ref Auths, a.Freeze());
-                Interlocked.Exchange(ref BearerAuths, bearerAuths.Freeze());
-                Interlocked.Exchange(ref AuthGuids, guidMap.Freeze());
-                Interlocked.Increment(ref InternalChangeCounter);
                 foreach (var x in changed)
                     x.Value.Item2.RequestLogout("Password or tokens have changed!");
             }
@@ -429,10 +445,10 @@ namespace SysWeaver.Auth
         /// <summary>
         /// Authorize using an API key (the key part of a "name:key" API key) as a bearer token.
         /// </summary>
-        /// <param name="token">The API key</param>
+        /// <param name="token">The API key (null is not found, i.e. a "Bearer" header without a token)</param>
         /// <returns>A weak authorization for the API key user, or null</returns>
         public override Task<Authorization> BearerAuth(string token)
-            => BearerAuths.TryGetValue(token, out var data) ? data : NoAuth;
+            => (token != null) && BearerAuths.TryGetValue(token, out var data) ? data : NoAuth;
 
         /// <inheritdoc/>
         public override Task<Authorization> SecureAuth(string userName, byte[] hash, String oneTimePad)
@@ -628,7 +644,7 @@ namespace SysWeaver.Auth
         /// Requires <see cref="SimpleAuthorizerParams.ApiKeyManagementAuth"/> (disabled if API keys are disabled).
         /// </summary>
         /// <param name="keyName">The name of the new key (used as user name), please use only alpha numericals</param>
-        /// <returns>Return a string with new user/password pair as "user:password", or null if a key with that name already exists</returns>
+        /// <returns>Return a string with new user/password pair as "user:password", or null if a key or user with that name already exists (user names are case insensitive)</returns>
         /// <exception cref="Exception">The key name is null, empty, contains a ':' or is too long.</exception>
         [WebApi(ApiKeyPath)]
         [WebApiAuth(ApiKeyAuth)]
@@ -662,6 +678,9 @@ namespace SysWeaver.Auth
                         }
                     }
                 }
+                //  May not collide with an existing user (would replace it, same name => same guid)
+                if (Auths.ContainsKey(keyName.FastToLower()))
+                    return null;
                 var kv = String.Join(':', keyName, GenKey());
                 t = t.Push(kv);
                 KeyValueStore.AllApp.Set(ApiKeyKey, t);

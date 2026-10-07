@@ -10,7 +10,7 @@ namespace SysWeaver
     /// <summary>
     /// A string tree stores a bunch of strings (with values) in a way that makes it fast to check if a test string starts with ANY of the contained strings.
     /// The leaf of a string is the values that was added with that string (in the order that they where added), see <see cref="FrozenStringTrie"/> for the implementation.
-    /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
+    /// Empty strings are not supported, they can't be added (throws an <see cref="ArgumentException"/>) and can't be searched for (throws in debug builds).
     /// An immutable (thread safe) and faster version of <see cref="StringTreeList{T}"/>, with the same results (but the returned value lists are read only).
     /// For case sensitive lookups <see cref="StringPrefixLookup.BuildList{T}(IEnumerable{Tuple{string, T}})"/> is a faster drop in replacement.
     /// </summary>
@@ -115,8 +115,9 @@ namespace SysWeaver
             return null;
         }
 
+#if DEBUG
         /// <summary>
-        /// The total number of trie nodes of all <see cref="FrozenStringTreeList{T}"/> instances (of this T) that are currently allocated (created and not yet finalized), for diagnostics
+        /// The total number of trie nodes of all <see cref="FrozenStringTreeList{T}"/> instances (of this T) that are currently allocated (created and not yet finalized), for diagnostics (debug builds only)
         /// </summary>
         public static long AllocatedNodes => Interlocked.Read(ref CountAllocNodes);
 
@@ -129,6 +130,7 @@ namespace SysWeaver
         {
             Interlocked.Add(ref CountAllocNodes, -NodeCount);
         }
+#endif//DEBUG
 
         /// <summary>
         /// An empty (case sensitive) tree, nothing is ever found
@@ -141,7 +143,9 @@ namespace SysWeaver
         /// <param name="tree">The tree to copy, the casing is taken from the tree</param>
         public FrozenStringTreeList(StringTreeList<T> tree) : base(Source(tree, null), tree.IsCaseInSensitive)
         {
+#if DEBUG
             Interlocked.Add(ref CountAllocNodes, NodeCount);
+#endif//DEBUG
         }
 
         #region Implementation

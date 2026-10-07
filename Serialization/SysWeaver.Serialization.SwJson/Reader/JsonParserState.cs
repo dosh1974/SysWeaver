@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading;
 
 namespace SysWeaver.Serialization.SwJson.Reader
 {
@@ -67,14 +66,25 @@ namespace SysWeaver.Serialization.SwJson.Reader
         public readonly UnmanagedMemoryManager<Byte> Mem = new UnmanagedMemoryManager<byte>();
 
         /// <summary>
-        /// The next free instance in the pool.
+        /// The max number of pooled instances
         /// </summary>
-        public JsonParserState Next;
+        const int MaxPooled = 32;
 
+        /// <summary>
+        /// The pooled (free) instances, the first <see cref="PoolCount"/> are used, only accessed while holding <see cref="PoolLock"/>
+        /// </summary>
+        static readonly JsonParserState[] Pool = new JsonParserState[MaxPooled];
 
+        /// <summary>
+        /// The number of pooled instances, only accessed while holding <see cref="PoolLock"/>
+        /// </summary>
+        static int PoolCount;
 
-        static volatile JsonParserState First;
-        static volatile int Count;
+        /// <summary>
+        /// Protects the pool (the lock is only held while taking or adding an instance).
+        /// The pool used to be a lock free stack without ABA protection, so two parses could get the same instance.
+        /// </summary>
+        static readonly Object PoolLock = new Object();
 
         /// <summary>
         /// Get a pooled (or new) state for parsing the data.
@@ -82,44 +92,48 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <param name="d">The start of the (pinned) UTF8 data</param>
         /// <param name="l">The length of the data in bytes</param>
         /// <returns>A state positioned at the start of the data, dispose to return it to the pool</returns>
-        /// <remarks>The pool is a lock free stack without ABA protection.</remarks>
+        /// <remarks>Thread safe, an instance is never returned to more than one caller (until it's disposed).</remarks>
         public static JsonParserState Get(Byte* d, int l)
         {
-            for (; ; )
+            JsonParserState t = null;
+            lock (PoolLock)
             {
-                var t = First;
-                if (t == null)
-                    return new JsonParserState(d, l);
-                if (Interlocked.CompareExchange(ref First, t.Next, t) == t)
+                var c = PoolCount;
+                if (c > 0)
                 {
-                    Interlocked.Decrement(ref Count);
-                    t.Set(d, l);
-                    return t;
+                    --c;
+                    t = Pool[c];
+                    Pool[c] = null;
+                    PoolCount = c;
                 }
             }
-
+            if (t == null)
+                return new JsonParserState(d, l);
+            t.Set(d, l);
+            return t;
         }
+
         /// <summary>
         /// Return the state to the pool (dropped if the pool already holds 32 instances, temp buffers larger than 64K chars/bytes are released).
         /// Must only be called once per <see cref="Get(byte*, int)"/>, and the state must not be used afterwards.
         /// </summary>
         public void Dispose()
         {
-            if (Count >= 32)
-                return;
             if (Temp.Length > MaxKeptTempSize)
                 Temp = null;
             if (TempB.Length > MaxKeptTempSize)
                 TempB = null;
-            for (; ;)
+            //  Don't keep pointers to the (no longer pinned) data
+            S = null;
+            D = null;
+            E = null;
+            lock (PoolLock)
             {
-                var t = First;
-                this.Next = t;
-                if (Interlocked.CompareExchange(ref First, this, t) == t)
-                {
-                    Interlocked.Increment(ref Count);
+                var c = PoolCount;
+                if (c >= MaxPooled)
                     return;
-                }
+                Pool[c] = this;
+                PoolCount = c + 1;
             }
         }
 

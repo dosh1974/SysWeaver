@@ -92,7 +92,7 @@ namespace SysWeaver.Net
         /// <param name="firewallHandler">Optional firewall handler, used for prefixes that should be added to the firewall</param>
         /// <param name="p">The parameters, null for defaults</param>
         /// <param name="listenerExceptionType">The exception type that the listener throws for connection problems (counted as listener exceptions instead of handler errors), may be null</param>
-        /// <remarks>May block for up to 60 seconds waiting for a LAN ip if none is available.</remarks>
+        /// <remarks>May block for up to 60 seconds waiting for a LAN ip if the machine has no IPv4 address at all (no wait if it only has public IPv4 addresses).</remarks>
         /// <exception cref="Exception">Thrown if the allowed languages are invalid or contain duplicates, or the rate limit parameters are invalid</exception>
         protected HttpServerBase(IMessageHost msg, ITranslator translator, IApiAuditService audit, AuthManager auth, IFirewallHandler firewallHandler, HttpServerBaseParams p, Type listenerExceptionType)
         {
@@ -109,7 +109,6 @@ namespace SysWeaver.Net
             Audit = audit;
             var s = p.SessionCookieName;
             SessionCookieName = (s == null ? null : TextTemplate.SearchAndReplace(String.IsNullOrEmpty(s) ? "SysWeaver.Session.[AppName]" : s, envVars, true, true)).EncodeNonAsciiCharacters();
-            SessionCookieNameEquals = SessionCookieName + "=";
 
             s = p.DeviceIdCookieName;
             DeviceIdCookieName = s == null ? null : TextTemplate.SearchAndReplace(String.IsNullOrEmpty(s) ? "SysWeaver.DeviceId" : s, envVars);
@@ -242,7 +241,8 @@ namespace SysWeaver.Net
             PruneTask = new PeriodicTask(Prune, 3000);
 
             var ip = NetworkTools.GetAnyLanIP();
-            if (ip == null)
+            //  Only wait if the network doesn't seem to be up yet, a host that only have public IPv4 addresses (no private LAN ip) shouldn't be delayed
+            if ((ip == null) && !NetworkTools.GetLocalIps().Any(x => x.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork))
             {
                 const int timeOut = 60;
                 msg?.AddMessage(Prefix + "Waiting up to " + timeOut + " seconds for a valid LAN ip");
@@ -287,11 +287,12 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Call this when a user has been set on a session (see <see cref="HttpSession.SetAuth"/>).
+        /// Call this when a user has been set on a session (see <see cref="HttpSession.SetAuth(Authorization)"/>).
         /// Pushes a "user.login" message, clears the session data, registers the session with the user and raises <see cref="OnLogin"/> and <see cref="OnLoginAsync"/>.
         /// </summary>
         /// <param name="session">The session</param>
-        /// <remarks>The session token is not changed.</remarks>
+        /// <remarks>The session token is not changed (the request is unknown, so a new session cookie can't be sent).
+        /// Use <see cref="RunOnLogin(HttpSession, HttpServerRequest)"/> to also rotate the session token (recommended, prevents session fixation).</remarks>
         public async Task RunOnLogin(HttpSession session)
         {
             session.PushMessage(MessageUserLogIn, true, false);
@@ -301,22 +302,103 @@ namespace SysWeaver.Net
             if (id == null)
                 return;
             var us = UserSessions;
-            if (!us.TryGetValue(id, out var u))
+            //  Add the session under the lock, so that a concurrent RunOnSessionRemove (of the user's last session) can't remove the user data after it was looked up here
+            lock (us)
             {
-                lock (us)
+                if (!us.TryGetValue(id, out var u))
                 {
-                    if (!us.TryGetValue(id, out u))
-                    {
-                        u = new UserData(auth);
-                        us.TryAdd(id, u);
-                        Interlocked.Increment(ref UserCount);
-                    }
+                    u = new UserData(auth);
+                    us.TryAdd(id, u);
+                    Interlocked.Increment(ref UserCount);
                 }
+                Interlocked.Increment(ref SessionUserCount);
+                u.Sessions.TryAdd(session, true);
             }
-            Interlocked.Increment(ref SessionUserCount);
-            u.Sessions.TryAdd(session, true);
             OnLogin.RaiseEvents(LoginErrors.OnException, session);
             await OnLoginAsync.RaiseEvents(LoginErrors.OnException, session).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Call this when a user has been set on a session (see <see cref="HttpSession.SetAuth(Authorization)"/>) during a request.
+        /// If the request presented the session's token (session cookie), the session token is replaced by a new random token and the new session cookie is set on the response (prevents session fixation).
+        /// The session object (and its data, user and push messages) is kept, only the token changes, see <see cref="RotatedTokenGraceSeconds"/> for what happens to the old token.
+        /// Then <see cref="RunOnLogin(HttpSession)"/> is called.
+        /// </summary>
+        /// <param name="session">The session</param>
+        /// <param name="request">The request that logged in the user (the new session cookie is set on its response), null to not rotate the token</param>
+        public async Task RunOnLogin(HttpSession session, HttpServerRequest request)
+        {
+            if ((request != null) && (session.Auth != null))
+                RotateSessionToken(session, request);
+            await RunOnLogin(session).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// For this number of seconds after a session token has been rotated (see <see cref="RunOnLogin(HttpSession, HttpServerRequest)"/>), requests using the old token
+        /// get a temporary new (anonymous) session but no new session cookie, so that a concurrent request of the same client (sent before the login response arrived) can't overwrite the new session cookie.
+        /// The old token never gives access to the (logged in) session again, else an attacker that planted the token could use it.
+        /// </summary>
+        public const int RotatedTokenGraceSeconds = 30;
+
+        /// <summary>
+        /// The maximum number of rotated tokens that are remembered (for <see cref="RotatedTokenGraceSeconds"/> seconds).
+        /// </summary>
+        public const int MaxRotatedTokens = 100000;
+
+        /// <summary>
+        /// Rotated (old) session tokens, the value is the UTC ticks when the grace period ends
+        /// </summary>
+        readonly LowAllocConcurrentDictionary<ReadOnlyMemory<Char>, long> RotatedTokens = new(64, ReadOnlyMemoryComparer.GetEqualityComparer<Char>());
+
+        /// <summary>
+        /// Replace the token of a session with a new random token and set the new session cookie on the response.
+        /// Only done if the request presented the current token of the session (a session created by this request, or already rotated, has a token that only this client knows).
+        /// </summary>
+        /// <param name="session">The session</param>
+        /// <param name="request">The request</param>
+        /// <returns>True if the token was replaced</returns>
+        bool RotateSessionToken(HttpSession session, HttpServerRequest request)
+        {
+            var sn = SessionCookieName;
+            if (sn == null)
+                return false;
+            var presented = ExtractSessionCookie(request.GetReqHeader("Cookie"));
+            if (presented.IsEmpty)
+                return false;
+            String newToken;
+            lock (session.TokenLock)
+            {
+                var oldToken = session.Token;
+                if (!presented.Span.SequenceEqual(oldToken.AsSpan()))
+                    return false;
+                var oldKey = oldToken.AsMemory();
+                var rotated = RotatedTokens;
+                //  Remember the old token before removing it (so that a concurrent request with the old token never gets a new session cookie)
+                var remember = rotated.Count < MaxRotatedTokens;
+                if (remember)
+                    rotated[oldKey] = DateTime.UtcNow.Ticks + TimeSpan.TicksPerSecond * RotatedTokenGraceSeconds;
+                var sessions = Sessions;
+                //  Removing the old token takes ownership of the session (fails if the session was removed or is being pruned concurrently)
+                if ((!sessions.TryRemove(oldKey, out var s)) || (s != session))
+                {
+                    if (s != null)
+                        sessions.TryAdd(oldKey, s);
+                    if (remember)
+                        rotated.TryRemove(oldKey, out _);
+                    return false;
+                }
+                using (var rng = SecureRng.Get())
+                {
+                    do
+                    {
+                        newToken = rng.GetGuid24();
+                    } while (!sessions.TryAdd(newToken.AsMemory(), session));
+                }
+                Volatile.Write(ref session.Token, newToken);
+            }
+            var exp = new DateTime(DateTime.UtcNow.Ticks + SessionCookieLifetime, DateTimeKind.Utc);
+            request.UpdateCookie(HttpServerTools.MakeCookie(sn, newToken, exp, CookieOptions));
+            return true;
         }
 
         readonly ExceptionTracker SessionStartErrors = new ExceptionTracker();
@@ -516,6 +598,21 @@ namespace SysWeaver.Net
                     rs.TryDequeue(out data);
                 }
             }
+            using (PerfMon.Track(nameof(Prune) + ".RotatedTokens"))
+            {
+                var rt = RotatedTokens;
+                if (rt.Count > 0)
+                {
+                    var now = DateTime.UtcNow.Ticks;
+                    List<ReadOnlyMemory<Char>> remove = null;
+                    foreach (var x in rt)
+                        if (now > x.Value)
+                            (remove ??= new List<ReadOnlyMemory<Char>>()).Add(x.Key);
+                    if (remove != null)
+                        foreach (var x in remove)
+                            rt.TryRemove(x, out _);
+                }
+            }
             return true;
         }
 
@@ -524,7 +621,7 @@ namespace SysWeaver.Net
         /// </summary>
         public event Action<HttpSession> OnSessionStart;
         /// <summary>
-        /// Raised when a user has logged into a session (see <see cref="RunOnLogin"/>).
+        /// Raised when a user has logged into a session (see <see cref="RunOnLogin(HttpSession)"/>).
         /// </summary>
         public event Action<HttpSession> OnLogin;
         /// <summary>
@@ -1055,6 +1152,14 @@ namespace SysWeaver.Net
             if (!p.TryGetValue("u", out var url))
                 throw new Exception("No 'u' query parameter found, expecting a redirect url");
             Msg?.AddMessage("url=" + url, MessageLevels.Warning);
+            //  Only redirect to this site (prevents open redirects to phishing sites)
+            if (!IsLocalRedirectUrl(url, data.Prefix, ExternalRootUri))
+            {
+                data.SetResStatusCode(400);
+                if (!data.IsHead)
+                    data.SetResText(await Translator.TranslateSafe("Bad Request - The redirect url must be a relative url or an url on this site!", session.Language, "en", "An error message that is displayed when a redirect url points to another web site").ConfigureAwait(false));
+                return;
+            }
             if (a == null)
             {
                 if (!p.TryGetValue("t", out var token))
@@ -1082,7 +1187,7 @@ namespace SysWeaver.Net
                         return;
                     }
                     session.SetAuth(user);
-                    await data.Server.RunOnLogin(session).ConfigureAwait(false);
+                    await data.Server.RunOnLogin(session, data).ConfigureAwait(false);
                     if (track)
                         audit.OnApiEnd(trackId, data, api, url);
                 }
@@ -1093,6 +1198,49 @@ namespace SysWeaver.Net
             }
             data.SetResHeader("Location", url);
             data.SetResStatusCode(302);
+        }
+
+        /// <summary>
+        /// Check if a redirect url is local (on this site).
+        /// Allowed are relative urls (ex: "page.html", "../a/b.html", "/app/x?y=1") and absolute http(s) urls with the same origin (scheme, host and port) as <paramref name="prefix"/> or <paramref name="externalRootUri"/>.
+        /// Protocol relative urls ("//host/x"), back slash variants ("/\host", "\\host"), other schemes (ex: "javascript:") and urls with control chars or leading / trailing white space are rejected.
+        /// </summary>
+        /// <param name="url">The (decoded) redirect url</param>
+        /// <param name="prefix">The prefix of the request, ex: "https://host:8080/"</param>
+        /// <param name="externalRootUri">Optional external root uri of the site (ex: when behind a reverse proxy)</param>
+        /// <returns>True if the url is local</returns>
+        public static bool IsLocalRedirectUrl(String url, String prefix, String externalRootUri = null)
+        {
+            if (String.IsNullOrEmpty(url))
+                return false;
+            var l = url.Length;
+            if ((url[0] <= ' ') || (url[l - 1] <= ' '))
+                return false;
+            foreach (var c in url)
+                if ((c < ' ') || (c == '\x7f'))
+                    return false;
+            var c0 = url[0];
+            if ((c0 == '/') || (c0 == '\\'))
+                return (l < 2) || ((url[1] != '/') && (url[1] != '\\'));
+            //  A scheme is terminated by a ':' before any '/', '\', '?' or '#'
+            var i = url.AsSpan().IndexOfAny(":/\\?#");
+            if ((i < 0) || (url[i] != ':'))
+                return true;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var target))
+                return false;
+            return IsSameOrigin(target, prefix) || IsSameOrigin(target, externalRootUri);
+        }
+
+        static bool IsSameOrigin(Uri target, String root)
+        {
+            if (String.IsNullOrEmpty(root))
+                return false;
+            if (!Uri.TryCreate(root, UriKind.Absolute, out var r))
+                return false;
+            var scheme = target.Scheme;
+            if ((scheme != Uri.UriSchemeHttp) && (scheme != Uri.UriSchemeHttps))
+                return false;
+            return (scheme == r.Scheme) && String.Equals(target.IdnHost, r.IdnHost, StringComparison.OrdinalIgnoreCase) && (target.Port == r.Port);
         }
 
         async ValueTask HandleLogoutUser(HttpServerRequest data, HttpSession session)
@@ -1296,8 +1444,9 @@ namespace SysWeaver.Net
                     }
                     if (session != null)
                     {
-                        session.SetAuth(user);
-                        await data.Server.RunOnLogin(session).ConfigureAwait(false);
+                        //  The authorization is cached (and shared between sessions) by the auth manager, so the session must not dispose it
+                        session.SetAuth(user, false);
+                        await data.Server.RunOnLogin(session, data).ConfigureAwait(false);
                     }
                 }
                 else
@@ -1465,7 +1614,7 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// Handle a request (the main entry point used by the listener implementations), see the class remarks for the pipeline.
-        /// Exceptions thrown by the handler while producing the response are turned into error responses (500, or the code of an <see cref="HttpResponseException"/>, with the exception message as text).
+        /// Exceptions thrown by the handler while producing the response are turned into error responses (500, or the code of an <see cref="HttpResponseException"/>, with the exception message as text, sensitive information removed using <see cref="ExceptionExt.SafeMessage"/>).
         /// </summary>
         /// <param name="data">The request</param>
         /// <returns>A task that completes when the response has been written</returns>
@@ -1676,10 +1825,8 @@ namespace SysWeaver.Net
                 {
                     if (haveTemplate)
                         vars = GetVars(true, data);
-                    if (isDynamicTemplate)
-                        langVars = await GetTranslationVars(lang, langTemplate, vars).ConfigureAwait(false);
-                    else
-                        langVars = await langTemplate.LangVars.GetOrUpdateAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false);
+                    //  The translations are cached per language, the variables inside of them are substituted per request
+                    langVars = SubstituteTranslationVars(await langTemplate.LangVars.GetOrUpdateAsync(lang, GetTranslationVars, langTemplate).ConfigureAwait(false), vars);
                 }
                 //  Set mime unless it's already set
                 var mime = data.GetResMime();
@@ -1785,9 +1932,10 @@ namespace SysWeaver.Net
                                 cachedTemplate = new TextTemplate(text, "${", "}", name => IsTemplateVariable(name) || (langVarNames?.Contains(name) ?? false));
                                 if (cachedTemplate.HaveVars)
                                 {
-                                    isDynamicTemplate = IsDynamic(cachedTemplate);
+                                    //  Translated texts may contain dynamic variables (ex: "Welcome ${#Session.NickName}" inserted as "${#Vr1}"), the output of such a template depends on the request too
+                                    isDynamicTemplate = IsDynamic(cachedTemplate) || HaveDynamicTranslationVars(langTemplate);
                                     vars = vars ?? GetVars(isDynamicTemplate || isLanguageTemplate, data);
-                                    langVars = langVars ?? (langTemplate == null ? null : await langTemplate.LangVars.GetOrUpdateAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false));
+                                    langVars = langVars ?? (langTemplate == null ? null : SubstituteTranslationVars(await langTemplate.LangVars.GetOrUpdateAsync(lang, GetTranslationVars, langTemplate).ConfigureAwait(false), vars));
                                     dec = null;
                                     textTemplate.Set(cachedTemplate, isDynamicTemplate, etag, langTemplate, lang);
                                     i.ChangeMem(ApplyTemplate(cachedTemplate, vars, langVars));
@@ -1806,7 +1954,7 @@ namespace SysWeaver.Net
                             if (cachedTemplate.HaveVars)
                             {
                                 vars = vars ?? GetVars(isDynamicTemplate || isLanguageTemplate, data);
-                                langVars = langVars ?? (langTemplate == null ? null : await langTemplate.LangVars.GetOrUpdateAsync(lang, GetTranslationVars, langTemplate, vars).ConfigureAwait(false));
+                                langVars = langVars ?? (langTemplate == null ? null : SubstituteTranslationVars(await langTemplate.LangVars.GetOrUpdateAsync(lang, GetTranslationVars, langTemplate).ConfigureAwait(false), vars));
                                 dec = null;
                                 textTemplate.SetLangLm(etag, lang);
                                 i.ChangeMem(ApplyTemplate(cachedTemplate, vars, langVars));
@@ -2124,7 +2272,8 @@ namespace SysWeaver.Net
                     data.SetResStatusCode(re.ResponseCode);
                     if (!isHead)
                     {
-                        var text = re.Message;
+                        //  The message is intended for the client, normal messages are unchanged by SafeMessage
+                        var text = re.SafeMessage();
                         var tr = re.Translate;
                         if ((translator != null) && (tr != null))
                             text = await translator.TranslateSafe(text, session.Language, tr, "This is an exception message thrown by a web server, the value at the end in the enclosing [ ] are the error code, keep as is", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false);
@@ -2138,8 +2287,9 @@ namespace SysWeaver.Net
                     Msg?.AddMessage(Prefix + "Handler for \"" + data.Url + "\" failed!", ex, MessageLevels.Debug);
 #endif//DEBUG
                     data.SetResStatusCode(500);
+                    //  Sensitive information (paths, connection strings, private ips, sql etc) is removed from the message
                     if (!isHead)
-                        data.SetResText(await translator.TranslateSafe(ex.Message + " [500]", session?.Language, "en", "This is an exception message thrown by a web server", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false));
+                        data.SetResText(await translator.TranslateSafe(ex.SafeMessage() + " [500]", session?.Language, "en", "This is an exception message thrown by a web server", TranslationEffort.Medium, TranslationCacheRetention.Short).ConfigureAwait(false));
                 }
             }
 
@@ -2536,7 +2686,6 @@ namespace SysWeaver.Net
         #region Session
 
         readonly String SessionCookieName;
-        readonly String SessionCookieNameEquals;
 
         readonly String DeviceIdCookieName;
         readonly String DeviceIdCookieNameEquals;
@@ -2656,29 +2805,45 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Get the session token from a Cookie header without allocating.
-        /// Finds the first occurrence of "name=" anywhere in the header (not only at a cookie boundary).
+        /// Get the session token from a Cookie header without allocating (see <see cref="GetCookieValue"/>).
         /// </summary>
-        unsafe ReadOnlyMemory<Char> ExtractSessionCookie(String cookieString)
+        ReadOnlyMemory<Char> ExtractSessionCookie(String cookieString) => GetCookieValue(cookieString, SessionCookieName);
+
+        /// <summary>
+        /// Get the value of a cookie from a Cookie header without allocating.
+        /// The name is only matched at a cookie boundary (the start of the header or after a ';' and optional white space), ex: "xName=1" doesn't match "Name".
+        /// </summary>
+        /// <param name="cookieString">The Cookie header value, may be null</param>
+        /// <param name="cookieName">The (case sensitive) name of the cookie</param>
+        /// <returns>The (trimmed) value of the first cookie with that name, empty if not found</returns>
+        public static ReadOnlyMemory<Char> GetCookieValue(String cookieString, String cookieName)
         {
-            if (cookieString == null)
-                return null;
-            var sn = SessionCookieNameEquals;
+            if ((cookieString == null) || String.IsNullOrEmpty(cookieName))
+                return default;
             var sp = cookieString.AsSpan();
-            fixed (Char* s = sp)
+            var len = sp.Length;
+            var nl = cookieName.Length;
+            int pos = 0;
+            while (pos < len)
             {
-                var start = s;
-                var end = s + sp.Length;
-                start = CharPtrTools.IndexOf(sn, start, end);
-                if (start == null)
-                    return null;
-                start += sn.Length;
-                var e = CharPtrTools.IndexOf(';', start, end);
-                if (e == null)
-                    e = end;
-                CharPtrTools.Trim(ref start, ref e);
-                return cookieString.AsMemory().Slice((int)(start - s), (int)(e - start));
+                while ((pos < len) && ((sp[pos] == ' ') || (sp[pos] == '\t')))
+                    ++pos;
+                var e = sp.Slice(pos).IndexOf(';');
+                var end = e < 0 ? len : pos + e;
+                var cookie = sp.Slice(pos, end - pos);
+                if ((cookie.Length > nl) && (cookie[nl] == '=') && cookie.StartsWith(cookieName, StringComparison.Ordinal))
+                {
+                    var vs = pos + nl + 1;
+                    while ((vs < end) && Char.IsWhiteSpace(sp[vs]))
+                        ++vs;
+                    var ve = end;
+                    while ((ve > vs) && Char.IsWhiteSpace(sp[ve - 1]))
+                        --ve;
+                    return cookieString.AsMemory(vs, ve - vs);
+                }
+                pos = end + 1;
             }
+            return default;
         }
 
         //readonly ConcurrentDictionary<String, HttpSession> Sessions = new (StringComparer.Ordinal);
@@ -2690,7 +2855,10 @@ namespace SysWeaver.Net
             using var _ = PerfMon.Track(nameof(GetSession));
             var sn = SessionCookieName;
             if (sn == null)
-                return default;
+            {
+                //  Session cookies are disabled, every request gets a new session (same as a client that doesn't store cookies)
+                return CreateSession(req, req.GetReqHeader("Cookie"), false);
+            }
             var cookieString = req.GetReqHeader("Cookie");
             var sessionTokenMemory = ExtractSessionCookie(cookieString);// req.GetReqCookie(sn, cookieString);
             if (!sessionTokenMemory.IsEmpty)
@@ -2700,6 +2868,9 @@ namespace SysWeaver.Net
                     session.Touch(DateTime.UtcNow.Ticks, req);
                     return ValueTask.FromResult(session);
                 }
+                //  A recently rotated token, don't set a session cookie (it could overwrite the new session cookie of the client)
+                if (RotatedTokens.TryGetValue(sessionTokenMemory, out var graceEnd) && (DateTime.UtcNow.Ticks <= graceEnd))
+                    return CreateSession(req, cookieString, false);
             }
             return CreateSession(req, cookieString);
 
@@ -2714,8 +2885,11 @@ namespace SysWeaver.Net
         /// Create a new session, may be called for every request by clients that doesn't store cookies, so keep it lean.
         /// Doesn't allocate a task unless the accept language lookup is incomplete.
         /// </summary>
+        /// <param name="req">The request</param>
+        /// <param name="cookieString">The Cookie header of the request</param>
+        /// <param name="setSessionCookie">True to set the session cookie on the response</param>
         [SkipLocalsInit]
-        async ValueTask<HttpSession> CreateSession(HttpServerRequest req, String cookieString)
+        async ValueTask<HttpSession> CreateSession(HttpServerRequest req, String cookieString, bool setSessionCookie = true)
         {
             var langTask = GetAcceptLanguage(req.GetReqHeader("Accept-Language"));
             var lang = langTask.IsCompletedSuccessfully ? langTask.Result : await langTask.ConfigureAwait(false);
@@ -2756,8 +2930,11 @@ namespace SysWeaver.Net
                     session.OnAuthLogout += onLogout;
                 } while (!sessions.TryAdd(sessionToken.AsMemory(), session));
             }
-            var exp = new DateTime(nowTicks + SessionCookieLifetime, DateTimeKind.Utc);
-            req.UpdateCookie(HttpServerTools.MakeCookie(SessionCookieName, sessionToken, exp, cookieOpt));
+            if (setSessionCookie)
+            {
+                var exp = new DateTime(nowTicks + SessionCookieLifetime, DateTimeKind.Utc);
+                req.UpdateCookie(HttpServerTools.MakeCookie(SessionCookieName, sessionToken, exp, cookieOpt));
+            }
             try
             {
                 OnSessionStart?.Invoke(session);
@@ -2780,8 +2957,12 @@ namespace SysWeaver.Net
         {
             if (session == null)
                 return false;
-            if (!Sessions.TryRemove(session.Token.AsMemory(), out session))
-                return false;
+            //  Lock so that the token can't be rotated concurrently
+            lock (session.TokenLock)
+            {
+                if (!Sessions.TryRemove(session.Token.AsMemory(), out session))
+                    return false;
+            }
             Interlocked.Decrement(ref CurrentSessionCount);
             RunOnSessionRemove(session);
             ExpiredSessions.Enqueue(session);
@@ -3535,7 +3716,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="r">Table parameters</param>
         /// <returns>The table data</returns>
-        /// <remarks>The session information includes the full session tokens.</remarks>
+        /// <remarks>The session tokens are redacted (only the first 6 characters are shown).</remarks>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(5)]
@@ -3572,7 +3753,7 @@ namespace SysWeaver.Net
         /// <param name="r">Table parameters</param>
         /// <param name="context">The request</param>
         /// <returns>The table data</returns>
-        /// <remarks>The response is stored in the global request cache (keyed by url, not session) for 4 seconds, so other sessions may get this session's entries.</remarks>
+        /// <remarks>The response is cached per session for 4 seconds (the method takes a <see cref="HttpServerRequest"/>, so the request cache is per session).</remarks>
         [WebApi("debug/{0}")]
         [WebApiAuth(Roles.Ops)]
         [WebApiClientCache(5)]

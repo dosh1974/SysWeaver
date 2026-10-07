@@ -205,13 +205,15 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// Get the translations of a language template as variables (untranslated if there is no translator or the language is English).
-        /// Variables in translations whose name starts with 'V' are substituted using <paramref name="vars"/>.
+        /// The result only depends on the language and is cached in <see cref="LanguageTemplate.LangVars"/>, so variables inside of the translations are NOT substituted here,
+        /// that is done per request by <see cref="SubstituteTranslationVars"/> (else the values of the first request would be cached and shown to everyone).
+        /// If a translation variable whose name starts with 'V' is only inserted html encoded in the template (ex: "${#Vr1}"), html encoding transforms of its inner variables are removed
+        /// (ex: "Welcome ${#Session.NickName}" becomes "Welcome ${Session.NickName}"), so that the values aren't html encoded twice.
         /// </summary>
         /// <param name="language">The language to translate to</param>
         /// <param name="temp">The language template</param>
-        /// <param name="vars">Variables to substitute, may be null</param>
         /// <returns>The translation variables, null if the template has no texts</returns>
-        async Task<IReadOnlyDictionary<String, String>> GetTranslationVars(String language, LanguageTemplate temp, IReadOnlyDictionary<String, String> vars)
+        async Task<IReadOnlyDictionary<String, String>> GetTranslationVars(String language, LanguageTemplate temp)
         {
             var v = temp.Vars;
             if (v == null)
@@ -238,24 +240,163 @@ namespace SysWeaver.Net
                 for (int i = 0; i < l; ++i)
                     r.Add(v[i].VarName, trs[i]);
             }
-            if (vars != null)
+            var vv = r.ToList();
+            for (int i = 0; i < l; ++ i)
             {
-                var vv = r.ToList();
-                for (int i = 0; i < l; ++ i)
-                {
-                    var kv = vv[i];
-                    var key = kv.Key;
-                    if (key[0] != 'V')
-                        continue;
-                    var nv = TextTemplate.SearchAndReplaceVars(kv.Value, vars, "${", "}", false, true);
-                    r[key] = nv;
-                }
+                var kv = vv[i];
+                var key = kv.Key;
+                if (key[0] != 'V')
+                    continue;
+                var nv = kv.Value;
+                //  The variable is html encoded when it's inserted, so html encoding the inner variables would encode them twice
+                if (HaveInnerHtmlEncodedVars(nv) && IsOnlyUsedHtmlEncoded(temp.Text, key))
+                    r[key] = RemoveInnerHtmlEncoding(nv);
             }
             if (!noTrans)
             {
                 r["EnvInfo.AppDescription"] = await tr.TranslateSafe(EnvInfo.AppDescription, language, "en", String.Concat("This is a description of the application named \"", EnvInfo.AppDisplayName, "\" and is displayed to the user"));
             }
             return r.Freeze();
+        }
+
+        /// <summary>
+        /// Substitute the variables inside of the translation variables whose name starts with 'V' (ex: "Welcome ${Session.NickName}") using the per request variables.
+        /// </summary>
+        /// <param name="translations">The (cached) translation variables, see <see cref="GetTranslationVars"/>, may be null</param>
+        /// <param name="vars">The per request variables (see <see cref="GetVars"/>), may be null</param>
+        /// <returns><paramref name="translations"/> if nothing was substituted, else a new dictionary</returns>
+        static IReadOnlyDictionary<String, String> SubstituteTranslationVars(IReadOnlyDictionary<String, String> translations, IReadOnlyDictionary<String, String> vars)
+        {
+            if ((translations == null) || (vars == null))
+                return translations;
+            Dictionary<String, String> r = null;
+            foreach (var kv in translations)
+            {
+                var key = kv.Key;
+                if ((key.Length <= 0) || (key[0] != 'V'))
+                    continue;
+                var v = kv.Value;
+                if ((v == null) || (v.IndexOf("${", StringComparison.Ordinal) < 0))
+                    continue;
+                var nv = TextTemplate.SearchAndReplaceVars(v, vars, "${", "}", false, true);
+                if (String.Equals(nv, v, StringComparison.Ordinal))
+                    continue;
+                r ??= new Dictionary<String, String>(translations, StringComparer.Ordinal);
+                r[key] = nv;
+            }
+            return r ?? translations;
+        }
+
+        /// <summary>
+        /// Check if any translation variable whose name starts with 'V' (a translated text that contains other variables) uses a dynamic variable (ex: "Welcome ${#Session.NickName}").
+        /// A template using such a translation variable must be treated as dynamic (it's output depends on the request), even if the template text itself have no dynamic variables.
+        /// </summary>
+        /// <param name="temp">The language template, may be null</param>
+        /// <returns>True if any translation variable uses a dynamic variable</returns>
+        bool HaveDynamicTranslationVars(LanguageTemplate temp)
+        {
+            var v = temp?.Vars;
+            if (v == null)
+                return false;
+            foreach (var d in v)
+            {
+                var name = d.VarName;
+                if (String.IsNullOrEmpty(name) || (name[0] != 'V'))
+                    continue;
+                var text = d.Text;
+                if ((text == null) || (text.IndexOf("${", StringComparison.Ordinal) < 0))
+                    continue;
+                if (IsDynamic(new TextTemplate(text, "${", "}", IsTemplateVariable)))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Get the length of an html encoding transform prefix ("#" or "@", optionally preceded by one of "_", "^" or "~") at a position, 0 if none
+        /// </summary>
+        static int GetHtmlEncodingTransformLength(String text, int pos, out int encPos)
+        {
+            encPos = pos;
+            var tl = text.Length;
+            if (pos >= tl)
+                return 0;
+            var c = text[pos];
+            if ((c == '_') || (c == '^') || (c == '~'))
+            {
+                ++encPos;
+                if (encPos >= tl)
+                    return 0;
+                c = text[encPos];
+            }
+            if ((c != '#') && (c != '@'))
+                return 0;
+            return encPos - pos + 1;
+        }
+
+        /// <summary>
+        /// Check if a text have any variables using an html encoding transform, ex: "${#Session.NickName}"
+        /// </summary>
+        static bool HaveInnerHtmlEncodedVars(String text)
+        {
+            if (text == null)
+                return false;
+            for (int p = text.IndexOf("${", StringComparison.Ordinal); p >= 0; p = text.IndexOf("${", p + 2, StringComparison.Ordinal))
+            {
+                if (GetHtmlEncodingTransformLength(text, p + 2, out _) > 0)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Remove the html encoding transforms of all variables in a text (case transforms are kept), ex: "Hi ${_#Name}" => "Hi ${_Name}"
+        /// </summary>
+        static String RemoveInnerHtmlEncoding(String text)
+        {
+            var sb = new StringBuilder(text.Length);
+            int s = 0;
+            for (int p = text.IndexOf("${", StringComparison.Ordinal); p >= 0; p = text.IndexOf("${", p + 2, StringComparison.Ordinal))
+            {
+                if (GetHtmlEncodingTransformLength(text, p + 2, out var encPos) <= 0)
+                    continue;
+                sb.Append(text, s, encPos - s);
+                s = encPos + 1;
+            }
+            sb.Append(text, s, text.Length - s);
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Check if all uses of a variable in a template text are html encoded ("${#Var}" or "${¤Var}", optionally with a case transform), and that it's used at least once
+        /// </summary>
+        static bool IsOnlyUsedHtmlEncoded(String templateText, String varName)
+        {
+            if (templateText == null)
+                return false;
+            var find = String.Concat(varName, "}");
+            bool found = false;
+            for (int p = templateText.IndexOf(find, StringComparison.Ordinal); p >= 0; p = templateText.IndexOf(find, p + 1, StringComparison.Ordinal))
+            {
+                var e = p - 1;
+                if (e < 2)
+                    return false;
+                var c = templateText[e];
+                if ((c != '#') && (c != '¤'))
+                    return false;
+                --e;
+                c = templateText[e];
+                if ((c == '_') || (c == '^') || (c == '~'))
+                {
+                    --e;
+                    if (e < 1)
+                        return false;
+                }
+                if ((templateText[e] != '{') || (templateText[e - 1] != '$'))
+                    return false;
+                found = true;
+            }
+            return found;
         }
 
 

@@ -284,12 +284,46 @@ namespace SysWeaver
 
 
         /// <summary>
+        /// Run an async function after some fixed duration (fire and forget)
+        /// </summary>
+        /// <param name="func">The function that starts the task to execute (it's called after the delay)</param>
+        /// <param name="delayInMs">The delay in milli seconds (<see cref="Timeout.Infinite"/> means that the function is never executed)</param>
+        /// <remarks>The function is executed on the thread pool and the returned task is tracked until it completes,
+        /// any exception thrown by the function or the task is unobserved (same as <see cref="RunDelayed(Action, int)"/>).
+        /// Async lambdas, i.e. RunDelayed(async () => ..., delay) binds to this overload (and not to an async void <see cref="Action"/>).</remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="func"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="delayInMs"/> is less than -1 (<see cref="Timeout.Infinite"/>)</exception>
+        public static void RunDelayed(Func<Task> func, int delayInMs)
+        {
+            ArgumentNullException.ThrowIfNull(func);
+            ArgumentOutOfRangeException.ThrowIfLessThan(delayInMs, Timeout.Infinite);
+            _ = Task.Delay(delayInMs).ContinueWith(static (_, s) => ((Func<Task>)s)(), func, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+        }
+
+        /// <summary>
+        /// Run an async function after some fixed duration (fire and forget)
+        /// </summary>
+        /// <param name="func">The function that starts the value task to execute (it's called after the delay)</param>
+        /// <param name="delayInMs">The delay in milli seconds (<see cref="Timeout.Infinite"/> means that the function is never executed)</param>
+        /// <remarks>The function is executed on the thread pool and the returned value task is tracked until it completes,
+        /// any exception thrown by the function or the task is unobserved (same as <see cref="RunDelayed(Action, int)"/>).</remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="func"/> is null</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="delayInMs"/> is less than -1 (<see cref="Timeout.Infinite"/>)</exception>
+        public static void RunDelayedValue(Func<ValueTask> func, int delayInMs)
+        {
+            ArgumentNullException.ThrowIfNull(func);
+            ArgumentOutOfRangeException.ThrowIfLessThan(delayInMs, Timeout.Infinite);
+            _ = Task.Delay(delayInMs).ContinueWith(static (_, s) => ((Func<ValueTask>)s)().AsTask(), func, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+        }
+
+        /// <summary>
         /// Execute a task after some fixed duration
         /// </summary>
         /// <param name="task">The task to execute</param>
         /// <param name="delayInMs">The delay in milli seconds</param>
-        /// <remarks>A task is already running when it's passed to this method, so this method does nothing useful (the task is neither started nor observed).
-        /// Use <see cref="RunDelayed(Action, int)"/> with a function that starts the task instead.</remarks>
+        /// <remarks>A task is already running when it's passed to this method, so this method does nothing useful (the task is neither delayed nor observed).
+        /// Use <see cref="RunDelayed(Func{Task}, int)"/> with a function that starts the task instead.</remarks>
+        [Obsolete("The task is already running when it's passed in, so it's neither delayed nor observed, use RunDelayed(Func<Task>, int) with a function that starts the task instead")]
         public static void RunDelayed(Task task, int delayInMs)
         {
             StartNewAsyncChain(() => Task.Delay(delayInMs).ContinueWith(x => task));
@@ -300,8 +334,9 @@ namespace SysWeaver
         /// </summary>
         /// <param name="task">The task to execute</param>
         /// <param name="delayInMs">The delay in milli seconds</param>
-        /// <remarks>A value task is already running when it's passed to this method, so this method does nothing useful (the task is neither started nor observed).
-        /// Use <see cref="RunDelayed(Action, int)"/> with a function that starts the task instead.</remarks>
+        /// <remarks>A value task is already running when it's passed to this method, so this method does nothing useful (the task is neither delayed nor observed).
+        /// Use <see cref="RunDelayedValue(Func{ValueTask}, int)"/> (or <see cref="RunDelayed(Func{Task}, int)"/>) with a function that starts the task instead.</remarks>
+        [Obsolete("The value task is already running when it's passed in, so it's neither delayed nor observed, use RunDelayedValue(Func<ValueTask>, int) or RunDelayed(Func<Task>, int) with a function that starts the task instead")]
         public static void RunDelayed(ValueTask task, int delayInMs)
         {
             StartNewAsyncChain(() => Task.Delay(delayInMs).ContinueWith(x => task));

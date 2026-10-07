@@ -33,6 +33,7 @@ flowchart LR
 ## Limitations and considerations
 
 - Reading and writing use different engines; types must serialize compatibly with both.
+- Compact output writes a `float` / `double` NaN or infinity as `null`, which is read back as NaN (`null` for a nullable member), so infinities come back as NaN.
 - Pulls in both the SysWeaver JSON and Newtonsoft JSON plug-ins.
 - Reading goes through Newtonsoft with `$type` handling enabled; `$type` names are restricted by the `DataTypePolicy` (see [SysWeaver.Serialization.NewtonsoftJson](../Serialization/SysWeaver.Serialization.NewtonsoftJson/README.md)). Avoid `object` members in input models where possible.
 - Registering it does not register the Newtonsoft and SysWeaver.Json serializers themselves; they are only used internally.

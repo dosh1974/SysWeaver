@@ -351,7 +351,7 @@ namespace SysWeaver
         /// else a <see cref="FrozenDictionary{TKey, TValue}"/>.
         /// The returned dictionaries are thread safe for reads.
         /// Freezing allocates a copy, it's intended for data that is created once and read many times (see also <see cref="SemiFrozenDictionary{TKey, TValue}"/>).
-        /// A null key throws <see cref="ArgumentNullException"/> on lookups, except for the empty and single entry dictionaries (where it's simply not found).
+        /// A null key throws <see cref="ArgumentNullException"/> on lookups (the indexer, ContainsKey and TryGetValue) for all implementations (like a <see cref="Dictionary{TKey, TValue}"/>), including the empty and single entry dictionaries.
         /// </remarks>
         /// <typeparam name="K">The key type</typeparam>
         /// <typeparam name="V">The value type</typeparam>
@@ -400,10 +400,11 @@ namespace SysWeaver
         /// </summary>
         /// <typeparam name="K">The key type</typeparam>
         /// <typeparam name="V">The value type</typeparam>
-        /// <param name="key">The key</param>
+        /// <param name="key">The key, should not be null (lookups with a null key throw an <see cref="ArgumentNullException"/>, so an entry with a null key can't be found)</param>
         /// <param name="value">The value</param>
         /// <param name="comp">The key comparer, if null the default comparer is used</param>
-        /// <returns>A frozen dictionary with one entry (freezing it again with the same comparer returns the same instance)</returns>
+        /// <returns>A frozen dictionary with one entry (freezing it again with the same comparer returns the same instance).
+        /// Lookups with a null key throw an <see cref="ArgumentNullException"/> (like a <see cref="Dictionary{TKey, TValue}"/>, the comparer is never called with a null key).</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IReadOnlyDictionary<K, V> Single<K, V>(K key, V value, IEqualityComparer<K> comp = null)
         {
@@ -428,7 +429,7 @@ namespace SysWeaver
         /// <summary>
         /// Get the comparer of a dictionary, or null if it's unknown
         /// </summary>
-        static IEqualityComparer<K> TryGetComparer<K, V>(IReadOnlyDictionary<K, V> dict)
+        internal static IEqualityComparer<K> TryGetComparer<K, V>(IReadOnlyDictionary<K, V> dict)
             => dict switch
             {
                 FrozenDictionary<K, V> a => a.Comparer,
@@ -473,6 +474,9 @@ namespace SysWeaver
     /// <summary>
     /// An immutable empty dictionary that remembers its comparer, one shared instance per comparer (returned by <see cref="DictionaryExt.Freeze{K, V}(IReadOnlyDictionary{K, V}, IEqualityComparer{K})"/> for an empty dictionary).
     /// </summary>
+    /// <remarks>
+    /// Lookups with a null key throw an <see cref="ArgumentNullException"/> (like a <see cref="Dictionary{TKey, TValue}"/> and the other frozen dictionaries).
+    /// </remarks>
     /// <typeparam name="K">The key type</typeparam>
     /// <typeparam name="V">The value type</typeparam>
     sealed class EmptyReadonlyDictionary<K, V> : IReadOnlyDictionary<K, V>, IHaveComparere<K>
@@ -521,7 +525,15 @@ namespace SysWeaver
 
         public IEqualityComparer<K> Comp { get; init; }
 
-        public V this[K key] => throw new KeyNotFoundException();
+        public V this[K key]
+        {
+            get
+            {
+                if (key is null)
+                    OrdinalStringKeys.ThrowNullKey();
+                throw new KeyNotFoundException();
+            }
+        }
 
         // Expression bodied (not initialized from static fields, they are not initialized yet when Default is created)
         public IEnumerable<K> Keys => Array.Empty<K>();
@@ -531,7 +543,12 @@ namespace SysWeaver
         public int Count => 0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool ContainsKey(K key) => false;
+        public bool ContainsKey(K key)
+        {
+            if (key is null)
+                OrdinalStringKeys.ThrowNullKey();
+            return false;
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public IEnumerator<KeyValuePair<K, V>> GetEnumerator() => ((IEnumerable<KeyValuePair<K, V>>)Array.Empty<KeyValuePair<K, V>>()).GetEnumerator();
@@ -539,6 +556,8 @@ namespace SysWeaver
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(K key, [MaybeNullWhen(false)] out V value)
         {
+            if (key is null)
+                OrdinalStringKeys.ThrowNullKey();
             value = default;
             return false;
         }
@@ -596,7 +615,8 @@ namespace SysWeaver
     /// <typeparam name="V">The value type</typeparam>
     /// <typeparam name="TEq">How the key is compared, <see cref="DefaultKeyEquality{K}"/> for value types using the default comparer (devirtualized), else <see cref="ComparerKeyEquality{K}"/></typeparam>
     /// <remarks>
-    /// A null key is passed to the comparer (it's not found, no exception is thrown).
+    /// Lookups with a null key throw an <see cref="ArgumentNullException"/> (like a <see cref="Dictionary{TKey, TValue}"/> and the other frozen dictionaries), the comparer is never called with a null key.
+    /// The null checks are removed by the JIT for value type keys.
     /// </remarks>
     sealed class SingleReadonlyDictionary<K, V, TEq> : IReadOnlyDictionary<K, V>, IHaveComparere<K> where TEq : struct, IKeyEquality<K>
     {
@@ -619,7 +639,11 @@ namespace SysWeaver
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool IsKey(K key)
-            => TEq.Equals(Comp, key, Key);
+        {
+            if (key is null)
+                OrdinalStringKeys.ThrowNullKey();
+            return TEq.Equals(Comp, key, Key);
+        }
 
         public V this[K key]
         {

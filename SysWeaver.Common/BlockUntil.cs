@@ -70,7 +70,7 @@ namespace SysWeaver
     /// <summary>
     /// The wait state for one "generation" of a <see cref="BlockUntil"/> or <see cref="BlockUntilString"/> (one instance per change).
     /// Waiters block on <see cref="W"/>, disposing the state (done when a change happens) releases all current waiters.
-    /// Instances are pooled (roughly 100 unused instances are kept in a global lock free free-list).
+    /// Instances are never reused (a late waiter may still hold a reference to a released state, reusing it could make that waiter block on a later generation or corrupt the state).
     /// </summary>
     internal sealed class StateBlockUntil : IDisposable
     {
@@ -78,14 +78,6 @@ namespace SysWeaver
         /// The wait semaphore, released once on dispose, every waiter that gets it releases it again (so that all waiters are woken)
         /// </summary>
         public readonly SemaphoreSlim W = new SemaphoreSlim(0, 1);
-        /// <summary>
-        /// Released when the last waiter (and the owner) have left, used to know when the instance can be reused
-        /// </summary>
-        public readonly SemaphoreSlim C = new SemaphoreSlim(0, 1);
-        /// <summary>
-        /// Number of active waiters plus one for the owner (the owner reference is removed on dispose)
-        /// </summary>
-        public long Count = 1;
 
         /// <summary>
         /// Wait until this state is disposed (a change happened), the time out expires or the token is canceled.
@@ -95,11 +87,6 @@ namespace SysWeaver
         /// <param name="cancel">Cancels the wait</param>
         public async Task WaitForChange(int msToWait, CancellationToken cancel)
         {
-            if (Interlocked.Increment(ref Count) <= 1)
-            {
-                Interlocked.Decrement(ref Count);
-                return;
-            }
             try
             {
                 var w = W;
@@ -109,8 +96,6 @@ namespace SysWeaver
             catch
             {
             }
-            if (Interlocked.Decrement(ref Count) == 0)
-                C.Release();
         }
 
         /// <summary>
@@ -120,11 +105,6 @@ namespace SysWeaver
         /// <param name="cancel">Cancels the wait</param>
         public async Task WaitForChange(CancellationToken cancel)
         {
-            if (Interlocked.Increment(ref Count) <= 1)
-            {
-                Interlocked.Decrement(ref Count);
-                return;
-            }
             try
             {
                 var w = W;
@@ -134,8 +114,6 @@ namespace SysWeaver
             catch
             {
             }
-            if (Interlocked.Decrement(ref Count) == 0)
-                C.Release();
         }
 
 
@@ -146,11 +124,6 @@ namespace SysWeaver
         /// <param name="msToWait">Max time to wait in ms, -1 to wait forever</param>
         public async Task WaitForChange(int msToWait)
         {
-            if (Interlocked.Increment(ref Count) <= 1)
-            {
-                Interlocked.Decrement(ref Count);
-                return;
-            }
             try
             {
                 var w = W;
@@ -160,8 +133,6 @@ namespace SysWeaver
             catch
             {
             }
-            if (Interlocked.Decrement(ref Count) == 0)
-                C.Release();
         }
 
 
@@ -171,11 +142,6 @@ namespace SysWeaver
         /// </summary>
         public async Task WaitForChange()
         {
-            if (Interlocked.Increment(ref Count) <= 1)
-            {
-                Interlocked.Decrement(ref Count);
-                return;
-            }
             try
             {
                 var w = W;
@@ -185,47 +151,16 @@ namespace SysWeaver
             catch
             {
             }
-            if (Interlocked.Decrement(ref Count) == 0)
-                C.Release();
-        }
-
-        async Task End()
-        {
-            var w = W;
-            var c = C;
-            w.Release();
-            if (Interlocked.Decrement(ref Count) == 0)
-                c.Release();
-            await c.WaitAsync().ConfigureAwait(false);
-            if (Interlocked.Read(ref AllocCount) < 100)
-            {
-                //  Reuse
-                Count = 1;
-                w.Wait();
-                for (; ; )
-                {
-                    var f = AllocFirst;
-                    Next = f;
-                    if (Interlocked.CompareExchange(ref AllocFirst, this, f) == f)
-                    {
-                        Interlocked.Increment(ref AllocCount);
-                        break;
-                    }
-                }
-                return;
-            }
-            c.Release();
-            w.Dispose();
-            c.Dispose();
         }
 
         /// <summary>
-        /// Release all waiters, the instance is returned to the pool (or disposed) on the thread pool once all waiters have left.
+        /// Release all waiters (current and late ones).
         /// Must only be called once (by the owner).
         /// </summary>
         public void Dispose()
         {
-            TaskExt.StartNewAsyncChain(() => End().ConfigureAwait(false));
+            //  Async waiters of a SemaphoreSlim continue asynchronously, so no waiter code runs on this thread
+            W.Release();
         }
 
 
@@ -234,23 +169,11 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get a state from the pool, or allocate a new one
+        /// Allocate a new state
         /// </summary>
         /// <returns>A state with no waiters</returns>
         public static StateBlockUntil Get()
         {
-            for (; ; )
-            {
-                var f = AllocFirst;
-                if (f == null)
-                    break;
-                var next = f.Next;
-                if (Interlocked.CompareExchange(ref AllocFirst, next, f) == f)
-                {
-                    Interlocked.Decrement(ref AllocCount);
-                    return f;
-                }
-            }
             Interlocked.Increment(ref TotalAllocCount);
             return new StateBlockUntil();
         }
@@ -260,14 +183,9 @@ namespace SysWeaver
         /// </summary>
         public static long TotalAllocCount;
         /// <summary>
-        /// Number of unused states in the pool (process wide)
+        /// Number of unused states in the pool (process wide), always 0 (states are no longer pooled)
         /// </summary>
-        public static long AllocCount;
-        static StateBlockUntil AllocFirst;
-
-        StateBlockUntil Next;
-
-
+        public static long AllocCount = 0;
     }
 
 
@@ -276,7 +194,7 @@ namespace SysWeaver
     /// </summary>
     /// <remarks>
     /// Waiters never throw, a time out or cancellation simply returns the current change id (so the caller should compare it with the id it passed in).
-    /// Internally every change swaps in a new pooled wait state and releases the old one, so a change is cheap and doesn't allocate in steady state.
+    /// Internally every change swaps in a new (small) wait state and releases the old one, so a change is cheap.
     /// </remarks>
     public abstract class BlockUntil : IDisposable
     {
@@ -326,7 +244,7 @@ namespace SysWeaver
         public static long TotalAllocCount => Interlocked.Read(ref StateBlockUntil.TotalAllocCount);
 
         /// <summary>
-        /// Total number of wait objects that are unused, roughly 100 is allowed.
+        /// Total number of wait objects that are unused, always 0 (wait objects are no longer pooled, reusing them was not safe with late waiters).
         /// </summary>
         public static long AllocatedUnused => Interlocked.Read(ref StateBlockUntil.AllocCount);
 
@@ -482,7 +400,7 @@ namespace SysWeaver
         public static long TotalAllocCount => Interlocked.Read(ref StateBlockUntil.TotalAllocCount);
 
         /// <summary>
-        /// Total number of wait objects that are unused, roughly 100 is allowed.
+        /// Total number of wait objects that are unused, always 0 (wait objects are no longer pooled, reusing them was not safe with late waiters).
         /// </summary>
         public static long AllocatedUnused => Interlocked.Read(ref StateBlockUntil.AllocCount);
 

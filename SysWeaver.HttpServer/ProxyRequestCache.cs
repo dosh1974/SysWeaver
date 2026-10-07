@@ -8,14 +8,23 @@ namespace SysWeaver.Net
 {
     /// <summary>
     /// A response cache for proxied GET and HEAD requests (used by <see cref="FileProxy"/> and the reverse proxy).
-    /// Responses are cached for the max-age of the upstream Cache-Control header (not cached if missing or zero), keyed by the upstream url and the Accept-Encoding header.
+    /// Responses are cached for the max-age of the upstream Cache-Control header (not cached if missing or zero, or if the response is "private" or "no-store"),
+    /// keyed by the upstream url, the Accept-Encoding header and the forwarded Cookie and Authorization headers (so responses are only shared between requests with the same credentials).
     /// </summary>
     /// <remarks>
-    /// Thread safe. The cache key doesn't include the client's credentials or cookies, and "private" / "no-store" directives are not honored,
-    /// so a cached response (including any Set-Cookie headers) is served to every client requesting the same url.
+    /// Thread safe. Set-Cookie headers are never stored in the cache (only the request that caused the upstream request gets them).
     /// </remarks>
     public sealed class ProxyRequestCache
     {
+        /// <summary>
+        /// If true (default), the client's Cookie header is forwarded to the upstream server (including the server's session and device id cookies).
+        /// </summary>
+        public bool ForwardCookies { get; init; } = true;
+
+        /// <summary>
+        /// If true (default), the client's Authorization header is forwarded to the upstream server.
+        /// </summary>
+        public bool ForwardAuthorization { get; init; } = true;
 
 
         /// <summary>
@@ -71,7 +80,7 @@ namespace SysWeaver.Net
         /// Only GET and HEAD requests are cached as of now (POST caching would require a hash computation of the post data, even if the request isn't cached).
         /// </summary>
         /// <param name="context">The request, the response is written to it</param>
-        /// <param name="req">The upstream url (also used as the cache key)</param>
+        /// <param name="req">The upstream url (part of the cache key)</param>
         /// <param name="doRequest">Function that performs a fresh request (as in not being cached)</param>
         /// <returns><see cref="HttpServerTools.AlreadyHandled"/></returns>
         /// <exception cref="HttpResponseException">Thrown (404) if the method isn't GET, HEAD or POST</exception>
@@ -87,41 +96,33 @@ namespace SysWeaver.Net
                     cache = GetCache;
                     break;
             }
-            String cacheKey = cache == null ? null : String.Join('\n', req, context.AcceptEncoding);
             ProxyData reqInput = await ProxyTools.GetFromRequest(context).ConfigureAwait(false);
+            if ((!ForwardCookies) || (!ForwardAuthorization))
+                reqInput.Headers = RemoveHeaders(reqInput.Headers, !ForwardCookies, !ForwardAuthorization);
             ProxyData proxyRet = null;
             if (cache != null)
             {
+                //  Responses may depend on the forwarded credentials, so they are part of the key
+                String cookie = null;
+                String auth = null;
+                foreach (var h in reqInput.Headers.Nullable())
+                {
+                    if (h.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase))
+                        cookie = cookie == null ? h : String.Concat(cookie, "\r", h);
+                    else if (h.StartsWith("Authorization:", StringComparison.OrdinalIgnoreCase))
+                        auth = auth == null ? h : String.Concat(auth, "\r", h);
+                }
+                var cacheKey = String.Join('\n', req, context.AcceptEncoding, cookie, auth);
+                ProxyData fresh = null;
                 var ce = await cache.GetOrUpdateWithExistingAsync(cacheKey, async (_, current) =>
                 {
-                    proxyRet = await doRequest(req, reqInput).ConfigureAwait(false);
-                    String etag = null;
-                    int maxAge = 0;
-                    foreach (var header in proxyRet.Headers)
-                    {
-                        if (header.FastStartsWith("Cache-Control:"))
-                        {
-                            var values = header.Substring(14).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                            foreach (var y in values)
-                            {
-                                if (y.FastStartsWith("max-age="))
-                                {
-                                    if (int.TryParse(y.Substring(8), out var x))
-                                        if (x > maxAge)
-                                            maxAge = x;
-                                    break;
-                                }
-
-                            }
-                            continue;
-                        }
-                        if (header.FastStartsWith("ETag:"))
-                            etag = etag ?? header.Substring(5).Trim();
-                    }
-                    if (maxAge <= 0)
+                    var r = await doRequest(req, reqInput).ConfigureAwait(false);
+                    fresh = r;
+                    proxyRet = r;
+                    if (!GetCacheInfo(r, out var maxAge, out var etag, out var haveSetCookie))
                         return null;
                     var et = DateTime.UtcNow.AddSeconds(maxAge).Ticks;
-                    if (proxyRet.StatusCode == 304)
+                    if (r.StatusCode == 304)
                     {
                         if (current != null)
                         {
@@ -130,7 +131,8 @@ namespace SysWeaver.Net
                         }
                         return null;
                     }
-                    return new CacheEntry(et, etag, proxyRet);
+                    //  Never share cookies between clients
+                    return new CacheEntry(et, etag, haveSetCookie ? new ProxyData(r.Method, RemoveSetCookie(r.Headers), r.Data, r.StatusCode) : r);
                 }).ConfigureAwait(false);
                 if (ce != null)
                 {
@@ -140,13 +142,90 @@ namespace SysWeaver.Net
                         context.SetResStatusCode(304);
                         return HttpServerTools.AlreadyHandled;
                     }
-                    proxyRet = ce.Data;
+                    //  The request that made the upstream request gets the complete response (including any Set-Cookie headers)
+                    proxyRet = ((fresh != null) && (fresh.StatusCode != 304)) ? fresh : ce.Data;
                 }
             }
             if (proxyRet == null)
                 proxyRet = await doRequest(req, reqInput).ConfigureAwait(false);
             await ProxyTools.SetToRequest(context, proxyRet).ConfigureAwait(false);
             return HttpServerTools.AlreadyHandled;
+        }
+
+        /// <summary>
+        /// Get the caching information of an upstream response.
+        /// </summary>
+        /// <param name="r">The upstream response</param>
+        /// <param name="maxAge">The max-age (in seconds) of the Cache-Control header(s)</param>
+        /// <param name="etag">The ETag header value, null if none</param>
+        /// <param name="haveSetCookie">True if the response contains Set-Cookie headers</param>
+        /// <returns>True if the response may be stored in the (shared) cache, i.e it has a positive max-age and isn't "private" or "no-store"</returns>
+        static bool GetCacheInfo(ProxyData r, out int maxAge, out String etag, out bool haveSetCookie)
+        {
+            etag = null;
+            maxAge = 0;
+            haveSetCookie = false;
+            bool noStore = false;
+            foreach (var header in r.Headers.Nullable())
+            {
+                if (header.StartsWith("Cache-Control:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var values = header.Substring(14).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var y in values)
+                    {
+                        if (y.StartsWith("max-age=", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (int.TryParse(y.AsSpan(8).Trim('"'), out var x))
+                                if (x > maxAge)
+                                    maxAge = x;
+                            continue;
+                        }
+                        //  "private" may have field names (private="Set-Cookie"), treat as private
+                        if (y.StartsWith("private", StringComparison.OrdinalIgnoreCase) || y.Equals("no-store", StringComparison.OrdinalIgnoreCase))
+                            noStore = true;
+                    }
+                    continue;
+                }
+                if (header.StartsWith("ETag:", StringComparison.OrdinalIgnoreCase))
+                {
+                    etag = etag ?? header.Substring(5).Trim();
+                    continue;
+                }
+                if (header.StartsWith("Set-Cookie:", StringComparison.OrdinalIgnoreCase))
+                    haveSetCookie = true;
+            }
+            return (maxAge > 0) && (!noStore);
+        }
+
+        /// <summary>
+        /// Get a copy of the headers without any Set-Cookie headers.
+        /// </summary>
+        static String[] RemoveSetCookie(String[] headers)
+        {
+            var l = new List<String>(headers.Length);
+            foreach (var h in headers)
+                if (!h.StartsWith("Set-Cookie:", StringComparison.OrdinalIgnoreCase))
+                    l.Add(h);
+            return l.ToArray();
+        }
+
+        /// <summary>
+        /// Get a copy of the headers without the Cookie and / or Authorization headers.
+        /// </summary>
+        static String[] RemoveHeaders(String[] headers, bool removeCookies, bool removeAuthorization)
+        {
+            if (headers == null)
+                return null;
+            var l = new List<String>(headers.Length);
+            foreach (var h in headers)
+            {
+                if (removeCookies && h.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (removeAuthorization && h.StartsWith("Authorization:", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                l.Add(h);
+            }
+            return l.ToArray();
         }
 
 

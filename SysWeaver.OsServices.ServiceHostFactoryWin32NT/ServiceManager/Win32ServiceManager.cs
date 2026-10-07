@@ -11,7 +11,7 @@ namespace SysWeaver.OsServices.ServiceManager
     /// </summary>
     /// <remarks>
     /// Most operations require administrator rights. Each call opens and closes its own SCM and service handles.
-    /// Win32 errors are read using a direct kernel32 GetLastError P/Invoke (not <see cref="Marshal.GetLastWin32Error"/>), so error detection is not reliable.
+    /// Success is determined from the return values of the API calls, error codes are read using <see cref="Marshal.GetLastWin32Error"/>.
     /// </remarks>
     static class Win32ServiceManager
     {
@@ -155,9 +155,9 @@ namespace SysWeaver.OsServices.ServiceManager
                     int ret = DeleteService(service);
                     if (ret == 0)
                     {
+                        var le = GetLastError();
                         if (desc != null)
                             SetDescription(service, desc, true);
-                        var le = GetLastError();
                         throw new ApplicationException(String.Concat("Could not delete service \"", serviceName, "\", error: ", le, " (0x", le.ToString("x").PadLeft(8, '0'), ')'));
                     }
                 }
@@ -483,18 +483,15 @@ namespace SysWeaver.OsServices.ServiceManager
         #region Internal
 
         /// <summary>
-        /// Returns <paramref name="ret"/> if GetLastError is 0, else throws. NOTE: the last error is never cleared, so a stale error code may cause a throw after a successful call.
+        /// Throws an exception with the last Win32 error code, call after an API call reported failure (through its return value).
         /// </summary>
-        /// <typeparam name="T">The return type.</typeparam>
-        /// <param name="ret">The value to return.</param>
-        /// <returns><paramref name="ret"/>.</returns>
-        /// <exception cref="Exception">GetLastError is non-zero.</exception>
-        static T ThrowNativeOrReturn<T>(T ret)
+        /// <typeparam name="T">The return type (to allow "return ThrowNative&lt;T&gt;()").</typeparam>
+        /// <returns>Never returns.</returns>
+        /// <exception cref="Exception">Always.</exception>
+        static T ThrowNative<T>()
         {
             var r = GetLastError();
-            if (r == 0)
-                return ret;
-            throw new Exception("Win32 failure: " + r + " (0x" + r.ToString("x").PadLeft(8, '0'));
+            throw new Exception("Win32 failure: " + r + " (0x" + r.ToString("x").PadLeft(8, '0') + ')');
         }
 
         /// <summary>
@@ -531,27 +528,37 @@ namespace SysWeaver.OsServices.ServiceManager
 
 
         /// <summary>
-        /// Query optional configuration (QueryServiceConfig2) into a marshalled class. NOTE: <paramref name="failSilent"/> is ignored, errors are thrown.
+        /// Query optional configuration (QueryServiceConfig2) into a marshalled class.
         /// </summary>
+        /// <returns>The configuration, null on errors if <paramref name="failSilent"/> is true.</returns>
         static T GetServiceConfig2<T>(IntPtr service, uint infoLevel, bool failSilent = true) where T : class, new()
         {
-            if (!QueryServiceConfig2(service, infoLevel, nint.Zero, 0, out var bytesNeeded))
-            {
-                if (GetLastError() != 122)
-                    return ThrowNativeOrReturn<T>(null);
-            }
-            nint ptr = Marshal.AllocHGlobal((int)bytesNeeded);
             try
             {
-                if (!QueryServiceConfig2(service, infoLevel, ptr, bytesNeeded, out bytesNeeded))
-                    return ThrowNativeOrReturn<T>(null);
-                T descriptionStruct = new T();
-                Marshal.PtrToStructure(ptr, descriptionStruct);
-                return descriptionStruct;
+                if (!QueryServiceConfig2(service, infoLevel, nint.Zero, 0, out var bytesNeeded))
+                {
+                    if (GetLastError() != 122)
+                        return ThrowNative<T>();
+                }
+                nint ptr = Marshal.AllocHGlobal((int)bytesNeeded);
+                try
+                {
+                    if (!QueryServiceConfig2(service, infoLevel, ptr, bytesNeeded, out bytesNeeded))
+                        return ThrowNative<T>();
+                    T descriptionStruct = new T();
+                    Marshal.PtrToStructure(ptr, descriptionStruct);
+                    return descriptionStruct;
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(ptr);
+                }
             }
-            finally
+            catch
             {
-                Marshal.FreeHGlobal(ptr);
+                if (failSilent)
+                    return null;
+                throw;
             }
         }
 
@@ -583,7 +590,7 @@ namespace SysWeaver.OsServices.ServiceManager
         }
 
         /// <summary>
-        /// Set optional configuration (ChangeServiceConfig2) from a marshalled class, success is determined using GetLastError (see <see cref="ThrowNativeOrReturn{T}"/>).
+        /// Set optional configuration (ChangeServiceConfig2) from a marshalled class, success is determined using the return value of ChangeServiceConfig2.
         /// </summary>
         static bool SetServiceConfig2<T>(IntPtr service, uint infoLevel, T value, bool failSilent = false)
         {
@@ -592,8 +599,9 @@ namespace SysWeaver.OsServices.ServiceManager
             try
             {
                 Marshal.StructureToPtr(value, ptr, false);
-                ChangeServiceConfig2(service, infoLevel, ptr);
-                return ThrowNativeOrReturn(true);
+                if (!ChangeServiceConfig2(service, infoLevel, ptr))
+                    return ThrowNative<bool>();
+                return true;
             }
             catch
             {
@@ -652,13 +660,13 @@ namespace SysWeaver.OsServices.ServiceManager
                     if (!QueryServiceStatusEx(service, infoLevel, nint.Zero, 0, out var bytesNeeded))
                     {
                         if (GetLastError() != 122)
-                            return ThrowNativeOrReturn<T>(null);
+                            return ThrowNative<T>();
                     }
                     nint ptr = Marshal.AllocHGlobal(bytesNeeded);
                     try
                     {
                         if (!QueryServiceStatusEx(service, infoLevel, ptr, bytesNeeded, out bytesNeeded))
-                            return ThrowNativeOrReturn<T>(null);
+                            return ThrowNative<T>();
                         T descriptionStruct = new T();
                         Marshal.PtrToStructure(ptr, descriptionStruct);
                         return descriptionStruct;
@@ -712,13 +720,13 @@ namespace SysWeaver.OsServices.ServiceManager
                     if (!QueryServiceConfig(service, nint.Zero, 0, out var bytesNeeded))
                     {
                         if (GetLastError() != 122)
-                            return ThrowNativeOrReturn<QueryServiceConfig>(null);
+                            return ThrowNative<QueryServiceConfig>();
                     }
                     nint ptr = Marshal.AllocHGlobal((int)bytesNeeded);
                     try
                     {
                         if (!QueryServiceConfig(service, ptr, bytesNeeded, out bytesNeeded))
-                            return ThrowNativeOrReturn<QueryServiceConfig>(null);
+                            return ThrowNative<QueryServiceConfig>();
                         QueryServiceConfig descriptionStruct = new QueryServiceConfig();
                         Marshal.PtrToStructure(ptr, descriptionStruct);
                         return descriptionStruct;
@@ -882,13 +890,13 @@ namespace SysWeaver.OsServices.ServiceManager
         const int STANDARD_RIGHTS_REQUIRED = 0xF0000;
         const int SERVICE_WIN32_OWN_PROCESS = 0x00000010;
 
-        [DllImport("advapi32.dll", EntryPoint = "OpenSCManagerA")]
+        [DllImport("advapi32.dll", EntryPoint = "OpenSCManagerA", SetLastError = true)]
         static extern nint OpenSCManager(string lpMachineName, string lpDatabaseName, ServiceManagerRights dwDesiredAccess);
 
-        [DllImport("advapi32.dll", EntryPoint = "OpenServiceA", CharSet = CharSet.Ansi)]
+        [DllImport("advapi32.dll", EntryPoint = "OpenServiceA", CharSet = CharSet.Ansi, SetLastError = true)]
         static extern nint OpenService(nint hSCManager, string lpServiceName, ServiceRights dwDesiredAccess);
 
-        [DllImport("advapi32.dll", EntryPoint = "CreateServiceA")]
+        [DllImport("advapi32.dll", EntryPoint = "CreateServiceA", SetLastError = true)]
         static extern nint CreateService(nint hSCManager, string lpServiceName, string lpDisplayName, ServiceRights dwDesiredAccess, int dwServiceType, ServiceBootFlag dwStartType, ServiceErrors dwErrorControl, string lpBinaryPathName, string lpLoadOrderGroup, nint lpdwTagId, string lpDependencies, string lp, string lpPassword);
 
         [DllImport("advapi32.dll")]
@@ -930,8 +938,10 @@ namespace SysWeaver.OsServices.ServiceManager
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "ChangeServiceConfig2W")]
         static extern bool ChangeServiceConfig2(nint hService, uint dwInfoLevel, nint lpInfo);
 
-        [DllImport("kernel32.dll")]
-        static extern uint GetLastError();
+        /// <summary>
+        /// The Win32 error code of the last P/Invoke call declared with SetLastError = true (calling kernel32 GetLastError directly is unreliable, the runtime may overwrite it).
+        /// </summary>
+        static uint GetLastError() => (uint)Marshal.GetLastWin32Error();
 
         #endregion//Interop
 

@@ -11,8 +11,8 @@ namespace SysWeaver.Net
     /// Instances are shared (one per distinct configuration), get them using <see cref="GetSupportedEncoders"/>.
     /// </summary>
     /// <remarks>
-    /// Thread safe. The results are cached per distinct Accept-Encoding header value, without any bound.
-    /// Quality values ("q=") are ignored, any listed encoding (even "gzip;q=0") is considered accepted, "*" is not supported.
+    /// Thread safe. The results are cached per distinct Accept-Encoding header value, up to <see cref="MaxCachedHeaders"/> values (further values are computed on every call, so client controlled headers can't grow the caches without bound).
+    /// Quality values ("q=") don't affect the order, but encodings with a zero quality value (ex: "gzip;q=0") are not accepted, "*" is not supported.
     /// </remarks>
     public sealed class HttpCompressionPriority
     {
@@ -31,7 +31,13 @@ namespace SysWeaver.Net
         /// The encoder compression level to use, most preferable first etc
 
 
-        readonly SemiFrozenDictionary<String, Tuple<ICompEncoder, CompEncoderLevels>> Matches = new SemiFrozenDictionary<string, Tuple<ICompEncoder, CompEncoderLevels>>(StringComparer.Ordinal);
+        readonly LowAllocConcurrentDictionary<String, Tuple<ICompEncoder, CompEncoderLevels>> Matches = new LowAllocConcurrentDictionary<string, Tuple<ICompEncoder, CompEncoderLevels>>(64, StringComparer.Ordinal);
+
+        /// <summary>
+        /// The maximum number of distinct Accept-Encoding header values that are cached (per instance, and for the shared parsed sets), values beyond this are computed on every call.
+        /// Browsers and common clients only use a handful of distinct values.
+        /// </summary>
+        public const int MaxCachedHeaders = 1024;
 
 
         /// <summary>
@@ -65,7 +71,8 @@ namespace SysWeaver.Net
                     }
                 }
             }
-            m[supported] = val;
+            if (m.Count < MaxCachedHeaders)
+                m.TryAdd(supported, val);
             return val;
         }
 
@@ -117,7 +124,7 @@ namespace SysWeaver.Net
         static readonly SemiFrozenDictionary<String, HttpCompressionPriority> Instances = new SemiFrozenDictionary<string, HttpCompressionPriority>(StringComparer.Ordinal);
 
 
-        static readonly SemiFrozenDictionary<String, IReadOnlySet<String>> EncoderSets = new SemiFrozenDictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
+        static readonly LowAllocConcurrentDictionary<String, IReadOnlySet<String>> EncoderSets = new LowAllocConcurrentDictionary<string, IReadOnlySet<string>>(64, StringComparer.Ordinal);
 
         static readonly IReadOnlySet<String> Empty = new HashSet<String>().Freeze();
 
@@ -125,7 +132,7 @@ namespace SysWeaver.Net
         /// Parse an Accept-Encoding header value into a set of lower cased encoding names (parameters are stripped, encodings with a zero quality value, ex: "gzip;q=0", are excluded).
         /// </summary>
         /// <param name="supported">The header value, may be null</param>
-        /// <returns>The (cached, shared) set, empty if <paramref name="supported"/> is null</returns>
+        /// <returns>The (cached, shared) set, empty if <paramref name="supported"/> is null. Up to <see cref="MaxCachedHeaders"/> distinct values are cached.</returns>
         public static IReadOnlySet<String> GetAcceptedEncoders(String supported)
         {
             if (supported == null)
@@ -155,7 +162,8 @@ namespace SysWeaver.Net
                 sup.Add(p[0].FastTrimToLower());
             }
             cs = sup.Freeze();
-            s[supported] = cs;
+            if (s.Count < MaxCachedHeaders)
+                s.TryAdd(supported, cs);
             return cs;
         }
 

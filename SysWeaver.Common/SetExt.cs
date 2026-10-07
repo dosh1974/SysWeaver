@@ -314,6 +314,8 @@ namespace SysWeaver
     /// <typeparam name="TEq">How the item is compared, <see cref="DefaultKeyEquality{K}"/> for value types using the default comparer (devirtualized), else <see cref="ComparerKeyEquality{K}"/></typeparam>
     /// <remarks>
     /// The set operations (subset, superset etc) enumerate the other collection and compare using this set's comparer.
+    /// A null item doesn't throw (like a <see cref="HashSet{T}"/> and the other frozen sets): it's found only if the item of the set is null, the comparer is never called with a null item
+    /// (the null checks are removed by the JIT for value types).
     /// </remarks>
     sealed class SingleReadonlySet<K, TEq> : IReadOnlySet<K>, IHaveComparere<K> where TEq : struct, IKeyEquality<K>
     {
@@ -336,7 +338,11 @@ namespace SysWeaver
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         bool IsKey(K key)
-            => TEq.Equals(Comp, key, Key);
+        {
+            if (key is null)
+                return Key is null;
+            return (Key is not null) && TEq.Equals(Comp, key, Key);
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Contains(K key)

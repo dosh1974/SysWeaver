@@ -360,7 +360,7 @@ namespace SysWeaver.Security
                     pfxBuilder.AddIssuer(importCert);
                 var pwd = Password;
                 var cert = pfxBuilder.Build("SysWeaver ACME " + Info.CommonName, pwd);
-                var fs = X509CertificateLoader.LoadPkcs12(cert, pwd, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
+                var fs = X509CertificateLoader.LoadPkcs12(cert, pwd, CertificateTools.InMemoryKeyStorageFlags);
                 //var fs = new X509Certificate2(cert, pwd, X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
                 msg?.AddMessage(Prefix + "Certificate is built successfully", MessageLevels.Debug);
                 return fs;

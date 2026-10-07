@@ -33,7 +33,7 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 
 ## Limitations and considerations
 
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / Jil / SpanJson / Utf8Json -5).
+- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / SpanJson / Utf8Json -5).
 - Byte-based APIs go through intermediate strings / stream readers, so it is not allocation free.
 
 ## Using it

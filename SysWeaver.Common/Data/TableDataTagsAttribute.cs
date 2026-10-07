@@ -34,8 +34,8 @@ namespace SysWeaver.Data
         /// {3} = The text (after formatting). 
         /// {4} = The title (after formatting). 
         /// </param>
-        /// <param name="copyOnClick">Copy all tags (raw value) to the clipboard on click.
-        /// Note: Currently ignored by the web client, a tag is copied on click if <paramref name="copyFormat"/> is non-empty.</param>
+        /// <param name="copyOnClick">Copy all tags (raw value) to the clipboard on click (on the cell).
+        /// Independent of <paramref name="copyFormat"/>, a single tag is copied on click (on the tag) if <paramref name="copyFormat"/> is non-empty.</param>
         public TableDataTagsAttribute(String textFormat = "{1}", String titleFormat = "{2}", String copyFormat = null, bool copyOnClick = false) : base(TableDataFormats.Tags, textFormat ?? "{1}", titleFormat ?? "{2}", copyFormat ?? "", copyOnClick)
         {
         }

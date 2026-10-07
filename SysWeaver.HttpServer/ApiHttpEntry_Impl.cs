@@ -47,7 +47,7 @@ namespace SysWeaver.Net
                     {
                         var copySer = io.CopySerializer;
                         var copy = copySer.Create<T>(copySer.Serialize(value));
-                        await TypeTranslator.Translate(t, lang, copy).ConfigureAwait(false);
+                        copy = await TypeTranslator.TranslateValue(t, lang, copy).ConfigureAwait(false);
                         return ser.Serialize(copy);
                     }
                     catch (Exception ex)
@@ -79,7 +79,7 @@ namespace SysWeaver.Net
         #region Return value
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RetGetAsyncTaskA1<T, R> : IInvokeApi
         {
@@ -119,7 +119,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RetPostAsyncTaskA1<T, R> : IInvokeApi
         {
@@ -155,7 +155,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RetGetA1<T, R> : IInvokeApi
         {
@@ -194,7 +194,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RetPostAsyncA1<T, R> : IInvokeApi
         {
@@ -235,7 +235,7 @@ namespace SysWeaver.Net
         #region Return raw value
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawRetGetAsyncTaskA1<T> : IInvokeApi
         {
@@ -270,7 +270,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawRetPostAsyncTaskA1<T> : IInvokeApi
         {
@@ -305,7 +305,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawRetGetA1<T> : IInvokeApi
         {
@@ -340,7 +340,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawRetPostAsyncA1<T> : IInvokeApi
         {
@@ -380,7 +380,7 @@ namespace SysWeaver.Net
         #region No return
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class GetAsyncTaskA1<T> : IInvokeApi
         {
@@ -417,7 +417,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class PostAsyncTaskA1<T> : IInvokeApi
         {
@@ -453,7 +453,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class GetA1<T> : IInvokeApi
         {
@@ -489,7 +489,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class PostAsyncA1<T> : IInvokeApi
         {
@@ -534,7 +534,7 @@ namespace SysWeaver.Net
         #region Return value
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning parameterless API method, used for Get requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning parameterless API method, used for Get requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RetGetAsyncTaskA0<R> : IInvokeApi
         {
@@ -569,7 +569,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning parameterless API method, used for Post requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning parameterless API method, used for Post requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RetPostAsyncTaskA0<R> : IInvokeApi
         {
@@ -604,7 +604,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous parameterless API method, used for Get requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous parameterless API method, used for Get requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RetGetA0<R> : IInvokeApi
         {
@@ -639,7 +639,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous parameterless API method, used for Post requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous parameterless API method, used for Post requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RetPostA0<R> : IInvokeApi
         {
@@ -678,7 +678,7 @@ namespace SysWeaver.Net
         #region Return raw value
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning parameterless API method, used for Get requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning parameterless API method, used for Get requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawRetGetAsyncTaskA0 : IInvokeApi
         {
@@ -712,7 +712,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning parameterless API method, used for Post requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning parameterless API method, used for Post requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawRetPostAsyncTaskA0 : IInvokeApi
         {
@@ -746,7 +746,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous parameterless API method, used for Get requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous parameterless API method, used for Get requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawRetGetA0 : IInvokeApi
         {
@@ -780,7 +780,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous parameterless API method, used for Post requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous parameterless API method, used for Post requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawRetPostA0 : IInvokeApi
         {
@@ -818,7 +818,7 @@ namespace SysWeaver.Net
         #region No return
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning parameterless API method, used for Get requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning parameterless API method, used for Get requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class GetAsyncTaskA0 : IInvokeApi
         {
@@ -854,7 +854,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning parameterless API method, used for Post requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning parameterless API method, used for Post requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class PostAsyncTaskA0 : IInvokeApi
         {
@@ -889,7 +889,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous parameterless API method, used for Get requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous parameterless API method, used for Get requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class GetA0 : IInvokeApi
         {
@@ -924,7 +924,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous parameterless API method, used for Post requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous parameterless API method, used for Post requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class PostA0 : IInvokeApi
         {
@@ -970,7 +970,7 @@ namespace SysWeaver.Net
         #region Return value
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextRetGetAsyncTaskA1<T, R> : IInvokeApi
         {
@@ -1007,7 +1007,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextRetPostAsyncTaskA1<T, R> : IInvokeApi
         {
@@ -1043,7 +1043,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextRetGetA1<T, R> : IInvokeApi
         {
@@ -1079,7 +1079,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextRetPostAsyncA1<T, R> : IInvokeApi
         {
@@ -1120,7 +1120,7 @@ namespace SysWeaver.Net
         #region Return raw value
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawContextRetGetAsyncTaskA1<T> : IInvokeApi
         {
@@ -1155,7 +1155,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawContextRetPostAsyncTaskA1<T> : IInvokeApi
         {
@@ -1190,7 +1190,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawContextRetGetA1<T> : IInvokeApi
         {
@@ -1225,7 +1225,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawContextRetPostAsyncA1<T> : IInvokeApi
         {
@@ -1268,7 +1268,7 @@ namespace SysWeaver.Net
         #region No return
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextGetAsyncTaskA1<T> : IInvokeApi
         {
@@ -1305,7 +1305,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextPostAsyncTaskA1<T> : IInvokeApi
         {
@@ -1341,7 +1341,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextGetA1<T> : IInvokeApi
         {
@@ -1377,7 +1377,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextPostAsyncA1<T> : IInvokeApi
         {
@@ -1422,7 +1422,7 @@ namespace SysWeaver.Net
         #region Return value
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextRetGetAsyncTaskA0<R> : IInvokeApi
         {
@@ -1457,7 +1457,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextRetPostAsyncTaskA0<R> : IInvokeApi
         {
@@ -1492,7 +1492,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextRetGetA0<R> : IInvokeApi
         {
@@ -1527,7 +1527,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextRetPostA0<R> : IInvokeApi
         {
@@ -1566,7 +1566,7 @@ namespace SysWeaver.Net
         #region Return raw value
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawContextRetGetAsyncTaskA0 : IInvokeApi
         {
@@ -1600,7 +1600,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawContextRetPostAsyncTaskA0 : IInvokeApi
         {
@@ -1634,7 +1634,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawContextRetGetA0 : IInvokeApi
         {
@@ -1668,7 +1668,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawContextRetPostA0 : IInvokeApi
         {
@@ -1706,7 +1706,7 @@ namespace SysWeaver.Net
         #region No return
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextGetAsyncTaskA0 : IInvokeApi
         {
@@ -1741,7 +1741,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="Task"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="Task"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextPostAsyncTaskA0 : IInvokeApi
         {
@@ -1776,7 +1776,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextGetA0 : IInvokeApi
         {
@@ -1811,7 +1811,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a synchronous parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a synchronous parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextPostA0 : IInvokeApi
         {
@@ -1867,7 +1867,7 @@ namespace SysWeaver.Net
         #region Return value
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RetGetAsyncValueTaskA1<T, R> : IInvokeApi
         {
@@ -1907,7 +1907,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RetPostAsyncValueTaskA1<T, R> : IInvokeApi
         {
@@ -1948,7 +1948,7 @@ namespace SysWeaver.Net
         #region Return raw value
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawRetGetAsyncValueTaskA1<T> : IInvokeApi
         {
@@ -1983,7 +1983,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawRetPostAsyncValueTaskA1<T> : IInvokeApi
         {
@@ -2023,7 +2023,7 @@ namespace SysWeaver.Net
         #region No return
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method, used for Get requests. The argument is deserialized from the query string (default when absent). Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class GetAsyncValueTaskA1<T> : IInvokeApi
         {
@@ -2060,7 +2060,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class PostAsyncValueTaskA1<T> : IInvokeApi
         {
@@ -2104,7 +2104,7 @@ namespace SysWeaver.Net
         #region Return value
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method, used for Get requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method, used for Get requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RetGetAsyncValueTaskA0<R> : IInvokeApi
         {
@@ -2139,7 +2139,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method, used for Post requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method, used for Post requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RetPostAsyncValueTaskA0<R> : IInvokeApi
         {
@@ -2178,7 +2178,7 @@ namespace SysWeaver.Net
         #region Return raw value
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method, used for Get requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method, used for Get requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawRetGetAsyncValueTaskA0 : IInvokeApi
         {
@@ -2212,7 +2212,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method, used for Post requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method, used for Post requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawRetPostAsyncValueTaskA0 : IInvokeApi
         {
@@ -2250,7 +2250,7 @@ namespace SysWeaver.Net
         #region No return
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method, used for Get requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method, used for Get requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class GetAsyncValueTaskA0 : IInvokeApi
         {
@@ -2286,7 +2286,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method, used for Post requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method, used for Post requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class PostAsyncValueTaskA0 : IInvokeApi
         {
@@ -2331,7 +2331,7 @@ namespace SysWeaver.Net
         #region Return value
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextRetGetAsyncValueTaskA1<T, R> : IInvokeApi
         {
@@ -2368,7 +2368,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextRetPostAsyncValueTaskA1<T, R> : IInvokeApi
         {
@@ -2409,7 +2409,7 @@ namespace SysWeaver.Net
         #region Return raw value
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawContextRetGetAsyncValueTaskA1<T> : IInvokeApi
         {
@@ -2444,7 +2444,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawContextRetPostAsyncValueTaskA1<T> : IInvokeApi
         {
@@ -2487,7 +2487,7 @@ namespace SysWeaver.Net
         #region No return
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The argument is deserialized from the query string (default when absent). Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextGetAsyncValueTaskA1<T> : IInvokeApi
         {
@@ -2524,7 +2524,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning one-argument API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The argument is deserialized from the (optionally compressed) request body, default when empty. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextPostAsyncValueTaskA1<T> : IInvokeApi
         {
@@ -2568,7 +2568,7 @@ namespace SysWeaver.Net
         #region Return value
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextRetGetAsyncValueTaskA0<R> : IInvokeApi
         {
@@ -2603,7 +2603,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The result is serialized according to the Accept header (and translated when needed). Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextRetPostAsyncValueTaskA0<R> : IInvokeApi
         {
@@ -2642,7 +2642,7 @@ namespace SysWeaver.Net
         #region Return raw value
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawContextRetGetAsyncValueTaskA0 : IInvokeApi
         {
@@ -2676,7 +2676,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. The returned raw bytes are sent as-is. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class RawContextRetPostAsyncValueTaskA0 : IInvokeApi
         {
@@ -2714,7 +2714,7 @@ namespace SysWeaver.Net
         #region No return
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Get requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextGetAsyncValueTaskA0 : IInvokeApi
         {
@@ -2749,7 +2749,7 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
-        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start.
+        /// Invoker for a <see cref="ValueTask"/>-returning parameterless API method that also receives the <see cref="HttpServerRequest"/>, used for Post requests. Returns an empty response. Audit callbacks are invoked when configured; input deserialization happens before the audit start (a deserialization failure is audited as a start with a null value followed by the exception).
         /// </summary>
         sealed class ContextPostAsyncValueTaskA0 : IInvokeApi
         {

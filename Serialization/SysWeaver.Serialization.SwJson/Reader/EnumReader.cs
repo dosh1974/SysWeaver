@@ -64,6 +64,19 @@ namespace SysWeaver.Serialization.SwJson.Reader
         }
 
         /// <summary>
+        /// Parse an enum from UTF8 text (without quotes, unescaped), like a dictionary key: an exact name, an integer or anything that Enum.Parse&lt;T&gt;(value, false) accepts
+        /// </summary>
+        /// <param name="text">The UTF8 text</param>
+        /// <returns>The value</returns>
+        /// <exception cref="ArgumentException">The text isn't a valid value</exception>
+        public static T Parse(ReadOnlySpan<Byte> text)
+        {
+            if (TryGet(text, out var value))
+                return value;
+            return Enum.Parse<T>(Encoding.UTF8.GetString(text), false);
+        }
+
+        /// <summary>
         /// Try to get the value of an exact name or a plain integer (within the range of the underlying type)
         /// </summary>
         /// <param name="text">The UTF8 text (without quotes)</param>

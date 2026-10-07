@@ -12,8 +12,7 @@ namespace SysWeaver.Serialization
     /// Has a low priority (-5) so it never displaces the other JSON serializers when they are registered.
     /// </summary>
     /// <remarks>
-    /// Serialization uses a custom resolver (nulls included, byte arrays as number arrays, enums as integers, original member name casing),
-    /// but deserialization uses SpanJson's default resolver, so the two are not fully symmetric (ex: enums).
+    /// Serialization and deserialization use the same custom resolver (nulls included, byte arrays as number arrays, enums as integers, original member name casing).
     /// The <see cref="SerializerOptions"/> are ignored (output is always compact).
     /// </remarks>
     public sealed class SpanJsonSerializer : ITextSerializerType
@@ -79,13 +78,13 @@ namespace SysWeaver.Serialization
         /// <inheritdoc/>
         public T Create<T>(ReadOnlySpan<byte> data)
         {
-            return JsonSerializer.Generic.Utf8.Deserialize<T>(data);
+            return JsonSerializer.Generic.Utf8.Deserialize<T, CustomResolver>(data);
         }
 
         /// <inheritdoc/>
         public T Create<T>(ReadOnlyMemory<byte> data)
         {
-            return JsonSerializer.Generic.Utf8.Deserialize<T>(data.Span);
+            return JsonSerializer.Generic.Utf8.Deserialize<T, CustomResolver>(data.Span);
         }
 
         /// <inheritdoc/>
@@ -103,13 +102,13 @@ namespace SysWeaver.Serialization
         /// <inheritdoc/>
         public T FromString<T>(ReadOnlySpan<char> text)
         {
-            return JsonSerializer.Generic.Utf8.Deserialize<T>(Encoding.UTF8.GetBytes(new String(text)));
+            return JsonSerializer.Generic.Utf8.Deserialize<T, CustomResolver>(Encoding.UTF8.GetBytes(new String(text)));
         }
 
         /// <inheritdoc/>
         public T FromString<T>(string text)
         {
-            return JsonSerializer.Generic.Utf8.Deserialize<T>(Encoding.UTF8.GetBytes(text));
+            return JsonSerializer.Generic.Utf8.Deserialize<T, CustomResolver>(Encoding.UTF8.GetBytes(text));
         }
     }
 }

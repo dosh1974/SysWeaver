@@ -186,6 +186,23 @@ namespace SysWeaver.Auth
 
 
         /// <summary>
+        /// Get a deterministic fake salt for an unknown user.
+        /// If all authorizers are <see cref="SimpleAuthorizer"/>'s the salt is computed the same way as for a known user (same format), 
+        /// else a 24 char salt is returned (the format used by random salts, <see cref="AuthTools.GetRandomSalt"/>).
+        /// </summary>
+        /// <param name="username">The user name</param>
+        /// <returns>A fake salt</returns>
+        String GetFakeSalt(String username)
+        {
+            //  A different salt format would reveal what users exist
+            var a = OrderdAuths;
+            if ((a != null) && (a.Length > 0) && a.All(x => x is SimpleAuthorizer))
+                return AuthTools.ComputeSimpleSalt(username ?? "");
+            return Convert.ToBase64String(SHA256.HashData(MemoryMarshal.Cast<Char, Byte>(username.AsSpan())), 0, 18);
+        }
+
+
+        /// <summary>
         /// Get the salt for a user (from the first authorizer that knows the user).
         /// For unknown users a deterministic fake salt is returned, and a random delay is always added, to make user enumeration harder.
         /// </summary>
@@ -201,7 +218,7 @@ namespace SysWeaver.Auth
                     break;
             }
             if (salt == null)
-                salt = Convert.ToBase64String(SHA256.HashData(MemoryMarshal.Cast<Char, Byte>(username.AsSpan())), 0, 18);
+                salt = GetFakeSalt(username);
             await TaskExt.RandomDelay().ConfigureAwait(false);
             return salt;
         }
@@ -227,7 +244,7 @@ namespace SysWeaver.Auth
                 }
             }
             if (salt == null)
-                salt = Convert.ToBase64String(SHA256.HashData(MemoryMarshal.Cast<Char, Byte>(username.AsSpan())), 0, 18);
+                salt = GetFakeSalt(username);
             await TaskExt.RandomDelay().ConfigureAwait(false);
             return Tuple.Create(a, salt);
         }

@@ -240,8 +240,12 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// The url as received from the listener (not url decoded by the server), used for parsing <see cref="QueryParameters"/>.
+        /// The absolute url as received from the listener (not url decoded by the server, no "index.html" inserted), used for parsing <see cref="QueryParameters"/>.
         /// </summary>
+        /// <remarks>
+        /// The scheme and authority are the same as in <see cref="Url"/> (NetHttpServer: Uri.AbsoluteUri, AspHttpServer: the display url with the path escaped).
+        /// For requests created from code (<see cref="ManualHttpServerRequest"/>, <see cref="ReplaceUrl"/>) it's normally the same as <see cref="Url"/>.
+        /// </remarks>
         public readonly String RawUrl;
 
         /// <summary>
@@ -606,21 +610,50 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Make a path that is relative to the folder of the local url absolute ("../" segments are resolved).
+        /// Make a path that is relative to the folder of the local url absolute ("./" and "../" segments are resolved).
         /// Paths containing "://" are returned as is.
         /// </summary>
         /// <param name="path">The relative path</param>
-        /// <returns>The absolute url</returns>
-        /// <exception cref="Exception">Thrown if the path goes above the root</exception>
-        /// <remarks>For requests in the root folder the result contains a double slash after the prefix (ex: "https://host//path").</remarks>
+        /// <returns>The absolute url, ex: "https://host/Api/../x.html" gives "https://host/x.html" for a request to "https://host/Api/Method"</returns>
+        /// <remarks>
+        /// "../" segments that would go above the root (the <see cref="Prefix"/>) are ignored (as browsers do), ex: "../x.html" for a root level request gives "https://host/x.html".
+        /// </remarks>
         public String MakeAbsolute(String path)
         {
             if (path.FastIndexOf("://") >= 0)
                 return path;
             var l = GetLocalUrl();
-            if (l.Length < 0)
-                return HttpServerTools.CleanupPaths(Prefix + path);
-            return HttpServerTools.CleanupPaths(String.Concat(Prefix, l, '/', path));
+            return String.Concat(Prefix, CleanupLocalPath(l.Length <= 0 ? path : String.Concat(l, "/", path)));
+        }
+
+        /// <summary>
+        /// Remove "./" and resolve "../" segments in a local path (relative to the prefix), "../" segments that would go above the root are ignored.
+        /// Empty segments (double slashes) are kept.
+        /// </summary>
+        /// <param name="p">A local path</param>
+        /// <returns>A cleaned up path (the same instance if nothing changed)</returns>
+        static String CleanupLocalPath(String p)
+        {
+            var ps = p.Split('/');
+            var l = ps.Length;
+            int o = 0;
+            for (int i = 0; i < l; ++i)
+            {
+                var t = ps[i];
+                if (t == ".")
+                    continue;
+                if (t == "..")
+                {
+                    if (o > 0)
+                        --o;
+                    continue;
+                }
+                ps[o] = t;
+                ++o;
+            }
+            if (o == l)
+                return p;
+            return String.Join('/', ps, 0, o);
         }
 
 
@@ -630,7 +663,7 @@ namespace SysWeaver.Net
         /// </summary>
         /// <param name="url">An absolute or relative url</param>
         /// <returns>An absolute url</returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown if the url has more leading "../" segments than the request url has segments</exception>
+        /// <remarks>Leading "../" segments that would go above the root are ignored (as browsers do).</remarks>
         public String MakeRequestAbsolute(String url)
         {
             if (url.FastIndexOf("://") > 0)
@@ -652,6 +685,10 @@ namespace SysWeaver.Net
                     continue;
                 break;
             }
+            //  Never go above the root (keep "scheme:", "" and the host), same as browsers do
+            var minI = Math.Min(3, b.Length - 1);
+            if (i < minI)
+                i = minI;
             return String.Join('/', String.Join('/', b, 0, i), String.Join('/', a, j, al - j));
         }
 

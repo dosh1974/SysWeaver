@@ -183,7 +183,7 @@ namespace SysWeaver.Data
                         var text = MarkDownTableDataExporter.Instance.GetMarkDownText(TableDataTools.Get(new TableDataRequest
                         {
                             MaxRowCount = 1000000,
-                        }, x.Members), null, new TableDataExportOptions
+                        }, x.Members, null, 1000000), null, new TableDataExportOptions
                         {
                             Custom = linePrefix
                         });

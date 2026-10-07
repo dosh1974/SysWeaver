@@ -52,7 +52,7 @@ flowchart LR
 - Self-signed and privately signed certificates are only trusted by clients that trust the issuer.
 - Providers must be registered before the HTTP server service.
 - Generated certificates are RSA (SHA256) with a fixed 4 day back-dating; the cached `.pfx` password defaults to the application name, so protect the cache folder with file system permissions.
-- Certificates are loaded with machine key storage (`MachineKeySet | PersistKeySet`), which typically requires elevated rights on Windows.
+- Certificates are loaded with machine key storage (`CertificateTools.InMemoryKeyStorageFlags` = `MachineKeySet | Exportable`), which typically requires elevated rights on Windows. The key isn't persisted: the temporary key file in `%ProgramData%\Microsoft\Crypto\...\MachineKeys` is deleted when the certificate is disposed (so renewals and LAN polls no longer accumulate key files). `EphemeralKeySet` isn't used since SslStream (SChannel) can't use ephemeral keys on Windows. `CertificateTools.Install` (used by the HttpListener / http.sys binding) adds a copy with a persisted key to the machine store.
 - With `IncludeLanIPs` enabled, a change of the local IP addresses causes a new certificate to be generated.
 
 ## Using it

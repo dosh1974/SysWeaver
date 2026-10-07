@@ -77,6 +77,20 @@ namespace SysWeaver.Net
         /// (unknown or unregistered names are ignored). The default serializer is always added.
         /// </summary>
         public String OutputSerializers = "json, xml, proto, bson";
+
+        /// <summary>
+        /// The maximum size in bytes of an API request body (as received, i.e. before any Content-Encoding decompression).
+        /// Requests with a larger body (or a larger Content-Length header) are rejected with a 413 (Content Too Large) response.
+        /// Zero or negative means no limit.
+        /// </summary>
+        public long MaxRequestSize = ApiIoParams.DefaultMaxRequestSize;
+
+        /// <summary>
+        /// The maximum size in bytes of an API request body after Content-Encoding decompression.
+        /// Requests that decompress to more than this are rejected with a 413 (Content Too Large) response.
+        /// Zero or negative means no limit.
+        /// </summary>
+        public long MaxDecompressedSize = ApiIoParams.DefaultMaxDecompressedSize;
     }
 
 

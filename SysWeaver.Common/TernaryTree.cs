@@ -14,7 +14,7 @@ namespace SysWeaver
     /// A null value is treated as "no value", so prefix nodes and keys with a null value are indistinguishable.
     /// For non nullable value types every node counts as having a value, so prefix and near searches also return the default value for intermediate nodes.
     /// All operations are recursive (the stack depth is proportional to the key length plus the tree depth).
-    /// Only used by <see cref="PrefixFinder"/>.
+    /// Not used by the framework.
     /// </remarks>
     /// <typeparam name="T">The type of the values</typeparam>
     public class TernaryTree<T>
@@ -369,49 +369,48 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Get the values of keys that are (approximately) within a Hamming distance of a query.
+        /// Get the values of keys that are within a Hamming distance of a query (only keys with the same length as the query can match).
         /// </summary>
-        /// <remarks>
-        /// The implementation is approximate: keys that extends a shorter key with a value are never visited (the search doesn't continue below a node with a value),
-        /// keys shorter than the query can match, and a distance of 0 (an exact match) always returns nothing.
-        /// </remarks>
         /// <param name="query">The query, null or white space returns nothing</param>
-        /// <param name="distance">The max number of mismatched chars, must be greater than 0 (else nothing is returned)</param>
+        /// <param name="distance">The max number of mismatched chars, 0 for an exact match only (a negative value returns nothing)</param>
         /// <returns>The values found</returns>
         public IEnumerable<T> NearSearch(string query, int distance)
         {
             Queue<T> queue = new Queue<T>();
-            if (!string.IsNullOrWhiteSpace(query) && distance > 0)
-                Collect(query, root, queue, distance);
+            if (!string.IsNullOrWhiteSpace(query) && distance >= 0)
+                Collect(query, 0, root, queue, distance);
             return queue;
         }
 
         /// <summary>
         /// Collect the values of keys in a sub tree that are within a Hamming distance (recursive)
         /// </summary>
-        /// <param name="query">The remaining part of the query</param>
+        /// <param name="query">The query</param>
+        /// <param name="index">The index of the char in the query to match against the node</param>
         /// <param name="node">The sub tree</param>
         /// <param name="queue">Receives the values</param>
         /// <param name="d">The remaining number of allowed mismatches</param>
-        void Collect(string query, Node node, Queue<T> queue, int d)
+        void Collect(string query, int index, Node node, Queue<T> queue, int d)
         {
             if (node == null) return;
-            char c = query[0];
+            char c = query[index];
             if (!CaseSenesitive)
                 c = CharExt.FastLower(c);
-            if (d > 0 || c < node.c) { Collect(query, node.left, queue, d); }
-            if (node.value != null)
+            if (d > 0 || c < node.c) { Collect(query, index, node.left, queue, d); }
+            var nd = c == node.c ? d : d - 1;
+            if (nd >= 0)
             {
-                if (query.Length <= d)
+                if (index == (query.Length - 1))
                 {
-                    queue.Enqueue(node.value);
+                    if (node.value != null)
+                        queue.Enqueue(node.value);
+                }
+                else
+                {
+                    Collect(query, index + 1, node.mid, queue, nd);
                 }
             }
-            else
-            {
-                Collect(query.Length > 1 ? query.Substring(1) : query, node.mid, queue, c == node.c ? d : d - 1);
-            }
-            if (d > 0 || c > node.c) { Collect(query, node.right, queue, d); }
+            if (d > 0 || c > node.c) { Collect(query, index, node.right, queue, d); }
 
         }
     }

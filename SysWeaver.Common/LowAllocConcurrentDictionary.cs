@@ -1807,13 +1807,21 @@ namespace SysWeaver
         public void EnterLock()
         {
             if (Interlocked.CompareExchange(ref LockState, 1, 0) == 0) return;
+            EnterLockSlow();
+        }
 
-            int spinCount = 1;
-            while (Interlocked.CompareExchange(ref LockState, 1, 0) != 0)
+        /// <summary>
+        /// Spin until the lock is acquired, yields the thread after a short busy spin (so that a preempted lock holder, or a long rebuild, doesn't make waiters burn the CPU)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        void EnterLockSlow()
+        {
+            SpinWait spinner = default;
+            do
             {
-                Thread.SpinWait(spinCount);
-                if (spinCount < 64) spinCount <<= 1;
+                spinner.SpinOnce(-1);
             }
+            while (Interlocked.CompareExchange(ref LockState, 1, 0) != 0);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

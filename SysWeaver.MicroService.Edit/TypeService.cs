@@ -127,10 +127,27 @@ namespace SysWeaver.MicroService
         {
             if (String.IsNullOrEmpty(typeName))
                 return null;
-            var type = TypeFinder.Get(typeName);
+            var type = FindType(typeName);
             if (type == null)
                 return null;
             return TryCreate(type);
+        }
+
+        /// <summary>
+        /// Get a type from a (untrusted) client supplied type name
+        /// </summary>
+        /// <param name="typeName">The name of the type</param>
+        /// <returns>The type or null if it doesn't exist or isn't allowed by the <see cref="DataTypePolicy"/></returns>
+        static Type FindType(String typeName)
+        {
+            try
+            {
+                return TypeFinder.GetForData(typeName, typeof(Object));
+            }
+            catch (DataTypeNotAllowedException)
+            {
+                return null;
+            }
         }
 
         /// <summary>
@@ -154,7 +171,7 @@ namespace SysWeaver.MicroService
             var cache = haveDebug ? TypeInfoCacheDebug : TypeInfoCache;
             if (cache.TryGetValue(key, out var v))
                 return v;
-            var type = TypeFinder.Get(typeName);
+            var type = FindType(typeName);
             if (type == null)
             {
                 cache.TryAdd(key, null);

@@ -543,7 +543,8 @@ namespace SysWeaver.Chat
                     url = await UserStore.StorePublicFile(context, filename, mem).ConfigureAwait(false);
                     break;
             }
-            return context.MakeAbsolute("../" + url);
+            //  The storage url is relative to the root (prefix), independent of the folder of the request
+            return context.Prefix + url;
         }
 
 
@@ -731,7 +732,8 @@ namespace SysWeaver.Chat
                 }
                 url = await saveLink(url).ConfigureAwait(false);
                 //return localPrefix + url;
-                return context.MakeAbsolute(localPrefix + url);
+                //  The storage url is relative to the root (prefix), independent of the folder of the request
+                return context.Prefix + url;
             }
         }
 

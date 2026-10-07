@@ -23,7 +23,7 @@ namespace SysWeaver
         /// <returns>A task that completes when the message has been written. Must not return null.</returns>
         /// <remarks>
         /// In <see cref="Modes.NativeSync"/> mode this is called on the thread that added the message and must complete synchronously.
-        /// In the other modes this is called from a background task, one message at a time in the normal case.
+        /// In the other modes this is called from a background task, one message at a time (never concurrently) and in the order the messages were added.
         /// </remarks>
         protected abstract Task Add(Message message);
 
@@ -67,7 +67,21 @@ namespace SysWeaver
         /// </summary>
         public virtual void Dispose()
         {
-            CurrentTask?.Wait(5000);
+            WaitForCurrentTask();
+        }
+
+        /// <summary>
+        /// Wait (at most 5 seconds) for the current background processing task (if any) to complete, a failed task (an <see cref="Add(Message)"/> threw) is ignored
+        /// </summary>
+        void WaitForCurrentTask()
+        {
+            try
+            {
+                CurrentTask?.Wait(5000);
+            }
+            catch (AggregateException)
+            {
+            }
         }
 
         /// <summary>
@@ -75,14 +89,29 @@ namespace SysWeaver
         /// </summary>
         protected static readonly Task CompletedTask = Task.CompletedTask;
 
+        /// <summary>
+        /// The single consumer of the message queue (only one is running at a time, so <see cref="Add(Message)"/> is never called concurrently)
+        /// </summary>
         async Task ProcessMessageQueue()
         {
             var messages = Messages;
-            Message m;
-            while (messages.TryDequeue(out m))
+            try
             {
-                await Add(m).ConfigureAwait(false);
-                Interlocked.Decrement(ref ProcessingCount);
+                for (; ; )
+                {
+                    while (messages.TryDequeue(out var m))
+                        await Add(m).ConfigureAwait(false);
+                    //  Stop running, unless a message was enqueued after the queue was found empty, and the producer didn't start a new consumer (because this one was still running)
+                    Interlocked.Exchange(ref Running, 0);
+                    if (messages.IsEmpty || (Interlocked.CompareExchange(ref Running, 1, 0) != 0))
+                        return;
+                }
+            }
+            catch
+            {
+                //  Allow the next message to start a new consumer
+                Interlocked.Exchange(ref Running, 0);
+                throw;
             }
         }
 
@@ -100,14 +129,18 @@ namespace SysWeaver
                 return null;
             }
             Messages.Enqueue(m);
-            if (Interlocked.Increment(ref ProcessingCount) != 1)
+            //  Start a consumer, unless one is already running (it will process this message)
+            if (Interlocked.CompareExchange(ref Running, 1, 0) != 0)
                 return null;
             var t = Task.Run(ProcessMessageQueue);
             CurrentTask = t;
             return (Mode == Modes.Async) || t.IsCompleted ? null : t;
         }
         internal volatile Task CurrentTask;
-        int ProcessingCount;
+        /// <summary>
+        /// 1 while a consumer (<see cref="ProcessMessageQueue"/>) is running, else 0
+        /// </summary>
+        int Running;
         readonly ConcurrentQueue<Message> Messages = new ConcurrentQueue<Message>();
 
         /// <summary>
@@ -115,7 +148,7 @@ namespace SysWeaver
         /// </summary>
         internal void Flush()
         {
-            CurrentTask?.Wait(5000);
+            WaitForCurrentTask();
             OnFlush();
         }
 

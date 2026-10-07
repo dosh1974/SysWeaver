@@ -148,7 +148,7 @@ namespace SysWeaver.AI
                                 if (!String.IsNullOrEmpty(ta))
                                     debugBuilder.Append(I).AppendLine(@"##### Parameters").Append(I).AppendLine("```json").Append(I).AppendLine(AiTools.BeautifyJson(ta, I)).Append(I).AppendLine("```  ");
                                 if (debug > AiDebugInfo.Parameters)
-                                    debugBuilder.Append(I).AppendLine(@"##### Exception").Append(I).AppendLine("```").Append(I).AppendLine(AiTools.Intendent(ex.ToString(), I)).Append(I).AppendLine("```");
+                                    debugBuilder.Append(I).AppendLine(@"##### Exception").Append(I).AppendLine("```").Append(I).AppendLine(AiTools.Intendent(ex.SafeText(), I)).Append(I).AppendLine("```");
                                 debugBuilder.AppendLine();
                             }
                             else

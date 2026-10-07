@@ -114,7 +114,22 @@ namespace SysWeaver
                     syncTasks.Add(t);
             }
             if (syncTasks.Count > 0)
-                Task.WaitAll(syncTasks.ToArray());
+                WaitAll(syncTasks);
+        }
+
+        /// <summary>
+        /// Wait for all tasks to complete, failed tasks (a handler's Add threw) are ignored
+        /// </summary>
+        /// <param name="tasks">The tasks to wait for</param>
+        static void WaitAll(List<Task> tasks)
+        {
+            try
+            {
+                Task.WaitAll(tasks.ToArray());
+            }
+            catch (AggregateException)
+            {
+            }
         }
 
 
@@ -188,7 +203,7 @@ namespace SysWeaver
                 if (t != null)
                     tasks.Add(t);
             }
-            Task.WaitAll(tasks.ToArray());
+            WaitAll(tasks);
             foreach (var c in mh)
                 c.Key.Flush();
         }

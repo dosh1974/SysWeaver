@@ -21,7 +21,7 @@ namespace SysWeaver.Net
     /// <remarks>
     /// Thread safe (used concurrently by all requests of the session).
     /// Do NOT dispose to release the session: the dispose pattern is only used to decrement the in progress request counter (see <see cref="IncRequestCounter"/>).
-    /// The session token is not changed when a user logs in.
+    /// The session token is replaced (rotated) when a user logs in using <see cref="HttpServerBase.RunOnLogin(HttpSession, HttpServerRequest)"/>, the session object (and its data) is kept.
     /// </remarks>
     public sealed class HttpSession : IDisposable
     {
@@ -134,8 +134,14 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// The session token (the value of the session cookie). This is a secret, anyone knowing it can use the session.
+        /// Do NOT assign, the server replaces the token when a user logs in (see <see cref="HttpServerBase.RunOnLogin(HttpSession, HttpServerRequest)"/>).
         /// </summary>
-        public readonly String Token;
+        public String Token;
+
+        /// <summary>
+        /// Lock used by the server when changing the <see cref="Token"/> (and removing the session) so that the session map stays consistent.
+        /// </summary>
+        internal readonly Object TokenLock = new Object();
 
         /// <summary>
         /// The User-Agent of the client that created the session (empty if not sent).
@@ -192,21 +198,43 @@ namespace SysWeaver.Net
         Authorization InternalAuth;
 
         /// <summary>
+        /// True if <see cref="InternalAuth"/> is owned by this session (and should be disposed when replaced)
+        /// </summary>
+        bool InternalAuthOwned;
+
+        /// <summary>
         /// Set (or clear) the logged in user, the session cache is invalidated and <see cref="OnAuthLogin"/> is raised when a user is set.
         /// If a user is set, the session language is changed to the user's language (if any).
         /// </summary>
         /// <param name="auth">The authorization, null to log out</param>
-        /// <remarks>The previous authorization (if different) is disposed.
-        /// Call <see cref="HttpServerBase.RunOnLogin"/> after setting a user so that the server tracks the user's sessions.</remarks>
-        public void SetAuth(Authorization auth)
+        /// <remarks>The session takes ownership of <paramref name="auth"/>: the previous authorization (if different) is disposed, unless it was set as not owned by the server
+        /// (an authorization from the Authorization / API key header is cached and shared between sessions, so it's never disposed by a session).
+        /// Call <see cref="HttpServerBase.RunOnLogin(HttpSession, HttpServerRequest)"/> after setting a user so that the server tracks the user's sessions.</remarks>
+        public void SetAuth(Authorization auth) => SetAuth(auth, true);
+
+        /// <summary>
+        /// Set (or clear) the logged in user, see <see cref="SetAuth(Authorization)"/>.
+        /// </summary>
+        /// <param name="auth">The authorization, null to log out</param>
+        /// <param name="owned">True if the session owns <paramref name="auth"/> (it's disposed when replaced), false if it's shared (ex: cached by the <see cref="AuthManager"/>)</param>
+        internal void SetAuth(Authorization auth, bool owned)
         {
-            var old = Interlocked.Exchange(ref InternalAuth, auth);
-            if (old == auth)
-                return;
+            Authorization old;
+            bool oldOwned;
+            lock (AuthLock)
+            {
+                old = InternalAuth;
+                if (old == auth)
+                    return;
+                oldOwned = InternalAuthOwned;
+                InternalAuthOwned = owned;
+                Volatile.Write(ref InternalAuth, auth);
+            }
             if (old != null)
             {
                 old.OnRequestLogout -= Auth_OnRequestLogout;
-                old.Dispose();
+                if (oldOwned)
+                    old.Dispose();
             }
             if (auth != null)
             {
@@ -217,6 +245,8 @@ namespace SysWeaver.Net
             }
             InvalidateCache();
         }
+
+        readonly Object AuthLock = new Object();
 
         void Auth_OnRequestLogout(string reason)
         {
@@ -821,7 +851,7 @@ namespace SysWeaver.Net
         public event Action<HttpSession, String> OnAuthLogout;
 
         /// <summary>
-        /// Event fired when a user has been set on the session (see <see cref="SetAuth"/>).
+        /// Event fired when a user has been set on the session (see <see cref="SetAuth(Authorization)"/>).
         /// </summary>
         public event Action<HttpSession> OnAuthLogin;
 

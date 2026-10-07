@@ -847,12 +847,11 @@ namespace SysWeaver.Data
 
         /// <summary>
         /// Apply filters (lazily, using LINQ).
-        /// Filters with a null value or an unknown column name are ignored.
+        /// Filters with a null value, an unknown column name or an undefined <see cref="TableDataFilterBase.Op"/> value are ignored.
         /// </summary>
         /// <param name="fs">The filters, may be null.</param>
         /// <param name="data">The source data.</param>
         /// <returns>The filtered sequence, null if <paramref name="data"/> is null.</returns>
-        /// <exception cref="IndexOutOfRangeException">A filter has an undefined <see cref="TableDataFilterBase.Op"/> value (thrown on call).</exception>
         public static IEnumerable<T> Filter(TableDataFilter[] fs, IEnumerable<T> data)
         {
             if (data == null)
@@ -872,12 +871,15 @@ namespace SysWeaver.Data
                     continue;
                 if (!nameToCol.TryGetValue(f.ColName ?? "", out var colIndex))
                     continue;
+                var colFilters = filters[colIndex];
+                if ((uint)f.Op >= (uint)(colFilters.Length >> 2))
+                    continue;
                 var findex = ((int)f.Op) << 2;
                 if (f.Invert)
                     findex |= 1;
                 if (f.CaseSensitive)
                     findex |= 2;
-                var filter = filters[colIndex][findex];
+                var filter = colFilters[findex];
                 data = filter(data, filterVal);
             }
             return data;
@@ -947,12 +949,15 @@ namespace SysWeaver.Data
                             continue;
                         if (!nameToCol.TryGetValue(f.ColName ?? "", out var colIndex))
                             continue;
+                        var colFilters = filters[colIndex];
+                        if ((uint)f.Op >= (uint)(colFilters.Length >> 2))
+                            continue;
                         var findex = ((int)f.Op) << 2;
                         if (f.Invert)
                             findex |= 1;
                         if (f.CaseSensitive)
                             findex |= 2;
-                        var filter = filters[colIndex][findex];
+                        var filter = colFilters[findex];
                         data = filter(data, filterVal);
                     }
                 }
@@ -1066,7 +1071,8 @@ namespace SysWeaver.Data
         /// </summary>
         /// <param name="count">The number of extracted rows plus the number of look ahead items found.</param>
         /// <param name="data">The data (should already be filtered, sorted and skipped).</param>
-        /// <param name="limit">Maximum number of rows to extract, zero or negative means no limit.</param>
+        /// <param name="limit">Maximum number of rows to extract, zero or negative means no limit.
+        /// No server side cap is applied here: callers passing client supplied values must cap them first (as <see cref="Get"/> does, ex: using <see cref="TableDataTools.DefaultMaxAllowedRows"/>).</param>
         /// <param name="lookAhead">Number of additional items to count.</param>
         /// <returns>The extracted rows, never null.</returns>
         public static TableDataRow[] ExtractGet(out long count, IEnumerable<T> data, long limit = long.MaxValue, long lookAhead = 0)
@@ -1165,6 +1171,30 @@ namespace SysWeaver.Data
         }
 
         /// <summary>
+        /// Compute the server side capped row limit and look ahead of a request (used by <see cref="Get"/> and <see cref="GetTyped{R}"/>).
+        /// A <see cref="TableDataOrderRequest.MaxRowCount"/> that is zero or negative (no limit) or above <paramref name="maxAllowedRows"/> becomes <paramref name="maxAllowedRows"/>,
+        /// and the look ahead is clamped so that limit + look ahead never exceeds <paramref name="maxAllowedRows"/>.
+        /// </summary>
+        /// <param name="request">The request, may not be null.</param>
+        /// <param name="maxAllowedRows">The cap, zero or negative means no cap (the request values are used as is, a negative look ahead becomes zero).</param>
+        /// <param name="limit">The number of rows to extract, zero or negative means no limit (only when there is no cap).</param>
+        /// <param name="lookAhead">The number of additional rows to count, never negative.</param>
+        internal static void CapLimit(TableDataOrderRequest request, long maxAllowedRows, out long limit, out long lookAhead)
+        {
+            limit = request.MaxRowCount;
+            lookAhead = request.LookAheadCount;
+            if (lookAhead < 0)
+                lookAhead = 0;
+            if (maxAllowedRows <= 0)
+                return;
+            if ((limit <= 0) || (limit > maxAllowedRows))
+                limit = maxAllowedRows;
+            var left = maxAllowedRows - limit;
+            if (lookAhead > left)
+                lookAhead = left;
+        }
+
+        /// <summary>
         /// Get the searchable texts of a row (all string members with a positive <see cref="TableDataSearchAttribute"/> weight, default 1), ordered by descending weight.
         /// Null if the type has no searchable members.
         /// </summary>
@@ -1177,12 +1207,14 @@ namespace SysWeaver.Data
         /// <param name="data">The source data.</param>
         /// <param name="title">The table title, only set when the columns are included.</param>
         /// <param name="search">The text search to use, defaults to <see cref="TableDataTools.DefaultSearch"/>.</param>
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned (and rows + look ahead), see <see cref="CapLimit"/>.
+        /// Zero or negative disables the cap (only for trusted server side callers).</param>
         /// <returns>The table. Columns and title are omitted if the request change counter matches (see <see cref="TableDataTools.HandleCc(TableData, long, TableDataColumn[], string)"/>).</returns>
         /// <remarks>
         /// Any exception during processing (including from the source enumerable) is swallowed and results in an empty table.
-        /// No server side cap is applied to <see cref="TableDataOrderRequest.MaxRowCount"/>, zero or negative returns all rows.
+        /// A <see cref="TableDataOrderRequest.MaxRowCount"/> that is zero or negative (no limit), or above <paramref name="maxAllowedRows"/>, is limited to <paramref name="maxAllowedRows"/>.
         /// </remarks>
-        public static TableData Get(TableDataRequest request, IEnumerable<T> data, String title, ITextSearch search = null)
+        public static TableData Get(TableDataRequest request, IEnumerable<T> data, String title, ITextSearch search = null, long maxAllowedRows = TableDataTools.DefaultMaxAllowedRows)
         {
             long count = 0;
             TableDataRow[] rows = Empty;
@@ -1209,7 +1241,8 @@ namespace SysWeaver.Data
                     skip -= s;
                     data = data.Skip((int)s);
                 }
-                rows = ExtractGet(out count, data, request.MaxRowCount, request.LookAheadCount);
+                CapLimit(request, maxAllowedRows, out var limit, out var lookAhead);
+                rows = ExtractGet(out count, data, limit, lookAhead);
                 count += Math.Max(0, request.Row);
             }
             catch
@@ -1230,9 +1263,11 @@ namespace SysWeaver.Data
         /// <param name="data">The source data.</param>
         /// <param name="title">The table title, only set when the columns are included.</param>
         /// <param name="search">The text search to use, defaults to <see cref="TableDataTools.DefaultSearch"/>.</param>
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned (and rows + look ahead), see <see cref="CapLimit"/>.
+        /// Zero or negative disables the cap (only for trusted server side callers).</param>
         /// <returns>The typed table.</returns>
         /// <remarks>Any exception during processing is swallowed and results in an empty table.</remarks>
-        public static R GetTyped<R>(TableDataRequest request, IEnumerable<T> data, String title, ITextSearch search = null) where R : TypedTableData<T>, new()
+        public static R GetTyped<R>(TableDataRequest request, IEnumerable<T> data, String title, ITextSearch search = null, long maxAllowedRows = TableDataTools.DefaultMaxAllowedRows) where R : TypedTableData<T>, new()
         {
             long count = 0;
             T[] rows = EmptyT;
@@ -1259,7 +1294,8 @@ namespace SysWeaver.Data
                     skip -= s;
                     data = data.Skip((int)s);
                 }
-                rows = ExtractTypedGet(out count, data, request.MaxRowCount, request.LookAheadCount);
+                CapLimit(request, maxAllowedRows, out var limit, out var lookAhead);
+                rows = ExtractTypedGet(out count, data, limit, lookAhead);
                 count += Math.Max(0, request.Row);
             }
             catch

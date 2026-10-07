@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -13,9 +14,11 @@ namespace SysWeaver
     /// <typeparam name="T">The type of the cached value</typeparam>
     /// <remarks>
     /// Thread safe. Reading a valid value is lock free, creating a value is serialized by an <see cref="AsyncLock"/> (so the value is only created once even with concurrent callers).
-    /// If auto dispose is enabled the previous value is disposed when it's replaced or cleared (unless the same instance is cached again), exceptions thrown by dispose are recorded in <see cref="AutoDisposeErrors"/>.
-    /// Values are not reference counted, so a replaced value is disposed even if another thread obtained it just before (and may still be using it),
-    /// don't use auto dispose for values that may be in use when they expire (dispose them some time after they are replaced instead).
+    /// If auto dispose is enabled the previous value is disposed when it's replaced, cleared or pruned (unless the same instance is cached again), exceptions thrown by dispose are recorded in <see cref="AutoDisposeErrors"/>.
+    /// Values are not reference counted, another thread may have obtained a value just before it's replaced (and may still be using it),
+    /// so the disposal of a replaced, cleared or pruned value is deferred by <see cref="DisposeDelay"/> (a grace period, by default the cache duration clamped to [10 seconds, 5 minutes]).
+    /// A value that is used for longer than the grace period after it's replaced can still be disposed while in use, don't use auto dispose for such values.
+    /// <see cref="Dispose"/> disposes the current value and all values waiting for a deferred disposal immediately.
     /// Exceptions thrown by the get function are propagated and nothing is cached.
     /// The async methods have overloads with a waitUntilReady argument: when false, a caller that finds the value missing or expired starts an update in the background
     /// (unless one is already running) and gets default until the value is ready, instead of waiting.
@@ -28,11 +31,29 @@ namespace SysWeaver
         /// Create a value cache
         /// </summary>
         /// <param name="defaultCacheDuration">The duration to keep a cached version (if no explicit expiration time is supplied)</param>
-        /// <param name="autoDispose">If true and <typeparamref name="T"/> implements <see cref="IDisposable"/>, a value is disposed when it's replaced or cleared</param>
+        /// <param name="autoDispose">If true and <typeparamref name="T"/> implements <see cref="IDisposable"/>, a value is disposed when it's replaced or cleared (after a grace period, see <see cref="DisposeDelay"/>)</param>
         public CachedValue(TimeSpan defaultCacheDuration, bool autoDispose = true)
+            : this(defaultCacheDuration, autoDispose, GetDefaultDisposeDelay(defaultCacheDuration))
+        {
+        }
+
+        /// <summary>
+        /// Create a value cache
+        /// </summary>
+        /// <param name="defaultCacheDuration">The duration to keep a cached version (if no explicit expiration time is supplied)</param>
+        /// <param name="autoDispose">If true and <typeparamref name="T"/> implements <see cref="IDisposable"/>, a value is disposed when it's replaced or cleared (after <paramref name="disposeDelay"/>)</param>
+        /// <param name="disposeDelay">The grace period before a replaced, cleared or pruned value is disposed (so that callers that obtained it just before can finish using it).
+        /// Zero or negative disposes it immediately (once it's replaced).</param>
+        public CachedValue(TimeSpan defaultCacheDuration, bool autoDispose, TimeSpan disposeDelay)
         {
             autoDispose &= typeof(IDisposable).IsAssignableFrom(typeof(T));
             DefaultCacheDuration = defaultCacheDuration;
+            //  Task.Delay can't handle more than int.MaxValue - 1 milliseconds
+            if (disposeDelay < TimeSpan.Zero)
+                disposeDelay = TimeSpan.Zero;
+            if (disposeDelay > MaxDisposeDelay)
+                disposeDelay = MaxDisposeDelay;
+            DisposeDelay = disposeDelay;
             if (autoDispose)
             {
                 var e = new ExceptionTracker();
@@ -59,10 +80,45 @@ namespace SysWeaver
         /// <summary>
         /// Create a value cache with a default cache duration of 5 minutes
         /// </summary>
-        /// <param name="autoDispose">If true and <typeparamref name="T"/> implements <see cref="IDisposable"/>, a value is disposed when it's replaced or cleared</param>
+        /// <param name="autoDispose">If true and <typeparamref name="T"/> implements <see cref="IDisposable"/>, a value is disposed when it's replaced or cleared (after a grace period, see <see cref="DisposeDelay"/>)</param>
         public CachedValue(bool autoDispose = true) : this(TimeSpan.FromMinutes(5), autoDispose)
         {
         }
+
+        /// <summary>
+        /// The default grace period before a replaced value is disposed: the cache duration, clamped to [<see cref="MinDefaultDisposeDelay"/>, <see cref="MaxDefaultDisposeDelay"/>]
+        /// </summary>
+        /// <param name="defaultCacheDuration">The cache duration</param>
+        /// <returns>The grace period</returns>
+        static TimeSpan GetDefaultDisposeDelay(TimeSpan defaultCacheDuration)
+        {
+            if (defaultCacheDuration < MinDefaultDisposeDelay)
+                return MinDefaultDisposeDelay;
+            if (defaultCacheDuration > MaxDefaultDisposeDelay)
+                return MaxDefaultDisposeDelay;
+            return defaultCacheDuration;
+        }
+
+        /// <summary>
+        /// The minimum default grace period before a replaced value is disposed
+        /// </summary>
+        public static readonly TimeSpan MinDefaultDisposeDelay = TimeSpan.FromSeconds(10);
+
+        /// <summary>
+        /// The maximum default grace period before a replaced value is disposed
+        /// </summary>
+        public static readonly TimeSpan MaxDefaultDisposeDelay = TimeSpan.FromMinutes(5);
+
+        /// <summary>
+        /// The maximum supported grace period (limit of <see cref="Task.Delay(TimeSpan)"/>)
+        /// </summary>
+        static readonly TimeSpan MaxDisposeDelay = TimeSpan.FromMilliseconds(int.MaxValue - 1);
+
+        /// <summary>
+        /// The grace period before a replaced, cleared or pruned value is disposed (if <see cref="WillDispose"/> is true), zero if it's disposed immediately.
+        /// Callers that obtained the value just before it was replaced can use it during this time.
+        /// </summary>
+        public readonly TimeSpan DisposeDelay;
 
         /// <summary>
         /// True if values are disposed when they are replaced or cleared (auto dispose was requested and <typeparamref name="T"/> implements <see cref="IDisposable"/>)
@@ -297,7 +353,7 @@ namespace SysWeaver
         /// Set a new value, cached for <see cref="DefaultCacheDuration"/>
         /// </summary>
         /// <param name="value">The new value</param>
-        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed (unless it's the same instance as <paramref name="value"/>), exceptions thrown by it are recorded in <see cref="AutoDisposeErrors"/></remarks>
+        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed after <see cref="DisposeDelay"/> (unless it's the same instance as <paramref name="value"/>), exceptions thrown by it are recorded in <see cref="AutoDisposeErrors"/></remarks>
         public void Set(T value)
         {
             Tuple<DateTime, T> old;
@@ -311,7 +367,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="value">The new value</param>
         /// <param name="expirationTime">When this value will expire (UTC)</param>
-        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed (unless it's the same instance as <paramref name="value"/>), exceptions thrown by it are recorded in <see cref="AutoDisposeErrors"/></remarks>
+        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed after <see cref="DisposeDelay"/> (unless it's the same instance as <paramref name="value"/>), exceptions thrown by it are recorded in <see cref="AutoDisposeErrors"/></remarks>
         public void Set(T value, DateTime expirationTime)
         {
             Tuple<DateTime, T> old;
@@ -324,21 +380,21 @@ namespace SysWeaver
         /// <summary>
         /// Clear the cache (the next get will create a new value)
         /// </summary>
-        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed, exceptions thrown by it are recorded in <see cref="AutoDisposeErrors"/></remarks>
+        /// <remarks>If <see cref="WillDispose"/> is true the previous value is disposed after <see cref="DisposeDelay"/>, exceptions thrown by it are recorded in <see cref="AutoDisposeErrors"/></remarks>
         public void Clear()
         {
             Tuple<DateTime, T> old;
             using (var l = Lock.LockSync())
                 old = Interlocked.Exchange(ref Data, null);
             if (WillDispose && (old != null))
-                InternalDispose(old.Item2);
+                DisposeLater(old.Item2);
         }
 
 
         /// <summary>
         /// Remove the value from the cache if it has expired (does nothing if the cache is empty)
         /// </summary>
-        /// <remarks>If <see cref="WillDispose"/> is true the removed value is disposed, exceptions thrown by it are recorded in <see cref="AutoDisposeErrors"/></remarks>
+        /// <remarks>If <see cref="WillDispose"/> is true the removed value is disposed after <see cref="DisposeDelay"/>, exceptions thrown by it are recorded in <see cref="AutoDisposeErrors"/></remarks>
         public void Prune()
         {
             Tuple<DateTime, T> old;
@@ -350,31 +406,118 @@ namespace SysWeaver
                 old = Interlocked.Exchange(ref Data, null);
             }
             if (WillDispose && (old != null))
-                InternalDispose(old.Item2);
+                DisposeLater(old.Item2);
         }
 
         /// <summary>
-        /// Dispose a replaced value (if <see cref="WillDispose"/> is true), unless it's the same instance as the new value (that would dispose a value that is still cached)
+        /// Dispose a replaced value after <see cref="DisposeDelay"/> (if <see cref="WillDispose"/> is true), unless it's the same instance as the new value (that would dispose a value that is still cached)
         /// </summary>
         /// <param name="old">The replaced entry (can be null)</param>
         /// <param name="val">The new value</param>
         void DisposeOld(Tuple<DateTime, T> old, T val)
         {
-            if (!WillDispose || (old == null))
+            if (!WillDispose)
+                return;
+            //  The new value may be a previously replaced instance that is waiting to be disposed, it's cached again so it must not be disposed
+            CancelDispose(val);
+            if (old == null)
                 return;
             var o = old.Item2;
             if (ReferenceEquals(o, val))
                 return;
-            InternalDispose(o);
+            DisposeLater(o);
         }
 
         /// <summary>
-        /// If <see cref="WillDispose"/> is true the cache is cleared (and the value disposed), else nothing happens (the value remains cached)
+        /// Dispose a value that is no longer cached after <see cref="DisposeDelay"/> (immediately if it's zero).
+        /// The value isn't reference counted, callers that obtained it just before it was replaced can use it during the grace period.
+        /// </summary>
+        /// <param name="value">The value to dispose (null is ignored)</param>
+        void DisposeLater(T value)
+        {
+            if (value == null)
+                return;
+            var delay = DisposeDelay;
+            if (delay <= TimeSpan.Zero)
+            {
+                InternalDispose(value);
+                return;
+            }
+            var box = new StrongBox<T>(value);
+            var p = PendingDisposals;
+            lock (p)
+                p.Add(box);
+            _ = DelayedDispose(box, delay);
+        }
+
+        /// <summary>
+        /// Wait for the grace period and dispose the value (unless it was cached again or already disposed by <see cref="Dispose"/>)
+        /// </summary>
+        /// <param name="box">The pending disposal</param>
+        /// <param name="delay">The grace period</param>
+        async Task DelayedDispose(StrongBox<T> box, TimeSpan delay)
+        {
+            await Task.Delay(delay).ConfigureAwait(false);
+            var p = PendingDisposals;
+            lock (p)
+            {
+                if (!p.Remove(box))
+                    return;
+            }
+            var v = box.Value;
+            //  Cached again (a concurrent Set of the same instance)
+            var d = Data;
+            if ((d != null) && ReferenceEquals(d.Item2, v))
+                return;
+            InternalDispose(v);
+        }
+
+        /// <summary>
+        /// Cancel any pending disposal of a value (it's cached again)
+        /// </summary>
+        /// <param name="value">The value</param>
+        void CancelDispose(T value)
+        {
+            if (value == null)
+                return;
+            var p = PendingDisposals;
+            lock (p)
+            {
+                for (int i = p.Count - 1; i >= 0; --i)
+                    if (ReferenceEquals(p[i].Value, value))
+                        p.RemoveAt(i);
+            }
+        }
+
+        /// <summary>
+        /// Replaced values waiting for their grace period to end before they are disposed
+        /// </summary>
+        readonly List<StrongBox<T>> PendingDisposals = new List<StrongBox<T>>();
+
+        /// <summary>
+        /// If <see cref="WillDispose"/> is true the cache is cleared and the current value is disposed immediately (together with any replaced values waiting for their grace period to end),
+        /// else nothing happens (the value remains cached)
         /// </summary>
         public void Dispose()
         {
-            if (WillDispose)
-                Clear();
+            if (!WillDispose)
+                return;
+            Tuple<DateTime, T> old;
+            using (var l = Lock.LockSync())
+                old = Interlocked.Exchange(ref Data, null);
+            StrongBox<T>[] pending;
+            var p = PendingDisposals;
+            lock (p)
+            {
+                pending = p.ToArray();
+                p.Clear();
+            }
+            Object current = old == null ? null : (Object)old.Item2;
+            foreach (var x in pending)
+                if (!ReferenceEquals(x.Value, current))
+                    InternalDispose(x.Value);
+            if (old != null)
+                InternalDispose(old.Item2);
         }
 
         /// <summary>

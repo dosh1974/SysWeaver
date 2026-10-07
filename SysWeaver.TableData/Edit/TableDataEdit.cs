@@ -206,7 +206,7 @@ namespace SysWeaver.Data
                     }
                     catch (Exception ex)
                     {
-                        throw new ArgumentException("New column " + col.Name.ToQuoted() + " is using an invalid expression, can't solve expression " + exp.ToQuoted() + ", exception: " + ex, nameof(col.Expression));
+                        throw new ArgumentException("New column " + col.Name.ToQuoted() + " is using an invalid expression, can't solve expression " + exp.ToQuoted() + ", exception: " + ex.SafeMessage(), nameof(col.Expression));
                     }
                 }
                 invalid.Remove(col.Name);
@@ -408,10 +408,11 @@ namespace SysWeaver.Data
         /// </summary>
         /// <param name="data">The table to aggregate</param>
         /// <param name="columns">The column aggregations to perform</param>
-        /// <returns>Currently always null</returns>
+        /// <returns>Never returns.</returns>
+        /// <exception cref="NotImplementedException">Always thrown, aggregation is not implemented yet.</exception>
         public static BaseTableData Aggregate(this BaseTableData data, params TableColumnAggregation[] columns)
         {
-            return null;
+            throw new NotImplementedException("Table column aggregation is not implemented yet");
         }
 
 

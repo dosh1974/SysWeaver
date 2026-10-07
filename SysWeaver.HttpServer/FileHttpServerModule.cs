@@ -59,7 +59,7 @@ namespace SysWeaver.Net
         /// <param name="p">Parameters (null to use defaults, i.e no folders)</param>
         /// <remarks>
         /// Folders whose disc folder doesn't exist are silently ignored.
-        /// If <see cref="FileHttpServerModuleParams.CacheSeconds"/> is positive, handler lookups are cached (currently always for 5 seconds, regardless of the value).
+        /// If <see cref="FileHttpServerModuleParams.CacheSeconds"/> is positive, handler lookups are cached for that many seconds (folder changes clear the cache).
         /// </remarks>
         public FileHttpServerModule(FileHttpServerModuleParams p = null)
         {
@@ -74,7 +74,7 @@ namespace SysWeaver.Net
             var c = p.CacheSeconds;
             if (c > 0)
             {
-                Cache = new(TimeSpan.FromSeconds(5), StringComparer.Ordinal);
+                Cache = new(TimeSpan.FromSeconds(c), StringComparer.Ordinal);
                 AsyncHandler = InternalCachedHandler;
             }else
             {

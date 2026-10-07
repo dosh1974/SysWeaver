@@ -38,7 +38,7 @@ namespace SysWeaver
         /// </summary>
         public String DestFolderName = "DestFolder";
         /// <summary>
-        /// Text shown as the default value tag of the destination folder argument, null for "&lt;Same as source file&gt;" (despite the name, it is not used as help text)
+        /// Help text of the destination folder argument, null for none (the default value tag is always "&lt;Same as source file&gt;")
         /// </summary>
         public String DestFolderHelp;
 
@@ -151,7 +151,7 @@ namespace SysWeaver
         /// A non-zero return value stops the processing and becomes the return value.
         /// </param>
         /// <param name="validateParams">Optionally validate (and do precomputations) the params after they have been read, return non-zero to signal an error or throw an exception</param>
-        /// <param name="threadCount">Maximum number of concurrent files, if 0 or less it's the number of CPU threads minus the thread count (so -1 gives one more than the CPU count)</param>
+        /// <param name="threadCount">Maximum number of concurrent files, if 0 or less it's the number of CPU threads plus the thread count (so -1 gives one less than the CPU count), at least 1</param>
         /// <returns>
         /// 0 if successful, 1 if help was requested, -1 if the command line was invalid, -2 if processing threw an exception,
         /// otherwise the non-zero value returned by <paramref name="validateParams"/> or <paramref name="doOnFile"/>.
@@ -161,7 +161,7 @@ namespace SysWeaver
         /// </remarks>
         public int OnFilesParallel(String[] commandLineArgs, Func<IMessageHost, T, String, String, String, Task<int>> doOnFile, Func<T, int> validateParams = null, int threadCount = -1)
         {
-            var count = threadCount > 0 ? threadCount : Environment.ProcessorCount - threadCount;
+            var count = threadCount > 0 ? threadCount : Environment.ProcessorCount + threadCount;
             if (count < 1)
                 count = 1;
             var popt = new ParallelOptions
@@ -268,7 +268,7 @@ namespace SysWeaver
             CommandLineArgument[] validArgs =
             [
                 FileCommandLineArgument.MultipleExisting(SourceFilesName, false, null, SourceFilesHelp, AllowSourceSequence),
-                CommandLineArgument.Make<String>(DestFolderName, true, DestFolderHelp ?? "<Same as source file>"),
+                CommandLineArgument.Make<String>(DestFolderName, true, "<Same as source file>", DestFolderHelp),
             ];
             CommandLine cmd;
             T opt;
@@ -319,7 +319,7 @@ namespace SysWeaver
             CommandLineArgument[] validArgs =
             [
                 FileCommandLineArgument.MultipleExisting(SourceFilesName, false, null, SourceFilesHelp, AllowSourceSequence),
-                CommandLineArgument.Make<String>(DestFolderName, true, DestFolderHelp ?? "<Same as source file>"),
+                CommandLineArgument.Make<String>(DestFolderName, true, "<Same as source file>", DestFolderHelp),
             ];
             CommandLine cmd;
             T opt;

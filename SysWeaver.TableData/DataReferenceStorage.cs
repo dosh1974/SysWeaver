@@ -2,7 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
+using System.Security.Cryptography;
 using SysWeaver.Data;
 
 namespace SysWeaver.Data
@@ -12,9 +12,9 @@ namespace SysWeaver.Data
     /// The HTTP server keeps one storage per scope (global, any user) and one per session.
     /// </summary>
     /// <remarks>
-    /// Ids are generated from an incrementing counter (seeded from the current time) encoded with <see cref="CompactAsciiString.Secure"/>
-    /// (a URL/HTML safe char set, not a cryptographic transform), prefixed with the scope char from <see cref="DataScopeTools.ScopePrefixes"/>.
-    /// The ids are unique but sequential and therefore guessable; access control must be enforced by the caller choosing the storage.
+    /// Ids are 128 random bits (from a cryptographically secure RNG) encoded with <see cref="CompactAsciiString.Secure"/> (a URL/HTML safe char set),
+    /// prefixed with the scope char from <see cref="DataScopeTools.ScopePrefixes"/>.
+    /// The ids are unguessable, but they carry no order or meaning (don't parse or sort them); access control must still be enforced by the caller choosing the storage.
     /// </remarks>
     public sealed class DataReferenceStorage : IDisposable
     {
@@ -83,11 +83,13 @@ namespace SysWeaver.Data
         public readonly String TypePrefix;
 
         String GetGuid()
-            => TypePrefix + CompactAsciiString.Secure.Encode((ulong)Interlocked.Increment(ref Id));
-
-        static readonly long BaseTick = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc).Ticks;
-
-        long Id = DateTime.UtcNow.Ticks - BaseTick;
+        {
+            //  Random (unguessable) ids, knowing an id is enough to access the data (for the global and any user scopes)
+            Span<Byte> r = stackalloc Byte[16];
+            RandomNumberGenerator.Fill(r);
+            var s = CompactAsciiString.Secure;
+            return String.Concat(TypePrefix, s.Encode(BitConverter.ToUInt64(r)), s.Encode(BitConverter.ToUInt64(r.Slice(8))));
+        }
 
         readonly ConcurrentDictionary<String, DataReference> Data = new ConcurrentDictionary<string, DataReference>(StringComparer.Ordinal);
 

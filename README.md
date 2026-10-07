@@ -359,7 +359,6 @@ flowchart LR
 | [SysWeaver.Serialization](SysWeaver.Serialization/README.md) | The serialization abstraction of SysWeaver and its registry: every component serializes through named, prioritised serializer types selected by file extension / MIME type. Includes System.Text.Json and XML implementations. |
 | [SysWeaver.Serialization.SafeJson](SysWeaver.Serialization.SafeJson/README.md) | A composite JSON serializer that writes with SysWeaver's fast JSON writer and reads with the tolerant Newtonsoft parser — and takes precedence over all other JSON serializers when registered. |
 | [SysWeaver.Serialization.CompactJson](Serialization/SysWeaver.Serialization.CompactJson/README.md) | Serializer plug-in: **json** (text) backed by CompactJson. |
-| [SysWeaver.Serialization.JilJson](Serialization/SysWeaver.Serialization.JilJson/README.md) | Serializer plug-in: **json** (text) backed by Jil. |
 | [SysWeaver.Serialization.MessagePack](Serialization/SysWeaver.Serialization.MessagePack/README.md) | Serializer plug-in: **msgpack** (binary) backed by MessagePack-CSharp. |
 | [SysWeaver.Serialization.NewtonsoftBson](Serialization/SysWeaver.Serialization.NewtonsoftBson/README.md) | Serializer plug-in: **bson** (binary) backed by Newtonsoft.Json.Bson. |
 | [SysWeaver.Serialization.NewtonsoftJson](Serialization/SysWeaver.Serialization.NewtonsoftJson/README.md) | Serializer plug-in: **json** (text) backed by Newtonsoft.Json. |

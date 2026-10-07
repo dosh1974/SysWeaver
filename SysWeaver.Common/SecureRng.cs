@@ -203,8 +203,8 @@ namespace SysWeaver
         /// <returns>A "random" numerical string obeying the above rules</returns>
         /// <exception cref="IndexOutOfRangeException"><paramref name="numDigits"/> is less than 1</exception>
         /// <remarks>
-        /// The repeat and series counters are shared and only reset by a step larger than one, so the rules are applied more strictly than described
-        /// (ex: with the defaults "112234" is rejected), the codes are therefore slightly less than uniformly random.
+        /// The repeat run (equal digits) and the series run (steps of +1 or -1 in the same direction) are tracked separately,
+        /// ex: with the defaults "112234" is ok (repeats of 2 and a series of 3).
         /// </remarks>
         public static String GetNumericCode(this SecureRng r, int numDigits = 6, int maxRepeat = 2, int maxInc = 3, bool nonZeroFirst = true)
         {
@@ -231,8 +231,11 @@ namespace SysWeaver
             }
             s[0] = (Char)('0' + digit);
             var prev = digit;
-            var prevDy = 10;
-            int repCount = 0;
+            //  Number of equal digits ending with the previous digit
+            int repRun = 1;
+            //  Number of digits in the series ending with the previous digit (and the step direction of that series, 0 if no series)
+            int seriesRun = 1;
+            int seriesDy = 0;
             for (int i = 1; i < numDigits;)
             {
                 for (; ; )
@@ -248,22 +251,29 @@ namespace SysWeaver
                         break;
                 }
                 var dy = digit - prev;
-                if ((dy >= -1) && (dy <= 1))
+                if (dy == 0)
                 {
-                    ++repCount;
-                    if (prevDy == dy)
-                    {
-                        if ((dy == 0) && (repCount >= maxRepeat))
-                            continue;
-                        if (repCount >= maxInc)
-                            continue;
-                    }
+                    if ((repRun + 1) > maxRepeat)
+                        continue;
+                    ++repRun;
+                    seriesRun = 1;
+                    seriesDy = 0;
+                }
+                else if ((dy == -1) || (dy == 1))
+                {
+                    var newSeries = dy == seriesDy ? seriesRun + 1 : 2;
+                    if (newSeries > maxInc)
+                        continue;
+                    seriesRun = newSeries;
+                    seriesDy = dy;
+                    repRun = 1;
                 }
                 else
                 {
-                    repCount = 0;
+                    repRun = 1;
+                    seriesRun = 1;
+                    seriesDy = 0;
                 }
-                prevDy = dy;
                 prev = digit;
                 s[i] = (Char)('0' + digit);
                 ++i;

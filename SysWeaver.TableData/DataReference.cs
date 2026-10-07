@@ -85,13 +85,14 @@ namespace SysWeaver.Data
         /// </summary>
         public void Remove()
         {
-            var d = Interlocked.Exchange(ref D, null);
-            if (d == null)
-                return;
+            //  The action is the "not removed" flag, it's taken first so that a concurrent Renew (that temporarily holds D) can detect the removal
             var a = Interlocked.Exchange(ref Action, null);
+            if (a == null)
+                return;
+            var d = Interlocked.Exchange(ref D, null);
             try
             {
-                d.Dispose();
+                d?.Dispose();
             }
             catch
             {
@@ -162,7 +163,10 @@ namespace SysWeaver.Data
             var expTime = DateTime.UtcNow.AddSeconds(TimeToLive);
             InternalExpires = expTime;
             Interlocked.Increment(ref InternalUseCounter);
-            D = Scheduler.Add(expTime, Remove, "Remove data reference " + Id);
+            Interlocked.Exchange(ref D, Scheduler.Add(expTime, Remove, "Remove data reference " + Id));
+            //  Removed while rescheduling (Remove found no D to cancel), cancel the new expiration (the remove action has already been invoked)
+            if (Action == null)
+                Interlocked.Exchange(ref D, null)?.Dispose();
         }
 
         #endregion//Server side

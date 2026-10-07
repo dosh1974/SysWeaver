@@ -199,7 +199,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Get the renderer for the current "icon.svg" (whatever module serves it), re-reading the svg at most every 15 seconds (when the prune task sets the check flag) if it changed.
         /// </summary>
-        /// <remarks>A replaced renderer is disposed immediately, even if other requests are still rendering with it.</remarks>
+        /// <remarks>A replaced renderer is not disposed (other requests may still be rendering with it), it's released by the GC.</remarks>
         async Task<SvgBitmapRenderer> GetFaviconBitmapRenderer(HttpServerRequest data, HttpSession session)
         {
             var bm = SvgFaviconBitmapRenderer;
@@ -212,7 +212,8 @@ namespace SysWeaver.Net
                     return bm;
                 bm = new SvgBitmapRenderer(memLast.Item1);
                 Interlocked.Exchange(ref FaviconLastModified, memLast.Item2);
-                Interlocked.Exchange(ref SvgFaviconBitmapRenderer, bm)?.Dispose();
+                //  Don't dispose the replaced renderer, other requests may still be rendering with it (it's released by the GC)
+                Interlocked.Exchange(ref SvgFaviconBitmapRenderer, bm);
                 CachedFaviconSizes.Clear();
             }
             else
@@ -337,7 +338,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Get the renderer for the current "logo.svg" (whatever module serves it), re-reading the svg at most every 15 seconds if it changed.
         /// </summary>
-        /// <remarks>A replaced renderer is disposed immediately, even if other requests are still rendering with it.</remarks>
+        /// <remarks>A replaced renderer is not disposed (other requests may still be rendering with it), it's released by the GC.</remarks>
         async Task<SvgBitmapRenderer> GetLogoBitmapRenderer(HttpServerRequest data, HttpSession session)
         {
             var bm = SvgLogoBitmapRenderer;
@@ -350,7 +351,8 @@ namespace SysWeaver.Net
                     return bm;
                 bm = new SvgBitmapRenderer(memLast.Item1);
                 Interlocked.Exchange(ref LogoLastModified, memLast.Item2);
-                Interlocked.Exchange(ref SvgLogoBitmapRenderer, bm)?.Dispose();
+                //  Don't dispose the replaced renderer, other requests may still be rendering with it (it's released by the GC)
+                Interlocked.Exchange(ref SvgLogoBitmapRenderer, bm);
                 CachedLogoSizes.Clear();
             }
             else

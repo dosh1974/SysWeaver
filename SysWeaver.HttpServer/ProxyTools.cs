@@ -212,7 +212,7 @@ namespace SysWeaver.Net
         /// <param name="url">The url to do the request against</param>
         /// <param name="data">The input data (method, headers and body)</param>
         /// <returns>The response (the whole body is read into memory).
-        /// Exceptions are not thrown, they are returned as a 500 response with the exception message as the body.</returns>
+        /// Exceptions are not thrown, they are returned as a 500 response with the exception message (sensitive information removed, see <see cref="ExceptionExt.SafeMessage"/>) as the body.</returns>
         public static async Task<ProxyData> ProxyRequest(HttpClient c, String url, ProxyData data)
         {
             var httpMethod = data.Method;
@@ -247,7 +247,8 @@ namespace SysWeaver.Net
             }
             catch (Exception ex)
             {
-                var resData = Encoding.UTF8.GetBytes(ex.Message + " [500]");
+                //  Sensitive information (internal host names, private ips etc) is removed from the message
+                var resData = Encoding.UTF8.GetBytes(ex.SafeMessage() + " [500]");
                 return new ProxyData(data.Method, new String[]
                     {
                         "Content-Length:" + resData.Length,

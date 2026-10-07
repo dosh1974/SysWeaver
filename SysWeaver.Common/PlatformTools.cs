@@ -164,11 +164,11 @@ namespace SysWeaver
         public String DefaultKeyDir => @"C:\Keys";
 
         /// <summary>
-        /// Does nothing, but returns true (unlike the other unsupported operations).
+        /// Not supported, does nothing.
         /// </summary>
         /// <param name="h">Ignored.</param>
-        /// <returns>Always true.</returns>
-        public bool FlushToDisc(SafeHandle h) => true;
+        /// <returns>Always false.</returns>
+        public bool FlushToDisc(SafeHandle h) => false;
 
         /// <summary>
         /// Not supported.

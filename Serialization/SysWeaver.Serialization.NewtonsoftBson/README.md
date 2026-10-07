@@ -34,8 +34,8 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 ## Limitations and considerations
 
 - BSON is rarely needed outside MongoDB-style ecosystems.
-- Reading uses Newtonsoft's default serializer settings (no type name handling), so polymorphic members written with `$type` are not restored.
-- BSON needs an object or array at the root: primitive root values can't be serialized, and root arrays/collections can't be read back (the reader does not enable `ReadRootValueAsArray`).
+- Reading honours `$type` (`TypeNameHandling.Auto`), resolving type names with `TypeNameResolver.GetForData`, so only types allowed by the `DataTypePolicy` (and assignable to the declared type) can be instantiated. Global `JsonConvert.DefaultSettings` are not applied.
+- BSON needs an object or array at the root: root values that aren't (`null`, numbers, `bool`, strings, enums, dates, `Guid`, `byte[]` etc) are written wrapped as `{"$swRootValue": value}` and unwrapped when read (other BSON readers see the wrapper document). Objects and collections are written exactly as before. Root arrays/collections are read back (`ReadRootValueAsArray` is enabled for collection types unless the data starts with `$type`).
 - Selection between serializers of the same extension is by priority; this is currently the only bundled `bson` implementation.
 
 ## Using it

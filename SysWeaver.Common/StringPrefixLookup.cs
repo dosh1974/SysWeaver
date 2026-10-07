@@ -8,7 +8,7 @@ namespace SysWeaver
     /// <summary>
     /// An immutable lookup that finds the longest string (from a set of strings) that a text starts with, using ordinal (case sensitive) compares.
     /// Optimized for a few (up to ~32) short strings (4 - 16 chars), where most searches doesn't match, like the web page sub paths of special modules.
-    /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
+    /// Empty strings are not supported, they can't be added (throws an <see cref="ArgumentException"/>) and can't be searched for (throws in debug builds).
     /// See <see cref="StringPrefixLookupBase"/> for the implementation. Immutable and thread safe.
     /// Used by the http server for the path prefixes of modules and redirects (and as a faster drop in replacement for a case sensitive <see cref="FrozenStringTree"/>).
     /// </summary>
@@ -19,7 +19,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="strings">The strings, may not contain null, empty strings or duplicates (ordinal)</param>
         /// <exception cref="ArgumentNullException">A string is null (or <paramref name="strings"/> is null)</exception>
-        /// <exception cref="Exception">A string is a duplicate, or (in debug builds only) a string is empty</exception>
+        /// <exception cref="ArgumentException">A string is empty</exception>
+        /// <exception cref="Exception">A string is a duplicate</exception>
         public StringPrefixLookup(IEnumerable<String> strings) : this(strings.ToArray())
         {
         }
@@ -77,7 +78,7 @@ namespace SysWeaver
     /// <summary>
     /// An immutable lookup that finds the value of the longest string (from a set of strings with a value each) that a text starts with, using ordinal (case sensitive) compares.
     /// Optimized for a few (up to ~32) short strings (4 - 16 chars), where most searches doesn't match, like the web page sub paths of special modules.
-    /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
+    /// Empty strings are not supported, they can't be added (throws an <see cref="ArgumentException"/>) and can't be searched for (throws in debug builds).
     /// See <see cref="StringPrefixLookupBase"/> for the implementation. Immutable and thread safe (as long as the values are).
     /// </summary>
     /// <typeparam name="T">The type of the values</typeparam>
@@ -88,7 +89,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="strings">The strings and values, the strings may not be null, empty or duplicates (ordinal)</param>
         /// <exception cref="ArgumentNullException">A string is null (or <paramref name="strings"/> is null)</exception>
-        /// <exception cref="Exception">A string is a duplicate, or (in debug builds only) a string is empty</exception>
+        /// <exception cref="ArgumentException">A string is empty</exception>
+        /// <exception cref="Exception">A string is a duplicate</exception>
         public StringPrefixLookup(IEnumerable<KeyValuePair<String, T>> strings) : this(strings.ToArray())
         {
         }
@@ -99,7 +101,8 @@ namespace SysWeaver
         /// <param name="values">The values</param>
         /// <param name="getKey">Function that extracts the string key (may not return null, an empty string or duplicates)</param>
         /// <exception cref="ArgumentNullException">A key is null (or <paramref name="values"/> is null)</exception>
-        /// <exception cref="Exception">A key is a duplicate, or (in debug builds only) a key is empty</exception>
+        /// <exception cref="ArgumentException">A key is empty</exception>
+        /// <exception cref="Exception">A key is a duplicate</exception>
         public StringPrefixLookup(IEnumerable<T> values, Func<T, String> getKey) : this(values.Select(x => KeyValuePair.Create(getKey(x), x)).ToArray())
         {
         }

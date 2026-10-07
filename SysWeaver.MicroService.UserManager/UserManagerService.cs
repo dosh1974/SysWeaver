@@ -789,7 +789,7 @@ namespace SysWeaver.MicroService
             if (login)
             {
                 s.SetAuth(auth);
-                await context.Server.RunOnLogin(s).ConfigureAwait(false);
+                await context.Server.RunOnLogin(s, context).ConfigureAwait(false);
             }
             return auth;
         }

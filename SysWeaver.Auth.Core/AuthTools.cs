@@ -23,7 +23,7 @@ namespace SysWeaver.Auth
 
         /// <summary>
         /// Compute a hash for some given text: SHA256(UTF8(text))
-        /// </summary>
+        /// </summary>  
         /// <param name="text">The text to hash, may not be null</param>
         /// <returns>Computed hash as a byte array: SHA256(UTF8(text))</returns>
         public static Byte[] ComputeHash(String text)

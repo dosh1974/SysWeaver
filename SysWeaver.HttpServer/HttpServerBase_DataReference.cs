@@ -50,10 +50,9 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Tokens required for debug access.
-        /// Note: tokens are compared ordinal against the lower cased user tokens, so this upper cased token never matches.
+        /// Tokens required for debug access (pre-processed, i.e lower cased, see <see cref="Authorization.RoleDebug"/>).
         /// </summary>
-        static readonly IReadOnlyList<String> DebugAuth = ["Debug"];
+        static readonly IReadOnlyList<String> DebugAuth = Authorization.RoleDebug;
 
         DataReferenceStorage GetDataStorage(HttpServerRequest context, String dataRefId)
         {

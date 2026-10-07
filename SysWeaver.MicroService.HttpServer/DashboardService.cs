@@ -59,7 +59,8 @@ namespace SysWeaver.MicroService
                 return nob?.Board;
             }
             var cacheKey = String.Join('_', id, user);
-            var storeKey = StorePrefix + cacheKey;
+            //  The store key must be a valid file name (the id is user input and user guids contain ':'), invalid chars are replaced with '_' (keys that were valid are unchanged)
+            var storeKey = PathExt.SafeFilename(StorePrefix + cacheKey);
             var ub = await UserBoards.GetOrUpdateAsync(cacheKey, cc => Store.TryGetAsync<UserBoard>(storeKey)).ConfigureAwait(false);
             return ub?.Board;
         }

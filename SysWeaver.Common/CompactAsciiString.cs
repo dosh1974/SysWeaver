@@ -1,10 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Runtime.CompilerServices;
-using System.Security;
-using System.Text;
-using System.Xml.Linq;
 
 namespace SysWeaver
 {
@@ -16,60 +12,53 @@ namespace SysWeaver
     /// <remarks>
     /// Immutable and thread safe. Typically used through <see cref="Default"/> or <see cref="Secure"/>.
     /// The encoding of a value is not padded, so the length of the string depends on the value (0 is a single char).
+    /// The decoding is not canonical: many strings decode to the same value (trailing zero digits are ignored and too long strings wrap around),
+    /// so compare the strings or the decoded values, but don't assume that Encode(Decode(s)) == s for strings that weren't made by Encode.
     /// </remarks>
     public sealed class CompactAsciiString
     {
 
         /// <summary>
         /// Chars that are escaped in common formats (json, sql, paths etc), DEL (127) is escaped by json serializers.
-        /// The default invalid set of the <see cref="CompactAsciiString(IReadOnlySet{char})"/> constructor (a static field that should not be reassigned)
+        /// The default invalid set of the <see cref="CompactAsciiString(IReadOnlySet{char})"/> constructor
         /// </summary>
-        public static IReadOnlySet<Char> InvalidDefaults = ReadOnlyData.Set("\\/'\"´`|%_\x7F".ToCharArray());
+        public static readonly IReadOnlySet<Char> InvalidDefaults = ReadOnlyData.Set("\\/'\"´`|%_\x7F".ToCharArray());
 
         /// <summary>
-        /// Uses all ASCII chars [33, 126] except the <see cref="InvalidDefaults"/>, chars that doesn't expand "in transit" (such as serialized json strings, sql requests etc).
-        /// (A static field that should not be reassigned).
+        /// Uses all ASCII chars [33, 126] except the <see cref="InvalidDefaults"/> (base 86).
+        /// The chars don't expand "in transit" with relaxed escaping, such as json strings written by SwJson (or System.Text.Json using <see cref="System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping"/>), sql requests etc.
         /// </summary>
-        public static CompactAsciiString Default = new CompactAsciiString();
+        /// <remarks>
+        /// The default System.Text.Json encoder (and html / xml) escapes &amp;, +, &lt; and &gt;, use <see cref="Secure"/> for values that are written that way.
+        /// </remarks>
+        public static readonly CompactAsciiString Default = new CompactAsciiString();
 
         /// <summary>
-        /// Only uses chars that can be used "everywhere" without escaping: uri's (data and url encoding), xml/html attributes and values, js strings etc.
-        /// (A static field that should not be reassigned).
+        /// The alphabet of <see cref="Secure"/>, the index is the digit value
         /// </summary>
-        public static CompactAsciiString Secure = new CompactAsciiString(GetSuperSafe());
+        const String SecureChars = "-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
         /// <summary>
-        /// Get the invalid chars for <see cref="Secure"/>: space, every ASCII char [33, 127] that is changed by any of the common escape functions, and the <see cref="InvalidDefaults"/>
+        /// Only uses chars that can be used "everywhere" without escaping: uri's (data and url encoding), xml/html attributes and values, js strings, json etc.
+        /// The chars are '-', '.', '0'-'9', 'A'-'Z' and 'a'-'z' (base 64).
         /// </summary>
-        static HashSet<Char> GetSuperSafe()
+        /// <remarks>
+        /// The alphabet is fixed (not computed from the escape functions of the framework), so encoded values never change.
+        /// </remarks>
+        public static readonly CompactAsciiString Secure = new CompactAsciiString(GetInvalid(SecureChars));
+
+        /// <summary>
+        /// Get the invalid set for an alphabet: every ASCII char [33, 127] that isn't in <paramref name="valid"/>
+        /// </summary>
+        static HashSet<Char> GetInvalid(String valid)
         {
             var c = new HashSet<char>();
-            c.Add(' ');
-            var a = new XAttribute("n", "a");
-            var e = new XElement("n", "a");
             for (int i = 33; i < 128; ++ i)
             {
                 var t = (Char)i;
-                var ts = "" + t;
-                c.Add(t);
-                if (Uri.EscapeDataString(ts) != ts)
-                    continue;
-                if (WebUtility.HtmlEncode(ts) != ts)
-                    continue;
-                if (WebUtility.UrlEncode(ts) != ts)
-                    continue;
-                if (SecurityElement.Escape(ts) != ts)
-                    continue;
-                a.SetValue(ts);
-                if (a.Value != ts)
-                    continue;
-                e.SetValue(ts);
-                if (e.Value != ts)
-                    continue;
-                c.Remove(t);
+                if (valid.IndexOf(t) < 0)
+                    c.Add(t);
             }
-            foreach (var x in InvalidDefaults)
-                c.Add(x);
             return c;
         }
 
@@ -172,6 +161,8 @@ namespace SysWeaver
 
 
             t = Secure;
+            if (new String(t.ValidChars) != SecureChars)
+                throw new Exception("Internal error!");
             if (t.DecodeUInt64(t.Encode(UInt64.MinValue)) != UInt64.MinValue)
                 throw new Exception("Internal error!");
             if (t.DecodeUInt64(t.Encode(UInt64.MaxValue)) != UInt64.MaxValue)
@@ -235,6 +226,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string</returns>
+        /// <remarks>Not canonical and no overflow checks, see <see cref="DecodeUInt64(string)"/></remarks>
         /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="KeyNotFoundException"><paramref name="compactString"/> contains a char that isn't valid (not in <see cref="Valid"/>)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -246,6 +238,7 @@ namespace SysWeaver
         /// </summary>
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string</returns>
+        /// <remarks>Not canonical and no overflow checks, see <see cref="DecodeUInt32(string)"/></remarks>
         /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="KeyNotFoundException"><paramref name="compactString"/> contains a char that isn't valid (not in <see cref="Valid"/>)</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -257,7 +250,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string, an empty string decodes to 0</returns>
-        /// <remarks>No overflow checks are made, a string that represents a value larger than UInt64.MaxValue will wrap around</remarks>
+        /// <remarks>No overflow checks are made, a string that represents a value larger than UInt64.MaxValue will wrap around.
+        /// The decoding is not canonical: trailing (most significant) zero digits (<see cref="Valid"/>[0]) are ignored, so "s", "s" + Valid[0] etc decode to the same value.</remarks>
         /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="KeyNotFoundException"><paramref name="compactString"/> contains a char that isn't valid (not in <see cref="Valid"/>)</exception>
         public UInt64 DecodeUInt64(String compactString)
@@ -282,7 +276,8 @@ namespace SysWeaver
         /// </summary>
         /// <param name="compactString">The compact value representation</param>
         /// <returns>The value that was represented by the string (always in the [0, UInt32.MaxValue] range), an empty string decodes to 0</returns>
-        /// <remarks>No overflow checks are made, a string that represents a value larger than UInt32.MaxValue will wrap around</remarks>
+        /// <remarks>No overflow checks are made, a string that represents a value larger than UInt32.MaxValue will wrap around.
+        /// The decoding is not canonical: trailing (most significant) zero digits (<see cref="Valid"/>[0]) are ignored, so "s", "s" + Valid[0] etc decode to the same value.</remarks>
         /// <exception cref="ArgumentNullException"><paramref name="compactString"/> is null (debug builds only; release builds throw a <see cref="NullReferenceException"/>)</exception>
         /// <exception cref="KeyNotFoundException"><paramref name="compactString"/> contains a char that isn't valid (not in <see cref="Valid"/>)</exception>
         public UInt64 DecodeUInt32(String compactString)

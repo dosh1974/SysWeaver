@@ -16,7 +16,7 @@ namespace SysWeaver
     /// using conditional requests (If-Modified-Since / If-None-Match).
     /// </summary>
     /// <remarks>
-    /// The file is requested using a POST request (not GET).
+    /// The file is requested using a GET request, the ETag and Last-Modified of the last response are sent back as If-None-Match and If-Modified-Since.
     /// If credentials are specified in the parameters, basic authentication is used.
     /// </remarks>
     sealed class HttpManagedFile : IManagedFileSource
@@ -54,7 +54,7 @@ namespace SysWeaver
         HttpClient C;
 
         String LastTime;
-        String ETag;
+        EntityTagHeaderValue ETag;
 
         /// <summary>
         /// Request the file now
@@ -65,15 +65,16 @@ namespace SysWeaver
             var f = Url;
             try
             {
-                using var r = new HttpRequestMessage(HttpMethod.Post, FileUrl);
-                if (P.GetUserPassword(out var user, out var password, false))
+                using var r = new HttpRequestMessage(HttpMethod.Get, FileUrl);
+                //  A configured credentials file must exist and contain valid credentials (reported as a failed request)
+                if (P.GetUserPassword(out var user, out var password, !String.IsNullOrEmpty(P.CredFile)))
                     r.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(String.Join(":", user, password))));
                 var lt = LastTime;
                 if (lt != null)
                     r.Headers.Add("If-Modified-Since", lt);
                 var et = ETag;
                 if (et != null)
-                    r.Headers.IfNoneMatch.Add(new EntityTagHeaderValue(et));
+                    r.Headers.IfNoneMatch.Add(et);
 
                 using var res = await C.SendAsync(r).ConfigureAwait(false);
                 var s = res.StatusCode;
@@ -82,9 +83,10 @@ namespace SysWeaver
                 if (s != HttpStatusCode.OK)
                     return new ManagedFileData(Url, Memory<Byte>.Empty, DateTime.MinValue, null, Manager, new Exception("Http response was: " + (int)s + " - " + s));
                 var h = res.Content.Headers;
-                ETag = h.TryGetValues("ETag", out var v) ? v?.FirstOrDefault() : null;
+                //  ETag is a response header (not a content header), keep the parsed value (it may be a weak tag)
+                ETag = res.Headers.ETag;
                 var d = DateTime.UtcNow;
-                var lm = h.TryGetValues("Last-Modified", out v) ? v?.FirstOrDefault() : null;
+                var lm = h.TryGetValues("Last-Modified", out var v) ? v?.FirstOrDefault() : null;
                 if (!String.IsNullOrEmpty(lm))
                 {
                     if (DateTime.TryParseExact(lm, "r", null, DateTimeStyles.RoundtripKind, out var rt))

@@ -246,9 +246,9 @@ namespace SysWeaver
     /// <remarks>
     /// The root node is the tree, the leaf flag of the root is used as the case in-sensitive marker.
     /// Case in-sensitive trees upper case all chars (invariant culture), and the found strings have the casing of the text (not the added string).
-    /// Empty strings aren't validated: adding one marks the root as a leaf, which makes the tree case in-sensitive.
+    /// Empty strings are not supported, they can't be added (throws an <see cref="ArgumentException"/>).
     /// Not thread safe for writes (see <see cref="CompactCharDictionary{T}"/>).
-    /// Every node have a finalizer (used to maintain <see cref="AllocatedNodes"/>).
+    /// In debug builds every node have a finalizer (used to maintain the AllocatedNodes diagnostics counter, that only exists in debug builds).
     /// Not used by the framework.
     /// </remarks>
     public sealed class CompactStringTree : IStringTree
@@ -284,12 +284,16 @@ namespace SysWeaver
         /// <param name="strings">The strings to build a tree from, may not contain null, empty strings or duplicates</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
         /// <returns>The tree</returns>
+        /// <exception cref="ArgumentException">A string is empty</exception>
         /// <exception cref="Exception">A string is a duplicate</exception>
         public static CompactStringTree Build(IEnumerable<String> strings, bool caseInSensitive = false)
         {
             CompactStringTree parent = null;
             foreach (var s in strings)
+            {
+                StringTree.ValidateAdd(s);
                 parent = InternalAdd(s, parent, caseInSensitive);
+            }
             parent = parent ?? new CompactStringTree();
             if (caseInSensitive)
                 parent.IsLeaf = true;
@@ -304,11 +308,13 @@ namespace SysWeaver
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree, if the tree already exists, the casing from that tree is used</param>
         /// <param name="parent">An existing tree (that is modified), or null to create a new tree</param>
         /// <returns>The new tree (or the existing)</returns>
+        /// <exception cref="ArgumentException">The string is empty</exception>
         /// <exception cref="Exception">The string have already been added</exception>
         public static CompactStringTree Add(String text, bool caseInSensitive = false, CompactStringTree parent = null)
         {
             if (parent != null)
                 caseInSensitive = parent.IsCaseInSensitive;
+            StringTree.ValidateAdd(text);
             parent = InternalAdd(text, parent, caseInSensitive);
             parent = parent ?? new CompactStringTree();
             if (caseInSensitive)
@@ -324,10 +330,12 @@ namespace SysWeaver
         /// <param name="text">The string to add, may not be null or empty</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree, if the tree already exists, the casing from that tree is used</param>
         /// <returns>True if the string was added, false if it already existed</returns>
+        /// <exception cref="ArgumentException">The string is empty</exception>
         public static bool TryAdd(ref CompactStringTree parent, String text, bool caseInSensitive = false)
         {
             if (parent != null)
                 caseInSensitive = parent.IsCaseInSensitive;
+            StringTree.ValidateAdd(text);
             if (!InternalAdd(out var x, text, parent, caseInSensitive))
                 return false;
             parent = x ?? new CompactStringTree();
@@ -657,8 +665,9 @@ namespace SysWeaver
 
 
 
+#if DEBUG
         /// <summary>
-        /// The number of <see cref="CompactStringTree"/> nodes that are currently allocated (created and not yet finalized), for diagnostics
+        /// The number of <see cref="CompactStringTree"/> nodes that are currently allocated (created and not yet finalized), for diagnostics (debug builds only)
         /// </summary>
         public static long AllocatedNodes => Interlocked.Read(ref CountAllocNodes);
 
@@ -671,11 +680,14 @@ namespace SysWeaver
         {
             Interlocked.Decrement(ref CountAllocNodes);
         }
+#endif//DEBUG
 
         CompactStringTree(string leaf)
         {
             IsLeaf = leaf != null;
+#if DEBUG
             Interlocked.Increment(ref CountAllocNodes);
+#endif//DEBUG
         }
 
 
@@ -687,14 +699,18 @@ namespace SysWeaver
         {
             IsLeaf = caseInSesnitive;
             Nodes = new();
+#if DEBUG
             Interlocked.Increment(ref CountAllocNodes);
+#endif//DEBUG
         }
 
         CompactStringTree(bool isLeaf, CompactCharDictionary<CompactStringTree> nodes)
         {
             IsLeaf = isLeaf;
             Nodes = nodes;
+#if DEBUG
             Interlocked.Increment(ref CountAllocNodes);
+#endif//DEBUG
         }
 
         /// <summary>

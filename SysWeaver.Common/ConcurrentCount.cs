@@ -11,8 +11,8 @@ namespace SysWeaver
     /// </summary>
     /// <typeparam name="TKey">The type of the keys</typeparam>
     /// <remarks>
-    /// Counters are created on first use (starting at zero) by the modifying methods, there is no way to remove a single key (use <see cref="Clear"/>).
-    /// Concurrent modifications of a key while <see cref="Clear"/> is executing may be lost.
+    /// Counters are created on first use (starting at zero) by the modifying methods, a single key can be removed using <see cref="Remove(KeyValuePair{TKey, long})"/> (if it have a specific value), use <see cref="Clear"/> to remove all.
+    /// Concurrent modifications of a key while <see cref="Clear"/> or <see cref="Remove(KeyValuePair{TKey, long})"/> is executing may be lost.
     /// </remarks>
     public sealed class ConcurrentCount<TKey> : ICollection<KeyValuePair<TKey, long>>
     {
@@ -206,14 +206,18 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Not supported
+        /// Remove a counter if it exists and have a specific value
         /// </summary>
-        /// <param name="item">Ignored</param>
-        /// <returns>Never returns</returns>
-        /// <exception cref="NotImplementedException">Always thrown</exception>
+        /// <param name="item">The key and the value that the counter must have</param>
+        /// <returns>True if the counter was removed</returns>
+        /// <remarks>Concurrent modifications of the counter while it's being removed may be lost</remarks>
         public bool Remove(KeyValuePair<TKey, long> item)
         {
-            throw new NotImplementedException();
+            if (!Counts.TryGetValue(item.Key, out var c))
+                return false;
+            if (Interlocked.Read(ref c.Value) != item.Value)
+                return false;
+            return Counts.TryRemove(new KeyValuePair<TKey, ConCount>(item.Key, c));
         }
 
         /// <summary>

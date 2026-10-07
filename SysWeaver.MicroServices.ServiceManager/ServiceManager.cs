@@ -1446,7 +1446,16 @@ namespace SysWeaver.MicroService
         [WebApiRequestCacheStatic]
         public bool HaveService(String serviceTypeName)
         {
-            var t = TypeFinder.Get(serviceTypeName);
+            Type t;
+            try
+            {
+                //  Client supplied name, don't load arbitrary types / assemblies
+                t = TypeFinder.GetForData(serviceTypeName, typeof(Object));
+            }
+            catch (DataTypeNotAllowedException)
+            {
+                return false;
+            }
             if (t == null)
                 return false;
             return TryGet(t) != null;

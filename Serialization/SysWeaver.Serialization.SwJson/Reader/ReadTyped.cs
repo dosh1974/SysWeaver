@@ -140,7 +140,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// </summary>
         /// <remarks>
         /// <typeparamref name="T"/> must be a concrete generic type with two type arguments, a public parameterless constructor and a public Add(key, value) method.
-        /// Keys can be any type supported by <see cref="SpanParsers"/> or a <see cref="String"/>.
+        /// Keys can be any type supported by <see cref="SpanParsers"/>, a <see cref="String"/> or an enum.
         /// </remarks>
         /// <param name="obj">A new (empty) dictionary</param>
         /// <returns>The item adder</returns>
@@ -176,6 +176,9 @@ namespace SysWeaver.Serialization.SwJson.Reader
                     if (ReadTypeCache.JsonSpanReaders.TryGetValue(keyType, out var keyBuild))
                         keyValueExp = keyBuild(keyExp);
                 }
+                //  Enum keys (written as quoted numbers, names are accepted too)
+                if ((keyValueExp == null) && keyType.IsEnum)
+                    keyValueExp = Expression.Call(Helper.SafeGetMethod(typeof(EnumReader<>).MakeGenericType(keyType), nameof(EnumReader<DayOfWeek>.Parse), BindingFlags.Public | BindingFlags.Static), keyExp);
                 if (keyValueExp == null)
                     throw new Exception("Unsupported key type \"" + keyType + "\"");
 

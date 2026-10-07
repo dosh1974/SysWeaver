@@ -17,6 +17,8 @@ namespace SysWeaver
     /// Waiting is done by polling every 10 ms (no fairness).
     /// A lock object that isn't disposed is released by its finalizer.
     /// On Unix the exclusivity relies on advisory file locking, so all participants must use this class.
+    /// On Unix a lock file is only considered taken if the opened file is still the one linked at the path (a waiter may open the old file just before
+    /// the previous holder unlinks it), and the holder unlinks the path before closing the file (it's not opened with delete on close).
     /// </remarks>
     public static class SystemLock
     {
@@ -34,12 +36,10 @@ namespace SysWeaver
             {
                 try
                 {
-                    var f = new FileStream(name, FileMode.Create, FileAccess.Write, FileShare.None, 128, FileOptions.DeleteOnClose);
-#if DEBUG
-                return new Lock(f, "SystemLock: " + key.ToQuoted());
-#else//DEBUG
-                    return new Lock(f);
-#endif//DEBUG
+                    var l = TryOpen(name, key);
+                    if (l != null)
+                        return l;
+                    Thread.Sleep(10);
                 }
                 catch (IOException)
                 {
@@ -70,15 +70,16 @@ namespace SysWeaver
                 {
                     lock (CheckLock)
                     {
-                        using var x = new FileStream(name, FileMode.Create, FileAccess.Write, FileShare.None, 128, FileOptions.DeleteOnClose);
+                        using var x = TryOpen(name, key);
+                        if (x != null)
+                            return false;
                     }
-                    return false;
                 }
                 catch (IOException)
                 {
-                    if (i >= 3)
-                        return true;
                 }
+                if (i >= 3)
+                    return true;
             }
         }
 
@@ -95,13 +96,9 @@ namespace SysWeaver
             var name = GetFilename(key);
             try
             {
-                var f = new FileStream(name, FileMode.Create, FileAccess.Write, FileShare.None, 128, FileOptions.DeleteOnClose);
-#if DEBUG
-                lockObject = new Lock(f, "SystemLock: " + key.ToQuoted());
-#else//DEBUG
-                    lockObject = new Lock(f);
-#endif//DEBUG
-                return true;
+                var l = TryOpen(name, key);
+                lockObject = l;
+                return l != null;
             }
             catch (IOException)
             {
@@ -123,12 +120,10 @@ namespace SysWeaver
             {
                 try
                 {
-                    var f = new FileStream(name, FileMode.Create, FileAccess.Write, FileShare.None, 128, FileOptions.DeleteOnClose);
-#if DEBUG
-                    return new Lock(f, "SystemLock: " + key.ToQuoted());
-#else//DEBUG
-                    return new Lock(f);
-#endif//DEBUG
+                    var l = TryOpen(name, key);
+                    if (l != null)
+                        return l;
+                    await Task.Delay(10).ConfigureAwait(false);
                 }
                 catch (IOException)
                 {
@@ -150,9 +145,82 @@ namespace SysWeaver
 
         static String GetFilename(String key) => Path.Combine(Folder, HashTools.GetHashString(key));
 
+        static readonly bool IsWindows = OperatingSystem.IsWindows();
+
+        /// <summary>
+        /// Try to take the lock file.
+        /// </summary>
+        /// <param name="name">The lock file name</param>
+        /// <param name="key">The key (for debugging)</param>
+        /// <returns>The lock, or null if the opened file turned out to be stale (Unix only, retry)</returns>
+        /// <exception cref="IOException">The lock is taken</exception>
+        static Lock TryOpen(String name, String key)
+        {
+            if (IsWindows)
+            {
+                var wf = new FileStream(name, FileMode.Create, FileAccess.Write, FileShare.None, 128, FileOptions.DeleteOnClose);
+#if DEBUG
+                return new Lock(wf, null, "SystemLock: " + key.ToQuoted());
+#else//DEBUG
+                return new Lock(wf, null);
+#endif//DEBUG
+            }
+            //  Unix: FileShare.None is an advisory flock on the inode, and delete on close unlinks the path before the lock is released,
+            //  so a waiter can lock an inode that is no longer linked at the path (while someone else creates and locks a new file).
+            //  Make sure that the locked file is the one linked at the path, the holder unlinks the path (while still holding the lock) on release.
+            var f = new FileStream(name, FileMode.Create, FileAccess.Write, FileShare.None, 128, FileOptions.None);
+            bool linked;
+            try
+            {
+                linked = IsLinked(f, name);
+            }
+            catch
+            {
+                f.Dispose();
+                throw;
+            }
+            if (!linked)
+            {
+                //  Stale file (unlinked by the previous holder), just close it (don't touch the path, it belongs to someone else)
+                f.Dispose();
+                return null;
+            }
+#if DEBUG
+            return new Lock(f, name, "SystemLock: " + key.ToQuoted());
+#else//DEBUG
+            return new Lock(f, name);
+#endif//DEBUG
+        }
+
+        /// <summary>
+        /// Check if the (locked) file is the file currently linked at the path.
+        /// Sets a random last write time on the open handle and compares it with the last write time of the path (stat, doesn't open the file).
+        /// </summary>
+        static bool IsLinked(FileStream f, String name)
+        {
+            var h = f.SafeFileHandle;
+            try
+            {
+                File.SetLastWriteTimeUtc(h, RandomTime());
+            }
+            catch
+            {
+            }
+            var handleTime = File.GetLastWriteTimeUtc(h);
+            var fi = new FileInfo(name);
+            if (!fi.Exists)
+                return false;
+            return fi.LastWriteTimeUtc == handleTime;
+        }
+
+        static readonly DateTime RandomTimeBase = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        static DateTime RandomTime() => RandomTimeBase.AddSeconds(Random.Shared.Next(1 << 30));
+
 
         /// <summary>
         /// A held lock, closing (and deleting) the exclusively opened lock file releases it.
+        /// On Unix the path is unlinked (while the lock is still held) before closing the file.
         /// </summary>
         sealed class Lock : IDisposable
         {
@@ -162,17 +230,19 @@ namespace SysWeaver
             public override string ToString() => S;
             readonly String S;
 
-            public Lock(FileStream m, String s)
+            public Lock(FileStream m, String unlinkName, String s)
             {
                 M = m;
+                UnlinkName = unlinkName;
                 S = s;
             }
 
 #else//DEBUG
 
-            public Lock(FileStream m)
+            public Lock(FileStream m, String unlinkName)
             {
                 M = m;
+                UnlinkName = unlinkName;
             }
 
 #endif//DEBUG
@@ -180,14 +250,33 @@ namespace SysWeaver
 
             FileStream M;
 
+            /// <summary>
+            /// Unix only: the path to unlink before closing the file (null on Windows where delete on close is used)
+            /// </summary>
+            readonly String UnlinkName;
+
 
             void TryDispose()
             {
+                var m = Interlocked.Exchange(ref M, null);
+                if (m == null)
+                    return;
+                var n = UnlinkName;
+                if (n != null)
+                {
+                    try
+                    {
+                        File.Delete(n);
+                    }
+                    catch
+                    {
+                    }
+                }
                 for (int i = 0; ; ++i)
                 {
                     try
                     {
-                        Interlocked.Exchange(ref M, null)?.Dispose();
+                        m.Dispose();
                         return;
                     }
                     catch

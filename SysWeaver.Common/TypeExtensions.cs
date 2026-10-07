@@ -134,7 +134,7 @@ namespace SysWeaver
         /// <returns>All matching properties</returns>
         /// <remarks>
         /// If <paramref name="mustHave"/> contains <see cref="ReflectionFlags.IsDeclared"/> only properties declared on the type itself are enumerated, else inherited ones are included too.
-        /// Passing <see cref="ReflectionFlags.IsDeclared"/> in <paramref name="mayNotHave"/> excludes all properties (see <see cref="Flags(PropertyInfo)"/>).
+        /// <see cref="ReflectionFlags.IsDeclared"/> in <paramref name="mayNotHave"/> is ignored.
         /// </remarks>
         public static IEnumerable<PropertyInfo> FindProperties(this TypeInfo ti, ReflectionFlags mustHave = ReflectionFlags.None, ReflectionFlags mayNotHave = ReflectionFlags.None)
         {
@@ -145,7 +145,7 @@ namespace SysWeaver
                 var flags = p.Flags();
                 if ((flags & mh) != mh)
                     continue;
-                if ((flags & mayNotHave) != 0)
+                if ((flags & mnh) != 0)
                     continue;
                 yield return p;
             }
@@ -171,7 +171,7 @@ namespace SysWeaver
                 var flags = p.Flags();
                 if ((flags & mh) != mh)
                     continue;
-                if ((flags & mayNotHave) != 0)
+                if ((flags & mnh) != 0)
                     continue;
                 yield return p;
             }
@@ -196,7 +196,7 @@ namespace SysWeaver
                 var flags = p.Flags();
                 if ((flags & mh) != mh)
                     continue;
-                if ((flags & mayNotHave) != 0)
+                if ((flags & mnh) != 0)
                     continue;
                 yield return p;
             }

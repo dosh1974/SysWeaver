@@ -441,9 +441,9 @@ namespace SysWeaver
         /// <typeparam name="NewValue">The new value type</typeparam>
         /// <param name="dictionary">The dictionary to convert (may be null)</param>
         /// <param name="func">The function that convert a value, the first argument is the key and the second argument is the current value</param>
-        /// <returns>A new dictionary (using the same comparer as the source) with the same keys and converted values, or null if <paramref name="dictionary"/> is null</returns>
+        /// <returns>A new dictionary (using the same comparer as the source if it can be determined, else the default comparer) with the same keys and converted values, or null if <paramref name="dictionary"/> is null</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="dictionary"/> is non-null (debug builds only; release builds throw a <see cref="NullReferenceException"/> if the <paramref name="dictionary"/> is non-empty)</exception>
-        /// <exception cref="Exception">Thrown if the comparer of the source can't be determined (only Dictionary, ConcurrentDictionary, FrozenDictionary and the frozen dictionaries of this library are supported, see <see cref="DictionaryExt.GetComparer{K, V}(IReadOnlyDictionary{K, V})"/>)</exception>
+        /// <remarks>The comparer can be determined for Dictionary, ConcurrentDictionary, FrozenDictionary and the frozen dictionaries of this library (see <see cref="DictionaryExt.GetComparer{K, V}(IReadOnlyDictionary{K, V})"/>), for other dictionaries (like a SortedDictionary or a ReadOnlyDictionary wrapper) the default equality comparer is used</remarks>
         public static Dictionary<Key, NewValue> ConvertValues<Key, CurrentValue, NewValue>(this IReadOnlyDictionary<Key, CurrentValue> dictionary, Func<Key, CurrentValue, NewValue> func)
         {
             if (dictionary == null)
@@ -451,7 +451,7 @@ namespace SysWeaver
 #if DEBUG
             ArgumentNullException.ThrowIfNull(func);
 #endif//DEBUG
-            var d = new Dictionary<Key, NewValue>(dictionary.Count, dictionary.GetComparer());
+            var d = new Dictionary<Key, NewValue>(dictionary.Count, DictionaryExt.TryGetComparer(dictionary));
             foreach (var kv in dictionary)
                 d.TryAdd(kv.Key, func(kv.Key, kv.Value));
             return d;
@@ -465,9 +465,9 @@ namespace SysWeaver
         /// <typeparam name="NewValue">The new value type</typeparam>
         /// <param name="dictionary">The dictionary to convert (may be null)</param>
         /// <param name="func">The function that convert a value</param>
-        /// <returns>A new dictionary (using the same comparer as the source) with the same keys and converted values, or null if <paramref name="dictionary"/> is null</returns>
+        /// <returns>A new dictionary (using the same comparer as the source if it can be determined, else the default comparer) with the same keys and converted values, or null if <paramref name="dictionary"/> is null</returns>
         /// <exception cref="ArgumentNullException">Thrown if <paramref name="func"/> is null and the <paramref name="dictionary"/> is non-null (debug builds only; release builds throw a <see cref="NullReferenceException"/> if the <paramref name="dictionary"/> is non-empty)</exception>
-        /// <exception cref="Exception">Thrown if the comparer of the source can't be determined (only Dictionary, ConcurrentDictionary, FrozenDictionary and the frozen dictionaries of this library are supported, see <see cref="DictionaryExt.GetComparer{K, V}(IReadOnlyDictionary{K, V})"/>)</exception>
+        /// <remarks>The comparer can be determined for Dictionary, ConcurrentDictionary, FrozenDictionary and the frozen dictionaries of this library (see <see cref="DictionaryExt.GetComparer{K, V}(IReadOnlyDictionary{K, V})"/>), for other dictionaries (like a SortedDictionary or a ReadOnlyDictionary wrapper) the default equality comparer is used</remarks>
         public static Dictionary<Key, NewValue> ConvertValues<Key, CurrentValue, NewValue>(this IReadOnlyDictionary<Key, CurrentValue> dictionary, Func<CurrentValue, NewValue> func)
         {
             if (dictionary == null)
@@ -475,7 +475,7 @@ namespace SysWeaver
 #if DEBUG
             ArgumentNullException.ThrowIfNull(func);
 #endif//DEBUG
-            var d = new Dictionary<Key, NewValue>(dictionary.Count, dictionary.GetComparer());
+            var d = new Dictionary<Key, NewValue>(dictionary.Count, DictionaryExt.TryGetComparer(dictionary));
             foreach (var kv in dictionary)
                 d.TryAdd(kv.Key, func(kv.Value));
             return d;
@@ -766,9 +766,14 @@ namespace SysWeaver
             int i = 0;
             foreach (var kv in dict)
             {
+                //  The source may be modified concurrently (ex: a ConcurrentDictionary), so the number of items may differ from the count
+                if (i >= tt.Length)
+                    Array.Resize(ref tt, i + (i >> 1) + 1);
                 tt[i] = func(kv.Key, kv.Value, i);
                 ++i;
             }
+            if (i != tt.Length)
+                Array.Resize(ref tt, i);
             return tt;
         }
 
@@ -808,6 +813,9 @@ namespace SysWeaver
             int i = 0;
             foreach (var kv in dict)
             {
+                //  The source may be modified concurrently (ex: a ConcurrentDictionary), so the number of items may differ from the count
+                if (i >= tt.Length)
+                    Array.Resize(ref tt, i + (i >> 1) + 1);
                 try
                 {
                     tt[i] = func(kv.Key, kv.Value, i);
@@ -819,6 +827,8 @@ namespace SysWeaver
                 }
                 ++i;
             }
+            if (i != tt.Length)
+                Array.Resize(ref tt, i);
             // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
             await Task.WhenAll((Task[])tt).ConfigureAwait(false);
             return GetResults(tt);
@@ -860,6 +870,9 @@ namespace SysWeaver
             int i = 0;
             foreach (var kv in dict)
             {
+                //  The source may be modified concurrently (ex: a ConcurrentDictionary), so the number of items may differ from the count
+                if (i >= tt.Length)
+                    Array.Resize(ref tt, i + (i >> 1) + 1);
                 try
                 {
                     tt[i] = func(kv.Key, kv.Value, i);
@@ -871,6 +884,8 @@ namespace SysWeaver
                 }
                 ++i;
             }
+            if (i != tt.Length)
+                Array.Resize(ref tt, i);
             return TaskExt.WhenAll(tt);
         }
 
@@ -898,9 +913,14 @@ namespace SysWeaver
             int i = 0;
             foreach (var kv in col)
             {
+                //  The source may be modified concurrently (ex: a ConcurrentDictionary), so the number of items may differ from the count
+                if (i >= tt.Length)
+                    Array.Resize(ref tt, i + (i >> 1) + 1);
                 tt[i] = func(kv, i);
                 ++i;
             }
+            if (i != tt.Length)
+                Array.Resize(ref tt, i);
             return tt;
         }
 
@@ -936,6 +956,9 @@ namespace SysWeaver
             int i = 0;
             foreach (var kv in col)
             {
+                //  The source may be modified concurrently (ex: a ConcurrentDictionary), so the number of items may differ from the count
+                if (i >= tt.Length)
+                    Array.Resize(ref tt, i + (i >> 1) + 1);
                 try
                 {
                     tt[i] = func(kv, i);
@@ -947,6 +970,8 @@ namespace SysWeaver
                 }
                 ++i;
             }
+            if (i != tt.Length)
+                Array.Resize(ref tt, i);
             // The non-generic WhenAll doesn't copy the task array (the generic one does, and also allocates a result array)
             await Task.WhenAll((Task[])tt).ConfigureAwait(false);
             return GetResults(tt);
@@ -984,6 +1009,9 @@ namespace SysWeaver
             int i = 0;
             foreach (var kv in col)
             {
+                //  The source may be modified concurrently (ex: a ConcurrentDictionary), so the number of items may differ from the count
+                if (i >= tt.Length)
+                    Array.Resize(ref tt, i + (i >> 1) + 1);
                 try
                 {
                     tt[i] = func(kv, i);
@@ -995,6 +1023,8 @@ namespace SysWeaver
                 }
                 ++i;
             }
+            if (i != tt.Length)
+                Array.Resize(ref tt, i);
             return TaskExt.WhenAll(tt);
         }
 

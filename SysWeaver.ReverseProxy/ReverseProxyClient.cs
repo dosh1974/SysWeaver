@@ -361,7 +361,8 @@ namespace SysWeaver.ReverseProxy
 
                     EndPointFails.OnException(ex);
                     endPoint?.Fails?.OnException(ex);
-                    SetErrorResponse(response, res.RequestId, "Internal Server Error: " + ex.Message, 500);
+                    //  Sensitive information (paths, private ips etc) is removed from the message
+                    SetErrorResponse(response, res.RequestId, "Internal Server Error: " + ex.SafeMessage(), 500);
                     continue;
                 }
                 finally

@@ -58,11 +58,11 @@ namespace SysWeaver
         /// </summary>
         /// <param name="user">The username</param>
         /// <param name="password">The password</param>
-        /// <param name="mustBeValid">Throw if the user or password is empty</param>
+        /// <param name="mustBeValid">If true, throw if the credentials file doesn't exist, contains no non-comment line, or if the user or password is empty.
+        /// If false, a missing credentials file or a file without any non-comment line yields empty values (and false) without throwing.</param>
         /// <returns>False if the user or password is empty, else True</returns>
-        /// <exception cref="Exception">The credentials file doesn't exist, is empty or the first non-comment line has no ':' (regardless of <paramref name="mustBeValid"/>),
-        /// or the user or password is empty and <paramref name="mustBeValid"/> is true.</exception>
-        /// <remarks>A file containing only comment lines yields empty values (and false) without throwing, even if <paramref name="mustBeValid"/> is true.</remarks>
+        /// <exception cref="Exception">The first non-comment line of the credentials file has no ':' (regardless of <paramref name="mustBeValid"/>),
+        /// or <paramref name="mustBeValid"/> is true and the credentials file doesn't exist, contains no non-comment line, or the user or password is empty.</exception>
         public bool GetUserPassword(out String user, out String password, bool mustBeValid = true)
         {
             var fn = CredFile;
@@ -70,14 +70,17 @@ namespace SysWeaver
             {
                 fn = PathTemplate.Resolve(fn);
                 fn = EnvInfo.MakeAbsoulte(fn);
-                if (!File.Exists(fn))
-                    throw new Exception("Credentials file " + fn.ToFilename() + " must exist!");
-                var l = FileExt.ReadLines(fn, null, true, true);
-                var lc = l.Length;
-                if (lc < 1)
-                    throw new Exception("Credentials file " + fn.ToFilename() + " must contain at least one line of text!");
                 user = "";
                 password = "";
+                if (!File.Exists(fn))
+                {
+                    if (mustBeValid)
+                        throw new Exception("Credentials file " + fn.ToFilename() + " must exist!");
+                    return false;
+                }
+                var l = FileExt.ReadLines(fn, null, true, true);
+                var lc = l.Length;
+                bool found = false;
                 for (int i = 0; i < lc; ++ i)
                 {
                     var t = l[i];
@@ -88,6 +91,7 @@ namespace SysWeaver
                         throw new Exception("Credentials file " + fn.ToFilename() + " must only contain a user:password pair!");
                     user = t.Substring(0, f).TrimEnd();
                     password = t.Substring(f + 1).TrimStart();
+                    found = true;
                     if (mustBeValid)
                     {
                         if (user.Length <= 0)
@@ -97,6 +101,8 @@ namespace SysWeaver
                     }
                     break;
                 }
+                if (mustBeValid && !found)
+                    throw new Exception("Credentials file " + fn.ToFilename() + " must contain at least one line of text!");
             }else
             {
                 user = User ?? "";

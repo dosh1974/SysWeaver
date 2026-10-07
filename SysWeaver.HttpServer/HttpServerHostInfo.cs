@@ -9,7 +9,7 @@ namespace SysWeaver.Net
     /// <remarks>
     /// For a wildcard listener prefix (ex: "http://*:80/") a new host is created for every distinct host name that clients send (the Host header),
     /// with the "*" replaced by that host name, so <see cref="Name"/> is client controlled for wildcard prefixes.
-    /// Instances are kept for the lifetime of the server.
+    /// Instances are kept for the lifetime of the server (up to <see cref="HttpServerHosts.MaxCachedHosts"/> hosts, further hosts get a new instance for every request).
     /// </remarks>
     public sealed class HttpServerHostInfo
     {

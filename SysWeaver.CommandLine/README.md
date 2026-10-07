@@ -41,7 +41,6 @@ The service manager registers the console message handler automatically when a c
 
 - Designed for the SysWeaver conventions (option prefix, option naming); not a general replacement for full-featured CLI frameworks with sub-command trees.
 - Options are recognised by the prefixes `-`, `--` and `/` (the longest matching prefix is removed, so `--name` is looked up as `name`); positional values starting with `-` or `/` (negative numbers, absolute Unix paths) are taken as options.
-- Known issue: min/max limits are only enforced for option arguments, not positional arguments.
 - Help quality depends on XML comments being present and deployed; only the plain text of `<summary>` is used.
 - Configuration (prefixes, tags, parsers) is global static state; set it up once at startup.
 

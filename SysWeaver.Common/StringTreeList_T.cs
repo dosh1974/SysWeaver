@@ -8,14 +8,14 @@ namespace SysWeaver
     /// <summary>
     /// A string tree (a mutable trie with one dictionary per node) that stores a bunch of strings with values, in a way that makes it fast to check if a test string starts with ANY of the contained strings.
     /// A string can have more than one value (adding an existing string appends the value).
-    /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
+    /// Empty strings are not supported, they can't be added (throws an <see cref="ArgumentException"/>) and can't be searched for (throws in debug builds).
     /// </summary>
     /// <remarks>
     /// The root node is the tree, a case in-sensitive tree is marked by a shared static empty list as the root leaf.
     /// Case in-sensitive trees upper case all chars (invariant culture, see <see cref="CharExt.FastToUpper(char)"/>).
     /// The value lists returned by the search methods are the internal (mutable) lists of the tree, they must not be modified.
     /// Not thread safe for writes (concurrent reads without writes are safe).
-    /// Every node have a finalizer (used to maintain <see cref="AllocatedNodes"/>), so a large tree is expensive to collect.
+    /// In debug builds every node have a finalizer (used to maintain the AllocatedNodes diagnostics counter, that only exists in debug builds).
     /// Use <see cref="FrozenStringTreeList{T}"/> (or <see cref="StringPrefixLookup.BuildList{T}(IEnumerable{Tuple{string, T}})"/> for case sensitive lookups) for a faster immutable version.
     /// </remarks>
     /// <typeparam name="T">The type of the values</typeparam>
@@ -546,8 +546,9 @@ namespace SysWeaver
 
 
 
+#if DEBUG
         /// <summary>
-        /// The number of <see cref="StringTreeList{T}"/> nodes (of this T) that are currently allocated (created and not yet finalized), for diagnostics
+        /// The number of <see cref="StringTreeList{T}"/> nodes (of this T) that are currently allocated (created and not yet finalized), for diagnostics (debug builds only)
         /// </summary>
         public static long AllocatedNodes => Interlocked.Read(ref CountAllocNodes);
 
@@ -560,6 +561,7 @@ namespace SysWeaver
         {
             Interlocked.Decrement(ref CountAllocNodes);
         }
+#endif//DEBUG
 
         StringTreeList(string leaf, T value)
         {
@@ -567,7 +569,9 @@ namespace SysWeaver
             {
                 value
             };
+#if DEBUG
             Interlocked.Increment(ref CountAllocNodes);
+#endif//DEBUG
         }
 
 
@@ -579,14 +583,18 @@ namespace SysWeaver
         {
             Leaf = caseInSesnitive ? LeafList : null;
             Nodes = new();
+#if DEBUG
             Interlocked.Increment(ref CountAllocNodes);
+#endif//DEBUG
         }
 
         StringTreeList(List<T> leaf, Dictionary<Char, StringTreeList<T>> nodes)
         {
             Leaf = leaf;
             Nodes = nodes;
+#if DEBUG
             Interlocked.Increment(ref CountAllocNodes);
+#endif//DEBUG
         }
 
         /// <summary>

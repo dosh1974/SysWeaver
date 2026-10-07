@@ -30,7 +30,7 @@ namespace SysWeaver.Auth
         /// <summary>
         /// Returns a new policy with the lowest common restriction: the smallest minimum length, the largest maximum length and only the character class requirements that all have.
         /// </summary>
-        /// <param name="policies">The policies, should contain at least one policy (an empty sequence gives a policy that rejects all passwords)</param>
+        /// <param name="policies">The policies, an empty sequence gives a new default <see cref="PasswordPolicy"/></param>
         /// <returns>A policy with the lowest common restriction of the inputs</returns>
         public static PasswordPolicy Min(IEnumerable<PasswordPolicy> policies)
         {
@@ -39,14 +39,18 @@ namespace SysWeaver.Auth
             bool cs = true;
             bool num = true;
             bool sp = true;
+            bool any = false;
             foreach (var p in policies)
             {
+                any = true;
                 min = Math.Min(min, p.MinLength);
                 max = Math.Max(max, p.MaxLength);
                 cs &= p.MixedCase;
                 num &= p.MixedNumerical;
                 sp &= p.MixedSpecial;
             }
+            if (!any)
+                return new PasswordPolicy();
             return new PasswordPolicy
             {
                 MinLength = min,

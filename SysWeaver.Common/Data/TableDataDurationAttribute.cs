@@ -6,7 +6,7 @@ namespace SysWeaver.Data
     /// Format values as a duration (time span, integer or float)
     /// </summary>
     /// <remarks>
-    /// Note: The web client currently ignores the copy on click options and always copies the value before formatting on click.
+    /// The boolean copyOnClick overload copies the value before formatting (copy format "{2}"), use the copyOnClickFormat overload to copy something else (ex: "{0}" for the formatted value).
     /// </remarks>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class TableDataDurationAttribute : TableDataRawFormatAttribute
@@ -24,9 +24,9 @@ namespace SysWeaver.Data
         /// {1} = Next value (must exist). 
         /// {2} = Value before formatting.
         /// </param>
-        /// <param name="copyOnClick">Copy the value to the clipboard on click (see remarks).</param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
         public TableDataDurationAttribute(String replaceZeroWith = null, String textFormat = "{0}", String titleFormat = "Raw: {2}", bool copyOnClick = false)
-            : base(TableDataFormats.Duration, textFormat ?? "{0}", titleFormat ?? "Raw: {2}", copyOnClick ? "{0}" : null, replaceZeroWith)
+            : base(TableDataFormats.Duration, textFormat ?? "{0}", titleFormat ?? "Raw: {2}", copyOnClick ? "{2}" : null, replaceZeroWith)
         {
         }
 
@@ -44,11 +44,11 @@ namespace SysWeaver.Data
         /// {1} = Next value (must exist). 
         /// {2} = Value before formatting.
         /// </param>
-        /// <param name="copyOnClickFormat">Copy the value to the clipboard on click, using this string formatter (see remarks).
+        /// <param name="copyOnClickFormat">Copy the value to the clipboard on click, using this string formatter.
         /// {0} = Formatted value.
         /// {1} = Next value (must exist).
         /// {2} = Value before formatting.
-        /// An empty string means "{2}".
+        /// An empty string copies the value before formatting ("{2}"), null disables copy on click.
         /// </param>
         public TableDataDurationAttribute(String replaceZeroWith, String textFormat, String titleFormat, String copyOnClickFormat)
             : base(TableDataFormats.Duration, textFormat ?? "{0}", titleFormat ?? "Raw: {2}", copyOnClickFormat == "" ? "{2}" : copyOnClickFormat, replaceZeroWith)

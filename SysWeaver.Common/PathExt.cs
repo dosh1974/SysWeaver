@@ -278,7 +278,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Use the casing of the file system for all existing parts of a full path (the root is kept as is).
-        /// Note that each part is used as a search pattern, so a name containing wild cards ('*' or '?', only valid on non-Windows file systems) may match another entry.
+        /// A name containing wild cards ('*' or '?', only valid on non-Windows file systems) is matched by name only (not used as a search pattern).
         /// </summary>
         /// <param name="full">A full path</param>
         /// <returns>The path with the casing of the existing parts fixed</returns>
@@ -293,7 +293,20 @@ namespace SysWeaver
                 var p = FixCase(parent);
                 var name = Path.GetFileName(t);
                 var di = new DirectoryInfo(p);
-                var m = di.Exists ? di.EnumerateFileSystemInfos(name).FirstOrDefault() : null;
+                FileSystemInfo m = null;
+                if (di.Exists)
+                {
+                    if (name.AsSpan().IndexOfAny('*', '?') < 0)
+                    {
+                        m = di.EnumerateFileSystemInfos(name).FirstOrDefault();
+                    }
+                    else
+                    {
+                        //  Wild cards are valid file name chars on some file systems, don't use the name as a search pattern
+                        m = di.EnumerateFileSystemInfos().FirstOrDefault(x => String.Equals(x.Name, name, StringComparison.Ordinal))
+                            ?? di.EnumerateFileSystemInfos().FirstOrDefault(x => String.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                    }
+                }
                 return Path.Combine(p, m?.Name ?? name) + full.Substring(t.Length);
             }
             catch
@@ -543,23 +556,45 @@ namespace SysWeaver
             di.LastAccessTimeUtc = la;
         }
 
-        static void InternalMove(String source, String dest)
+        /// <summary>
+        /// A retryable move operation, remembers if the file have been moved so that a retry (after a failure to restore the file times) only restores the file times
+        /// </summary>
+        sealed class InternalMoveOp
         {
-            var fi = new FileInfo(source);
-            var ct = fi.CreationTimeUtc;
-            var lwt = fi.LastWriteTimeUtc;
-            var la = fi.LastAccessTimeUtc;
-            var di = new FileInfo(dest);
-            if (di.Exists && di.IsReadOnly)
-                di.IsReadOnly = false;
-            var dir = di.Directory;
-            if (!dir.Exists)
-                dir.Create();
-            File.Move(source, dest, true);
-            //di = new FileInfo(dest);
-            di.CreationTimeUtc = ct;
-            di.LastWriteTimeUtc = lwt;
-            di.LastAccessTimeUtc = la;
+            public InternalMoveOp(String source, String dest)
+            {
+                Source = source;
+                Dest = dest;
+            }
+
+            readonly String Source;
+            readonly String Dest;
+            bool Moved;
+            DateTime Ct;
+            DateTime Lwt;
+            DateTime La;
+
+            public void Run()
+            {
+                var di = new FileInfo(Dest);
+                if (!Moved)
+                {
+                    var fi = new FileInfo(Source);
+                    Ct = fi.CreationTimeUtc;
+                    Lwt = fi.LastWriteTimeUtc;
+                    La = fi.LastAccessTimeUtc;
+                    if (di.Exists && di.IsReadOnly)
+                        di.IsReadOnly = false;
+                    var dir = di.Directory;
+                    if (!dir.Exists)
+                        dir.Create();
+                    File.Move(Source, Dest, true);
+                    Moved = true;
+                }
+                di.CreationTimeUtc = Ct;
+                di.LastWriteTimeUtc = Lwt;
+                di.LastAccessTimeUtc = La;
+            }
         }
 
 
@@ -671,7 +706,7 @@ namespace SysWeaver
         {
             try
             {
-                Retry.Op(() => InternalMove(source, dest), retryCount, delayInMs);
+                Retry.Op(new InternalMoveOp(source, dest).Run, retryCount, delayInMs);
 /*                Retry.Op(() => 
                 {
                     using (new FileStream(dest, FileMode.Open, FileAccess.Read, FileShare.None)) ;
@@ -698,7 +733,7 @@ namespace SysWeaver
         {
             try
             {
-                await Retry.OpAsync(() => InternalMove(source, dest), retryCount, delayInMs).ConfigureAwait(false);
+                await Retry.OpAsync(new InternalMoveOp(source, dest).Run, retryCount, delayInMs).ConfigureAwait(false);
 /*                await Retry.OpAsync(() =>
                 {
                     using (new FileStream(dest, FileMode.Open, FileAccess.Read, FileShare.None))
@@ -1231,15 +1266,19 @@ namespace SysWeaver
 
 
         /// <summary>
-        /// Allow all users to read / write a folder (adds a full control rule for "Everyone").
-        /// Only does anything on Windows.
+        /// Allow all users to read / write a folder (on Windows: adds a full control rule for "Everyone").
+        /// On other platforms <see cref="IPlatformTools.MakeDirectoryAccessableToEveryOne(string)"/> of <see cref="PlatformTools.Current"/> is used
+        /// (Linux: "a+rwX" on the folder and all content plus a POSIX default ACL, see the SysWeaver.Common.Linux LinuxPlatformTools).
         /// </summary>
         /// <remarks>
-        /// The rule is inherited using <see cref="PropagationFlags.NoPropagateInherit"/>, so it only applies to the folder and its direct files and sub folders, not to deeper levels.
+        /// The rule is container and object inherited (<see cref="PropagationFlags.None"/>), so it applies to the folder and is inherited by all nested files and sub folders (at any depth).
+        /// This makes files and folders created by a service (ex: running as SYSTEM) modifiable by users (without an UAC prompt) and vice versa.
+        /// Applying the rule to an existing folder also propagates it to the existing files and sub folders that inherit permissions (Windows does this when the security descriptor is written).
+        /// A rule added by older versions (using <see cref="PropagationFlags.NoPropagateInherit"/>, only inherited by direct children) is replaced.
         /// Granting everyone full control makes the folder writable by any local user, only use it for data that isn't security sensitive.
         /// </remarks>
         /// <param name="folder">The folder</param>
-        /// <returns>True if successful (or if the folder doesn't exist or the OS isn't Windows), false on error (never throws)</returns>
+        /// <returns>True if successful (or if the folder doesn't exist or the platform has no implementation), false on error (never throws)</returns>
         public static bool AllowAllAccess(String folder)
         {
             try
@@ -1252,8 +1291,10 @@ namespace SysWeaver
                         return true;
                     var dSecurity = dInfo.GetAccessControl();
                     var sid = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
-                    var rule = new FileSystemAccessRule(sid, FileSystemRights.FullControl, InheritanceFlags.ObjectInherit | InheritanceFlags.ContainerInherit, PropagationFlags.NoPropagateInherit, AccessControlType.Allow);
+                    const InheritanceFlags inherit = InheritanceFlags.ObjectInherit | InheritanceFlags.ContainerInherit;
+                    var rule = new FileSystemAccessRule(sid, FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow);
                     bool found = false;
+                    bool foundOld = false;
                     foreach (FileSystemAccessRule x in dSecurity.GetAccessRules(true, true, typeof(SecurityIdentifier)))
                     {
                         if (x.IdentityReference.Value != rule.IdentityReference.Value)
@@ -1264,19 +1305,32 @@ namespace SysWeaver
                             continue;
                         if (x.InheritanceFlags != rule.InheritanceFlags)
                             continue;
+                        if (x.PropagationFlags == PropagationFlags.NoPropagateInherit)
+                        {
+                            //  Rule added by older versions (only inherited by direct children), replace it
+                            if (!x.IsInherited)
+                                foundOld = true;
+                            continue;
+                        }
                         if (x.PropagationFlags != rule.PropagationFlags)
                             continue;
                         found = true;
-                        break;
                     }
-                    if (!found)
+                    if ((!found) || foundOld)
                     {
-                        dSecurity.AddAccessRule(rule);
+                        if (foundOld)
+                            dSecurity.RemoveAccessRuleSpecific(new FileSystemAccessRule(sid, FileSystemRights.FullControl, inherit, PropagationFlags.NoPropagateInherit, AccessControlType.Allow));
+                        if (!found)
+                            dSecurity.AddAccessRule(rule);
+                        //  Writing the security descriptor propagates the inheritable rule to all existing (inheriting) files and sub folders
                         dInfo.SetAccessControl(dSecurity);
                     }
 #pragma warning restore CA1416
+                    return true;
                 }
-                return true;
+                if (!Directory.Exists(folder))
+                    return true;
+                return PlatformTools.Current.MakeDirectoryAccessableToEveryOne(folder) == null;
             }
             catch
             {

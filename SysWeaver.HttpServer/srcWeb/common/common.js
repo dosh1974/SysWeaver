@@ -4887,7 +4887,14 @@ class ValueFormat {
         const c = ValueFormat.formatTimeSpan(value, formats && formats[4]);
         const text = ValueFormat.stringFormat((formats ? formats[1] : null) ?? "{0}", c, nextValue, value);
         let title = ValueFormat.stringFormat((formats ? formats[2] : null) ?? "Raw: {2}", c, nextValue, value, text);
-        title = ValueFormat.joinNonEmpty("\n\n", title, ValueFormat.copyOnClick(el, value));
+        //  Copy format: undefined (no format, ex: a TimeSpan member) = copy the raw value, empty = no copy, else formatted ({0} = formatted, {1} = next value, {2} = raw value, {3} = text)
+        const copy = formats ? formats[3] : undefined;
+        if (copy || typeof copy === "undefined") {
+            let copyVal = value;
+            if (typeof copy === "string")
+                copyVal = ValueFormat.stringFormat(copy, c, nextValue, value, text);
+            title = ValueFormat.joinNonEmpty("\n\n", title, ValueFormat.copyOnClick(el, copyVal));
+        }
         ValueFormat.updateText(el, text, title, flash);
         return el;
     }
@@ -5338,7 +5345,8 @@ class ValueFormat {
                 if (t)
                     ValueFormat.copyOnClick(el.children[i], t);
             }
-            if (formats[4])
+            //  Copy all tags (the raw value) on click, formats[4] is the copyOnClick bool ("True" or "False")
+            if (("" + (formats[4] ?? "")).toLowerCase() === "true")
                 el.title = ValueFormat.copyOnClick(el, value);
         }
         return el;

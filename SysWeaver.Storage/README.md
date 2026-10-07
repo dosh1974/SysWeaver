@@ -38,7 +38,7 @@ flowchart TB
 | **Decompressed file hash** (`DecompressedFileHash`) | Cached MD5-based hash of the *decompressed* content of a compressed file. |
 | **Compressed chunked stream** (`CompressedChunkedStream`) | A read-only stream that concatenates the decompressed content of several compressed chunks. |
 | **Embedded resources** (`StorageTypeExt`) | `Type.GetManifestResourceStream/Data/Text/Object` helpers that transparently decompress resources stored compressed (ex: `MyText.txt.br`). |
-| **System lock** (`SystemLock`) | A named lock visible to all processes on the machine, implemented with exclusively opened lock files (delete on close) so it works on every OS. Not re-entrant. |
+| **System lock** (`SystemLock`) | A named lock visible to all processes on the machine, implemented with exclusively opened lock files (delete on close; on Unix the locked file is verified to still be linked at the path and the holder unlinks it before releasing) so it works on every OS. Not re-entrant. |
 | **Temp folder** (`TempFolder`) | Named cache folders (configurable, default under CommonApplicationData) whose old files are pruned at process exit. |
 
 ## Key features
@@ -52,8 +52,8 @@ flowchart TB
 
 - Designed for small-to-medium values and moderate write rates; it is not a database (no queries, transactions or indexing). Every operation reads or writes all copies of a key.
 - Redundancy multiplies disk usage by the number of copies.
-- Keys are used as file names; only valid file name characters may be used (this is only verified in DEBUG builds).
-- Currently all four static stores share the id `"Default"`, so `UserApp`, `AllShared` and `UserShared` return the same instance as `AllApp` (application specific, all users).
+- Keys are used as file names, so a key MUST be a valid file name: not empty, not `.` / `..`, no path separators, `:` or other invalid file name characters (`PathExt.SafeFilename(key)` must return the key unchanged). This is validated in all builds (`ArgumentException`), keys are never transformed (that would make existing data unreadable), so callers building keys from arbitrary text must sanitize them (e.g. with `PathExt.SafeFilename`).
+- The four static stores use separate locations (`Folders.AllAppFolders`, `UserAppFolders`, `AllSharedFolders`, `UserSharedFolders`). Before 2026-10-07 `UserApp`, `AllShared` and `UserShared` were the same instance as `AllApp`, so their old data is in the `AllApp` location: when a key has no valid copy in one of these stores, it's read from `AllApp` and copied to the store (the `AllApp` copy is kept). Deleting a key from such a store stops this fallback for that key. Old values written by any user remain visible to every user's per user store until set there (as before). `KeyValueStore.Get` with the id `"Default"` still returns `AllApp`.
 - File-based locks depend on a shared temporary location and cooperative use; waiting is done by polling.
 - Cleanup of caches and temp folders only happens at process exit.
 

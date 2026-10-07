@@ -513,12 +513,13 @@ namespace SysWeaver.Net
         /// <summary>
         /// Same result as req.GetDisplayUrl() but with a single allocation (GetDisplayUrl uses a StringBuilder)
         /// </summary>
-        static String GetDisplayUrl(HttpRequest req)
+        /// <param name="req">The request</param>
+        /// <param name="pathBase">The path base to use (decoded <see cref="HttpRequest.PathBase"/> value, or the escaped <see cref="PathString.ToUriComponent"/>)</param>
+        /// <param name="path">The path to use (decoded <see cref="HttpRequest.Path"/> value, or the escaped <see cref="PathString.ToUriComponent"/>)</param>
+        static String GetDisplayUrl(HttpRequest req, String pathBase, String path)
         {
             var scheme = req.Scheme ?? String.Empty;
             var host = req.Host.Value ?? String.Empty;
-            var pathBase = req.PathBase.Value ?? String.Empty;
-            var path = req.Path.Value ?? String.Empty;
             var query = req.QueryString.Value ?? String.Empty;
             var len = scheme.Length + 3 + host.Length + pathBase.Length + path.Length + query.Length;
             return String.Create(len, (scheme, host, pathBase, path, query), static (span, s) =>
@@ -555,15 +556,23 @@ namespace SysWeaver.Net
                     await HandlePause(req, res).ConfigureAwait(false);
                     return;
                 }
-                var rawUrl = GetDisplayUrl(req);
-                var url = rawUrl;
+                //  Kestrel decodes the path (except "%2F"), the raw url uses the (re-)escaped path so that encoded '?', '#', '%', space etc are kept encoded (same as NetHttpServer)
+                var pathBase = req.PathBase.Value ?? String.Empty;
+                var path = req.Path.Value ?? String.Empty;
+                var url = GetDisplayUrl(req, pathBase, path);
+                var escPathBase = req.PathBase.ToUriComponent();
+                var escPath = req.Path.ToUriComponent();
+                var rawUrl = (String.Equals(escPathBase, pathBase, StringComparison.Ordinal) && String.Equals(escPath, path, StringComparison.Ordinal))
+                    ? url
+                    : GetDisplayUrl(req, escPathBase, escPath);
                 var host = GetHost(out var prefix, out var queryStart, out var didIndex, ref url);
                 if (prefix == null)
                 {
                     await HandleInvalidPrefix(req, res).ConfigureAwait(false);
                     return;
                 }
-                using var data = new AspHttpServerRequest(c, url, url, prefix, this, host, queryStart, didIndex);
+                //  The raw url (undecoded query string) is used for parsing the query parameters, so that escaped '&', '=', '+', '#' and '%' are only decoded once (same as NetHttpServer)
+                using var data = new AspHttpServerRequest(c, rawUrl, url, prefix, this, host, queryStart, didIndex);
                 await Handle(data).ConfigureAwait(false);
             }
             catch (HttpListenerException ex)

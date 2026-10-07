@@ -32,14 +32,15 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 - `MemberResolver` (public contract resolver, also used by Chart.js) serializes fields and skips read-only fields and get-only properties.
 - `NewtonsoftJsonSerializer.ToFormattedJson` pretty-prints objects with byte arrays as aligned rows of numbers instead of base64.
 - Deserializers are pooled, so concurrent use is cheap and safe.
+- A json `null` is read as NaN into a (not nullable) `float` / `double`, so data written by SysWeaver.Json (which writes NaN and infinities as `null`, like the compact output of SafeJson) can be read back; the `NaN` / `Infinity` tokens are still accepted.
 - Registered through the manifest like any service, or with one static call in code.
 
 ## Limitations and considerations
 
 - Slower and more allocation-heavy than the span-based serializers.
 - **Security:** `$type` names in the input are resolved with `TypeFinder.GetForData`: only types in loaded assemblies (or assemblies in the executable folder) can be named, the `DataTypePolicy` deny list of known gadget types, delegates and reflection types are always rejected, and the type must be assignable to the declared type.
-- `FromString(string)` throws `NullReferenceException` when the text deserializes to null but isn't the literal `null` (e.g. empty text), unlike the other overloads which return null.
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / Jil / SpanJson / Utf8Json -5).
+- `FromString(string)` returns null for null, empty or white space text and `null`, but throws `NullReferenceException` when other text deserializes to null (e.g. `undefined` or only a comment), unlike the other overloads which return null.
+- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / SpanJson / Utf8Json -5).
 
 ## Using it
 

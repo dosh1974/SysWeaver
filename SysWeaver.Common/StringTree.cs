@@ -9,13 +9,13 @@ namespace SysWeaver
 
     /// <summary>
     /// A string tree (a mutable trie with one dictionary per node) stores a bunch of strings in a way that makes it fast to check if a test string starts with ANY of the contained strings.
-    /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
+    /// Empty strings are not supported, they can't be added (throws an <see cref="ArgumentException"/>) and can't be searched for (throws in debug builds).
     /// </summary>
     /// <remarks>
     /// The root node is the tree, and the leaf of the root is used as the case in-sensitive marker.
     /// Case in-sensitive trees upper case all chars (invariant culture, see <see cref="CharExt.FastToUpper(char)"/>), the found strings are the added strings (original casing).
     /// Not thread safe for writes (concurrent reads without writes are safe).
-    /// Every node have a finalizer (used to maintain <see cref="AllocatedNodes"/>), so a large tree is expensive to collect.
+    /// In debug builds every node have a finalizer (used to maintain the AllocatedNodes diagnostics counter, that only exists in debug builds).
     /// Use <see cref="FrozenStringTree"/> (built from a <see cref="StringTree"/>) for a faster immutable version.
     /// </remarks>
     public sealed class StringTree : IStringTree
@@ -36,7 +36,8 @@ namespace SysWeaver
         /// <param name="strings">The strings to build a tree from, may not contain null, empty strings or duplicates (duplicates after case folding for case in-sensitive trees)</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
         /// <returns>The tree (an empty tree if there are no strings)</returns>
-        /// <exception cref="Exception">A string is a duplicate, or (in debug builds only) a string is empty</exception>
+        /// <exception cref="ArgumentException">A string is empty</exception>
+        /// <exception cref="Exception">A string is a duplicate</exception>
         public static StringTree Build(IEnumerable<String> strings, bool caseInSensitive = false)
         {
             StringTree parent = null;
@@ -59,7 +60,8 @@ namespace SysWeaver
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree, if the tree already exists, the casing from that tree is used</param>
         /// <param name="parent">An existing tree (that is modified), or null to create a new tree</param>
         /// <returns>The new tree (or the existing)</returns>
-        /// <exception cref="Exception">The string have already been added, or (in debug builds only) the string is empty</exception>
+        /// <exception cref="ArgumentException">The string is empty</exception>
+        /// <exception cref="Exception">The string have already been added</exception>
         public static StringTree Add(String text, bool caseInSensitive = false, StringTree parent = null)
         {
             if (parent != null)
@@ -80,7 +82,7 @@ namespace SysWeaver
         /// <param name="text">The string to add, may not be null or empty</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree, if the tree already exists, the casing from that tree is used</param>
         /// <returns>True if the string was added, false if it already existed (the tree is unchanged)</returns>
-        /// <exception cref="Exception">(Debug builds only) the string is empty</exception>
+        /// <exception cref="ArgumentException">The string is empty</exception>
         public static bool TryAdd(ref StringTree parent, String text, bool caseInSensitive = false)
         {
             if (parent != null)
@@ -467,13 +469,13 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Empty strings are not supported (the root leaf is used as the case in-sensitive marker), throws in debug builds
+        /// Empty strings are not supported (the root leaf is used as the case in-sensitive marker, adding one would corrupt the tree), always throws
         /// </summary>
-        [Conditional("DEBUG")]
+        /// <exception cref="ArgumentException">The string is empty</exception>
         internal static void ValidateAdd(String text)
         {
             if (text.Length == 0)
-                throw new Exception("Empty strings can't be added to a string tree!");
+                throw new ArgumentException("Empty strings can't be added to a string tree!", nameof(text));
         }
 
         /// <summary>
@@ -507,8 +509,9 @@ namespace SysWeaver
         /// </summary>
         internal Dictionary<Char, StringTree> GetNodes() => Nodes;
 
+#if DEBUG
         /// <summary>
-        /// The number of <see cref="StringTree"/> nodes that are currently allocated (created and not yet finalized), for diagnostics
+        /// The number of <see cref="StringTree"/> nodes that are currently allocated (created and not yet finalized), for diagnostics (debug builds only)
         /// </summary>
         public static long AllocatedNodes => Interlocked.Read(ref CountAllocNodes);
 
@@ -521,11 +524,14 @@ namespace SysWeaver
         {
             Interlocked.Decrement(ref CountAllocNodes);
         }
+#endif//DEBUG
 
         StringTree(string leaf)
         {
             Leaf = leaf;
+#if DEBUG
             Interlocked.Increment(ref CountAllocNodes);
+#endif//DEBUG
         }
 
 
@@ -537,14 +543,18 @@ namespace SysWeaver
         {
             Leaf = caseInSesnitive ? "caseInSensitive" : null;
             Nodes = new();
+#if DEBUG
             Interlocked.Increment(ref CountAllocNodes);
+#endif//DEBUG
         }
 
         StringTree(string leaf, Dictionary<Char, StringTree> nodes)
         {
             Leaf = leaf;
             Nodes = nodes;
+#if DEBUG
             Interlocked.Increment(ref CountAllocNodes);
+#endif//DEBUG
         }
 
         /// <summary>

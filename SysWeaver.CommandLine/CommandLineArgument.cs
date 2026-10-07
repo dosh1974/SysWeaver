@@ -41,8 +41,8 @@ namespace SysWeaver
         /// </summary>
         /// <typeparam name="T">Type of the argument</typeparam>
         /// <param name="name">Name of the argument</param>
-        /// <param name="minValue">The minimum allowed value (shown in help; NOTE: currently not enforced when parsing arguments)</param>
-        /// <param name="maxValue">The maximum allowed value (shown in help; NOTE: currently not enforced when parsing arguments)</param>
+        /// <param name="minValue">The minimum allowed value , enforced by <see cref="CommandLineOptionArgument.ParseValue(string)"/></param>
+        /// <param name="maxValue">The maximum allowed value , enforced by <see cref="CommandLineOptionArgument.ParseValue(string)"/></param>
         /// <param name="optional">Set to true if the argument is optional, false to require it</param>
         /// <param name="defaultValue">Text describing the default value, shown as a "default: ..." tag in help (not used when parsing), or null for no tag.</param>
         /// <param name="helpText">Optional help text for this argument</param>
@@ -79,8 +79,8 @@ namespace SysWeaver
         /// <typeparam name="T">Type of the argument</typeparam>
         /// <param name="name">Name of the argument</param>
         /// <param name="parser">The parser to use (string to value), the input is trimmed for the generic overloads</param>
-        /// <param name="minValue">The minimum allowed value (shown in help; NOTE: currently not enforced when parsing arguments)</param>
-        /// <param name="maxValue">The maximum allowed value (shown in help; NOTE: currently not enforced when parsing arguments)</param>
+        /// <param name="minValue">The minimum allowed value , enforced by <see cref="CommandLineOptionArgument.ParseValue(string)"/></param>
+        /// <param name="maxValue">The maximum allowed value , enforced by <see cref="CommandLineOptionArgument.ParseValue(string)"/></param>
         /// <param name="optional">Set to true if the argument is optional, false to require it</param>
         /// <param name="defaultValue">Text describing the default value, shown as a "default: ..." tag in help (not used when parsing), or null for no tag.</param>
         /// <param name="helpText">Optional help text for this argument</param>
@@ -101,7 +101,7 @@ namespace SysWeaver
             Optional = optional;
         }
 
-        CommandLineArgument(String name, Type type, Func<String, Object>parser, Object minValue, Object maxValue, bool optional, String defaultValue, String helpText) : base(name, type, parser, defaultValue, helpText)
+        CommandLineArgument(String name, Type type, Func<String, Object>parser, Object minValue, Object maxValue, bool optional, String defaultValue, String helpText) : base(name, type, parser, minValue, maxValue, defaultValue, helpText)
         {
             Optional = optional;
         }

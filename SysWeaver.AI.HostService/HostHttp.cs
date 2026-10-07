@@ -120,7 +120,7 @@ namespace SysWeaver.AI
             => JsonResponse(r, ex.StatusCode, Json(w =>
             {
                 w.WriteStartObject();
-                WriteError(w, ex.Message, ex.Type, ex.Code, ex.Param);
+                WriteError(w, ex.SafeMessage(), ex.Type, ex.Code, ex.Param);
                 w.WriteEndObject();
             }));
 

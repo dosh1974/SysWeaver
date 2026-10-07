@@ -18,7 +18,7 @@ namespace SysWeaver.Net
 
         /// <summary>
         /// The session cookie name, EnvInfo variables may be used (ex: "[AppName]"), an empty string uses the default.
-        /// Non-ASCII chars are escaped. Setting this to null disables sessions, which is not supported (requests will fail).
+        /// Non-ASCII chars are escaped. Setting this to null disables the session cookie, every request then gets a new session (as for a client that doesn't store cookies).
         /// </summary>
         public String SessionCookieName = "SysWeaver.Session.[AppName]";
 

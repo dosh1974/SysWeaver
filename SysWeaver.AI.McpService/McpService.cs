@@ -446,7 +446,7 @@ namespace SysWeaver.AI
             }
             catch (RpcException ex)
             {
-                return JsonResponse(r, 400, Json(w => WriteError(w, default, ex.Code, ex.Message)));
+                return JsonResponse(r, 400, Json(w => WriteError(w, default, ex.Code, ex.SafeMessage())));
             }
             using (doc)
             {
@@ -516,12 +516,12 @@ namespace SysWeaver.AI
             }
             catch (RpcException ex)
             {
-                return Json(w => WriteError(w, id, ex.Code, ex.Message));
+                return Json(w => WriteError(w, id, ex.Code, ex.SafeMessage()));
             }
             catch (Exception ex)
             {
                 Msg?.AddMessage(LogPrefix + "Failed to handle " + method.ToQuoted(), ex, MessageLevels.Warning);
-                return Json(w => WriteError(w, id, ErrInternal, ex.Message));
+                return Json(w => WriteError(w, id, ErrInternal, ex.SafeMessage()));
             }
         }
 
@@ -595,7 +595,8 @@ namespace SysWeaver.AI
                     while (((ex is TargetInvocationException) || (ex is AggregateException)) && (ex.InnerException != null))
                         ex = ex.InnerException;
                     Msg?.AddMessage(LogPrefix + "Tool " + name.ToQuoted() + " failed", ex, MessageLevels.Debug);
-                    text = ex.Message;
+                    //  The error is sent to the MCP client, so sensitive information is removed
+                    text = ex.SafeMessage();
                     isError = true;
                 }
                 finally

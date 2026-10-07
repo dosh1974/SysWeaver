@@ -320,11 +320,24 @@ namespace SysWeaver.IsoData
 
         /// <summary>
         /// ISO 639-1 codes of commonly used languages: languages used in countries with a combined population of at least 10 million,
-        /// excluding languages whose comment starts with "ancient". In the same order as <see cref="Languages"/>.
+        /// excluding languages whose comment starts with "ancient" (the set is kept identical to the one computed from the previous population data, see <see cref="KeepCommon"/> and <see cref="ExcludeCommon"/>).
+        /// In the same order as <see cref="Languages"/>.
         /// Used as the default set of target languages when no translator is available.
         /// </summary>
         /// <remarks>This is a shared, mutable array assigned by the static constructor; do not modify it.</remarks>
         public static String[] Common;
+
+        /// <summary>
+        /// Languages that were part of <see cref="Common"/> before the population data was refreshed (2026-10-07) but are now below the threshold,
+        /// kept so that the default target languages (and user settings using them) keep working.
+        /// </summary>
+        static readonly String[] KeepCommon = ["sr"];
+
+        /// <summary>
+        /// Languages that are above the threshold with the refreshed population data (2026-10-07) but weren't part of <see cref="Common"/> before,
+        /// excluded so that the default target languages (ex: of translators) don't change.
+        /// </summary>
+        static readonly String[] ExcludeCommon = ["he", "ho", "tg"];
 
 
         static IsoLanguage()
@@ -421,7 +434,9 @@ namespace SysWeaver.IsoData
                 if (!speakers.TryGetValue(c.Iso639_1, out var count))
                     if (!speakers.TryGetValue(c.Iso639_2, out count))
                         continue;
-                if (count < 10_000_000)
+                if ((count < 10_000_000) && (Array.IndexOf(KeepCommon, c.Iso639_1) < 0))
+                    continue;
+                if (Array.IndexOf(ExcludeCommon, c.Iso639_1) >= 0)
                     continue;
                 var cc = c.Comment?.FastToLower();
                 if (cc != null)

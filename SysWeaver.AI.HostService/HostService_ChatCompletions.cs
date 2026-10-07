@@ -312,7 +312,7 @@ namespace SysWeaver.AI
                 await sse.Data(HostHttp.Json(w =>
                 {
                     w.WriteStartObject();
-                    HostHttp.WriteError(w, he.Message, he.Type, he.Code, he.Param);
+                    HostHttp.WriteError(w, he.SafeMessage(), he.Type, he.Code, he.Param);
                     w.WriteEndObject();
                 })).ConfigureAwait(false);
                 await sse.Done().ConfigureAwait(false);

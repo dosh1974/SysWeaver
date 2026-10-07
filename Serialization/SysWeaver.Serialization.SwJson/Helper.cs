@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -162,6 +164,49 @@ namespace SysWeaver.Serialization.SwJson
 
 #endif //DEBUG
 
+        static readonly ConcurrentDictionary<Type, Type> CreatedTypes = new();
+
+        /// <summary>
+        /// The type the reader creates for a value declared as <paramref name="declaredType"/> when the json has no <c>"$type"</c>, for collection and dictionary interfaces:
+        /// a <see cref="List{T}"/> for interfaces it implements (<see cref="IList{T}"/>, <see cref="ICollection{T}"/>, <see cref="IEnumerable{T}"/>, <see cref="IReadOnlyList{T}"/>, <see cref="IReadOnlyCollection{T}"/>),
+        /// a <see cref="HashSet{T}"/> for other collection interfaces it implements (<see cref="ISet{T}"/>)
+        /// and a <see cref="Dictionary{TKey, TValue}"/> for <see cref="IDictionary{TKey, TValue}"/> and <see cref="IReadOnlyDictionary{TKey, TValue}"/>.
+        /// </summary>
+        /// <remarks>
+        /// The writer omits the <c>"$type"</c> of a value of exactly this type, so it must match what the reader creates (see JsonReader.CollectionFactory, JsonReader.EnumerableFactory and JsonReader.DictionaryInterface).
+        /// </remarks>
+        /// <param name="declaredType">The declared type</param>
+        /// <returns>The type that is created, or null if the declared type isn't such an interface (the type is created as is, or needs a <c>"$type"</c>)</returns>
+        public static Type GetCreatedType(Type declaredType)
+        {
+            //  typeof(void) is cached for "none" (a ConcurrentDictionary can't store null values)
+            var c = CreatedTypes.GetOrAdd(declaredType, static t => FindCreatedType(t) ?? typeof(void));
+            return c == typeof(void) ? null : c;
+        }
+
+        static Type FindCreatedType(Type t)
+        {
+            if (!(t.IsInterface && t.IsGenericType))
+                return null;
+            var args = t.GetGenericArguments();
+            if (args.Length == 1)
+            {
+                var lt = typeof(List<>).MakeGenericType(args);
+                if (t.IsAssignableFrom(lt))
+                    return lt;
+                var ht = typeof(HashSet<>).MakeGenericType(args);
+                if (typeof(ICollection<>).MakeGenericType(args).IsAssignableFrom(t) && t.IsAssignableFrom(ht))
+                    return ht;
+                return null;
+            }
+            if (args.Length == 2)
+            {
+                var gt = t.GetGenericTypeDefinition();
+                if ((gt == typeof(IDictionary<,>)) || (gt == typeof(IReadOnlyDictionary<,>)))
+                    return typeof(Dictionary<,>).MakeGenericType(args);
+            }
+            return null;
+        }
 
     }
 

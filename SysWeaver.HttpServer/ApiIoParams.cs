@@ -5,6 +5,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Collections.Concurrent;
 using System.Buffers;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SysWeaver.Net
 {
@@ -64,6 +67,28 @@ namespace SysWeaver.Net
         /// A null value means the format is recognized but its deserializer isn't enabled.
         /// </summary>
         public readonly IReadOnlyDictionary<Char, IDeserializer> SerMapper;
+
+        /// <summary>
+        /// The default value of <see cref="MaxRequestSize"/> (64 MB).
+        /// </summary>
+        public const long DefaultMaxRequestSize = 64L << 20;
+
+        /// <summary>
+        /// The default value of <see cref="MaxDecompressedSize"/> (64 MB).
+        /// </summary>
+        public const long DefaultMaxDecompressedSize = 64L << 20;
+
+        /// <summary>
+        /// The maximum size in bytes of a request body (before any Content-Encoding decompression), larger bodies are rejected with a 413 response.
+        /// Zero or negative means no limit.
+        /// </summary>
+        public long MaxRequestSize { get; init; } = DefaultMaxRequestSize;
+
+        /// <summary>
+        /// The maximum size in bytes of a request body after Content-Encoding decompression, larger bodies are rejected with a 413 response.
+        /// Zero or negative means no limit.
+        /// </summary>
+        public long MaxDecompressedSize { get; init; } = DefaultMaxDecompressedSize;
 
 
         /// <summary>
@@ -328,7 +353,7 @@ namespace SysWeaver.Net
             var comp = z.Item1;
             if (comp != null)
             {
-                using var dd = comp.GetUnmanagedDecompressed(data.Span);
+                using var dd = GetDecompressed(comp, data.Span);
                 return ser.Create<T>(dd.Memory);
 
             }
@@ -398,6 +423,143 @@ namespace SysWeaver.Net
             }
             return GetText<T>(text, ser);
         }
+
+
+        #region Size limits
+
+        /// <summary>
+        /// The maximum initial capacity to allocate based on a client supplied Content-Length (or compressed size), the buffer grows as data arrives.
+        /// </summary>
+        const int MaxInitialCapacity = 64 * 1024;
+
+        static void ThrowTooLarge(long max)
+            => throw new HttpResponseException(413, String.Concat("Content Too Large - The request body exceeds the limit of ", max, " bytes [413]"));
+
+        /// <summary>
+        /// Read the entire request body into pooled memory, enforcing <see cref="MaxRequestSize"/>.
+        /// </summary>
+        /// <param name="request">The request to read the body of.</param>
+        /// <returns>The body (not decompressed), the caller must dispose it.</returns>
+        /// <exception cref="HttpResponseException">A 413 response if the Content-Length or the actual body exceeds <see cref="MaxRequestSize"/>.</exception>
+        public async Task<IUnmanagedReadOnlyMemory<Byte>> ReadRequestBodyAsync(HttpServerRequest request)
+        {
+            var max = MaxRequestSize;
+            var len = request.ReqContentLength;
+            if ((max > 0) && (len > max))
+                ThrowTooLarge(max);
+            using var ms = new ArrayPoolStream((int)Math.Clamp(len, 32, MaxInitialCapacity));
+            var input = request.InputStream;
+            if (input == null)
+                return ms.GetMemory();
+            var buf = ArrayPoolStream.Rent(16384);
+            try
+            {
+                long total = 0;
+                for (; ; )
+                {
+                    var r = await input.ReadAsync(buf.AsMemory()).ConfigureAwait(false);
+                    if (r <= 0)
+                        break;
+                    total += r;
+                    if ((max > 0) && (total > max))
+                        ThrowTooLarge(max);
+                    ms.Write(buf, 0, r);
+                }
+            }
+            finally
+            {
+                ArrayPoolStream.Return(buf);
+            }
+            return ms.GetMemory();
+        }
+
+        /// <summary>
+        /// Decompress request data into pooled memory, enforcing <see cref="MaxDecompressedSize"/> (decompression stops as soon as the limit is exceeded).
+        /// </summary>
+        /// <param name="decoder">The decoder to use.</param>
+        /// <param name="data">The compressed data.</param>
+        /// <returns>The decompressed data, the caller must dispose it.</returns>
+        /// <exception cref="HttpResponseException">A 413 response if the decompressed data exceeds <see cref="MaxDecompressedSize"/>.</exception>
+        public IUnmanagedReadOnlyMemory<Byte> GetDecompressed(ICompDecoder decoder, ReadOnlySpan<Byte> data)
+        {
+            var max = MaxDecompressedSize;
+            using var ms = new ArrayPoolStream((int)Math.Clamp((long)data.Length << 2, 4096, MaxInitialCapacity));
+            if (max <= 0)
+            {
+                decoder.Decompress(data, ms);
+            }
+            else
+            {
+                using var ls = new LimitedWriteStream(ms, max);
+                decoder.Decompress(data, ls);
+            }
+            return ms.GetMemory();
+        }
+
+        /// <summary>
+        /// A write only stream that forwards writes to another stream, throwing a 413 <see cref="HttpResponseException"/> if more than a given number of bytes are written.
+        /// </summary>
+        sealed class LimitedWriteStream : Stream
+        {
+            public LimitedWriteStream(Stream inner, long max)
+            {
+                Inner = inner;
+                Max = max;
+            }
+            readonly Stream Inner;
+            readonly long Max;
+            long Written;
+
+            void Add(int count)
+            {
+                var w = Written + count;
+                if (w > Max)
+                    ThrowTooLarge(Max);
+                Written = w;
+            }
+
+            public override bool CanRead => false;
+            public override bool CanSeek => false;
+            public override bool CanWrite => true;
+            public override long Length => Written;
+            public override long Position { get => Written; set => throw new NotSupportedException(); }
+            public override void Flush() { }
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                Add(count);
+                Inner.Write(buffer, offset, count);
+            }
+
+            public override void Write(ReadOnlySpan<byte> buffer)
+            {
+                Add(buffer.Length);
+                Inner.Write(buffer);
+            }
+
+            public override void WriteByte(byte value)
+            {
+                Add(1);
+                Inner.WriteByte(value);
+            }
+
+            public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            {
+                Add(count);
+                return Inner.WriteAsync(buffer, offset, count, cancellationToken);
+            }
+
+            public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                Add(buffer.Length);
+                return Inner.WriteAsync(buffer, cancellationToken);
+            }
+        }
+
+        #endregion//Size limits
 
     }
 

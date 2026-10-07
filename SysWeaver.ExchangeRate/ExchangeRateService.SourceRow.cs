@@ -27,7 +27,8 @@ namespace SysWeaver.ExchangeRate
                 {
                     Fails = fc;
                     LastFailAt = new DateTime(f.LastTime, DateTimeKind.Utc);
-                    LastFail = f.LastException?.Message;
+                    //  Visible to any logged in user, so sensitive information is removed
+                    LastFail = f.LastException?.SafeMessage();
                 }
                 NextUpdate = new DateTime(s.NextUpdateTick, DateTimeKind.Utc);
                 IsCurrent = s == current;

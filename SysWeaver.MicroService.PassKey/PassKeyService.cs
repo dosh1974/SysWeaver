@@ -313,7 +313,7 @@ namespace SysWeaver.MicroService
             if (auth == null)
                 return Failed;
             session.SetAuth(auth);
-            await context.Server.RunOnLogin(session).ConfigureAwait(false);
+            await context.Server.RunOnLogin(session, context).ConfigureAwait(false);
             session.InvalidateCache();
             return new AuthInfo
             {
@@ -520,7 +520,7 @@ namespace SysWeaver.MicroService
             if (doLogin)
             {
                 session.SetAuth(newAuth);
-                await context.Server.RunOnLogin(session).ConfigureAwait(false);
+                await context.Server.RunOnLogin(session, context).ConfigureAwait(false);
                 auth = newAuth;
             }
             var deviceId = session.DeviceId;

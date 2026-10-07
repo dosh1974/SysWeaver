@@ -75,7 +75,7 @@ namespace SysWeaver.MicroService
             if (auth == null)
                 return AuthInfo.Failed;
             s.SetAuth(auth);
-            await context.Server.RunOnLogin(s).ConfigureAwait(false);
+            await context.Server.RunOnLogin(s, context).ConfigureAwait(false);
             s.InvalidateCache();
             try
             {

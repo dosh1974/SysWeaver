@@ -9,7 +9,7 @@ namespace SysWeaver
     /// </summary>
     /// <remarks>
     /// The prefixes are expected to be URL's: everything up to and including the host is stripped from every prefix ("https://host/api/" becomes "/api/"),
-    /// so the texts to test should be the path part of an URL. Not used by the framework.
+    /// so the texts to test should be the path part of an URL (a prefix without "://" is used as is). Not used by the framework.
     /// </remarks>
     public static class PrefixFinder
     {
@@ -17,12 +17,12 @@ namespace SysWeaver
         /// <summary>
         /// Get the path part of an URL ("https://host/a/b" => "/a/b", "https://host" => "")
         /// </summary>
-        /// <returns>The path (starting with a '/'), an empty string if there is no path, or null if the string doesn't contain "://"</returns>
+        /// <returns>The path (starting with a '/'), an empty string if there is no path, or the string as is if it doesn't contain "://"</returns>
         static String StripPrefix(String s)
         {
             int i = s.FastIndexOf("://");
             if (i < 0)
-                return null;
+                return s;
             i = s.IndexOf('/', i + 3);
             return i < 0 ? "" : s.Substring(i);
         }
@@ -30,15 +30,15 @@ namespace SysWeaver
         /// <summary>
         /// Creates a prefix finder.
         /// If all (stripped) prefixes differs at some char position (shorter than the shortest prefix), the result is a lookup of that single char (an array lookup if the chars are within a range of 256),
-        /// else a <see cref="TernaryTree{T}"/> is used.
+        /// else the prefixes are tested in order of decreasing length (the longest matching prefix is returned).
         /// </summary>
         /// <param name="prefixes">The URL's whose path part should be matched against, ex: ["https://host/api/", "https://host/files/"] (matches "/api/" and "/files/").
-        /// Every prefix must contain "://" (or a NullReferenceException is thrown). Duplicate paths are merged</param>
+        /// A prefix without "://" is used as is (ex: "/api/"). Duplicate paths are merged</param>
         /// <param name="caseSensitive">True if the comparison should be case sensitive, else false (ASCII and invariant culture case folding)</param>
         /// <returns>A function that given a string (an URL path), returns the (stripped) prefix that it starts with.
         /// The given string must start with one of the pre-defined prefixes or the behaviour is undefined (it may return a wrong prefix, String.Empty or throw an IndexOutOfRangeException).
         /// If no prefixes are given the function always returns String.Empty, if one is given that prefix is always returned.
-        /// When a <see cref="TernaryTree{T}"/> is used and several prefixes match, the shortest one is returned</returns>
+        /// When several prefixes match, the longest one is returned</returns>
         public static Func<String, String> Create(String[] prefixes, bool caseSensitive = true)
         {
             prefixes = new HashSet<String>(prefixes.Select(x => StripPrefix(x))).ToArray();
@@ -103,36 +103,19 @@ namespace SysWeaver
                 }
             }
 
-            var tree = new TernaryTree<String>(caseSensitive);
-            foreach (var x in prefixes)
-                tree.Add(x, x);
-            return t => tree.TryFindStart(out var v, t) ? (v ?? String.Empty) : String.Empty;
-/*            var sorted = prefixes.ToArray();
+            //  Longest match first (a TernaryTree.TryFindStart returns the shortest matching prefix)
+            var sorted = prefixes.ToArray();
             Array.Sort(sorted, (a, b) => b.Length - a.Length);
-            if (caseSensitive)
-            {
-                return t =>
-                {
-                    foreach (var x in sorted)
-                    {
-                        if (t.StartsWith(x))
-                            return x;
-
-                    }
-                    return String.Empty;
-                };
-            }
+            var cmp = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
             return t =>
             {
                 foreach (var x in sorted)
                 {
-                    if (t.StartsWith(x, true, null))
+                    if (t.StartsWith(x, cmp))
                         return x;
-
                 }
                 return String.Empty;
             };
-*/
         }
 
     }

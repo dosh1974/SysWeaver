@@ -21,8 +21,8 @@ namespace SysWeaver.Compression
         /// The singleton instance of the implementation.
         /// </summary>
         /// <remarks>
-        /// The built-in implementations expose <c>Instance</c> as a static field, which does not implement this static virtual property,
-        /// so accessing it through a generic type parameter constrained to <see cref="ICompType"/> throws; use the concrete type's field instead.
+        /// The built-in implementations expose <c>Instance</c> as a static field and implement this property explicitly (returning the field),
+        /// so it can also be accessed through a generic type parameter constrained to <see cref="ICompType"/>.
         /// </remarks>
         /// <exception cref="NotImplementedException">The implementing type doesn't override this property.</exception>
         static virtual ICompType Instance { get => throw new NotImplementedException(); } 

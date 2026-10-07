@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 namespace SysWeaver.Translation
@@ -33,9 +34,53 @@ namespace SysWeaver.Translation
         /// <param name="effort">The effort (cost / time) to put into the translation</param>
         /// <param name="retention">How long to cache the translation</param>
         /// <returns>A task that completes when all members have been translated, a completed task if <typeparamref name="T"/> have nothing to translate</returns>
-        /// <remarks>Value types are passed by value, so translations of a struct <paramref name="value"/> are lost.</remarks>
+        /// <remarks>Value types are passed by value, so translations of a struct <paramref name="value"/> are lost,
+        /// use <see cref="TranslateValue{T}(ITranslator, string, T, TranslationEffort, TranslationCacheRetention)"/> or
+        /// <see cref="TranslateBoxed{T}(ITranslator, string, StrongBox{T}, TranslationEffort, TranslationCacheRetention)"/> for structs.
+        /// Struct members (and struct array elements) of a class are written back to the member.</remarks>
         public static Task Translate<T>(ITranslator tr, String to, T value, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
             => TypeTranslatorT<T>.Translate?.Invoke(tr, to, value, effort, retention) ?? Task.CompletedTask;
+
+        /// <summary>
+        /// Translate the content of a value (all members marked with <see cref="AutoTranslateAttribute"/>, recursively) and return the translated value.
+        /// For reference types the object is translated in place and returned, for value types (structs) a translated copy is returned.
+        /// </summary>
+        /// <typeparam name="T">The type of the value to translate</typeparam>
+        /// <param name="tr">The translator to use</param>
+        /// <param name="to">The target language ISO code</param>
+        /// <param name="value">The value to translate, null is ignored</param>
+        /// <param name="effort">The effort (cost / time) to put into the translation</param>
+        /// <param name="retention">How long to cache the translation</param>
+        /// <returns>The translated value (<paramref name="value"/> as is if <typeparamref name="T"/> have nothing to translate)</returns>
+        /// <remarks>
+        /// This is the by reference write back variant of <see cref="Translate{T}(ITranslator, string, T, TranslationEffort, TranslationCacheRetention)"/>:
+        /// the translation is asynchronous so a ref parameter can't be used, assign the result instead (ex: "s = await TypeTranslator.TranslateValue(tr, to, s);").
+        /// </remarks>
+        public static async Task<T> TranslateValue<T>(ITranslator tr, String to, T value, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
+        {
+            var t = TypeTranslatorT<T>.TranslateBox;
+            if (t == null)
+                return value;
+            if (value == null)
+                return value;
+            var box = new StrongBox<T>(value);
+            await t(tr, to, box, effort, retention).ConfigureAwait(false);
+            return box.Value;
+        }
+
+        /// <summary>
+        /// Translate the content of a boxed value in place (all members marked with <see cref="AutoTranslateAttribute"/>, recursively),
+        /// when the task completes <see cref="StrongBox{T}.Value"/> holds the translated value (also for value types / structs).
+        /// </summary>
+        /// <typeparam name="T">The type of the value to translate</typeparam>
+        /// <param name="tr">The translator to use</param>
+        /// <param name="to">The target language ISO code</param>
+        /// <param name="value">The box holding the value to translate, null (or a null value) is ignored</param>
+        /// <param name="effort">The effort (cost / time) to put into the translation</param>
+        /// <param name="retention">How long to cache the translation</param>
+        /// <returns>A task that completes when all members have been translated, a completed task if <typeparamref name="T"/> have nothing to translate</returns>
+        public static Task TranslateBoxed<T>(ITranslator tr, String to, StrongBox<T> value, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
+            => TypeTranslatorT<T>.TranslateBox?.Invoke(tr, to, value, effort, retention) ?? Task.CompletedTask;
 
         /// <summary>
         /// Get a value and translate it's content in place, the value is only retrieved if <typeparamref name="T"/> have something to translate
@@ -46,17 +91,18 @@ namespace SysWeaver.Translation
         /// <param name="getValue">A function that returns the value, only called if translation in needed</param>
         /// <param name="effort">The effort (cost / time) to put into the translation</param>
         /// <param name="retention">How long to cache the translation</param>
-        /// <returns>default (null) if <typeparamref name="T"/> have nothing to translate or if <paramref name="getValue"/> returned null, else the (translated) value returned by <paramref name="getValue"/></returns>
+        /// <returns>default (null) if <typeparamref name="T"/> have nothing to translate or if <paramref name="getValue"/> returned null, else the (translated) value returned by <paramref name="getValue"/> (for value types a translated copy)</returns>
         public static async Task<T> Translate<T>(ITranslator tr, String to, Func<T> getValue, TranslationEffort effort = TranslationEffort.High, TranslationCacheRetention retention = TranslationCacheRetention.Long)
         {
-            var t = TypeTranslatorT<T>.Translate;
+            var t = TypeTranslatorT<T>.TranslateBox;
             if (t == null)
                 return default;
             var value = getValue();
             if (value == null)
                 return default;
-            await t(tr, to, value, effort, retention).ConfigureAwait(false);
-            return value;
+            var box = new StrongBox<T>(value);
+            await t(tr, to, box, effort, retention).ConfigureAwait(false);
+            return box.Value;
         }
 
         /// <summary>
@@ -70,17 +116,18 @@ namespace SysWeaver.Translation
         /// <param name="retention">How long to cache the translation</param>
         /// <param name="getValue">A function that returns the value, only called if translation in needed</param>
         /// <param name="a0">Argument of the getValue function</param>
-        /// <returns>default (null) if <typeparamref name="T"/> have nothing to translate or if <paramref name="getValue"/> returned null, else the (translated) value returned by <paramref name="getValue"/></returns>
+        /// <returns>default (null) if <typeparamref name="T"/> have nothing to translate or if <paramref name="getValue"/> returned null, else the (translated) value returned by <paramref name="getValue"/> (for value types a translated copy)</returns>
         public static async Task<T> Translate<T, A0>(ITranslator tr, String to, TranslationEffort effort, TranslationCacheRetention retention, Func<A0, T> getValue, A0 a0)
         {
-            var t = TypeTranslatorT<T>.Translate;
+            var t = TypeTranslatorT<T>.TranslateBox;
             if (t == null)
                 return default;
             var value = getValue(a0);
             if (value == null)
                 return default;
-            await t(tr, to, value, effort, retention).ConfigureAwait(false);
-            return value;
+            var box = new StrongBox<T>(value);
+            await t(tr, to, box, effort, retention).ConfigureAwait(false);
+            return box.Value;
         }
 
         /// <summary>
@@ -96,17 +143,18 @@ namespace SysWeaver.Translation
         /// <param name="getValue">A function that returns the value, only called if translation in needed</param>
         /// <param name="a0">First argument of the getValue function</param>
         /// <param name="a1">Second argument of the getValue function</param>
-        /// <returns>default (null) if <typeparamref name="T"/> have nothing to translate or if <paramref name="getValue"/> returned null, else the (translated) value returned by <paramref name="getValue"/></returns>
+        /// <returns>default (null) if <typeparamref name="T"/> have nothing to translate or if <paramref name="getValue"/> returned null, else the (translated) value returned by <paramref name="getValue"/> (for value types a translated copy)</returns>
         public static async Task<T> Translate<T, A0, A1>(ITranslator tr, String to, TranslationEffort effort, TranslationCacheRetention retention, Func<A0, A1, T> getValue, A0 a0, A1 a1)
         {
-            var t = TypeTranslatorT<T>.Translate;
+            var t = TypeTranslatorT<T>.TranslateBox;
             if (t == null)
                 return default;
             var value = getValue(a0, a1);
             if (value == null)
                 return default;
-            await t(tr, to, value, effort, retention).ConfigureAwait(false);
-            return value;
+            var box = new StrongBox<T>(value);
+            await t(tr, to, box, effort, retention).ConfigureAwait(false);
+            return box.Value;
         }
 
         /// <summary>
@@ -346,6 +394,39 @@ namespace SysWeaver.Translation
             => TypeTranslatorT<T>.Translate;
 
         internal static readonly MethodInfo GetFuncMethod = typeof(TypeTranslator).GetMethod(nameof(GetFunc), BindingFlags.Static | BindingFlags.NonPublic);
+
+        static Func<ITranslator, String, StrongBox<T>, TranslationEffort, TranslationCacheRetention, Task> GetBoxFunc<T>()
+            => TypeTranslatorT<T>.TranslateBox;
+
+        internal static readonly MethodInfo GetBoxFuncMethod = typeof(TypeTranslator).GetMethod(nameof(GetBoxFunc), BindingFlags.Static | BindingFlags.NonPublic);
+
+        /// <summary>
+        /// Translate a (struct) value in a box and write the translated value back using <paramref name="save"/> when all translations completed.
+        /// </summary>
+        static async Task TranslateStruct<T>(Func<ITranslator, String, StrongBox<T>, TranslationEffort, TranslationCacheRetention, Task> fn, ITranslator tr, String to, T value, TranslationEffort effort, TranslationCacheRetention retention, Action<T> save)
+        {
+            if (fn == null)
+                return;
+            var box = new StrongBox<T>(value);
+            await fn(tr, to, box, effort, retention).ConfigureAwait(false);
+            save(box.Value);
+        }
+
+        internal static readonly MethodInfo TranslateStructMethod = typeof(TypeTranslator).GetMethod(nameof(TranslateStruct), BindingFlags.Static | BindingFlags.NonPublic);
+
+        /// <summary>
+        /// Translate a (struct) array element in a box and write the translated value back to the array element when all translations completed.
+        /// </summary>
+        internal static async Task TranslateArrayElement<T>(Func<ITranslator, String, StrongBox<T>, TranslationEffort, TranslationCacheRetention, Task> fn, ITranslator tr, String to, T[] array, int index, TranslationEffort effort, TranslationCacheRetention retention)
+        {
+            if (fn == null)
+                return;
+            var box = new StrongBox<T>(array[index]);
+            await fn(tr, to, box, effort, retention).ConfigureAwait(false);
+            array[index] = box.Value;
+        }
+
+        internal static readonly MethodInfo TranslateArrayElementMethod = typeof(TypeTranslator).GetMethod(nameof(TranslateArrayElement), BindingFlags.Static | BindingFlags.NonPublic);
 
         /// <summary>
         /// Translation context added for members marked with <see cref="AutoTranslateTypeAttribute"/> using <see cref="TranslatorTypes.MD"/>.

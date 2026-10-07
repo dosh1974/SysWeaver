@@ -16,7 +16,7 @@ namespace SysWeaver
     /// <para>Not referenced directly: <see cref="PlatformTools.Current"/> loads it by name ("SysWeaver.LinuxPlatformTools, SysWeaver.Common.Linux") when running on Linux,
     /// so the assembly only needs to be deployed with the application.</para>
     /// <para>Uses /etc/*-release for the OS name, /proc/meminfo for memory and the output of "top -b -n 1" for CPU usage.
-    /// <see cref="FlushToDisc(SafeHandle)"/> and <see cref="MakeDirectoryAccessableToEveryOne(string)"/> are no-ops.</para>
+    /// <see cref="FlushToDisc(SafeHandle)"/> is a no-op. <see cref="MakeDirectoryAccessableToEveryOne(string)"/> uses mode bits and POSIX default ACL's (setfacl).</para>
     /// <para>Failures are counted in an <see cref="ExceptionTracker"/> exposed through <see cref="GetStats"/>.</para>
     /// </remarks>
     public sealed class LinuxPlatformTools : IPlatformTools
@@ -161,11 +161,144 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Not implemented on Linux: does nothing.
+        /// Make a directory, everything in it and everything created in it later, readable and writable by all users
+        /// (mimics the Windows implementation that grants "Everyone" full control, inherited by all files and sub directories).
+        /// This makes files and folders created by a service (ex: running as root) modifiable by users and vice versa.
         /// </summary>
-        /// <param name="directoryName">The directory (ignored).</param>
-        /// <returns>Always null (reported as success).</returns>
-        public Exception MakeDirectoryAccessableToEveryOne(String directoryName) => null;
+        /// <param name="directoryName">The full path to the directory.</param>
+        /// <returns>null if successful, else the exception that occurred (also tracked in the stats).</returns>
+        /// <remarks>
+        /// <para>The directory and all existing files and sub directories (recursively) get read and write access for owner, group and others (like "chmod -R a+rwX"):
+        /// directories get rwx for all and the setgid bit (so new entries inherit the group), files keep their execute bits
+        /// (if any execute bit is set, it's set for all).
+        /// Entries that already have the required bits aren't touched. Symbolic links are skipped (never followed).
+        /// The sticky bit is never set, so users can modify and delete each others files.</para>
+        /// <para>Files and directories created later (by any user, regardless of their umask) are made modifiable by everyone using POSIX default ACL's:
+        /// "setfacl -R -P -d -m u::rwx,g::rwx,o::rwx,m::rwx" is run on the directory (new files get rw for all, new directories rwx for all and the same default ACL).
+        /// If setfacl isn't installed (package "acl") or fails (ex: the file system doesn't support ACL's), the mode bits (and setgid) are still applied,
+        /// but an exception describing the problem is returned (files created later then get the permissions given by the creator's umask).</para>
+        /// <para>Only the owner of an entry (or root) may change its permissions, entries that can't be changed are reported in the returned exception (the rest is still processed).</para>
+        /// <para>A directory that was successfully set up (including the default ACL) is remembered for the lifetime of the process,
+        /// calling it again for that directory or any directory inside it returns null without doing anything.</para>
+        /// <para>Granting everyone write access makes the folder writable by any local user, only use it for data that isn't security sensitive.</para>
+        /// </remarks>
+        public Exception MakeDirectoryAccessableToEveryOne(String directoryName)
+        {
+            try
+            {
+                var fullName = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directoryName));
+                //  Already done (default ACL's are inherited by new sub directories)?
+                var done = DoneDirs;
+                for (var p = fullName; p != null; p = Path.GetDirectoryName(p))
+                    if (done.ContainsKey(p))
+                        return null;
+                var di = new DirectoryInfo(fullName);
+                if (!di.Exists)
+                    throw new DirectoryNotFoundException("The directory \"" + fullName + "\" doesn't exist!");
+                if (di.LinkTarget != null)
+                    throw new IOException("The directory \"" + fullName + "\" is a symbolic link, refusing to change permissions!");
+                List<Exception> errors = null;
+                SetAllAccess(di, true, ref errors);
+                foreach (var x in di.EnumerateFileSystemInfos("*", AllEntries))
+                {
+                    if ((x.Attributes & FileAttributes.ReparsePoint) != 0)
+                        continue;
+                    SetAllAccess(x, x is DirectoryInfo, ref errors);
+                }
+                var aclError = SetDefaultAcl(fullName);
+                if (aclError != null)
+                    (errors ??= new List<Exception>()).Add(aclError);
+                if (errors == null)
+                {
+                    done.TryAdd(fullName, 0);
+                    return null;
+                }
+                var ex = errors.Count == 1 ? errors[0] : new AggregateException("Failed to make \"" + fullName + "\" accessible to everyone", errors);
+                Exs.OnException(ex);
+                return ex;
+            }
+            catch (Exception ex)
+            {
+                Exs.OnException(ex);
+                return ex;
+            }
+        }
+
+        static readonly LowAllocConcurrentDictionary<String, int> DoneDirs = new(StringComparer.Ordinal);
+
+        static readonly EnumerationOptions AllEntries = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+            ReturnSpecialDirectories = false,
+            MatchType = MatchType.Simple,
+        };
+
+        const UnixFileMode AllRw = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.OtherRead | UnixFileMode.OtherWrite;
+        const UnixFileMode AllX = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
+
+#pragma warning disable CA1416 // Only used on Linux
+        static void SetAllAccess(FileSystemInfo x, bool isDir, ref List<Exception> errors)
+        {
+            try
+            {
+                var m = x.UnixFileMode;
+                var n = m | AllRw;
+                if (isDir)
+                    n |= AllX | UnixFileMode.SetGroup;
+                else if ((m & AllX) != 0)
+                    n |= AllX;
+                if (n == m)
+                    return;
+                //  Never follow symbolic links (could point anywhere)
+                if (x.LinkTarget != null)
+                    return;
+                x.UnixFileMode = n;
+            }
+            catch (Exception ex)
+            {
+                (errors ??= new List<Exception>()).Add(ex);
+            }
+        }
+#pragma warning restore CA1416
+
+        static readonly String SetFaclPath = new[] { "/usr/bin/setfacl", "/bin/setfacl", "/usr/local/bin/setfacl", "/usr/sbin/setfacl", "/sbin/setfacl" }.FirstOrDefault(File.Exists);
+
+        static Exception SetDefaultAcl(String dir)
+        {
+            var exe = SetFaclPath;
+            if (exe == null)
+                return new PlatformNotSupportedException("The \"setfacl\" tool (package \"acl\") isn't installed, the permissions of \"" + dir + "\" and it's content was updated, but files and folders created later in it will get the permissions given by the creator's umask!");
+            try
+            {
+                var pi = new ProcessStartInfo(exe);
+                //  -R: recursive, -P: don't follow symbolic links, -d: default ACL (only applies to directories)
+                pi.ArgumentList.Add("-R");
+                pi.ArgumentList.Add("-P");
+                pi.ArgumentList.Add("-d");
+                pi.ArgumentList.Add("-m");
+                pi.ArgumentList.Add("u::rwx,g::rwx,o::rwx,m::rwx");
+                pi.ArgumentList.Add("--");
+                pi.ArgumentList.Add(dir);
+                pi.UseShellExecute = false;
+                pi.RedirectStandardOutput = true;
+                pi.RedirectStandardError = true;
+                pi.Environment["LC_ALL"] = "C";
+                using var process = Process.Start(pi);
+                var errTask = process.StandardError.ReadToEndAsync();
+                process.StandardOutput.ReadToEnd();
+                var err = errTask.GetAwaiter().GetResult();
+                process.WaitForExit();
+                if (process.ExitCode == 0)
+                    return null;
+                return new IOException(String.Concat("Failed to set the default ACL of \"", dir, "\" (exit code ", process.ExitCode.ToString(CultureInfo.InvariantCulture), "), files and folders created later in it may get the permissions given by the creator's umask: ", err?.Trim()));
+            }
+            catch (Exception ex)
+            {
+                return new IOException("Failed to run \"" + exe + "\" to set the default ACL of \"" + dir + "\", files and folders created later in it will get the permissions given by the creator's umask: " + ex.Message, ex);
+            }
+        }
 
         /// <summary>
         /// Gets the total CPU usage by running "top -b -n 1" through /bin/bash and parsing the idle value of the "%Cpu(s):" line.

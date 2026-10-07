@@ -35,23 +35,20 @@ namespace SysWeaver
         {
             get
             {
+                //  The name, seed and colors are cached together in a single field, so a reader can never combine new name / seed with old colors
                 var c = InternalAppCols;
                 var seed = EnvInfo.AppSeed;
                 var name = EnvInfo.AppName;
                 if (c != null)
-                    if ((name == InternalAppName) && (seed == InternalAppSeed))
-                        return c;
-                c = new HashColors(name, seed);
-                InternalAppCols = c;
-                InternalAppName = name;
-                InternalAppSeed = seed;
-                return c;
+                    if ((name == c.Item1) && (seed == c.Item2))
+                        return c.Item3;
+                var cols = new HashColors(name, seed);
+                InternalAppCols = Tuple.Create(name, seed, cols);
+                return cols;
             }
         }
 
-        volatile static HashColors InternalAppCols;
-        volatile static String InternalAppName;
-        volatile static int InternalAppSeed;
+        volatile static Tuple<String, int, HashColors> InternalAppCols;
 
         /// <summary>
         /// The random theme properties (hues and saturation) derived from a seed

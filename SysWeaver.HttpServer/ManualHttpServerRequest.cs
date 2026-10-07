@@ -38,6 +38,22 @@ namespace SysWeaver.Net
         }
 
         /// <summary>
+        /// Create a request with a raw url that differs from the decoded url (as a listener would).
+        /// </summary>
+        /// <param name="httpMethod">The http method, ex: "GET"</param>
+        /// <param name="rawUrl">The absolute url as received (not url decoded, no "index.html" inserted), see <see cref="HttpServerRequest.RawUrl"/>, null to use the url</param>
+        /// <param name="url">The absolute (decoded) url</param>
+        /// <param name="prefix">The prefix of the url (from <see cref="HttpServerBase.GetHost"/>)</param>
+        /// <param name="server">The server</param>
+        /// <param name="host">The host</param>
+        /// <param name="queryStart">The index of the '?' in the url, -1 if there is no query string</param>
+        /// <param name="didIndex">True if "index.html" was added to the url</param>
+        public ManualHttpServerRequest(String httpMethod, String rawUrl, String url, String prefix, HttpServerBase server, HttpServerHostInfo host, int queryStart, bool didIndex = false)
+            : base(httpMethod, rawUrl ?? url, url, prefix, server, host, queryStart, didIndex)
+        {
+        }
+
+        /// <summary>
         /// Dispose the custom data, the input stream and the output stream.
         /// </summary>
         public override void Dispose()

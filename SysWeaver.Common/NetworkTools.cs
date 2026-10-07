@@ -15,27 +15,48 @@ namespace SysWeaver
     /// </summary>
     public static class NetworkTools
     {
-        static readonly IReadOnlySet<String> ValidIpStarts = ReadOnlyData.Set(StringComparer.Ordinal,
-                "192", "172", "10"
-            );
+        /// <summary>
+        /// Check if an ip address is a private (LAN) IPv4 address, i.e in one of the private ranges 10/8, 172.16/12 or 192.168/16 (RFC 1918).
+        /// </summary>
+        /// <param name="addr">The ip address to check</param>
+        /// <returns>True if the address is a private IPv4 address, false for anything else (null, IPv6, link local, loopback, public addresses etc)</returns>
+        static bool IsPrivateIPv4(IPAddress addr)
+        {
+            if (addr == null)
+                return false;
+            if (addr.AddressFamily != AddressFamily.InterNetwork)
+                return false;
+            Span<Byte> bytes = stackalloc Byte[16];
+            if (!addr.TryWriteBytes(bytes, out var len))
+                return false;
+            var b0 = bytes[0];
+            //  Class A network
+            if (b0 == 10)
+                return true;
+            //  Class B network
+            if ((b0 == 172) && (bytes[1] >= 16) && (bytes[1] <= 31))
+                return true;
+            //  Class C network
+            return (b0 == 192) && (bytes[1] == 168);
+        }
 
         /// <summary>
-        /// Get the first valid LAN ip found (an IPv4 address of the local machine where the first number is 192, 172 or 10)
+        /// Get the first valid LAN ip found (a private IPv4 address of the local machine, i.e in 10/8, 172.16/12 or 192.168/16)
         /// </summary>
         /// <param name="mustStartWith">If not null or empty, the first number in the IP must match this, valid values are: "192", "172", "10" (any other value will always return null)</param>
         /// <returns>The first LAN ip (in the order of <see cref="GetLocalIps"/>) or null if no LAN ip is found</returns>
         /// <exception cref="NetworkInformationException">If the network interfaces can't be enumerated</exception>
+        /// <remarks>Public addresses (ex: 172.217.x.x or 192.0.2.x) are never considered LAN ip's</remarks>
         public static IPAddress GetAnyLanIP(String mustStartWith = null)
         {
-            var validIpStarts = ValidIpStarts;
             foreach (var x in GetLocalIps())
             {
                 try
                 {
-                    var part = x.ToString().Split('.')[0];
-                    if (validIpStarts.Contains(part))
-                        if (String.IsNullOrEmpty(mustStartWith) || (mustStartWith == part))
-                            return x;
+                    if (!IsPrivateIPv4(x))
+                        continue;
+                    if (String.IsNullOrEmpty(mustStartWith) || (mustStartWith == x.ToString().Split('.')[0]))
+                        return x;
                 }
                 catch
                 {
@@ -45,19 +66,19 @@ namespace SysWeaver
         }
 
         /// <summary>
-        /// Get all LAN ip's (the IPv4 addresses of the local machine where the first number is 192, 172 or 10)
+        /// Get all LAN ip's (the private IPv4 addresses of the local machine, i.e in 10/8, 172.16/12 or 192.168/16)
         /// </summary>
         /// <returns>All LAN ip's (in the order of <see cref="GetLocalIps"/>), an empty list if no LAN ip is found (never null)</returns>
         /// <exception cref="NetworkInformationException">If the network interfaces can't be enumerated</exception>
+        /// <remarks>Public addresses (ex: 172.217.x.x or 192.0.2.x) are never considered LAN ip's</remarks>
         public static List<IPAddress> GetAllLanIps()
         {
-            var validIpStarts = ValidIpStarts;
             List<IPAddress> ips = new List<IPAddress>();
             foreach (var x in GetLocalIps())
             {
                 try
                 {
-                    if (validIpStarts.Contains(x.ToString().Split('.')[0]))
+                    if (IsPrivateIPv4(x))
                         ips.Add(x);
                 }
                 catch
@@ -181,16 +202,8 @@ namespace SysWeaver
                 if (!addr.TryWriteBytes(bytes, out var len))
                     throw new InvalidOperationException("Failed to get the bytes of the ip address " + addr);
                 var b0 = bytes[0];
-                if (b0 == 10)
-                {   // Class A network
-                    return false;
-                }
-                else if (b0 == 172 && bytes[1] >= 16 && bytes[1] <= 31)
-                {   // Class B network
-                    return false;
-                }
-                else if (b0 == 192 && bytes[1] == 168)
-                {   // Class C network
+                if (IsPrivateIPv4(addr))
+                {   // Private network (10/8, 172.16/12, 192.168/16)
                     return false;
                 }
                 else if ((b0 == 169 && bytes[1] == 254) || b0 == 0)

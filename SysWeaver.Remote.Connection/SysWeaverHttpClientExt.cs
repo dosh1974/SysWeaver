@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -318,7 +319,8 @@ namespace SysWeaver
             var count = info.Length;
             if (count <= 0)
                 return false;
-            urlbase = urlbase + "upload/Upload?repo=" + repo;
+            //  Values are escaped (the server decodes them), plain names produce the exact same request as before
+            urlbase = urlbase + "upload/Upload?repo=" + Uri.EscapeDataString(repo);
             await info.Where(f => f.Status == FileStatus.Upload).ProcessAsync(async f => f.Status = await UploadOne(client, urlbase, f).ConfigureAwait(false)).ConfigureAwait(false);
             return true;
         }
@@ -360,7 +362,11 @@ namespace SysWeaver
                 var s = new StreamContent(fs);
                 s.Headers.ContentLength = fi.Length;
                 s.Headers.ContentType = Mt;
-                baseUrl = String.Concat(baseUrl, "&name=", fi.Name, "&length=" + fi.Length + "&hash=" + fi.Hash + "&time=" + fi.LastModified);
+                baseUrl = String.Concat(baseUrl,
+                    "&name=", Uri.EscapeDataString(fi.Name),
+                    "&length=" + fi.Length.ToString(CultureInfo.InvariantCulture),
+                    "&hash=" + Uri.EscapeDataString(fi.Hash),
+                    "&time=" + fi.LastModified.ToString(CultureInfo.InvariantCulture));
                 using var res = await client.PostAsync(baseUrl, s).ConfigureAwait(false);
                 if (res.StatusCode != System.Net.HttpStatusCode.OK)
                     return FileStatus.UploadFailed;

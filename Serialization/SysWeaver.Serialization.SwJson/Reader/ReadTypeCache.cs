@@ -20,7 +20,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
     /// <remarks>
     /// The reader expression depends on the type: numbers, dates, <see cref="Guid"/> and <see cref="Boolean"/> use <see cref="SpanParsers"/> (date/time types and <see cref="Guid"/> must be quoted),
     /// strings, <see cref="Char"/>, <see cref="Byte"/> arrays and <see cref="Object"/> are special cased, then enums, arrays, generic collections with one type argument, nullable value types,
-    /// reference types (including dictionaries) and finally other value types.
+    /// <see cref="IEnumerable{T}"/> types that aren't collections (see <see cref="GetEnumerableElementType"/>), reference types (including dictionaries) and finally other value types.
     /// </remarks>
     sealed class ReadTypeCache
     {
@@ -85,6 +85,18 @@ namespace SysWeaver.Serialization.SwJson.Reader
                                 return cv;
                             }
                         }
+                    }
+                }
+                {
+                    //  IEnumerable<T> that isn't a collection (like Queue<T>, Stack<T> or a member declared as IEnumerable<T>), the writer writes them as json arrays
+                    var et = GetEnumerableElementType(t);
+                    if (et != null)
+                    {
+                        var f = Expression.Call(MethodCreateEnumerable.MakeGenericMethod(et, t), TempCall);
+                        cv = new ReadTypeCache(t, f);
+                        cache.TryAdd(t, cv);
+                        Get(et);
+                        return cv;
                     }
                 }
                 if (!(t.IsPrimitive || t.IsValueType))
@@ -183,8 +195,8 @@ namespace SysWeaver.Serialization.SwJson.Reader
             if (v.Type != typeof(object))
                 v = Expression.Convert(v, typeof(object));
             Create = Expression.Lambda<Creator>(v, ParState, ParEndOn).Compile();
-            if (t.GetConstructor(BindingFlags.Instance | BindingFlags.Public, null, Type.EmptyTypes, null) != null)
-                Cp = Expression.Lambda<CreateAndPopulateDel>(Expression.Call(MethodNewAndPopulate.MakeGenericMethod(t), ParHeader, ParState, ParEndOn), ParHeader, ParState, ParEndOn).Compile();
+            if (t.IsValueType || (t.GetConstructor(BindingFlags.Instance | BindingFlags.Public, null, Type.EmptyTypes, null) != null))
+                Cp = MakeCreateAndPopulate(t);
 #if VERBOSE
                 }
                 catch (Exception ex)
@@ -211,8 +223,8 @@ namespace SysWeaver.Serialization.SwJson.Reader
             if (v.Type != typeof(object))
                 v = Expression.Convert(v, typeof(object));
             Create = Expression.Lambda<Creator>(v, ParState, ParEndOn).Compile();
-            if (t.GetConstructor(BindingFlags.Instance | BindingFlags.Public, null, Type.EmptyTypes, null) != null)
-                Cp = Expression.Lambda<CreateAndPopulateDel>(Expression.Call(MethodNewAndPopulate.MakeGenericMethod(t), ParHeader, ParState, ParEndOn), ParHeader, ParState, ParEndOn).Compile();
+            if (t.IsValueType || (t.GetConstructor(BindingFlags.Instance | BindingFlags.Public, null, Type.EmptyTypes, null) != null))
+                Cp = MakeCreateAndPopulate(t);
 #if VERBOSE
                 }
                 catch (Exception ex)
@@ -231,10 +243,21 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// </summary>
         public readonly Creator Create;
         /// <summary>
-        /// Create and populate an instance given the first member name, null if the type has no public parameterless constructor.
+        /// Create and populate an instance given the first member name, null if the type is a reference type without a public parameterless constructor (value types are created with default).
         /// Used when <c>"$type"</c> names a different type than the declared one.
         /// </summary>
         public readonly CreateAndPopulateDel Cp;
+
+        /// <summary>
+        /// Build <see cref="Cp"/>: <see cref="JsonReader.NewAndPopulate{T}"/> for the type, boxed.
+        /// </summary>
+        static CreateAndPopulateDel MakeCreateAndPopulate(Type t)
+        {
+            Expression call = Expression.Call(MethodNewAndPopulate.MakeGenericMethod(t), ParHeader, ParState, ParEndOn);
+            if (t.IsValueType)
+                call = Expression.Convert(call, typeof(Object));
+            return Expression.Lambda<CreateAndPopulateDel>(call, ParHeader, ParState, ParEndOn).Compile();
+        }
 
         static readonly Type JsonReaderType = typeof(JsonReader);
         static readonly MethodInfo EnumParse = Helper.SafeGetMethod(typeof(Enum), nameof(Enum.Parse), [typeof(Type), typeof(string)]);
@@ -244,6 +267,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
 
         static readonly MethodInfo MethodCreateArray = Helper.SafeGetMethod(JsonReaderType, nameof(JsonReader.CreateArray), BindingFlags.Static | BindingFlags.NonPublic);
         static readonly MethodInfo MethodCreateCollection = Helper.SafeGetMethod(JsonReaderType, nameof(JsonReader.CreateCollection), BindingFlags.Static | BindingFlags.NonPublic);
+        static readonly MethodInfo MethodCreateEnumerable = Helper.SafeGetMethod(JsonReaderType, nameof(JsonReader.CreateEnumerable), BindingFlags.Static | BindingFlags.NonPublic);
         static readonly MethodInfo MethodCreateNullableObject = Helper.SafeGetMethod(JsonReaderType, nameof(JsonReader.CreateNullableObject), BindingFlags.Static | BindingFlags.NonPublic);
         static readonly MethodInfo MethodCreateSealedNullableObject = Helper.SafeGetMethod(JsonReaderType, nameof(JsonReader.CreateSealedNullableObject), BindingFlags.Static | BindingFlags.NonPublic);
         static readonly MethodInfo MethodCreateStruct = Helper.SafeGetMethod(JsonReaderType, nameof(JsonReader.CreateStruct), BindingFlags.Static | BindingFlags.NonPublic);
@@ -355,6 +379,45 @@ namespace SysWeaver.Serialization.SwJson.Reader
             if (at.Length == 2)
                 return typeof(KeyValuePair<,>).MakeGenericType(at);
             throw new Exception("Unknown collection type");
+        }
+
+        /// <summary>
+        /// The element type of a reference type that is read using <see cref="JsonReader.CreateEnumerable{T, C}"/>:
+        /// <see cref="IEnumerable{T}"/> itself, or a type implementing <see cref="IEnumerable{T}"/> (the first one) but not <see cref="ICollection{T}"/> or <see cref="IDictionary{TKey, TValue}"/>,
+        /// without serialized members (public read / write properties or public non readonly fields), the same rule as the writer uses.
+        /// </summary>
+        /// <param name="t">The type</param>
+        /// <returns>The element type, or null if the type isn't read as an enumerable</returns>
+        static Type GetEnumerableElementType(Type t)
+        {
+            if (t.IsValueType || t.IsArray || (t == typeof(String)))
+                return null;
+            Type et = null;
+            if (t.IsInterface && t.IsGenericType && (t.GetGenericTypeDefinition() == typeof(IEnumerable<>)))
+                et = t.GetGenericArguments()[0];
+            foreach (var i in t.GetInterfaces())
+            {
+                if (!i.IsGenericType)
+                    continue;
+                var gt = i.GetGenericTypeDefinition();
+                if ((gt == typeof(ICollection<>)) || (gt == typeof(IDictionary<,>)))
+                    return null;
+                if ((et == null) && (gt == typeof(IEnumerable<>)))
+                    et = i.GetGenericArguments()[0];
+            }
+            if (et == null)
+                return null;
+            //  Types with serialized members are written (and read) as objects
+            foreach (var m in t.GetMembers(BindingFlags.Instance | BindingFlags.Public))
+            {
+                var p = m as PropertyInfo;
+                if ((p != null) && p.CanRead && p.CanWrite && (p.GetIndexParameters().Length == 0))
+                    return null;
+                var f = m as FieldInfo;
+                if ((f != null) && !f.IsInitOnly)
+                    return null;
+            }
+            return et;
         }
 
 

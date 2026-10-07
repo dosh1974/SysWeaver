@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -119,7 +120,7 @@ namespace SysWeaver
         /// <remarks>
         /// Member names are matched case sensitively. Read only properties, init only fields and members marked with <see cref="ConfigIgnoreAttribute"/> are skipped.
         /// Only primitive numeric types, <see cref="String"/>, <see cref="Boolean"/>, <see cref="Decimal"/> and single dimension arrays of those are supported, other members are silently ignored.
-        /// Values that can't be converted to the member type are ignored. Strings are converted to numbers using the current culture.
+        /// Values that can't be converted to the member type are ignored. Strings are converted to numbers using the invariant culture ('.' as the decimal separator, no thousands separators, ex: "1.5", "-3", "1e5").
         /// </remarks>
         public static void ApplyConfig(Type ct, object config, String filename, String comment = null)
         {
@@ -449,6 +450,17 @@ namespace SysWeaver
             { typeof(String[]), (k, d, s) => TryParseArray<String>(k, d, out var v) && s(v) },
             { typeof(Boolean[]), (k, d, s) => TryParseArray<Boolean>(k, d, out var v) && s(v) },
         }.Freeze();
+
+        /// <summary>
+        /// Number styles used when an integer is given as a string (culture independent).
+        /// </summary>
+        const NumberStyles IntegerStyles = NumberStyles.Integer;
+
+        /// <summary>
+        /// Number styles used when a floating point / decimal number is given as a string (culture independent, no thousands separators so that "1,5" fails instead of becoming 15).
+        /// </summary>
+        const NumberStyles FloatStyles = NumberStyles.Float;
+
         static bool TryParseString(JsonValueKind kind, Object data, out String value)
         {
             value = kind == JsonValueKind.Null ? null : data.ToString();
@@ -473,7 +485,7 @@ namespace SysWeaver
         {
             value = default;
             if (kind != JsonValueKind.Number)
-                return kind == JsonValueKind.String ? Int32.TryParse((data as String)?.Trim() ?? "", out value) : false;
+                return kind == JsonValueKind.String ? Int32.TryParse((data as String)?.Trim() ?? "", IntegerStyles, CultureInfo.InvariantCulture, out value) : false;
             var valType = data.GetType();
             if (valType == typeof(Decimal))
             {
@@ -511,7 +523,7 @@ namespace SysWeaver
         {
             value = default;
             if (kind != JsonValueKind.Number)
-                return kind == JsonValueKind.String ? UInt32.TryParse((data as String)?.Trim() ?? "", out value) : false;
+                return kind == JsonValueKind.String ? UInt32.TryParse((data as String)?.Trim() ?? "", IntegerStyles, CultureInfo.InvariantCulture, out value) : false;
             var valType = data.GetType();
             if (valType == typeof(Decimal))
             {
@@ -549,7 +561,7 @@ namespace SysWeaver
         {
             value = default;
             if (kind != JsonValueKind.Number)
-                return kind == JsonValueKind.String ? Int64.TryParse((data as String)?.Trim() ?? "", out value) : false;
+                return kind == JsonValueKind.String ? Int64.TryParse((data as String)?.Trim() ?? "", IntegerStyles, CultureInfo.InvariantCulture, out value) : false;
             var valType = data.GetType();
             if (valType == typeof(Decimal))
             {
@@ -583,7 +595,7 @@ namespace SysWeaver
         {
             value = default;
             if (kind != JsonValueKind.Number)
-                return kind == JsonValueKind.String ? UInt64.TryParse((data as String)?.Trim() ?? "", out value) : false;
+                return kind == JsonValueKind.String ? UInt64.TryParse((data as String)?.Trim() ?? "", IntegerStyles, CultureInfo.InvariantCulture, out value) : false;
             var valType = data.GetType();
             if (valType == typeof(Decimal))
             {
@@ -616,7 +628,7 @@ namespace SysWeaver
         {
             value = default;
             if (kind != JsonValueKind.Number)
-                return kind == JsonValueKind.String ? Decimal.TryParse((data as String)?.Trim() ?? "", out value) : false;
+                return kind == JsonValueKind.String ? Decimal.TryParse((data as String)?.Trim() ?? "", FloatStyles, CultureInfo.InvariantCulture, out value) : false;
             var valType = data.GetType();
             if (valType == typeof(Decimal))
             {
@@ -642,7 +654,7 @@ namespace SysWeaver
         {
             value = default;
             if (kind != JsonValueKind.Number)
-                return kind == JsonValueKind.String ? Double.TryParse((data as String)?.Trim() ?? "", out value) : false;
+                return kind == JsonValueKind.String ? Double.TryParse((data as String)?.Trim() ?? "", FloatStyles, CultureInfo.InvariantCulture, out value) : false;
             var valType = data.GetType();
             if (valType == typeof(Decimal))
             {
@@ -669,7 +681,7 @@ namespace SysWeaver
         {
             value = default;
             if (kind != JsonValueKind.Number)
-                return kind == JsonValueKind.String ? Single.TryParse((data as String)?.Trim() ?? "", out value) : false;
+                return kind == JsonValueKind.String ? Single.TryParse((data as String)?.Trim() ?? "", FloatStyles, CultureInfo.InvariantCulture, out value) : false;
             var valType = data.GetType();
             if (valType == typeof(Decimal))
             {
@@ -766,7 +778,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Try to get a config value as a 32-bit signed integer.
-        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the invariant culture.
         /// </summary>
         /// <param name="key">The config key (case insensitive).</param>
         /// <param name="value">The value, or the default value if not found or not convertible.</param>
@@ -789,7 +801,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Try to get a config value as a 32-bit unsigned integer.
-        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the invariant culture.
         /// </summary>
         /// <param name="key">The config key (case insensitive).</param>
         /// <param name="value">The value, or the default value if not found or not convertible.</param>
@@ -812,7 +824,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Try to get a config value as a 64-bit signed integer.
-        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the invariant culture.
         /// </summary>
         /// <param name="key">The config key (case insensitive).</param>
         /// <param name="value">The value, or the default value if not found or not convertible.</param>
@@ -835,7 +847,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Try to get a config value as a 64-bit unsigned integer.
-        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the invariant culture.
         /// </summary>
         /// <param name="key">The config key (case insensitive).</param>
         /// <param name="value">The value, or the default value if not found or not convertible.</param>
@@ -858,7 +870,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Try to get a config value as a decimal.
-        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the invariant culture.
         /// </summary>
         /// <param name="key">The config key (case insensitive).</param>
         /// <param name="value">The value, or the default value if not found or not convertible.</param>
@@ -881,7 +893,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Try to get a config value as a double precision floating point.
-        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the invariant culture.
         /// </summary>
         /// <param name="key">The config key (case insensitive).</param>
         /// <param name="value">The value, or the default value if not found or not convertible.</param>
@@ -904,7 +916,7 @@ namespace SysWeaver
 
         /// <summary>
         /// Try to get a config value as a single precision floating point.
-        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the current culture.
+        /// JSON numbers must be in range (and integral for integer types), strings are parsed using the invariant culture.
         /// </summary>
         /// <param name="key">The config key (case insensitive).</param>
         /// <param name="value">The value, or the default value if not found or not convertible.</param>

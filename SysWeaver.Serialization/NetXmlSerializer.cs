@@ -13,7 +13,8 @@ namespace SysWeaver.Serialization
     /// <remarks>
     /// The usual <see cref="XmlSerializer"/> restrictions apply: types must be public with a public parameterless constructor and only public read/write members are serialized.
     /// The <see cref="SerializerOptions"/> are ignored (output is always indented).
-    /// <see cref="ToString{T}(T, SerializerOptions)"/> writes through a <see cref="StringWriter"/>, so the XML declaration states encoding="utf-16" even though <c>Encoding</c> is UTF-8.
+    /// The XML declaration of both <see cref="Serialize{T}(T, SerializerOptions)"/> and <see cref="ToString{T}(T, SerializerOptions)"/> states encoding="utf-8" (the <c>Encoding</c>), so the text encoded as UTF-8 can be read as data.
+    /// Whitespace only strings are read as empty strings (an <see cref="XmlSerializer"/> limitation).
     /// </remarks>
     public sealed class NetXmlSerializer : ITextSerializerType
     {
@@ -69,11 +70,23 @@ namespace SysWeaver.Serialization
             }
         }
 
+        /// <summary>
+        /// A string writer that reports UTF-8 as its encoding, so that the XML declaration states the <see cref="Encoding"/> of the serializer
+        /// </summary>
+        sealed class Utf8StringWriter : StringWriter
+        {
+            public Utf8StringWriter() : base(System.Globalization.CultureInfo.InvariantCulture)
+            {
+            }
+
+            public override Encoding Encoding => Encoding.UTF8;
+        }
+
         /// <inheritdoc/>
         public string ToString<T>(T obj, SerializerOptions options = SerializerOptions.Compact)
         {
             var s = new XmlSerializer(typeof(T));
-            using var sb = new StringWriter();
+            using var sb = new Utf8StringWriter();
             s.Serialize(sb, obj);
             return sb.ToString();
         }

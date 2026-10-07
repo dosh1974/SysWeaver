@@ -232,7 +232,8 @@ namespace SysWeaver.AI
             try
             {
                 var model = Models[modelIndex];
-                string storeKey = "LLmTranslator.Lang." + model;
+                //  The store key must be a valid file name (model names may contain '/' or ':'), invalid chars are replaced with '_' (names that were valid are unchanged)
+                string storeKey = "LLmTranslator.Lang." + PathExt.SafeFilename(model);
                 var current = await KeyValueStore.AllShared.TryGetAsync<SupLangSave>(storeKey).ConfigureAwait(false);
                 String res = "Used cached languages";
                 if ((current == null) || forceRenew || ((DateTime.UtcNow - current.Updated) > TimeSpan.FromDays(30)))

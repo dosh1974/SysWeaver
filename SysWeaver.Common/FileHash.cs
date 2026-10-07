@@ -200,7 +200,7 @@ namespace SysWeaver
         /// <returns>A hash string (26 chars) or null if there is some error</returns>
         /// <remarks>
         /// For urls two GET requests are made, one to get the headers for the cache key and one to download and hash the content (unless the hash is cached on disk).
-        /// A null result (failure) for a local file is also cached in memory.
+        /// A null result (failure) is never cached in memory, so a transient error (ex: the file is locked) is retried on the next call.
         /// </remarks>
         public static Task<String> GetHashAsync(String filename)
         {
@@ -223,9 +223,14 @@ namespace SysWeaver
                     if (fi.Exists)
                     {
                         var key = await GetCacheKeyAsync(filename, fi).ConfigureAwait(false);
+                        //  A failure (null) is thrown inside the factory so that it isn't cached
                         return await Cache.GetOrUpdateAsync(key, _ =>
-                            InternalUncachedHashAsync(filename, isWeb)).ConfigureAwait(false);
+                            InternalUncachedHashOrThrowAsync(filename, isWeb)).ConfigureAwait(false);
                     }
+                }
+                catch (HashFailedException)
+                {
+                    return null;
                 }
                 catch
                 {
@@ -233,6 +238,16 @@ namespace SysWeaver
             }
             return await InternalUncachedHashAsync(filename, isWeb).ConfigureAwait(false);
         }
+
+        /// <summary>
+        /// Thrown inside the memory cache factory when the hash couldn't be computed (so that the failure isn't cached)
+        /// </summary>
+        sealed class HashFailedException : Exception
+        {
+        }
+
+        static async Task<String> InternalUncachedHashOrThrowAsync(String filename, bool isWeb)
+            => await InternalUncachedHashAsync(filename, isWeb).ConfigureAwait(false) ?? throw new HashFailedException();
 
         static async Task<String> InternalUncachedHashAsync(String filename, bool isWeb)
         {

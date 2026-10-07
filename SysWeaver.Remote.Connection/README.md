@@ -59,7 +59,7 @@ flowchart TB
 - Remote calls have network semantics (latency, failures, time-outs) even though they look like method calls; design interfaces accordingly (coarse-grained, async).
 - Interfaces must be public, inherit `IDisposable` (optionally `IRemoteApi`) and every method must return `Task` or `Task<T>` (`ValueTask` return types are accepted by the generator but not usable).
 - Types crossing the wire must be serializable by the chosen serializer; cached responses are shared between callers, so don't mutate them.
-- The connection time-out is also the `HttpClient` time-out, so a per end point time-out can only shorten it. `RemoteCache` on an interface (rather than a method) is not applied.
+- A per end point time-out overrides the connection time-out (it can both shorten and extend it), a time-out is reported as a `TimeoutException`. The `HttpClient` time-out is the largest of the connection and per end point time-outs. `RemoteCache` on an interface (rather than a method) is not applied.
 - With `SysWeaverLogin` the login is performed synchronously when the instance is created.
 - Runtime code generation requires a runtime that supports dynamic code (not AOT-only environments).
 

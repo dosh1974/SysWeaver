@@ -796,7 +796,7 @@ namespace SysWeaver.AI
                         }
                         catch (Exception ex)
                         {
-                            m.Text = String.Join(ex.Message, "```\n", "\n```");
+                            m.Text = String.Join(ex.SafeMessage(), "```\n", "\n```");
                             m.Format = ChatMessageFormats.MarkDown;
                         }
                         finally
@@ -948,7 +948,7 @@ namespace SysWeaver.AI
                 {
                     m.From = s.ErrorName;
                     m.FromImage = s.ErrorImageUrl;
-                    m.Text += String.Join(ex.Message, "\n\n```\n", "\n```");
+                    m.Text += String.Join(ex.SafeMessage(), "\n\n```\n", "\n```");
                     if (m.Data == s.WorkingImageUrl)
                         m.Data = null;
                 }

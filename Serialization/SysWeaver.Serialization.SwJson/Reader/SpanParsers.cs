@@ -186,7 +186,8 @@ namespace SysWeaver.Serialization.SwJson.Reader
         static readonly float[] Pow10Single = [1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f, 1e8f, 1e9f, 1e10f];
 
         /// <summary>
-        /// n / 10^k is correctly rounded when n and 10^k are exactly representable (n &lt; 2^53, k &lt;= 22), the same as Double.Parse
+        /// n / 10^k is correctly rounded when n and 10^k are exactly representable (n &lt; 2^53, k &lt;= 22), the same as Double.Parse.
+        /// null is read as NaN (the writer writes NaN and infinities as null), the tokens NaN, Infinity and -Infinity (written by older versions) are accepted too.
         /// </summary>
         public static Double ToDouble(ReadOnlySpan<Byte> d)
         {
@@ -197,11 +198,14 @@ namespace SysWeaver.Serialization.SwJson.Reader
                     v /= Pow10Double[k];
                 return neg ? -v : v;
             }
+            if (IsNullToken(d))
+                return Double.NaN;
             return Double.Parse(d, ParseStyle, ParseCulture);
         }
 
         /// <summary>
-        /// n / 10^k is correctly rounded when n and 10^k are exactly representable (n &lt; 2^24, k &lt;= 10), the same as Single.Parse
+        /// n / 10^k is correctly rounded when n and 10^k are exactly representable (n &lt; 2^24, k &lt;= 10), the same as Single.Parse.
+        /// null is read as NaN (the writer writes NaN and infinities as null), the tokens NaN, Infinity and -Infinity (written by older versions) are accepted too.
         /// </summary>
         public static Single ToSingle(ReadOnlySpan<Byte> d)
         {
@@ -212,8 +216,16 @@ namespace SysWeaver.Serialization.SwJson.Reader
                     v /= Pow10Single[k];
                 return neg ? -v : v;
             }
+            if (IsNullToken(d))
+                return Single.NaN;
             return Single.Parse(d, ParseStyle, ParseCulture);
         }
+
+        /// <summary>
+        /// True if the value is the json null (only checked on the slow path, after the fast number parsing failed)
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static bool IsNullToken(ReadOnlySpan<Byte> d) => d.SequenceEqual("null"u8);
 
         /// <summary>
         /// A decimal is the mantissa and the scale (the number of decimals, trailing zeros are kept), the same as Decimal.Parse

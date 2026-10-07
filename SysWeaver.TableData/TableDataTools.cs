@@ -36,6 +36,14 @@ namespace SysWeaver.Data
         /// </summary>
         public static ITextSearch DefaultSearch = new SimpleTextSearch();
 
+        /// <summary>
+        /// The default server side cap on the number of rows (and rows + look ahead) returned by <see cref="Get{T}(TableDataRequest, IEnumerable{T}, string, long)"/> and
+        /// <see cref="GetTyped{T}(TableDataRequest, IEnumerable{T}, string, long)"/> (and their overloads).
+        /// A request with no row limit (<see cref="TableDataOrderRequest.MaxRowCount"/> zero or negative), or above the cap, is limited to the cap.
+        /// Pass a different maxAllowedRows to change it (zero or negative disables the cap, only for trusted server side callers).
+        /// </summary>
+        public const long DefaultMaxAllowedRows = 100000;
+
 
         /// <summary>
         /// Convert from typed table data to generic table data, extracting the values of each row object.
@@ -116,13 +124,12 @@ namespace SysWeaver.Data
 
         /// <summary>
         /// Filter some data using <see cref="TableDataFilter"/>'s (lazily, using LINQ).
-        /// Filters with a null value or an unknown column name are ignored.
+        /// Filters with a null value, an unknown column name or an undefined <see cref="TableDataFilterOps"/> value are ignored.
         /// </summary>
         /// <typeparam name="T">The row type.</typeparam>
         /// <param name="filters">The filters to apply, may be null.</param>
         /// <param name="data">Source data</param>
         /// <returns>The resulting data, null if <paramref name="data"/> is null.</returns>
-        /// <exception cref="IndexOutOfRangeException">A filter has an undefined <see cref="TableDataFilterOps"/> value.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IEnumerable<T> Filter<T>(TableDataFilter[] filters, IEnumerable<T> data)
             => TableDataType<T>.Filter(filters, data);
@@ -177,14 +184,16 @@ namespace SysWeaver.Data
         /// <param name="request">What part of the data, sorting etc, if null a default request (first 20 rows) is used.</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned (and rows + look ahead), the requested row count is limited to this.
+        /// A request with no row limit gets this many rows. Zero or negative disables the cap (only for trusted server side callers).</param>
         /// <returns>Some table data. Columns and title are only included if the request change counter differs from the current one.</returns>
         /// <remarks>
         /// Exceptions while processing the data are swallowed, giving an empty table.
-        /// No server side cap is applied to the requested row count (zero or negative returns all rows).
+        /// The requested row count is capped server side by <paramref name="maxAllowedRows"/> (a request with no limit, zero or negative, gets <paramref name="maxAllowedRows"/> rows).
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static TableData Get<T>(TableDataRequest request, IEnumerable<T> data, String title = null) 
-            => TableDataType<T>.Get(request ?? DefRequest, data, title);
+        public static TableData Get<T>(TableDataRequest request, IEnumerable<T> data, String title = null, long maxAllowedRows = DefaultMaxAllowedRows)
+            => TableDataType<T>.Get(request ?? DefRequest, data, title, null, maxAllowedRows);
 
 
         /// <summary>
@@ -198,17 +207,19 @@ namespace SysWeaver.Data
             => TableDataType<T>.GetAll(data);
 
         /// <summary>
-        /// Get table data from an enumerable sequence, see <see cref="Get{T}(TableDataRequest, IEnumerable{T}, string)"/>.
+        /// Get table data from an enumerable sequence, see <see cref="Get{T}(TableDataRequest, IEnumerable{T}, string, long)"/>.
         /// </summary>
         /// <typeparam name="T">The row type.</typeparam>
         /// <param name="request">What part of the data, sorting etc</param>
         /// <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned (and rows + look ahead), the requested row count is limited to this.
+        /// A request with no row limit gets this many rows. Zero or negative disables the cap (only for trusted server side callers).</param>
         /// <returns>Some table data</returns>
-        public static TableData Get<T>(TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null)
+        public static TableData Get<T>(TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null, long maxAllowedRows = DefaultMaxAllowedRows)
         {
-            var r = TableDataType<T>.Get(request ?? DefRequest, data, title);
+            var r = TableDataType<T>.Get(request ?? DefRequest, data, title, null, maxAllowedRows);
             if (r != null)
                 r.RefreshRate = refreshRate;
             return r;
@@ -216,7 +227,7 @@ namespace SysWeaver.Data
 
         /// <summary>
         /// Get table data from an enumerable sequence with the <see cref="AutoTranslateAttribute"/> columns translated,
-        /// see <see cref="Get{T}(TableDataRequest, IEnumerable{T}, string)"/>.
+        /// see <see cref="Get{T}(TableDataRequest, IEnumerable{T}, string, long)"/>.
         /// </summary>
         /// <typeparam name="T">The row type.</typeparam>
         /// <param name="translationContext">The translator and target language to use, if null (or without translator) no translation is done</param>
@@ -224,10 +235,12 @@ namespace SysWeaver.Data
         /// <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned (and rows + look ahead), the requested row count is limited to this.
+        /// A request with no row limit gets this many rows. Zero or negative disables the cap (only for trusted server side callers).</param>
         /// <returns>Some table data</returns>
-        public static Task<TableData> Get<T>(ITranslationContext translationContext, TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null)
+        public static Task<TableData> Get<T>(ITranslationContext translationContext, TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null, long maxAllowedRows = DefaultMaxAllowedRows)
         {
-            var r = TableDataType<T>.Get(request ?? DefRequest, data, title);
+            var r = TableDataType<T>.Get(request ?? DefRequest, data, title, null, maxAllowedRows);
             if (r != null)
                 r.RefreshRate = refreshRate;
             return r.Translate<T>(translationContext);
@@ -247,11 +260,13 @@ namespace SysWeaver.Data
         /// <param name="request">What part of the data, sorting etc, if null a default request (first 20 rows) is used.</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned (and rows + look ahead), the requested row count is limited to this.
+        /// A request with no row limit gets this many rows. Zero or negative disables the cap (only for trusted server side callers).</param>
         /// <returns>Some table data</returns>
         /// <remarks>Exceptions while processing the data are swallowed, giving an empty table.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static TypedTableData<T> GetTyped<T>(TableDataRequest request, IEnumerable<T> data, String title = null)
-            => TableDataType<T>.GetTyped<TypedTableData<T>>(request ?? DefRequest, data, title);
+        public static TypedTableData<T> GetTyped<T>(TableDataRequest request, IEnumerable<T> data, String title = null, long maxAllowedRows = DefaultMaxAllowedRows)
+            => TableDataType<T>.GetTyped<TypedTableData<T>>(request ?? DefRequest, data, title, null, maxAllowedRows);
 
 
         /// <summary>
@@ -265,17 +280,19 @@ namespace SysWeaver.Data
             => TableDataType<T>.GetAllTyped<TypedTableData<T>>(data);
 
         /// <summary>
-        /// Get typed table data from an enumerable sequence, see <see cref="GetTyped{T}(TableDataRequest, IEnumerable{T}, string)"/>.
+        /// Get typed table data from an enumerable sequence, see <see cref="GetTyped{T}(TableDataRequest, IEnumerable{T}, string, long)"/>.
         /// </summary>
         /// <typeparam name="T">The element (row) type</typeparam>
         /// <param name="request">What part of the data, sorting etc</param>
         /// <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned (and rows + look ahead), the requested row count is limited to this.
+        /// A request with no row limit gets this many rows. Zero or negative disables the cap (only for trusted server side callers).</param>
         /// <returns>Some table data</returns>
-        public static TypedTableData<T> GetTyped<T>(TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null)
+        public static TypedTableData<T> GetTyped<T>(TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null, long maxAllowedRows = DefaultMaxAllowedRows)
         {
-            var r = TableDataType<T>.GetTyped<TypedTableData<T>>(request ?? DefRequest, data, title);
+            var r = TableDataType<T>.GetTyped<TypedTableData<T>>(request ?? DefRequest, data, title, null, maxAllowedRows);
             if (r != null)
                 r.RefreshRate = refreshRate;
             return r;
@@ -290,10 +307,12 @@ namespace SysWeaver.Data
         /// <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned (and rows + look ahead), the requested row count is limited to this.
+        /// A request with no row limit gets this many rows. Zero or negative disables the cap (only for trusted server side callers).</param>
         /// <returns>Some table data</returns>
-        public static Task<TypedTableData<T>> GetTyped<T>(ITranslationContext translationContext, TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null)
+        public static Task<TypedTableData<T>> GetTyped<T>(ITranslationContext translationContext, TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null, long maxAllowedRows = DefaultMaxAllowedRows)
         {
-            var r = TableDataType<T>.GetTyped<TypedTableData<T>>(request ?? DefRequest, data, title);
+            var r = TableDataType<T>.GetTyped<TypedTableData<T>>(request ?? DefRequest, data, title, null, maxAllowedRows);
             if (r != null)
                 r.RefreshRate = refreshRate;
             return r.Translate<T, TypedTableData<T>>(translationContext);
@@ -305,17 +324,19 @@ namespace SysWeaver.Data
         #region Typed base versions
 
         /// <summary>
-        /// Get typed table data of a custom table type, see <see cref="GetTyped{T}(TableDataRequest, IEnumerable{T}, string)"/>.
+        /// Get typed table data of a custom table type, see <see cref="GetTyped{T}(TableDataRequest, IEnumerable{T}, string, long)"/>.
         /// </summary>
         /// <typeparam name="T">The element (row) type</typeparam>
         /// <typeparam name="R">The typed table type to create</typeparam>
         /// <param name="request">What part of the data, sorting etc, if null a default request (first 20 rows) is used.</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned (and rows + look ahead), the requested row count is limited to this.
+        /// A request with no row limit gets this many rows. Zero or negative disables the cap (only for trusted server side callers).</param>
         /// <returns>Some table data</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static R GetTyped<T, R>(TableDataRequest request, IEnumerable<T> data, String title = null) where R : TypedTableData<T>, new()
-            => TableDataType<T>.GetTyped<R>(request ?? DefRequest, data, title);
+        public static R GetTyped<T, R>(TableDataRequest request, IEnumerable<T> data, String title = null, long maxAllowedRows = DefaultMaxAllowedRows) where R : TypedTableData<T>, new()
+            => TableDataType<T>.GetTyped<R>(request ?? DefRequest, data, title, null, maxAllowedRows);
 
 
         /// <summary>
@@ -330,7 +351,7 @@ namespace SysWeaver.Data
             => TableDataType<T>.GetAllTyped<R>(data);
 
         /// <summary>
-        /// Get typed table data of a custom table type, see <see cref="GetTyped{T}(TableDataRequest, IEnumerable{T}, string)"/>.
+        /// Get typed table data of a custom table type, see <see cref="GetTyped{T}(TableDataRequest, IEnumerable{T}, string, long)"/>.
         /// </summary>
         /// <typeparam name="T">The element (row) type</typeparam>
         /// <typeparam name="R">The typed table type to create</typeparam>
@@ -338,10 +359,12 @@ namespace SysWeaver.Data
         /// <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned (and rows + look ahead), the requested row count is limited to this.
+        /// A request with no row limit gets this many rows. Zero or negative disables the cap (only for trusted server side callers).</param>
         /// <returns>Some table data</returns>
-        public static R GetTyped<T, R>(TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null) where R : TypedTableData<T>, new()
+        public static R GetTyped<T, R>(TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null, long maxAllowedRows = DefaultMaxAllowedRows) where R : TypedTableData<T>, new()
         {
-            var r = TableDataType<T>.GetTyped<R>(request ?? DefRequest, data, title);
+            var r = TableDataType<T>.GetTyped<R>(request ?? DefRequest, data, title, null, maxAllowedRows);
             if (r != null)
                 r.RefreshRate = refreshRate;
             return r;
@@ -357,10 +380,12 @@ namespace SysWeaver.Data
         /// <param name="refreshRate">Number of ms the client should wait before refreshing the data</param>
         /// <param name="data">Source data</param>
         /// <param name="title">Optional title of the table</param>
+        /// <param name="maxAllowedRows">Server side cap on the number of rows returned (and rows + look ahead), the requested row count is limited to this.
+        /// A request with no row limit gets this many rows. Zero or negative disables the cap (only for trusted server side callers).</param>
         /// <returns>Some table data</returns>
-        public static Task<R> GetTyped<T, R>(ITranslationContext translationContext, TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null) where R : TypedTableData<T>, new()
+        public static Task<R> GetTyped<T, R>(ITranslationContext translationContext, TableDataRequest request, long refreshRate, IEnumerable<T> data, String title = null, long maxAllowedRows = DefaultMaxAllowedRows) where R : TypedTableData<T>, new()
         {
-            var r = TableDataType<T>.GetTyped<R>(request ?? DefRequest, data, title);
+            var r = TableDataType<T>.GetTyped<R>(request ?? DefRequest, data, title, null, maxAllowedRows);
             if (r != null)
                 r.RefreshRate = refreshRate;
             return r.Translate<T, R>(translationContext);
@@ -1281,7 +1306,18 @@ namespace SysWeaver.Data
         }
 
 
-        static readonly MethodInfo ChangeTypeMethod = typeof(TableDataTools).GetMethod(nameof(ChangeType), BindingFlags.NonPublic| BindingFlags.Static);
+        /// <summary>
+        /// Convert a value using <see cref="ChangeType"/>, null values and values that can't be converted are mapped to the default value of the type.
+        /// </summary>
+        static Object ChangeTypeOrDefault(Object val, Type type)
+        {
+            val = ChangeType(val, type);
+            if ((val != null) && type.IsInstanceOfType(val))
+                return val;
+            return StringToObject.GetDefault(type);
+        }
+
+        static readonly MethodInfo ChangeTypeMethod = typeof(TableDataTools).GetMethod(nameof(ChangeTypeOrDefault), BindingFlags.NonPublic| BindingFlags.Static);
 
         /// <summary>
         /// Create a function that returns table data from some static untyped data.
@@ -1292,7 +1328,7 @@ namespace SysWeaver.Data
         /// Enumerated once, immediately.</param>
         /// <param name="title">Optional title</param>
         /// <returns>A function that can be used to get the static data</returns>
-        /// <remarks>Null values in value type columns, or values that can't be converted, throw while creating the rows.</remarks>
+        /// <remarks>Null values, and values that can't be converted, are replaced by the default value of the column type (ex: 0 for numbers, null for reference types).</remarks>
         public static Func<TableDataRequest, TableData> GetStaticTableFn(TableDataColumn[] columns, IEnumerable<object[]> rows, String title = null)
         {
             var type = GetDynType(out var createFn, columns);
@@ -1674,6 +1710,7 @@ namespace SysWeaver.Data
 
         /// <summary>
         /// Translate the <see cref="AutoTranslateAttribute"/> members of the row objects in a typed table data (in place, rows are processed concurrently).
+        /// Struct rows are translated in a copy that is written back to <see cref="TypedTableData{T}.Rows"/>.
         /// </summary>
         /// <typeparam name="T">The type must match the element type used when creating the table</typeparam>
         /// <typeparam name="R">The type must match the type used when creating the table</typeparam>
@@ -1694,8 +1731,16 @@ namespace SysWeaver.Data
             if (rows == null)
                 return data;
             var l = rows.Length;
-            if (l > 0)
-                await rows.ProcessAsync(row => tr(translator, to, row, effort, retention)).ConfigureAwait(false);
+            if (l <= 0)
+                return data;
+            if (typeof(T).IsValueType)
+            {
+                //  Struct rows are translated in a box and written back to the row array
+                var bt = TypeTranslatorT<T>.TranslateBox;
+                await rows.ProcessAsync((row, index) => TypeTranslator.TranslateArrayElement(bt, translator, to, rows, index, effort, retention)).ConfigureAwait(false);
+                return data;
+            }
+            await rows.ProcessAsync(row => tr(translator, to, row, effort, retention)).ConfigureAwait(false);
             return data;
         }
 

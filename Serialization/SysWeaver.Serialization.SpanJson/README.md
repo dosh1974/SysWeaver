@@ -28,13 +28,12 @@ All data that SysWeaver moves — web API payloads, stored values, remote API ca
 ## Key features
 
 - `SpanJsonSerializer` (singleton `Instance`) implements both the binary (UTF-8) and the string APIs.
-- Writes with a custom resolver: nulls included, byte arrays as number arrays, enums as integers, original member casing.
+- Writes and reads with the same custom resolver: nulls included, byte arrays as number arrays, enums as integers, original member casing.
 - Registered through the manifest like any service, or with one static call in code.
 
 ## Limitations and considerations
 
-- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / Jil / SpanJson / Utf8Json -5).
-- Reading uses SpanJson's default resolver rather than the custom writing resolver, so output does not necessarily round-trip (e.g. enums written as integers).
+- Selection between serializers of the same extension is by priority, so the effective JSON implementation depends on which plug-ins are registered (bundled priorities: SafeJson 10, SysWeaver.Json 2, Newtonsoft 1, System.Text.Json 0, CompactJson / SpanJson / Utf8Json -5).
 - `SerializerOptions` are ignored; output is always compact.
 
 ## Using it

@@ -125,8 +125,15 @@ namespace SysWeaver.Auth
             var u = UserData;
             if (u.TryGetValue(userGuid, out var userData))
             {
-                Interlocked.Increment(ref userData.RefCount);
-                return userData;
+                //  Never resurrect a count of 0 outside the lock (it's being removed by Dispose), use the locked path instead
+                for (; ; )
+                {
+                    var c = Interlocked.Read(ref userData.RefCount);
+                    if (c <= 0)
+                        break;
+                    if (Interlocked.CompareExchange(ref userData.RefCount, c + 1, c) == c)
+                        return userData;
+                }
             }
             lock (u)
             {

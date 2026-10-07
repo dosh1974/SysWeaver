@@ -111,7 +111,7 @@ namespace SysWeaver.Serialization.SwJson.Reader
         /// <summary>
         /// Read a quoted json string (with escapes) or <c>null</c>.
         /// </summary>
-        /// <remarks>An unterminated string at the end of the data is returned as is (no exception).</remarks>
+        /// <remarks>An unterminated string at the end of the data throws.</remarks>
         /// <param name="state">The parser state, positioned at the opening quote</param>
         /// <returns>The string, null for a json <c>null</c></returns>
         /// <exception cref="Exception">The value isn't a string or <c>null</c></exception>

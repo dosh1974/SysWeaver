@@ -120,7 +120,7 @@ namespace SysWeaver.AI
             w.WriteStartObject();
             w.WriteStartObject("error");
             w.WriteNumber("code", ex.StatusCode);
-            w.WriteString("message", ex.Message);
+            w.WriteString("message", ex.SafeMessage());
             w.WriteString("status", GetGoogleStatus(ex.StatusCode));
             w.WriteEndObject();
             w.WriteEndObject();

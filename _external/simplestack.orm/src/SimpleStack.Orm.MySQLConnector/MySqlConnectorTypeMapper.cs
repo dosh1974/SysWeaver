@@ -24,7 +24,7 @@ namespace SimpleStack.Orm.MySQLConnector
                     return l < 65535 ? "TEXT" : "LONGTEXT";
                 case DbType.Binary:
                 case DbType.Object:
-                    return "BLOB";
+                    return "MEDIUMBLOB";
                 case DbType.Boolean:
                     return "BOOLEAN";
                 case DbType.SByte:

@@ -13,7 +13,9 @@ namespace SysWeaver.Net
     /// Also url decodes the whole url (path and query, see <see cref="HttpServerTools.UrlDecode(string)"/>) and inserts "index.html" for directory requests.
     /// The decoding happens after any normalization done by the listener, so the resulting local url may contain "../" segments (from "%2F" / "%2E") and "?" chars (from "%3F").
     /// Thread safe, new hosts are added under a lock (copy on write lookup array).
-    /// Hosts are never removed, a new <see cref="HttpServerHostInfo"/> is kept for every distinct "scheme://host:port" that matches a listener prefix.
+    /// Hosts are never removed, a new <see cref="HttpServerHostInfo"/> is kept for every distinct "scheme://host:port" that matches a listener prefix,
+    /// up to <see cref="MaxCachedHosts"/> hosts. Further hosts (the Host header is client controlled) are resolved on every request without being cached,
+    /// so that random Host headers can't grow the memory without bound.
     /// </remarks>
     public sealed class HttpServerHosts
     {
@@ -21,6 +23,11 @@ namespace SysWeaver.Net
         /// Up to this number of hosts are kept in the lookup array, if there are more the dictionary is used
         /// </summary>
         const int MaxArrayHosts = 8;
+
+        /// <summary>
+        /// The maximum number of hosts that are cached, more hosts are resolved (a new <see cref="HttpServerHostInfo"/> is created) for every request.
+        /// </summary>
+        public const int MaxCachedHosts = 1024;
 
         /// <summary>
         /// Urls up to this length are decoded on the stack (longer urls use a pooled buffer)
@@ -43,7 +50,7 @@ namespace SysWeaver.Net
 
         HttpServerPrefix[] Prefixes = [];
 
-        readonly SemiFrozenDictionary<String, HttpServerHostInfo> Hosts = new SemiFrozenDictionary<string, HttpServerHostInfo>(StringComparer.Ordinal);
+        readonly LowAllocConcurrentDictionary<String, HttpServerHostInfo> Hosts = new LowAllocConcurrentDictionary<string, HttpServerHostInfo>(64, StringComparer.Ordinal);
 
         /// <summary>
         /// The known hosts (key is the lower cased "scheme://host:port"), replaced (never modified) when a host is added, null if there are too many hosts
@@ -103,6 +110,7 @@ namespace SysWeaver.Net
         /// <summary>
         /// Create (or get) the host for a lower cased "scheme://host:port" (slow path, takes a lock).
         /// With a single listener prefix any host name is accepted, with multiple prefixes the first prefix that the url starts with (wildcard replaced by the host name) is used.
+        /// If <see cref="MaxCachedHosts"/> hosts are already cached, a new (uncached) host is returned.
         /// </summary>
         /// <param name="hostName">The lower cased "scheme://host:port" part of the url</param>
         /// <param name="url">The full url</param>
@@ -111,62 +119,70 @@ namespace SysWeaver.Net
         HttpServerHostInfo CreateHost(String hostName, String url)
         {
             var hosts = Hosts;
+            if (hosts.Count >= MaxCachedHosts)
+                return NewHost(hostName, url);
             lock (hosts)
             {
-                if (!hosts.TryGetValue(hostName, out var host))
+                if (hosts.TryGetValue(hostName, out var host))
+                    return host;
+                host = NewHost(hostName, url);
+                if (hosts.Count >= MaxCachedHosts)
+                    return host;
+                hosts[hostName] = host;
+                // Update the lookup array (copy on write)
+                var arr = HostArray;
+                if (arr != null)
                 {
-                    var pr = Prefixes;
-                    var start = hostName.FastIndexOf("://") + 3;
-                    // An IPv6 host is enclosed in brackets (ex: "[::1]"), the port starts after the ']'
-                    var end = ((start < hostName.Length) && (hostName[start] == '['))
-                        ? hostName.IndexOf(']', start) + 1
-                        : hostName.IndexOf(':', start);
-                    if (end <= 0)
-                        end = hostName.Length;
-                    String wild = hostName.Substring(start, end - start);
-                    if (pr.Length == 1)
+                    if (arr.Length < MaxArrayHosts)
                     {
-                        var prefix = pr[0];
-                        var t = prefix.Prefix.Replace("*", wild);
-                        host = new HttpServerHostInfo(t, prefix);
+                        var n = new HostEntry[arr.Length + 1];
+                        arr.CopyTo(n, 0);
+                        n[arr.Length] = new HostEntry(hostName, host);
+                        arr = n;
                     }
                     else
                     {
-                        // The host name part must be compared lower cased (the prefixes are)
-                        var lowerUrl = String.Concat(hostName, url.AsSpan(Math.Min(hostName.Length, url.Length)));
-                        foreach (var prefix in pr)
-                        {
-                            var t = prefix.Prefix.Replace("*", wild);
-                            if (lowerUrl.FastStartsWith(t))
-                            {
-                                host = new HttpServerHostInfo(t, prefix);
-                                break;
-                            }
-                        }
-                        if (host == null)
-                            throw new Exception("Unknown host name!");
+                        arr = null;
                     }
-                    hosts[hostName] = host;
-                    // Update the lookup array (copy on write)
-                    var arr = HostArray;
-                    if (arr != null)
-                    {
-                        if (arr.Length < MaxArrayHosts)
-                        {
-                            var n = new HostEntry[arr.Length + 1];
-                            arr.CopyTo(n, 0);
-                            n[arr.Length] = new HostEntry(hostName, host);
-                            arr = n;
-                        }
-                        else
-                        {
-                            arr = null;
-                        }
-                        Volatile.Write(ref HostArray, arr);
-                    }
+                    Volatile.Write(ref HostArray, arr);
                 }
                 return host;
             }
+        }
+
+        /// <summary>
+        /// Create a new host for a lower cased "scheme://host:port" (no caching).
+        /// </summary>
+        /// <param name="hostName">The lower cased "scheme://host:port" part of the url</param>
+        /// <param name="url">The full url</param>
+        /// <returns>The host</returns>
+        /// <exception cref="Exception">Thrown if there are multiple prefixes and none of them matches the url</exception>
+        HttpServerHostInfo NewHost(String hostName, String url)
+        {
+            var pr = Prefixes;
+            var start = hostName.FastIndexOf("://") + 3;
+            // An IPv6 host is enclosed in brackets (ex: "[::1]"), the port starts after the ']'
+            var end = ((start < hostName.Length) && (hostName[start] == '['))
+                ? hostName.IndexOf(']', start) + 1
+                : hostName.IndexOf(':', start);
+            if (end <= 0)
+                end = hostName.Length;
+            String wild = hostName.Substring(start, end - start);
+            if (pr.Length == 1)
+            {
+                var prefix = pr[0];
+                var t = prefix.Prefix.Replace("*", wild);
+                return new HttpServerHostInfo(t, prefix);
+            }
+            // The host name part must be compared lower cased (the prefixes are)
+            var lowerUrl = String.Concat(hostName, url.AsSpan(Math.Min(hostName.Length, url.Length)));
+            foreach (var prefix in pr)
+            {
+                var t = prefix.Prefix.Replace("*", wild);
+                if (lowerUrl.FastStartsWith(t))
+                    return new HttpServerHostInfo(t, prefix);
+            }
+            throw new Exception("Unknown host name!");
         }
 
         /// <summary>

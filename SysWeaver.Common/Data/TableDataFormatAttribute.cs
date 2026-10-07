@@ -6,7 +6,7 @@ namespace SysWeaver.Data
     /// Format value.
     /// </summary>
     /// <remarks>
-    /// The copy on click format is applied with the formatted value as {0}, so the boolean copyOnClick overloads copy the formatted value (not the value before formatting).
+    /// The boolean copyOnClick overloads copy the value before formatting (copy format "{2}"), use a copyOnClickFormat overload to copy something else (ex: "{0}" for the formatted value).
     /// </remarks>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class TableDataFormatAttribute : TableDataRawFormatAttribute
@@ -23,9 +23,9 @@ namespace SysWeaver.Data
         /// {1} = Next value (must exist).
         /// {2} = Value before formatting.
         /// </param>
-        /// <param name="copyOnClick">Copy the formatted value to the clipboard on click.</param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
         public TableDataFormatAttribute(String textFormat = "{0}", String titleFormat = "Raw: {2}", bool copyOnClick = false)
-            : base(TableDataFormats.Default, textFormat ?? "{0}", titleFormat ?? "Raw: {2}", copyOnClick ? "{0}" : null)
+            : base(TableDataFormats.Default, textFormat ?? "{0}", titleFormat ?? "Raw: {2}", copyOnClick ? "{2}" : null)
         {
         }
 
@@ -67,9 +67,9 @@ namespace SysWeaver.Data
         /// {1} = Next value (must exist). 
         /// {2} = Value before formatting.
         /// </param>
-        /// <param name="copyOnClick">Copy the formatted value to the clipboard on click.</param>
+        /// <param name="copyOnClick">Copy the value (before formatting) to the clipboard on click.</param>
         public TableDataFormatAttribute(TableDataFormats format, String textFormat = "{0}", String titleFormat = "Raw: {2}", bool copyOnClick = false)
-            : base(format, textFormat ?? "{0}", titleFormat ?? "Raw: {2}", copyOnClick ? "{0}" : null)
+            : base(format, textFormat ?? "{0}", titleFormat ?? "Raw: {2}", copyOnClick ? "{2}" : null)
         {
         }
 

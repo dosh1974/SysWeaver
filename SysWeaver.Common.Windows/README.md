@@ -31,14 +31,14 @@ No project calls this assembly directly; it only needs to be deployed with the a
 - `WindowsPlatformTools`: CPU usage (performance counter `Processor Information\% Processor Time\_Total`) and physical memory (`GlobalMemoryStatusEx`), surfaced in the service manager's statistics tables.
 - OS friendly name from WMI (`Win32_OperatingSystem` caption, build and bitness).
 - Machine reboot via `ExitWindowsEx` after enabling `SeShutdownPrivilege` (used by administrative services).
-- Flushing file handles to disk (`FlushFileBuffers`) and granting the Everyone group full control (inherited by contained files and folders).
+- Flushing file handles to disk (`FlushFileBuffers`) and granting the Everyone group full control (on the directory itself, inherited by contained files and folders).
 - Default key folder location for the platform (`C:\Keys`).
 - Exception counters exposed as statistics (`IHaveStats`).
 
 ## Limitations and considerations
 
 - Only meaningful on Windows; relies on Windows management and performance-counter APIs.
-- If the assembly is missing, or the performance counter / WMI query fails while the instance is created, the framework silently falls back to a dummy implementation (metrics become unavailable rather than failing).
+- If the assembly is missing, the framework silently falls back to a dummy implementation. If the performance counter can't be created only CPU usage is unavailable (`GetCpuUsage` returns false), and if the WMI query fails `OsFriendlyName` falls back to `RuntimeInformation.OSDescription`.
 
 ## Using it
 

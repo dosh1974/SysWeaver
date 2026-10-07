@@ -7,7 +7,7 @@ namespace SysWeaver
 {
     /// <summary>
     /// A string tree stores a bunch of strings in a way that makes it fast to check if a test string starts with ANY of the contained strings.
-    /// Empty strings are not supported, they can't be added and can't be searched for (throws in debug builds).
+    /// Empty strings are not supported, they can't be added (throws an <see cref="ArgumentException"/>) and can't be searched for (throws in debug builds).
     /// The leaf of a string is the string itself (see <see cref="FrozenStringTrie"/> for the implementation).
     /// An immutable (thread safe) and faster version of <see cref="StringTree"/>, with the same results.
     /// </summary>
@@ -19,7 +19,8 @@ namespace SysWeaver
         /// <param name="strings">The strings to build a tree from, may not contain null, empty strings or duplicates (duplicates after case folding for case in-sensitive trees)</param>
         /// <param name="caseInSensitive">Set to true to make a case in-sensitive tree</param>
         /// <returns>The tree</returns>
-        /// <exception cref="Exception">A string is a duplicate, or (in debug builds only) a string is empty</exception>
+        /// <exception cref="ArgumentException">A string is empty</exception>
+        /// <exception cref="Exception">A string is a duplicate</exception>
         public static FrozenStringTree Build(IEnumerable<String> strings, bool caseInSensitive = false)
             => new FrozenStringTree(StringTree.Build(strings, caseInSensitive));
 
@@ -64,8 +65,9 @@ namespace SysWeaver
         /// </summary>
         public IEnumerable<String> GetAllInReverseOrder() => GetAllLeafsInReverseOrder<String>();
 
+#if DEBUG
         /// <summary>
-        /// The total number of trie nodes of all <see cref="FrozenStringTree"/> instances that are currently allocated (created and not yet finalized), for diagnostics
+        /// The total number of trie nodes of all <see cref="FrozenStringTree"/> instances that are currently allocated (created and not yet finalized), for diagnostics (debug builds only)
         /// </summary>
         public static long AllocatedNodes => Interlocked.Read(ref CountAllocNodes);
 
@@ -78,6 +80,7 @@ namespace SysWeaver
         {
             Interlocked.Add(ref CountAllocNodes, -NodeCount);
         }
+#endif//DEBUG
 
         /// <summary>
         /// Create a frozen copy of a string tree (the source tree isn't used after construction)
@@ -85,7 +88,9 @@ namespace SysWeaver
         /// <param name="tree">The tree to copy, the casing is taken from the tree</param>
         public FrozenStringTree(StringTree tree) : base(Source(tree, true), tree.GetLeaf() != null)
         {
+#if DEBUG
             Interlocked.Add(ref CountAllocNodes, NodeCount);
+#endif//DEBUG
         }
 
         /// <summary>

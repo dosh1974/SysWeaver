@@ -39,6 +39,20 @@ namespace SysWeaver
         }
 
         /// <summary>
+        /// Open a resource stream, throws a <see cref="FileNotFoundException"/> naming the resource if it doesn't exist
+        /// </summary>
+        /// <param name="asm">The assembly that contain the resource</param>
+        /// <param name="name">The full name of the resource, null if it wasn't found</param>
+        /// <param name="requestedName">The name to report if the resource doesn't exist</param>
+        static Stream OpenResource(Assembly asm, String name, String requestedName)
+        {
+            var s = name == null ? null : asm.GetManifestResourceStream(name);
+            if (s == null)
+                throw new FileNotFoundException(String.Concat("Embedded resource \"", requestedName, "\" not found in ", asm.FullName), requestedName);
+            return s;
+        }
+
+        /// <summary>
         /// Given an uncompressed resource name, find the resource that has that name or that name + "." + a compression extension, and modify to the true resource name.
         /// If no resource starts with the name, the name is retried with the prefix of the first resource that contains ".data." (the convention used for embedded web data).
         /// </summary>
@@ -115,13 +129,13 @@ namespace SysWeaver
         /// <param name="asm">The assembly that contain the resource</param>
         /// <param name="compressedName">The full name of the resource (including any compression extension), if the resource is compressed the compression extension is removed</param>
         /// <returns>The uncompressed data of the resource</returns>
-        /// <exception cref="NullReferenceException">The resource doesn't exist.</exception>
+        /// <exception cref="FileNotFoundException">The resource doesn't exist.</exception>
         /// <exception cref="InvalidDataException">The compressed data is invalid.</exception>
         public static unsafe ReadOnlyMemory<Byte> GetUncompressedResourceData(this Assembly asm, ref String compressedName)
         {
             var o = compressedName;
             var comp = GetResourceCompression(asm, ref compressedName);
-            using var s = asm.GetManifestResourceStream(o);
+            using var s = OpenResource(asm, o, o);
             if (s is UnmanagedMemoryStream x)
                 return comp == null
                     ?
@@ -137,12 +151,13 @@ namespace SysWeaver
         /// <param name="asm">The assembly that contain the resource</param>
         /// <param name="uncompressedName">The name of the resource without any compression extension, a compressed version is located using <see cref="FindResource(Assembly, ref string)"/></param>
         /// <returns>The uncompressed data of the resource</returns>
-        /// <exception cref="ArgumentNullException">The resource doesn't exist.</exception>
+        /// <exception cref="FileNotFoundException">The resource doesn't exist.</exception>
         /// <exception cref="InvalidDataException">The compressed data is invalid.</exception>
         public static unsafe ReadOnlyMemory<Byte> GetUncompressedResourceData(this Assembly asm, String uncompressedName)
         {
+            var o = uncompressedName;
             var comp = FindResource(asm, ref uncompressedName);
-            using var s = asm.GetManifestResourceStream(uncompressedName);
+            using var s = OpenResource(asm, uncompressedName, o);
             if (s is UnmanagedMemoryStream x)
                 return comp == null
                     ?
@@ -157,10 +172,10 @@ namespace SysWeaver
         /// <param name="asm">The assembly that contain the resource</param>
         /// <param name="name">The full name of the resource</param>
         /// <returns>The data of the resource</returns>
-        /// <exception cref="NullReferenceException">The resource doesn't exist.</exception>
+        /// <exception cref="FileNotFoundException">The resource doesn't exist.</exception>
         public static unsafe ReadOnlyMemory<Byte> GetResourceData(this Assembly asm, String name)
         {
-            using var s = asm.GetManifestResourceStream(name);
+            using var s = OpenResource(asm, name, name);
             if (s is UnmanagedMemoryStream x)
                 return new UnmanagedMemoryManager<Byte>(x.PositionPointer, checked((int)x.Length)).ReadOnlyMemory;
             return ReadAllBytes(s);
@@ -172,10 +187,10 @@ namespace SysWeaver
         /// <param name="asm">The assembly that contain the resource</param>
         /// <param name="name">The full name of the resource</param>
         /// <returns>The data of the resource</returns>
-        /// <exception cref="NullReferenceException">The resource doesn't exist.</exception>
+        /// <exception cref="FileNotFoundException">The resource doesn't exist.</exception>
         public static unsafe Byte[] GetResourceDataBytes(this Assembly asm, String name)
         {
-            using var s = asm.GetManifestResourceStream(name);
+            using var s = OpenResource(asm, name, name);
             if (s is UnmanagedMemoryStream x)
             {
                 var sl = checked((int)x.Length);
@@ -192,7 +207,7 @@ namespace SysWeaver
         /// <param name="asmType">A type in the assembly that contain the resource, if the resource isn't found by name it's retried prefixed with the namespace of this type</param>
         /// <param name="uncompressedName">The name of the resource without any compression extension, a compressed version is located using <see cref="FindResource(Assembly, ref string)"/></param>
         /// <returns>The uncompressed data of the resource</returns>
-        /// <exception cref="ArgumentNullException">The resource doesn't exist.</exception>
+        /// <exception cref="FileNotFoundException">The resource doesn't exist.</exception>
         /// <exception cref="InvalidDataException">The compressed data is invalid.</exception>
         public static unsafe ReadOnlyMemory<Byte> GetUncompressedResourceData(this Type asmType, String uncompressedName)
         {
@@ -204,7 +219,7 @@ namespace SysWeaver
                 t = String.Concat(asmType.Namespace, '.', uncompressedName);
                 comp = FindResource(asm, ref t);
             }
-            using var s = asm.GetManifestResourceStream(t);
+            using var s = OpenResource(asm, t, uncompressedName);
             if (s is UnmanagedMemoryStream x)
                 return comp == null
                     ?
@@ -219,7 +234,7 @@ namespace SysWeaver
         /// <param name="asmType">A type in the assembly that contain the resource, if the resource isn't found by name it's retried prefixed with the namespace of this type</param>
         /// <param name="uncompressedName">The name of the resource without any compression extension, a compressed version is located using <see cref="FindResource(Assembly, ref string)"/></param>
         /// <returns>The uncompressed data of the resource</returns>
-        /// <exception cref="ArgumentNullException">The resource doesn't exist.</exception>
+        /// <exception cref="FileNotFoundException">The resource doesn't exist.</exception>
         /// <exception cref="InvalidDataException">The compressed data is invalid.</exception>
         public static unsafe Byte[] GetUncompressedResourceDataBytes(this Type asmType, String uncompressedName)
         {
@@ -231,7 +246,7 @@ namespace SysWeaver
                 t = String.Concat(asmType.Namespace, '.', uncompressedName);
                 comp = FindResource(asm, ref t);
             }
-            using var s = asm.GetManifestResourceStream(t);
+            using var s = OpenResource(asm, t, uncompressedName);
             if (s is UnmanagedMemoryStream x)
             {
                 var sl = checked((int)x.Length);

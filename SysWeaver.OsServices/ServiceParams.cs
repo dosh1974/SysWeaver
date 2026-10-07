@@ -44,9 +44,9 @@ namespace SysWeaver.OsServices
         public int RestartDelaySeconds = 2 * 60;
         
         /// <summary>
-        /// Number of seconds to wait on the third (and later) fail. NOTE: the default is 5 * 50 = 250 seconds
+        /// Number of seconds to wait before restarting on the third (and later) fail (Windows only), the default is 5 minutes
         /// </summary>
-        public int RestartDelayLastSeconds = 5 * 50;
+        public int RestartDelayLastSeconds = 5 * 60;
         
         /// <summary>
         /// Number of seconds without failures before resetting the failure counter (Windows only)

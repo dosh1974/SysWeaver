@@ -170,6 +170,14 @@ namespace SysWeaver.Serialization.SwJson
         }
 
         /// <summary>
+        /// Throw: the type named by "$type" can't be created (a reference type without a public parameterless constructor).
+        /// </summary>
+        public static void ThrowCantCreate(Type t)
+        {
+            throw new Exception("The type \"" + t.CleanTypename() + "\" named by \"$type\" can't be created, it has no public parameterless constructor");
+        }
+
+        /// <summary>
         /// Throw: an internal error (unexpected state).
         /// </summary>
         public static void ThrowInteralError()

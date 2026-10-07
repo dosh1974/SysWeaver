@@ -1031,9 +1031,9 @@ namespace SysWeaver.Net
         public string Uri { get; init; }
 
         /// <summary>
-        /// Always null, never assigned (API entries accept both GET and POST).
+        /// The http methods accepted by the end point, &quot;GET, POST&quot; (API entries accept both GET and POST).
         /// </summary>
-        public string Method { get; init; }
+        public string Method { get; init; } = "GET, POST";
 
         /// <inheritdoc/>
         public string CompPreference => Compression?.ToString();
@@ -1185,14 +1185,45 @@ namespace SysWeaver.Net
 
 
         /// <summary>
-        /// Deserialize the input from the query string (everything after '?') using <see cref="ApiIoParams"/>, default if there is no query string.
+        /// Called when reading / deserializing the input of an audited API fails (before the audit start was raised).
+        /// Raises the audit start with a null value followed by the audit exception, so that the failed attempt is recorded.
+        /// Exceptions thrown by the audit handlers are ignored (the original exception is rethrown by the caller).
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static void AuditInputFailed(ApiHttpEntry api, HttpServerRequest request, Exception ex)
+        {
+            var onStart = api.OnStart;
+            if (onStart == null)
+                return;
+            try
+            {
+                var trackId = ApiAudit.GetId();
+                onStart(trackId, request, api, null);
+                api.OnException?.Invoke(trackId, request, api, ex);
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
+        /// Deserialize the input from the query string (everything after '?') using <see cref="ApiIoParams"/>, default if there is no query string.
+        /// If deserialization fails for an audited API, the failure is audited (see <see cref="AuditInputFailed"/>).
+        /// </summary>
         static T Input_GET<T>(ApiHttpEntry api, HttpServerRequest request)
         {
             //  Decode get request
             var qs = request.QueryStringStart;
-            return qs <= 0 ? default : api.IoParams.Get<T>(request.Url.AsSpan().Slice(qs));
+            if (qs <= 0)
+                return default;
+            try
+            {
+                return api.IoParams.Get<T>(request.Url.AsSpan().Slice(qs));
+            }
+            catch (Exception ex)
+            {
+                AuditInputFailed(api, request, ex);
+                throw;
+            }
         }
 
         static ICompType ThrowDecompress(String ce)
@@ -1202,17 +1233,11 @@ namespace SysWeaver.Net
             => throw new Exception(String.Concat("Don't know how to deserialize using \"", ct, '"'));
 
         /// <summary>
-        /// Read the entire request body into pooled memory (no size limit, the caller must dispose the result).
+        /// Read the entire request body into pooled memory (the caller must dispose the result).
         /// </summary>
-        static async Task<IUnmanagedReadOnlyMemory<Byte>> Input_POST_Read(ApiHttpEntry api, HttpServerRequest request)
-        {
-            var s = (int)request.ReqContentLength;
-            if (s < 32)
-                s = 32;
-            using var ms = new ArrayPoolStream(s);
-            await request.InputStream.CopyToAsync(ms).ConfigureAwait(false);
-            return ms.GetMemory();
-        }
+        /// <exception cref="HttpResponseException">A 413 response if the body exceeds <see cref="ApiIoParams.MaxRequestSize"/>.</exception>
+        static Task<IUnmanagedReadOnlyMemory<Byte>> Input_POST_Read(ApiHttpEntry api, HttpServerRequest request)
+            => api.IoParams.ReadRequestBodyAsync(request);
 
         /// <summary>
         /// Deserialize the input from the request body (or from a body previously stored in <see cref="HttpServerRequest.Custom"/>).
@@ -1220,7 +1245,22 @@ namespace SysWeaver.Net
         /// Returns default for an empty body.
         /// </summary>
         /// <exception cref="Exception">Unknown Content-Encoding or Content-Type.</exception>
+        /// <exception cref="HttpResponseException">A 413 response if the body exceeds <see cref="ApiIoParams.MaxRequestSize"/> or decompresses to more than <see cref="ApiIoParams.MaxDecompressedSize"/>.</exception>
+        /// <remarks>If reading or deserializing fails for an audited API, the failure is audited (see <see cref="AuditInputFailed"/>).</remarks>
         static async Task<T> Input_POST<T>(ApiHttpEntry api, HttpServerRequest request)
+        {
+            try
+            {
+                return await Input_POST_Deserialize<T>(api, request).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                AuditInputFailed(api, request, ex);
+                throw;
+            }
+        }
+
+        static async Task<T> Input_POST_Deserialize<T>(ApiHttpEntry api, HttpServerRequest request)
         {
             IUnmanagedReadOnlyMemory<Byte> dataMem = null;
             var c = request.Custom;
@@ -1231,12 +1271,7 @@ namespace SysWeaver.Net
             }
             else
             {
-                var s = (int)request.ReqContentLength;
-                if (s < 32)
-                    s = 32;
-                using var ms = new ArrayPoolStream(s);
-                await request.InputStream.CopyToAsync(ms).ConfigureAwait(false);
-                dataMem = ms.GetMemory();
+                dataMem = await Input_POST_Read(api, request).ConfigureAwait(false);
             }
             using (dataMem)
             {
@@ -1249,7 +1284,7 @@ namespace SysWeaver.Net
                 if (!String.IsNullOrEmpty(ce))
                 {
                     var comp = CompManager.GetFromHttp(ce) ?? ThrowDecompress(ce);
-                    compMem = comp.GetUnmanagedDecompressed(data.Span);
+                    compMem = api.IoParams.GetDecompressed(comp, data.Span);
                     data = compMem.Memory;
                 }
                 using (compMem)

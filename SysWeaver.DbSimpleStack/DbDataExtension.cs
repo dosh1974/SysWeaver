@@ -127,7 +127,8 @@ namespace SysWeaver.Db
                     var val = f.Value;
                     if (val == null)
                         continue;
-                    if (!filterActions.TryGetValue(f.ColName, out var fs))
+                    var colName = f.ColName;
+                    if ((colName == null) || !filterActions.TryGetValue(colName, out var fs))
                         continue;
                     op += op;
                     if (f.Invert)

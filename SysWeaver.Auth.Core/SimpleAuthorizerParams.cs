@@ -55,7 +55,7 @@ namespace SysWeaver.Auth
 
         /// <summary>
         /// The auth (comma separated tokens) required to manage API keys.
-        /// Warning: null means that no auth is required to call the API key management methods (although the menu item is hidden).
+        /// null is treated as the default (<see cref="Roles.AdminOps"/>), use <see cref="Roles.Disabled"/> ("-") to disable API key management.
         /// </summary>
         public String ApiKeyManagementAuth = Roles.AdminOps;
 

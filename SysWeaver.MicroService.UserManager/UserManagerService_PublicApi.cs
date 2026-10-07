@@ -347,7 +347,7 @@ namespace SysWeaver.MicroService
             if (s.Auth != null)
                 s.Auth.RequestLogout("Password change");
             s.SetAuth(auth);
-            await context.Server.RunOnLogin(s).ConfigureAwait(false);
+            await context.Server.RunOnLogin(s, context).ConfigureAwait(false);
             return ret;
         }
 

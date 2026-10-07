@@ -97,7 +97,8 @@ namespace SysWeaver.Remote
         /// The resolved default timeout in milliseconds (from <see cref="RemoteConnection.TimeoutInMilliSeconds"/>, else the interface <see cref="RemoteTimeoutAttribute"/>, else 60 000 ms).
         /// </summary>
         /// <remarks>
-        /// This is also used as <see cref="HttpClient.Timeout"/>, so a per end point timeout can only shorten, never extend, the request time.
+        /// A per end point <see cref="RemoteTimeoutAttribute"/> overrides it (it can both shorten and extend the request time).
+        /// <see cref="HttpClient.Timeout"/> of <see cref="Client"/> is set to the largest of this and all per end point timeouts of the interface.
         /// </remarks>
         public readonly int TimeoutInMilliSeconds;
 
@@ -210,6 +211,14 @@ namespace SysWeaver.Remote
             }
             p.TimeoutInMilliSeconds = timeOut;
             TimeoutInMilliSeconds = timeOut;
+            //  The client timeout must allow the longest per end point timeout (the handler applies the actual per request timeout)
+            int clientTimeOut = timeOut;
+            foreach (var mi in interfaceType.GetMethods())
+            {
+                var epTimeOut = (mi.GetCustomAttributes(typeof(RemoteTimeoutAttribute), false).FirstOrDefault() as RemoteTimeoutAttribute)?.TimeOutInMilliSeconds ?? 0;
+                if (epTimeOut > clientTimeOut)
+                    clientTimeOut = epTimeOut;
+            }
             Ser = SerManager.Get(ser);
             PostSer = SerManager.Get(postSer);
             //  Proxy/Tor
@@ -262,7 +271,7 @@ namespace SysWeaver.Remote
             {
                 DefaultRequestVersion = HttpVersion.Version10,
                 DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
-                Timeout = timeOutS,
+                Timeout = TimeSpan.FromMilliseconds(clientTimeOut),
             };
             Client = c;
             var ua = p.UserAgent;
@@ -274,7 +283,8 @@ namespace SysWeaver.Remote
             var b = p.BearerToken;
             if (String.IsNullOrEmpty(b))
             {
-                if (p.GetUserPassword(out var user, out var password, false))
+                //  A configured credentials file must exist and contain valid credentials (fail loudly on a misconfiguration)
+                if (p.GetUserPassword(out var user, out var password, !String.IsNullOrEmpty(p.CredFile)))
                 {
                     switch (p.AuthMethod)
                     {
@@ -1018,6 +1028,26 @@ namespace SysWeaver.Remote
         }
 
 
+        /// <summary>
+        /// Send a request (buffering the response content), the whole request (including reading the response content) must complete within the timeout.
+        /// </summary>
+        /// <param name="req">The request.</param>
+        /// <param name="timeout">The per end point timeout in milliseconds, less or equal to zero to use <see cref="TimeoutInMilliSeconds"/>.</param>
+        /// <returns>The response.</returns>
+        /// <exception cref="TimeoutException">The timeout elapsed before the response was received.</exception>
+        async Task<HttpResponseMessage> Send(HttpRequestMessage req, int timeout)
+        {
+            using var cts = new CancellationTokenSource(timeout > 0 ? timeout : TimeoutInMilliSeconds);
+            try
+            {
+                return await Client.SendAsync(req, cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested)
+            {
+                throw new TimeoutException();
+            }
+        }
+
         async Task<T> ReadResponse<T>(HttpRequestMessage req, EndPointOptions opt, HttpEndPointTypes type, ISerializerType payloadSer, ReadOnlyMemory<Byte> payload, HttpContent content = null)
         {
             long rid = Interlocked.Increment(ref ReqId);
@@ -1030,7 +1060,7 @@ namespace SysWeaver.Remote
             {
                 if (timeout > 0)
                     req.SetTimeout(TimeSpan.FromMilliseconds(timeout));
-                var res = await Client.SendAsync(req).ConfigureAwait(false);
+                var res = await Send(req, timeout).ConfigureAwait(false);
                 var c = res.Content;
                 Memory<Byte> data = c == null ? null : await c.ReadAsByteArrayAsync().ConfigureAwait(false);
                 var code = res.StatusCode;
@@ -1101,7 +1131,7 @@ namespace SysWeaver.Remote
             {
                 if (timeout > 0)
                     req.SetTimeout(TimeSpan.FromMilliseconds(timeout));
-                var res = await Client.SendAsync(req).ConfigureAwait(false);
+                var res = await Send(req, timeout).ConfigureAwait(false);
                 var code = res.StatusCode;
                 if (code != HttpStatusCode.OK)
                 {

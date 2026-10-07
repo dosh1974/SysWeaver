@@ -80,8 +80,7 @@ namespace SysWeaver.Data
         /// <typeparam name="T">The column value type, also the type of the returned value</typeparam>
         /// <typeparam name="W">The accumulator type</typeparam>
         /// <param name="values">The boxed values</param>
-        /// <returns>The boxed average (of type <typeparamref name="T"/>)</returns>
-        /// <exception cref="DivideByZeroException">For integer accumulators when <paramref name="values"/> is empty.</exception>
+        /// <returns>The boxed average (of type <typeparamref name="T"/>), the default value of <typeparamref name="T"/> if <paramref name="values"/> is empty</returns>
         internal static Object Avg<T, W>(IEnumerable<Object> values) where W : IAdditionOperators<W, W, W>, IDivisionOperators<W, W, W>
         {
             W c = default;
@@ -97,6 +96,8 @@ namespace SysWeaver.Data
                 ++count;
                 first = false;
             }
+            if (count <= 0)
+                return default(T);
             var cc = (W)Convert.ChangeType(count, typeof(W));
             var res = c / cc;
             return Convert.ChangeType(res, typeof(T));

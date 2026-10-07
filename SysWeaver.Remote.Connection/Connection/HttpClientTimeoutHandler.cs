@@ -10,7 +10,8 @@ namespace SysWeaver.Remote.Connection
     /// A timeout is reported as a <see cref="TimeoutException"/> instead of a <see cref="TaskCanceledException"/>.
     /// </summary>
     /// <remarks>
-    /// The <see cref="HttpClient.Timeout"/> of the owning client still applies, so a per request timeout longer than that has no effect.
+    /// The <see cref="HttpClient.Timeout"/> of the owning client still applies, so a per request timeout longer than that has no effect
+    /// (RemoteConnectionBase sets it to the largest end point timeout of the interface).
     /// </remarks>
     public sealed class HttpClientTimeoutHandler : DelegatingHandler
     {
